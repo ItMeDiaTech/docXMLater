@@ -272,6 +272,68 @@ export class Document {
         throw err;
       }
     }
+
+    // Validate that we didn't load an empty/corrupted document
+    this.validateLoadedContent();
+  }
+
+  /**
+   * Validates loaded content to detect corrupted or empty documents
+   * Adds warnings if the document appears to have lost text content
+   */
+  private validateLoadedContent(): void {
+    const paragraphs = this.bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
+
+    if (paragraphs.length === 0) {
+      return; // Empty document is valid
+    }
+
+    // Count total runs and empty runs
+    let totalRuns = 0;
+    let emptyRuns = 0;
+    let runsWithText = 0;
+
+    for (const para of paragraphs) {
+      const runs = para.getRuns();
+      totalRuns += runs.length;
+
+      for (const run of runs) {
+        const text = run.getText();
+        if (text.length === 0) {
+          emptyRuns++;
+        } else {
+          runsWithText++;
+        }
+      }
+    }
+
+    // If more than 90% of runs are empty, warn about potential corruption
+    if (totalRuns > 0) {
+      const emptyPercentage = (emptyRuns / totalRuns) * 100;
+
+      if (emptyPercentage > 90 && emptyRuns > 10) {
+        const warning = new Error(
+          `WARNING: Document appears to be corrupted or empty. ` +
+          `${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(1)}%) have no text content. ` +
+          `This may indicate:\n` +
+          `  - The document was already corrupted before loading\n` +
+          `  - Text content was stripped by another application\n` +
+          `  - Encoding issues during document creation\n` +
+          `Original document structure is preserved, but text may be lost.`
+        );
+        this.parseErrors.push({ element: 'document-validation', error: warning });
+
+        // Always warn to console, even in non-strict mode
+        console.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
+      } else if (emptyPercentage > 50 && emptyRuns > 5) {
+        const warning = new Error(
+          `Document has ${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(1)}%) with no text. ` +
+          `This is higher than normal and may indicate partial data loss.`
+        );
+        this.parseErrors.push({ element: 'document-validation', error: warning });
+        console.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
+      }
+    }
   }
 
   /**
@@ -701,6 +763,50 @@ export class Document {
   }
 
   /**
+   * Validates that the document has meaningful content before saving
+   * Warns if the document appears to be empty or corrupted
+   */
+  private validateBeforeSave(): void {
+    const paragraphs = this.getParagraphs();
+
+    if (paragraphs.length === 0) {
+      console.warn(
+        '\nDocXML Save Warning:\n' +
+        'Document has no paragraphs. You are saving an empty document.\n'
+      );
+      return;
+    }
+
+    // Count runs with text
+    let totalRuns = 0;
+    let emptyRuns = 0;
+
+    for (const para of paragraphs) {
+      const runs = para.getRuns();
+      totalRuns += runs.length;
+
+      for (const run of runs) {
+        if (run.getText().length === 0) {
+          emptyRuns++;
+        }
+      }
+    }
+
+    if (totalRuns > 0) {
+      const emptyPercentage = (emptyRuns / totalRuns) * 100;
+
+      if (emptyPercentage > 90 && emptyRuns > 10) {
+        console.warn(
+          '\nDocXML Save Warning:\n' +
+          `You are about to save a document where ${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(1)}%) are empty.\n` +
+          'This may result in a document with no visible text content.\n' +
+          'If this is unintentional, please review the document before saving.\n'
+        );
+      }
+    }
+  }
+
+  /**
    * Saves the document to a file
    * @param filePath - Output file path
    */
@@ -710,6 +816,9 @@ export class Document {
     const tempPath = `${filePath}.tmp.${Date.now()}`;
 
     try {
+      // Validate before saving to prevent data loss
+      this.validateBeforeSave();
+
       // Check memory usage before starting
       this.checkMemoryThreshold();
 
@@ -764,6 +873,9 @@ export class Document {
    */
   async toBuffer(): Promise<Buffer> {
     try {
+      // Validate before saving to prevent data loss
+      this.validateBeforeSave();
+
       // Check memory usage before starting
       this.checkMemoryThreshold();
 

@@ -117,8 +117,17 @@ export class XMLBuilder {
       }
     }
 
-    // Self-closing element
+    // Self-closing element validation
     if (element.selfClosing) {
+      // CRITICAL: Text elements must NEVER be self-closing in Word XML
+      // Self-closing <w:t/> causes Word to not parse the text content
+      if (element.name === 'w:t') {
+        throw new Error(
+          'CRITICAL: Text elements (w:t) cannot be self-closing. ' +
+          'This would cause text content loss in the document. ' +
+          'Use XMLBuilder.w("t", attrs, [text]) instead of XMLBuilder.wSelf("t", attrs).'
+        );
+      }
       xml += '/>';
       return xml;
     }

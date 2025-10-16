@@ -50,6 +50,15 @@ export class XMLParser {
       const startIdx = xml.indexOf(openTag, pos);
       if (startIdx === -1) break;
 
+      // Verify this is the exact tag (not a prefix match like <w:p matching <w:pPr>)
+      // The character after the tag name must be either '>', '/' or whitespace
+      const charAfterTag = xml[startIdx + openTag.length];
+      if (charAfterTag && charAfterTag !== '>' && charAfterTag !== '/' && charAfterTag !== ' ' && charAfterTag !== '\t' && charAfterTag !== '\n' && charAfterTag !== '\r') {
+        // This is a prefix match (e.g., <w:pPr> when looking for <w:p>), skip it
+        pos = startIdx + openTag.length;
+        continue;
+      }
+
       // Find the end of opening tag
       const openEnd = xml.indexOf('>', startIdx);
       if (openEnd === -1) break;
@@ -66,7 +75,25 @@ export class XMLParser {
       let searchPos = openEnd + 1;
 
       while (depth > 0 && searchPos < xml.length) {
-        const nextOpen = xml.indexOf(openTag, searchPos);
+        // Find next potential opening tag
+        let nextOpen = -1;
+        let openSearchPos = searchPos;
+        while (true) {
+          const candidateOpen = xml.indexOf(openTag, openSearchPos);
+          if (candidateOpen === -1) {
+            break;
+          }
+          // Verify it's an exact match (not a prefix)
+          const charAfter = xml[candidateOpen + openTag.length];
+          if (charAfter && charAfter !== '>' && charAfter !== '/' && charAfter !== ' ' && charAfter !== '\t' && charAfter !== '\n' && charAfter !== '\r') {
+            // Prefix match, keep searching
+            openSearchPos = candidateOpen + openTag.length;
+            continue;
+          }
+          nextOpen = candidateOpen;
+          break;
+        }
+
         const nextClose = xml.indexOf(closeTag, searchPos);
 
         if (nextClose === -1) break;

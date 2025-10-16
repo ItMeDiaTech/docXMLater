@@ -199,6 +199,15 @@ export class Run {
    * @returns XMLElement representing the run
    */
   toXML(): XMLElement {
+    // Validate text content before serialization
+    if (this.text === undefined || this.text === null) {
+      console.warn(
+        'DocXML Warning: Run has undefined/null text content - using empty string. ' +
+        'This may indicate a bug in your code.'
+      );
+      this.text = '';
+    }
+
     const rPrChildren: XMLElement[] = [];
 
     // Add formatting elements
@@ -266,6 +275,33 @@ export class Run {
     }, [this.text]));
 
     return XMLBuilder.w('r', undefined, runChildren);
+  }
+
+  /**
+   * Checks if the run has non-empty text content
+   * @returns True if the run has text with length > 0
+   */
+  hasText(): boolean {
+    return this.text !== undefined &&
+           this.text !== null &&
+           this.text.length > 0;
+  }
+
+  /**
+   * Checks if the run has any formatting applied
+   * @returns True if any formatting properties are set
+   */
+  hasFormatting(): boolean {
+    return Object.keys(this.formatting).length > 0;
+  }
+
+  /**
+   * Checks if the run is valid (has either text or formatting)
+   * An empty run with no formatting is considered invalid
+   * @returns True if the run has text or formatting
+   */
+  isValid(): boolean {
+    return this.hasText() || this.hasFormatting();
   }
 
   /**
