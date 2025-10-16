@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output
+dist/
+build/
+*.js
+*.d.ts
+*.map
+
+# Keep config files
+!jest.config.js
+
+# Testing
+coverage/
+.nyc_output/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Claude AI files (not for public repo)
+CLAUDE.md
+**/CLAUDE.md
+.claude/
+Claude.cli
+IMPLEMENTATION_SUMMARY.md
+QUICKSTART.md
+PROJECT_STATUS.md
+
+# Generated example outputs
+*.docx

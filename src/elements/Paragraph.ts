@@ -1,0 +1,562 @@
+/**
+ * Paragraph - Represents a paragraph in a Word document
+ * Contains one or more runs of formatted text
+ */
+
+import { Run, RunFormatting } from './Run';
+import { Field } from './Field';
+import { Hyperlink } from './Hyperlink';
+import { Bookmark } from './Bookmark';
+import { Revision } from './Revision';
+import { Comment } from './Comment';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+
+/**
+ * Paragraph alignment options
+ */
+export type ParagraphAlignment = 'left' | 'center' | 'right' | 'justify' | 'both';
+
+/**
+ * Paragraph formatting options
+ */
+export interface ParagraphFormatting {
+  /** Text alignment */
+  alignment?: ParagraphAlignment;
+  /** Indentation in twips (1/20th of a point) */
+  indentation?: {
+    left?: number;
+    right?: number;
+    firstLine?: number;
+    hanging?: number;
+  };
+  /** Spacing in twips */
+  spacing?: {
+    before?: number;
+    after?: number;
+    line?: number;
+    lineRule?: 'auto' | 'exact' | 'atLeast';
+  };
+  /** Keep with next paragraph */
+  keepNext?: boolean;
+  /** Keep lines together */
+  keepLines?: boolean;
+  /** Page break before */
+  pageBreakBefore?: boolean;
+  /** Paragraph style ID */
+  style?: string;
+  /** Numbering properties */
+  numbering?: {
+    numId: number;
+    level: number;
+  };
+}
+
+/**
+ * Paragraph content (runs, fields, hyperlinks, or revisions)
+ */
+type ParagraphContent = Run | Field | Hyperlink | Revision;
+
+/**
+ * Represents a paragraph in a document
+ */
+export class Paragraph {
+  private content: ParagraphContent[] = [];
+  private formatting: ParagraphFormatting;
+  private bookmarksStart: Bookmark[] = [];
+  private bookmarksEnd: Bookmark[] = [];
+  private commentsStart: Comment[] = [];
+  private commentsEnd: Comment[] = [];
+
+  /**
+   * Creates a new Paragraph
+   * @param formatting - Paragraph formatting options
+   */
+  constructor(formatting: ParagraphFormatting = {}) {
+    this.formatting = formatting;
+  }
+
+  /**
+   * Adds a run to the paragraph
+   * @param run - Run to add
+   * @returns This paragraph for chaining
+   */
+  addRun(run: Run): this {
+    this.content.push(run);
+    return this;
+  }
+
+  /**
+   * Adds a field to the paragraph
+   * @param field - Field to add
+   * @returns This paragraph for chaining
+   */
+  addField(field: Field): this {
+    this.content.push(field);
+    return this;
+  }
+
+  /**
+   * Adds a hyperlink to the paragraph
+   * @param hyperlink - Hyperlink to add
+   * @returns This paragraph for chaining
+   */
+  addHyperlink(hyperlink: Hyperlink): this {
+    this.content.push(hyperlink);
+    return this;
+  }
+
+  /**
+   * Adds a revision (tracked change) to the paragraph
+   * @param revision - Revision to add
+   * @returns This paragraph for chaining
+   */
+  addRevision(revision: Revision): this {
+    this.content.push(revision);
+    return this;
+  }
+
+  /**
+   * Adds a bookmark start marker at the beginning of this paragraph
+   * @param bookmark - Bookmark to add
+   * @returns This paragraph for chaining
+   */
+  addBookmarkStart(bookmark: Bookmark): this {
+    this.bookmarksStart.push(bookmark);
+    return this;
+  }
+
+  /**
+   * Adds a bookmark end marker at the end of this paragraph
+   * @param bookmark - Bookmark to add (must have matching start marker)
+   * @returns This paragraph for chaining
+   */
+  addBookmarkEnd(bookmark: Bookmark): this {
+    this.bookmarksEnd.push(bookmark);
+    return this;
+  }
+
+  /**
+   * Adds both start and end bookmark markers (wraps entire paragraph)
+   * @param bookmark - Bookmark to add
+   * @returns This paragraph for chaining
+   */
+  addBookmark(bookmark: Bookmark): this {
+    this.addBookmarkStart(bookmark);
+    this.addBookmarkEnd(bookmark);
+    return this;
+  }
+
+  /**
+   * Gets all bookmarks that start in this paragraph
+   * @returns Array of bookmarks
+   */
+  getBookmarksStart(): Bookmark[] {
+    return [...this.bookmarksStart];
+  }
+
+  /**
+   * Gets all bookmarks that end in this paragraph
+   * @returns Array of bookmarks
+   */
+  getBookmarksEnd(): Bookmark[] {
+    return [...this.bookmarksEnd];
+  }
+
+  /**
+   * Adds a comment range start marker at the beginning of this paragraph
+   * @param comment - Comment to start
+   * @returns This paragraph for chaining
+   */
+  addCommentStart(comment: Comment): this {
+    this.commentsStart.push(comment);
+    return this;
+  }
+
+  /**
+   * Adds a comment range end marker at the end of this paragraph
+   * @param comment - Comment to end (must have matching start marker)
+   * @returns This paragraph for chaining
+   */
+  addCommentEnd(comment: Comment): this {
+    this.commentsEnd.push(comment);
+    return this;
+  }
+
+  /**
+   * Adds both start and end comment range markers (comments entire paragraph)
+   * @param comment - Comment to add
+   * @returns This paragraph for chaining
+   */
+  addComment(comment: Comment): this {
+    this.addCommentStart(comment);
+    this.addCommentEnd(comment);
+    return this;
+  }
+
+  /**
+   * Gets all comments that start in this paragraph
+   * @returns Array of comments
+   */
+  getCommentsStart(): Comment[] {
+    return [...this.commentsStart];
+  }
+
+  /**
+   * Gets all comments that end in this paragraph
+   * @returns Array of comments
+   */
+  getCommentsEnd(): Comment[] {
+    return [...this.commentsEnd];
+  }
+
+  /**
+   * Adds text with optional formatting
+   * @param text - Text to add
+   * @param formatting - Text formatting
+   * @returns This paragraph for chaining
+   */
+  addText(text: string, formatting?: RunFormatting): this {
+    this.content.push(new Run(text, formatting));
+    return this;
+  }
+
+  /**
+   * Sets the text content (replaces all content with a single run)
+   * @param text - Text content
+   * @param formatting - Optional formatting for the text
+   * @returns This paragraph for chaining
+   */
+  setText(text: string, formatting?: RunFormatting): this {
+    this.content = [new Run(text, formatting)];
+    return this;
+  }
+
+  /**
+   * Gets all runs in the paragraph (excluding fields)
+   * @returns Array of runs
+   */
+  getRuns(): Run[] {
+    return this.content.filter((item): item is Run => item instanceof Run);
+  }
+
+  /**
+   * Gets all content in the paragraph (runs and fields)
+   * @returns Array of content items
+   */
+  getContent(): ParagraphContent[] {
+    return [...this.content];
+  }
+
+  /**
+   * Gets the text content of all runs combined
+   * @returns Combined text content
+   */
+  getText(): string {
+    return this.content
+      .filter((item): item is Run => item instanceof Run)
+      .map(run => run.getText())
+      .join('');
+  }
+
+  /**
+   * Gets the paragraph formatting
+   * @returns Paragraph formatting
+   */
+  getFormatting(): ParagraphFormatting {
+    return { ...this.formatting };
+  }
+
+  /**
+   * Sets paragraph alignment
+   * @param alignment - Alignment value
+   * @returns This paragraph for chaining
+   */
+  setAlignment(alignment: ParagraphAlignment): this {
+    this.formatting.alignment = alignment;
+    return this;
+  }
+
+  /**
+   * Sets left indentation
+   * @param twips - Indentation in twips (1/20th of a point)
+   * @returns This paragraph for chaining
+   */
+  setLeftIndent(twips: number): this {
+    if (!this.formatting.indentation) {
+      this.formatting.indentation = {};
+    }
+    this.formatting.indentation.left = twips;
+    return this;
+  }
+
+  /**
+   * Sets right indentation
+   * @param twips - Indentation in twips
+   * @returns This paragraph for chaining
+   */
+  setRightIndent(twips: number): this {
+    if (!this.formatting.indentation) {
+      this.formatting.indentation = {};
+    }
+    this.formatting.indentation.right = twips;
+    return this;
+  }
+
+  /**
+   * Sets first line indentation
+   * @param twips - Indentation in twips
+   * @returns This paragraph for chaining
+   */
+  setFirstLineIndent(twips: number): this {
+    if (!this.formatting.indentation) {
+      this.formatting.indentation = {};
+    }
+    this.formatting.indentation.firstLine = twips;
+    return this;
+  }
+
+  /**
+   * Sets spacing before paragraph
+   * @param twips - Spacing in twips
+   * @returns This paragraph for chaining
+   */
+  setSpaceBefore(twips: number): this {
+    if (!this.formatting.spacing) {
+      this.formatting.spacing = {};
+    }
+    this.formatting.spacing.before = twips;
+    return this;
+  }
+
+  /**
+   * Sets spacing after paragraph
+   * @param twips - Spacing in twips
+   * @returns This paragraph for chaining
+   */
+  setSpaceAfter(twips: number): this {
+    if (!this.formatting.spacing) {
+      this.formatting.spacing = {};
+    }
+    this.formatting.spacing.after = twips;
+    return this;
+  }
+
+  /**
+   * Sets line spacing
+   * @param twips - Line spacing in twips
+   * @param rule - Line spacing rule
+   * @returns This paragraph for chaining
+   */
+  setLineSpacing(twips: number, rule: 'auto' | 'exact' | 'atLeast' = 'auto'): this {
+    if (!this.formatting.spacing) {
+      this.formatting.spacing = {};
+    }
+    this.formatting.spacing.line = twips;
+    this.formatting.spacing.lineRule = rule;
+    return this;
+  }
+
+  /**
+   * Sets paragraph style
+   * @param styleId - Style ID
+   * @returns This paragraph for chaining
+   */
+  setStyle(styleId: string): this {
+    this.formatting.style = styleId;
+    return this;
+  }
+
+  /**
+   * Sets keep with next
+   * @param keepNext - Whether to keep with next paragraph
+   * @returns This paragraph for chaining
+   */
+  setKeepNext(keepNext: boolean = true): this {
+    this.formatting.keepNext = keepNext;
+    return this;
+  }
+
+  /**
+   * Sets keep lines together
+   * @param keepLines - Whether to keep lines together
+   * @returns This paragraph for chaining
+   */
+  setKeepLines(keepLines: boolean = true): this {
+    this.formatting.keepLines = keepLines;
+    return this;
+  }
+
+  /**
+   * Sets page break before
+   * @param pageBreakBefore - Whether to insert page break before
+   * @returns This paragraph for chaining
+   */
+  setPageBreakBefore(pageBreakBefore: boolean = true): this {
+    this.formatting.pageBreakBefore = pageBreakBefore;
+    return this;
+  }
+
+  /**
+   * Sets numbering for this paragraph (adds to a list)
+   * @param numId - The numbering instance ID
+   * @param level - The level (0-8, where 0 is the outermost level)
+   * @returns This paragraph for chaining
+   */
+  setNumbering(numId: number, level: number = 0): this {
+    if (numId < 0) {
+      throw new Error('Numbering ID must be non-negative');
+    }
+    if (level < 0 || level > 8) {
+      throw new Error('Level must be between 0 and 8');
+    }
+
+    this.formatting.numbering = { numId, level };
+    return this;
+  }
+
+  /**
+   * Removes numbering from this paragraph
+   * @returns This paragraph for chaining
+   */
+  removeNumbering(): this {
+    delete this.formatting.numbering;
+    return this;
+  }
+
+  /**
+   * Gets the numbering properties
+   * @returns Numbering properties or undefined
+   */
+  getNumbering(): { numId: number; level: number } | undefined {
+    return this.formatting.numbering ? { ...this.formatting.numbering } : undefined;
+  }
+
+  /**
+   * Converts the paragraph to WordprocessingML XML element
+   * @returns XMLElement representing the paragraph
+   */
+  toXML(): XMLElement {
+    const pPrChildren: XMLElement[] = [];
+
+    // Add paragraph style
+    if (this.formatting.style) {
+      pPrChildren.push(XMLBuilder.wSelf('pStyle', { 'w:val': this.formatting.style }));
+    }
+
+    // Add numbering properties (must come before other properties)
+    if (this.formatting.numbering) {
+      const numPr = XMLBuilder.w('numPr', undefined, [
+        XMLBuilder.wSelf('ilvl', { 'w:val': this.formatting.numbering.level.toString() }),
+        XMLBuilder.wSelf('numId', { 'w:val': this.formatting.numbering.numId.toString() })
+      ]);
+      pPrChildren.push(numPr);
+    }
+
+    // Add alignment
+    if (this.formatting.alignment) {
+      pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': this.formatting.alignment }));
+    }
+
+    // Add indentation
+    if (this.formatting.indentation) {
+      const ind = this.formatting.indentation;
+      const attributes: Record<string, number> = {};
+      if (ind.left !== undefined) attributes['w:left'] = ind.left;
+      if (ind.right !== undefined) attributes['w:right'] = ind.right;
+      if (ind.firstLine !== undefined) attributes['w:firstLine'] = ind.firstLine;
+      if (ind.hanging !== undefined) attributes['w:hanging'] = ind.hanging;
+      if (Object.keys(attributes).length > 0) {
+        pPrChildren.push(XMLBuilder.wSelf('ind', attributes));
+      }
+    }
+
+    // Add spacing
+    if (this.formatting.spacing) {
+      const spc = this.formatting.spacing;
+      const attributes: Record<string, number | string> = {};
+      if (spc.before !== undefined) attributes['w:before'] = spc.before;
+      if (spc.after !== undefined) attributes['w:after'] = spc.after;
+      if (spc.line !== undefined) attributes['w:line'] = spc.line;
+      if (spc.lineRule) attributes['w:lineRule'] = spc.lineRule;
+      if (Object.keys(attributes).length > 0) {
+        pPrChildren.push(XMLBuilder.wSelf('spacing', attributes));
+      }
+    }
+
+    // Add other properties
+    if (this.formatting.keepNext) {
+      pPrChildren.push(XMLBuilder.wSelf('keepNext'));
+    }
+    if (this.formatting.keepLines) {
+      pPrChildren.push(XMLBuilder.wSelf('keepLines'));
+    }
+    if (this.formatting.pageBreakBefore) {
+      pPrChildren.push(XMLBuilder.wSelf('pageBreakBefore'));
+    }
+
+    // Build paragraph element
+    const paragraphChildren: XMLElement[] = [];
+
+    // Add paragraph properties if there are any
+    if (pPrChildren.length > 0) {
+      paragraphChildren.push(XMLBuilder.w('pPr', undefined, pPrChildren));
+    }
+
+    // Add bookmark start markers
+    for (const bookmark of this.bookmarksStart) {
+      paragraphChildren.push(bookmark.toStartXML());
+    }
+
+    // Add comment range start markers
+    for (const comment of this.commentsStart) {
+      paragraphChildren.push(comment.toRangeStartXML());
+    }
+
+    // Add content (runs, fields, hyperlinks, and revisions)
+    for (const item of this.content) {
+      if (item instanceof Field) {
+        // Fields need to be wrapped in a run
+        paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
+      } else if (item instanceof Hyperlink) {
+        // Hyperlinks are their own element
+        paragraphChildren.push(item.toXML());
+      } else if (item instanceof Revision) {
+        // Revisions (track changes) are their own element
+        paragraphChildren.push(item.toXML());
+      } else {
+        paragraphChildren.push(item.toXML());
+      }
+    }
+
+    // If no content, add empty run to prevent invalid XML
+    if (this.content.length === 0) {
+      paragraphChildren.push(new Run('').toXML());
+    }
+
+    // Add comment range end markers
+    for (const comment of this.commentsEnd) {
+      paragraphChildren.push(comment.toRangeEndXML());
+    }
+
+    // Add comment references (must come after range end)
+    for (const comment of this.commentsEnd) {
+      paragraphChildren.push(comment.toReferenceXML());
+    }
+
+    // Add bookmark end markers
+    for (const bookmark of this.bookmarksEnd) {
+      paragraphChildren.push(bookmark.toEndXML());
+    }
+
+    return XMLBuilder.w('p', undefined, paragraphChildren);
+  }
+
+  /**
+   * Creates a new Paragraph with the specified formatting
+   * @param formatting - Paragraph formatting
+   * @returns New Paragraph instance
+   */
+  static create(formatting?: ParagraphFormatting): Paragraph {
+    return new Paragraph(formatting);
+  }
+}

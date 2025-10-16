@@ -30,17 +30,17 @@ npm install docxml
 ### Create Your First Document
 
 ```typescript
-import { Document } from 'docxml';
+import { Document } from "docxml";
 
 const doc = Document.create();
 
 // Add content with styles
-doc.createParagraph('My Document').setStyle('Title');
-doc.createParagraph('Introduction').setStyle('Heading1');
-doc.createParagraph('This is body text with the Normal style.');
+doc.createParagraph("My Document").setStyle("Title");
+doc.createParagraph("Introduction").setStyle("Heading1");
+doc.createParagraph("This is body text with the Normal style.");
 
 // Save
-await doc.save('my-document.docx');
+await doc.save("my-document.docx");
 ```
 
 ### Add Formatted Text
@@ -50,11 +50,11 @@ const doc = Document.create();
 
 // Create a paragraph with mixed formatting
 const para = doc.createParagraph();
-para.addText('Bold text', { bold: true });
-para.addText(' and ');
-para.addText('colored text', { color: 'FF0000' });
+para.addText("Bold text", { bold: true });
+para.addText(" and ");
+para.addText("colored text", { color: "FF0000" });
 
-await doc.save('formatted.docx');
+await doc.save("formatted.docx");
 ```
 
 ### Create Tables
@@ -66,70 +66,71 @@ const doc = Document.create();
 const table = doc.createTable(3, 3);
 
 // Add borders
-table.setAllBorders({ style: 'single', size: 8, color: '000000' });
+table.setAllBorders({ style: "single", size: 8, color: "000000" });
 
 // Populate cells
-table.getCell(0, 0)?.createParagraph('Header 1');
-table.getCell(0, 1)?.createParagraph('Header 2');
+table.getCell(0, 0)?.createParagraph("Header 1");
+table.getCell(0, 1)?.createParagraph("Header 2");
 
 // Add shading to header row
-table.getRow(0)?.getCell(0)?.setShading({ fill: '4472C4' });
+table.getRow(0)?.getCell(0)?.setShading({ fill: "4472C4" });
 
-await doc.save('table.docx');
+await doc.save("table.docx");
 ```
 
 ### Add Images
 
 ```typescript
-import { Document, Image, inchesToEmus } from 'docxml';
+import { Document, Image, inchesToEmus } from "docxml";
 
 const doc = Document.create();
 
 // Add title
-doc.createParagraph('Document with Image').setStyle('Title');
+doc.createParagraph("Document with Image").setStyle("Title");
 
 // Create image from file
-const image = Image.fromFile('./photo.png');
+const image = Image.fromFile("./photo.png");
 image.setWidth(inchesToEmus(4), true); // 4 inches wide, maintain aspect ratio
 
 // Add image to document
 doc.addImage(image);
 
 // Add caption
-doc.createParagraph('Figure 1: Sample image')
-  .setAlignment('center')
-  .addText('Figure 1: Sample image', { italic: true, size: 10 });
+doc
+  .createParagraph("Figure 1: Sample image")
+  .setAlignment("center")
+  .addText("Figure 1: Sample image", { italic: true, size: 10 });
 
-await doc.save('with-image.docx');
+await doc.save("with-image.docx");
 ```
 
 ### Use Custom Styles
 
 ```typescript
-import { Document, Style } from 'docxml';
+import { Document, Style } from "docxml";
 
 const doc = Document.create();
 
 // Create a custom style
 const alertStyle = Style.create({
-  styleId: 'Alert',
-  name: 'Alert',
-  type: 'paragraph',
-  basedOn: 'Normal',
+  styleId: "Alert",
+  name: "Alert",
+  type: "paragraph",
+  basedOn: "Normal",
   runFormatting: {
     bold: true,
-    color: 'FF0000',
-    size: 12
+    color: "FF0000",
+    size: 12,
   },
   paragraphFormatting: {
-    alignment: 'center'
-  }
+    alignment: "center",
+  },
 });
 
 doc.addStyle(alertStyle);
-doc.createParagraph('Important Warning').setStyle('Alert');
+doc.createParagraph("Important Warning").setStyle("Alert");
 
-await doc.save('custom-styles.docx');
+await doc.save("custom-styles.docx");
 ```
 
 ## Core Concepts
@@ -142,18 +143,18 @@ The high-level API for creating Word documents:
 // Create new document
 const doc = Document.create({
   properties: {
-    title: 'My Document',
-    creator: 'DocXML',
-    subject: 'Example'
-  }
+    title: "My Document",
+    creator: "DocXML",
+    subject: "Example",
+  },
 });
 
 // Add content
-doc.createParagraph('Content here');
+doc.createParagraph("Content here");
 doc.createTable(5, 3);
 
 // Save
-await doc.save('output.docx');
+await doc.save("output.docx");
 ```
 
 ### Paragraphs and Runs
@@ -164,12 +165,12 @@ Paragraphs contain runs of formatted text:
 const para = doc.createParagraph();
 
 // Add text with different formatting
-para.addText('Normal ');
-para.addText('Bold', { bold: true });
-para.addText(' Italic', { italic: true });
+para.addText("Normal ");
+para.addText("Bold", { bold: true });
+para.addText(" Italic", { italic: true });
 
 // Set paragraph formatting
-para.setAlignment('center');
+para.setAlignment("center");
 para.setSpaceAfter(240);
 ```
 
@@ -182,13 +183,13 @@ const table = doc.createTable(4, 3);
 
 // Format table
 table.setWidth(8640); // Full page width
-table.setAllBorders({ style: 'single', size: 6 });
+table.setAllBorders({ style: "single", size: 6 });
 
 // Access cells
 const cell = table.getCell(0, 0);
-cell?.createParagraph('Cell content');
-cell?.setShading({ fill: 'D9E1F2' });
-cell?.setVerticalAlignment('center');
+cell?.createParagraph("Cell content");
+cell?.setShading({ fill: "D9E1F2" });
+cell?.setVerticalAlignment("center");
 
 // Merge cells
 cell?.setColumnSpan(3); // Span 3 columns
@@ -200,11 +201,11 @@ cell?.setColumnSpan(3); // Span 3 columns
 
 ```typescript
 // Built-in styles
-doc.createParagraph('Title').setStyle('Title');
-doc.createParagraph('Subtitle').setStyle('Subtitle');
-doc.createParagraph('Chapter 1').setStyle('Heading1');
-doc.createParagraph('Section 1.1').setStyle('Heading2');
-doc.createParagraph('Body text').setStyle('Normal');
+doc.createParagraph("Title").setStyle("Title");
+doc.createParagraph("Subtitle").setStyle("Subtitle");
+doc.createParagraph("Chapter 1").setStyle("Heading1");
+doc.createParagraph("Section 1.1").setStyle("Heading2");
+doc.createParagraph("Body text").setStyle("Normal");
 
 // Check available styles
 console.log(doc.getStylesManager().getStyleCount()); // 13
@@ -280,16 +281,16 @@ para.setPageBreakBefore()
 const formatting = {
   bold: true,
   italic: true,
-  underline: 'single',
-  font: 'Arial',
-  size: 12,              // points
-  color: 'FF0000',       // hex without #
-  highlight: 'yellow',
+  underline: "single",
+  font: "Arial",
+  size: 12, // points
+  color: "FF0000", // hex without #
+  highlight: "yellow",
   strike: true,
   subscript: true,
   superscript: true,
   smallCaps: true,
-  allCaps: true
+  allCaps: true,
 };
 ```
 
@@ -300,30 +301,30 @@ const formatting = {
 const table = doc.createTable(rows, cols);
 
 // Access
-table.getRow(index)
-table.getCell(rowIndex, colIndex)
+table.getRow(index);
+table.getCell(rowIndex, colIndex);
 
 // Formatting
-table.setWidth(twips)
-table.setAlignment('left' | 'center' | 'right')
-table.setAllBorders(border)
-table.setBorders(borders)
-table.setLayout('auto' | 'fixed')
+table.setWidth(twips);
+table.setAlignment("left" | "center" | "right");
+table.setAllBorders(border);
+table.setBorders(borders);
+table.setLayout("auto" | "fixed");
 ```
 
 ### Style
 
 ```typescript
-Style.create(properties)
-Style.createNormalStyle()
-Style.createHeadingStyle(1-9)
-Style.createTitleStyle()
-Style.createSubtitleStyle()
+Style.create(properties);
+Style.createNormalStyle();
+Style.createHeadingStyle(1 - 9);
+Style.createTitleStyle();
+Style.createSubtitleStyle();
 
 // Properties
-style.setBasedOn(styleId)
-style.setParagraphFormatting(formatting)
-style.setRunFormatting(formatting)
+style.setBasedOn(styleId);
+style.setParagraphFormatting(formatting);
+style.setRunFormatting(formatting);
 ```
 
 ### Image
@@ -350,15 +351,15 @@ image.getImageData()
 
 All documents include 13 ready-to-use styles:
 
-| Style | Description | Font | Size | Color |
-|-------|-------------|------|------|-------|
-| **Normal** | Default paragraph | Calibri | 11pt | Black |
-| **Heading1** | Major headings | Calibri Light | 16pt | Blue (#2E74B5) |
-| **Heading2** | Section headings | Calibri Light | 13pt | Blue (#1F4D78) |
-| **Heading3-9** | Subsection headings | Calibri Light | 12-11pt | Blue (#1F4D78) |
-| **Title** | Document title | Calibri Light | 28pt | Blue (#2E74B5) |
-| **Subtitle** | Document subtitle | Calibri Light | 14pt | Gray, Italic |
-| **ListParagraph** | List items | Calibri | 11pt | Black, Indented |
+| Style             | Description         | Font          | Size    | Color           |
+| ----------------- | ------------------- | ------------- | ------- | --------------- |
+| **Normal**        | Default paragraph   | Calibri       | 11pt    | Black           |
+| **Heading1**      | Major headings      | Calibri Light | 16pt    | Blue (#2E74B5)  |
+| **Heading2**      | Section headings    | Calibri Light | 13pt    | Blue (#1F4D78)  |
+| **Heading3-9**    | Subsection headings | Calibri Light | 12-11pt | Blue (#1F4D78)  |
+| **Title**         | Document title      | Calibri Light | 28pt    | Blue (#2E74B5)  |
+| **Subtitle**      | Document subtitle   | Calibri Light | 14pt    | Gray, Italic    |
+| **ListParagraph** | List items          | Calibri       | 11pt    | Black, Indented |
 
 See [Using Styles Guide](docs/guides/using-styles.md) for complete documentation.
 
@@ -367,37 +368,44 @@ See [Using Styles Guide](docs/guides/using-styles.md) for complete documentation
 The `examples/` directory contains comprehensive examples:
 
 ### Basic Examples (`examples/01-basic/`)
+
 - Creating simple documents
 - Reading and modifying DOCX files
 - Working with ZIP archives
 
 ### Text Formatting (`examples/02-text/`)
+
 - Paragraph formatting examples
 - Text formatting (bold, italic, colors)
 - Advanced formatting techniques
 
 ### Tables (`examples/03-tables/`)
+
 - Simple tables
 - Tables with borders and shading
 - Complex tables with merged cells
 
 ### Styles (`examples/04-styles/`)
+
 - Using built-in styles
 - Creating custom styles
 - Style inheritance
 
 ### Images (`examples/05-images/`)
+
 - Adding images from files and buffers
 - Sizing and resizing images
 - Multiple images in documents
 - Images with text content
 
 ### Complete Examples (`examples/06-complete/`)
+
 - Professional reports
 - Invoice templates
 - Styled documents
 
 Run any example:
+
 ```bash
 npx ts-node examples/02-text/paragraph-basics.ts
 ```
@@ -416,13 +424,13 @@ npx ts-node examples/02-text/paragraph-basics.ts
 
 ```typescript
 // Load existing DOCX
-const doc = await Document.load('existing.docx');
+const doc = await Document.load("existing.docx");
 
 // Add content
-doc.createParagraph('New paragraph added');
+doc.createParagraph("New paragraph added");
 
 // Save
-await doc.save('modified.docx');
+await doc.save("modified.docx");
 ```
 
 ### Work with Buffers
@@ -430,7 +438,7 @@ await doc.save('modified.docx');
 ```typescript
 // Create document
 const doc = Document.create();
-doc.createParagraph('Content');
+doc.createParagraph("Content");
 
 // Save to buffer
 const buffer = await doc.toBuffer();
@@ -444,16 +452,16 @@ const doc2 = await Document.loadFromBuffer(buffer);
 For advanced users, direct ZIP manipulation is available:
 
 ```typescript
-import { ZipHandler, DOCX_PATHS } from 'docxml';
+import { ZipHandler, DOCX_PATHS } from "docxml";
 
 const handler = new ZipHandler();
-await handler.load('document.docx');
+await handler.load("document.docx");
 
 // Direct XML access
 const xml = handler.getFileAsString(DOCX_PATHS.DOCUMENT);
 handler.updateFile(DOCX_PATHS.DOCUMENT, modifiedXml);
 
-await handler.save('output.docx');
+await handler.save("output.docx");
 ```
 
 ## Development
@@ -508,13 +516,13 @@ examples/
 
 ## Phase Implementation Status
 
-| Phase | Status | Features |
-|-------|--------|----------|
-| **Phase 1: Foundation** | Complete | ZIP handling, XML generation, validation |
-| **Phase 2: Core Elements** | Complete | Paragraph, Run, text formatting |
-| **Phase 3: Advanced Formatting** | Complete | Document API, Tables, Styles, Lists |
-| **Phase 4: Rich Content** | In Progress | Images (Complete) / Headers, Footers (In Progress) |
-| **Phase 5: Polish** | Planned | Track changes, comments, TOC |
+| Phase                            | Status      | Features                                           |
+| -------------------------------- | ----------- | -------------------------------------------------- |
+| **Phase 1: Foundation**          | Complete    | ZIP handling, XML generation, validation           |
+| **Phase 2: Core Elements**       | Complete    | Paragraph, Run, text formatting                    |
+| **Phase 3: Advanced Formatting** | Complete    | Document API, Tables, Styles, Lists                |
+| **Phase 4: Rich Content**        | In Progress | Images (Complete) / Headers, Footers (In Progress) |
+| **Phase 5: Polish**              | Planned     | Track changes, comments, TOC                       |
 
 **Current: 159 tests passing | 17 source files | ~4,000+ lines of code**
 
@@ -560,6 +568,7 @@ npm run test:coverage
 ```
 
 **Test Statistics:**
+
 - 159 tests passing
 - 4 test suites
 - High code coverage
@@ -567,7 +576,7 @@ npm run test:coverage
 
 ## License
 
-MIT © [Your Name]
+MIT © DiaTech
 
 ## Acknowledgments
 
@@ -584,18 +593,21 @@ MIT © [Your Name]
 ## Roadmap
 
 **Phase 3 (Complete):**
+
 - [x] Document API
 - [x] Tables with formatting
 - [x] Styles system
 - [x] Lists and numbering
 
 **Phase 4 (Current):**
+
 - [x] Images and media
 - [ ] Headers and footers (in progress)
 - [ ] Page sections (in progress)
 - [ ] Hyperlinks (in progress)
 
 **Phase 5 (Future):**
+
 - [ ] Track changes
 - [ ] Comments
 - [ ] Table of contents
