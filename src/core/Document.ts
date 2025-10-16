@@ -346,9 +346,28 @@ export class Document {
       // Parse paragraph properties
       this.parseParagraphProperties(paraXml, paragraph);
 
-      // Parse runs using XMLParser (safe position-based parsing)
-      const runXmls = XMLParser.extractElements(paraXml, 'w:r');
+      // Parse hyperlinks first using XMLParser
+      const hyperlinkXmls = XMLParser.extractElements(paraXml, 'w:hyperlink');
 
+      // Add hyperlinks to paragraph
+      for (const hyperlinkXml of hyperlinkXmls) {
+        const hyperlink = this.parseHyperlink(hyperlinkXml);
+        if (hyperlink) {
+          paragraph.addHyperlink(hyperlink);
+        }
+      }
+
+      // Parse runs using XMLParser (safe position-based parsing)
+      // Note: We need to exclude runs that are inside hyperlinks
+      // Remove all hyperlink tags from the XML before extracting runs
+      let paraXmlWithoutHyperlinks = paraXml;
+      for (const hyperlinkXml of hyperlinkXmls) {
+        paraXmlWithoutHyperlinks = paraXmlWithoutHyperlinks.replace(hyperlinkXml, '');
+      }
+
+      const runXmls = XMLParser.extractElements(paraXmlWithoutHyperlinks, 'w:r');
+
+      // Add runs to paragraph
       for (const runXml of runXmls) {
         const run = this.parseRun(runXml);
         if (run) {
@@ -551,6 +570,71 @@ export class Document {
     // All caps
     if (rPr.includes('<w:caps/>') || rPr.includes('<w:caps ')) {
       run.setAllCaps(true);
+    }
+  }
+
+  /**
+   * Parses a single hyperlink from XML
+   * Extracts URL from relationships, anchor for internal links, and text formatting
+   */
+  private parseHyperlink(hyperlinkXml: string): Hyperlink | null {
+    try {
+      // Extract hyperlink attributes using XMLParser
+      const relationshipId = XMLParser.extractAttribute(hyperlinkXml, 'r:id');
+      const anchor = XMLParser.extractAttribute(hyperlinkXml, 'w:anchor');
+      const tooltip = XMLParser.extractAttribute(hyperlinkXml, 'w:tooltip');
+
+      // Hyperlink must have either a relationship ID (external) or anchor (internal)
+      if (!relationshipId && !anchor) {
+        return null;
+      }
+
+      // Extract runs within the hyperlink for text and formatting
+      const runXmls = XMLParser.extractElements(hyperlinkXml, 'w:r');
+      let text = '';
+      let formatting: RunFormatting | undefined;
+
+      for (const runXml of runXmls) {
+        // Accumulate text from all runs
+        text += XMLBuilder.unescapeXml(XMLParser.extractText(runXml));
+
+        // Get formatting from first run
+        if (!formatting) {
+          const run = this.parseRun(runXml);
+          if (run) {
+            formatting = run.getFormatting();
+          }
+        }
+      }
+
+      // Resolve URL from relationship manager for external links
+      let url: string | undefined;
+      if (relationshipId) {
+        const relationship = this.relationshipManager.getRelationship(relationshipId);
+        if (relationship && relationship.getType().includes('hyperlink')) {
+          url = relationship.getTarget();
+        }
+      }
+
+      // Create hyperlink with extracted properties
+      return new Hyperlink({
+        url,
+        anchor,
+        text: text || 'Link', // Default text if empty
+        formatting,
+        tooltip,
+        relationshipId,
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.parseErrors.push({ element: 'hyperlink', error: err });
+
+      if (this.strictParsing) {
+        throw new Error(`Failed to parse hyperlink: ${err.message}`);
+      }
+
+      // In lenient mode, log warning and continue
+      return null;
     }
   }
 

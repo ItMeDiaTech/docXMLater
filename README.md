@@ -1,6 +1,6 @@
-# DocXML - Professional DOCX Editing Framework
+# docxmlater - Professional DOCX Editing Framework
 
-[![Tests](https://img.shields.io/badge/tests-159%20passing-brightgreen)](https://github.com/yourusername/docxml)
+[![Tests](https://img.shields.io/badge/tests-205%20passing-brightgreen)](https://github.com/ItMeDiaTech/docXMLater)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -13,16 +13,17 @@ A comprehensive, production-ready TypeScript/JavaScript library for creating, re
 - **Paragraph Formatting** - Alignment, indentation, spacing, keep-with-next
 - **Tables** - Full table support with borders, shading, cell merging
 - **Images** - Embed PNG, JPEG, GIF images with sizing and positioning
+- **Hyperlinks** - Internal and external links with full formatting support
 - **Styles System** - 13 built-in styles + custom style creation
 - **ZIP Archive Handling** - Low-level DOCX manipulation
 - **TypeScript First** - Full type safety with comprehensive definitions
-- **Well Tested** - 159 tests, all passing
+- **Well Tested** - 205 tests, all passing
 - **Production Ready** - Used in real-world applications
 
 ## Installation
 
 ```bash
-npm install docxml
+npm install docxmlater
 ```
 
 ## Quick Start
@@ -30,7 +31,7 @@ npm install docxml
 ### Create Your First Document
 
 ```typescript
-import { Document } from "docxml";
+import { Document } from "docxmlater";
 
 const doc = Document.create();
 
@@ -81,7 +82,7 @@ await doc.save("table.docx");
 ### Add Images
 
 ```typescript
-import { Document, Image, inchesToEmus } from "docxml";
+import { Document, Image, inchesToEmus } from "docxmlater";
 
 const doc = Document.create();
 
@@ -107,7 +108,7 @@ await doc.save("with-image.docx");
 ### Use Custom Styles
 
 ```typescript
-import { Document, Style } from "docxml";
+import { Document, Style } from "docxmlater";
 
 const doc = Document.create();
 
@@ -452,7 +453,7 @@ const doc2 = await Document.loadFromBuffer(buffer);
 For advanced users, direct ZIP manipulation is available:
 
 ```typescript
-import { ZipHandler, DOCX_PATHS } from "docxml";
+import { ZipHandler, DOCX_PATHS } from "docxmlater";
 
 const handler = new ZipHandler();
 await handler.load("document.docx");
@@ -516,15 +517,15 @@ examples/
 
 ## Phase Implementation Status
 
-| Phase                            | Status      | Features                                           |
-| -------------------------------- | ----------- | -------------------------------------------------- |
-| **Phase 1: Foundation**          | Complete    | ZIP handling, XML generation, validation           |
-| **Phase 2: Core Elements**       | Complete    | Paragraph, Run, text formatting                    |
-| **Phase 3: Advanced Formatting** | Complete    | Document API, Tables, Styles, Lists                |
-| **Phase 4: Rich Content**        | In Progress | Images (Complete) / Headers, Footers (In Progress) |
-| **Phase 5: Polish**              | Planned     | Track changes, comments, TOC                       |
+| Phase                            | Status      | Features                                                |
+| -------------------------------- | ----------- | ------------------------------------------------------- |
+| **Phase 1: Foundation**          | ✅ Complete | ZIP handling, XML generation, validation                |
+| **Phase 2: Core Elements**       | ✅ Complete | Paragraph, Run, text formatting                         |
+| **Phase 3: Advanced Formatting** | ✅ Complete | Document API, Tables, Styles, Lists                     |
+| **Phase 4: Rich Content**        | ✅ Complete | Images, Headers, Footers, Hyperlinks (NEW!)             |
+| **Phase 5: Polish**              | 🚧 Planned  | Track changes, comments, TOC                            |
 
-**Current: 159 tests passing | 17 source files | ~4,000+ lines of code**
+**Current: 205 tests passing | 20+ source files | ~5,000+ lines of code**
 
 ## Requirements
 
@@ -588,7 +589,7 @@ MIT © DiaTech
 
 - **Documentation**: [docs/](docs/)
 - **Examples**: [examples/](examples/)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/docxml/issues)
+- **Issues**: [GitHub Issues](https://github.com/ItMeDiaTech/docXMLater/issues)
 
 ## Roadmap
 
@@ -599,12 +600,12 @@ MIT © DiaTech
 - [x] Styles system
 - [x] Lists and numbering
 
-**Phase 4 (Current):**
+**Phase 4 (Complete):**
 
 - [x] Images and media
-- [ ] Headers and footers (in progress)
-- [ ] Page sections (in progress)
-- [ ] Hyperlinks (in progress)
+- [x] Headers and footers
+- [x] Page sections
+- [x] Hyperlinks (**NEW in v0.2.0!**)
 
 **Phase 5 (Future):**
 
