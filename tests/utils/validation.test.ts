@@ -114,6 +114,30 @@ describe('Validation Utilities', () => {
     test('should handle single file name', () => {
       expect(normalizePath('file.txt')).toBe('file.txt');
     });
+
+    // Security tests
+    test('should reject path traversal with ../ (Unix)', () => {
+      expect(() => normalizePath('../etc/passwd')).toThrow('path traversal');
+      expect(() => normalizePath('word/../../etc/passwd')).toThrow('path traversal');
+      expect(() => normalizePath('word/media/../../../tmp/evil.sh')).toThrow('path traversal');
+    });
+
+    test('should reject path traversal with ..\\ (Windows)', () => {
+      expect(() => normalizePath('..\\Windows\\System32')).toThrow('path traversal');
+      expect(() => normalizePath('word\\..\\..\\tmp')).toThrow('path traversal');
+    });
+
+    test('should reject absolute Windows paths', () => {
+      expect(() => normalizePath('C:\\Windows\\System32')).toThrow('absolute Windows path');
+      expect(() => normalizePath('D:\\tmp\\evil.exe')).toThrow('absolute Windows path');
+      expect(() => normalizePath('c:/windows/system32')).toThrow('absolute Windows path');
+    });
+
+    test('should allow valid relative paths', () => {
+      expect(normalizePath('word/document.xml')).toBe('word/document.xml');
+      expect(normalizePath('word/media/image1.png')).toBe('word/media/image1.png');
+      expect(normalizePath('[Content_Types].xml')).toBe('[Content_Types].xml');
+    });
   });
 
   describe('isValidZipBuffer', () => {

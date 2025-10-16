@@ -219,12 +219,25 @@ export class RelationshipManager {
   static fromXml(xml: string): RelationshipManager {
     const manager = new RelationshipManager();
 
+    // Prevent ReDoS: validate input size (typical .rels files are < 10KB)
+    if (xml.length > 100000) {
+      throw new Error('Relationships XML file too large (>100KB). Possible malicious input or corrupted file.');
+    }
+
     // Simple XML parsing using regex (sufficient for .rels files)
     // Match all Relationship elements
-    const relationshipPattern = /<Relationship\s+([^>]+)\/>/g;
+    // Use non-backtracking pattern with lazy quantifier
+    const relationshipPattern = /<Relationship\s+(.*?)\/>/g;
     let match;
+    let iterations = 0;
+    const MAX_ITERATIONS = 1000; // Prevent infinite loops
 
     while ((match = relationshipPattern.exec(xml)) !== null) {
+      iterations++;
+      if (iterations > MAX_ITERATIONS) {
+        throw new Error('Too many relationships in XML file (>1000). Possible malicious input.');
+      }
+
       const attributesString = match[1];
 
       // Skip if no attributes string found
@@ -240,12 +253,18 @@ export class RelationshipManager {
 
       // Only create relationship if all required attributes present
       if (id !== undefined && type !== undefined && target !== undefined) {
+        // Validate targetMode before type assertion
+        const validatedTargetMode =
+          targetMode === 'Internal' || targetMode === 'External' || targetMode === undefined
+            ? (targetMode as 'Internal' | 'External' | undefined)
+            : undefined;
+
         // Create and add relationship
         const relationship = Relationship.create({
           id,
           type,
           target,
-          targetMode: (targetMode as 'Internal' | 'External' | undefined) || 'Internal',
+          targetMode: validatedTargetMode || 'Internal',
         });
 
         manager.addRelationship(relationship);
@@ -262,8 +281,17 @@ export class RelationshipManager {
    * @returns The attribute value or undefined if not found
    */
   private static extractAttribute(attributesString: string, attributeName: string): string | undefined {
+    // Prevent ReDoS: validate input size first (relationships attributes are typically < 1KB)
+    if (attributesString.length > 10000) {
+      return undefined;
+    }
+
+    // Escape attribute name to prevent regex injection
+    const escapedName = attributeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
     // Match: AttributeName="value" or AttributeName='value'
-    const pattern = new RegExp(`${attributeName}=["']([^"']+)["']`, 'i');
+    // Use lazy quantifier (.*?) instead of greedy [^"']+ to prevent backtracking
+    const pattern = new RegExp(`${escapedName}=["'](.*?)["']`, 'i');
     const match = attributesString.match(pattern);
     return match ? match[1] : undefined;
   }

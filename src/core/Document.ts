@@ -62,22 +62,28 @@ export interface DocumentOptions {
 type BodyElement = Paragraph | Table | TableOfContentsElement;
 
 /**
- * Renderable interface for objects that can generate XML
- * Ensures type safety for paragraph content
- */
-interface Renderable {
-  toXML(): XMLElement;
-}
-
-/**
  * ImageRun - A run that contains an image (drawing)
- * Implements Renderable interface for type-safe paragraph content
+ * Extends Run class for type-safe paragraph content
+ *
+ * Note: This is a specialized Run that contains a drawing instead of text.
+ * It generates proper w:r (run) XML with w:drawing child element.
  */
-class ImageRun implements Renderable {
-  constructor(private image: Image) {}
+class ImageRun extends Run {
+  private imageElement: Image;
 
+  constructor(image: Image) {
+    // Call parent constructor with empty text
+    // The text is irrelevant for image runs
+    super('');
+    this.imageElement = image;
+  }
+
+  /**
+   * Override toXML to generate image-specific XML
+   * @returns XMLElement with w:r containing w:drawing
+   */
   toXML(): XMLElement {
-    const drawing = this.image.toXML();
+    const drawing = this.imageElement.toXML();
     return {
       name: 'w:r',
       children: [drawing]
@@ -113,8 +119,14 @@ export class Document {
    */
   private constructor(zipHandler?: ZipHandler, options: DocumentOptions = {}, initDefaults: boolean = true) {
     this.zipHandler = zipHandler || new ZipHandler();
-    this.properties = options.properties || {};
-    this.maxMemoryUsagePercent = options.maxMemoryUsagePercent ?? 80;
+    // Validate and sanitize properties before storing
+    this.properties = options.properties ? Document.validateProperties(options.properties) : {};
+    // Validate maxMemoryUsagePercent
+    const memoryPercent = options.maxMemoryUsagePercent ?? 80;
+    if (memoryPercent < 1 || memoryPercent > 100 || !Number.isFinite(memoryPercent)) {
+      throw new Error('maxMemoryUsagePercent must be between 1 and 100');
+    }
+    this.maxMemoryUsagePercent = memoryPercent;
     this.strictParsing = options.strictParsing ?? false;
     this.stylesManager = StylesManager.create();
     this.numberingManager = NumberingManager.create();
@@ -176,6 +188,114 @@ export class Document {
     await doc.parseDocument();
 
     return doc;
+  }
+
+  /**
+   * Validates and sanitizes document properties
+   * Prevents injection attacks and excessive memory usage
+   * @param properties - Properties to validate
+   * @returns Validated and sanitized properties
+   */
+  private static validateProperties(properties: DocumentProperties): DocumentProperties {
+    const MAX_STRING_LENGTH = 10000; // Reasonable limit for property strings
+    const MAX_REVISION = 999999; // Reasonable max revision number
+
+    const validated: DocumentProperties = {};
+
+    // Validate and truncate string properties
+    if (properties.title !== undefined) {
+      if (typeof properties.title !== 'string') {
+        throw new Error('DocumentProperties.title must be a string');
+      }
+      if (properties.title.length > MAX_STRING_LENGTH) {
+        throw new Error(`DocumentProperties.title exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
+      }
+      validated.title = properties.title;
+    }
+
+    if (properties.subject !== undefined) {
+      if (typeof properties.subject !== 'string') {
+        throw new Error('DocumentProperties.subject must be a string');
+      }
+      if (properties.subject.length > MAX_STRING_LENGTH) {
+        throw new Error(`DocumentProperties.subject exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
+      }
+      validated.subject = properties.subject;
+    }
+
+    if (properties.creator !== undefined) {
+      if (typeof properties.creator !== 'string') {
+        throw new Error('DocumentProperties.creator must be a string');
+      }
+      if (properties.creator.length > MAX_STRING_LENGTH) {
+        throw new Error(`DocumentProperties.creator exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
+      }
+      validated.creator = properties.creator;
+    }
+
+    if (properties.keywords !== undefined) {
+      if (typeof properties.keywords !== 'string') {
+        throw new Error('DocumentProperties.keywords must be a string');
+      }
+      if (properties.keywords.length > MAX_STRING_LENGTH) {
+        throw new Error(`DocumentProperties.keywords exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
+      }
+      validated.keywords = properties.keywords;
+    }
+
+    if (properties.description !== undefined) {
+      if (typeof properties.description !== 'string') {
+        throw new Error('DocumentProperties.description must be a string');
+      }
+      if (properties.description.length > MAX_STRING_LENGTH) {
+        throw new Error(`DocumentProperties.description exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
+      }
+      validated.description = properties.description;
+    }
+
+    if (properties.lastModifiedBy !== undefined) {
+      if (typeof properties.lastModifiedBy !== 'string') {
+        throw new Error('DocumentProperties.lastModifiedBy must be a string');
+      }
+      if (properties.lastModifiedBy.length > MAX_STRING_LENGTH) {
+        throw new Error(`DocumentProperties.lastModifiedBy exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
+      }
+      validated.lastModifiedBy = properties.lastModifiedBy;
+    }
+
+    // Validate revision number
+    if (properties.revision !== undefined) {
+      if (typeof properties.revision !== 'number' || !Number.isInteger(properties.revision)) {
+        throw new Error('DocumentProperties.revision must be an integer');
+      }
+      if (properties.revision < 0 || properties.revision > MAX_REVISION) {
+        throw new Error(`DocumentProperties.revision must be between 0 and ${MAX_REVISION}`);
+      }
+      validated.revision = properties.revision;
+    }
+
+    // Validate dates
+    if (properties.created !== undefined) {
+      if (!(properties.created instanceof Date)) {
+        throw new Error('DocumentProperties.created must be a Date object');
+      }
+      if (!Number.isFinite(properties.created.getTime())) {
+        throw new Error('DocumentProperties.created is an invalid date');
+      }
+      validated.created = properties.created;
+    }
+
+    if (properties.modified !== undefined) {
+      if (!(properties.modified instanceof Date)) {
+        throw new Error('DocumentProperties.modified must be a Date object');
+      }
+      if (!Number.isFinite(properties.modified.getTime())) {
+        throw new Error('DocumentProperties.modified is an invalid date');
+      }
+      validated.modified = properties.modified;
+    }
+
+    return validated;
   }
 
   /**
@@ -513,9 +633,14 @@ export class Document {
     // Underline
     const underlineMatch = rPr.match(/<w:u\s+w:val="([^"]+)"/);
     if (underlineMatch && underlineMatch[1]) {
-      // Accept underline style from XML (cast to expected type union)
-      const underlineStyle = underlineMatch[1] as RunFormatting['underline'];
-      run.setUnderline(underlineStyle);
+      // Validate underline style before applying
+      const value = underlineMatch[1];
+      const validUnderlineStyles = ['single', 'double', 'thick', 'dotted', 'dash', 'dotDash', 'dotDotDash', 'wave'];
+      if (validUnderlineStyles.includes(value) || value === 'true' || value === 'false') {
+        const underlineStyle = value as RunFormatting['underline'];
+        run.setUnderline(underlineStyle);
+      }
+      // Invalid values are silently ignored to prevent crashes
     } else if (rPr.includes('<w:u/>')) {
       run.setUnderline(true);
     }
@@ -557,9 +682,14 @@ export class Document {
     // Highlight
     const highlightMatch = rPr.match(/<w:highlight\s+w:val="([^"]+)"/);
     if (highlightMatch && highlightMatch[1]) {
-      // Accept highlight color from XML (cast to expected type union)
-      const highlightColor = highlightMatch[1] as RunFormatting['highlight'];
-      run.setHighlight(highlightColor);
+      // Validate highlight color before applying
+      const value = highlightMatch[1];
+      const validHighlightColors = ['yellow', 'green', 'cyan', 'magenta', 'blue', 'red', 'darkBlue', 'darkCyan', 'darkGreen', 'darkMagenta', 'darkRed', 'darkYellow', 'darkGray', 'lightGray', 'black', 'white'];
+      if (validHighlightColors.includes(value)) {
+        const highlightColor = value as RunFormatting['highlight'];
+        run.setHighlight(highlightColor);
+      }
+      // Invalid values are silently ignored to prevent crashes
     }
 
     // Small caps
@@ -834,7 +964,9 @@ export class Document {
    * @returns This document for chaining
    */
   setProperties(properties: DocumentProperties): this {
-    this.properties = { ...this.properties, ...properties };
+    // Validate and sanitize properties before storing
+    const validated = Document.validateProperties(properties);
+    this.properties = { ...this.properties, ...validated };
     return this;
   }
 
@@ -1396,10 +1528,9 @@ export class Document {
 
     // Create a paragraph containing the image
     const para = new Paragraph();
-    // Add image as a run (images use w:drawing in w:r)
+    // Add image as a run (ImageRun extends Run and generates w:drawing in w:r)
     const imageRun = this.createImageRun(image);
-    // Cast to Run for type compatibility (ImageRun implements same toXML interface)
-    para.addRun(imageRun as any as Run);
+    para.addRun(imageRun);
 
     this.bodyElements.push(para);
     return this;
@@ -1408,11 +1539,10 @@ export class Document {
   /**
    * Creates a run containing an image
    * @param image The image
-   * @returns A run with the image
+   * @returns ImageRun (extends Run) with the image
    */
-  private createImageRun(image: Image): Renderable {
-    // Create a special run that contains the drawing
-    // Implements Renderable interface for type safety
+  private createImageRun(image: Image): ImageRun {
+    // ImageRun extends Run, so it's type-safe to add to paragraphs
     return new ImageRun(image);
   }
 

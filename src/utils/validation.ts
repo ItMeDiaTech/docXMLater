@@ -38,11 +38,33 @@ export function isBinaryFile(filePath: string): boolean {
 /**
  * Normalizes a file path for consistent comparisons
  * Converts backslashes to forward slashes and removes leading slashes
+ * Also validates against path traversal attacks
  * @param path - The path to normalize
  * @returns Normalized path
+ * @throws {Error} If path contains path traversal sequences or absolute paths
  */
 export function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\/+/, '');
+  const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '');
+
+  // Security: Prevent path traversal attacks
+  // Malicious DOCX files could contain paths like "../../../etc/passwd"
+  if (normalized.includes('../') || path.includes('..\\')) {
+    throw new Error(
+      `Invalid file path: "${path}" contains path traversal sequence. ` +
+      `This could be a malicious DOCX file attempting directory traversal.`
+    );
+  }
+
+  // Security: Prevent absolute paths (Windows drive letters)
+  // Paths like "C:\Windows\System32" should not be allowed
+  if (/^[a-zA-Z]:/.test(normalized)) {
+    throw new Error(
+      `Invalid file path: "${path}" appears to be an absolute Windows path. ` +
+      `Only relative paths are allowed in DOCX archives.`
+    );
+  }
+
+  return normalized;
 }
 
 /**
