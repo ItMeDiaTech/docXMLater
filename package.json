@@ -1,5 +1,5 @@
 {
-  "name": "docxml",
+  "name": "docxmlater",
   "version": "0.1.0",
   "description": "A comprehensive DOCX editing framework for creating, reading, and manipulating Microsoft Word documents",
   "main": "dist/index.js",
@@ -10,7 +10,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "dev": "ts-node src/index.ts",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build && npm test"
   },
   "keywords": [
     "docx",
@@ -18,10 +19,31 @@
     "document",
     "office",
     "openxml",
-    "xml"
+    "xml",
+    "wordprocessingml",
+    "microsoft-word",
+    "document-generation",
+    "docx-editor",
+    "openxml-sdk"
   ],
-  "author": "",
+  "author": "DiaTech",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ItMeDiaTech/docXMLater.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ItMeDiaTech/docXMLater/issues"
+  },
+  "homepage": "https://github.com/ItMeDiaTech/docXMLater#readme",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "devDependencies": {
     "@types/jest": "^29.5.11",
     "@types/node": "^20.10.6",

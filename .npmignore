@@ -1,0 +1,29 @@
+# Source files (only publish compiled dist/)
+src/
+tests/
+examples/
+
+# Config files
+tsconfig.json
+jest.config.js
+.gitignore
+
+# Documentation (except README and LICENSE)
+docs/
+CONTRIBUTING.md
+
+# Development files
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Build artifacts
+*.tsbuildinfo
+
+# Temp files
+*.tmp.*
