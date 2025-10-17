@@ -4,6 +4,7 @@
  */
 
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { validateRunText } from '../utils/validation';
 
 /**
  * Text formatting options for a run
@@ -35,6 +36,12 @@ export interface RunFormatting {
   smallCaps?: boolean;
   /** All caps */
   allCaps?: boolean;
+  /**
+   * Automatically clean XML-like patterns from text content.
+   * When enabled, removes XML tags like <w:t> from text to prevent display issues.
+   * Default: false (only warns about XML patterns)
+   */
+  cleanXmlFromText?: boolean;
 }
 
 /**
@@ -50,8 +57,19 @@ export class Run {
    * @param formatting - Formatting options
    */
   constructor(text: string, formatting: RunFormatting = {}) {
-    this.text = text;
-    this.formatting = formatting;
+    // Validate text for XML patterns
+    const validation = validateRunText(text, {
+      context: 'Run constructor',
+      autoClean: formatting.cleanXmlFromText || false,
+      warnToConsole: true,
+    });
+
+    // Use cleaned text if available and cleaning was requested
+    this.text = validation.cleanedText || text;
+
+    // Remove cleanXmlFromText from formatting as it's not a display property
+    const { cleanXmlFromText, ...displayFormatting } = formatting;
+    this.formatting = displayFormatting;
   }
 
   /**
@@ -66,7 +84,15 @@ export class Run {
    * @param text - New text content
    */
   setText(text: string): void {
-    this.text = text;
+    // Validate text for XML patterns
+    const validation = validateRunText(text, {
+      context: 'Run.setText',
+      autoClean: this.formatting.cleanXmlFromText || false,
+      warnToConsole: true,
+    });
+
+    // Use cleaned text if available and cleaning was requested
+    this.text = validation.cleanedText || text;
   }
 
   /**

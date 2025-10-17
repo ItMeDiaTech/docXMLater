@@ -340,3 +340,166 @@ export function validateEmus(value: number, fieldName: string = 'EMUs'): void {
     );
   }
 }
+
+/**
+ * Result of text validation for XML-like content
+ */
+export interface TextValidationResult {
+  isValid: boolean;
+  hasXmlPatterns: boolean;
+  warnings: string[];
+  cleanedText?: string;
+}
+
+/**
+ * Detects XML-like patterns in text that might cause display issues
+ *
+ * This function checks for patterns that look like XML markup which,
+ * when properly escaped in XML output, will display as literal text
+ * in Word documents rather than being interpreted as markup.
+ *
+ * @param text - The text to validate
+ * @param context - Optional context for better warning messages (e.g., "hyperlink text")
+ * @returns Validation result with warnings and optional cleaned text
+ */
+export function detectXmlInText(text: string, context?: string): TextValidationResult {
+  const warnings: string[] = [];
+  let hasXmlPatterns = false;
+
+  // Check for common XML element patterns
+  const xmlElementPattern = /<\/?w:[^>]+>|<w:[^>]+\/>/g;
+  const escapedXmlPattern = /&lt;.*?&gt;|&quot;|&apos;/g;
+
+  // Check for specific problematic patterns we've seen
+  const problematicPatterns = [
+    /<w:t\s+xml:space="preserve">/,
+    /<w:t\s+xml:space=["']preserve["']>/,
+    /<\/w:t>/,
+    /&lt;w:t\s+xml:space=&quot;preserve&quot;&gt;/,
+  ];
+
+  // Check for any XML-like tags
+  if (xmlElementPattern.test(text)) {
+    hasXmlPatterns = true;
+    const contextStr = context ? ` in ${context}` : '';
+    warnings.push(
+      `Text${contextStr} contains XML-like markup: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}". ` +
+      `This will be displayed as literal text in the document. ` +
+      `If you intended to add formatting, use the appropriate API methods instead.`
+    );
+  }
+
+  // Check for already-escaped XML entities
+  if (escapedXmlPattern.test(text)) {
+    hasXmlPatterns = true;
+    const contextStr = context ? ` in ${context}` : '';
+    warnings.push(
+      `Text${contextStr} contains escaped XML entities (e.g., &lt;, &gt;, &quot;). ` +
+      `These will appear as literal characters in the document.`
+    );
+  }
+
+  // Check for specific known problematic patterns
+  for (const pattern of problematicPatterns) {
+    if (pattern.test(text)) {
+      hasXmlPatterns = true;
+      const contextStr = context ? ` in ${context}` : '';
+      warnings.push(
+        `Text${contextStr} contains a known problematic XML pattern that suggests ` +
+        `the text may have been corrupted by previous processing.`
+      );
+      break;
+    }
+  }
+
+  return {
+    isValid: true, // Text is always "valid" - we just warn about potential issues
+    hasXmlPatterns,
+    warnings,
+  };
+}
+
+/**
+ * Cleans XML-like patterns from text
+ *
+ * This function removes or cleans various XML patterns that might
+ * appear in text content, typically from corrupted or improperly
+ * processed documents.
+ *
+ * @param text - The text to clean
+ * @param aggressive - If true, removes all angle brackets; if false, only removes clear XML tags
+ * @returns Cleaned text with XML patterns removed
+ */
+export function cleanXmlFromText(text: string, aggressive: boolean = false): string {
+  let cleaned = text;
+
+  // First, unescape any HTML/XML entities
+  cleaned = cleaned
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+
+  // Remove specific Word XML patterns
+  // This targets patterns like <w:t xml:space="preserve">
+  cleaned = cleaned.replace(/<w:[^>]+>/g, '');
+  cleaned = cleaned.replace(/<\/w:[^>]+>/g, '');
+
+  // Remove any remaining XML-like tags if aggressive mode
+  if (aggressive) {
+    cleaned = cleaned.replace(/<[^>]+>/g, '');
+  }
+
+  // Clean up any double spaces left behind
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+  return cleaned;
+}
+
+/**
+ * Validates text for use in Run or Hyperlink elements
+ *
+ * This is the main validation function that should be called when
+ * setting text content in Run or Hyperlink elements. It provides
+ * warnings about problematic content and optionally cleans the text.
+ *
+ * @param text - The text to validate
+ * @param options - Validation options
+ * @returns Validation result with warnings and optionally cleaned text
+ */
+export function validateRunText(
+  text: string,
+  options: {
+    context?: string;
+    autoClean?: boolean;
+    aggressive?: boolean;
+    warnToConsole?: boolean;
+  } = {}
+): TextValidationResult {
+  const { context, autoClean = false, aggressive = false, warnToConsole = true } = options;
+
+  // Detect XML patterns
+  const result = detectXmlInText(text, context);
+
+  // If auto-cleaning is enabled and XML patterns were found
+  if (autoClean && result.hasXmlPatterns) {
+    result.cleanedText = cleanXmlFromText(text, aggressive);
+
+    // Add a note about cleaning
+    result.warnings.push(
+      `Text has been automatically cleaned. ` +
+      `Original: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}" ` +
+      `Cleaned: "${result.cleanedText.substring(0, 50)}${result.cleanedText.length > 50 ? '...' : ''}"`
+    );
+  }
+
+  // Log warnings to console in development if requested
+  if (warnToConsole && result.warnings.length > 0 && typeof console !== 'undefined') {
+    const contextStr = context ? ` [${context}]` : '';
+    console.warn(`DocXML Text Validation Warning${contextStr}:`);
+    result.warnings.forEach(warning => console.warn(`  - ${warning}`));
+  }
+
+  return result;
+}

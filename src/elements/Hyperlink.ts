@@ -50,6 +50,7 @@
 
 import { XMLElement } from '../xml/XMLBuilder';
 import { Run, RunFormatting } from './Run';
+import { validateRunText } from '../utils/validation';
 
 /**
  * Hyperlink properties
@@ -167,6 +168,18 @@ export class Hyperlink {
     // This provides better UX when text is empty
     this.text = properties.text || this.url || this.anchor || 'Link';
 
+    // Validate text for XML patterns
+    const validation = validateRunText(this.text, {
+      context: 'Hyperlink text',
+      autoClean: properties.formatting?.cleanXmlFromText || false,
+      warnToConsole: true,
+    });
+
+    // Use cleaned text if available and cleaning was requested
+    if (validation.cleanedText) {
+      this.text = validation.cleanedText;
+    }
+
     // Create run with default hyperlink styling (blue, underlined)
     const formatting: RunFormatting = {
       color: '0563C1', // Word's default hyperlink blue
@@ -202,8 +215,14 @@ export class Hyperlink {
    * Sets the display text
    */
   setText(text: string): this {
+    // Validate text for XML patterns (warning only, Run handles cleaning)
+    validateRunText(text, {
+      context: 'Hyperlink.setText',
+      warnToConsole: true,
+    });
+
     this.text = text;
-    this.run.setText(text);
+    this.run.setText(text); // Run.setText also validates
     return this;
   }
 
