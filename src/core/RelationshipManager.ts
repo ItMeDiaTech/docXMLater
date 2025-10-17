@@ -165,6 +165,100 @@ export class RelationshipManager {
   }
 
   /**
+   * Updates the target URL of an existing hyperlink relationship
+   *
+   * This method modifies an existing relationship's target in-place, maintaining
+   * the same relationship ID. This is crucial for proper OpenXML compliance
+   * per ECMA-376 §17.16.22, as it prevents orphaned relationships.
+   *
+   * @param relationshipId The ID of the relationship to update
+   * @param newUrl The new URL to set
+   * @returns True if updated, false if relationship not found
+   */
+  updateHyperlinkTarget(relationshipId: string, newUrl: string): boolean {
+    const relationship = this.getRelationship(relationshipId);
+    if (!relationship) {
+      return false;
+    }
+
+    // Verify this is a hyperlink relationship
+    if (relationship.getType() !== RelationshipType.HYPERLINK) {
+      throw new Error(
+        `Relationship ${relationshipId} is not a hyperlink relationship. ` +
+        `Type is ${relationship.getType()}, expected ${RelationshipType.HYPERLINK}`
+      );
+    }
+
+    // Update the target URL
+    relationship.setTarget(newUrl);
+    return true;
+  }
+
+  /**
+   * Finds a hyperlink relationship by its target URL
+   *
+   * @param targetUrl The URL to search for
+   * @returns The matching relationship, or undefined if not found
+   */
+  findHyperlinkByTarget(targetUrl: string): Relationship | undefined {
+    return this.getAllRelationships().find(
+      rel => rel.getType() === RelationshipType.HYPERLINK && rel.getTarget() === targetUrl
+    );
+  }
+
+  /**
+   * Gets or creates a hyperlink relationship for the given URL
+   *
+   * This method ensures we don't create duplicate relationships for the same URL.
+   * If a relationship already exists for the URL, it returns the existing one.
+   * Otherwise, it creates a new relationship.
+   *
+   * @param url The hyperlink URL
+   * @returns The existing or newly created relationship
+   */
+  getOrCreateHyperlink(url: string): Relationship {
+    // Check if relationship already exists for this URL
+    const existing = this.findHyperlinkByTarget(url);
+    if (existing) {
+      return existing;
+    }
+
+    // Create new relationship
+    return this.addHyperlink(url);
+  }
+
+  /**
+   * Removes orphaned hyperlink relationships
+   *
+   * This method removes hyperlink relationships that are no longer referenced
+   * by any hyperlink in the document. Call this after updating URLs to clean
+   * up any orphaned relationships.
+   *
+   * @param referencedIds Set of relationship IDs that are still in use
+   * @returns Number of relationships removed
+   */
+  removeOrphanedHyperlinks(referencedIds: Set<string>): number {
+    let removed = 0;
+    const toRemove: string[] = [];
+
+    // Find orphaned relationships
+    for (const rel of this.getAllRelationships()) {
+      if (rel.getType() === RelationshipType.HYPERLINK && !referencedIds.has(rel.getId())) {
+        toRemove.push(rel.getId());
+      }
+    }
+
+    // Remove orphaned relationships
+    for (const id of toRemove) {
+      if (this.removeRelationship(id)) {
+        removed++;
+      }
+    }
+
+    return removed;
+  }
+
+  /**
    * Adds a comments relationship
    * @returns The created relationship
    */

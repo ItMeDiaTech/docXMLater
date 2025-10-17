@@ -259,12 +259,13 @@ export class Hyperlink {
   /**
    * Sets or updates the hyperlink URL
    *
-   * When URL is updated, the relationship ID is cleared to force re-registration.
-   * This ensures the relationship points to the new URL when Document.save() is called.
+   * When URL is updated, we mark that the relationship needs updating.
+   * The actual relationship update happens during Document.save() to ensure
+   * proper coordination with the RelationshipManager.
    *
-   * **Important:** This clears the relationship ID, which will be automatically
-   * re-registered when save() or toBuffer() is called. The new relationship will
-   * point to the updated URL, ensuring OpenXML compliance per ECMA-376.
+   * **Important:** This method maintains the relationship ID but flags it for update.
+   * The RelationshipManager will update the existing relationship's target URL
+   * during save, preventing orphaned relationships per ECMA-376 §17.16.22.
    *
    * **Security:** URLs are validated to prevent XSS, file disclosure, and XML injection attacks.
    *
@@ -276,8 +277,8 @@ export class Hyperlink {
    * @example
    * ```typescript
    * const link = Hyperlink.createExternal('https://old.com', 'Link');
-   * link.setUrl('https://new.com');  // Clears relationshipId
-   * await doc.save('updated.docx');  // Re-registers with new URL
+   * link.setUrl('https://new.com');  // Marks for relationship update
+   * await doc.save('updated.docx');  // Updates relationship target
    * ```
    */
   setUrl(url: string | undefined): this {
@@ -304,10 +305,8 @@ export class Hyperlink {
     // Update URL
     this.url = url;
 
-    // Clear relationship ID when URL changes
-    // This forces Document.save() to re-register the hyperlink
-    // with the new URL, preventing orphaned relationships
-    this.relationshipId = undefined;
+    // Keep the relationship ID - it will be updated in-place during save
+    // This is more efficient and maintains document integrity
 
     // Update text ONLY if it was auto-generated from the old URL
     // This preserves user-provided text (even if it's "Link")

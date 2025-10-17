@@ -121,6 +121,23 @@ export class Relationship {
   }
 
   /**
+   * Sets the target path
+   *
+   * This method allows updating the target of an existing relationship,
+   * which is crucial for properly updating hyperlink URLs without creating
+   * orphaned relationships. Per ECMA-376 §9.2, relationships can be modified
+   * as long as the ID remains the same.
+   *
+   * @param target The new target path or URL
+   */
+  setTarget(target: string): void {
+    if (!target) {
+      throw new Error('Relationship target cannot be empty');
+    }
+    this.target = target;
+  }
+
+  /**
    * Gets the target mode
    */
   getTargetMode(): 'Internal' | 'External' {

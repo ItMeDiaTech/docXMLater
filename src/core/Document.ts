@@ -48,6 +48,23 @@ export interface DocumentProperties {
 }
 
 /**
+ * Document part representation
+ * Represents any part within a DOCX package (XML, binary, etc.)
+ */
+export interface DocumentPart {
+  /** Part name/path within the package */
+  name: string;
+  /** Part content (string for XML/text, Buffer for binary) */
+  content: string | Buffer;
+  /** MIME content type */
+  contentType?: string;
+  /** Whether the part is binary */
+  isBinary?: boolean;
+  /** Part size in bytes */
+  size?: number;
+}
+
+/**
  * Document creation options
  */
 export interface DocumentOptions {
@@ -556,6 +573,8 @@ export class Document {
    */
   addStyle(style: Style): this {
     this.stylesManager.addStyle(style);
+    // Update styles XML immediately so it's reflected in getStylesXml()
+    this.updateStylesXml();
     return this;
   }
 
@@ -575,6 +594,72 @@ export class Document {
    */
   hasStyle(styleId: string): boolean {
     return this.stylesManager.hasStyle(styleId);
+  }
+
+  /**
+   * Gets all styles in the document
+   * @returns Array of all style definitions
+   */
+  getStyles(): Style[] {
+    return this.stylesManager.getAllStyles();
+  }
+
+  /**
+   * Removes a style from the document
+   * @param styleId - Style ID to remove
+   * @returns True if the style was removed, false if not found
+   */
+  removeStyle(styleId: string): boolean {
+    return this.stylesManager.removeStyle(styleId);
+  }
+
+  /**
+   * Updates an existing style with new properties
+   * @param styleId - Style ID to update
+   * @param properties - Properties to update
+   * @returns True if the style was updated, false if not found
+   */
+  updateStyle(styleId: string, properties: any): boolean {
+    const style = this.stylesManager.getStyle(styleId);
+    if (!style) {
+      return false;
+    }
+
+    // Update the style properties
+    const currentProps = style.getProperties();
+    const updatedProps = { ...currentProps, ...properties, styleId }; // Preserve styleId
+
+    // Create new style with updated properties
+    const updatedStyle = Style.create(updatedProps);
+
+    // Replace in manager
+    this.stylesManager.addStyle(updatedStyle);
+    return true;
+  }
+
+  /**
+   * Gets the raw styles.xml content as a string
+   * @returns The raw XML content of styles.xml
+   */
+  getStylesXml(): string {
+    const stylesFile = this.zipHandler.getFileAsString(DOCX_PATHS.STYLES);
+    return stylesFile || this.stylesManager.generateStylesXml();
+  }
+
+  /**
+   * Sets the raw styles.xml content
+   *
+   * **Warning:** This directly sets the XML content without validation.
+   * Invalid XML may corrupt the document. Use StylesManager.validate()
+   * to check the XML before setting.
+   *
+   * @param xml - The raw XML content to set
+   */
+  setStylesXml(xml: string): void {
+    this.zipHandler.updateFile(DOCX_PATHS.STYLES, xml);
+
+    // Clear the styles manager to force reload on next access
+    this.stylesManager.clear();
   }
 
   /**
@@ -1312,19 +1397,19 @@ export class Document {
    * Updates hyperlink URLs in the document using a URL mapping
    *
    * This method finds all external hyperlinks in the document and updates their URLs
-   * according to the provided map. The relationships are automatically re-registered
-   * when save() or toBuffer() is called, ensuring the document remains valid per ECMA-376.
+   * according to the provided map. The relationships are updated in-place to maintain
+   * document integrity and prevent orphaned relationships per ECMA-376 §17.16.22.
    *
    * **Important Notes:**
    * - Only updates external hyperlinks (not internal bookmarks)
    * - Only updates the URL, not the display text
-   * - Relationships are cleared and will be re-registered on save()
+   * - Relationships are updated in-place to maintain IDs
    * - To update text too, manually iterate and call setText() on hyperlinks
    *
    * **OpenXML Compliance:**
    * This implementation ensures proper OpenXML structure by:
-   * 1. Clearing the old relationship ID when URL changes (prevents orphaned relationships)
-   * 2. Relying on processHyperlinks() during save() to create new relationships
+   * 1. Updating existing relationship targets in-place (prevents orphaned relationships)
+   * 2. Maintaining relationship IDs for document integrity
    * 3. Maintaining TargetMode="External" for all web links (per ECMA-376 §17.16.22)
    *
    * @param urlMap - Map of old URLs to new URLs
@@ -1359,7 +1444,7 @@ export class Document {
 
     // Two-phase update to handle circular URL swaps correctly
     // Phase 1: Collect all updates without modifying hyperlinks
-    const updates: Array<{ hyperlink: Hyperlink; newUrl: string }> = [];
+    const updates: Array<{ hyperlink: Hyperlink; newUrl: string; relationshipId?: string }> = [];
 
     // Iterate through all paragraphs in document body
     for (const para of this.getParagraphs()) {
@@ -1372,7 +1457,11 @@ export class Document {
           // If current URL is in the map, collect the update
           if (currentUrl && urlMap.has(currentUrl)) {
             const newUrl = urlMap.get(currentUrl)!;
-            updates.push({ hyperlink: content, newUrl });
+            updates.push({
+              hyperlink: content,
+              newUrl,
+              relationshipId: content.getRelationshipId()
+            });
           }
         }
       }
@@ -1380,13 +1469,18 @@ export class Document {
 
     // Phase 2: Apply all updates atomically
     // This prevents circular swap issues (e.g., A→B, B→A becomes B→A, A→B)
-    for (const { hyperlink, newUrl } of updates) {
+    for (const { hyperlink, newUrl, relationshipId } of updates) {
+      // Update the hyperlink URL (maintains relationship ID)
       hyperlink.setUrl(newUrl);
+
+      // Update the relationship target in-place if relationship exists
+      if (relationshipId) {
+        this.relationshipManager.updateHyperlinkTarget(relationshipId, newUrl);
+      }
     }
 
-    // Note: Relationships are automatically re-registered when save() is called
-    // via processHyperlinks() in Document.save() (line 435, 492)
-    // This ensures proper OpenXML structure per ECMA-376
+    // Note: This implementation updates relationships in-place,
+    // maintaining document integrity per ECMA-376
 
     return updates.length;
   }
@@ -1439,5 +1533,422 @@ export class Document {
     warnings: string[];
   } {
     return this.validator.getSizeStats(this.bodyElements, this.imageManager);
+  }
+
+  // ==================== DOCUMENT PART ACCESS METHODS ====================
+  // These methods provide low-level access to document package parts,
+  // enabling advanced operations not covered by the high-level API.
+
+  /**
+   * Gets a specific document part from the package
+   *
+   * Provides direct access to any part within the DOCX package, including
+   * XML parts, binary files, and custom parts. This enables advanced scenarios
+   * not covered by the high-level API.
+   *
+   * @param partName - The part name/path (e.g., 'word/document.xml', '[Content_Types].xml')
+   * @returns The document part with content and metadata, or null if not found
+   *
+   * @example
+   * ```typescript
+   * // Get the main document XML
+   * const docPart = await doc.getPart('word/document.xml');
+   * if (docPart) {
+   *   console.log(docPart.content); // XML content as string
+   * }
+   *
+   * // Get an image
+   * const imagePart = await doc.getPart('word/media/image1.png');
+   * if (imagePart) {
+   *   console.log(imagePart.isBinary); // true
+   *   // imagePart.content is a Buffer
+   * }
+   * ```
+   */
+  async getPart(partName: string): Promise<DocumentPart | null> {
+    try {
+      const file = this.zipHandler.getFile(partName);
+      if (!file) {
+        return null;
+      }
+
+      return {
+        name: partName,
+        content: file.content,
+        contentType: this.getContentTypeForPart(partName),
+        isBinary: file.isBinary,
+        size: file.size,
+      };
+    } catch (error) {
+      // Return null for any errors (file not found, etc.)
+      return null;
+    }
+  }
+
+  /**
+   * Sets or updates a document part in the package
+   *
+   * Allows adding or updating any part within the DOCX package. Use with caution
+   * as incorrect modifications can corrupt the document structure.
+   *
+   * **Important:** This method does not automatically update relationships or
+   * content types. You may need to manually update these for new parts.
+   *
+   * @param partName - The part name/path
+   * @param content - The part content (string for XML/text, Buffer for binary)
+   * @returns Promise that resolves when the part is set
+   *
+   * @example
+   * ```typescript
+   * // Update custom XML part
+   * await doc.setPart('customXml/item1.xml', '<data>Custom content</data>');
+   *
+   * // Add a new image (remember to update relationships and content types)
+   * const imageBuffer = await fs.readFile('image.png');
+   * await doc.setPart('word/media/image2.png', imageBuffer);
+   * ```
+   */
+  async setPart(partName: string, content: string | Buffer): Promise<void> {
+    // Determine if content is binary
+    const isBinary = Buffer.isBuffer(content);
+
+    // Add or update the file in the ZIP handler
+    this.zipHandler.addFile(partName, content, { binary: isBinary });
+  }
+
+  /**
+   * Removes a document part from the package
+   *
+   * **Warning:** Removing required parts can corrupt the document.
+   * This method does not update relationships or content types that may
+   * reference the removed part.
+   *
+   * @param partName - The part name/path to remove
+   * @returns True if the part was removed, false if it didn't exist
+   *
+   * @example
+   * ```typescript
+   * // Remove a custom part
+   * const removed = await doc.removePart('customXml/item1.xml');
+   * console.log(removed ? 'Part removed' : 'Part not found');
+   * ```
+   */
+  async removePart(partName: string): Promise<boolean> {
+    return this.zipHandler.removeFile(partName);
+  }
+
+  /**
+   * Lists all parts in the document package
+   *
+   * Returns an array of all part names/paths in the DOCX package,
+   * useful for debugging, analysis, or discovering custom parts.
+   *
+   * @returns Array of part names
+   *
+   * @example
+   * ```typescript
+   * const parts = await doc.listParts();
+   * console.log('Document contains', parts.length, 'parts');
+   * parts.forEach(part => console.log(part));
+   * ```
+   */
+  async listParts(): Promise<string[]> {
+    return this.zipHandler.getFilePaths();
+  }
+
+  /**
+   * Checks if a part exists in the document package
+   *
+   * @param partName - The part name/path to check
+   * @returns True if the part exists, false otherwise
+   *
+   * @example
+   * ```typescript
+   * if (await doc.partExists('word/glossary/document.xml')) {
+   *   console.log('Document has a glossary');
+   * }
+   * ```
+   */
+  async partExists(partName: string): Promise<boolean> {
+    return this.zipHandler.hasFile(partName);
+  }
+
+  /**
+   * Gets all content types from [Content_Types].xml
+   *
+   * Returns a map of part names/extensions to their MIME content types.
+   * This is useful for understanding the document structure and registering
+   * new content types for custom parts.
+   *
+   * @returns Map of part names/extensions to content types
+   *
+   * @example
+   * ```typescript
+   * const contentTypes = await doc.getContentTypes();
+   * contentTypes.forEach((type, name) => {
+   *   console.log(`${name}: ${type}`);
+   * });
+   * ```
+   */
+  async getContentTypes(): Promise<Map<string, string>> {
+    const contentTypes = new Map<string, string>();
+
+    try {
+      const contentTypesXml = this.zipHandler.getFileAsString('[Content_Types].xml');
+      if (!contentTypesXml) {
+        return contentTypes;
+      }
+
+      // Parse content types XML
+      // Match Default elements (by extension)
+      const defaultPattern = /<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"/g;
+      let match;
+      while ((match = defaultPattern.exec(contentTypesXml)) !== null) {
+        if (match[1] && match[2]) {
+          contentTypes.set(`.${match[1]}`, match[2]);
+        }
+      }
+
+      // Match Override elements (by part name)
+      const overridePattern = /<Override\s+PartName="([^"]+)"\s+ContentType="([^"]+)"/g;
+      while ((match = overridePattern.exec(contentTypesXml)) !== null) {
+        if (match[1] && match[2]) {
+          contentTypes.set(match[1], match[2]);
+        }
+      }
+    } catch (error) {
+      // Return empty map on error
+    }
+
+    return contentTypes;
+  }
+
+  /**
+   * Adds or updates a content type registration
+   *
+   * Registers a new content type in [Content_Types].xml. This is required
+   * when adding new types of parts to the document package.
+   *
+   * @param partNameOrExtension - Part name (e.g., '/word/custom.xml') or extension (e.g., '.xml')
+   * @param contentType - MIME content type (e.g., 'application/xml')
+   * @returns True if successful
+   *
+   * @example
+   * ```typescript
+   * // Register a custom XML part
+   * await doc.addContentType('/customXml/item1.xml', 'application/xml');
+   *
+   * // Register a new file extension
+   * await doc.addContentType('.json', 'application/json');
+   * ```
+   */
+  async addContentType(partNameOrExtension: string, contentType: string): Promise<boolean> {
+    try {
+      let contentTypesXml = this.zipHandler.getFileAsString('[Content_Types].xml');
+      if (!contentTypesXml) {
+        return false;
+      }
+
+      const isExtension = partNameOrExtension.startsWith('.');
+
+      if (isExtension) {
+        // Add as Default element (for extensions)
+        const extension = partNameOrExtension.substring(1);
+
+        // Check if already exists
+        const existingPattern = new RegExp(`<Default\\s+Extension="${extension}"\\s+ContentType="[^"]+"/?>`, 'g');
+        if (existingPattern.test(contentTypesXml)) {
+          // Update existing
+          contentTypesXml = contentTypesXml.replace(
+            existingPattern,
+            `<Default Extension="${extension}" ContentType="${contentType}"/>`
+          );
+        } else {
+          // Add new before closing tag
+          contentTypesXml = contentTypesXml.replace(
+            '</Types>',
+            `  <Default Extension="${extension}" ContentType="${contentType}"/>\n</Types>`
+          );
+        }
+      } else {
+        // Add as Override element (for specific parts)
+        const partName = partNameOrExtension.startsWith('/') ? partNameOrExtension : `/${partNameOrExtension}`;
+
+        // Check if already exists
+        const existingPattern = new RegExp(`<Override\\s+PartName="${partName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s+ContentType="[^"]+"/?>`, 'g');
+        if (existingPattern.test(contentTypesXml)) {
+          // Update existing
+          contentTypesXml = contentTypesXml.replace(
+            existingPattern,
+            `<Override PartName="${partName}" ContentType="${contentType}"/>`
+          );
+        } else {
+          // Add new before closing tag
+          contentTypesXml = contentTypesXml.replace(
+            '</Types>',
+            `  <Override PartName="${partName}" ContentType="${contentType}"/>\n</Types>`
+          );
+        }
+      }
+
+      // Update the content types file
+      this.zipHandler.updateFile('[Content_Types].xml', contentTypesXml);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Gets all relationships for the document
+   *
+   * Returns a map of relationship file paths to their relationships.
+   * This includes document relationships, part relationships, etc.
+   *
+   * @returns Map of relationship file paths to relationship arrays
+   *
+   * @example
+   * ```typescript
+   * const relationships = await doc.getAllRelationships();
+   * relationships.forEach((rels, path) => {
+   *   console.log(`${path}: ${rels.length} relationships`);
+   * });
+   * ```
+   */
+  async getAllRelationships(): Promise<Map<string, any[]>> {
+    const relationships = new Map<string, any[]>();
+
+    try {
+      // Get all .rels files
+      const relsPaths = this.zipHandler.getFilePaths().filter(path => path.endsWith('.rels'));
+
+      for (const relsPath of relsPaths) {
+        const relsContent = this.zipHandler.getFileAsString(relsPath);
+        if (relsContent) {
+          const rels: any[] = [];
+
+          // Parse relationships
+          const relPattern = /<Relationship\s+([^>]+)\/>/g;
+          let match;
+          while ((match = relPattern.exec(relsContent)) !== null) {
+            const attrs = match[1];
+            if (!attrs) continue;
+
+            const rel: any = {};
+
+            // Extract attributes
+            const idMatch = attrs.match(/Id="([^"]+)"/);
+            const typeMatch = attrs.match(/Type="([^"]+)"/);
+            const targetMatch = attrs.match(/Target="([^"]+)"/);
+            const modeMatch = attrs.match(/TargetMode="([^"]+)"/);
+
+            if (idMatch) rel.id = idMatch[1];
+            if (typeMatch) rel.type = typeMatch[1];
+            if (targetMatch) rel.target = targetMatch[1];
+            if (modeMatch) rel.targetMode = modeMatch[1];
+
+            rels.push(rel);
+          }
+
+          relationships.set(relsPath, rels);
+        }
+      }
+    } catch (error) {
+      // Return empty map on error
+    }
+
+    return relationships;
+  }
+
+  /**
+   * Gets the content type for a specific part
+   * Helper method used internally by getPart
+   */
+  private getContentTypeForPart(partName: string): string | undefined {
+    try {
+      const contentTypesXml = this.zipHandler.getFileAsString('[Content_Types].xml');
+      if (!contentTypesXml) {
+        return undefined;
+      }
+
+      // Check for specific override
+      const overridePattern = new RegExp(`<Override\\s+PartName="${partName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s+ContentType="([^"]+)"`, 'i');
+      const overrideMatch = contentTypesXml.match(overridePattern);
+      if (overrideMatch) {
+        return overrideMatch[1];
+      }
+
+      // Check for extension default
+      const ext = partName.substring(partName.lastIndexOf('.'));
+      if (ext) {
+        const defaultPattern = new RegExp(`<Default\\s+Extension="${ext.substring(1)}"\\s+ContentType="([^"]+)"`, 'i');
+        const defaultMatch = contentTypesXml.match(defaultPattern);
+        if (defaultMatch) {
+          return defaultMatch[1];
+        }
+      }
+    } catch (error) {
+      // Return undefined on error
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Creates an empty document with minimal structure
+   *
+   * Creates a new document with only the essential parts required
+   * for a valid DOCX file, without any default content or styling.
+   * Useful for building documents from scratch programmatically.
+   *
+   * @returns New empty Document instance
+   *
+   * @example
+   * ```typescript
+   * const doc = Document.createEmpty();
+   * // Document has minimal structure, ready for content
+   * doc.createParagraph('First paragraph');
+   * await doc.save('minimal.docx');
+   * ```
+   */
+  static createEmpty(): Document {
+    const doc = new Document(undefined, {}, false); // Don't init defaults
+
+    // Add only the absolute minimum required files
+    const zipHandler = doc.getZipHandler();
+
+    // [Content_Types].xml - minimal
+    zipHandler.addFile('[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
+      '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
+      '  <Default Extension="xml" ContentType="application/xml"/>\n' +
+      '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>\n' +
+      '</Types>'
+    );
+
+    // _rels/.rels - minimal
+    zipHandler.addFile('_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>\n' +
+      '</Relationships>'
+    );
+
+    // word/document.xml - empty body
+    zipHandler.addFile('word/document.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">\n' +
+      '  <w:body/>\n' +
+      '</w:document>'
+    );
+
+    // word/_rels/document.xml.rels - empty relationships
+    zipHandler.addFile('word/_rels/document.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
+    );
+
+    return doc;
   }
 }

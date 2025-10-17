@@ -85,7 +85,7 @@ export {
 } from './utils/units';
 
 // Core classes
-export { Document, DocumentProperties, DocumentOptions } from './core/Document';
+export { Document, DocumentProperties, DocumentOptions, DocumentPart } from './core/Document';
 export { Relationship, RelationshipType, RelationshipProperties } from './core/Relationship';
 export { RelationshipManager } from './core/RelationshipManager';
 export { DocumentParser, ParseError } from './core/DocumentParser';
@@ -94,7 +94,7 @@ export { DocumentValidator, SizeEstimate, MemoryOptions } from './core/DocumentV
 
 // Formatting classes
 export { Style, StyleType, StyleProperties } from './formatting/Style';
-export { StylesManager } from './formatting/StylesManager';
+export { StylesManager, ValidationResult } from './formatting/StylesManager';
 export {
   NumberingLevel,
   NumberFormat,

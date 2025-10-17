@@ -123,6 +123,100 @@ export class Style {
   }
 
   /**
+   * Validates that this style definition is valid
+   *
+   * Checks:
+   * - Required fields (styleId, name, type)
+   * - Valid type value
+   * - No circular references (basedOn != styleId)
+   * - Valid formatting values
+   *
+   * @returns True if the style is valid, false otherwise
+   */
+  isValid(): boolean {
+    try {
+      // Required fields
+      if (!this.properties.styleId || !this.properties.name || !this.properties.type) {
+        return false;
+      }
+
+      // Valid type
+      const validTypes: StyleType[] = ['paragraph', 'character', 'table', 'numbering'];
+      if (!validTypes.includes(this.properties.type)) {
+        return false;
+      }
+
+      // No circular reference
+      if (this.properties.basedOn === this.properties.styleId) {
+        return false;
+      }
+
+      // Check paragraph formatting if present
+      if (this.properties.paragraphFormatting) {
+        const pf = this.properties.paragraphFormatting;
+
+        // Check alignment
+        if (pf.alignment) {
+          const validAlignments = ['left', 'center', 'right', 'justify', 'both', 'distribute'];
+          if (!validAlignments.includes(pf.alignment)) {
+            return false;
+          }
+        }
+
+        // Check spacing values
+        if (pf.spacing) {
+          const spacing = pf.spacing;
+          if (spacing.before !== undefined && spacing.before < 0) return false;
+          if (spacing.after !== undefined && spacing.after < 0) return false;
+          if (spacing.line !== undefined && spacing.line < 0) return false;
+          if (spacing.lineRule && !['auto', 'exact', 'atLeast'].includes(spacing.lineRule)) {
+            return false;
+          }
+        }
+
+        // Check indentation values
+        if (pf.indentation) {
+          const ind = pf.indentation;
+          // Indentation values can be negative for hanging indent
+          if (ind.left !== undefined && ind.left < -100000) return false;
+          if (ind.right !== undefined && ind.right < -100000) return false;
+        }
+      }
+
+      // Check run formatting if present
+      if (this.properties.runFormatting) {
+        const rf = this.properties.runFormatting;
+
+        // Check font size
+        if (rf.size !== undefined && (rf.size <= 0 || rf.size > 1638)) {
+          return false; // Max font size in Word is 1638
+        }
+
+        // Check color format (should be 6 hex characters)
+        if (rf.color && !/^[0-9A-Fa-f]{6}$/.test(rf.color)) {
+          return false;
+        }
+
+        // Check highlight color
+        if (rf.highlight) {
+          const validHighlights = [
+            'black', 'blue', 'cyan', 'darkBlue', 'darkCyan', 'darkGray',
+            'darkGreen', 'darkMagenta', 'darkRed', 'darkYellow', 'green',
+            'lightGray', 'magenta', 'none', 'red', 'white', 'yellow'
+          ];
+          if (!validHighlights.includes(rf.highlight)) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Converts the style to WordprocessingML XML element
    * @returns XMLElement representing the style
    */
