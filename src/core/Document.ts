@@ -22,6 +22,7 @@ import { RevisionManager } from '../elements/RevisionManager';
 import { Comment } from '../elements/Comment';
 import { CommentManager } from '../elements/CommentManager';
 import { Run } from '../elements/Run';
+import { Hyperlink } from '../elements/Hyperlink';
 import { XMLElement } from '../xml/XMLBuilder';
 import { StylesManager } from '../formatting/StylesManager';
 import { Style } from '../formatting/Style';
@@ -1305,6 +1306,77 @@ export class Document {
    */
   getParseWarnings(): Array<{ element: string; error: Error }> {
     return this.parser.getParseErrors();
+  }
+
+  /**
+   * Updates hyperlink URLs in the document using a URL mapping
+   *
+   * This method finds all external hyperlinks in the document and updates their URLs
+   * according to the provided map. The relationships are automatically re-registered
+   * when save() or toBuffer() is called, ensuring the document remains valid per ECMA-376.
+   *
+   * **Important Notes:**
+   * - Only updates external hyperlinks (not internal bookmarks)
+   * - Only updates the URL, not the display text
+   * - Relationships are cleared and will be re-registered on save()
+   * - To update text too, manually iterate and call setText() on hyperlinks
+   *
+   * **OpenXML Compliance:**
+   * This implementation ensures proper OpenXML structure by:
+   * 1. Clearing the old relationship ID when URL changes (prevents orphaned relationships)
+   * 2. Relying on processHyperlinks() during save() to create new relationships
+   * 3. Maintaining TargetMode="External" for all web links (per ECMA-376 §17.16.22)
+   *
+   * @param urlMap - Map of old URLs to new URLs
+   * @returns Number of hyperlinks updated
+   *
+   * @example
+   * ```typescript
+   * // Load existing document
+   * const doc = await Document.load('document.docx');
+   *
+   * // Define URL mappings (old URL → new URL)
+   * const urlMap = new Map([
+   *   ['https://old-site.com', 'https://new-site.com'],
+   *   ['https://example.org', 'https://example.com']
+   * ]);
+   *
+   * // Update hyperlink URLs
+   * const updated = doc.updateHyperlinkUrls(urlMap);
+   * console.log(`Updated ${updated} hyperlink(s)`);
+   *
+   * // Save with updated relationships
+   * await doc.save('updated-document.docx');
+   * ```
+   *
+   * @see {@link https://www.ecma-international.org/publications-and-standards/standards/ecma-376/ | ECMA-376 Part 1 §17.16.22}
+   */
+  updateHyperlinkUrls(urlMap: Map<string, string>): number {
+    let updatedCount = 0;
+
+    // Iterate through all paragraphs in document body
+    for (const para of this.getParagraphs()) {
+      // Get all content items (runs, hyperlinks, fields, revisions)
+      for (const content of para.getContent()) {
+        // Check if content is a Hyperlink and is external
+        if (content instanceof Hyperlink && content.isExternal()) {
+          const currentUrl = content.getUrl();
+
+          // If current URL is in the map, update it
+          if (currentUrl && urlMap.has(currentUrl)) {
+            const newUrl = urlMap.get(currentUrl)!;
+            content.setUrl(newUrl);
+            updatedCount++;
+          }
+        }
+      }
+    }
+
+    // Note: Relationships are automatically re-registered when save() is called
+    // via processHyperlinks() in Document.save() (line 435, 492)
+    // This ensures proper OpenXML structure per ECMA-376
+
+    return updatedCount;
   }
 
   /**

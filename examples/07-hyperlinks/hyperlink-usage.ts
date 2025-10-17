@@ -352,6 +352,151 @@ async function example5_InternalLinks() {
 }
 
 /**
+ * Example 6: Validation and best practices
+ *
+ * This example demonstrates the validation rules enforced by DocXML
+ * to prevent document corruption per ECMA-376 standards.
+ */
+async function example6_ValidationAndBestPractices() {
+  console.log('Example 6: Validation and best practices...');
+
+  const doc = Document.create({
+    properties: {
+      title: 'Hyperlink Validation Example',
+      creator: 'DocXML Examples',
+    },
+  });
+
+  // Title
+  doc.createParagraph('Hyperlink Validation and Best Practices')
+    .setStyle('Title')
+    .setSpaceAfter(480);
+
+  // Introduction
+  doc.createParagraph(
+    'DocXML enforces ECMA-376 compliance to prevent document corruption. ' +
+    'External hyperlinks require relationship registration, which is ' +
+    'automatically handled when using Document.save() or Document.toBuffer().'
+  )
+    .setAlignment('justify')
+    .setSpaceAfter(240);
+
+  // Best Practice #1
+  doc.createParagraph('✅ Best Practice: Use Document.save()')
+    .setStyle('Heading1')
+    .setSpaceAfter(240);
+
+  doc.createParagraph(
+    'The recommended pattern is to use Document.save() or Document.toBuffer(). ' +
+    'These methods automatically register all external hyperlinks with the ' +
+    'relationship manager, ensuring valid OpenXML documents.'
+  )
+    .setAlignment('justify')
+    .setSpaceAfter(240);
+
+  const example1 = doc.createParagraph();
+  example1.addText('Example: ');
+  example1.addHyperlink(Hyperlink.createExternal('https://example.com', 'This link works correctly'));
+  example1.addText(' because Document.save() handles relationships automatically.');
+  example1.setSpaceAfter(480);
+
+  // Validation Rule #1
+  doc.createParagraph('🔒 Validation: External Links Require Relationship IDs')
+    .setStyle('Heading1')
+    .setSpaceAfter(240);
+
+  doc.createParagraph(
+    'Per ECMA-376 Part 1 §17.16.22, external hyperlinks MUST have a relationship ID. ' +
+    'DocXML throws an error if you attempt to generate XML for an external link without ' +
+    'one, preventing silent document corruption.'
+  )
+    .setAlignment('justify')
+    .setSpaceAfter(240);
+
+  const validation1 = doc.createParagraph();
+  validation1.addText('Attempting to manually call toXML() on an external hyperlink ');
+  validation1.addText('without a relationship ID will throw: ', { italic: true });
+  validation1.addText('"CRITICAL: External hyperlink to [URL] is missing relationship ID."',
+    { color: 'FF0000', font: 'Courier New', size: 10 });
+  validation1.setSpaceAfter(480);
+
+  // Validation Rule #2
+  doc.createParagraph('🔒 Validation: Empty Hyperlinks Rejected')
+    .setStyle('Heading1')
+    .setSpaceAfter(240);
+
+  doc.createParagraph(
+    'Hyperlinks must have either a URL (external) or anchor (internal). ' +
+    'DocXML rejects empty hyperlinks that have neither.'
+  )
+    .setAlignment('justify')
+    .setSpaceAfter(480);
+
+  // Validation Rule #3
+  doc.createParagraph('⚠️ Warning: Hybrid Links (URL + Anchor)')
+    .setStyle('Heading1')
+    .setSpaceAfter(240);
+
+  doc.createParagraph(
+    'Hyperlinks with both a URL and an anchor are ambiguous per ECMA-376. ' +
+    'DocXML logs a warning when such links are created, though the URL takes precedence.'
+  )
+    .setAlignment('justify')
+    .setSpaceAfter(240);
+
+  doc.createParagraph(
+    'Use Hyperlink.createExternal() for web links or Hyperlink.createInternal() ' +
+    'for bookmark links to avoid this ambiguity.'
+  )
+    .setAlignment('justify')
+    .setSpaceAfter(480);
+
+  // Improved Text Fallback
+  doc.createParagraph('✨ Improved Text Fallback (v0.3.0+)')
+    .setStyle('Heading1')
+    .setSpaceAfter(240);
+
+  doc.createParagraph(
+    'When hyperlink text is empty, DocXML uses an improved fallback chain: ' +
+    'text → url → anchor → "Link". This makes links more user-friendly.'
+  )
+    .setAlignment('justify')
+    .setSpaceAfter(240);
+
+  const fallback1 = doc.createParagraph();
+  fallback1.addText('Example with empty text: ');
+  // This will display "https://example.com" as the link text
+  fallback1.addHyperlink(Hyperlink.createExternal('https://example.com', ''));
+  fallback1.setSpaceAfter(480);
+
+  // References
+  doc.createParagraph('📚 References')
+    .setStyle('Heading1')
+    .setSpaceAfter(240);
+
+  const ref1 = doc.createParagraph();
+  ref1.addText('• ECMA-376 Part 1 §17.16.22: ');
+  ref1.addHyperlink(
+    Hyperlink.createExternal(
+      'https://www.ecma-international.org/publications-and-standards/standards/ecma-376/',
+      'Hyperlink Element Specification'
+    )
+  );
+  ref1.setLeftIndent(360);
+  ref1.setSpaceAfter(120);
+
+  const ref2 = doc.createParagraph();
+  ref2.addText('• DocXML Hyperlink Best Practices: See OPENXML_STRUCTURE_GUIDE.md');
+  ref2.setLeftIndent(360);
+
+  // Save document
+  const outputPath = path.join(outputDir, 'example6-validation-best-practices.docx');
+  await doc.save(outputPath);
+
+  console.log(`✓ Saved to ${outputPath}`);
+}
+
+/**
  * Main function to run all examples
  */
 async function main() {
@@ -363,6 +508,7 @@ async function main() {
     await example3_CustomFormattedLinks();
     await example4_LinksInContext();
     await example5_InternalLinks();
+    await example6_ValidationAndBestPractices();
 
     console.log('\n✓ All examples completed successfully!');
     console.log(`\nOutput files saved to: ${outputDir}`);
@@ -383,4 +529,5 @@ export {
   example3_CustomFormattedLinks,
   example4_LinksInContext,
   example5_InternalLinks,
+  example6_ValidationAndBestPractices,
 };

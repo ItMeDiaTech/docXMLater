@@ -105,6 +105,34 @@ doc
 await doc.save("with-image.docx");
 ```
 
+### Add Hyperlinks
+
+```typescript
+import { Document, Hyperlink } from "docxmlater";
+
+const doc = Document.create();
+
+// External link (to website)
+const para1 = doc.createParagraph();
+para1.addText("Visit ");
+para1.addHyperlink(Hyperlink.createExternal("https://example.com", "our website"));
+para1.addText(" for more information.");
+
+// Email link
+const para2 = doc.createParagraph();
+para2.addHyperlink(Hyperlink.createEmail("user@example.com", "Contact us"));
+
+// Internal link (to bookmark - requires bookmark to be defined)
+const para3 = doc.createParagraph();
+para3.addHyperlink(Hyperlink.createInternal("Section1", "Jump to Section 1"));
+
+await doc.save("with-links.docx");
+```
+
+**Important:** External hyperlinks require relationship registration. Always use `Document.save()` or `Document.toBuffer()` which automatically handle this. Manually calling `toXML()` on external hyperlinks without setting relationship IDs will throw an error to prevent document corruption.
+
+See [Hyperlink Best Practices](OPENXML_STRUCTURE_GUIDE.md#hyperlink-best-practices) for complete documentation.
+
 ### Use Custom Styles
 
 ```typescript
@@ -348,6 +376,40 @@ image.getExtension()
 image.getImageData()
 ```
 
+### Hyperlink
+
+```typescript
+// Factory methods (recommended)
+Hyperlink.createExternal(url, text, formatting?)
+Hyperlink.createWebLink(url, text?, formatting?)  // Same as createExternal
+Hyperlink.createEmail(email, text?, formatting?)  // Adds "mailto:" prefix
+Hyperlink.createInternal(anchor, text, formatting?)
+
+// Generic constructor
+Hyperlink.create(properties)
+new Hyperlink(properties)
+
+// Properties
+hyperlink.getText()
+hyperlink.setText(text)
+hyperlink.getUrl()
+hyperlink.getAnchor()
+hyperlink.getTooltip()
+hyperlink.setTooltip(tooltip)
+hyperlink.setFormatting(formatting)
+hyperlink.getFormatting()
+hyperlink.isExternal()
+hyperlink.isInternal()
+
+// ⚠️ IMPORTANT: Relationship Management
+// External links require relationship IDs before XML generation
+// Always use Document.save() or Document.toBuffer() which handle this automatically
+// Manual toXML() on external links without relationship IDs will throw error
+hyperlink.setRelationshipId(id)  // Usually managed by Document, not called directly
+hyperlink.getRelationshipId()
+hyperlink.toXML()  // ⚠️ Requires relationshipId for external links
+```
+
 ## Built-in Styles
 
 All documents include 13 ready-to-use styles:
@@ -398,6 +460,13 @@ The `examples/` directory contains comprehensive examples:
 - Sizing and resizing images
 - Multiple images in documents
 - Images with text content
+
+### Hyperlinks (`examples/07-hyperlinks/`)
+
+- External hyperlinks (websites, emails)
+- Internal hyperlinks (bookmarks)
+- Hyperlink formatting and tooltips
+- Validation and best practices
 
 ### Complete Examples (`examples/06-complete/`)
 

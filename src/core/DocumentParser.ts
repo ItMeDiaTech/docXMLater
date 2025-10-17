@@ -540,10 +540,11 @@ export class DocumentParser {
       }
 
       // Create hyperlink with extracted properties
+      // Improved fallback: text → url → anchor → 'Link'
       return new Hyperlink({
         url,
         anchor,
-        text: text || 'Link', // Default text if empty
+        text: text || url || anchor || 'Link',
         formatting,
         tooltip,
         relationshipId,

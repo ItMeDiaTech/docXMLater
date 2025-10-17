@@ -158,7 +158,7 @@ describe('Hyperlink Parsing', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle hyperlink with empty text', async () => {
+    it('should handle hyperlink with empty text (improved fallback)', async () => {
       const mockDocument = await createMockDocument([
         {
           type: 'hyperlink',
@@ -172,8 +172,9 @@ describe('Hyperlink Parsing', () => {
       const paragraphs = doc.getParagraphs();
       const hyperlink = paragraphs[0]!.getContent()[0] as Hyperlink;
 
-      // Should default to 'Link' when text is empty
-      expect(hyperlink.getText()).toBe('Link');
+      // NEW BEHAVIOR: Should use URL as fallback when text is empty
+      // This is more user-friendly than generic 'Link'
+      expect(hyperlink.getText()).toBe('https://example.com');
     });
 
     it('should handle hyperlink with missing relationship', async () => {
@@ -258,6 +259,261 @@ describe('Hyperlink Parsing', () => {
       expect(hyperlink2.getText()).toBe('Go to Section 1');
       expect(hyperlink2.getAnchor()).toBe('Section1');
       expect(hyperlink2.isInternal()).toBe(true);
+    });
+  });
+
+  describe('Validation (ECMA-376 Compliance)', () => {
+    it('should throw error if external link toXML() called without relationship ID', () => {
+      const link = Hyperlink.createExternal('https://example.com', 'Link');
+
+      // toXML() should throw error because relationshipId is not set
+      expect(() => link.toXML()).toThrow(/CRITICAL: External hyperlink/);
+      expect(() => link.toXML()).toThrow(/missing relationship ID/);
+      expect(() => link.toXML()).toThrow(/ECMA-376 §17.16.22/);
+    });
+
+    it('should NOT throw error if external link has relationship ID set', () => {
+      const link = Hyperlink.createExternal('https://example.com', 'Link');
+      link.setRelationshipId('rId5');
+
+      // Should not throw because relationshipId is set
+      expect(() => link.toXML()).not.toThrow();
+
+      const xml = link.toXML();
+      expect(xml.name).toBe('w:hyperlink');
+      expect(xml.attributes?.['r:id']).toBe('rId5');
+    });
+
+    it('should throw error if hyperlink has neither url nor anchor', () => {
+      // Create hyperlink with neither url nor anchor (empty link)
+      const link = new Hyperlink({ text: 'Empty Link' });
+
+      expect(() => link.toXML()).toThrow(/CRITICAL: Hyperlink must have either a URL/);
+      expect(() => link.toXML()).toThrow(/or anchor/);
+    });
+
+    it('should NOT throw error for internal links without relationship ID', () => {
+      const link = Hyperlink.createInternal('Section1', 'Go to Section 1');
+
+      // Internal links don't need relationship IDs
+      expect(() => link.toXML()).not.toThrow();
+
+      const xml = link.toXML();
+      expect(xml.name).toBe('w:hyperlink');
+      expect(xml.attributes?.['w:anchor']).toBe('Section1');
+      expect(xml.attributes?.['r:id']).toBeUndefined();
+    });
+
+    it('should warn when hyperlink has both url and anchor (hybrid link)', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      // Creating hybrid link should log warning
+      new Hyperlink({ url: 'https://example.com', anchor: 'Section1', text: 'Hybrid' });
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('DocXML Warning: Hyperlink has both URL')
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('ambiguous per ECMA-376 spec')
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should properly escape special characters in tooltip attribute', async () => {
+      const link = Hyperlink.createExternal(
+        'https://example.com',
+        'Link',
+        undefined
+      );
+      link.setRelationshipId('rId5');
+      link.setTooltip('This is a "tooltip" with <special> & characters');
+
+      const xml = link.toXML();
+
+      // XMLBuilder should escape these characters when generating string
+      expect(xml.attributes?.['w:tooltip']).toBe('This is a "tooltip" with <special> & characters');
+    });
+
+    it('should use improved text fallback chain (url → anchor → text → "Link")', () => {
+      // Test 1: No text provided, should use URL
+      const link1 = Hyperlink.createExternal('https://example.com', '');
+      expect(link1.getText()).toBe('https://example.com');
+
+      // Test 2: No text provided, should use anchor
+      const link2 = Hyperlink.createInternal('Section1', '');
+      expect(link2.getText()).toBe('Section1');
+
+      // Test 3: No text, no url, no anchor - should default to 'Link'
+      const link3 = new Hyperlink({ text: '' });
+      expect(link3.getText()).toBe('Link');
+
+      // Test 4: Text provided - should use text
+      const link4 = Hyperlink.createExternal('https://example.com', 'Custom Text');
+      expect(link4.getText()).toBe('Custom Text');
+    });
+
+    it('should preserve validation through Document.save() workflow', async () => {
+      // This test verifies the RECOMMENDED pattern works correctly
+      const doc = Document.create();
+      const para = doc.createParagraph();
+
+      // Add external hyperlink WITHOUT manually setting relationship ID
+      para.addHyperlink(Hyperlink.createExternal('https://example.com', 'Test Link'));
+
+      // Document.save() should automatically register relationships
+      const buffer = await doc.toBuffer();
+
+      // Load and verify it worked
+      const doc2 = await Document.loadFromBuffer(buffer);
+      const hyperlink = doc2.getParagraphs()[0]!.getContent()[0] as Hyperlink;
+
+      expect(hyperlink.getText()).toBe('Test Link');
+      expect(hyperlink.getUrl()).toBe('https://example.com');
+      expect(hyperlink.getRelationshipId()).toBeDefined();
+    });
+  });
+
+  describe('Hyperlink URL Updates', () => {
+    it('should update hyperlink URL using setUrl()', () => {
+      const link = Hyperlink.createExternal('https://old.com', 'Link');
+
+      expect(link.getUrl()).toBe('https://old.com');
+      expect(link.getRelationshipId()).toBeUndefined();
+
+      // Update URL
+      link.setUrl('https://new.com');
+
+      expect(link.getUrl()).toBe('https://new.com');
+      expect(link.getRelationshipId()).toBeUndefined(); // Should remain cleared
+    });
+
+    it('should clear relationship ID when URL is updated', () => {
+      const link = Hyperlink.createExternal('https://old.com', 'Link');
+      link.setRelationshipId('rId1');
+
+      expect(link.getRelationshipId()).toBe('rId1');
+
+      // Update URL - should clear relationship ID
+      link.setUrl('https://new.com');
+
+      expect(link.getUrl()).toBe('https://new.com');
+      expect(link.getRelationshipId()).toBeUndefined(); // Cleared for re-registration
+    });
+
+    it('should update multiple hyperlinks in document using updateHyperlinkUrls()', () => {
+      const doc = Document.create();
+
+      // Add paragraphs with hyperlinks
+      const para1 = doc.createParagraph();
+      para1.addHyperlink(Hyperlink.createExternal('https://old1.com', 'Link 1'));
+
+      const para2 = doc.createParagraph();
+      para2.addHyperlink(Hyperlink.createExternal('https://old2.com', 'Link 2'));
+      para2.addHyperlink(Hyperlink.createExternal('https://keep.com', 'Keep'));
+
+      // Update URLs
+      const urlMap = new Map([
+        ['https://old1.com', 'https://new1.com'],
+        ['https://old2.com', 'https://new2.com']
+      ]);
+
+      const updated = doc.updateHyperlinkUrls(urlMap);
+      expect(updated).toBe(2);
+
+      // Verify URLs updated
+      const paras = doc.getParagraphs();
+      const link1 = paras[0]!.getContent()[0] as Hyperlink;
+      const link2 = paras[1]!.getContent()[0] as Hyperlink;
+      const link3 = paras[1]!.getContent()[1] as Hyperlink;
+
+      expect(link1.getUrl()).toBe('https://new1.com');
+      expect(link2.getUrl()).toBe('https://new2.com');
+      expect(link3.getUrl()).toBe('https://keep.com'); // Unchanged
+    });
+
+    it('should skip internal hyperlinks when updating URLs', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+
+      // Add internal link (should not be updated)
+      para.addHyperlink(Hyperlink.createInternal('Section1', 'Jump'));
+
+      // Add external link (should be updated)
+      para.addHyperlink(Hyperlink.createExternal('https://old.com', 'Link'));
+
+      const urlMap = new Map([['https://old.com', 'https://new.com']]);
+      const updated = doc.updateHyperlinkUrls(urlMap);
+
+      expect(updated).toBe(1); // Only 1 external link updated
+
+      const content = para.getContent();
+      const link1 = content[0] as Hyperlink;
+      const link2 = content[1] as Hyperlink;
+
+      expect(link1.isInternal()).toBe(true);
+      expect(link1.getAnchor()).toBe('Section1'); // Unchanged
+      expect(link2.getUrl()).toBe('https://new.com'); // Updated
+    });
+
+    it('should re-register relationships after URL update on save', async () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+      para.addHyperlink(Hyperlink.createExternal('https://old.com', 'Link'));
+
+      // Update URL
+      const urlMap = new Map([['https://old.com', 'https://new.com']]);
+      doc.updateHyperlinkUrls(urlMap);
+
+      // Save and reload
+      const buffer = await doc.toBuffer();
+      const doc2 = await Document.loadFromBuffer(buffer);
+
+      // Verify URL persisted correctly
+      const paras = doc2.getParagraphs();
+      const link = paras[0]!.getContent()[0] as Hyperlink;
+
+      expect(link.getUrl()).toBe('https://new.com');
+      expect(link.getRelationshipId()).toBeDefined(); // Re-registered
+      expect(link.getText()).toBe('Link');
+    });
+
+    it('should return 0 when no URLs match the map', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+      para.addHyperlink(Hyperlink.createExternal('https://example.com', 'Link'));
+
+      const urlMap = new Map([['https://other.com', 'https://new.com']]);
+      const updated = doc.updateHyperlinkUrls(urlMap);
+
+      expect(updated).toBe(0);
+
+      // URL should remain unchanged
+      const link = para.getContent()[0] as Hyperlink;
+      expect(link.getUrl()).toBe('https://example.com');
+    });
+
+    it('should handle updating same URL multiple times in one document', () => {
+      const doc = Document.create();
+
+      // Create 3 paragraphs with the same URL
+      for (let i = 0; i < 3; i++) {
+        const para = doc.createParagraph();
+        para.addHyperlink(Hyperlink.createExternal('https://old.com', `Link ${i + 1}`));
+      }
+
+      const urlMap = new Map([['https://old.com', 'https://new.com']]);
+      const updated = doc.updateHyperlinkUrls(urlMap);
+
+      expect(updated).toBe(3);
+
+      // Verify all were updated
+      const paras = doc.getParagraphs();
+      for (let i = 0; i < 3; i++) {
+        const link = paras[i]!.getContent()[0] as Hyperlink;
+        expect(link.getUrl()).toBe('https://new.com');
+        expect(link.getText()).toBe(`Link ${i + 1}`); // Text unchanged
+      }
     });
   });
 });
