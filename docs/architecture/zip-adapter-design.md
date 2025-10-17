@@ -7,11 +7,13 @@ This document outlines a future architecture for abstracting the ZIP handling la
 ## Current Status (Phase 2)
 
 **Current Implementation:**
+
 - Direct dependency on JSZip v3.10.1
 - `ZipHandler`, `ZipReader`, and `ZipWriter` classes directly use JSZip API
 - ~1,000 lines of code coupled to JSZip
 
 **Known Limitations:**
+
 - JSZip loads entire archive into memory (no streaming)
 - No incremental save support
 - Last major update: June 2023
@@ -50,7 +52,11 @@ interface ZipAdapter {
   /**
    * Add file to archive
    */
-  addFile(path: string, content: string | Buffer, options?: AddFileOptions): void;
+  addFile(
+    path: string,
+    content: string | Buffer,
+    options?: AddFileOptions
+  ): void;
 
   /**
    * Remove file from archive
@@ -82,6 +88,7 @@ interface ZipAdapter {
 ### 2. Implementation Adapters
 
 #### JSZip Adapter (Current)
+
 ```typescript
 class JSZipAdapter implements ZipAdapter {
   private jszip: JSZip;
@@ -92,6 +99,7 @@ class JSZipAdapter implements ZipAdapter {
 ```
 
 #### Yauzl/Yazl Adapter (Streaming Alternative)
+
 ```typescript
 class YauzlAdapter implements ZipAdapter {
   // Uses yauzl for reading (streaming)
@@ -101,6 +109,7 @@ class YauzlAdapter implements ZipAdapter {
 ```
 
 #### Node Native Adapter (Future)
+
 ```typescript
 class NodeZipAdapter implements ZipAdapter {
   // Uses native Node.js ZIP support when available
@@ -118,11 +127,11 @@ class ZipAdapterFactory {
   /**
    * Create adapter based on configuration or auto-detection
    */
-  static create(type?: 'jszip' | 'yauzl' | 'native'): ZipAdapter {
-    if (type === 'yauzl') {
+  static create(type?: "jszip" | "yauzl" | "native"): ZipAdapter {
+    if (type === "yauzl") {
       return new YauzlAdapter();
     }
-    if (type === 'native' && isNodeZipAvailable()) {
+    if (type === "native" && isNodeZipAvailable()) {
       return new NodeZipAdapter();
     }
     // Default to JSZip for backwards compatibility
@@ -137,7 +146,7 @@ class ZipAdapterFactory {
 export class ZipHandler {
   private adapter: ZipAdapter;
 
-  constructor(adapterType?: 'jszip' | 'yauzl' | 'native') {
+  constructor(adapterType?: "jszip" | "yauzl" | "native") {
     this.adapter = ZipAdapterFactory.create(adapterType);
   }
 
@@ -153,18 +162,21 @@ export class ZipHandler {
 ## Migration Path
 
 ### Phase 1: Create Abstraction (No Breaking Changes)
+
 1. Define `ZipAdapter` interface
 2. Create `JSZipAdapter` wrapping current implementation
 3. Update `ZipHandler` to use adapter internally
 4. **Result:** Same functionality, prepared for future changes
 
 ### Phase 2: Add Alternative Implementations
+
 1. Implement `YauzlAdapter` for streaming support
 2. Add configuration option to select adapter
 3. Benchmark performance differences
 4. **Result:** Users can opt-in to better performance
 
 ### Phase 3: Optimize Default
+
 1. Based on benchmarks, choose best default
 2. Deprecate JSZip if better alternative found
 3. Provide migration guide
@@ -173,21 +185,25 @@ export class ZipHandler {
 ## Benefits
 
 ### Flexibility
+
 - Easy to switch implementations if JSZip has issues
 - Can optimize for different use cases (small vs. large files)
 - Not locked into single dependency
 
 ### Performance
+
 - Yauzl/Yazl provides streaming for large files
 - Native implementation could be fastest
 - Can benchmark and choose best option
 
 ### Maintenance
+
 - If JSZip becomes unmaintained, easy to migrate
 - Security issues in one adapter don't block entire framework
 - Can support multiple adapters simultaneously
 
 ### Testing
+
 - Can mock adapter for unit tests
 - Easier to test ZIP operations in isolation
 - Adapter-specific tests separate from DocXML logic
@@ -195,19 +211,25 @@ export class ZipHandler {
 ## Risks & Mitigation
 
 ### Risk: Breaking Changes
+
 **Mitigation:**
+
 - Phase 1 maintains 100% backwards compatibility
 - Old API continues to work
 - Migration is opt-in initially
 
 ### Risk: Increased Complexity
+
 **Mitigation:**
+
 - Adapter interface is simple (10-15 methods)
 - Most code stays the same
 - Only ZipHandler changes significantly
 
 ### Risk: Performance Regression
+
 **Mitigation:**
+
 - Benchmark before switching defaults
 - Allow users to choose adapter
 - Keep JSZip adapter available
@@ -215,14 +237,17 @@ export class ZipHandler {
 ## Alternative Approaches Considered
 
 ### 1. Stay with JSZip Only
+
 **Pros:** No work required, stable
 **Cons:** Locked-in, memory issues persist, potential security risk
 
 ### 2. Direct Migration to Different Library
+
 **Pros:** Simpler than abstraction
 **Cons:** Risky, no fallback, hard to change later
 
 ### 3. Build Custom ZIP Handler
+
 **Pros:** Full control, optimal for DOCX
 **Cons:** Massive effort, reinventing wheel, maintenance burden
 
@@ -236,6 +261,7 @@ export class ZipHandler {
 - Small effort (~2-3 days)
 
 **Timeline:**
+
 - Phase 1: After Phase 3 features complete (table support)
 - Phase 2: Based on user feedback about large file handling
 - Phase 3: Only if JSZip shows problems
@@ -245,15 +271,15 @@ export class ZipHandler {
 ```typescript
 // Default (JSZip)
 const doc = Document.create();
-await doc.save('output.docx');
+await doc.save("output.docx");
 
 // Streaming for large files
-const doc = Document.create({ zipAdapter: 'yauzl' });
-await doc.save('large-output.docx'); // Better memory usage
+const doc = Document.create({ zipAdapter: "yauzl" });
+await doc.save("large-output.docx"); // Better memory usage
 
 // Native (if available)
-const doc = Document.create({ zipAdapter: 'native' });
-await doc.save('output.docx'); // Potentially fastest
+const doc = Document.create({ zipAdapter: "native" });
+await doc.save("output.docx"); // Potentially fastest
 ```
 
 ## Conclusion
