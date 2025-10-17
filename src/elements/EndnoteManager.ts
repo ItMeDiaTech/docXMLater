@@ -5,7 +5,7 @@
  * Maintains unique IDs and proper ordering.
  */
 
-import { Endnote, EndnoteType } from './Endnote';
+import { Endnote } from './Endnote';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
@@ -193,7 +193,14 @@ export class EndnoteManager {
       children: endnotes.map(e => e.toXML())
     };
 
-    return XMLBuilder.buildXML(endnotesElement);
+    // Build XML using XMLBuilder
+    const builder = new XMLBuilder();
+    builder.element(
+      endnotesElement.name,
+      endnotesElement.attributes,
+      endnotesElement.children
+    );
+    return builder.build(true);
   }
 
   /**

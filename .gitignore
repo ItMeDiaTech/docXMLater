@@ -55,3 +55,6 @@ PROJECT_STATUS.md
 !tests/**/*.docx
 !ErrorDoc.docx
 !Working.docx
+/SKILL.md
+/OPENXML_STRUCTURE_GUIDE.md
+/jest.config.js

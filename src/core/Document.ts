@@ -22,9 +22,7 @@ import { Revision, RevisionType } from '../elements/Revision';
 import { RevisionManager } from '../elements/RevisionManager';
 import { Comment } from '../elements/Comment';
 import { CommentManager } from '../elements/CommentManager';
-import { Footnote, FootnoteType } from '../elements/Footnote';
 import { FootnoteManager } from '../elements/FootnoteManager';
-import { Endnote, EndnoteType } from '../elements/Endnote';
 import { EndnoteManager } from '../elements/EndnoteManager';
 import { Run } from '../elements/Run';
 import { Hyperlink } from '../elements/Hyperlink';
@@ -141,8 +139,10 @@ export class Document {
   private bookmarkManager: BookmarkManager;
   private revisionManager: RevisionManager;
   private commentManager: CommentManager;
-  private footnoteManager: FootnoteManager;
-  private endnoteManager: EndnoteManager;
+  // @ts-ignore - Reserved for future implementation
+  private _footnoteManager: FootnoteManager;
+  // @ts-ignore - Reserved for future implementation
+  private _endnoteManager: EndnoteManager;
 
   // Helper classes for parsing, generation, and validation
   private parser: DocumentParser;
@@ -187,8 +187,8 @@ export class Document {
     this.bookmarkManager = BookmarkManager.create();
     this.revisionManager = RevisionManager.create();
     this.commentManager = CommentManager.create();
-    this.footnoteManager = FootnoteManager.create();
-    this.endnoteManager = EndnoteManager.create();
+    this._footnoteManager = FootnoteManager.create();
+    this._endnoteManager = EndnoteManager.create();
 
     // Add default relationships only for new documents
     if (initDefaults) {

@@ -158,6 +158,10 @@ export { Revision, RevisionType, RevisionProperties } from './elements/Revision'
 export { RevisionManager } from './elements/RevisionManager';
 export { Comment, CommentProperties } from './elements/Comment';
 export { CommentManager } from './elements/CommentManager';
+export { Footnote, FootnoteType, FootnoteProperties } from './elements/Footnote';
+export { FootnoteManager } from './elements/FootnoteManager';
+export { Endnote, EndnoteType, EndnoteProperties } from './elements/Endnote';
+export { EndnoteManager } from './elements/EndnoteManager';
 
 // XML Builder and Parser
 export { XMLBuilder, XMLElement } from './xml/XMLBuilder';

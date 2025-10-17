@@ -1,10 +1,11 @@
-# Contributing to DocXML
+# Contributing to DocXMLater
 
 Thank you for your interest in contributing to DocXML! This document provides guidelines for contributing to the project.
 
 ## Getting Started
 
 ### Prerequisites
+
 - Node.js 14 or higher
 - TypeScript 5.0 or higher
 - Git
@@ -13,19 +14,26 @@ Thank you for your interest in contributing to DocXML! This document provides gu
 
 1. Fork the repository
 2. Clone your fork:
+
    ```bash
-   git clone https://github.com/your-username/docXML.git
+   git clone https://github.com/ItMeDiatech/docXMLater.git
    cd docXML
    ```
+
 3. Install dependencies:
+
    ```bash
    npm install
    ```
+
 4. Build the project:
+
    ```bash
    npm run build
    ```
+
 5. Run tests:
+
    ```bash
    npm test
    ```
@@ -39,6 +47,7 @@ git checkout -b feature/your-feature-name
 ```
 
 Use descriptive branch names:
+
 - `feature/add-custom-numbering`
 - `fix/table-border-rendering`
 - `docs/update-api-reference`
@@ -66,6 +75,7 @@ Use descriptive branch names:
 - Test edge cases and error conditions
 
 Run tests:
+
 ```bash
 # Run all tests
 npm test
@@ -82,7 +92,8 @@ npm run test:coverage
 ### Commit Messages
 
 Follow this format:
-```
+
+```text
 <type>: <subject>
 
 <body>
@@ -91,6 +102,7 @@ Follow this format:
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -100,7 +112,8 @@ Follow this format:
 - `chore`: Maintenance tasks
 
 **Examples:**
-```
+
+```text
 feat: add support for custom table styles
 
 Implements custom table styling with borders, shading, and cell formatting.
@@ -108,7 +121,7 @@ Implements custom table styling with borders, shading, and cell formatting.
 Closes #123
 ```
 
-```
+```text
 fix: correct paragraph spacing calculation
 
 Fixed incorrect twips to points conversion that caused spacing issues.
@@ -133,6 +146,7 @@ Fixed incorrect twips to points conversion that caused spacing issues.
 ### Submitting a Pull Request
 
 1. Push your branch to your fork:
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -171,7 +185,8 @@ When adding new features:
 - Include usage examples in comments
 
 Example:
-```typescript
+
+````typescript
 /**
  * Creates a new paragraph with specified text and formatting
  * @param text - The paragraph text content
@@ -186,7 +201,7 @@ Example:
  * ```
  */
 createParagraph(text?: string, formatting?: ParagraphFormatting): Paragraph
-```
+````
 
 ### User Documentation
 
@@ -197,7 +212,7 @@ createParagraph(text?: string, formatting?: ParagraphFormatting): Paragraph
 
 ## Project Structure
 
-```
+```text
 src/
 ├── core/          # Document, ZipHandler classes
 ├── elements/      # Paragraph, Run, Table elements
@@ -234,6 +249,7 @@ docs/
 ### Creating a Good Issue
 
 Include:
+
 - Clear, descriptive title
 - Detailed description of the problem
 - Steps to reproduce
@@ -260,6 +276,7 @@ Include:
 ## Questions?
 
 If you have questions:
+
 - Check existing documentation
 - Search closed issues
 - Open a new issue with the `question` label

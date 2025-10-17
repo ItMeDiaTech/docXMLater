@@ -170,7 +170,7 @@ export class Endnote {
       type: EndnoteType.Separator
     });
     // Separator typically has a horizontal line
-    const para = endnote.createParagraph();
+    endnote.createParagraph();
     // Add separator formatting if needed
     return endnote;
   }

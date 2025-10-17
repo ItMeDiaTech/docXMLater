@@ -170,7 +170,7 @@ export class Footnote {
       type: FootnoteType.Separator
     });
     // Separator typically has a horizontal line
-    const para = footnote.createParagraph();
+    footnote.createParagraph();
     // Add separator formatting if needed
     return footnote;
   }

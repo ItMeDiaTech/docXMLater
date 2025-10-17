@@ -5,7 +5,7 @@
  * Maintains unique IDs and proper ordering.
  */
 
-import { Footnote, FootnoteType } from './Footnote';
+import { Footnote } from './Footnote';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
@@ -193,7 +193,14 @@ export class FootnoteManager {
       children: footnotes.map(f => f.toXML())
     };
 
-    return XMLBuilder.buildXML(footnotesElement);
+    // Build XML using XMLBuilder
+    const builder = new XMLBuilder();
+    builder.element(
+      footnotesElement.name,
+      footnotesElement.attributes,
+      footnotesElement.children
+    );
+    return builder.build(true);
   }
 
   /**
