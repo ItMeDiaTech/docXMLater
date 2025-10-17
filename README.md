@@ -7,7 +7,7 @@
 
 A comprehensive, production-ready TypeScript/JavaScript library for creating, reading, and manipulating Microsoft Word (.docx) documents programmatically. Full OpenXML compliance with extensive API coverage.
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 npm install docxmlater
@@ -24,7 +24,7 @@ doc.createParagraph("Hello World").setStyle("Title");
 await doc.save("output.docx");
 ```
 
-## 📚 Complete API Reference
+## Complete API Reference
 
 ### Document Operations
 
@@ -283,7 +283,7 @@ await doc.save("output.docx");
 | `pointsToTwips(points)`      | Points to twips      | `pointsToTwips(12)` // 240  |
 | `pixelsToEmus(pixels, dpi?)` | Pixels to EMUs       | `pixelsToEmus(96)`          |
 
-## 📖 Common Recipes
+## Common Recipes
 
 ### Create a Simple Document
 
@@ -458,27 +458,27 @@ const parts = await doc.listParts();
 console.log("Document contains:", parts.length, "parts");
 ```
 
-## 🎯 Features
+## Features
 
-- ✅ **Full OpenXML Compliance** - Follows ECMA-376 standard
-- ✅ **TypeScript First** - Complete type definitions
-- ✅ **Memory Efficient** - Handles large documents with streaming
-- ✅ **Atomic Saves** - Prevents corruption with temp file pattern
-- ✅ **Rich Formatting** - Complete text and paragraph formatting
-- ✅ **Tables** - Full support with borders, shading, merging
-- ✅ **Images** - PNG, JPEG, GIF with sizing and positioning
-- ✅ **Hyperlinks** - External, internal, and email links
-- ✅ **Styles** - 13 built-in styles + custom style creation
-- ✅ **Lists** - Bullets, numbering, multi-level
-- ✅ **Headers/Footers** - Different first/even/odd pages
-- ✅ **Search & Replace** - With case and whole word options
-- ✅ **Document Stats** - Word count, character count, size estimation
-- ✅ **Track Changes** - Insertions and deletions with authors
-- ✅ **Comments** - With replies and threading
-- ✅ **Bookmarks** - For internal navigation
-- ✅ **Low-level Access** - Direct ZIP and XML manipulation
+- **Full OpenXML Compliance** - Follows ECMA-376 standard
+- **TypeScript First** - Complete type definitions
+- **Memory Efficient** - Handles large documents with streaming
+- **Atomic Saves** - Prevents corruption with temp file pattern
+- **Rich Formatting** - Complete text and paragraph formatting
+- **Tables** - Full support with borders, shading, merging
+- **Images** - PNG, JPEG, GIF with sizing and positioning
+- **Hyperlinks** - External, internal, and email links
+- **Styles** - 13 built-in styles + custom style creation
+- **Lists** - Bullets, numbering, multi-level
+- **Headers/Footers** - Different first/even/odd pages
+- **Search & Replace** - With case and whole word options
+- **Document Stats** - Word count, character count, size estimation
+- **Track Changes** - Insertions and deletions with authors
+- **Comments** - With replies and threading
+- **Bookmarks** - For internal navigation
+- **Low-level Access** - Direct ZIP and XML manipulation
 
-## 📊 Performance
+## Performance
 
 - Process 100+ page documents efficiently
 - Atomic save pattern prevents corruption
@@ -486,7 +486,7 @@ console.log("Document contains:", parts.length, "parts");
 - Lazy loading of document parts
 - Resource cleanup with `dispose()`
 
-## 🧪 Testing
+## Testing
 
 ```bash
 npm test                 # Run all tests
@@ -496,7 +496,7 @@ npm run test:coverage   # Coverage report
 
 **Current:** 253 tests passing | 100% core functionality covered
 
-## 🛠 Development
+## Development
 
 ```bash
 # Install dependencies
@@ -509,7 +509,7 @@ npm run build
 npx ts-node examples/simple-document.ts
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 src/
@@ -560,12 +560,12 @@ w:document (root)
     └── w:sectPr (section properties) [1] (must be last child of w:body)
 ```
 
-## 🔧 Requirements
+## Requirements
 
 - Node.js 16+
 - TypeScript 5.0+ (for development)
 
-## 📦 Installation Options
+## Installation Options
 
 ```bash
 # NPM
@@ -578,7 +578,7 @@ yarn add docxmlater
 pnpm add docxmlater
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md).
 
@@ -588,24 +588,24 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 MIT © DiaTech
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built with [JSZip](https://stuk.github.io/jszip/) for ZIP handling
 - Follows [ECMA-376](https://www.ecma-international.org/publications-and-standards/standards/ecma-376/) Office Open XML standard
 - Inspired by [python-docx](https://python-docx.readthedocs.io/) and [docx](https://github.com/dolanmiu/docx)
 
-## 📞 Support
+## Support
 
 - **Documentation**: [Full Docs](https://github.com/ItMeDiaTech/docXMLater/tree/main/docs)
 - **Examples**: [Example Code](https://github.com/ItMeDiaTech/docXMLater/tree/main/examples)
 - **Issues**: [GitHub Issues](https://github.com/ItMeDiaTech/docXMLater/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/ItMeDiaTech/docXMLater/discussions)
 
-## 🚀 Quick Links
+## Quick Links
 
 - [NPM Package](https://www.npmjs.com/package/docxmlater)
 - [GitHub Repository](https://github.com/ItMeDiaTech/docXMLater)
@@ -614,4 +614,4 @@ MIT © DiaTech
 
 ---
 
-**Ready to create amazing Word documents?** Start with our [examples](https://github.com/ItMeDiaTech/docXMLater/tree/main/examples) or dive into the [API Reference](#-complete-api-reference) above!
+**Ready to create amazing Word documents?** Start with our [examples](https://github.com/ItMeDiaTech/docXMLater/tree/main/examples) or dive into the [API Reference](#complete-api-reference) above!
