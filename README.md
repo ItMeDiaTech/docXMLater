@@ -1,694 +1,569 @@
-# docxmlater - Professional DOCX Editing Framework
+# docXMLater - Professional DOCX Framework
 
-[![Tests](https://img.shields.io/badge/tests-205%20passing-brightgreen)](https://github.com/ItMeDiaTech/docXMLater)
+[![npm version](https://img.shields.io/npm/v/docxmlater.svg)](https://www.npmjs.com/package/docxmlater)
+[![Tests](https://img.shields.io/badge/tests-253%20passing-brightgreen)](https://github.com/ItMeDiaTech/docXMLater)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A comprehensive, production-ready TypeScript/JavaScript library for creating, reading, and manipulating Microsoft Word (.docx) documents programmatically.
+A comprehensive, production-ready TypeScript/JavaScript library for creating, reading, and manipulating Microsoft Word (.docx) documents programmatically. Full OpenXML compliance with extensive API coverage.
 
-## Features
-
-- **High-Level Document API** - Create documents with a simple, intuitive interface
-- **Text Formatting** - Bold, italic, fonts, colors, and 15+ formatting options
-- **Paragraph Formatting** - Alignment, indentation, spacing, keep-with-next
-- **Tables** - Full table support with borders, shading, cell merging
-- **Images** - Embed PNG, JPEG, GIF images with sizing and positioning
-- **Hyperlinks** - Internal and external links with full formatting support
-- **Styles System** - 13 built-in styles + custom style creation
-- **ZIP Archive Handling** - Low-level DOCX manipulation
-- **TypeScript First** - Full type safety with comprehensive definitions
-- **Well Tested** - 205 tests, all passing
-- **Production Ready** - Used in real-world applications
-
-## Installation
+## 🚀 Quick Start
 
 ```bash
 npm install docxmlater
 ```
 
-## Quick Start
-
-### Create Your First Document
-
 ```typescript
-import { Document } from "docxmlater";
+import { Document } from 'docxmlater';
 
+// Create document
 const doc = Document.create();
+doc.createParagraph('Hello World').setStyle('Title');
 
-// Add content with styles
-doc.createParagraph("My Document").setStyle("Title");
-doc.createParagraph("Introduction").setStyle("Heading1");
-doc.createParagraph("This is body text with the Normal style.");
+// Save document
+await doc.save('output.docx');
+```
 
-// Save
-await doc.save("my-document.docx");
+## 📚 Complete API Reference
+
+### Document Operations
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `Document.create(options?)` | Create new document | `const doc = Document.create()` |
+| `Document.createEmpty()` | Create minimal document | `const doc = Document.createEmpty()` |
+| `Document.load(path)` | Load from file | `const doc = await Document.load('file.docx')` |
+| `Document.loadFromBuffer(buffer)` | Load from buffer | `const doc = await Document.loadFromBuffer(buf)` |
+| `save(path)` | Save to file | `await doc.save('output.docx')` |
+| `toBuffer()` | Export as buffer | `const buffer = await doc.toBuffer()` |
+| `dispose()` | Clean up resources | `doc.dispose()` |
+
+### Content Creation
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `createParagraph(text?)` | Add paragraph | `doc.createParagraph('Text')` |
+| `createTable(rows, cols)` | Add table | `doc.createTable(3, 4)` |
+| `addParagraph(para)` | Add existing paragraph | `doc.addParagraph(myPara)` |
+| `addTable(table)` | Add existing table | `doc.addTable(myTable)` |
+| `addImage(image)` | Add image | `doc.addImage(myImage)` |
+| `addTableOfContents(toc?)` | Add TOC | `doc.addTableOfContents()` |
+| `insertParagraphAt(index, para)` | Insert at position | `doc.insertParagraphAt(0, para)` |
+
+### Content Retrieval
+
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `getParagraphs()` | Get all paragraphs | `Paragraph[]` |
+| `getTables()` | Get all tables | `Table[]` |
+| `getBodyElements()` | Get all body elements | `BodyElement[]` |
+| `getParagraphCount()` | Count paragraphs | `number` |
+| `getTableCount()` | Count tables | `number` |
+| `getHyperlinks()` | Get all links | `Array<{hyperlink, paragraph}>` |
+| `getBookmarks()` | Get all bookmarks | `Array<{bookmark, paragraph}>` |
+| `getImages()` | Get all images | `Array<{image, relationshipId, filename}>` |
+
+### Content Removal
+
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `removeParagraph(paraOrIndex)` | Remove paragraph | `boolean` |
+| `removeTable(tableOrIndex)` | Remove table | `boolean` |
+| `clearParagraphs()` | Remove all content | `this` |
+
+### Search & Replace
+
+| Method | Description | Options |
+|--------|-------------|---------|
+| `findText(text, options?)` | Find text occurrences | `{caseSensitive?, wholeWord?}` |
+| `replaceText(find, replace, options?)` | Replace all text | `{caseSensitive?, wholeWord?}` |
+| `updateHyperlinkUrls(urlMap)` | Update hyperlink URLs | `Map<oldUrl, newUrl>` |
+
+### Document Statistics
+
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `getWordCount()` | Total word count | `number` |
+| `getCharacterCount(includeSpaces?)` | Character count | `number` |
+| `estimateSize()` | Size estimation | `{totalEstimatedMB, warning?}` |
+| `getSizeStats()` | Detailed size stats | `{elements, size, warnings}` |
+
+### Text Formatting
+
+| Property | Values | Example |
+|----------|--------|---------|
+| `bold` | `true/false` | `{bold: true}` |
+| `italic` | `true/false` | `{italic: true}` |
+| `underline` | `'single'/'double'/'dotted'/etc` | `{underline: 'single'}` |
+| `strike` | `true/false` | `{strike: true}` |
+| `font` | Font name | `{font: 'Arial'}` |
+| `size` | Points | `{size: 12}` |
+| `color` | Hex color | `{color: 'FF0000'}` |
+| `highlight` | Color name | `{highlight: 'yellow'}` |
+| `subscript` | `true/false` | `{subscript: true}` |
+| `superscript` | `true/false` | `{superscript: true}` |
+| `smallCaps` | `true/false` | `{smallCaps: true}` |
+| `allCaps` | `true/false` | `{allCaps: true}` |
+
+### Paragraph Formatting
+
+| Method | Description | Values |
+|--------|-------------|--------|
+| `setAlignment(align)` | Text alignment | `'left'/'center'/'right'/'justify'` |
+| `setLeftIndent(twips)` | Left indentation | Twips value |
+| `setRightIndent(twips)` | Right indentation | Twips value |
+| `setFirstLineIndent(twips)` | First line indent | Twips value |
+| `setSpaceBefore(twips)` | Space before | Twips value |
+| `setSpaceAfter(twips)` | Space after | Twips value |
+| `setLineSpacing(twips, rule?)` | Line spacing | Twips + rule |
+| `setStyle(styleId)` | Apply style | Style ID |
+| `setKeepNext()` | Keep with next | - |
+| `setKeepLines()` | Keep lines together | - |
+| `setPageBreakBefore()` | Page break before | - |
+
+### Table Operations
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `getRow(index)` | Get table row | `table.getRow(0)` |
+| `getCell(row, col)` | Get table cell | `table.getCell(0, 1)` |
+| `addRow()` | Add new row | `table.addRow()` |
+| `removeRow(index)` | Remove row | `table.removeRow(2)` |
+| `insertColumn(index)` | Insert column | `table.insertColumn(1)` |
+| `removeColumn(index)` | Remove column | `table.removeColumn(3)` |
+| `setWidth(twips)` | Set table width | `table.setWidth(8640)` |
+| `setAlignment(align)` | Table alignment | `table.setAlignment('center')` |
+| `setAllBorders(border)` | Set all borders | `table.setAllBorders({style: 'single'})` |
+| `setBorders(borders)` | Set specific borders | `table.setBorders({top: {...}})` |
+
+### Table Cell Operations
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `createParagraph(text?)` | Add paragraph to cell | `cell.createParagraph('Text')` |
+| `setShading(shading)` | Cell background | `cell.setShading({fill: 'E0E0E0'})` |
+| `setVerticalAlignment(align)` | Vertical align | `cell.setVerticalAlignment('center')` |
+| `setColumnSpan(cols)` | Merge columns | `cell.setColumnSpan(3)` |
+| `setRowSpan(rows)` | Merge rows | `cell.setRowSpan(2)` |
+| `setBorders(borders)` | Cell borders | `cell.setBorders({top: {...}})` |
+| `setWidth(width, type?)` | Cell width | `cell.setWidth(2000, 'dxa')` |
+
+### Style Management
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `addStyle(style)` | Add custom style | `doc.addStyle(myStyle)` |
+| `getStyle(styleId)` | Get style by ID | `doc.getStyle('Heading1')` |
+| `hasStyle(styleId)` | Check style exists | `doc.hasStyle('CustomStyle')` |
+| `getStyles()` | Get all styles | `doc.getStyles()` |
+| `removeStyle(styleId)` | Remove style | `doc.removeStyle('OldStyle')` |
+| `updateStyle(styleId, props)` | Update style | `doc.updateStyle('Normal', {...})` |
+
+#### Built-in Styles
+- `Normal` - Default paragraph
+- `Title` - Document title
+- `Subtitle` - Document subtitle
+- `Heading1` through `Heading9` - Section headings
+- `ListParagraph` - List items
+
+### List Management
+
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `createBulletList(levels?, bullets?)` | Create bullet list | `numId` |
+| `createNumberedList(levels?, formats?)` | Create numbered list | `numId` |
+| `createMultiLevelList()` | Create multi-level list | `numId` |
+
+### Image Handling
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `Image.fromFile(path, width?, height?)` | Load from file | `Image.fromFile('pic.jpg')` |
+| `Image.fromBuffer(buffer, ext, w?, h?)` | Load from buffer | `Image.fromBuffer(buf, 'png')` |
+| `setWidth(emus, maintainRatio?)` | Set width | `img.setWidth(inchesToEmus(3))` |
+| `setHeight(emus, maintainRatio?)` | Set height | `img.setHeight(inchesToEmus(2))` |
+| `setSize(width, height)` | Set dimensions | `img.setSize(w, h)` |
+| `setRotation(degrees)` | Rotate image | `img.setRotation(90)` |
+| `setAltText(text)` | Accessibility text | `img.setAltText('Description')` |
+
+### Hyperlinks
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `Hyperlink.createExternal(url, text, format?)` | Web link | `Hyperlink.createExternal('https://example.com', 'Click')` |
+| `Hyperlink.createEmail(email, text?, format?)` | Email link | `Hyperlink.createEmail('user@example.com')` |
+| `Hyperlink.createInternal(anchor, text, format?)` | Internal link | `Hyperlink.createInternal('Section1', 'Go to')` |
+| `para.addHyperlink(hyperlink)` | Add to paragraph | `para.addHyperlink(link)` |
+
+### Headers & Footers
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `setHeader(header)` | Set default header | `doc.setHeader(myHeader)` |
+| `setFooter(footer)` | Set default footer | `doc.setFooter(myFooter)` |
+| `setFirstPageHeader(header)` | First page header | `doc.setFirstPageHeader(header)` |
+| `setFirstPageFooter(footer)` | First page footer | `doc.setFirstPageFooter(footer)` |
+| `setEvenPageHeader(header)` | Even page header | `doc.setEvenPageHeader(header)` |
+| `setEvenPageFooter(footer)` | Even page footer | `doc.setEvenPageFooter(footer)` |
+
+### Page Setup
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `setPageSize(width, height, orient?)` | Page dimensions | `doc.setPageSize(12240, 15840)` |
+| `setPageOrientation(orientation)` | Page orientation | `doc.setPageOrientation('landscape')` |
+| `setMargins(margins)` | Page margins | `doc.setMargins({top: 1440, ...})` |
+| `setLanguage(language)` | Document language | `doc.setLanguage('en-US')` |
+
+### Document Properties
+
+| Method | Description | Properties |
+|--------|-------------|------------|
+| `setProperties(props)` | Set metadata | `{title, subject, creator, keywords}` |
+| `getProperties()` | Get metadata | Returns all properties |
+
+### Advanced Features
+
+#### Bookmarks
+| Method | Description |
+|--------|-------------|
+| `createBookmark(name)` | Create bookmark |
+| `createHeadingBookmark(text)` | Auto-named bookmark |
+| `getBookmark(name)` | Get by name |
+| `hasBookmark(name)` | Check existence |
+| `addBookmarkToParagraph(para, bookmark)` | Add to paragraph |
+
+#### Comments
+| Method | Description |
+|--------|-------------|
+| `createComment(author, content, initials?)` | Add comment |
+| `createReply(parentId, author, content)` | Reply to comment |
+| `getComment(id)` | Get by ID |
+| `getAllComments()` | Get all top-level |
+| `addCommentToParagraph(para, comment)` | Add to paragraph |
+
+#### Track Changes
+| Method | Description |
+|--------|-------------|
+| `trackInsertion(para, author, text)` | Track insertion |
+| `trackDeletion(para, author, text)` | Track deletion |
+| `isTrackingChanges()` | Check if tracking |
+| `getRevisionStats()` | Get statistics |
+
+#### Footnotes & Endnotes
+| Method | Description |
+|--------|-------------|
+| `FootnoteManager.create()` | Manage footnotes |
+| `EndnoteManager.create()` | Manage endnotes |
+
+### Low-Level Document Parts
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `getPart(partName)` | Get document part | `doc.getPart('word/document.xml')` |
+| `setPart(partName, content)` | Set document part | `doc.setPart('custom.xml', data)` |
+| `removePart(partName)` | Remove part | `doc.removePart('custom.xml')` |
+| `listParts()` | List all parts | `const parts = await doc.listParts()` |
+| `partExists(partName)` | Check part exists | `if (await doc.partExists('...'))` |
+| `getContentTypes()` | Get content types | `const types = await doc.getContentTypes()` |
+| `addContentType(part, type)` | Register content type | `doc.addContentType('.json', 'application/json')` |
+
+### Unit Conversion Utilities
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `inchesToTwips(inches)` | Inches to twips | `inchesToTwips(1)` // 1440 |
+| `inchesToEmus(inches)` | Inches to EMUs | `inchesToEmus(1)` // 914400 |
+| `cmToTwips(cm)` | Centimeters to twips | `cmToTwips(2.54)` // 1440 |
+| `pointsToTwips(points)` | Points to twips | `pointsToTwips(12)` // 240 |
+| `pixelsToEmus(pixels, dpi?)` | Pixels to EMUs | `pixelsToEmus(96)` |
+
+## 📖 Common Recipes
+
+### Create a Simple Document
+```typescript
+const doc = Document.create();
+doc.createParagraph('Title').setStyle('Title');
+doc.createParagraph('This is a simple document.');
+await doc.save('simple.docx');
 ```
 
 ### Add Formatted Text
-
 ```typescript
-const doc = Document.create();
-
-// Create a paragraph with mixed formatting
 const para = doc.createParagraph();
-para.addText("Bold text", { bold: true });
-para.addText(" and ");
-para.addText("colored text", { color: "FF0000" });
-
-await doc.save("formatted.docx");
+para.addText('Bold', { bold: true });
+para.addText(' and ');
+para.addText('Colored', { color: 'FF0000' });
 ```
 
-### Create Tables
-
+### Create a Table with Borders
 ```typescript
-const doc = Document.create();
-
-// Create a 3x3 table
 const table = doc.createTable(3, 3);
-
-// Add borders
-table.setAllBorders({ style: "single", size: 8, color: "000000" });
-
-// Populate cells
-table.getCell(0, 0)?.createParagraph("Header 1");
-table.getCell(0, 1)?.createParagraph("Header 2");
-
-// Add shading to header row
-table.getRow(0)?.getCell(0)?.setShading({ fill: "4472C4" });
-
-await doc.save("table.docx");
+table.setAllBorders({ style: 'single', size: 8, color: '000000' });
+table.getCell(0, 0)?.createParagraph('Header 1');
+table.getRow(0)?.getCell(0)?.setShading({ fill: '4472C4' });
 ```
 
-### Add Images
-
+### Insert an Image
 ```typescript
-import { Document, Image, inchesToEmus } from "docxmlater";
+import { Image, inchesToEmus } from 'docxmlater';
 
-const doc = Document.create();
-
-// Add title
-doc.createParagraph("Document with Image").setStyle("Title");
-
-// Create image from file
-const image = Image.fromFile("./photo.png");
-image.setWidth(inchesToEmus(4), true); // 4 inches wide, maintain aspect ratio
-
-// Add image to document
+const image = Image.fromFile('./photo.jpg');
+image.setWidth(inchesToEmus(4), true); // 4 inches, maintain ratio
 doc.addImage(image);
-
-// Add caption
-doc
-  .createParagraph("Figure 1: Sample image")
-  .setAlignment("center")
-  .addText("Figure 1: Sample image", { italic: true, size: 10 });
-
-await doc.save("with-image.docx");
 ```
 
-### Add Hyperlinks
-
-```typescript
-import { Document, Hyperlink } from "docxmlater";
-
-const doc = Document.create();
-
-// External link (to website)
-const para1 = doc.createParagraph();
-para1.addText("Visit ");
-para1.addHyperlink(Hyperlink.createExternal("https://example.com", "our website"));
-para1.addText(" for more information.");
-
-// Email link
-const para2 = doc.createParagraph();
-para2.addHyperlink(Hyperlink.createEmail("user@example.com", "Contact us"));
-
-// Internal link (to bookmark - requires bookmark to be defined)
-const para3 = doc.createParagraph();
-para3.addHyperlink(Hyperlink.createInternal("Section1", "Jump to Section 1"));
-
-await doc.save("with-links.docx");
-```
-
-**Important:** External hyperlinks require relationship registration. Always use `Document.save()` or `Document.toBuffer()` which automatically handle this. Manually calling `toXML()` on external hyperlinks without setting relationship IDs will throw an error to prevent document corruption.
-
-See [Hyperlink Best Practices](OPENXML_STRUCTURE_GUIDE.md#hyperlink-best-practices) for complete documentation.
-
-### Use Custom Styles
-
-```typescript
-import { Document, Style } from "docxmlater";
-
-const doc = Document.create();
-
-// Create a custom style
-const alertStyle = Style.create({
-  styleId: "Alert",
-  name: "Alert",
-  type: "paragraph",
-  basedOn: "Normal",
-  runFormatting: {
-    bold: true,
-    color: "FF0000",
-    size: 12,
-  },
-  paragraphFormatting: {
-    alignment: "center",
-  },
-});
-
-doc.addStyle(alertStyle);
-doc.createParagraph("Important Warning").setStyle("Alert");
-
-await doc.save("custom-styles.docx");
-```
-
-## Core Concepts
-
-### Document Class
-
-The high-level API for creating Word documents:
-
-```typescript
-// Create new document
-const doc = Document.create({
-  properties: {
-    title: "My Document",
-    creator: "DocXML",
-    subject: "Example",
-  },
-});
-
-// Add content
-doc.createParagraph("Content here");
-doc.createTable(5, 3);
-
-// Save
-await doc.save("output.docx");
-```
-
-### Paragraphs and Runs
-
-Paragraphs contain runs of formatted text:
-
+### Add a Hyperlink
 ```typescript
 const para = doc.createParagraph();
-
-// Add text with different formatting
-para.addText("Normal ");
-para.addText("Bold", { bold: true });
-para.addText(" Italic", { italic: true });
-
-// Set paragraph formatting
-para.setAlignment("center");
-para.setSpaceAfter(240);
+para.addText('Visit ');
+para.addHyperlink(Hyperlink.createExternal('https://example.com', 'our website'));
 ```
 
-### Tables
-
-Create tables with full formatting control:
-
+### Search and Replace Text
 ```typescript
-const table = doc.createTable(4, 3);
+// Find all occurrences
+const results = doc.findText('old text', { caseSensitive: true });
+console.log(`Found ${results.length} occurrences`);
 
-// Format table
-table.setWidth(8640); // Full page width
-table.setAllBorders({ style: "single", size: 6 });
-
-// Access cells
-const cell = table.getCell(0, 0);
-cell?.createParagraph("Cell content");
-cell?.setShading({ fill: "D9E1F2" });
-cell?.setVerticalAlignment("center");
-
-// Merge cells
-cell?.setColumnSpan(3); // Span 3 columns
+// Replace all
+const count = doc.replaceText('old text', 'new text', { wholeWord: true });
+console.log(`Replaced ${count} occurrences`);
 ```
 
-### Styles
-
-13 built-in styles ready to use:
-
+### Load and Modify Existing Document
 ```typescript
-// Built-in styles
-doc.createParagraph("Title").setStyle("Title");
-doc.createParagraph("Subtitle").setStyle("Subtitle");
-doc.createParagraph("Chapter 1").setStyle("Heading1");
-doc.createParagraph("Section 1.1").setStyle("Heading2");
-doc.createParagraph("Body text").setStyle("Normal");
+const doc = await Document.load('existing.docx');
+doc.createParagraph('Added paragraph');
 
-// Check available styles
-console.log(doc.getStylesManager().getStyleCount()); // 13
+// Update all hyperlinks
+const urlMap = new Map([
+  ['https://old-site.com', 'https://new-site.com']
+]);
+doc.updateHyperlinkUrls(urlMap);
 
-// Create custom styles (see examples)
+await doc.save('modified.docx');
 ```
 
-## API Overview
-
-### Document
-
+### Create Lists
 ```typescript
-// Creating
-Document.create(options?)
-Document.load(filePath)
-Document.loadFromBuffer(buffer)
+// Bullet list
+const bulletId = doc.createBulletList(3);
+doc.createParagraph('First item').setNumbering(bulletId, 0);
+doc.createParagraph('Second item').setNumbering(bulletId, 0);
 
-// Content
-doc.createParagraph(text?)
-doc.createTable(rows, columns)
-doc.addParagraph(paragraph)
-doc.addTable(table)
-
-// Styles
-doc.addStyle(style)
-doc.getStyle(styleId)
-doc.hasStyle(styleId)
-doc.getStylesManager()
-
-// Saving
-doc.save(filePath)
-doc.toBuffer()
-
-// Access
-doc.getParagraphs()
-doc.getTables()
-doc.getImageManager()
-doc.getProperties()
-doc.setProperties(props)
-
-// Images
-doc.addImage(image)
+// Numbered list
+const numberId = doc.createNumberedList(3);
+doc.createParagraph('Step 1').setNumbering(numberId, 0);
+doc.createParagraph('Step 2').setNumbering(numberId, 0);
 ```
 
-### Paragraph
-
+### Apply Custom Styles
 ```typescript
-// Content
-para.addText(text, formatting?)
-para.addRun(run)
-para.setText(text, formatting?)
+import { Style } from 'docxmlater';
 
-// Formatting
-para.setAlignment('left' | 'center' | 'right' | 'justify')
-para.setLeftIndent(twips)
-para.setRightIndent(twips)
-para.setSpaceBefore(twips)
-para.setSpaceAfter(twips)
-para.setLineSpacing(twips, rule?)
+const customStyle = Style.create({
+  styleId: 'CustomHeading',
+  name: 'Custom Heading',
+  basedOn: 'Normal',
+  runFormatting: { bold: true, size: 14, color: '2E74B5' },
+  paragraphFormatting: { alignment: 'center', spaceAfter: 240 }
+});
 
-// Styles
-para.setStyle(styleId)
-
-// Special
-para.setKeepNext()
-para.setKeepLines()
-para.setPageBreakBefore()
+doc.addStyle(customStyle);
+doc.createParagraph('Custom Styled Text').setStyle('CustomHeading');
 ```
 
-### Run (Text Formatting)
-
+### Add Headers and Footers
 ```typescript
-const formatting = {
-  bold: true,
-  italic: true,
-  underline: "single",
-  font: "Arial",
-  size: 12, // points
-  color: "FF0000", // hex without #
-  highlight: "yellow",
-  strike: true,
-  subscript: true,
-  superscript: true,
-  smallCaps: true,
-  allCaps: true,
-};
+import { Header, Footer, Field } from 'docxmlater';
+
+// Header with page numbers
+const header = Header.create();
+header.addParagraph('Document Title').setAlignment('center');
+
+// Footer with page numbers
+const footer = Footer.create();
+const footerPara = footer.addParagraph();
+footerPara.addText('Page ');
+footerPara.addField(Field.create({ type: 'PAGE' }));
+footerPara.addText(' of ');
+footerPara.addField(Field.create({ type: 'NUMPAGES' }));
+
+doc.setHeader(header);
+doc.setFooter(footer);
 ```
 
-### Table
-
+### Work with Document Statistics
 ```typescript
-// Creation
-const table = doc.createTable(rows, cols);
+// Get word and character counts
+console.log('Words:', doc.getWordCount());
+console.log('Characters:', doc.getCharacterCount());
+console.log('Characters (no spaces):', doc.getCharacterCount(false));
 
-// Access
-table.getRow(index);
-table.getCell(rowIndex, colIndex);
-
-// Formatting
-table.setWidth(twips);
-table.setAlignment("left" | "center" | "right");
-table.setAllBorders(border);
-table.setBorders(borders);
-table.setLayout("auto" | "fixed");
+// Check document size
+const size = doc.estimateSize();
+if (size.warning) {
+  console.warn(size.warning);
+}
+console.log(`Estimated size: ${size.totalEstimatedMB} MB`);
 ```
 
-### Style
-
+### Handle Large Documents Efficiently
 ```typescript
-Style.create(properties);
-Style.createNormalStyle();
-Style.createHeadingStyle(1 - 9);
-Style.createTitleStyle();
-Style.createSubtitleStyle();
+const doc = Document.create({
+  maxMemoryUsagePercent: 80,
+  maxRssMB: 2048,
+  maxImageCount: 50,
+  maxTotalImageSizeMB: 100
+});
 
-// Properties
-style.setBasedOn(styleId);
-style.setParagraphFormatting(formatting);
-style.setRunFormatting(formatting);
+// Process document...
+
+// Clean up resources after saving
+await doc.save('large-document.docx');
+doc.dispose(); // Free memory
 ```
 
-### Image
-
+### Direct XML Access (Advanced)
 ```typescript
-// Creation
-Image.fromFile(filePath, width?, height?)
-Image.fromBuffer(buffer, extension, width?, height?)
-Image.create(properties)
+// Get raw XML
+const documentXml = await doc.getPart('word/document.xml');
+console.log(documentXml?.content);
 
-// Sizing (all in EMUs - use inchesToEmus() helper)
-image.setWidth(emus, maintainAspectRatio?)
-image.setHeight(emus, maintainAspectRatio?)
-image.setSize(width, height)
+// Modify raw XML (use with caution)
+await doc.setPart('word/custom.xml', '<custom>data</custom>');
+await doc.addContentType('/word/custom.xml', 'application/xml');
 
-// Properties
-image.getWidth()
-image.getHeight()
-image.getExtension()
-image.getImageData()
+// List all parts
+const parts = await doc.listParts();
+console.log('Document contains:', parts.length, 'parts');
 ```
 
-### Hyperlink
+## 🎯 Features
 
-```typescript
-// Factory methods (recommended)
-Hyperlink.createExternal(url, text, formatting?)
-Hyperlink.createWebLink(url, text?, formatting?)  // Same as createExternal
-Hyperlink.createEmail(email, text?, formatting?)  // Adds "mailto:" prefix
-Hyperlink.createInternal(anchor, text, formatting?)
+- ✅ **Full OpenXML Compliance** - Follows ECMA-376 standard
+- ✅ **TypeScript First** - Complete type definitions
+- ✅ **Memory Efficient** - Handles large documents with streaming
+- ✅ **Atomic Saves** - Prevents corruption with temp file pattern
+- ✅ **Rich Formatting** - Complete text and paragraph formatting
+- ✅ **Tables** - Full support with borders, shading, merging
+- ✅ **Images** - PNG, JPEG, GIF with sizing and positioning
+- ✅ **Hyperlinks** - External, internal, and email links
+- ✅ **Styles** - 13 built-in styles + custom style creation
+- ✅ **Lists** - Bullets, numbering, multi-level
+- ✅ **Headers/Footers** - Different first/even/odd pages
+- ✅ **Search & Replace** - With case and whole word options
+- ✅ **Document Stats** - Word count, character count, size estimation
+- ✅ **Track Changes** - Insertions and deletions with authors
+- ✅ **Comments** - With replies and threading
+- ✅ **Bookmarks** - For internal navigation
+- ✅ **Low-level Access** - Direct ZIP and XML manipulation
 
-// Generic constructor
-Hyperlink.create(properties)
-new Hyperlink(properties)
+## 📊 Performance
 
-// Properties
-hyperlink.getText()
-hyperlink.setText(text)
-hyperlink.getUrl()
-hyperlink.getAnchor()
-hyperlink.getTooltip()
-hyperlink.setTooltip(tooltip)
-hyperlink.setFormatting(formatting)
-hyperlink.getFormatting()
-hyperlink.isExternal()
-hyperlink.isInternal()
+- Process 100+ page documents efficiently
+- Atomic save pattern prevents corruption
+- Memory management for large files
+- Lazy loading of document parts
+- Resource cleanup with `dispose()`
 
-// ⚠️ IMPORTANT: Relationship Management
-// External links require relationship IDs before XML generation
-// Always use Document.save() or Document.toBuffer() which handle this automatically
-// Manual toXML() on external links without relationship IDs will throw error
-hyperlink.setRelationshipId(id)  // Usually managed by Document, not called directly
-hyperlink.getRelationshipId()
-hyperlink.toXML()  // ⚠️ Requires relationshipId for external links
-```
-
-## Built-in Styles
-
-All documents include 13 ready-to-use styles:
-
-| Style             | Description         | Font          | Size    | Color           |
-| ----------------- | ------------------- | ------------- | ------- | --------------- |
-| **Normal**        | Default paragraph   | Calibri       | 11pt    | Black           |
-| **Heading1**      | Major headings      | Calibri Light | 16pt    | Blue (#2E74B5)  |
-| **Heading2**      | Section headings    | Calibri Light | 13pt    | Blue (#1F4D78)  |
-| **Heading3-9**    | Subsection headings | Calibri Light | 12-11pt | Blue (#1F4D78)  |
-| **Title**         | Document title      | Calibri Light | 28pt    | Blue (#2E74B5)  |
-| **Subtitle**      | Document subtitle   | Calibri Light | 14pt    | Gray, Italic    |
-| **ListParagraph** | List items          | Calibri       | 11pt    | Black, Indented |
-
-See [Using Styles Guide](docs/guides/using-styles.md) for complete documentation.
-
-## Examples
-
-The `examples/` directory contains comprehensive examples:
-
-### Basic Examples (`examples/01-basic/`)
-
-- Creating simple documents
-- Reading and modifying DOCX files
-- Working with ZIP archives
-
-### Text Formatting (`examples/02-text/`)
-
-- Paragraph formatting examples
-- Text formatting (bold, italic, colors)
-- Advanced formatting techniques
-
-### Tables (`examples/03-tables/`)
-
-- Simple tables
-- Tables with borders and shading
-- Complex tables with merged cells
-
-### Styles (`examples/04-styles/`)
-
-- Using built-in styles
-- Creating custom styles
-- Style inheritance
-
-### Images (`examples/05-images/`)
-
-- Adding images from files and buffers
-- Sizing and resizing images
-- Multiple images in documents
-- Images with text content
-
-### Hyperlinks (`examples/07-hyperlinks/`)
-
-- External hyperlinks (websites, emails)
-- Internal hyperlinks (bookmarks)
-- Hyperlink formatting and tooltips
-- Validation and best practices
-
-### Complete Examples (`examples/06-complete/`)
-
-- Professional reports
-- Invoice templates
-- Styled documents
-
-Run any example:
+## 🧪 Testing
 
 ```bash
-npx ts-node examples/02-text/paragraph-basics.ts
+npm test                 # Run all tests
+npm run test:watch      # Watch mode
+npm run test:coverage   # Coverage report
 ```
 
-## Documentation
+**Current:** 253 tests passing | 100% core functionality covered
 
-- **[Getting Started Guide](docs/guides/getting-started.md)** - Your first document
-- **[Using Styles](docs/guides/using-styles.md)** - Complete styles guide
-- **[Working with Tables](docs/guides/working-with-tables.md)** - Table guide
-- **[API Reference](docs/api/)** - Complete API documentation
-- **[Architecture](docs/architecture/)** - System architecture
-
-## Advanced Usage
-
-### Load and Modify Existing Documents
-
-```typescript
-// Load existing DOCX
-const doc = await Document.load("existing.docx");
-
-// Add content
-doc.createParagraph("New paragraph added");
-
-// Save
-await doc.save("modified.docx");
-```
-
-### Work with Buffers
-
-```typescript
-// Create document
-const doc = Document.create();
-doc.createParagraph("Content");
-
-// Save to buffer
-const buffer = await doc.toBuffer();
-
-// Load from buffer
-const doc2 = await Document.loadFromBuffer(buffer);
-```
-
-### Low-Level ZIP Access
-
-For advanced users, direct ZIP manipulation is available:
-
-```typescript
-import { ZipHandler, DOCX_PATHS } from "docxmlater";
-
-const handler = new ZipHandler();
-await handler.load("document.docx");
-
-// Direct XML access
-const xml = handler.getFileAsString(DOCX_PATHS.DOCUMENT);
-handler.updateFile(DOCX_PATHS.DOCUMENT, modifiedXml);
-
-await handler.save("output.docx");
-```
-
-## Development
-
-### Setup
+## 🛠 Development
 
 ```bash
 # Install dependencies
 npm install
 
-# Build
+# Build TypeScript
 npm run build
 
-# Run tests
-npm test
-
-# Run tests with coverage
-npm run test:coverage
+# Run examples
+npx ts-node examples/simple-document.ts
 ```
 
-### Project Structure
+## 📁 Project Structure
 
 ```
 src/
-├── core/          # Document class
-├── elements/      # Paragraph, Run, Table
-├── formatting/    # Style, StylesManager
-├── xml/           # XML generation
-├── zip/           # ZIP archive handling
-└── utils/         # Validation utilities
-
-tests/
-├── core/          # Document tests
-├── elements/      # Element tests
-├── formatting/    # Style tests (pending)
-├── zip/           # ZIP tests
-└── utils/         # Utility tests
-
-docs/
-├── api/           # API reference
-├── guides/        # User guides
-└── architecture/  # Architecture docs
+├── core/           # Document, Parser, Generator, Validator
+├── elements/       # Paragraph, Run, Table, Image, Hyperlink
+├── formatting/     # Style, NumberingManager
+├── xml/           # XMLBuilder, XMLParser
+├── zip/           # ZipHandler for DOCX manipulation
+└── utils/         # Validation, Units conversion
 
 examples/
-├── 01-basic/      # Basic examples
-├── 02-text/       # Text examples
+├── 01-basic/      # Simple document creation
+├── 02-text/       # Text formatting examples
 ├── 03-tables/     # Table examples
 ├── 04-styles/     # Style examples
-├── 05-images/     # Image examples
-└── 06-complete/   # Complete examples
+├── 05-images/     # Image handling
+├── 06-complete/   # Full document examples
+└── 07-hyperlinks/ # Link examples
 ```
 
-## Phase Implementation Status
+## 🔧 Requirements
 
-| Phase                            | Status      | Features                                                |
-| -------------------------------- | ----------- | ------------------------------------------------------- |
-| **Phase 1: Foundation**          | ✅ Complete | ZIP handling, XML generation, validation                |
-| **Phase 2: Core Elements**       | ✅ Complete | Paragraph, Run, text formatting                         |
-| **Phase 3: Advanced Formatting** | ✅ Complete | Document API, Tables, Styles, Lists                     |
-| **Phase 4: Rich Content**        | ✅ Complete | Images, Headers, Footers, Hyperlinks (NEW!)             |
-| **Phase 5: Polish**              | 🚧 Planned  | Track changes, comments, TOC                            |
-
-**Current: 205 tests passing | 20+ source files | ~5,000+ lines of code**
-
-## Requirements
-
-- Node.js 14+
+- Node.js 16+
 - TypeScript 5.0+ (for development)
 
-## Dependencies
-
-- **jszip** (^3.10.1) - ZIP archive handling
-
-## Browser Support
-
-DocXML works in Node.js environments. Browser support requires bundling with webpack/rollup and may need buffer polyfills.
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Testing
-
-All features are comprehensively tested:
+## 📦 Installation Options
 
 ```bash
-# Run all tests
-npm test
+# NPM
+npm install docxmlater
 
-# Run specific test suite
-npm test -- tests/core/Document.test.ts
+# Yarn
+yarn add docxmlater
 
-# Watch mode
-npm run test:watch
-
-# Coverage report
-npm run test:coverage
+# PNPM
+pnpm add docxmlater
 ```
 
-**Test Statistics:**
+## 🤝 Contributing
 
-- 159 tests passing
-- 4 test suites
-- High code coverage
-- Integration tests included
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md).
 
-## License
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
 
 MIT © DiaTech
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-- Built with [JSZip](https://stuk.github.io/jszip/) for ZIP archive handling
+- Built with [JSZip](https://stuk.github.io/jszip/) for ZIP handling
 - Follows [ECMA-376](https://www.ecma-international.org/publications-and-standards/standards/ecma-376/) Office Open XML standard
 - Inspired by [python-docx](https://python-docx.readthedocs.io/) and [docx](https://github.com/dolanmiu/docx)
 
-## Support
+## 📞 Support
 
-- **Documentation**: [docs/](docs/)
-- **Examples**: [examples/](examples/)
+- **Documentation**: [Full Docs](https://github.com/ItMeDiaTech/docXMLater/tree/main/docs)
+- **Examples**: [Example Code](https://github.com/ItMeDiaTech/docXMLater/tree/main/examples)
 - **Issues**: [GitHub Issues](https://github.com/ItMeDiaTech/docXMLater/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/ItMeDiaTech/docXMLater/discussions)
 
-## Roadmap
+## 🚀 Quick Links
 
-**Phase 3 (Complete):**
-
-- [x] Document API
-- [x] Tables with formatting
-- [x] Styles system
-- [x] Lists and numbering
-
-**Phase 4 (Complete):**
-
-- [x] Images and media
-- [x] Headers and footers
-- [x] Page sections
-- [x] Hyperlinks (**NEW in v0.2.0!**)
-
-**Phase 5 (Future):**
-
-- [ ] Track changes
-- [ ] Comments
-- [ ] Table of contents
-- [ ] Fields
-
-## Related Projects
-
-- **[python-docx](https://python-docx.readthedocs.io/)** - Python DOCX library
-- **[docx](https://github.com/dolanmiu/docx)** - JavaScript DOCX library
-- **[mammoth.js](https://github.com/mwilliamson/mammoth.js)** - Convert DOCX to HTML
+- [NPM Package](https://www.npmjs.com/package/docxmlater)
+- [GitHub Repository](https://github.com/ItMeDiaTech/docXMLater)
+- [API Reference](https://github.com/ItMeDiaTech/docXMLater/tree/main/docs/api)
+- [Change Log](https://github.com/ItMeDiaTech/docXMLater/blob/main/CHANGELOG.md)
 
 ---
 
-**Ready to get started?** Check out the [Quick Start Guide](docs/guides/getting-started.md) or explore the [examples](examples/).
+**Ready to create amazing Word documents?** Start with our [examples](https://github.com/ItMeDiaTech/docXMLater/tree/main/examples) or dive into the [API Reference](#-complete-api-reference) above!
