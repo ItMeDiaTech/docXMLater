@@ -299,13 +299,21 @@ export class Table {
     // Add table properties
     tableChildren.push(XMLBuilder.w('tblPr', undefined, tblPrChildren));
 
-    // Add table grid (column definitions) - simplified for now
-    // In a more complete implementation, we'd calculate proper column widths
+    // Add table grid (column definitions)
     const maxColumns = Math.max(...this.rows.map(row => row.getCellCount()), 0);
     if (maxColumns > 0) {
       const tblGridChildren: XMLElement[] = [];
+      const columnWidths = (this.formatting as any).columnWidths;
+
       for (let i = 0; i < maxColumns; i++) {
-        tblGridChildren.push(XMLBuilder.wSelf('gridCol', { 'w:w': 2880 })); // Default width
+        // Use specified width if available, otherwise default
+        const width = columnWidths && columnWidths[i] !== null ? columnWidths[i] : 2880;
+        if (width !== null) {
+          tblGridChildren.push(XMLBuilder.wSelf('gridCol', { 'w:w': width }));
+        } else {
+          // Auto width (no w:w attribute)
+          tblGridChildren.push(XMLBuilder.wSelf('gridCol', {}));
+        }
       }
       tableChildren.push(XMLBuilder.w('tblGrid', undefined, tblGridChildren));
     }
@@ -334,6 +342,112 @@ export class Table {
     }
 
     return XMLBuilder.wSelf(side, attrs);
+  }
+
+  /**
+   * Removes a row from the table
+   * @param index - Row index to remove (0-based)
+   * @returns True if the row was removed, false if index was invalid
+   */
+  removeRow(index: number): boolean {
+    if (index >= 0 && index < this.rows.length) {
+      this.rows.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Inserts a row at the specified position
+   * @param index - Position to insert at (0-based)
+   * @param row - Row to insert (optional, creates empty row if not provided)
+   * @returns The inserted row
+   */
+  insertRow(index: number, row?: TableRow): TableRow {
+    // Clamp index to valid range
+    if (index < 0) index = 0;
+    if (index > this.rows.length) index = this.rows.length;
+
+    // Create new row if not provided, matching the column count
+    if (!row) {
+      const columnCount = this.getColumnCount();
+      row = new TableRow(columnCount);
+    }
+
+    // Insert the row
+    this.rows.splice(index, 0, row);
+    return row;
+  }
+
+  /**
+   * Adds a column to all rows in the table
+   * @param index - Optional position to insert column (defaults to end)
+   * @returns This table for chaining
+   */
+  addColumn(index?: number): this {
+    for (const row of this.rows) {
+      const cell = new TableCell();
+      const cells = row.getCells();
+
+      if (index === undefined || index >= cells.length) {
+        // Add to end
+        row.addCell(cell);
+      } else {
+        // Insert at specific position
+        const idx = Math.max(0, index);
+        // We need to rebuild the row with cells in the correct order
+        const newCells = [...cells.slice(0, idx), cell, ...cells.slice(idx)];
+
+        // Clear existing cells and add in new order
+        (row as any).cells = newCells;
+      }
+    }
+    return this;
+  }
+
+  /**
+   * Removes a column from all rows in the table
+   * @param index - Column index to remove (0-based)
+   * @returns True if the column was removed, false if index was invalid
+   */
+  removeColumn(index: number): boolean {
+    if (index < 0 || this.rows.length === 0) {
+      return false;
+    }
+
+    let removed = false;
+    for (const row of this.rows) {
+      const cells = row.getCells();
+      if (index < cells.length) {
+        // Remove the cell at the specified index
+        (row as any).cells.splice(index, 1);
+        removed = true;
+      }
+    }
+
+    return removed;
+  }
+
+  /**
+   * Gets the maximum column count across all rows
+   * @returns Maximum number of columns
+   */
+  getColumnCount(): number {
+    if (this.rows.length === 0) {
+      return 0;
+    }
+    return Math.max(...this.rows.map(row => row.getCellCount()));
+  }
+
+  /**
+   * Sets column widths for the table
+   * @param widths - Array of widths in twips (null for auto width)
+   * @returns This table for chaining
+   */
+  setColumnWidths(widths: (number | null)[]): this {
+    // Store column widths in formatting for use in toXML
+    (this.formatting as any).columnWidths = widths;
+    return this;
   }
 
   /**

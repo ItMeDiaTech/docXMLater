@@ -622,6 +622,57 @@ export class Image {
   }
 
   /**
+   * Sets the alternative text (alt text) for the image
+   * This is important for accessibility
+   * @param altText Alternative text description
+   * @returns This image for chaining
+   */
+  setAltText(altText: string): this {
+    this.description = altText;
+    return this;
+  }
+
+  /**
+   * Gets the alternative text (alt text) for the image
+   * @returns Alternative text description
+   */
+  getAltText(): string {
+    return this.description;
+  }
+
+  /**
+   * Sets image rotation in degrees
+   * Note: This stores the rotation angle but doesn't actually rotate the image data
+   * The rotation is applied via DrawingML transform in the XML
+   * @param degrees Rotation angle in degrees (0-360)
+   * @returns This image for chaining
+   */
+  rotate(degrees: number): this {
+    // Normalize degrees to 0-360 range
+    const normalizedDegrees = ((degrees % 360) + 360) % 360;
+
+    // Store rotation for use in XML generation
+    (this as any).rotation = normalizedDegrees;
+
+    // If rotating 90 or 270 degrees, swap dimensions
+    if (normalizedDegrees === 90 || normalizedDegrees === 270) {
+      const temp = this.width;
+      this.width = this.height;
+      this.height = temp;
+    }
+
+    return this;
+  }
+
+  /**
+   * Gets the rotation angle in degrees
+   * @returns Rotation angle (0-360)
+   */
+  getRotation(): number {
+    return (this as any).rotation || 0;
+  }
+
+  /**
    * Generates DrawingML XML for the image
    * This creates an inline image in the document
    */
@@ -785,6 +836,7 @@ export class Image {
           children: [
             {
               name: 'a:xfrm',
+              attributes: this.getRotation() > 0 ? { rot: (this.getRotation() * 60000).toString() } : undefined,
               children: [
                 {
                   name: 'a:off',

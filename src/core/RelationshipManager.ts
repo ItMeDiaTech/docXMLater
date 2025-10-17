@@ -268,6 +268,24 @@ export class RelationshipManager {
   }
 
   /**
+   * Adds a footnotes relationship
+   * @returns The created relationship
+   */
+  addFootnotes(): Relationship {
+    const id = this.generateId();
+    return this.addRelationship(Relationship.createFootnotes(id));
+  }
+
+  /**
+   * Adds an endnotes relationship
+   * @returns The created relationship
+   */
+  addEndnotes(): Relationship {
+    const id = this.generateId();
+    return this.addRelationship(Relationship.createEndnotes(id));
+  }
+
+  /**
    * Generates the relationships XML file content
    * @returns Complete XML string for .rels file
    */

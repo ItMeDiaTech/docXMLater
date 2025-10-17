@@ -39,6 +39,12 @@ export enum RelationshipType {
   /** Link to comments.xml */
   COMMENTS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
 
+  /** Link to footnotes.xml */
+  FOOTNOTES = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes',
+
+  /** Link to endnotes.xml */
+  ENDNOTES = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes',
+
   /** Link to web settings */
   WEB_SETTINGS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings',
 }
@@ -270,6 +276,30 @@ export class Relationship {
       id,
       type: RelationshipType.COMMENTS,
       target: 'comments.xml',
+    });
+  }
+
+  /**
+   * Creates a footnotes relationship
+   * @param id Relationship ID
+   */
+  static createFootnotes(id: string = 'rId4'): Relationship {
+    return new Relationship({
+      id,
+      type: RelationshipType.FOOTNOTES,
+      target: 'footnotes.xml',
+    });
+  }
+
+  /**
+   * Creates an endnotes relationship
+   * @param id Relationship ID
+   */
+  static createEndnotes(id: string = 'rId5'): Relationship {
+    return new Relationship({
+      id,
+      type: RelationshipType.ENDNOTES,
+      target: 'endnotes.xml',
     });
   }
 }

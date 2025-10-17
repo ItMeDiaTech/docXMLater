@@ -7,6 +7,7 @@ import { ZipHandler } from '../zip/ZipHandler';
 import { DOCX_PATHS } from '../zip/types';
 import { Paragraph } from '../elements/Paragraph';
 import { Table } from '../elements/Table';
+import { TableCell } from '../elements/TableCell';
 import { Section } from '../elements/Section';
 import { Image } from '../elements/Image';
 import { ImageManager } from '../elements/ImageManager';
@@ -21,6 +22,10 @@ import { Revision, RevisionType } from '../elements/Revision';
 import { RevisionManager } from '../elements/RevisionManager';
 import { Comment } from '../elements/Comment';
 import { CommentManager } from '../elements/CommentManager';
+import { Footnote, FootnoteType } from '../elements/Footnote';
+import { FootnoteManager } from '../elements/FootnoteManager';
+import { Endnote, EndnoteType } from '../elements/Endnote';
+import { EndnoteManager } from '../elements/EndnoteManager';
 import { Run } from '../elements/Run';
 import { Hyperlink } from '../elements/Hyperlink';
 import { XMLElement } from '../xml/XMLBuilder';
@@ -136,6 +141,8 @@ export class Document {
   private bookmarkManager: BookmarkManager;
   private revisionManager: RevisionManager;
   private commentManager: CommentManager;
+  private footnoteManager: FootnoteManager;
+  private endnoteManager: EndnoteManager;
 
   // Helper classes for parsing, generation, and validation
   private parser: DocumentParser;
@@ -180,6 +187,8 @@ export class Document {
     this.bookmarkManager = BookmarkManager.create();
     this.revisionManager = RevisionManager.create();
     this.commentManager = CommentManager.create();
+    this.footnoteManager = FootnoteManager.create();
+    this.endnoteManager = EndnoteManager.create();
 
     // Add default relationships only for new documents
     if (initDefaults) {
@@ -1892,6 +1901,445 @@ export class Document {
     }
 
     return undefined;
+  }
+
+  /**
+   * Finds all occurrences of text in the document
+   * @param text - Text to search for
+   * @param options - Search options
+   * @returns Array of search results with paragraph and run information
+   */
+  findText(text: string, options?: { caseSensitive?: boolean; wholeWord?: boolean }): Array<{
+    paragraph: Paragraph;
+    paragraphIndex: number;
+    run: Run;
+    runIndex: number;
+    text: string;
+    startIndex: number;
+  }> {
+    const results: Array<{
+      paragraph: Paragraph;
+      paragraphIndex: number;
+      run: Run;
+      runIndex: number;
+      text: string;
+      startIndex: number;
+    }> = [];
+
+    const caseSensitive = options?.caseSensitive ?? false;
+    const wholeWord = options?.wholeWord ?? false;
+    const searchText = caseSensitive ? text : text.toLowerCase();
+
+    const paragraphs = this.getParagraphs();
+    for (let pIndex = 0; pIndex < paragraphs.length; pIndex++) {
+      const paragraph = paragraphs[pIndex];
+      if (!paragraph) continue;
+      const runs = paragraph.getRuns();
+
+      for (let rIndex = 0; rIndex < runs.length; rIndex++) {
+        const run = runs[rIndex];
+        if (!run) continue;
+        const runText = run.getText();
+        const compareText = caseSensitive ? runText : runText.toLowerCase();
+
+        if (wholeWord) {
+          // Create word boundary regex
+          const wordPattern = new RegExp(`\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, caseSensitive ? 'g' : 'gi');
+          let match;
+          while ((match = wordPattern.exec(runText)) !== null) {
+            results.push({
+              paragraph,
+              paragraphIndex: pIndex,
+              run,
+              runIndex: rIndex,
+              text: match[0],
+              startIndex: match.index,
+            });
+          }
+        } else {
+          // Simple substring search
+          let startIndex = 0;
+          while ((startIndex = compareText.indexOf(searchText, startIndex)) !== -1) {
+            results.push({
+              paragraph,
+              paragraphIndex: pIndex,
+              run,
+              runIndex: rIndex,
+              text: runText.substr(startIndex, text.length),
+              startIndex,
+            });
+            startIndex += text.length;
+          }
+        }
+      }
+    }
+
+    // Also search in tables
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          if (cell instanceof TableCell) {
+            const cellParagraphs = cell.getParagraphs();
+            for (let pIndex = 0; pIndex < cellParagraphs.length; pIndex++) {
+              const paragraph = cellParagraphs[pIndex];
+              if (!paragraph) continue;
+              const runs = paragraph.getRuns();
+
+              for (let rIndex = 0; rIndex < runs.length; rIndex++) {
+                const run = runs[rIndex];
+                if (!run) continue;
+                const runText = run.getText();
+                const compareText = caseSensitive ? runText : runText.toLowerCase();
+
+                if (wholeWord) {
+                  // Create word boundary regex
+                  const wordPattern = new RegExp(`\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, caseSensitive ? 'g' : 'gi');
+                  let match;
+                  while ((match = wordPattern.exec(runText)) !== null) {
+                    results.push({
+                      paragraph,
+                      paragraphIndex: -1, // Not in main body, in table
+                      run,
+                      runIndex: rIndex,
+                      text: match[0],
+                      startIndex: match.index,
+                    });
+                  }
+                } else {
+                  // Simple substring search
+                  let startIndex = 0;
+                  while ((startIndex = compareText.indexOf(searchText, startIndex)) !== -1) {
+                    results.push({
+                      paragraph,
+                      paragraphIndex: -1, // Not in main body, in table
+                      run,
+                      runIndex: rIndex,
+                      text: runText.substr(startIndex, text.length),
+                      startIndex,
+                    });
+                    startIndex += text.length;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Replaces all occurrences of text in the document
+   * @param find - Text to find
+   * @param replace - Text to replace with
+   * @param options - Replace options
+   * @returns Number of replacements made
+   */
+  replaceText(find: string, replace: string, options?: { caseSensitive?: boolean; wholeWord?: boolean }): number {
+    let replacementCount = 0;
+    const caseSensitive = options?.caseSensitive ?? false;
+    const wholeWord = options?.wholeWord ?? false;
+
+    const paragraphs = this.getParagraphs();
+    for (const paragraph of paragraphs) {
+      const runs = paragraph.getRuns();
+
+      for (const run of runs) {
+        const originalText = run.getText();
+        let newText = originalText;
+
+        if (wholeWord) {
+          // Use word boundary regex for whole word replacement
+          const wordPattern = new RegExp(
+            `\\b${find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+            caseSensitive ? 'g' : 'gi'
+          );
+          const matches = originalText.match(wordPattern);
+          if (matches) {
+            replacementCount += matches.length;
+            newText = originalText.replace(wordPattern, replace);
+          }
+        } else {
+          // Simple substring replacement
+          const searchPattern = new RegExp(
+            find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+            caseSensitive ? 'g' : 'gi'
+          );
+          const matches = originalText.match(searchPattern);
+          if (matches) {
+            replacementCount += matches.length;
+            newText = originalText.replace(searchPattern, replace);
+          }
+        }
+
+        if (newText !== originalText) {
+          run.setText(newText);
+        }
+      }
+    }
+
+    return replacementCount;
+  }
+
+  /**
+   * Gets the total word count in the document
+   * @returns Total number of words
+   */
+  getWordCount(): number {
+    let totalWords = 0;
+
+    const paragraphs = this.getParagraphs();
+    for (const paragraph of paragraphs) {
+      const text = paragraph.getText().trim();
+      if (text) {
+        // Split by whitespace and filter out empty strings
+        const words = text.split(/\s+/).filter(word => word.length > 0);
+        totalWords += words.length;
+      }
+    }
+
+    // Also count words in tables
+    const tables = this.getTables();
+    for (const table of tables) {
+      const rows = table.getRows();
+      for (const row of rows) {
+        const cells = row.getCells();
+        for (const cell of cells) {
+          const cellParas = cell.getParagraphs();
+          for (const para of cellParas) {
+            const text = para.getText().trim();
+            if (text) {
+              const words = text.split(/\s+/).filter(word => word.length > 0);
+              totalWords += words.length;
+            }
+          }
+        }
+      }
+    }
+
+    return totalWords;
+  }
+
+  /**
+   * Gets the total character count in the document
+   * @param includeSpaces - Whether to include spaces in the count
+   * @returns Total number of characters
+   */
+  getCharacterCount(includeSpaces: boolean = true): number {
+    let totalChars = 0;
+
+    const paragraphs = this.getParagraphs();
+    for (const paragraph of paragraphs) {
+      const text = paragraph.getText();
+      if (includeSpaces) {
+        totalChars += text.length;
+      } else {
+        totalChars += text.replace(/\s/g, '').length;
+      }
+    }
+
+    // Also count characters in tables
+    const tables = this.getTables();
+    for (const table of tables) {
+      const rows = table.getRows();
+      for (const row of rows) {
+        const cells = row.getCells();
+        for (const cell of cells) {
+          const cellParas = cell.getParagraphs();
+          for (const para of cellParas) {
+            const text = para.getText();
+            if (includeSpaces) {
+              totalChars += text.length;
+            } else {
+              totalChars += text.replace(/\s/g, '').length;
+            }
+          }
+        }
+      }
+    }
+
+    return totalChars;
+  }
+
+  /**
+   * Removes a paragraph from the document
+   * @param paragraphOrIndex - The paragraph object or its index
+   * @returns True if the paragraph was removed, false otherwise
+   */
+  removeParagraph(paragraphOrIndex: Paragraph | number): boolean {
+    let index: number;
+
+    if (typeof paragraphOrIndex === 'number') {
+      index = paragraphOrIndex;
+    } else {
+      // Find the index of the paragraph
+      index = this.bodyElements.indexOf(paragraphOrIndex);
+    }
+
+    if (index >= 0 && index < this.bodyElements.length) {
+      const element = this.bodyElements[index];
+      if (element instanceof Paragraph) {
+        this.bodyElements.splice(index, 1);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Removes a table from the document
+   * @param tableOrIndex - The table object or its index
+   * @returns True if the table was removed, false otherwise
+   */
+  removeTable(tableOrIndex: Table | number): boolean {
+    let index: number;
+
+    if (typeof tableOrIndex === 'number') {
+      // If number provided, find the nth table
+      const tables = this.getTables();
+      if (tableOrIndex >= 0 && tableOrIndex < tables.length) {
+        const table = tables[tableOrIndex];
+        if (!table) return false;
+        index = this.bodyElements.indexOf(table);
+      } else {
+        return false;
+      }
+    } else {
+      // Find the index of the table
+      index = this.bodyElements.indexOf(tableOrIndex);
+    }
+
+    if (index >= 0 && index < this.bodyElements.length) {
+      const element = this.bodyElements[index];
+      if (element instanceof Table) {
+        this.bodyElements.splice(index, 1);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Inserts a paragraph at a specific position
+   * @param index - The position to insert at (0-based)
+   * @param paragraph - The paragraph to insert
+   * @returns This document for chaining
+   */
+  insertParagraphAt(index: number, paragraph: Paragraph): this {
+    if (index < 0) {
+      index = 0;
+    } else if (index > this.bodyElements.length) {
+      index = this.bodyElements.length;
+    }
+
+    this.bodyElements.splice(index, 0, paragraph);
+    return this;
+  }
+
+  /**
+   * Gets all hyperlinks in the document
+   * @returns Array of hyperlinks with their containing paragraph
+   */
+  getHyperlinks(): Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> {
+    const hyperlinks: Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> = [];
+
+    for (const paragraph of this.getParagraphs()) {
+      for (const content of paragraph.getContent()) {
+        if (content instanceof Hyperlink) {
+          hyperlinks.push({ hyperlink: content, paragraph });
+        }
+      }
+    }
+
+    // Also check in tables
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          const cellParagraphs = (cell as any).getParagraphs?.() || [];
+          for (const para of cellParagraphs) {
+            for (const content of para.getContent()) {
+              if (content instanceof Hyperlink) {
+                hyperlinks.push({ hyperlink: content, paragraph: para });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return hyperlinks;
+  }
+
+  /**
+   * Gets all bookmarks in the document
+   * @returns Array of bookmarks with their containing paragraph
+   */
+  getBookmarks(): Array<{ bookmark: Bookmark; paragraph: Paragraph }> {
+    const bookmarks: Array<{ bookmark: Bookmark; paragraph: Paragraph }> = [];
+
+    for (const paragraph of this.getParagraphs()) {
+      // Get bookmarks that start in this paragraph
+      for (const bookmark of paragraph.getBookmarksStart()) {
+        bookmarks.push({ bookmark, paragraph });
+      }
+    }
+
+    // Also check in tables
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            for (const bookmark of para.getBookmarksStart()) {
+              bookmarks.push({ bookmark, paragraph: para });
+            }
+          }
+        }
+      }
+    }
+
+    return bookmarks;
+  }
+
+  /**
+   * Gets all images in the document
+   * @returns Array of images with their metadata
+   */
+  getImages(): Array<{
+    image: Image;
+    relationshipId: string;
+    filename: string;
+  }> {
+    return this.imageManager.getAllImages();
+  }
+
+  /**
+   * Sets the document language
+   * @param language - Language code (e.g., 'en-US', 'es-ES', 'fr-FR')
+   * @returns This document for chaining
+   */
+  setLanguage(language: string): this {
+    // Store language in properties for core.xml
+    if (!this.properties) {
+      this.properties = {};
+    }
+    (this.properties as any).language = language;
+
+    // Also store for styles.xml (default paragraph properties)
+    (this.stylesManager as any).setDefaultLanguage?.(language);
+
+    return this;
+  }
+
+  /**
+   * Gets the document language
+   * @returns Language code or undefined if not set
+   */
+  getLanguage(): string | undefined {
+    return (this.properties as any)?.language;
   }
 
   /**

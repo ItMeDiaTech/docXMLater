@@ -570,6 +570,128 @@ export class Paragraph {
   }
 
   /**
+   * Gets the word count for this paragraph
+   * @returns Number of words in the paragraph
+   */
+  getWordCount(): number {
+    const text = this.getText().trim();
+    if (!text) return 0;
+
+    // Split by whitespace and filter out empty strings
+    const words = text.split(/\s+/).filter(word => word.length > 0);
+    return words.length;
+  }
+
+  /**
+   * Gets the character count for this paragraph
+   * @param includeSpaces - Whether to include spaces in the count
+   * @returns Number of characters in the paragraph
+   */
+  getLength(includeSpaces: boolean = true): number {
+    const text = this.getText();
+    if (includeSpaces) {
+      return text.length;
+    } else {
+      return text.replace(/\s/g, '').length;
+    }
+  }
+
+  /**
+   * Creates a deep clone of this paragraph
+   * @returns A new Paragraph instance with the same content and formatting
+   */
+  clone(): Paragraph {
+    // Clone the formatting
+    const clonedFormatting: ParagraphFormatting = JSON.parse(JSON.stringify(this.formatting));
+
+    // Create new paragraph with cloned formatting
+    const clonedParagraph = new Paragraph(clonedFormatting);
+
+    // Clone all content (runs, fields, hyperlinks, revisions)
+    for (const item of this.content) {
+      if (item instanceof Run) {
+        // Clone the run with its text and formatting
+        const runFormatting = item.getFormatting();
+        const clonedRun = new Run(item.getText(), JSON.parse(JSON.stringify(runFormatting)));
+        clonedParagraph.addRun(clonedRun);
+      } else {
+        // For other content types, add them as-is (shallow copy for now)
+        // In a more complete implementation, we'd clone these too
+        clonedParagraph.content.push(item);
+      }
+    }
+
+    // Clone bookmark and comment markers
+    clonedParagraph.bookmarksStart = [...this.bookmarksStart];
+    clonedParagraph.bookmarksEnd = [...this.bookmarksEnd];
+    clonedParagraph.commentsStart = [...this.commentsStart];
+    clonedParagraph.commentsEnd = [...this.commentsEnd];
+
+    return clonedParagraph;
+  }
+
+  /**
+   * Sets paragraph borders
+   * @param borders - Border definitions for each side
+   * @returns This paragraph for chaining
+   */
+  setBorder(borders: {
+    top?: { style?: string; size?: number; color?: string; space?: number };
+    bottom?: { style?: string; size?: number; color?: string; space?: number };
+    left?: { style?: string; size?: number; color?: string; space?: number };
+    right?: { style?: string; size?: number; color?: string; space?: number };
+  }): this {
+    if (!this.formatting) {
+      this.formatting = {};
+    }
+
+    // Store borders in formatting (will be handled in toXML)
+    (this.formatting as any).borders = borders;
+
+    return this;
+  }
+
+  /**
+   * Sets paragraph shading (background color)
+   * @param shading - Shading options
+   * @returns This paragraph for chaining
+   */
+  setShading(shading: {
+    fill?: string;  // Background color (hex)
+    color?: string;  // Foreground color (hex)
+    val?: 'clear' | 'solid' | 'horzStripe' | 'vertStripe' | 'reverseDiagStripe' | 'diagStripe' | 'horzCross' | 'diagCross';
+  }): this {
+    if (!this.formatting) {
+      this.formatting = {};
+    }
+
+    // Store shading in formatting (will be handled in toXML)
+    (this.formatting as any).shading = shading;
+
+    return this;
+  }
+
+  /**
+   * Sets tab stops for the paragraph
+   * @param tabs - Array of tab stop definitions
+   * @returns This paragraph for chaining
+   */
+  setTabs(tabs: Array<{
+    position: number;  // Position in twips
+    val?: 'clear' | 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'num';
+    leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+  }>): this {
+    if (!this.formatting) {
+      this.formatting = {};
+    }
+
+    // Store tabs in formatting (will be handled in toXML)
+    (this.formatting as any).tabs = tabs;
+
+    return this;
+  }
+
+  /**
    * Creates a new Paragraph with the specified formatting
    * @param formatting - Paragraph formatting
    * @returns New Paragraph instance
