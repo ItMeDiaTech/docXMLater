@@ -232,6 +232,11 @@ export class DocumentGenerator {
 
   /**
    * Processes hyperlinks in a single paragraph
+   *
+   * **Validation:** Throws error if external hyperlink has no URL to prevent
+   * document corruption per ECMA-376 §17.16.22.
+   *
+   * @throws {Error} If external hyperlink has undefined/empty URL
    */
   private processHyperlinksInParagraph(
     paragraph: Paragraph,
@@ -247,10 +252,19 @@ export class DocumentGenerator {
       ) {
         // Register external hyperlink with relationship manager
         const url = item.getUrl();
-        if (url) {
-          const relationship = relationshipManager.addHyperlink(url);
-          item.setRelationshipId(relationship.getId());
+
+        // Validate that external hyperlink has a URL
+        // This prevents invalid document generation and fails early with clear error
+        if (!url) {
+          throw new Error(
+            `Invalid hyperlink in paragraph: External hyperlink "${item.getText()}" has no URL. ` +
+            `This would create a corrupted document per ECMA-376 §17.16.22. ` +
+            `Fix the hyperlink by providing a valid URL before saving.`
+          );
         }
+
+        const relationship = relationshipManager.addHyperlink(url);
+        item.setRelationshipId(relationship.getId());
       }
     }
   }

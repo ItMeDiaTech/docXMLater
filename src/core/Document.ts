@@ -1352,7 +1352,14 @@ export class Document {
    * @see {@link https://www.ecma-international.org/publications-and-standards/standards/ecma-376/ | ECMA-376 Part 1 §17.16.22}
    */
   updateHyperlinkUrls(urlMap: Map<string, string>): number {
-    let updatedCount = 0;
+    // Early exit if no URLs to update
+    if (urlMap.size === 0) {
+      return 0;
+    }
+
+    // Two-phase update to handle circular URL swaps correctly
+    // Phase 1: Collect all updates without modifying hyperlinks
+    const updates: Array<{ hyperlink: Hyperlink; newUrl: string }> = [];
 
     // Iterate through all paragraphs in document body
     for (const para of this.getParagraphs()) {
@@ -1362,21 +1369,26 @@ export class Document {
         if (content instanceof Hyperlink && content.isExternal()) {
           const currentUrl = content.getUrl();
 
-          // If current URL is in the map, update it
+          // If current URL is in the map, collect the update
           if (currentUrl && urlMap.has(currentUrl)) {
             const newUrl = urlMap.get(currentUrl)!;
-            content.setUrl(newUrl);
-            updatedCount++;
+            updates.push({ hyperlink: content, newUrl });
           }
         }
       }
+    }
+
+    // Phase 2: Apply all updates atomically
+    // This prevents circular swap issues (e.g., A→B, B→A becomes B→A, A→B)
+    for (const { hyperlink, newUrl } of updates) {
+      hyperlink.setUrl(newUrl);
     }
 
     // Note: Relationships are automatically re-registered when save() is called
     // via processHyperlinks() in Document.save() (line 435, 492)
     // This ensures proper OpenXML structure per ECMA-376
 
-    return updatedCount;
+    return updates.length;
   }
 
   /**

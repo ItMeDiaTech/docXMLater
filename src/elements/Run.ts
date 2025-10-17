@@ -196,6 +196,22 @@ export class Run {
 
   /**
    * Converts the run to WordprocessingML XML element
+   *
+   * **ECMA-376 Compliance:** Properties are generated in the order specified by
+   * ECMA-376 Part 1 §17.3.2.28 to ensure strict OpenXML conformance.
+   *
+   * Per spec, the order is:
+   * 1. rFonts (font family)
+   * 2. b (bold)
+   * 3. i (italic)
+   * 4. caps/smallCaps (capitalization)
+   * 5. strike/dstrike (strikethrough)
+   * 6. u (underline)
+   * 7. sz/szCs (font size)
+   * 8. color (text color)
+   * 9. highlight (highlight color)
+   * 10. vertAlign (subscript/superscript)
+   *
    * @returns XMLElement representing the run
    */
   toXML(): XMLElement {
@@ -210,31 +226,7 @@ export class Run {
 
     const rPrChildren: XMLElement[] = [];
 
-    // Add formatting elements
-    if (this.formatting.bold) {
-      rPrChildren.push(XMLBuilder.wSelf('b'));
-    }
-    if (this.formatting.italic) {
-      rPrChildren.push(XMLBuilder.wSelf('i'));
-    }
-    if (this.formatting.underline) {
-      const underlineValue = typeof this.formatting.underline === 'string'
-        ? this.formatting.underline
-        : 'single';
-      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': underlineValue }));
-    }
-    if (this.formatting.strike) {
-      rPrChildren.push(XMLBuilder.wSelf('strike'));
-    }
-    if (this.formatting.dstrike) {
-      rPrChildren.push(XMLBuilder.wSelf('dstrike'));
-    }
-    if (this.formatting.subscript) {
-      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
-    }
-    if (this.formatting.superscript) {
-      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'superscript' }));
-    }
+    // 1. Font family (must be first per ECMA-376 §17.3.2.28)
     if (this.formatting.font) {
       rPrChildren.push(XMLBuilder.wSelf('rFonts', {
         'w:ascii': this.formatting.font,
@@ -242,23 +234,65 @@ export class Run {
         'w:cs': this.formatting.font,
       }));
     }
+
+    // 2. Bold
+    if (this.formatting.bold) {
+      rPrChildren.push(XMLBuilder.wSelf('b'));
+    }
+
+    // 3. Italic
+    if (this.formatting.italic) {
+      rPrChildren.push(XMLBuilder.wSelf('i'));
+    }
+
+    // 4. Capitalization (caps/smallCaps)
+    if (this.formatting.allCaps) {
+      rPrChildren.push(XMLBuilder.wSelf('caps'));
+    }
+    if (this.formatting.smallCaps) {
+      rPrChildren.push(XMLBuilder.wSelf('smallCaps'));
+    }
+
+    // 5. Strikethrough
+    if (this.formatting.strike) {
+      rPrChildren.push(XMLBuilder.wSelf('strike'));
+    }
+    if (this.formatting.dstrike) {
+      rPrChildren.push(XMLBuilder.wSelf('dstrike'));
+    }
+
+    // 6. Underline
+    if (this.formatting.underline) {
+      const underlineValue = typeof this.formatting.underline === 'string'
+        ? this.formatting.underline
+        : 'single';
+      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': underlineValue }));
+    }
+
+    // 7. Font size
     if (this.formatting.size !== undefined) {
       // Word uses half-points (size * 2)
       const halfPoints = this.formatting.size * 2;
       rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': halfPoints }));
       rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': halfPoints }));
     }
+
+    // 8. Text color
     if (this.formatting.color) {
       rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': this.formatting.color }));
     }
+
+    // 9. Highlight color
     if (this.formatting.highlight) {
       rPrChildren.push(XMLBuilder.wSelf('highlight', { 'w:val': this.formatting.highlight }));
     }
-    if (this.formatting.smallCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('smallCaps'));
+
+    // 10. Vertical alignment (subscript/superscript) - must be last
+    if (this.formatting.subscript) {
+      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
     }
-    if (this.formatting.allCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('caps'));
+    if (this.formatting.superscript) {
+      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'superscript' }));
     }
 
     // Build the run element

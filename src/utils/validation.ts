@@ -39,27 +39,56 @@ export function isBinaryFile(filePath: string): boolean {
  * Normalizes a file path for consistent comparisons
  * Converts backslashes to forward slashes and removes leading slashes
  * Also validates against path traversal attacks
+ *
+ * **Security:** This function validates paths to prevent:
+ * - Path traversal attacks (../, ..\, URL-encoded variants)
+ * - Absolute paths (C:\, /etc/, etc.)
+ * - Malicious DOCX files attempting directory escape
+ *
  * @param path - The path to normalize
  * @returns Normalized path
- * @throws {Error} If path contains path traversal sequences or absolute paths
+ * @throws {Error} If path contains path traversal sequences, absolute paths, or URL-encoded attacks
  */
 export function normalizePath(path: string): string {
+  // First convert all backslashes to forward slashes for consistent checking
   const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '');
 
-  // Security: Prevent path traversal attacks
-  // Malicious DOCX files could contain paths like "../../../etc/passwd"
-  if (normalized.includes('../') || path.includes('..\\')) {
+  // Security: Reject URL-encoded path traversal attempts
+  // Attackers might try: %2e%2e%2f (%2e = . and %2f = /)
+  if (/%2[eE]|%2[fF]|%5[cC]/.test(path)) {
     throw new Error(
-      `Invalid file path: "${path}" contains path traversal sequence. ` +
-      `This could be a malicious DOCX file attempting directory traversal.`
+      `Invalid file path: "${path}" contains URL-encoded characters (%2E, %2F, %5C). ` +
+      `This could be an attempt to bypass path validation. ` +
+      `Only plain characters are allowed in DOCX file paths.`
+    );
+  }
+
+  // Security: Prevent path traversal attacks
+  // Check AFTER normalization when all paths use forward slashes
+  // This catches: ../, /.., or standalone ".."
+  if (normalized.includes('../') || normalized.includes('/..') || normalized === '..') {
+    throw new Error(
+      `Invalid file path: "${path}" contains path traversal sequence (..). ` +
+      `This could be a malicious DOCX file attempting directory traversal. ` +
+      `DOCX archives must only contain relative paths within the archive.`
     );
   }
 
   // Security: Prevent absolute paths (Windows drive letters)
-  // Paths like "C:\Windows\System32" should not be allowed
+  // Examples: C:/, C:\, D:, etc.
   if (/^[a-zA-Z]:/.test(normalized)) {
     throw new Error(
       `Invalid file path: "${path}" appears to be an absolute Windows path. ` +
+      `Absolute paths are not allowed in DOCX archives. ` +
+      `Only relative paths within the archive are permitted.`
+    );
+  }
+
+  // Security: Prevent Unix absolute paths
+  // After removing leading slashes, if it starts with / it's suspicious
+  if (path.startsWith('/') && normalized.startsWith('/')) {
+    throw new Error(
+      `Invalid file path: "${path}" appears to be an absolute Unix path. ` +
       `Only relative paths are allowed in DOCX archives.`
     );
   }

@@ -81,14 +81,74 @@ export class Hyperlink {
   private relationshipId?: string;
 
   /**
+   * Validates a hyperlink URL for security and ECMA-376 compliance
+   *
+   * **Security:** Prevents dangerous protocols and XML injection attacks.
+   * Per ECMA-376 Part 1 §17.16.22, only safe protocols should be used for external links.
+   *
+   * @param url - The URL to validate (undefined is allowed to clear URL)
+   * @throws {Error} If URL uses dangerous protocol, contains XML characters, or is malformed
+   */
+  private static validateUrl(url: string | undefined): void {
+    if (!url) return; // Allow undefined to clear URL
+
+    // Security: Reject dangerous protocols that could enable attacks
+    const DANGEROUS_PROTOCOLS = [
+      'javascript:', // XSS via JavaScript execution
+      'data:',       // Data URLs can contain scripts
+      'file:',       // Local file system access
+      'vbscript:',   // VBScript execution
+      'about:',      // Browser internal pages
+    ];
+
+    const lowerUrl = url.toLowerCase();
+    for (const protocol of DANGEROUS_PROTOCOLS) {
+      if (lowerUrl.startsWith(protocol)) {
+        throw new Error(
+          `Security: Hyperlink URL "${url}" uses dangerous protocol "${protocol}". ` +
+          `Only HTTP(S), MAILTO, and FTP protocols are allowed per ECMA-376 §17.16.22 security guidelines. ` +
+          `This prevents XSS attacks and file disclosure vulnerabilities.`
+        );
+      }
+    }
+
+    // Security: Validate allowed protocols
+    // Per ECMA-376, external hyperlinks should use standard web protocols
+    const ALLOWED_PROTOCOLS = /^(https?|mailto|ftp):\/?\/?/i;
+    if (!ALLOWED_PROTOCOLS.test(url)) {
+      throw new Error(
+        `Invalid hyperlink URL: "${url}". ` +
+        `Must start with http://, https://, mailto:, or ftp:// per ECMA-376 §17.16.22. ` +
+        `Other protocols are not supported for document security.`
+      );
+    }
+
+    // Security: Check for XML injection characters
+    // These could break the relationship XML file
+    if (url.includes('"') || url.includes('<') || url.includes('>')) {
+      throw new Error(
+        `Invalid hyperlink URL: "${url}" contains XML special characters (", <, or >). ` +
+        `These characters could corrupt the document relationships file. ` +
+        `URLs must not contain these characters even if URL-encoded.`
+      );
+    }
+  }
+
+  /**
    * Creates a new hyperlink
    *
    * **Note:** A hyperlink must have either a URL (external) or anchor (internal), but not both.
    * If both are provided, the URL takes precedence and a warning is logged.
    *
+   * **Security:** URLs are validated to prevent XSS, file disclosure, and XML injection attacks.
+   *
    * @param properties Hyperlink properties
+   * @throws {Error} If URL uses dangerous protocol or contains invalid characters
    */
   constructor(properties: HyperlinkProperties) {
+    // Validate URL for security before setting
+    Hyperlink.validateUrl(properties.url);
+
     this.url = properties.url;
     this.anchor = properties.anchor;
     this.tooltip = properties.tooltip;
@@ -187,8 +247,12 @@ export class Hyperlink {
    * re-registered when save() or toBuffer() is called. The new relationship will
    * point to the updated URL, ensuring OpenXML compliance per ECMA-376.
    *
+   * **Security:** URLs are validated to prevent XSS, file disclosure, and XML injection attacks.
+   *
    * @param url - The new URL (or undefined to clear)
    * @returns This hyperlink for chaining
+   * @throws {Error} If URL uses dangerous protocol or contains invalid characters
+   * @throws {Error} If clearing URL would create empty hyperlink (no URL and no anchor)
    *
    * @example
    * ```typescript
@@ -198,8 +262,25 @@ export class Hyperlink {
    * ```
    */
   setUrl(url: string | undefined): this {
+    // Validate URL for security before setting
+    Hyperlink.validateUrl(url);
+
+    // Validate that clearing URL doesn't create empty hyperlink
+    if (!url && !this.anchor) {
+      throw new Error(
+        `Cannot set URL to undefined: Hyperlink "${this.text}" has no anchor. ` +
+        `Clearing the URL would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
+        `Either provide a new URL or delete the hyperlink entirely.`
+      );
+    }
+
     // Save old URL before updating (for text fallback logic)
     const oldUrl = this.url;
+
+    // Skip if URL unchanged (optimization)
+    if (oldUrl === url) {
+      return this;
+    }
 
     // Update URL
     this.url = url;

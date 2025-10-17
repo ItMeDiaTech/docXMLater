@@ -433,17 +433,46 @@ export class Paragraph {
 
   /**
    * Converts the paragraph to WordprocessingML XML element
+   *
+   * **ECMA-376 Compliance:** Properties are generated in the order specified by
+   * ECMA-376 Part 1 §17.3.1.26 to ensure strict OpenXML conformance.
+   *
+   * Per spec, the order is:
+   * 1. pStyle (style reference)
+   * 2. keepNext (keep with next paragraph)
+   * 3. keepLines (keep lines together)
+   * 4. pageBreakBefore (page break before)
+   * 5. numPr (numbering properties)
+   * 6. spacing (spacing before/after/line)
+   * 7. ind (indentation)
+   * 8. jc (justification/alignment)
+   *
    * @returns XMLElement representing the paragraph
    */
   toXML(): XMLElement {
     const pPrChildren: XMLElement[] = [];
 
-    // Add paragraph style
+    // 1. Paragraph style (must be first per ECMA-376 §17.3.1.26)
     if (this.formatting.style) {
       pPrChildren.push(XMLBuilder.wSelf('pStyle', { 'w:val': this.formatting.style }));
     }
 
-    // Add numbering properties (must come before other properties)
+    // 2. Keep with next paragraph
+    if (this.formatting.keepNext) {
+      pPrChildren.push(XMLBuilder.wSelf('keepNext'));
+    }
+
+    // 3. Keep lines together
+    if (this.formatting.keepLines) {
+      pPrChildren.push(XMLBuilder.wSelf('keepLines'));
+    }
+
+    // 4. Page break before
+    if (this.formatting.pageBreakBefore) {
+      pPrChildren.push(XMLBuilder.wSelf('pageBreakBefore'));
+    }
+
+    // 5. Numbering properties
     if (this.formatting.numbering) {
       const numPr = XMLBuilder.w('numPr', undefined, [
         XMLBuilder.wSelf('ilvl', { 'w:val': this.formatting.numbering.level.toString() }),
@@ -452,25 +481,7 @@ export class Paragraph {
       pPrChildren.push(numPr);
     }
 
-    // Add alignment
-    if (this.formatting.alignment) {
-      pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': this.formatting.alignment }));
-    }
-
-    // Add indentation
-    if (this.formatting.indentation) {
-      const ind = this.formatting.indentation;
-      const attributes: Record<string, number> = {};
-      if (ind.left !== undefined) attributes['w:left'] = ind.left;
-      if (ind.right !== undefined) attributes['w:right'] = ind.right;
-      if (ind.firstLine !== undefined) attributes['w:firstLine'] = ind.firstLine;
-      if (ind.hanging !== undefined) attributes['w:hanging'] = ind.hanging;
-      if (Object.keys(attributes).length > 0) {
-        pPrChildren.push(XMLBuilder.wSelf('ind', attributes));
-      }
-    }
-
-    // Add spacing
+    // 6. Spacing (before/after/line)
     if (this.formatting.spacing) {
       const spc = this.formatting.spacing;
       const attributes: Record<string, number | string> = {};
@@ -483,15 +494,22 @@ export class Paragraph {
       }
     }
 
-    // Add other properties
-    if (this.formatting.keepNext) {
-      pPrChildren.push(XMLBuilder.wSelf('keepNext'));
+    // 7. Indentation (left/right/firstLine/hanging)
+    if (this.formatting.indentation) {
+      const ind = this.formatting.indentation;
+      const attributes: Record<string, number> = {};
+      if (ind.left !== undefined) attributes['w:left'] = ind.left;
+      if (ind.right !== undefined) attributes['w:right'] = ind.right;
+      if (ind.firstLine !== undefined) attributes['w:firstLine'] = ind.firstLine;
+      if (ind.hanging !== undefined) attributes['w:hanging'] = ind.hanging;
+      if (Object.keys(attributes).length > 0) {
+        pPrChildren.push(XMLBuilder.wSelf('ind', attributes));
+      }
     }
-    if (this.formatting.keepLines) {
-      pPrChildren.push(XMLBuilder.wSelf('keepLines'));
-    }
-    if (this.formatting.pageBreakBefore) {
-      pPrChildren.push(XMLBuilder.wSelf('pageBreakBefore'));
+
+    // 8. Justification/Alignment (must be last per ECMA-376 §17.3.1.26)
+    if (this.formatting.alignment) {
+      pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': this.formatting.alignment }));
     }
 
     // Build paragraph element

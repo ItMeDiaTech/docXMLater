@@ -136,9 +136,20 @@ export class Relationship {
 
   /**
    * Generates XML for this relationship
+   *
+   * **Security:** All attributes are properly XML-escaped to prevent injection attacks.
+   * Per ECMA-376 Part 2 §9, relationship attributes must be escaped.
    */
   toXML(): string {
-    let xml = `  <Relationship Id="${this.id}" Type="${this.type}" Target="${this.target}"`;
+    // Import XMLBuilder for escaping (local import to avoid circular dependency)
+    const { XMLBuilder } = require('../xml/XMLBuilder');
+
+    // Escape all attributes to prevent XML injection
+    const escapedId = XMLBuilder.escapeXmlAttribute(this.id);
+    const escapedType = XMLBuilder.escapeXmlAttribute(this.type);
+    const escapedTarget = XMLBuilder.escapeXmlAttribute(this.target);
+
+    let xml = `  <Relationship Id="${escapedId}" Type="${escapedType}" Target="${escapedTarget}"`;
 
     if (this.targetMode === 'External') {
       xml += ` TargetMode="External"`;
