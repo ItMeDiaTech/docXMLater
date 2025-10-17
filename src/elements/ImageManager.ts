@@ -22,20 +22,39 @@ interface ImageEntry {
 }
 
 /**
+ * Image manager options
+ */
+export interface ImageManagerOptions {
+  /** Maximum number of images allowed. Default: 20 */
+  maxImageCount?: number;
+  /** Maximum total size of all images in MB. Default: 100 */
+  maxTotalImageSizeMB?: number;
+  /** Maximum size of a single image in MB. Default: 20 */
+  maxSingleImageSizeMB?: number;
+}
+
+/**
  * Manages all images in a document
  */
 export class ImageManager {
   private images: Map<Image, ImageEntry>;
   private nextImageNumber: number;
   private nextDocPrId: number;
+  private maxImageCount: number;
+  private maxTotalImageSizeBytes: number;
+  private maxSingleImageSizeBytes: number;
 
   /**
    * Creates a new image manager
+   * @param options Image manager options
    */
-  constructor() {
+  constructor(options: ImageManagerOptions = {}) {
     this.images = new Map();
     this.nextImageNumber = 1;
     this.nextDocPrId = 1;
+    this.maxImageCount = options.maxImageCount ?? 20;
+    this.maxTotalImageSizeBytes = (options.maxTotalImageSizeMB ?? 100) * 1024 * 1024;
+    this.maxSingleImageSizeBytes = (options.maxSingleImageSizeMB ?? 20) * 1024 * 1024;
   }
 
   /**
@@ -43,12 +62,65 @@ export class ImageManager {
    * @param image The image to register
    * @param relationshipId The relationship ID for this image
    * @returns The filename assigned to this image
+   * @throws {Error} If image limits are exceeded
    */
   registerImage(image: Image, relationshipId: string): string {
     // Check if already registered
     const existing = this.images.get(image);
     if (existing) {
       return existing.filename;
+    }
+
+    // Validate image count limit
+    if (this.images.size >= this.maxImageCount) {
+      throw new Error(
+        `Cannot add image: Maximum image count (${this.maxImageCount}) exceeded. ` +
+        `Consider:\n` +
+        `  - Reducing the number of images\n` +
+        `  - Increasing maxImageCount in DocumentOptions\n` +
+        `  - Splitting into multiple documents`
+      );
+    }
+
+    // Validate single image size (if data is loaded)
+    try {
+      const imageData = image.getImageData();
+      const imageSizeMB = imageData.length / (1024 * 1024);
+
+      if (imageData.length > this.maxSingleImageSizeBytes) {
+        throw new Error(
+          `Image size (${imageSizeMB.toFixed(1)}MB) exceeds maximum single image size ` +
+          `(${(this.maxSingleImageSizeBytes / (1024 * 1024)).toFixed(0)}MB). ` +
+          `Consider:\n` +
+          `  - Compressing the image\n` +
+          `  - Resizing to lower resolution\n` +
+          `  - Converting to a more efficient format (e.g., JPEG)\n` +
+          `  - Increasing maxSingleImageSizeMB in DocumentOptions`
+        );
+      }
+
+      // Validate total size after adding this image
+      const currentTotalSize = this.getTotalSize();
+      const newTotalSize = currentTotalSize + imageData.length;
+      const newTotalSizeMB = newTotalSize / (1024 * 1024);
+
+      if (newTotalSize > this.maxTotalImageSizeBytes) {
+        throw new Error(
+          `Total image size (${newTotalSizeMB.toFixed(1)}MB) would exceed maximum ` +
+          `(${(this.maxTotalImageSizeBytes / (1024 * 1024)).toFixed(0)}MB) after adding this image. ` +
+          `Consider:\n` +
+          `  - Compressing existing images\n` +
+          `  - Removing unnecessary images\n` +
+          `  - Increasing maxTotalImageSizeMB in DocumentOptions\n` +
+          `  - Splitting into multiple documents`
+        );
+      }
+    } catch (error) {
+      // Image data not loaded yet - validation will happen during save
+      // This is acceptable for lazy-loaded images
+      if (error instanceof Error && !error.message.includes('not loaded')) {
+        throw error; // Re-throw size limit errors
+      }
     }
 
     // Generate unique filename
@@ -138,15 +210,58 @@ export class ImageManager {
   }
 
   /**
-   * Loads data for all images
+   * Loads data for all images with controlled concurrency
    * Call this before saving to ensure all image data is available
+   * @param concurrency Maximum number of images to load simultaneously (default: 5)
+   * @param onProgress Optional callback for progress tracking (loaded, total)
    */
-  async loadAllImageData(): Promise<void> {
-    // Load all images in parallel for better performance
-    const loadPromises = Array.from(this.images.values()).map(entry =>
-      entry.image.ensureDataLoaded()
-    );
-    await Promise.all(loadPromises);
+  async loadAllImageData(
+    concurrency: number = 5,
+    onProgress?: (loaded: number, total: number) => void
+  ): Promise<void> {
+    const images = Array.from(this.images.values());
+    const total = images.length;
+
+    if (total === 0) {
+      return;
+    }
+
+    // Validate concurrency
+    if (concurrency < 1 || concurrency > 50 || !Number.isInteger(concurrency)) {
+      throw new Error('Concurrency must be an integer between 1 and 50');
+    }
+
+    let loaded = 0;
+
+    // Load images in batches to control concurrency
+    for (let i = 0; i < total; i += concurrency) {
+      const batch = images.slice(i, Math.min(i + concurrency, total));
+
+      // Load batch in parallel
+      await Promise.all(
+        batch.map(async (entry) => {
+          try {
+            await entry.image.ensureDataLoaded();
+            loaded++;
+
+            // Report progress
+            if (onProgress) {
+              onProgress(loaded, total);
+            }
+          } catch (error) {
+            // Log error but continue loading other images
+            console.warn(
+              `Failed to load image data: ${error instanceof Error ? error.message : error}`
+            );
+            loaded++; // Still count as processed
+
+            if (onProgress) {
+              onProgress(loaded, total);
+            }
+          }
+        })
+      );
+    }
   }
 
   /**
@@ -225,8 +340,9 @@ export class ImageManager {
 
   /**
    * Creates a new image manager
+   * @param options Image manager options
    */
-  static create(): ImageManager {
-    return new ImageManager();
+  static create(options?: ImageManagerOptions): ImageManager {
+    return new ImageManager(options);
   }
 }

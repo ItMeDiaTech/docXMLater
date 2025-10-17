@@ -88,6 +88,9 @@ export {
 export { Document, DocumentProperties, DocumentOptions } from './core/Document';
 export { Relationship, RelationshipType, RelationshipProperties } from './core/Relationship';
 export { RelationshipManager } from './core/RelationshipManager';
+export { DocumentParser, ParseError } from './core/DocumentParser';
+export { DocumentGenerator } from './core/DocumentGenerator';
+export { DocumentValidator, SizeEstimate, MemoryOptions } from './core/DocumentValidator';
 
 // Formatting classes
 export { Style, StyleType, StyleProperties } from './formatting/Style';

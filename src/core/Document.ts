@@ -13,7 +13,6 @@ import { ImageManager } from '../elements/ImageManager';
 import { Header } from '../elements/Header';
 import { Footer } from '../elements/Footer';
 import { HeaderFooterManager } from '../elements/HeaderFooterManager';
-import { Hyperlink } from '../elements/Hyperlink';
 import { TableOfContents } from '../elements/TableOfContents';
 import { TableOfContentsElement } from '../elements/TableOfContentsElement';
 import { Bookmark } from '../elements/Bookmark';
@@ -22,13 +21,15 @@ import { Revision, RevisionType } from '../elements/Revision';
 import { RevisionManager } from '../elements/RevisionManager';
 import { Comment } from '../elements/Comment';
 import { CommentManager } from '../elements/CommentManager';
-import { Run, RunFormatting } from '../elements/Run';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { XMLParser } from '../xml/XMLParser';
+import { Run } from '../elements/Run';
+import { XMLElement } from '../xml/XMLBuilder';
 import { StylesManager } from '../formatting/StylesManager';
 import { Style } from '../formatting/Style';
 import { NumberingManager } from '../formatting/NumberingManager';
 import { RelationshipManager } from './RelationshipManager';
+import { DocumentParser } from './DocumentParser';
+import { DocumentGenerator } from './DocumentGenerator';
+import { DocumentValidator } from './DocumentValidator';
 
 /**
  * Document properties
@@ -52,8 +53,18 @@ export interface DocumentOptions {
   properties?: DocumentProperties;
   /** Maximum memory usage percentage (0-100) before throwing error. Default: 80 */
   maxMemoryUsagePercent?: number;
+  /** Maximum absolute RSS (Resident Set Size) in MB. Default: 2048 (2GB) */
+  maxRssMB?: number;
+  /** Enable absolute RSS limit checking. Default: true */
+  useAbsoluteMemoryLimit?: boolean;
   /** Strict parsing mode - throw errors instead of collecting warnings. Default: false */
   strictParsing?: boolean;
+  /** Maximum number of images allowed in document. Default: 20 */
+  maxImageCount?: number;
+  /** Maximum total size of all images in MB. Default: 100 */
+  maxTotalImageSizeMB?: number;
+  /** Maximum size of a single image in MB. Default: 20 */
+  maxSingleImageSizeMB?: number;
 }
 
 /**
@@ -107,9 +118,11 @@ export class Document {
   private bookmarkManager: BookmarkManager;
   private revisionManager: RevisionManager;
   private commentManager: CommentManager;
-  private maxMemoryUsagePercent: number;
-  private strictParsing: boolean;
-  private parseErrors: Array<{ element: string; error: Error }> = [];
+
+  // Helper classes for parsing, generation, and validation
+  private parser: DocumentParser;
+  private generator: DocumentGenerator;
+  private validator: DocumentValidator;
 
   /**
    * Private constructor - use Document.create() or Document.load()
@@ -119,19 +132,31 @@ export class Document {
    */
   private constructor(zipHandler?: ZipHandler, options: DocumentOptions = {}, initDefaults: boolean = true) {
     this.zipHandler = zipHandler || new ZipHandler();
-    // Validate and sanitize properties before storing
-    this.properties = options.properties ? Document.validateProperties(options.properties) : {};
-    // Validate maxMemoryUsagePercent
+
+    // Initialize helper classes
+    const strictParsing = options.strictParsing ?? false;
     const memoryPercent = options.maxMemoryUsagePercent ?? 80;
-    if (memoryPercent < 1 || memoryPercent > 100 || !Number.isFinite(memoryPercent)) {
-      throw new Error('maxMemoryUsagePercent must be between 1 and 100');
-    }
-    this.maxMemoryUsagePercent = memoryPercent;
-    this.strictParsing = options.strictParsing ?? false;
+
+    this.parser = new DocumentParser(strictParsing);
+    this.generator = new DocumentGenerator();
+    this.validator = new DocumentValidator(memoryPercent, {
+      maxMemoryUsagePercent: options.maxMemoryUsagePercent,
+      maxRssMB: options.maxRssMB,
+      useAbsoluteLimit: options.useAbsoluteMemoryLimit,
+    });
+
+    // Validate and sanitize properties before storing
+    this.properties = options.properties ? DocumentValidator.validateProperties(options.properties) : {};
+
+    // Initialize managers
     this.stylesManager = StylesManager.create();
     this.numberingManager = NumberingManager.create();
     this.section = Section.createLetter(); // Default Letter-sized section
-    this.imageManager = ImageManager.create();
+    this.imageManager = ImageManager.create({
+      maxImageCount: options.maxImageCount,
+      maxTotalImageSizeMB: options.maxTotalImageSizeMB,
+      maxSingleImageSizeMB: options.maxSingleImageSizeMB,
+    });
     this.relationshipManager = RelationshipManager.create();
     this.headerFooterManager = HeaderFooterManager.create();
     this.bookmarkManager = BookmarkManager.create();
@@ -191,125 +216,17 @@ export class Document {
   }
 
   /**
-   * Validates and sanitizes document properties
-   * Prevents injection attacks and excessive memory usage
-   * @param properties - Properties to validate
-   * @returns Validated and sanitized properties
-   */
-  private static validateProperties(properties: DocumentProperties): DocumentProperties {
-    const MAX_STRING_LENGTH = 10000; // Reasonable limit for property strings
-    const MAX_REVISION = 999999; // Reasonable max revision number
-
-    const validated: DocumentProperties = {};
-
-    // Validate and truncate string properties
-    if (properties.title !== undefined) {
-      if (typeof properties.title !== 'string') {
-        throw new Error('DocumentProperties.title must be a string');
-      }
-      if (properties.title.length > MAX_STRING_LENGTH) {
-        throw new Error(`DocumentProperties.title exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
-      }
-      validated.title = properties.title;
-    }
-
-    if (properties.subject !== undefined) {
-      if (typeof properties.subject !== 'string') {
-        throw new Error('DocumentProperties.subject must be a string');
-      }
-      if (properties.subject.length > MAX_STRING_LENGTH) {
-        throw new Error(`DocumentProperties.subject exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
-      }
-      validated.subject = properties.subject;
-    }
-
-    if (properties.creator !== undefined) {
-      if (typeof properties.creator !== 'string') {
-        throw new Error('DocumentProperties.creator must be a string');
-      }
-      if (properties.creator.length > MAX_STRING_LENGTH) {
-        throw new Error(`DocumentProperties.creator exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
-      }
-      validated.creator = properties.creator;
-    }
-
-    if (properties.keywords !== undefined) {
-      if (typeof properties.keywords !== 'string') {
-        throw new Error('DocumentProperties.keywords must be a string');
-      }
-      if (properties.keywords.length > MAX_STRING_LENGTH) {
-        throw new Error(`DocumentProperties.keywords exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
-      }
-      validated.keywords = properties.keywords;
-    }
-
-    if (properties.description !== undefined) {
-      if (typeof properties.description !== 'string') {
-        throw new Error('DocumentProperties.description must be a string');
-      }
-      if (properties.description.length > MAX_STRING_LENGTH) {
-        throw new Error(`DocumentProperties.description exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
-      }
-      validated.description = properties.description;
-    }
-
-    if (properties.lastModifiedBy !== undefined) {
-      if (typeof properties.lastModifiedBy !== 'string') {
-        throw new Error('DocumentProperties.lastModifiedBy must be a string');
-      }
-      if (properties.lastModifiedBy.length > MAX_STRING_LENGTH) {
-        throw new Error(`DocumentProperties.lastModifiedBy exceeds maximum length of ${MAX_STRING_LENGTH} characters`);
-      }
-      validated.lastModifiedBy = properties.lastModifiedBy;
-    }
-
-    // Validate revision number
-    if (properties.revision !== undefined) {
-      if (typeof properties.revision !== 'number' || !Number.isInteger(properties.revision)) {
-        throw new Error('DocumentProperties.revision must be an integer');
-      }
-      if (properties.revision < 0 || properties.revision > MAX_REVISION) {
-        throw new Error(`DocumentProperties.revision must be between 0 and ${MAX_REVISION}`);
-      }
-      validated.revision = properties.revision;
-    }
-
-    // Validate dates
-    if (properties.created !== undefined) {
-      if (!(properties.created instanceof Date)) {
-        throw new Error('DocumentProperties.created must be a Date object');
-      }
-      if (!Number.isFinite(properties.created.getTime())) {
-        throw new Error('DocumentProperties.created is an invalid date');
-      }
-      validated.created = properties.created;
-    }
-
-    if (properties.modified !== undefined) {
-      if (!(properties.modified instanceof Date)) {
-        throw new Error('DocumentProperties.modified must be a Date object');
-      }
-      if (!Number.isFinite(properties.modified.getTime())) {
-        throw new Error('DocumentProperties.modified is an invalid date');
-      }
-      validated.modified = properties.modified;
-    }
-
-    return validated;
-  }
-
-  /**
    * Initializes all required DOCX files with minimal valid content
    */
   private initializeRequiredFiles(): void {
     // [Content_Types].xml
-    this.zipHandler.addFile(DOCX_PATHS.CONTENT_TYPES, this.generateContentTypes());
+    this.zipHandler.addFile(DOCX_PATHS.CONTENT_TYPES, this.generator.generateContentTypes());
 
     // _rels/.rels
-    this.zipHandler.addFile(DOCX_PATHS.RELS, this.generateRels());
+    this.zipHandler.addFile(DOCX_PATHS.RELS, this.generator.generateRels());
 
     // word/document.xml (will be updated when saving)
-    this.zipHandler.addFile(DOCX_PATHS.DOCUMENT, this.generateDocumentXml());
+    this.zipHandler.addFile(DOCX_PATHS.DOCUMENT, this.generator.generateDocumentXml(this.bodyElements, this.section));
 
     // word/_rels/document.xml.rels
     this.zipHandler.addFile('word/_rels/document.xml.rels', this.relationshipManager.generateXml());
@@ -321,511 +238,20 @@ export class Document {
     this.zipHandler.addFile(DOCX_PATHS.NUMBERING, this.numberingManager.generateNumberingXml());
 
     // docProps/core.xml
-    this.zipHandler.addFile(DOCX_PATHS.CORE_PROPS, this.generateCoreProps());
+    this.zipHandler.addFile(DOCX_PATHS.CORE_PROPS, this.generator.generateCoreProps(this.properties));
 
     // docProps/app.xml
-    this.zipHandler.addFile(DOCX_PATHS.APP_PROPS, this.generateAppProps());
+    this.zipHandler.addFile(DOCX_PATHS.APP_PROPS, this.generator.generateAppProps());
   }
 
   /**
    * Parses the document XML and extracts paragraphs, runs, and tables
    */
   private async parseDocument(): Promise<void> {
-    // Verify the document exists
-    const docXml = this.zipHandler.getFileAsString(DOCX_PATHS.DOCUMENT);
-    if (!docXml) {
-      throw new Error('Invalid document: word/document.xml not found');
-    }
-
-    // Parse existing relationships to avoid ID collisions
-    this.parseRelationships();
-
-    // Parse document properties
-    this.parseProperties();
-
-    // Parse body elements (paragraphs and tables)
-    this.parseBodyElements(docXml);
-  }
-
-  /**
-   * Parses body elements from document XML
-   * Extracts paragraphs and tables with their formatting
-   * Uses XMLParser for safe position-based parsing (prevents ReDoS)
-   */
-  private parseBodyElements(docXml: string): void {
-    this.bodyElements = [];
-
-    // Validate input size to prevent excessive memory usage
-    try {
-      XMLParser.validateSize(docXml);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'document', error: err });
-      if (this.strictParsing) {
-        throw err;
-      }
-      return;
-    }
-
-    // Extract the body content using safe position-based parsing
-    const bodyContent = XMLParser.extractBody(docXml);
-    if (!bodyContent) {
-      return;
-    }
-
-    // Parse paragraphs using XMLParser (no regex backtracking)
-    const paragraphXmls = XMLParser.extractElements(bodyContent, 'w:p');
-
-    for (const paraXml of paragraphXmls) {
-      const paragraph = this.parseParagraph(paraXml);
-      if (paragraph) {
-        this.bodyElements.push(paragraph);
-      }
-    }
-
-    // Check for tables (not yet implemented)
-    const hasTable = bodyContent.includes('<w:tbl');
-    if (hasTable) {
-      const err = new Error('Document contains tables which are not yet fully supported in Phase 2. Tables will be ignored.');
-      this.parseErrors.push({ element: 'table', error: err });
-      if (this.strictParsing) {
-        throw err;
-      }
-    }
-
-    // Validate that we didn't load an empty/corrupted document
-    this.validateLoadedContent();
-  }
-
-  /**
-   * Validates loaded content to detect corrupted or empty documents
-   * Adds warnings if the document appears to have lost text content
-   */
-  private validateLoadedContent(): void {
-    const paragraphs = this.bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
-
-    if (paragraphs.length === 0) {
-      return; // Empty document is valid
-    }
-
-    // Count total runs and empty runs
-    let totalRuns = 0;
-    let emptyRuns = 0;
-    let runsWithText = 0;
-
-    for (const para of paragraphs) {
-      const runs = para.getRuns();
-      totalRuns += runs.length;
-
-      for (const run of runs) {
-        const text = run.getText();
-        if (text.length === 0) {
-          emptyRuns++;
-        } else {
-          runsWithText++;
-        }
-      }
-    }
-
-    // If more than 90% of runs are empty, warn about potential corruption
-    if (totalRuns > 0) {
-      const emptyPercentage = (emptyRuns / totalRuns) * 100;
-
-      if (emptyPercentage > 90 && emptyRuns > 10) {
-        const warning = new Error(
-          `WARNING: Document appears to be corrupted or empty. ` +
-          `${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(1)}%) have no text content. ` +
-          `This may indicate:\n` +
-          `  - The document was already corrupted before loading\n` +
-          `  - Text content was stripped by another application\n` +
-          `  - Encoding issues during document creation\n` +
-          `Original document structure is preserved, but text may be lost.`
-        );
-        this.parseErrors.push({ element: 'document-validation', error: warning });
-
-        // Always warn to console, even in non-strict mode
-        console.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
-      } else if (emptyPercentage > 50 && emptyRuns > 5) {
-        const warning = new Error(
-          `Document has ${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(1)}%) with no text. ` +
-          `This is higher than normal and may indicate partial data loss.`
-        );
-        this.parseErrors.push({ element: 'document-validation', error: warning });
-        console.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
-      }
-    }
-  }
-
-  /**
-   * Parses a single paragraph from XML
-   */
-  private parseParagraph(paraXml: string): Paragraph | null {
-    try {
-      const paragraph = new Paragraph();
-
-      // Parse paragraph properties
-      this.parseParagraphProperties(paraXml, paragraph);
-
-      // Parse hyperlinks first using XMLParser
-      const hyperlinkXmls = XMLParser.extractElements(paraXml, 'w:hyperlink');
-
-      // Add hyperlinks to paragraph
-      for (const hyperlinkXml of hyperlinkXmls) {
-        const hyperlink = this.parseHyperlink(hyperlinkXml);
-        if (hyperlink) {
-          paragraph.addHyperlink(hyperlink);
-        }
-      }
-
-      // Parse runs using XMLParser (safe position-based parsing)
-      // Note: We need to exclude runs that are inside hyperlinks
-      // Remove all hyperlink tags from the XML before extracting runs
-      let paraXmlWithoutHyperlinks = paraXml;
-      for (const hyperlinkXml of hyperlinkXmls) {
-        paraXmlWithoutHyperlinks = paraXmlWithoutHyperlinks.replace(hyperlinkXml, '');
-      }
-
-      const runXmls = XMLParser.extractElements(paraXmlWithoutHyperlinks, 'w:r');
-
-      // Add runs to paragraph
-      for (const runXml of runXmls) {
-        const run = this.parseRun(runXml);
-        if (run) {
-          paragraph.addRun(run);
-        }
-      }
-
-      return paragraph;
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'paragraph', error: err });
-
-      if (this.strictParsing) {
-        throw new Error(`Failed to parse paragraph: ${err.message}`);
-      }
-
-      // In lenient mode, log warning and continue
-      return null;
-    }
-  }
-
-  /**
-   * Parses paragraph properties and applies them
-   */
-  private parseParagraphProperties(paraXml: string, paragraph: Paragraph): void {
-    const pPrMatch = paraXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
-    if (!pPrMatch || !pPrMatch[1]) {
-      return;
-    }
-
-    const pPr = pPrMatch[1];
-
-    // Alignment
-    const alignMatch = pPr.match(/<w:jc\s+w:val="([^"]+)"/);
-    if (alignMatch && alignMatch[1]) {
-      const alignment = alignMatch[1] as 'left' | 'center' | 'right' | 'justify';
-      paragraph.setAlignment(alignment);
-    }
-
-    // Style
-    const styleMatch = pPr.match(/<w:pStyle\s+w:val="([^"]+)"/);
-    if (styleMatch && styleMatch[1]) {
-      paragraph.setStyle(styleMatch[1]);
-    }
-
-    // Indentation
-    const indMatch = pPr.match(/<w:ind([^>]+)\/>/);
-    if (indMatch && indMatch[1]) {
-      const indStr = indMatch[1];
-      const leftMatch = indStr.match(/w:left="(\d+)"/);
-      const rightMatch = indStr.match(/w:right="(\d+)"/);
-      const firstLineMatch = indStr.match(/w:firstLine="(\d+)"/);
-
-      if (leftMatch && leftMatch[1]) {
-        paragraph.setLeftIndent(parseInt(leftMatch[1], 10));
-      }
-      if (rightMatch && rightMatch[1]) {
-        paragraph.setRightIndent(parseInt(rightMatch[1], 10));
-      }
-      if (firstLineMatch && firstLineMatch[1]) {
-        paragraph.setFirstLineIndent(parseInt(firstLineMatch[1], 10));
-      }
-    }
-
-    // Spacing
-    const spacingMatch = pPr.match(/<w:spacing([^>]+)\/>/);
-    if (spacingMatch && spacingMatch[1]) {
-      const spacingStr = spacingMatch[1];
-      const beforeMatch = spacingStr.match(/w:before="(\d+)"/);
-      const afterMatch = spacingStr.match(/w:after="(\d+)"/);
-      const lineMatch = spacingStr.match(/w:line="(\d+)"/);
-
-      if (beforeMatch && beforeMatch[1]) {
-        paragraph.setSpaceBefore(parseInt(beforeMatch[1], 10));
-      }
-      if (afterMatch && afterMatch[1]) {
-        paragraph.setSpaceAfter(parseInt(afterMatch[1], 10));
-      }
-      if (lineMatch && lineMatch[1]) {
-        const lineRule = spacingStr.match(/w:lineRule="([^"]+)"/);
-        paragraph.setLineSpacing(
-          parseInt(lineMatch[1], 10),
-          lineRule && lineRule[1] ? lineRule[1] as 'auto' | 'exact' | 'atLeast' : undefined
-        );
-      }
-    }
-
-    // Keep properties
-    if (pPr.includes('<w:keepNext')) paragraph.setKeepNext(true);
-    if (pPr.includes('<w:keepLines')) paragraph.setKeepLines(true);
-    if (pPr.includes('<w:pageBreakBefore')) paragraph.setPageBreakBefore(true);
-  }
-
-  /**
-   * Parses a single run from XML
-   */
-  private parseRun(runXml: string): Run | null {
-    try {
-      // Extract text content using XMLParser (safe parsing)
-      const text = XMLBuilder.unescapeXml(XMLParser.extractText(runXml));
-
-      // Create run with text
-      const run = new Run(text);
-
-      // Parse run properties
-      this.parseRunProperties(runXml, run);
-
-      return run;
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'run', error: err });
-
-      if (this.strictParsing) {
-        throw new Error(`Failed to parse run: ${err.message}`);
-      }
-
-      // In lenient mode, log warning and continue
-      return null;
-    }
-  }
-
-  /**
-   * Parses run properties and applies them
-   */
-  private parseRunProperties(runXml: string, run: Run): void {
-    const rPrMatch = runXml.match(/<w:rPr[^>]*>([\s\S]*?)<\/w:rPr>/);
-    if (!rPrMatch || !rPrMatch[1]) {
-      return;
-    }
-
-    const rPr = rPrMatch[1];
-
-    // Bold
-    if (rPr.includes('<w:b/>') || rPr.includes('<w:b ')) {
-      run.setBold(true);
-    }
-
-    // Italic
-    if (rPr.includes('<w:i/>') || rPr.includes('<w:i ')) {
-      run.setItalic(true);
-    }
-
-    // Underline
-    const underlineMatch = rPr.match(/<w:u\s+w:val="([^"]+)"/);
-    if (underlineMatch && underlineMatch[1]) {
-      // Validate underline style before applying
-      const value = underlineMatch[1];
-      const validUnderlineStyles = ['single', 'double', 'thick', 'dotted', 'dash', 'dotDash', 'dotDotDash', 'wave'];
-      if (validUnderlineStyles.includes(value) || value === 'true' || value === 'false') {
-        const underlineStyle = value as RunFormatting['underline'];
-        run.setUnderline(underlineStyle);
-      }
-      // Invalid values are silently ignored to prevent crashes
-    } else if (rPr.includes('<w:u/>')) {
-      run.setUnderline(true);
-    }
-
-    // Strike
-    if (rPr.includes('<w:strike/>') || rPr.includes('<w:strike ')) {
-      run.setStrike(true);
-    }
-
-    // Subscript/Superscript
-    const vertAlignMatch = rPr.match(/<w:vertAlign\s+w:val="([^"]+)"/);
-    if (vertAlignMatch && vertAlignMatch[1]) {
-      if (vertAlignMatch[1] === 'subscript') {
-        run.setSubscript(true);
-      } else if (vertAlignMatch[1] === 'superscript') {
-        run.setSuperscript(true);
-      }
-    }
-
-    // Font
-    const fontMatch = rPr.match(/<w:rFonts[^>]+w:ascii="([^"]+)"/);
-    if (fontMatch && fontMatch[1]) {
-      run.setFont(fontMatch[1]);
-    }
-
-    // Size (in half-points, convert to points)
-    const sizeMatch = rPr.match(/<w:sz\s+w:val="(\d+)"/);
-    if (sizeMatch && sizeMatch[1]) {
-      const halfPoints = parseInt(sizeMatch[1], 10);
-      run.setSize(halfPoints / 2);
-    }
-
-    // Color
-    const colorMatch = rPr.match(/<w:color\s+w:val="([^"]+)"/);
-    if (colorMatch && colorMatch[1]) {
-      run.setColor(colorMatch[1]);
-    }
-
-    // Highlight
-    const highlightMatch = rPr.match(/<w:highlight\s+w:val="([^"]+)"/);
-    if (highlightMatch && highlightMatch[1]) {
-      // Validate highlight color before applying
-      const value = highlightMatch[1];
-      const validHighlightColors = ['yellow', 'green', 'cyan', 'magenta', 'blue', 'red', 'darkBlue', 'darkCyan', 'darkGreen', 'darkMagenta', 'darkRed', 'darkYellow', 'darkGray', 'lightGray', 'black', 'white'];
-      if (validHighlightColors.includes(value)) {
-        const highlightColor = value as RunFormatting['highlight'];
-        run.setHighlight(highlightColor);
-      }
-      // Invalid values are silently ignored to prevent crashes
-    }
-
-    // Small caps
-    if (rPr.includes('<w:smallCaps/>') || rPr.includes('<w:smallCaps ')) {
-      run.setSmallCaps(true);
-    }
-
-    // All caps
-    if (rPr.includes('<w:caps/>') || rPr.includes('<w:caps ')) {
-      run.setAllCaps(true);
-    }
-  }
-
-  /**
-   * Parses a single hyperlink from XML
-   * Extracts URL from relationships, anchor for internal links, and text formatting
-   */
-  private parseHyperlink(hyperlinkXml: string): Hyperlink | null {
-    try {
-      // Extract hyperlink attributes using XMLParser
-      const relationshipId = XMLParser.extractAttribute(hyperlinkXml, 'r:id');
-      const anchor = XMLParser.extractAttribute(hyperlinkXml, 'w:anchor');
-      const tooltip = XMLParser.extractAttribute(hyperlinkXml, 'w:tooltip');
-
-      // Hyperlink must have either a relationship ID (external) or anchor (internal)
-      if (!relationshipId && !anchor) {
-        return null;
-      }
-
-      // Extract runs within the hyperlink for text and formatting
-      const runXmls = XMLParser.extractElements(hyperlinkXml, 'w:r');
-      let text = '';
-      let formatting: RunFormatting | undefined;
-
-      for (const runXml of runXmls) {
-        // Accumulate text from all runs
-        text += XMLBuilder.unescapeXml(XMLParser.extractText(runXml));
-
-        // Get formatting from first run
-        if (!formatting) {
-          const run = this.parseRun(runXml);
-          if (run) {
-            formatting = run.getFormatting();
-          }
-        }
-      }
-
-      // Resolve URL from relationship manager for external links
-      let url: string | undefined;
-      if (relationshipId) {
-        const relationship = this.relationshipManager.getRelationship(relationshipId);
-        if (relationship && relationship.getType().includes('hyperlink')) {
-          url = relationship.getTarget();
-        }
-      }
-
-      // Create hyperlink with extracted properties
-      return new Hyperlink({
-        url,
-        anchor,
-        text: text || 'Link', // Default text if empty
-        formatting,
-        tooltip,
-        relationshipId,
-      });
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'hyperlink', error: err });
-
-      if (this.strictParsing) {
-        throw new Error(`Failed to parse hyperlink: ${err.message}`);
-      }
-
-      // In lenient mode, log warning and continue
-      return null;
-    }
-  }
-
-  /**
-   * Parses existing relationships from word/_rels/document.xml.rels
-   * This ensures new relationships don't collide with existing IDs
-   */
-  private parseRelationships(): void {
-    const relsPath = 'word/_rels/document.xml.rels';
-    const relsXml = this.zipHandler.getFileAsString(relsPath);
-
-    if (relsXml) {
-      // Parse and replace the relationship manager with populated one
-      this.relationshipManager = RelationshipManager.fromXml(relsXml);
-    } else {
-      // No existing relationships - add defaults
-      this.relationshipManager.addStyles();
-      this.relationshipManager.addNumbering();
-    }
-  }
-
-  /**
-   * Parses document properties from core.xml
-   */
-  private parseProperties(): void {
-    const coreXml = this.zipHandler.getFileAsString(DOCX_PATHS.CORE_PROPS);
-    if (!coreXml) {
-      return;
-    }
-
-    // Simple XML parsing using regex (sufficient for Phase 3)
-    const extractTag = (xml: string, tag: string): string | undefined => {
-      const match = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`));
-      return match && match[1] ? XMLBuilder.unescapeXml(match[1]) : undefined;
-    };
-
-    this.properties = {
-      title: extractTag(coreXml, 'dc:title'),
-      subject: extractTag(coreXml, 'dc:subject'),
-      creator: extractTag(coreXml, 'dc:creator'),
-      keywords: extractTag(coreXml, 'cp:keywords'),
-      description: extractTag(coreXml, 'dc:description'),
-      lastModifiedBy: extractTag(coreXml, 'cp:lastModifiedBy'),
-    };
-
-    // Parse revision as number
-    const revisionStr = extractTag(coreXml, 'cp:revision');
-    if (revisionStr) {
-      this.properties.revision = parseInt(revisionStr, 10);
-    }
-
-    // Parse dates
-    const createdStr = extractTag(coreXml, 'dcterms:created');
-    if (createdStr) {
-      this.properties.created = new Date(createdStr);
-    }
-
-    const modifiedStr = extractTag(coreXml, 'dcterms:modified');
-    if (modifiedStr) {
-      this.properties.modified = new Date(modifiedStr);
-    }
+    const result = await this.parser.parseDocument(this.zipHandler, this.relationshipManager);
+    this.bodyElements = result.bodyElements;
+    this.properties = result.properties;
+    this.relationshipManager = result.relationshipManager;
   }
 
 
@@ -965,7 +391,7 @@ export class Document {
    */
   setProperties(properties: DocumentProperties): this {
     // Validate and sanitize properties before storing
-    const validated = Document.validateProperties(properties);
+    const validated = DocumentValidator.validateProperties(properties);
     this.properties = { ...this.properties, ...validated };
     return this;
   }
@@ -979,50 +405,6 @@ export class Document {
   }
 
   /**
-   * Validates that the document has meaningful content before saving
-   * Warns if the document appears to be empty or corrupted
-   */
-  private validateBeforeSave(): void {
-    const paragraphs = this.getParagraphs();
-
-    if (paragraphs.length === 0) {
-      console.warn(
-        '\nDocXML Save Warning:\n' +
-        'Document has no paragraphs. You are saving an empty document.\n'
-      );
-      return;
-    }
-
-    // Count runs with text
-    let totalRuns = 0;
-    let emptyRuns = 0;
-
-    for (const para of paragraphs) {
-      const runs = para.getRuns();
-      totalRuns += runs.length;
-
-      for (const run of runs) {
-        if (run.getText().length === 0) {
-          emptyRuns++;
-        }
-      }
-    }
-
-    if (totalRuns > 0) {
-      const emptyPercentage = (emptyRuns / totalRuns) * 100;
-
-      if (emptyPercentage > 90 && emptyRuns > 10) {
-        console.warn(
-          '\nDocXML Save Warning:\n' +
-          `You are about to save a document where ${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(1)}%) are empty.\n` +
-          'This may result in a document with no visible text content.\n' +
-          'If this is unintentional, please review the document before saving.\n'
-        );
-      }
-    }
-  }
-
-  /**
    * Saves the document to a file
    * @param filePath - Output file path
    */
@@ -1033,19 +415,19 @@ export class Document {
 
     try {
       // Validate before saving to prevent data loss
-      this.validateBeforeSave();
+      this.validator.validateBeforeSave(this.bodyElements);
 
       // Check memory usage before starting
-      this.checkMemoryThreshold();
+      this.validator.checkMemoryThreshold();
 
       // Load all image data before saving (now async)
       await this.imageManager.loadAllImageData();
 
       // Check memory again after loading images
-      this.checkMemoryThreshold();
+      this.validator.checkMemoryThreshold();
 
       // Check document size and warn if too large
-      const sizeInfo = this.estimateSize();
+      const sizeInfo = this.validator.estimateSize(this.bodyElements, this.imageManager);
       if (sizeInfo.warning) {
         console.warn(`DocXML Warning: ${sizeInfo.warning}`);
       }
@@ -1090,19 +472,19 @@ export class Document {
   async toBuffer(): Promise<Buffer> {
     try {
       // Validate before saving to prevent data loss
-      this.validateBeforeSave();
+      this.validator.validateBeforeSave(this.bodyElements);
 
       // Check memory usage before starting
-      this.checkMemoryThreshold();
+      this.validator.checkMemoryThreshold();
 
       // Load all image data before saving (now async)
       await this.imageManager.loadAllImageData();
 
       // Check memory again after loading images
-      this.checkMemoryThreshold();
+      this.validator.checkMemoryThreshold();
 
       // Check document size and warn if too large
-      const sizeInfo = this.estimateSize();
+      const sizeInfo = this.validator.estimateSize(this.bodyElements, this.imageManager);
       if (sizeInfo.warning) {
         console.warn(`DocXML Warning: ${sizeInfo.warning}`);
       }
@@ -1129,7 +511,7 @@ export class Document {
    * Updates the document.xml file with current paragraphs
    */
   private updateDocumentXml(): void {
-    const xml = this.generateDocumentXml();
+    const xml = this.generator.generateDocumentXml(this.bodyElements, this.section);
     this.zipHandler.updateFile(DOCX_PATHS.DOCUMENT, xml);
   }
 
@@ -1137,7 +519,7 @@ export class Document {
    * Updates the core properties with current values
    */
   private updateCoreProps(): void {
-    const xml = this.generateCoreProps();
+    const xml = this.generator.generateCoreProps(this.properties);
     this.zipHandler.updateFile(DOCX_PATHS.CORE_PROPS, xml);
   }
 
@@ -1155,106 +537,6 @@ export class Document {
   private updateNumberingXml(): void {
     const xml = this.numberingManager.generateNumberingXml();
     this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
-  }
-
-  /**
-   * Generates [Content_Types].xml
-   */
-  private generateContentTypes(): string {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
-  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
-  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
-</Types>`;
-  }
-
-  /**
-   * Generates _rels/.rels
-   */
-  private generateRels(): string {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
-</Relationships>`;
-  }
-
-  /**
-   * Generates word/document.xml with current body elements
-   */
-  private generateDocumentXml(): string {
-    const bodyXmls: XMLElement[] = [];
-
-    // Generate XML for each body element
-    // Note: TableOfContentsElement.toXML() returns an array
-    for (const element of this.bodyElements) {
-      const xml = element.toXML();
-      if (Array.isArray(xml)) {
-        // TableOfContentsElement returns array of XMLElements
-        bodyXmls.push(...xml);
-      } else {
-        // Paragraph and Table return single XMLElement
-        bodyXmls.push(xml);
-      }
-    }
-
-    // Add section properties at the end
-    bodyXmls.push(this.section.toXML());
-    return XMLBuilder.createDocument(bodyXmls);
-  }
-
-  /**
-   * Generates docProps/core.xml
-   */
-  private generateCoreProps(): string {
-    const now = new Date();
-    const created = this.properties.created || now;
-    const modified = this.properties.modified || now;
-
-    const formatDate = (date: Date): string => {
-      return date.toISOString();
-    };
-
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
-                   xmlns:dc="http://purl.org/dc/elements/1.1/"
-                   xmlns:dcterms="http://purl.org/dc/terms/"
-                   xmlns:dcmitype="http://purl.org/dc/dcmitype/"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>${XMLBuilder.escapeXmlText(this.properties.title || '')}</dc:title>
-  <dc:subject>${XMLBuilder.escapeXmlText(this.properties.subject || '')}</dc:subject>
-  <dc:creator>${XMLBuilder.escapeXmlText(this.properties.creator || 'DocXML')}</dc:creator>
-  <cp:keywords>${XMLBuilder.escapeXmlText(this.properties.keywords || '')}</cp:keywords>
-  <dc:description>${XMLBuilder.escapeXmlText(this.properties.description || '')}</dc:description>
-  <cp:lastModifiedBy>${XMLBuilder.escapeXmlText(this.properties.lastModifiedBy || this.properties.creator || 'DocXML')}</cp:lastModifiedBy>
-  <cp:revision>${this.properties.revision || 1}</cp:revision>
-  <dcterms:created xsi:type="dcterms:W3CDTF">${formatDate(created)}</dcterms:created>
-  <dcterms:modified xsi:type="dcterms:W3CDTF">${formatDate(modified)}</dcterms:modified>
-</cp:coreProperties>`;
-  }
-
-  /**
-   * Generates docProps/app.xml
-   */
-  private generateAppProps(): string {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
-            xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>DocXML</Application>
-  <DocSecurity>0</DocSecurity>
-  <ScaleCrop>false</ScaleCrop>
-  <Company></Company>
-  <LinksUpToDate>false</LinksUpToDate>
-  <SharedDoc>false</SharedDoc>
-  <HyperlinksChanged>false</HyperlinksChanged>
-  <AppVersion>0.1.0</AppVersion>
-</Properties>`;
   }
 
 
@@ -1566,51 +848,11 @@ export class Document {
    * Processes all hyperlinks in paragraphs and registers them with RelationshipManager
    */
   private processHyperlinks(): void {
-    // Get all paragraphs (from body and from headers/footers)
-    const paragraphs = this.getParagraphs();
-
-    // Also check headers and footers
-    const headers = this.headerFooterManager.getAllHeaders();
-    const footers = this.headerFooterManager.getAllFooters();
-
-    for (const header of headers) {
-      for (const element of header.header.getElements()) {
-        if (element instanceof Paragraph) {
-          this.processHyperlinksInParagraph(element);
-        }
-      }
-    }
-
-    for (const footer of footers) {
-      for (const element of footer.footer.getElements()) {
-        if (element instanceof Paragraph) {
-          this.processHyperlinksInParagraph(element);
-        }
-      }
-    }
-
-    // Process body paragraphs
-    for (const para of paragraphs) {
-      this.processHyperlinksInParagraph(para);
-    }
-  }
-
-  /**
-   * Processes hyperlinks in a single paragraph
-   */
-  private processHyperlinksInParagraph(paragraph: Paragraph): void {
-    const content = paragraph.getContent();
-
-    for (const item of content) {
-      if (item instanceof Hyperlink && item.isExternal() && !item.getRelationshipId()) {
-        // Register external hyperlink with relationship manager
-        const url = item.getUrl();
-        if (url) {
-          const relationship = this.relationshipManager.addHyperlink(url);
-          item.setRelationshipId(relationship.getId());
-        }
-      }
-    }
+    this.generator.processHyperlinks(
+      this.bodyElements,
+      this.headerFooterManager,
+      this.relationshipManager
+    );
   }
 
   /**
@@ -1681,63 +923,12 @@ export class Document {
    * Updates [Content_Types].xml to include image extensions, headers/footers, and comments
    */
   private updateContentTypesWithImagesHeadersFootersAndComments(): void {
-    const contentTypes = this.generateContentTypesWithImagesHeadersFootersAndComments();
+    const contentTypes = this.generator.generateContentTypesWithImagesHeadersFootersAndComments(
+      this.imageManager,
+      this.headerFooterManager,
+      this.commentManager
+    );
     this.zipHandler.updateFile(DOCX_PATHS.CONTENT_TYPES, contentTypes);
-  }
-
-  /**
-   * Generates [Content_Types].xml with image extensions, headers/footers, and comments
-   */
-  private generateContentTypesWithImagesHeadersFootersAndComments(): string {
-    const images = this.imageManager.getAllImages();
-    const headers = this.headerFooterManager.getAllHeaders();
-    const footers = this.headerFooterManager.getAllFooters();
-    const hasComments = this.commentManager.getCount() > 0;
-
-    // Collect unique extensions
-    const extensions = new Set<string>();
-    for (const entry of images) {
-      extensions.add(entry.image.getExtension());
-    }
-
-    let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-    xml += '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n';
-
-    // Default types
-    xml += '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n';
-    xml += '  <Default Extension="xml" ContentType="application/xml"/>\n';
-
-    // Image extensions
-    for (const ext of extensions) {
-      const mimeType = ImageManager.getMimeType(ext);
-      xml += `  <Default Extension="${ext}" ContentType="${mimeType}"/>\n`;
-    }
-
-    // Override types
-    xml += '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>\n';
-    xml += '  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>\n';
-    xml += '  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>\n';
-
-    // Header overrides
-    for (const entry of headers) {
-      xml += `  <Override PartName="/word/${entry.filename}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>\n`;
-    }
-
-    // Footer overrides
-    for (const entry of footers) {
-      xml += `  <Override PartName="/word/${entry.filename}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>\n`;
-    }
-
-    // Comments override
-    if (hasComments) {
-      xml += '  <Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>\n';
-    }
-
-    xml += '  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>\n';
-    xml += '  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>\n';
-    xml += '</Types>';
-
-    return xml;
   }
 
   /**
@@ -2113,28 +1304,7 @@ export class Document {
    * @returns Array of parse errors/warnings
    */
   getParseWarnings(): Array<{ element: string; error: Error }> {
-    return [...this.parseErrors];
-  }
-
-  /**
-   * Checks current memory usage and throws if above threshold
-   * Prevents out-of-memory errors by failing early
-   * @throws {Error} If memory usage exceeds configured percentage
-   */
-  private checkMemoryThreshold(): void {
-    const { heapUsed, heapTotal } = process.memoryUsage();
-    const usagePercent = (heapUsed / heapTotal) * 100;
-
-    if (usagePercent > this.maxMemoryUsagePercent) {
-      throw new Error(
-        `Memory usage critical (${usagePercent.toFixed(1)}% of ${(heapTotal / 1024 / 1024).toFixed(0)}MB heap). ` +
-        `Cannot process document safely. Consider:\n` +
-        `- Reducing document size\n` +
-        `- Optimizing/compressing images\n` +
-        `- Splitting into multiple documents\n` +
-        `- Increasing Node.js heap size (--max-old-space-size)`
-      );
-    }
+    return this.parser.getParseErrors();
   }
 
   /**
@@ -2152,46 +1322,7 @@ export class Document {
     totalEstimatedMB: number;
     warning?: string;
   } {
-    // Count elements
-    const paragraphCount = this.getParagraphCount();
-    const tableCount = this.getTableCount();
-    const imageCount = this.imageManager.getImageCount();
-
-    // Estimate XML size
-    // Average: 200 bytes per paragraph, 1000 bytes per table
-    const estimatedXml = (paragraphCount * 200) + (tableCount * 1000) + 50000; // +50KB for structure
-
-    // Get actual image sizes
-    const imageBytes = this.imageManager.getTotalSize();
-
-    // Total estimate
-    const totalBytes = estimatedXml + imageBytes;
-    const totalMB = totalBytes / (1024 * 1024);
-
-    // Thresholds
-    const WARNING_MB = 50;
-    const ERROR_MB = 100;
-
-    let warning: string | undefined;
-
-    if (totalMB > ERROR_MB) {
-      warning = `Document size (${totalMB.toFixed(1)}MB) exceeds recommended maximum of ${ERROR_MB}MB. ` +
-        `This may cause memory issues. Consider splitting into multiple documents or optimizing images.`;
-    } else if (totalMB > WARNING_MB) {
-      warning = `Document size (${totalMB.toFixed(1)}MB) exceeds ${WARNING_MB}MB. ` +
-        `Large documents may take longer to process and use significant memory.`;
-    }
-
-    return {
-      paragraphs: paragraphCount,
-      tables: tableCount,
-      images: imageCount,
-      estimatedXmlBytes: estimatedXml,
-      imageBytes,
-      totalEstimatedBytes: totalBytes,
-      totalEstimatedMB: parseFloat(totalMB.toFixed(2)),
-      warning,
-    };
+    return this.validator.estimateSize(this.bodyElements, this.imageManager);
   }
 
   /**
@@ -2202,7 +1333,7 @@ export class Document {
   dispose(): void {
     // Clear all managers to free memory
     this.bodyElements = [];
-    this.parseErrors = [];
+    this.parser.clearParseErrors();
     this.stylesManager = StylesManager.create();
     this.numberingManager = NumberingManager.create();
     this.imageManager.clear();
@@ -2223,32 +1354,6 @@ export class Document {
     size: { xml: string; images: string; total: string };
     warnings: string[];
   } {
-    const estimate = this.estimateSize();
-    const warnings: string[] = [];
-
-    if (estimate.warning) {
-      warnings.push(estimate.warning);
-    }
-
-    // Format sizes for display
-    const formatBytes = (bytes: number): string => {
-      if (bytes < 1024) return `${bytes} B`;
-      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    };
-
-    return {
-      elements: {
-        paragraphs: estimate.paragraphs,
-        tables: estimate.tables,
-        images: estimate.images,
-      },
-      size: {
-        xml: formatBytes(estimate.estimatedXmlBytes),
-        images: formatBytes(estimate.imageBytes),
-        total: formatBytes(estimate.totalEstimatedBytes),
-      },
-      warnings,
-    };
+    return this.validator.getSizeStats(this.bodyElements, this.imageManager);
   }
 }

@@ -54,7 +54,6 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "docxmlater": "^0.1.1",
     "jszip": "^3.10.1"
   }
 }

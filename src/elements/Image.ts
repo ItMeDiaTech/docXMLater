@@ -164,7 +164,7 @@ export class Image {
 
   /**
    * Attempts to detect image dimensions from buffer
-   * Basic detection for PNG and JPEG
+   * Supports PNG, JPEG, GIF, BMP, and TIFF formats
    */
   private detectDimensions(): { width: number; height: number } | null {
     if (!this.imageData || this.imageData.length < 24) {
@@ -172,31 +172,201 @@ export class Image {
     }
 
     try {
-      // PNG detection
+      // PNG detection (signature: 89 50 4E 47)
       if (
         this.imageData[0] === 0x89 &&
         this.imageData[1] === 0x50 &&
         this.imageData[2] === 0x4e &&
         this.imageData[3] === 0x47
       ) {
-        const width = this.imageData.readUInt32BE(16);
-        const height = this.imageData.readUInt32BE(20);
+        return this.detectPngDimensions();
+      }
+
+      // JPEG detection (signature: FF D8)
+      if (this.imageData[0] === 0xff && this.imageData[1] === 0xd8) {
+        return this.detectJpegDimensions();
+      }
+
+      // GIF detection (signature: "GIF87a" or "GIF89a")
+      if (
+        this.imageData[0] === 0x47 && // 'G'
+        this.imageData[1] === 0x49 && // 'I'
+        this.imageData[2] === 0x46    // 'F'
+      ) {
+        return this.detectGifDimensions();
+      }
+
+      // BMP detection (signature: "BM")
+      if (this.imageData[0] === 0x42 && this.imageData[1] === 0x4d) {
+        return this.detectBmpDimensions();
+      }
+
+      // TIFF detection (little-endian: "II*\0" or big-endian: "MM\0*")
+      if (
+        (this.imageData[0] === 0x49 && this.imageData[1] === 0x49 && this.imageData[2] === 0x2a) || // Little-endian
+        (this.imageData[0] === 0x4d && this.imageData[1] === 0x4d && this.imageData[2] === 0x00)    // Big-endian
+      ) {
+        return this.detectTiffDimensions();
+      }
+    } catch (error) {
+      // Dimension detection failed - will use defaults
+    }
+
+    return null;
+  }
+
+  /**
+   * Detects dimensions from PNG image data
+   */
+  private detectPngDimensions(): { width: number; height: number } | null {
+    if (!this.imageData || this.imageData.length < 24) {
+      return null;
+    }
+
+    try {
+      const width = this.imageData.readUInt32BE(16);
+      const height = this.imageData.readUInt32BE(20);
+
+      // Convert pixels to EMUs (assuming 96 DPI)
+      return {
+        width: Math.round((width / 96) * 914400),
+        height: Math.round((height / 96) * 914400),
+      };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Detects dimensions from GIF image data
+   * GIF format: width and height are at bytes 6-7 (width) and 8-9 (height), little-endian
+   */
+  private detectGifDimensions(): { width: number; height: number } | null {
+    if (!this.imageData || this.imageData.length < 10) {
+      return null;
+    }
+
+    try {
+      // GIF dimensions are stored as little-endian 16-bit integers
+      const width = this.imageData.readUInt16LE(6);
+      const height = this.imageData.readUInt16LE(8);
+
+      // Validate dimensions
+      if (width > 0 && height > 0 && width < 65535 && height < 65535) {
         // Convert pixels to EMUs (assuming 96 DPI)
         return {
           width: Math.round((width / 96) * 914400),
           height: Math.round((height / 96) * 914400),
         };
       }
+    } catch (error) {
+      // Detection failed
+    }
 
-      // JPEG detection
-      if (this.imageData[0] === 0xff && this.imageData[1] === 0xd8) {
-        const jpegDims = this.detectJpegDimensions();
-        if (jpegDims) {
-          return jpegDims;
-        }
+    return null;
+  }
+
+  /**
+   * Detects dimensions from BMP image data
+   * BMP format: width at bytes 18-21, height at bytes 22-25, little-endian
+   */
+  private detectBmpDimensions(): { width: number; height: number } | null {
+    if (!this.imageData || this.imageData.length < 26) {
+      return null;
+    }
+
+    try {
+      // BMP dimensions are stored as little-endian 32-bit integers
+      const width = this.imageData.readInt32LE(18);
+      const height = Math.abs(this.imageData.readInt32LE(22)); // Height can be negative (top-down)
+
+      // Validate dimensions
+      if (width > 0 && height > 0 && width < 65535 && height < 65535) {
+        // Convert pixels to EMUs (assuming 96 DPI)
+        return {
+          width: Math.round((width / 96) * 914400),
+          height: Math.round((height / 96) * 914400),
+        };
       }
     } catch (error) {
-      // Dimension detection failed
+      // Detection failed
+    }
+
+    return null;
+  }
+
+  /**
+   * Detects dimensions from TIFF image data
+   * TIFF format is more complex - reads IFD (Image File Directory) entries
+   */
+  private detectTiffDimensions(): { width: number; height: number } | null {
+    if (!this.imageData || this.imageData.length < 14) {
+      return null;
+    }
+
+    try {
+      // Determine byte order
+      const isLittleEndian = this.imageData[0] === 0x49; // 'II' = little-endian
+
+      // Read IFD offset (bytes 4-7)
+      const ifdOffset = isLittleEndian
+        ? this.imageData.readUInt32LE(4)
+        : this.imageData.readUInt32BE(4);
+
+      if (ifdOffset + 14 > this.imageData.length) {
+        return null;
+      }
+
+      // Read number of directory entries
+      const numEntries = isLittleEndian
+        ? this.imageData.readUInt16LE(ifdOffset)
+        : this.imageData.readUInt16BE(ifdOffset);
+
+      let width = 0;
+      let height = 0;
+
+      // Read IFD entries
+      for (let i = 0; i < numEntries; i++) {
+        const entryOffset = ifdOffset + 2 + i * 12;
+
+        if (entryOffset + 12 > this.imageData.length) {
+          break;
+        }
+
+        // Read tag ID
+        const tag = isLittleEndian
+          ? this.imageData.readUInt16LE(entryOffset)
+          : this.imageData.readUInt16BE(entryOffset);
+
+        // Read value
+        const value = isLittleEndian
+          ? this.imageData.readUInt32LE(entryOffset + 8)
+          : this.imageData.readUInt32BE(entryOffset + 8);
+
+        // Tag 256 (0x100) = ImageWidth
+        // Tag 257 (0x101) = ImageHeight
+        if (tag === 256 || tag === 0x100) {
+          width = value;
+        } else if (tag === 257 || tag === 0x101) {
+          height = value;
+        }
+
+        // Stop if we have both dimensions
+        if (width > 0 && height > 0) {
+          break;
+        }
+      }
+
+      // Validate dimensions
+      if (width > 0 && height > 0 && width < 65535 && height < 65535) {
+        // Convert pixels to EMUs (assuming 96 DPI)
+        return {
+          width: Math.round((width / 96) * 914400),
+          height: Math.round((height / 96) * 914400),
+        };
+      }
+    } catch (error) {
+      // Detection failed
     }
 
     return null;
@@ -334,20 +504,9 @@ export class Image {
   }
 
   /**
-   * Gets the image data buffer
-   * Ensures data is loaded before returning
-   * @deprecated Use async pattern: await image.ensureDataLoaded() then access imageData
-   */
-  getImageData(): Buffer {
-    if (!this.imageData) {
-      throw new Error('Image data not loaded. Call await ensureDataLoaded() first.');
-    }
-    return this.imageData;
-  }
-
-  /**
    * Gets the image data buffer asynchronously
-   * Preferred method - ensures data is loaded before returning
+   * This is the preferred method for loading image data
+   * @returns Promise<Buffer> containing the image data
    */
   async getImageDataAsync(): Promise<Buffer> {
     await this.ensureDataLoaded();
@@ -358,6 +517,23 @@ export class Image {
 
     // Should not reach here after ensureDataLoaded()
     throw new Error('Failed to load image data');
+  }
+
+  /**
+   * Gets the image data buffer synchronously
+   * IMPORTANT: Only use this after calling ensureDataLoaded() or when the ImageManager
+   * has already loaded all images via loadAllImageData()
+   * @returns Buffer containing the image data
+   * @throws {Error} If image data has not been loaded yet
+   */
+  getImageData(): Buffer {
+    if (!this.imageData) {
+      throw new Error(
+        'Image data not loaded. ' +
+        'Call await image.ensureDataLoaded() or await imageManager.loadAllImageData() first.'
+      );
+    }
+    return this.imageData;
   }
 
   /**
