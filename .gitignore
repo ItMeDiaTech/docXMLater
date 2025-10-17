@@ -50,3 +50,8 @@ PROJECT_STATUS.md
 
 # Generated example outputs
 *.docx
+
+# Allow test fixtures
+!tests/**/*.docx
+!ErrorDoc.docx
+!Working.docx
