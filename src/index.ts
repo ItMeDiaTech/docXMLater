@@ -165,4 +165,9 @@ export { EndnoteManager } from './elements/EndnoteManager';
 
 // XML Builder and Parser
 export { XMLBuilder, XMLElement } from './xml/XMLBuilder';
-export { XMLParser } from './xml/XMLParser';
+export {
+  XMLParser,
+  ParseToObjectOptions,
+  ParsedXMLValue,
+  ParsedXMLObject,
+} from './xml/XMLParser';

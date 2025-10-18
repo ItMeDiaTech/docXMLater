@@ -272,7 +272,51 @@ The framework correctly handles:
 3. Binary files (images) are preserved as-is without encoding conversion
 4. XML declarations always specify `encoding="UTF-8"` and `standalone="yes"`
 
-### 6. XML Namespaces
+### 6. XML Parsing (parseToObject)
+
+**New Feature (v0.11.0)**: XMLParser now includes `parseToObject()` method for converting XML to JavaScript objects.
+
+**Compatible with fast-xml-parser format:**
+- Attributes → `@_` prefix (e.g., `@_Id`, `@_Type`)
+- Text content → `#text` property
+- Multiple child elements → Array `[]`
+- Single child element → Object `{}`
+- Namespaces → Preserved in keys (e.g., `w:p`, `w:r`)
+- Self-closing tags → Empty object `{}`
+
+**Usage Example:**
+```typescript
+import { XMLParser } from 'docxmlater';
+
+const xml = `
+  <Relationships xmlns="http://...">
+    <Relationship Id="rId1" Type="http://..." Target="styles.xml"/>
+    <Relationship Id="rId2" Type="http://..." Target="numbering.xml"/>
+  </Relationships>
+`;
+
+const result = XMLParser.parseToObject(xml);
+// Result: { Relationships: { Relationship: [{ '@_Id': 'rId1', ... }, { '@_Id': 'rId2', ... }] } }
+```
+
+**Parsing Options:**
+- `ignoreAttributes`: Ignore all attributes (default: false)
+- `attributeNamePrefix`: Custom attribute prefix (default: '@_')
+- `textNodeName`: Custom text property name (default: '#text')
+- `parseAttributeValue`: Parse numbers/booleans (default: true)
+- `trimValues`: Trim whitespace (default: true)
+- `alwaysArray`: Always return arrays for elements (default: false)
+
+**Key Features:**
+- Position-based parsing prevents ReDoS attacks
+- Automatic array coalescing for duplicate element names
+- Type conversion for numeric/boolean attribute values
+- Handles all OOXML structures (Relationships, Styles, Document XML)
+- Safe for large documents (size validation)
+- Full namespace handling (including ignoreNamespace option)
+- **39 comprehensive tests - 100% passing**
+
+### 7. XML Namespaces
 Must handle these OpenXML namespaces:
 ```xml
 xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -283,7 +327,7 @@ xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
 xmlns:v="urn:schemas-microsoft-com:vml"
 ```
 
-### 7. Unit Conversions
+### 8. Unit Conversions
 Handle multiple measurement units:
 - **Twips**: 1/20th of a point (used for most measurements)
 - **EMUs**: English Metric Units (used for images, 914400 EMUs = 1 inch)

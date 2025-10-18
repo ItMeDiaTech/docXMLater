@@ -5,6 +5,60 @@
  */
 
 /**
+ * Options for XML-to-object parsing
+ */
+export interface ParseToObjectOptions {
+  /** Ignore attributes (default: false) */
+  ignoreAttributes?: boolean;
+
+  /** Attribute name prefix (default: '@_') */
+  attributeNamePrefix?: string;
+
+  /** Text node property name (default: '#text') */
+  textNodeName?: string;
+
+  /** Remove namespace prefixes from element names (default: false) */
+  ignoreNamespace?: boolean;
+
+  /** Parse numeric attribute values (default: true) */
+  parseAttributeValue?: boolean;
+
+  /** Trim whitespace from text values (default: true) */
+  trimValues?: boolean;
+
+  /** Always return arrays for elements (default: false) */
+  alwaysArray?: boolean;
+}
+
+/**
+ * Parsed XML object structure
+ * Can be a string, object, array, or nested structure
+ */
+export type ParsedXMLValue =
+  | string
+  | number
+  | boolean
+  | ParsedXMLObject
+  | ParsedXMLObject[]
+  | null
+  | undefined;
+
+/**
+ * Parsed XML object with dynamic keys
+ */
+export interface ParsedXMLObject {
+  [key: string]: ParsedXMLValue;
+}
+
+/**
+ * Internal structure for tracking parsed elements during parsing
+ */
+interface ParsedElement {
+  name: string;
+  value: ParsedXMLValue;
+}
+
+/**
  * Simple XML parser using position-based parsing instead of regex
  * Prevents catastrophic backtracking (ReDoS attacks) by avoiding nested regex patterns
  */
@@ -220,5 +274,404 @@ export class XMLParser {
     if (endIdx === -1) return undefined;
 
     return xml.substring(openEnd + 1, endIdx);
+  }
+
+  /**
+   * Parse XML string to JavaScript object
+   * Compatible with fast-xml-parser output format
+   *
+   * @param xml - XML string to parse
+   * @param options - Parsing options
+   * @returns Parsed JavaScript object
+   *
+   * @example
+   * const xml = '<Relationships><Relationship Id="rId1" Target="https://example.com"/></Relationships>';
+   * const obj = XMLParser.parseToObject(xml);
+   * // Returns: { Relationships: { Relationship: { '@_Id': 'rId1', '@_Target': 'https://example.com' } } }
+   *
+   * @example
+   * // Multiple elements become arrays
+   * const xml = '<Items><Item id="1"/><Item id="2"/></Items>';
+   * const obj = XMLParser.parseToObject(xml);
+   * // Returns: { Items: { Item: [{ '@_id': '1' }, { '@_id': '2' }] } }
+   */
+  static parseToObject(
+    xml: string,
+    options?: ParseToObjectOptions
+  ): ParsedXMLObject {
+    // Default options
+    const opts: Required<ParseToObjectOptions> = {
+      ignoreAttributes: options?.ignoreAttributes ?? false,
+      attributeNamePrefix: options?.attributeNamePrefix ?? '@_',
+      textNodeName: options?.textNodeName ?? '#text',
+      ignoreNamespace: options?.ignoreNamespace ?? false,
+      parseAttributeValue: options?.parseAttributeValue ?? true,
+      trimValues: options?.trimValues ?? true,
+      alwaysArray: options?.alwaysArray ?? false,
+    };
+
+    // Validate input size
+    XMLParser.validateSize(xml);
+
+    // Remove XML declaration and trim
+    xml = xml.replace(/<\?xml[^>]*\?>\s*/g, '').trim();
+
+    if (!xml) {
+      return {};
+    }
+
+    // Parse root element
+    const result = XMLParser.parseElementToObject(xml, 0, opts);
+    return result.value as ParsedXMLObject;
+  }
+
+  /**
+   * Parses a single XML element into an object
+   * @private
+   */
+  private static parseElementToObject(
+    xml: string,
+    startPos: number,
+    options: Required<ParseToObjectOptions>
+  ): { value: ParsedXMLValue; endPos: number } {
+    // Find opening tag
+    const openTagStart = xml.indexOf('<', startPos);
+    if (openTagStart === -1) {
+      return { value: {}, endPos: xml.length };
+    }
+
+    // Skip comments
+    if (xml.substring(openTagStart, openTagStart + 4) === '<!--') {
+      const commentEnd = xml.indexOf('-->', openTagStart + 4);
+      if (commentEnd !== -1) {
+        return XMLParser.parseElementToObject(xml, commentEnd + 3, options);
+      }
+      return { value: {}, endPos: xml.length };
+    }
+
+    // Extract element name
+    const nameMatch = xml.substring(openTagStart + 1).match(/^([a-zA-Z0-9:_-]+)/);
+    if (!nameMatch) {
+      return { value: {}, endPos: openTagStart + 1 };
+    }
+
+    const originalElementName: string = nameMatch[1] || '';
+    let elementName: string = originalElementName;
+    const tagHeaderEnd = xml.indexOf('>', openTagStart);
+    if (tagHeaderEnd === -1) {
+      return { value: {}, endPos: xml.length };
+    }
+
+    // Remove namespace if requested (but keep original for offset calculations)
+    if (options.ignoreNamespace && elementName.includes(':')) {
+      elementName = elementName.split(':')[1] || elementName;
+    }
+
+    // Extract attributes using ORIGINAL element name length for correct offset
+    const tagHeader = xml.substring(openTagStart + 1 + originalElementName.length, tagHeaderEnd);
+    const attributes = XMLParser.extractAttributesFromTag(tagHeader, options);
+
+    // Check if self-closing
+    const isSelfClosing = tagHeader.trim().endsWith('/') || xml[tagHeaderEnd - 1] === '/';
+
+    if (isSelfClosing) {
+      // Self-closing tag - return object with attributes only
+      const elementValue: ParsedXMLObject = { ...attributes };
+      return {
+        value: { [elementName]: elementValue },
+        endPos: tagHeaderEnd + 1,
+      };
+    }
+
+    // Find closing tag (use original name with namespace for correct matching)
+    const closingTag = `</${originalElementName}>`;
+    const contentStart = tagHeaderEnd + 1;
+    const closingTagPos = XMLParser.findClosingTag(xml, originalElementName, contentStart);
+
+    if (closingTagPos === -1) {
+      // No closing tag found - treat as self-closing
+      return {
+        value: { [elementName]: { ...attributes } },
+        endPos: tagHeaderEnd + 1,
+      };
+    }
+
+    // Extract content between tags
+    const content = xml.substring(contentStart, closingTagPos);
+
+    // Parse content (children or text)
+    const children: ParsedElement[] = [];
+    let textContent = '';
+    let pos = 0;
+
+    while (pos < content.length) {
+      const nextTag = content.indexOf('<', pos);
+
+      if (nextTag === -1) {
+        // No more tags - rest is text
+        const text = content.substring(pos);
+        if (text.trim()) {
+          textContent += text;
+        }
+        break;
+      }
+
+      // Collect text before next tag
+      if (nextTag > pos) {
+        const text = content.substring(pos, nextTag);
+        if (text.trim()) {
+          textContent += text;
+        }
+      }
+
+      // Parse child element
+      const childResult = XMLParser.parseElementToObject(content, nextTag, options);
+      const childObj = childResult.value as ParsedXMLObject;
+
+      // Extract child name and value
+      const childKeys = Object.keys(childObj);
+      if (childKeys.length > 0) {
+        const childName = childKeys[0];
+        if (childName) {
+          const childValue = childObj[childName];
+          children.push({ name: childName, value: childValue });
+        }
+      }
+
+      pos = childResult.endPos;
+    }
+
+    // Build element value
+    let elementValue: ParsedXMLValue = {};
+
+    // Add attributes
+    if (!options.ignoreAttributes && Object.keys(attributes).length > 0) {
+      elementValue = { ...attributes };
+    }
+
+    // Add text content
+    if (textContent.trim()) {
+      const text = options.trimValues ? textContent.trim() : textContent;
+      if (typeof elementValue === 'object' && !Array.isArray(elementValue)) {
+        if (Object.keys(elementValue).length === 0) {
+          // Only text, no attributes - return as direct value if simple
+          elementValue = text;
+        } else {
+          // Text with attributes
+          (elementValue as ParsedXMLObject)[options.textNodeName] = text;
+        }
+      }
+    }
+
+    // Add children
+    if (children.length > 0) {
+      const coalescedChildren = XMLParser.coalesceChildren(children, options);
+      if (typeof elementValue === 'object' && !Array.isArray(elementValue)) {
+        elementValue = { ...elementValue, ...coalescedChildren };
+      } else {
+        elementValue = coalescedChildren;
+      }
+    }
+
+    // If element has no content, attributes, or children - return empty object
+    if (
+      typeof elementValue === 'object' &&
+      !Array.isArray(elementValue) &&
+      Object.keys(elementValue).length === 0
+    ) {
+      elementValue = {};
+    }
+
+    return {
+      value: { [elementName]: elementValue },
+      endPos: closingTagPos + closingTag.length,
+    };
+  }
+
+  /**
+   * Extracts attributes from a tag header
+   * @private
+   */
+  private static extractAttributesFromTag(
+    tagHeader: string,
+    options: Required<ParseToObjectOptions>
+  ): Record<string, string | number | boolean> {
+    const attributes: Record<string, string | number | boolean> = {};
+
+    if (options.ignoreAttributes) {
+      return attributes;
+    }
+
+    // Simple attribute extraction using position-based parsing
+    let pos = 0;
+    while (pos < tagHeader.length) {
+      // Skip whitespace
+      while (pos < tagHeader.length) {
+        const char = tagHeader[pos];
+        if (char && /\s/.test(char)) {
+          pos++;
+        } else {
+          break;
+        }
+      }
+
+      if (pos >= tagHeader.length || tagHeader[pos] === '/') {
+        break;
+      }
+
+      // Extract attribute name
+      const nameStart = pos;
+      while (pos < tagHeader.length) {
+        const char = tagHeader[pos];
+        if (char && /[a-zA-Z0-9:_-]/.test(char)) {
+          pos++;
+        } else {
+          break;
+        }
+      }
+
+      if (pos === nameStart) {
+        break;
+      }
+
+      let attrName = tagHeader.substring(nameStart, pos);
+
+      // Skip whitespace and '='
+      while (pos < tagHeader.length) {
+        const char = tagHeader[pos];
+        if (char && /[\s=]/.test(char)) {
+          pos++;
+        } else {
+          break;
+        }
+      }
+
+      // Extract attribute value
+      let attrValue = '';
+      if (pos < tagHeader.length && (tagHeader[pos] === '"' || tagHeader[pos] === "'")) {
+        const quote = tagHeader[pos];
+        pos++; // Skip opening quote
+        const valueStart = pos;
+
+        while (pos < tagHeader.length && tagHeader[pos] !== quote) {
+          pos++;
+        }
+
+        attrValue = tagHeader.substring(valueStart, pos);
+        pos++; // Skip closing quote
+      }
+
+      // Remove namespace from attribute name if requested
+      if (options.ignoreNamespace && attrName.includes(':')) {
+        attrName = attrName.split(':')[1] || attrName;
+      }
+
+      // Add prefix to attribute name
+      const prefixedName = options.attributeNamePrefix + attrName;
+
+      // Parse attribute value
+      attributes[prefixedName] = options.parseAttributeValue
+        ? XMLParser.parseValue(attrValue)
+        : attrValue;
+    }
+
+    return attributes;
+  }
+
+  /**
+   * Finds the closing tag for an element, handling nesting
+   * @private
+   */
+  private static findClosingTag(xml: string, elementName: string, startPos: number): number {
+    const openTag = `<${elementName}`;
+    const closeTag = `</${elementName}>`;
+    let depth = 1;
+    let pos = startPos;
+
+    while (depth > 0 && pos < xml.length) {
+      const nextOpen = xml.indexOf(openTag, pos);
+      const nextClose = xml.indexOf(closeTag, pos);
+
+      if (nextClose === -1) {
+        return -1; // No closing tag found
+      }
+
+      // Verify nextOpen is a real opening tag (not part of another tag name)
+      let isRealOpen = false;
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        const charAfter = xml[nextOpen + openTag.length];
+        if (charAfter === '>' || charAfter === ' ' || charAfter === '/' || charAfter === '\t' || charAfter === '\n' || charAfter === '\r') {
+          isRealOpen = true;
+        }
+      }
+
+      if (isRealOpen && nextOpen < nextClose) {
+        depth++;
+        pos = nextOpen + openTag.length;
+      } else {
+        depth--;
+        if (depth === 0) {
+          return nextClose;
+        }
+        pos = nextClose + closeTag.length;
+      }
+    }
+
+    return -1;
+  }
+
+  /**
+   * Coalesces children with duplicate names into arrays
+   * @private
+   */
+  private static coalesceChildren(
+    children: ParsedElement[],
+    options: Required<ParseToObjectOptions>
+  ): ParsedXMLObject {
+    const result: ParsedXMLObject = {};
+    const nameCounts: Record<string, number> = {};
+
+    // Count occurrences of each child name
+    for (const child of children) {
+      nameCounts[child.name] = (nameCounts[child.name] || 0) + 1;
+    }
+
+    // Build result object
+    for (const child of children) {
+      const shouldBeArray = options.alwaysArray || (nameCounts[child.name] || 0) > 1;
+
+      if (shouldBeArray) {
+        if (!result[child.name]) {
+          result[child.name] = [];
+        }
+        (result[child.name] as ParsedXMLValue[]).push(child.value);
+      } else {
+        result[child.name] = child.value;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Parses a string value to number or boolean if applicable
+   * @private
+   */
+  private static parseValue(value: string): string | number | boolean {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+
+    // Try parsing as number
+    if (/^-?\d+$/.test(value)) {
+      const num = parseInt(value, 10);
+      if (!isNaN(num)) return num;
+    }
+
+    if (/^-?\d+\.\d+$/.test(value)) {
+      const num = parseFloat(value);
+      if (!isNaN(num)) return num;
+    }
+
+    return value;
   }
 }
