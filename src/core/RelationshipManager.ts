@@ -6,6 +6,7 @@
  */
 
 import { Relationship, RelationshipType } from './Relationship';
+import { XMLParser } from '../xml/XMLParser';
 
 /**
  * Manages relationships for a document or document part
@@ -336,35 +337,24 @@ export class RelationshipManager {
       throw new Error('Relationships XML file too large (>100KB). Possible malicious input or corrupted file.');
     }
 
-    // Simple XML parsing using regex (sufficient for .rels files)
-    // Match all Relationship elements
-    // Use non-backtracking pattern with lazy quantifier
-    const relationshipPattern = /<Relationship\s+(.*?)\/>/g;
-    let match;
-    let iterations = 0;
-    const MAX_ITERATIONS = 1000; // Prevent infinite loops
+    // Use XMLParser to extract all Relationship elements
+    const relationshipElements = XMLParser.extractElements(xml, 'Relationship');
 
-    while ((match = relationshipPattern.exec(xml)) !== null) {
-      iterations++;
-      if (iterations > MAX_ITERATIONS) {
-        throw new Error('Too many relationships in XML file (>1000). Possible malicious input.');
-      }
+    // Prevent infinite loops: check relationship count
+    if (relationshipElements.length > 1000) {
+      throw new Error('Too many relationships in XML file (>1000). Possible malicious input.');
+    }
 
-      const attributesString = match[1];
-
-      // Skip if no attributes string found
-      if (!attributesString) {
-        continue;
-      }
-
-      // Extract attributes
-      const id = this.extractAttribute(attributesString, 'Id');
-      const type = this.extractAttribute(attributesString, 'Type');
-      const target = this.extractAttribute(attributesString, 'Target');
-      const targetMode = this.extractAttribute(attributesString, 'TargetMode');
+    // Process each relationship element
+    for (const relationshipElement of relationshipElements) {
+      // Extract attributes using XMLParser
+      const id = XMLParser.extractAttribute(relationshipElement, 'Id');
+      const type = XMLParser.extractAttribute(relationshipElement, 'Type');
+      const target = XMLParser.extractAttribute(relationshipElement, 'Target');
+      const targetMode = XMLParser.extractAttribute(relationshipElement, 'TargetMode');
 
       // Only create relationship if all required attributes present
-      if (id !== undefined && type !== undefined && target !== undefined) {
+      if (id && type && target) {
         // Validate targetMode before type assertion
         const validatedTargetMode =
           targetMode === 'Internal' || targetMode === 'External' || targetMode === undefined
@@ -386,25 +376,4 @@ export class RelationshipManager {
     return manager;
   }
 
-  /**
-   * Extracts an attribute value from an XML attributes string
-   * @param attributesString The attributes string
-   * @param attributeName The attribute name to extract
-   * @returns The attribute value or undefined if not found
-   */
-  private static extractAttribute(attributesString: string, attributeName: string): string | undefined {
-    // Prevent ReDoS: validate input size first (relationships attributes are typically < 1KB)
-    if (attributesString.length > 10000) {
-      return undefined;
-    }
-
-    // Escape attribute name to prevent regex injection
-    const escapedName = attributeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    // Match: AttributeName="value" or AttributeName='value'
-    // Use lazy quantifier (.*?) instead of greedy [^"']+ to prevent backtracking
-    const pattern = new RegExp(`${escapedName}=["'](.*?)["']`, 'i');
-    const match = attributesString.match(pattern);
-    return match ? match[1] : undefined;
-  }
 }
