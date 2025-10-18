@@ -125,11 +125,12 @@ export class DocumentParser {
     }
 
     // Parse tables (w:tbl elements)
-    const tableRegex = /<w:tbl[^>]*>[\s\S]*?<\/w:tbl>/g;
-    let tableMatch;
-    while ((tableMatch = tableRegex.exec(bodyContent)) !== null) {
+    // Use XMLParser to extract all table elements
+    const tableElements = XMLParser.extractElements(bodyContent, 'w:tbl');
+
+    for (const tableElement of tableElements) {
       try {
-        const table = this.parseTable(tableMatch[0], relationshipManager);
+        const table = this.parseTable(tableElement, relationshipManager);
         if (table) {
           bodyElements.push(table);
         }
@@ -606,20 +607,17 @@ export class DocumentParser {
    */
   private parseTable(tableXml: string, relationshipManager: RelationshipManager): Table | null {
     try {
-      // Extract table rows (w:tr)
-      const rowRegex = /<w:tr[^>]*>([\s\S]*?)<\/w:tr>/g;
+      // Use XMLParser to extract all table rows (w:tr)
+      const rowElements = XMLParser.extractElements(tableXml, 'w:tr');
       const rows: Array<Array<string>> = [];
-      let rowMatch;
 
-      while ((rowMatch = rowRegex.exec(tableXml)) !== null) {
-        const rowContent = rowMatch[1] || '';
+      for (const rowElement of rowElements) {
+        // Use XMLParser to extract cells (w:tc) from this row
+        const cellElements = XMLParser.extractElements(rowElement, 'w:tc');
         const cells: string[] = [];
 
-        // Extract cells (w:tc)
-        const cellRegex = /<w:tc[^>]*>([\s\S]*?)<\/w:tc>/g;
-        let cellMatch;
-        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
-          cells.push(cellMatch[1] || '');
+        for (const cellElement of cellElements) {
+          cells.push(cellElement);
         }
 
         if (cells.length > 0) {
@@ -633,16 +631,12 @@ export class DocumentParser {
 
       // Create table with row/column dimensions from first row
       const firstRow = rows[0];
-      if (!firstRow) {
+      if (!firstRow || firstRow.length === 0) {
         return null;
       }
 
       const colCount = firstRow.length;
       const rowCount = rows.length;
-
-      if (colCount === 0) {
-        return null;
-      }
 
       const table = new Table(rowCount, colCount);
 
@@ -658,14 +652,12 @@ export class DocumentParser {
         for (let cIdx = 0; cIdx < cellContents.length && cIdx < cells.length; cIdx++) {
           const cell = cells[cIdx];
           if (cell instanceof TableCell) {
-            // Parse paragraphs inside cell
+            // Parse paragraphs inside cell using XMLParser
             const cellXml = cellContents[cIdx] || '';
-            const paraRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
-            let paraMatch;
+            const paraElements = XMLParser.extractElements(cellXml, 'w:p');
 
-            while ((paraMatch = paraRegex.exec(cellXml)) !== null) {
-              const paraContent = paraMatch[1] || '';
-              const para = this.parseParagraph(`<w:p>${paraContent}</w:p>`, relationshipManager);
+            for (const paraElement of paraElements) {
+              const para = this.parseParagraph(paraElement, relationshipManager);
               if (para) {
                 cell.addParagraph(para);
               }
