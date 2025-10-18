@@ -1835,6 +1835,40 @@ export class Document {
   }
 
   /**
+   * Sets or updates raw XML content for a document part
+   *
+   * Convenience method for updating XML content in document parts.
+   * Automatically detects and handles text/XML content.
+   *
+   * **Note**: This method does not automatically update relationships or
+   * content types. You may need to manually update these if adding new parts.
+   *
+   * @param partName - Part path (e.g., 'word/document.xml')
+   * @param xmlContent - Raw XML string to set
+   * @returns Promise that resolves when the part is updated
+   *
+   * @example
+   * ```typescript
+   * // Update document XML
+   * const newXml = '<?xml version="1.0"?><w:document>...</w:document>';
+   * await doc.setRawXml('word/document.xml', newXml);
+   *
+   * // Update styles
+   * const stylesXml = await doc.getRawXml('word/styles.xml');
+   * const modified = stylesXml.replace('Old Style', 'New Style');
+   * await doc.setRawXml('word/styles.xml', modified);
+   * ```
+   */
+  async setRawXml(partName: string, xmlContent: string): Promise<void> {
+    if (typeof xmlContent !== 'string') {
+      throw new Error('XML content must be a string');
+    }
+
+    // Use setPart to update the part (handles both string and binary detection)
+    await this.setPart(partName, xmlContent);
+  }
+
+  /**
    * Adds or updates a content type registration
    *
    * Registers a new content type in [Content_Types].xml. This is required
@@ -1976,6 +2010,87 @@ export class Document {
     }
 
     return relationships;
+  }
+
+  /**
+   * Gets relationships for a specific document part
+   *
+   * Retrieves all relationships defined for a specific part's .rels file.
+   * For example, calling with 'word/document.xml' returns relationships
+   * from 'word/_rels/document.xml.rels'.
+   *
+   * @param partName - The part name to get relationships for (e.g., 'word/document.xml')
+   * @returns Array of relationships for that part, or empty array if none found
+   *
+   * @example
+   * ```typescript
+   * // Get relationships for document
+   * const docRels = await doc.getRelationships('word/document.xml');
+   * for (const rel of docRels) {
+   *   if (rel.type.includes('hyperlink')) {
+   *     console.log('Hyperlink target:', rel.target);
+   *   }
+   * }
+   *
+   * // Get relationships for styles
+   * const styleRels = await doc.getRelationships('word/styles.xml');
+   *
+   * // Get relationships for headers/footers
+   * const headerRels = await doc.getRelationships('word/header1.xml');
+   * ```
+   */
+  async getRelationships(partName: string): Promise<Array<{ id?: string; type?: string; target?: string; targetMode?: string }>> {
+    try {
+      // Construct the .rels path from the part name
+      // For 'word/document.xml' -> 'word/_rels/document.xml.rels'
+      const lastSlash = partName.lastIndexOf('/');
+      const relsPath = lastSlash === -1
+        ? `_rels/${partName}.rels`
+        : `${partName.substring(0, lastSlash)}/_rels/${partName.substring(lastSlash + 1)}.rels`;
+
+      const relsContent = this.zipHandler.getFileAsString(relsPath);
+      if (!relsContent) {
+        return [];
+      }
+
+      interface ParsedRelationship {
+        id?: string;
+        type?: string;
+        target?: string;
+        targetMode?: string;
+      }
+
+      const relationships: ParsedRelationship[] = [];
+
+      // Parse relationship XML
+      const relPattern = /<Relationship\s+([^>]+)\/>/g;
+      let match;
+
+      while ((match = relPattern.exec(relsContent)) !== null) {
+        const attrs = match[1];
+        if (!attrs) continue;
+
+        const rel: ParsedRelationship = {};
+
+        // Extract attributes
+        const idMatch = attrs.match(/Id="([^"]+)"/);
+        const typeMatch = attrs.match(/Type="([^"]+)"/);
+        const targetMatch = attrs.match(/Target="([^"]+)"/);
+        const modeMatch = attrs.match(/TargetMode="([^"]+)"/);
+
+        if (idMatch) rel.id = idMatch[1];
+        if (typeMatch) rel.type = typeMatch[1];
+        if (targetMatch) rel.target = targetMatch[1];
+        if (modeMatch) rel.targetMode = modeMatch[1];
+
+        relationships.push(rel);
+      }
+
+      return relationships;
+    } catch (error) {
+      // Return empty array on error
+      return [];
+    }
   }
 
   /**
