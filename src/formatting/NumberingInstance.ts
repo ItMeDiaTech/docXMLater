@@ -159,9 +159,16 @@ export class NumberingInstance {
 
   /**
    * Factory method for creating a numbering instance
-   * @param properties The instance properties
+   * @param propertiesOrNumId The instance properties object, or numId (number)
+   * @param abstractNumId The abstract numbering ID (if first param is a number)
    */
-  static create(properties: NumberingInstanceProperties): NumberingInstance {
-    return new NumberingInstance(properties);
+  static create(
+    propertiesOrNumId: NumberingInstanceProperties | number,
+    abstractNumId?: number
+  ): NumberingInstance {
+    if (typeof propertiesOrNumId === 'number') {
+      return new NumberingInstance(propertiesOrNumId, abstractNumId);
+    }
+    return new NumberingInstance(propertiesOrNumId);
   }
 }

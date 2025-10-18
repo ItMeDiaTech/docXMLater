@@ -40,18 +40,30 @@ export class AbstractNumbering {
 
   /**
    * Creates a new abstract numbering definition
-   * @param properties The abstract numbering properties
+   * @param idOrProps The abstract numbering ID (number) or properties object
+   * @param name Optional name (if first param is a number)
    */
-  constructor(properties: AbstractNumberingProperties) {
-    this.abstractNumId = properties.abstractNumId;
-    this.name = properties.name;
-    this.levels = new Map();
-    this.multiLevelType = properties.multiLevelType !== undefined ? properties.multiLevelType : 1;
+  constructor(idOrProps: number | AbstractNumberingProperties, name?: string) {
+    // Support both simple (numId) and object constructor patterns
+    if (typeof idOrProps === 'number') {
+      // Simple constructor: new AbstractNumbering(id)
+      this.abstractNumId = idOrProps;
+      this.name = name;
+      this.levels = new Map();
+      this.multiLevelType = 1; // default multilevel
+    } else {
+      // Object constructor: new AbstractNumbering({ abstractNumId, ... })
+      const properties = idOrProps as AbstractNumberingProperties;
+      this.abstractNumId = properties.abstractNumId;
+      this.name = properties.name;
+      this.levels = new Map();
+      this.multiLevelType = properties.multiLevelType !== undefined ? properties.multiLevelType : 1;
 
-    if (properties.levels) {
-      properties.levels.forEach(level => {
-        this.addLevel(level);
-      });
+      if (properties.levels) {
+        properties.levels.forEach(level => {
+          this.addLevel(level);
+        });
+      }
     }
 
     this.validate();
@@ -134,6 +146,15 @@ export class AbstractNumbering {
     }
 
     this.levels.set(levelIndex, level);
+    return this;
+  }
+
+  /**
+   * Adds multiple numbering levels at once
+   * @param levels The numbering levels to add
+   */
+  addLevels(levels: NumberingLevel[]): this {
+    levels.forEach(level => this.addLevel(level));
     return this;
   }
 

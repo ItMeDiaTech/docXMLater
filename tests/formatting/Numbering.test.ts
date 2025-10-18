@@ -2,10 +2,18 @@
  * Tests for Numbering components (NumberingLevel, AbstractNumbering, NumberingInstance)
  */
 
-import { NumberingLevel, NumberFormat, NumberAlignment } from '../../src/formatting/NumberingLevel';
+import { NumberingLevel, NumberFormat } from '../../src/formatting/NumberingLevel';
 import { AbstractNumbering } from '../../src/formatting/AbstractNumbering';
 import { NumberingInstance } from '../../src/formatting/NumberingInstance';
 import { NumberingManager } from '../../src/formatting/NumberingManager';
+import { XMLElement } from '../../src/xml/XMLBuilder';
+
+/**
+ * Helper to filter and safely access XMLElement children
+ */
+function filterXMLElements(children?: (XMLElement | string)[]): XMLElement[] {
+  return (children || []).filter((c): c is XMLElement => typeof c !== 'string');
+}
 
 describe('NumberingLevel', () => {
   describe('Basic functionality', () => {
@@ -212,16 +220,17 @@ describe('NumberingLevel', () => {
       expect(xml.attributes?.['w:ilvl']).toBe('0');
 
       // Check for required elements
-      const start = xml.children?.find(c => c.name === 'w:start');
+      const xmlElements = filterXMLElements(xml.children);
+      const start = xmlElements.find(c => c.name === 'w:start');
       expect(start?.attributes?.['w:val']).toBe('1');
 
-      const numFmt = xml.children?.find(c => c.name === 'w:numFmt');
+      const numFmt = xmlElements.find(c => c.name === 'w:numFmt');
       expect(numFmt?.attributes?.['w:val']).toBe('decimal');
 
-      const lvlText = xml.children?.find(c => c.name === 'w:lvlText');
+      const lvlText = xmlElements.find(c => c.name === 'w:lvlText');
       expect(lvlText?.attributes?.['w:val']).toBe('%1.');
 
-      const lvlJc = xml.children?.find(c => c.name === 'w:lvlJc');
+      const lvlJc = xmlElements.find(c => c.name === 'w:lvlJc');
       expect(lvlJc?.attributes?.['w:val']).toBe('left');
     });
 
@@ -235,10 +244,10 @@ describe('NumberingLevel', () => {
       });
 
       const xml = level.toXML();
-      const pPr = xml.children?.find(c => c.name === 'w:pPr');
+      const pPr = filterXMLElements(xml.children).find(c => c.name === 'w:pPr');
       expect(pPr).toBeDefined();
 
-      const ind = pPr?.children?.find(c => c.name === 'w:ind');
+      const ind = filterXMLElements(pPr?.children).find(c => c.name === 'w:ind');
       expect(ind?.attributes?.['w:left']).toBe('1440');
       expect(ind?.attributes?.['w:hanging']).toBe('720');
     });
@@ -253,14 +262,14 @@ describe('NumberingLevel', () => {
       });
 
       const xml = level.toXML();
-      const rPr = xml.children?.find(c => c.name === 'w:rPr');
+      const rPr = filterXMLElements(xml.children).find(c => c.name === 'w:rPr');
       expect(rPr).toBeDefined();
 
-      const rFonts = rPr?.children?.find(c => c.name === 'w:rFonts');
+      const rFonts = filterXMLElements(rPr?.children).find(c => c.name === 'w:rFonts');
       expect(rFonts?.attributes?.['w:ascii']).toBe('Symbol');
       expect(rFonts?.attributes?.['w:hAnsi']).toBe('Symbol');
 
-      const sz = rPr?.children?.find(c => c.name === 'w:sz');
+      const sz = filterXMLElements(rPr?.children).find(c => c.name === 'w:sz');
       expect(sz?.attributes?.['w:val']).toBe('24');
     });
 
@@ -273,7 +282,7 @@ describe('NumberingLevel', () => {
       });
 
       const xml = level.toXML();
-      const suff = xml.children?.find(c => c.name === 'w:suff');
+      const suff = filterXMLElements(xml.children).find(c => c.name === 'w:suff');
       expect(suff?.attributes?.['w:val']).toBe('space');
     });
 
@@ -286,7 +295,7 @@ describe('NumberingLevel', () => {
       });
 
       const xml = level.toXML();
-      const isLgl = xml.children?.find(c => c.name === 'w:isLgl');
+      const isLgl = filterXMLElements(xml.children).find(c => c.name === 'w:isLgl');
       expect(isLgl).toBeDefined();
     });
   });
@@ -455,7 +464,7 @@ describe('AbstractNumbering', () => {
       expect(xml.attributes?.['w:abstractNumId']).toBe('5');
 
       // Check for levels
-      const levels = xml.children?.filter(c => c.name === 'w:lvl');
+      const levels = filterXMLElements(xml.children).filter(c => c.name === 'w:lvl');
       expect(levels).toHaveLength(2);
     });
 
@@ -464,7 +473,7 @@ describe('AbstractNumbering', () => {
       abstractNum.setMultiLevelType('hybridMultilevel');
 
       const xml = abstractNum.toXML();
-      const multiLevelType = xml.children?.find(c => c.name === 'w:multiLevelType');
+      const multiLevelType = filterXMLElements(xml.children).find(c => c.name === 'w:multiLevelType');
       expect(multiLevelType?.attributes?.['w:val']).toBe('hybridMultilevel');
     });
   });
@@ -490,10 +499,10 @@ describe('AbstractNumbering', () => {
       expect(levels).toHaveLength(9);
 
       // Check the pattern: decimal, lower letter, lower roman, repeating
-      expect(levels[0].getFormat()).toBe('decimal');
-      expect(levels[1].getFormat()).toBe('lowerLetter');
-      expect(levels[2].getFormat()).toBe('lowerRoman');
-      expect(levels[3].getFormat()).toBe('decimal');
+      expect(levels[0]!.getFormat()).toBe('decimal');
+      expect(levels[1]!.getFormat()).toBe('lowerLetter');
+      expect(levels[2]!.getFormat()).toBe('lowerRoman');
+      expect(levels[3]!.getFormat()).toBe('decimal');
     });
 
     it('should create outline list', () => {
@@ -504,9 +513,9 @@ describe('AbstractNumbering', () => {
       expect(levels).toHaveLength(9);
 
       // Check the outline pattern
-      expect(levels[0].getFormat()).toBe('upperRoman');
-      expect(levels[1].getFormat()).toBe('upperLetter');
-      expect(levels[2].getFormat()).toBe('decimal');
+      expect(levels[0]!.getFormat()).toBe('upperRoman');
+      expect(levels[1]!.getFormat()).toBe('upperLetter');
+      expect(levels[2]!.getFormat()).toBe('decimal');
     });
   });
 });
@@ -549,7 +558,7 @@ describe('NumberingInstance', () => {
       expect(xml.name).toBe('w:num');
       expect(xml.attributes?.['w:numId']).toBe('5');
 
-      const abstractNumId = xml.children?.find(c => c.name === 'w:abstractNumId');
+      const abstractNumId = filterXMLElements(xml.children).find(c => c.name === 'w:abstractNumId');
       expect(abstractNumId?.attributes?.['w:val']).toBe('200');
     });
 
@@ -560,15 +569,15 @@ describe('NumberingInstance', () => {
 
       const xml = instance.toXML();
 
-      const lvlOverrides = xml.children?.filter(c => c.name === 'w:lvlOverride');
+      const lvlOverrides = filterXMLElements(xml.children).filter(c => c.name === 'w:lvlOverride');
       expect(lvlOverrides).toHaveLength(2);
 
-      const level0Override = lvlOverrides?.find(o => o.attributes?.['w:ilvl'] === '0');
-      const startOverride0 = level0Override?.children?.find(c => c.name === 'w:startOverride');
+      const level0Override = lvlOverrides.find(o => o.attributes?.['w:ilvl'] === '0');
+      const startOverride0 = filterXMLElements(level0Override?.children).find(c => c.name === 'w:startOverride');
       expect(startOverride0?.attributes?.['w:val']).toBe('5');
 
-      const level2Override = lvlOverrides?.find(o => o.attributes?.['w:ilvl'] === '2');
-      const startOverride2 = level2Override?.children?.find(c => c.name === 'w:startOverride');
+      const level2Override = lvlOverrides.find(o => o.attributes?.['w:ilvl'] === '2');
+      const startOverride2 = filterXMLElements(level2Override?.children).find(c => c.name === 'w:startOverride');
       expect(startOverride2?.attributes?.['w:val']).toBe('10');
     });
   });
@@ -682,11 +691,11 @@ describe('NumberingManager', () => {
       expect(xml.attributes?.['xmlns:w']).toBeDefined();
 
       // Should have abstract numberings and instances
-      const abstractNums = xml.children?.filter(c => c.name === 'w:abstractNum');
-      expect(abstractNums?.length).toBeGreaterThanOrEqual(2);
+      const abstractNums = filterXMLElements(xml.children).filter(c => c.name === 'w:abstractNum');
+      expect(abstractNums.length).toBeGreaterThanOrEqual(2);
 
-      const nums = xml.children?.filter(c => c.name === 'w:num');
-      expect(nums?.length).toBeGreaterThanOrEqual(2);
+      const nums = filterXMLElements(xml.children).filter(c => c.name === 'w:num');
+      expect(nums.length).toBeGreaterThanOrEqual(2);
     });
 
     it('should include namespaces in root element', () => {

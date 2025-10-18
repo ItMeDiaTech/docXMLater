@@ -2,9 +2,17 @@
  * Tests for Table, TableRow, and TableCell components
  */
 
-import { Table, TableAlignment, TableLayout } from '../../src/elements/Table';
+import { Table, TableLayout } from '../../src/elements/Table';
 import { TableRow } from '../../src/elements/TableRow';
 import { TableCell } from '../../src/elements/TableCell';
+import { XMLElement } from '../../src/xml/XMLBuilder';
+
+/**
+ * Helper to filter and safely access XMLElement children
+ */
+function filterXMLElements(children?: (XMLElement | string)[]): XMLElement[] {
+  return (children || []).filter((c): c is XMLElement => typeof c !== 'string');
+}
 
 describe('TableCell', () => {
   describe('Basic functionality', () => {
@@ -118,10 +126,10 @@ describe('TableCell', () => {
       expect(xml.children).toBeDefined();
 
       // Should have tcPr and at least one paragraph
-      const tcPr = xml.children?.find(c => c.name === 'w:tcPr');
+      const tcPr = filterXMLElements(xml.children).find(c => c.name === 'w:tcPr');
       expect(tcPr).toBeDefined();
 
-      const paragraph = xml.children?.find(c => c.name === 'w:p');
+      const paragraph = filterXMLElements(xml.children).find(c => c.name === 'w:p');
       expect(paragraph).toBeDefined();
     });
 
@@ -130,19 +138,19 @@ describe('TableCell', () => {
       cell.setWidth(2880).setShading('FFFF00').setGridSpan(2);
       const xml = cell.toXML();
 
-      const tcPr = xml.children?.find(c => c.name === 'w:tcPr');
+      const tcPr = filterXMLElements(xml.children).find(c => c.name === 'w:tcPr');
       expect(tcPr?.children).toBeDefined();
 
       // Check for width
-      const tcW = tcPr?.children?.find(c => c.name === 'w:tcW');
+      const tcW = filterXMLElements(tcPr?.children).find(c => c.name === 'w:tcW');
       expect(tcW?.attributes?.['w:w']).toBe(2880);
 
       // Check for shading
-      const shd = tcPr?.children?.find(c => c.name === 'w:shd');
+      const shd = filterXMLElements(tcPr?.children).find(c => c.name === 'w:shd');
       expect(shd?.attributes?.['w:fill']).toBe('FFFF00');
 
       // Check for grid span
-      const gridSpan = tcPr?.children?.find(c => c.name === 'w:gridSpan');
+      const gridSpan = filterXMLElements(tcPr?.children).find(c => c.name === 'w:gridSpan');
       expect(gridSpan?.attributes?.['w:val']).toBe(2);
     });
   });
@@ -262,7 +270,7 @@ describe('TableRow', () => {
       expect(xml.name).toBe('w:tr');
 
       // Should have 2 cells
-      const cells = xml.children?.filter(c => c.name === 'w:tc');
+      const cells = filterXMLElements(xml.children).filter(c => c.name === 'w:tc');
       expect(cells).toHaveLength(2);
     });
 
@@ -271,16 +279,16 @@ describe('TableRow', () => {
       row.setHeight(1440).setHeightRule('exact').setHeader(true);
 
       const xml = row.toXML();
-      const trPr = xml.children?.find(c => c.name === 'w:trPr');
+      const trPr = filterXMLElements(xml.children).find(c => c.name === 'w:trPr');
       expect(trPr).toBeDefined();
 
       // Check for height
-      const trHeight = trPr?.children?.find(c => c.name === 'w:trHeight');
+      const trHeight = filterXMLElements(trPr?.children).find(c => c.name === 'w:trHeight');
       expect(trHeight?.attributes?.['w:val']).toBe(1440);
       expect(trHeight?.attributes?.['w:hRule']).toBe('exact');
 
       // Check for header
-      const tblHeader = trPr?.children?.find(c => c.name === 'w:tblHeader');
+      const tblHeader = filterXMLElements(trPr?.children).find(c => c.name === 'w:tblHeader');
       expect(tblHeader).toBeDefined();
     });
   });
@@ -516,17 +524,18 @@ describe('Table', () => {
       expect(xml.name).toBe('w:tbl');
 
       // Should have table properties
-      const tblPr = xml.children?.find(c => c.name === 'w:tblPr');
+      const xmlElements = filterXMLElements(xml.children);
+      const tblPr = xmlElements.find(c => c.name === 'w:tblPr');
       expect(tblPr).toBeDefined();
 
       // Should have table grid
-      const tblGrid = xml.children?.find(c => c.name === 'w:tblGrid');
+      const tblGrid = xmlElements.find(c => c.name === 'w:tblGrid');
       expect(tblGrid).toBeDefined();
-      const gridCols = tblGrid?.children?.filter(c => c.name === 'w:gridCol');
+      const gridCols = filterXMLElements(tblGrid?.children).filter(c => c.name === 'w:gridCol');
       expect(gridCols).toHaveLength(2);
 
       // Should have 2 rows
-      const rows = xml.children?.filter(c => c.name === 'w:tr');
+      const rows = xmlElements.filter(c => c.name === 'w:tr');
       expect(rows).toHaveLength(2);
     });
 
@@ -537,18 +546,18 @@ describe('Table', () => {
       });
 
       const xml = table.toXML();
-      const tblPr = xml.children?.find(c => c.name === 'w:tblPr');
+      const tblPr = filterXMLElements(xml.children).find(c => c.name === 'w:tblPr');
 
       // Check width
-      const tblW = tblPr?.children?.find(c => c.name === 'w:tblW');
+      const tblW = filterXMLElements(tblPr?.children).find(c => c.name === 'w:tblW');
       expect(tblW?.attributes?.['w:w']).toBe(8640);
 
       // Check alignment
-      const jc = tblPr?.children?.find(c => c.name === 'w:jc');
+      const jc = filterXMLElements(tblPr?.children).find(c => c.name === 'w:jc');
       expect(jc?.attributes?.['w:val']).toBe('center');
 
       // Check borders
-      const tblBorders = tblPr?.children?.find(c => c.name === 'w:tblBorders');
+      const tblBorders = filterXMLElements(tblPr?.children).find(c => c.name === 'w:tblBorders');
       expect(tblBorders).toBeDefined();
     });
   });

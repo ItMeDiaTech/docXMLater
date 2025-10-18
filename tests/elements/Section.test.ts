@@ -2,8 +2,16 @@
  * Tests for Section component
  */
 
-import { Section, PageOrientation, SectionType } from '../../src/elements/Section';
+import { Section, SectionType } from '../../src/elements/Section';
 import { PAGE_SIZES } from '../../src/utils/units';
+import { XMLElement } from '../../src/xml/XMLBuilder';
+
+/**
+ * Helper to filter and safely access XMLElement children
+ */
+function filterXMLElements(children?: (XMLElement | string)[]): XMLElement[] {
+  return (children || []).filter((c): c is XMLElement => typeof c !== 'string');
+}
 
 describe('Section', () => {
   describe('Basic functionality', () => {
@@ -261,21 +269,22 @@ describe('Section', () => {
       expect(xml.children).toBeDefined();
 
       // Should have page size
-      const pgSz = xml.children?.find(c => c.name === 'w:pgSz');
+      const xmlElements = filterXMLElements(xml.children);
+      const pgSz = xmlElements.find(c => c.name === 'w:pgSz');
       expect(pgSz).toBeDefined();
       expect(pgSz?.attributes?.['w:w']).toBe(PAGE_SIZES.LETTER.width.toString());
       expect(pgSz?.attributes?.['w:h']).toBe(PAGE_SIZES.LETTER.height.toString());
 
       // Should have margins
-      const pgMar = xml.children?.find(c => c.name === 'w:pgMar');
+      const pgMar = xmlElements.find(c => c.name === 'w:pgMar');
       expect(pgMar).toBeDefined();
 
       // Should have columns
-      const cols = xml.children?.find(c => c.name === 'w:cols');
+      const cols = xmlElements.find(c => c.name === 'w:cols');
       expect(cols).toBeDefined();
 
       // Should have type
-      const type = xml.children?.find(c => c.name === 'w:type');
+      const type = xmlElements.find(c => c.name === 'w:type');
       expect(type).toBeDefined();
     });
 
@@ -284,7 +293,7 @@ describe('Section', () => {
       section.setOrientation('landscape');
 
       const xml = section.toXML();
-      const pgSz = xml.children?.find(c => c.name === 'w:pgSz');
+      const pgSz = filterXMLElements(xml.children).find(c => c.name === 'w:pgSz');
       expect(pgSz?.attributes?.['w:orient']).toBe('landscape');
     });
 
@@ -293,7 +302,7 @@ describe('Section', () => {
       section.setColumns(3, 480);
 
       const xml = section.toXML();
-      const cols = xml.children?.find(c => c.name === 'w:cols');
+      const cols = filterXMLElements(xml.children).find(c => c.name === 'w:cols');
       expect(cols?.attributes?.['w:num']).toBe('3');
       expect(cols?.attributes?.['w:space']).toBe('480');
       expect(cols?.attributes?.['w:equalWidth']).toBe('1');
@@ -304,7 +313,7 @@ describe('Section', () => {
       section.setPageNumbering(10, 'upperRoman');
 
       const xml = section.toXML();
-      const pgNumType = xml.children?.find(c => c.name === 'w:pgNumType');
+      const pgNumType = filterXMLElements(xml.children).find(c => c.name === 'w:pgNumType');
       expect(pgNumType?.attributes?.['w:start']).toBe('10');
       expect(pgNumType?.attributes?.['w:fmt']).toBe('upperRoman');
     });
@@ -314,7 +323,7 @@ describe('Section', () => {
       section.setTitlePage(true);
 
       const xml = section.toXML();
-      const titlePg = xml.children?.find(c => c.name === 'w:titlePg');
+      const titlePg = filterXMLElements(xml.children).find(c => c.name === 'w:titlePg');
       expect(titlePg).toBeDefined();
     });
 
@@ -326,18 +335,18 @@ describe('Section', () => {
 
       const xml = section.toXML();
 
-      const headerRefs = xml.children?.filter(c => c.name === 'w:headerReference');
+      const headerRefs = filterXMLElements(xml.children).filter(c => c.name === 'w:headerReference');
       expect(headerRefs).toHaveLength(2);
 
-      const defaultHeader = headerRefs?.find(h => h.attributes?.['w:type'] === 'default');
+      const defaultHeader = headerRefs.find(h => h.attributes?.['w:type'] === 'default');
       expect(defaultHeader?.attributes?.['r:id']).toBe('rId1');
 
-      const firstHeader = headerRefs?.find(h => h.attributes?.['w:type'] === 'first');
+      const firstHeader = headerRefs.find(h => h.attributes?.['w:type'] === 'first');
       expect(firstHeader?.attributes?.['r:id']).toBe('rId2');
 
-      const footerRefs = xml.children?.filter(c => c.name === 'w:footerReference');
+      const footerRefs = filterXMLElements(xml.children).filter(c => c.name === 'w:footerReference');
       expect(footerRefs).toHaveLength(1);
-      expect(footerRefs?.[0]?.attributes?.['r:id']).toBe('rId3');
+      expect(footerRefs[0]?.attributes?.['r:id']).toBe('rId3');
     });
 
     it('should generate XML with gutter margin', () => {
@@ -351,7 +360,7 @@ describe('Section', () => {
       });
 
       const xml = section.toXML();
-      const pgMar = xml.children?.find(c => c.name === 'w:pgMar');
+      const pgMar = filterXMLElements(xml.children).find(c => c.name === 'w:pgMar');
       expect(pgMar?.attributes?.['w:gutter']).toBe('720');
     });
   });
