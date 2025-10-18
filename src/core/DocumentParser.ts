@@ -714,10 +714,10 @@ export class DocumentParser {
       return {};
     }
 
-    // Simple XML parsing using regex (sufficient for Phase 3)
+    // Extract document properties using XMLParser
     const extractTag = (xml: string, tag: string): string | undefined => {
-      const match = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`));
-      return match && match[1] ? XMLBuilder.unescapeXml(match[1]) : undefined;
+      const tagContent = XMLParser.extractBetweenTags(xml, `<${tag}`, `</${tag}>`);
+      return tagContent ? XMLBuilder.unescapeXml(tagContent) : undefined;
     };
 
     const properties: DocumentProperties = {
