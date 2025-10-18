@@ -5,6 +5,7 @@
 
 import { Style, StyleType } from './Style';
 import { XMLBuilder } from '../xml/XMLBuilder';
+import { XMLParser } from '../xml/XMLParser';
 
 /**
  * Result of XML validation
@@ -358,8 +359,9 @@ export class StylesManager {
     // Skip complex XML structure validation - focus on w:styles specific validation
     // Checking balanced tags with regex is unreliable and can give false positives
 
-    // Check for required root element
-    if (!xml.includes('<w:styles') || !xml.includes('</w:styles>')) {
+    // Use XMLParser to extract root element
+    const stylesContent = XMLParser.extractBetweenTags(xml, '<w:styles', '</w:styles>');
+    if (!stylesContent) {
       result.isValid = false;
       result.errors.push('Missing required <w:styles> root element');
       return result;
@@ -370,28 +372,36 @@ export class StylesManager {
       result.warnings.push('Missing WordprocessingML namespace declaration');
     }
 
+    // Use XMLParser to extract all style elements
+    const styleElements = XMLParser.extractElements(stylesContent, 'w:style');
+    result.styleCount = styleElements.length;
+
+    // Check if any styles found
+    if (styleElements.length === 0) {
+      result.warnings.push('No styles found in document');
+      return result;
+    }
+
     // Check for styles without attributes (invalid)
-    if (/<w:style\s*>/.test(xml)) {
+    const styleWithoutAttrs = styleElements.filter(el => {
+      // Check if element has any attributes
+      const openTagEnd = el.indexOf('>');
+      const openTag = el.substring(0, openTagEnd);
+      return !openTag.includes('w:type') || !openTag.includes('w:styleId');
+    });
+
+    if (styleWithoutAttrs.length > 0) {
       result.isValid = false;
       result.errors.push('Style found without any attributes - w:type and w:styleId are required');
     }
 
-    // Extract and validate style definitions (with attributes)
-    const stylePattern = /<w:style\s+([^>]+)>/g;
-    let match;
+    // Process each style element
     const foundStyleIds = new Set<string>();
 
-    while ((match = stylePattern.exec(xml)) !== null) {
-      const attrs = match[1];
-      if (!attrs) continue;
-
-      result.styleCount++;
-
-      // Extract styleId (handle both single and double quotes)
-      const idMatch = attrs.match(/w:styleId=["']([^"']+)["']/);
-      if (idMatch && idMatch[1]) {
-        const styleId = idMatch[1];
-
+    for (const styleElement of styleElements) {
+      // Extract styleId using XMLParser
+      const styleId = XMLParser.extractAttribute(styleElement, 'w:styleId');
+      if (styleId) {
         // Check for duplicates
         if (foundStyleIds.has(styleId)) {
           result.isValid = false;
@@ -405,16 +415,25 @@ export class StylesManager {
         result.errors.push('Style found without required w:styleId attribute');
       }
 
-      // Extract and validate type (handle both single and double quotes)
-      const typeMatch = attrs.match(/w:type=["']([^"']+)["']/);
-      if (typeMatch && typeMatch[1]) {
-        const type = typeMatch[1];
+      // Extract and validate type using XMLParser
+      const type = XMLParser.extractAttribute(styleElement, 'w:type');
+      if (type) {
         if (!['paragraph', 'character', 'table', 'numbering'].includes(type)) {
           result.warnings.push(`Invalid style type: "${type}"`);
         }
       } else {
         result.isValid = false;
         result.errors.push('Style found without required w:type attribute');
+      }
+
+      // Check for circular references - extract basedOn value
+      const basedOnElement = XMLParser.extractElements(styleElement, 'w:basedOn')[0];
+      if (basedOnElement && styleId) {
+        const basedOn = XMLParser.extractAttribute(basedOnElement, 'w:val');
+        if (basedOn && styleId === basedOn) {
+          result.isValid = false;
+          result.errors.push(`Circular reference detected: style "${styleId}" based on itself`);
+        }
       }
     }
 
@@ -432,25 +451,6 @@ export class StylesManager {
     // Check for BOM or invalid characters
     if (xml.charCodeAt(0) === 0xFEFF) {
       result.warnings.push('XML contains BOM (Byte Order Mark) - may cause parsing issues');
-    }
-
-    // Skip unclosed tag validation within style blocks - too complex and error-prone with regex
-    // Let the XML parser handle this when the document is actually loaded
-
-    // Check for circular references - match style blocks individually
-    const styleBlocks = xml.match(/<w:style[^>]*>[\s\S]*?<\/w:style>/g) || [];
-    for (const block of styleBlocks) {
-      const styleIdMatch = block.match(/w:styleId=["']([^"']+)["']/);
-      const basedOnMatch = block.match(/<w:basedOn\s+w:val=["']([^"']+)["']/);
-
-      if (styleIdMatch && basedOnMatch) {
-        const styleId = styleIdMatch[1];
-        const basedOn = basedOnMatch[1];
-        if (styleId === basedOn) {
-          result.isValid = false;
-          result.errors.push(`Circular reference detected: style "${styleId}" based on itself`);
-        }
-      }
     }
 
     // Summary
