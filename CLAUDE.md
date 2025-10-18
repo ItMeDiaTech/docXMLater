@@ -5,7 +5,7 @@ Build a comprehensive, production-ready DOCX editing framework from scratch that
 
 ## Current Status (Updated: October 2025)
 
-**Phases Completed: 3 of 5**
+**Phases Completed: 3 of 5 + Polish Fixes**
 
 | Phase | Status | Tests | Features |
 |-------|--------|-------|----------|
@@ -316,12 +316,74 @@ Handle multiple measurement units:
 - [ ] Advanced table features
 - [ ] Hyperlinks and bookmarks
 
-### Phase 5: Polish (PLANNED)
+### Phase 5: Polish (IN PROGRESS)
+- [x] Color normalization (uppercase hex per Microsoft convention)
+- [x] ECMA-376 compliance validation (RSIDs, properties order)
+- [x] Cell margins support (table formatting)
+- [x] Contextual spacing support (paragraph formatting)
+- [x] TOC field validation (prevents corruption)
 - [ ] Track changes support
 - [ ] Comments
-- [ ] Fields and TOC
-- [ ] Performance optimization
-- [ ] Comprehensive testing
+- [ ] Additional field support
+
+## Architecture & Design Philosophy
+
+### XML Generation Philosophy: KISS Principle
+
+**The framework follows a lean approach to XML generation:**
+
+1. **No Optimizer Needed**
+   - Properties are only serialized if explicitly set
+   - Generator checks `if (property)` before adding elements
+   - Empty attributes objects aren't included in output
+   - Default values are naturally omitted - no special logic needed
+
+   Example:
+   ```typescript
+   // Paragraph.ts - Already optimal
+   if (this.formatting.spacing) {
+     // Only build spacing if it has attributes
+     if (Object.keys(attributes).length > 0) {
+       pPrChildren.push(XMLBuilder.wSelf('spacing', attributes));
+     }
+   }
+   // Result: Lean XML without explicit optimization
+   ```
+
+2. **Why Complexity Was Avoided**
+   - XMLOptimizer class would add 100+ lines
+   - Solves problem that doesn't exist
+   - Adds maintenance burden for zero benefit
+   - Framework envy / resume-driven development trap
+   - **Better to write code you don't need than code you don't use**
+
+3. **RSID Handling (Revision Session IDs)**
+   - Framework correctly omits RSIDs for programmatic generation
+   - Word regenerates RSIDs automatically on first edit
+   - RSIDs only matter for collaborative editing / change tracking
+   - Not needed for document generation use case
+   - Per ECMA-376: RSIDs are OPTIONAL and may be omitted
+
+4. **Color Handling**
+   - All colors normalized to uppercase 6-character hex
+   - Supports both 3-char (#F00) and 6-char (#FF0000) formats
+   - Automatic expansion and normalization on set/load
+   - Aligns with Microsoft conventions
+   - See: `src/elements/Run.ts - normalizeColor() method`
+
+### Senior Development Principle
+
+**"The best code is the code you don't write"**
+
+Decision framework:
+- ✅ Optimize WITH measurement (find actual problems first)
+- ✅ Use proven patterns that solve real problems
+- ✅ KISS: Simplest solution that works
+- ❌ Don't optimize without evidence
+- ❌ Don't build frameworks for non-existent problems
+- ❌ Don't add complexity "just in case"
+
+**This is how the framework stays lean and maintainable.**
 
 ## Resources and References
 
