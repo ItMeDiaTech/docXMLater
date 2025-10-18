@@ -27,6 +27,7 @@ import { EndnoteManager } from '../elements/EndnoteManager';
 import { Run } from '../elements/Run';
 import { Hyperlink } from '../elements/Hyperlink';
 import { XMLElement } from '../xml/XMLBuilder';
+import { XMLParser } from '../xml/XMLParser';
 import { StylesManager } from '../formatting/StylesManager';
 import { Style, StyleProperties } from '../formatting/Style';
 import { NumberingManager } from '../formatting/NumberingManager';
@@ -1979,25 +1980,22 @@ export class Document {
 
           const rels: ParsedRelationship[] = [];
 
-          // Parse relationships
-          const relPattern = /<Relationship\s+([^>]+)\/>/g;
-          let match;
-          while ((match = relPattern.exec(relsContent)) !== null) {
-            const attrs = match[1];
-            if (!attrs) continue;
+          // Use XMLParser to extract all Relationship elements
+          const relationshipElements = XMLParser.extractElements(relsContent, 'Relationship');
 
+          for (const relElement of relationshipElements) {
             const rel: ParsedRelationship = {};
 
-            // Extract attributes
-            const idMatch = attrs.match(/Id="([^"]+)"/);
-            const typeMatch = attrs.match(/Type="([^"]+)"/);
-            const targetMatch = attrs.match(/Target="([^"]+)"/);
-            const modeMatch = attrs.match(/TargetMode="([^"]+)"/);
+            // Extract attributes using XMLParser
+            const id = XMLParser.extractAttribute(relElement, 'Id');
+            const type = XMLParser.extractAttribute(relElement, 'Type');
+            const target = XMLParser.extractAttribute(relElement, 'Target');
+            const targetMode = XMLParser.extractAttribute(relElement, 'TargetMode');
 
-            if (idMatch) rel.id = idMatch[1];
-            if (typeMatch) rel.type = typeMatch[1];
-            if (targetMatch) rel.target = targetMatch[1];
-            if (modeMatch) rel.targetMode = modeMatch[1];
+            if (id) rel.id = id;
+            if (type) rel.type = type;
+            if (target) rel.target = target;
+            if (targetMode) rel.targetMode = targetMode;
 
             rels.push(rel);
           }
@@ -2062,26 +2060,22 @@ export class Document {
 
       const relationships: ParsedRelationship[] = [];
 
-      // Parse relationship XML
-      const relPattern = /<Relationship\s+([^>]+)\/>/g;
-      let match;
+      // Use XMLParser to extract all Relationship elements
+      const relationshipElements = XMLParser.extractElements(relsContent, 'Relationship');
 
-      while ((match = relPattern.exec(relsContent)) !== null) {
-        const attrs = match[1];
-        if (!attrs) continue;
-
+      for (const relElement of relationshipElements) {
         const rel: ParsedRelationship = {};
 
-        // Extract attributes
-        const idMatch = attrs.match(/Id="([^"]+)"/);
-        const typeMatch = attrs.match(/Type="([^"]+)"/);
-        const targetMatch = attrs.match(/Target="([^"]+)"/);
-        const modeMatch = attrs.match(/TargetMode="([^"]+)"/);
+        // Extract attributes using XMLParser
+        const id = XMLParser.extractAttribute(relElement, 'Id');
+        const type = XMLParser.extractAttribute(relElement, 'Type');
+        const target = XMLParser.extractAttribute(relElement, 'Target');
+        const targetMode = XMLParser.extractAttribute(relElement, 'TargetMode');
 
-        if (idMatch) rel.id = idMatch[1];
-        if (typeMatch) rel.type = typeMatch[1];
-        if (targetMatch) rel.target = targetMatch[1];
-        if (modeMatch) rel.targetMode = modeMatch[1];
+        if (id) rel.id = id;
+        if (type) rel.type = type;
+        if (target) rel.target = target;
+        if (targetMode) rel.targetMode = targetMode;
 
         relationships.push(rel);
       }
