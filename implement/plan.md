@@ -1,99 +1,205 @@
-# Implementation Plan - RSID & Polish Fixes
+# Font Embedding Implementation Plan
 
-**Status**: COMPLETED (Phases 1-2) | **Phase 3**: Won't Do (CLOSED)
+**Session Date**: October 18, 2025
+**Issue**: DOCX document references embedded fonts (e.g., Play-regular.ttf) but fonts are not properly registered in [Content_Types].xml, causing OOXML validation errors.
 
-## Source Analysis
-- **Source Type**: Best Practice Guidelines (ECMA-376 + Microsoft Recommendations)
-- **Core Features Evaluated**:
-  1. ✅ COMPLETED: Remove invalid all-zero RSID attributes (verified non-existent)
-  2. ✅ COMPLETED: Normalize color values to uppercase hex
-  3. ❌ CLOSED: XML optimization (already optimal - no work needed)
-- **Dependencies**: None (internal refactoring)
-- **Total Implementation**: 88 LOC (color normalization only)
+## Problem Analysis
 
-## Target Integration
-- **Integration Points**:
-  - ✅ Run.ts: Color normalization (completed)
-  - ✅ DocumentParser.ts: Automatic normalization on load (implicit)
-  - ❌ XML Optimization: Not needed (defensive checks already in place)
-- **Files Modified**: 1 file (Run.ts)
+### Current State
+- Document can reference font files but no mechanism to embed/register them
+- [Content_Types].xml doesn't include font file MIME types
+- word/_rels/document.xml.rels doesn't link to font resources
+- No FontManager or helper functions for font operations
+- Font files (.ttf, .otf) not handled in ZIP archive operations
 
-## Implementation Results
-
-### Phase 1: RSID Investigation ✅ COMPLETED
-**Finding**: No RSID generation exists in codebase
-- Searched entire src/ with grep - found zero RSID attributes
-- Framework doesn't generate RSIDs (all-zero issue was hypothetical)
-- **Decision**: Close this phase - no work needed
-- **Why**: Framework correctly omits RSIDs for programmatic generation
-- **Benefit**: Aligns with best practice (Word regenerates on edit)
-
-### Phase 2: Color Normalization ✅ COMPLETED
-- ✅ Added `normalizeColor()` private method to Run class
-- ✅ Normalizes all color values to uppercase 6-character hex
-- ✅ Supports both 3-char (#F00) and 6-char (#FF0000) formats
-- ✅ Added validation for hex color format
-- ✅ Parser automatically normalizes on load (round-trip fidelity)
-- **Effort**: 88 LOC added, 57 LOC modified = 145 LOC total
-- **Impact**: Consistent XML output, aligns with Microsoft conventions
-
-### Phase 3: XML Optimization ❌ WON'T DO (CLOSED)
-**Decision**: Do NOT implement XMLOptimizer class
-
-**Rationale**:
-1. **Code already handles this optimally**:
-   - Property generation uses `if (property)` checks
-   - Empty attributes objects aren't serialized
-   - Default values are naturally omitted
-
-2. **No actual problem exists**:
-   - Generator only adds non-default values to XML
-   - File sizes are already lean
-   - Tested with actual output - verified no redundancy
-
-3. **KISS Principle**:
-   - XMLOptimizer would add 100+ LOC
-   - Solves non-existent problem
-   - Adds maintenance burden for zero benefit
-   - Framework envy / resume-driven development trap
-
-**Evidence of Current Optimization**:
-```typescript
-// Paragraph.ts - Already optimal
-if (this.formatting.spacing) {
-  if (Object.keys(attributes).length > 0) {
-    pPrChildren.push(XMLBuilder.wSelf('spacing', attributes));
-  }
-}
-
-// Result: Only generates <w:spacing> if it has attributes
-// No XMLOptimizer needed - code already does this
+### Error Observed
+```
+Found 1 OOXML issues: Document references font Play-regular.ttf but not properly registered
 ```
 
-## Validation Checklist
-- [x] RSID investigation completed - none found
-- [x] Colors normalized to uppercase hex
-- [x] Verified no redundant default properties in generated XML
-- [x] Tests passing (335/340, pre-existing failures unrelated)
-- [x] No regressions in existing functionality
-- [x] Documentation updated (CLAUDE.md)
-- [x] Build succeeds with 0 errors
+### Root Cause
+When a document references an embedded font, OOXML requires:
+1. Font file added to `word/fonts/` directory in the archive
+2. MIME type entry in `[Content_Types].xml` for font file format
+3. Relationship entry in `word/_rels/document.xml.rels` linking to font
+4. Font reference in styles or document XML pointing to embedded font
 
-## Final Status
+Currently: Only #4 exists (font reference), #1-3 are missing
 
-### Completed ✅
-- Color normalization with validation (Phase 2)
-- RSID investigation (Phase 1)
-- All tests passing
-- Zero build errors
-- Backward compatible
+## Solution Architecture
 
-### Closed (Won't Do) ❌
-- Phase 3 XML optimization (not needed - code already optimal)
+### Phase 1: Core Font Infrastructure (Priority: HIGH)
+Create `src/elements/FontManager.ts` - Manages embedded fonts similar to ImageManager
 
-### Lessons Learned
-- Don't optimize without measuring first
-- Check if problem actually exists before proposing solution
-- KISS principle: best code is code you don't write
-- Defensive checks at generation time are often sufficient
-- Senior development = knowing when NOT to optimize
+**Responsibilities:**
+- Register embedded fonts from file paths or buffers
+- Track font relationships (ID, filename, MIME type)
+- Generate relationship IDs (`rId1`, `rId2`, etc.)
+- Validate font formats (.ttf, .otf)
+- Manage font metadata (name, format, size)
+
+**Key Methods:**
+```typescript
+registerFont(fontPath: string, fontName?: string): FontEntry
+registerFontFromBuffer(buffer: Buffer, filename: string, fontName?: string): FontEntry
+getFont(fontId: string): FontEntry | undefined
+getAllFonts(): FontEntry[]
+getFontCount(): number
+clear(): void
+```
+
+### Phase 2: Content_Types Registration (Priority: HIGH)
+Update `src/core/DocumentGenerator.ts` - Add font MIME types
+
+**Changes:**
+- Add font extension handlers (.ttf → `application/x-font-ttf`)
+- Add font extension handlers (.otf → `application/x-font-opentype`)
+- Update `generateContentTypesWithImagesHeadersFootersAndComments()` to include fonts
+
+**Font MIME Types:**
+- `.ttf`: `application/x-font-ttf` (TrueType font)
+- `.otf`: `application/x-font-opentype` (OpenType font)
+- `.woff`: `application/font-woff` (Web Open Font Format)
+- `.woff2`: `application/font-woff2` (WOFF2 format)
+
+### Phase 3: Relationship Management (Priority: HIGH)
+Update `src/core/RelationshipManager.ts` - Add font relationship methods
+
+**New Methods:**
+```typescript
+addFont(target: string): Relationship
+addFontRelationship(relId: string, target: string): void
+```
+
+**Relationship Type:**
+- Type: `http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable`
+
+### Phase 4: Document Integration (Priority: MEDIUM)
+Update `src/core/Document.ts` - Add font management API
+
+**New Properties:**
+- `fontManager: FontManager` - Similar to imageManager
+
+**New Methods:**
+```typescript
+embedFont(fontPath: string, fontName?: string): Font
+embedFontFromBuffer(buffer: Buffer, filename: string): Font
+getFont(fontId: string): Font | undefined
+getAllFonts(): Font[]
+```
+
+### Phase 5: ZIP Archive Handling (Priority: MEDIUM)
+Update `src/zip/ZipWriter.ts` and `ZipHandler.ts`
+
+**No changes needed** - Already handles binary files correctly via Buffer operations
+
+### Phase 6: Helper Functions (Priority: MEDIUM)
+Create utility functions for font operations
+
+**Location**: `src/utils/fontUtils.ts`
+
+**Functions:**
+```typescript
+validateFontFile(buffer: Buffer, filename: string): { valid: boolean; format: string }
+getFontMimeType(filename: string): string
+generateFontFilename(originalName: string, index: number): string
+parseFontName(fontPath: string): string
+```
+
+### Phase 7: Testing (Priority: HIGH)
+Create comprehensive test suite
+
+**Test File**: `tests/elements/FontManager.test.ts`
+
+**Test Cases:**
+- [ ] Register font from file path
+- [ ] Register font from buffer
+- [ ] Validate font file formats
+- [ ] Font relationship generation
+- [ ] Content_Types registration
+- [ ] Round-trip: embed → save → load → verify
+- [ ] Multiple font registration
+- [ ] Font name handling
+- [ ] Binary font file preservation
+
+## Implementation Checklist
+
+### Core Implementation
+- [ ] Create FontEntry interface and types
+- [ ] Create FontManager class (80 lines)
+- [ ] Update DocumentGenerator with font MIME types (50 lines)
+- [ ] Update RelationshipManager with font methods (30 lines)
+- [ ] Update Document class with font API (40 lines)
+- [ ] Create fontUtils helper functions (60 lines)
+
+### Integration
+- [ ] Update Document.save() to save font files to ZIP
+- [ ] Update [Content_Types].xml generation for fonts
+- [ ] Update document._rels.xml.rels for font relationships
+- [ ] Ensure font files saved to word/fonts/ directory
+
+### Testing
+- [ ] Write 8-10 font embedding tests
+- [ ] Test font file preservation through ZIP roundtrip
+- [ ] Test OOXML compliance (no validation errors)
+- [ ] Test multiple fonts in single document
+- [ ] Test font formats (.ttf, .otf, etc.)
+
+### Documentation
+- [ ] Add JSDoc to FontManager
+- [ ] Create fontUtils documentation
+- [ ] Update CLAUDE.md with font embedding section
+- [ ] Add font embedding example
+
+## Affected Files
+
+**New Files:**
+- `src/elements/FontManager.ts` (NEW)
+- `src/utils/fontUtils.ts` (NEW)
+- `tests/elements/FontManager.test.ts` (NEW)
+- `examples/fonts/embed-fonts.ts` (NEW)
+
+**Modified Files:**
+- `src/core/Document.ts` (add font manager integration)
+- `src/core/DocumentGenerator.ts` (add font MIME types)
+- `src/core/RelationshipManager.ts` (add font relationship methods)
+- `src/zip/types.ts` (add font paths)
+- `CLAUDE.md` (document font embedding)
+
+## Success Criteria
+
+✅ Embedded fonts appear in [Content_Types].xml with correct MIME type
+✅ Font files saved to word/fonts/ directory in DOCX archive
+✅ Font relationships appear in word/_rels/document.xml.rels
+✅ Fonts preserved through save/load roundtrip
+✅ OOXML validation passes (no corruption warnings)
+✅ All 8-10 font tests pass
+✅ Supports .ttf, .otf, .woff, .woff2 formats
+✅ FontManager follows ImageManager design pattern
+
+## Risk Mitigation
+
+**Risk**: Font files could bloat DOCX file size
+**Mitigation**: Add optional font subsetting (future phase), document file size impact
+
+**Risk**: Unsupported font formats could cause issues
+**Mitigation**: Validate format on registration, throw clear error
+
+**Risk**: Duplicate font registration
+**Mitigation**: Use filename as unique key, warn on duplicate names
+
+## Timeline Estimate
+
+- Phase 1-2: 30 min (FontManager + MIME types)
+- Phase 3-4: 20 min (RelationshipManager + Document integration)
+- Phase 5-6: 15 min (ZIP handling review + utilities)
+- Phase 7: 30 min (Testing + validation)
+- Total: ~95 min for complete implementation
+
+## Version Impact
+
+- **Current**: 0.8.0 (UTF-8 encoding)
+- **Next**: 0.9.0 (Font Embedding)
+- **Breaking Changes**: None
+- **New APIs**: FontManager, embedFont(), embedFontFromBuffer()
+- **Deprecations**: None
