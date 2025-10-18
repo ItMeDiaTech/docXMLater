@@ -28,7 +28,7 @@ import { Run } from '../elements/Run';
 import { Hyperlink } from '../elements/Hyperlink';
 import { XMLElement } from '../xml/XMLBuilder';
 import { StylesManager } from '../formatting/StylesManager';
-import { Style } from '../formatting/Style';
+import { Style, StyleProperties } from '../formatting/Style';
 import { NumberingManager } from '../formatting/NumberingManager';
 import { RelationshipManager } from './RelationshipManager';
 import { DocumentParser } from './DocumentParser';
@@ -48,6 +48,7 @@ export interface DocumentProperties {
   revision?: number;
   created?: Date;
   modified?: Date;
+  language?: string;
 }
 
 /**
@@ -628,7 +629,7 @@ export class Document {
    * @param properties - Properties to update
    * @returns True if the style was updated, false if not found
    */
-  updateStyle(styleId: string, properties: any): boolean {
+  updateStyle(styleId: string, properties: Partial<StyleProperties>): boolean {
     const style = this.stylesManager.getStyle(styleId);
     if (!style) {
       return false;
@@ -1935,7 +1936,14 @@ export class Document {
       for (const relsPath of relsPaths) {
         const relsContent = this.zipHandler.getFileAsString(relsPath);
         if (relsContent) {
-          const rels: any[] = [];
+          interface ParsedRelationship {
+            id?: string;
+            type?: string;
+            target?: string;
+            targetMode?: string;
+          }
+
+          const rels: ParsedRelationship[] = [];
 
           // Parse relationships
           const relPattern = /<Relationship\s+([^>]+)\/>/g;
@@ -1944,7 +1952,7 @@ export class Document {
             const attrs = match[1];
             if (!attrs) continue;
 
-            const rel: any = {};
+            const rel: ParsedRelationship = {};
 
             // Extract attributes
             const idMatch = attrs.match(/Id="([^"]+)"/);
@@ -2360,7 +2368,8 @@ export class Document {
     for (const table of this.getTables()) {
       for (const row of table.getRows()) {
         for (const cell of row.getCells()) {
-          const cellParagraphs = (cell as any).getParagraphs?.() || [];
+          // TableCell has getParagraphs method
+          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
           for (const para of cellParagraphs) {
             for (const content of para.getContent()) {
               if (content instanceof Hyperlink) {
@@ -2427,10 +2436,7 @@ export class Document {
     if (!this.properties) {
       this.properties = {};
     }
-    (this.properties as any).language = language;
-
-    // Also store for styles.xml (default paragraph properties)
-    (this.stylesManager as any).setDefaultLanguage?.(language);
+    this.properties.language = language;
 
     return this;
   }
@@ -2440,7 +2446,7 @@ export class Document {
    * @returns Language code or undefined if not set
    */
   getLanguage(): string | undefined {
-    return (this.properties as any)?.language;
+    return this.properties?.language;
   }
 
   /**

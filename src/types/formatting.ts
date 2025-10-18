@@ -2,6 +2,10 @@
  * Additional formatting types for enhanced document manipulation
  */
 
+// Forward references to avoid circular dependencies
+import type { Paragraph } from '../elements/Paragraph';
+import type { Run } from '../elements/Run';
+
 /**
  * Border style options
  */
@@ -127,9 +131,9 @@ export interface ReplaceOptions extends FindOptions {
  */
 export interface SearchResult {
   /** The paragraph containing the match */
-  paragraph: any; // Will be Paragraph type
+  paragraph: Paragraph;
   /** The run containing the match */
-  run?: any; // Will be Run type
+  run?: Run;
   /** Match start position in paragraph */
   startIndex: number;
   /** Match end position in paragraph */
