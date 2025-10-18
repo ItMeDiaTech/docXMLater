@@ -29,6 +29,11 @@ export class ZipWriter {
    * @param filePath - Path where the file will be stored in the archive
    * @param content - File content (string or Buffer)
    * @param options - Options for adding the file
+   *
+   * **Encoding Note:**
+   * - String content is always encoded as UTF-8 per DOCX/OpenXML standard
+   * - Buffer content is stored as-is (should already be UTF-8 encoded for text)
+   * - XML files must use UTF-8 encoding as specified in their XML declaration
    */
   addFile(
     filePath: string,
@@ -43,9 +48,19 @@ export class ZipWriter {
 
     const normalizedPath = normalizePath(filePath);
 
+    // Convert string content to UTF-8 Buffer if not already binary
+    // This ensures consistent UTF-8 encoding regardless of system locale
+    let processedContent = content;
+    if (typeof content === 'string') {
+      // Explicitly encode string as UTF-8 Buffer
+      processedContent = Buffer.from(content, 'utf8');
+    }
+
     // Add to JSZip
-    this.zip.file(normalizedPath, content, {
-      binary,
+    // Note: JSZip will automatically handle the binary flag and compression
+    // For text content (XML), this ensures UTF-8 encoding is preserved
+    this.zip.file(normalizedPath, processedContent, {
+      binary: true, // Always treat as binary since we're using Buffers
       compression: compression > 0 ? 'DEFLATE' : 'STORE',
       compressionOptions: {
         level: compression,
@@ -146,6 +161,11 @@ export class ZipWriter {
    * Generates the ZIP archive as a buffer
    * @param options - Save options
    * @returns Buffer containing the ZIP archive
+   *
+   * **Encoding Note:**
+   * The generated buffer contains UTF-8 encoded XML and text files.
+   * All string content within files has been explicitly UTF-8 encoded
+   * before being added to the archive to ensure consistency.
    */
   async toBuffer(options: SaveOptions = {}): Promise<Buffer> {
     const { compression = 6, validate = true } = options;
@@ -157,14 +177,16 @@ export class ZipWriter {
 
     try {
       // Generate ZIP with specified compression
+      // All text content is UTF-8 encoded (done in addFile method)
       const buffer = await this.zip.generateAsync({
-        type: 'nodebuffer',
+        type: 'nodebuffer', // Returns Node.js Buffer
         compression: compression > 0 ? 'DEFLATE' : 'STORE',
         compressionOptions: {
           level: compression,
         },
         // Use ZIP64 for large files
         streamFiles: true,
+        // Note: encoding defaults to UTF-8 for all content in JSZip 3.x
       });
 
       return buffer;

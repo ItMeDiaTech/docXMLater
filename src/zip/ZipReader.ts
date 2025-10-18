@@ -87,6 +87,12 @@ export class ZipReader {
 
   /**
    * Extracts all files from the ZIP archive into memory
+   *
+   * **Encoding Note:**
+   * - Text files (XML, etc.) are extracted as UTF-8 strings using `async('string')`
+   * - JSZip automatically decodes UTF-8 when extracting as 'string'
+   * - Binary files are extracted as Buffers to preserve exact content
+   * - All text content is guaranteed to be valid UTF-8
    */
   private async extractFiles(): Promise<void> {
     if (!this.zip) {
@@ -112,9 +118,16 @@ export class ZipReader {
       const isBinary = isBinaryFile(normalizedPath);
 
       // Extract content based on type
-      const content = isBinary
-        ? await zipObject.async('nodebuffer')
-        : await zipObject.async('string');
+      // For text files: JSZip's async('string') automatically uses UTF-8 decoding
+      // For binary files: async('nodebuffer') preserves exact bytes
+      let content;
+      if (isBinary) {
+        content = await zipObject.async('nodebuffer');
+      } else {
+        // Text files are extracted as UTF-8 strings
+        // JSZip automatically handles UTF-8 decoding for 'string' type
+        content = await zipObject.async('string');
+      }
 
       // Get file metadata
       const date = zipObject.date;
@@ -153,7 +166,12 @@ export class ZipReader {
   /**
    * Gets the content of a specific file as a string
    * @param filePath - Path to the file within the archive
-   * @returns The file content as a string, or undefined if not found
+   * @returns The file content as a UTF-8 string, or undefined if not found
+   *
+   * **Encoding Note:**
+   * - Returns UTF-8 decoded string content
+   * - For binary files, converts the Buffer to UTF-8 string
+   * - Assumes all text content is UTF-8 encoded (per OpenXML standard)
    */
   getFileAsString(filePath: string): string | undefined {
     const file = this.getFile(filePath);
@@ -162,6 +180,7 @@ export class ZipReader {
     }
 
     if (file.isBinary) {
+      // Convert binary buffer to UTF-8 string
       return (file.content as Buffer).toString('utf8');
     }
 
@@ -171,7 +190,12 @@ export class ZipReader {
   /**
    * Gets the content of a specific file as a buffer
    * @param filePath - Path to the file within the archive
-   * @returns The file content as a buffer, or undefined if not found
+   * @returns The file content as a Buffer, or undefined if not found
+   *
+   * **Encoding Note:**
+   * - Returns Buffer with UTF-8 encoded content for text files
+   * - For binary files, returns raw bytes
+   * - String content is explicitly encoded as UTF-8
    */
   getFileAsBuffer(filePath: string): Buffer | undefined {
     const file = this.getFile(filePath);
@@ -183,6 +207,7 @@ export class ZipReader {
       return file.content as Buffer;
     }
 
+    // Encode string content as UTF-8 Buffer
     return Buffer.from(file.content as string, 'utf8');
   }
 

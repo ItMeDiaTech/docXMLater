@@ -556,4 +556,139 @@ describe('ZipHandler', () => {
       expect(handler.hasFile('path/with spaces/file.txt')).toBe(true);
     });
   });
+
+  describe('UTF-8 Encoding', () => {
+    test('should preserve UTF-8 characters when adding string content', () => {
+      const utf8Content = 'Hello UTF-8! 你好 مرحبا שלום 🎉';
+      handler.addFile('utf8.txt', utf8Content);
+
+      const retrieved = handler.getFileAsString('utf8.txt');
+      expect(retrieved).toBe(utf8Content);
+    });
+
+    test('should convert string to UTF-8 Buffer internally', () => {
+      const utf8Content = 'Test 日本語 content';
+      handler.addFile('utf8-buffer.txt', utf8Content);
+
+      const buffer = handler.getFileAsBuffer('utf8-buffer.txt');
+      expect(buffer).toBeDefined();
+      expect(buffer?.toString('utf8')).toBe(utf8Content);
+    });
+
+    test('should handle emoji and special characters', () => {
+      const emojiContent = '😀😃😄😁😆😅🤣😂 🎉 ❤️ 🚀';
+      handler.addFile('emoji.txt', emojiContent);
+
+      expect(handler.getFileAsString('emoji.txt')).toBe(emojiContent);
+    });
+
+    test('should handle mixed scripts (Latin, Greek, Cyrillic, Arabic, CJK)', () => {
+      const mixed = 'Latin: Hello\nGreek: Γεια\nCyrillic: Привет\nArabic: مرحبا\nCJK: 你好日本語한글';
+      handler.addFile('mixed-scripts.txt', mixed);
+
+      expect(handler.getFileAsString('mixed-scripts.txt')).toBe(mixed);
+    });
+
+    test('should handle right-to-left text (Arabic, Hebrew)', () => {
+      const rtlContent = 'مرحبا بك في UTF-8 וברוכים הבאים';
+      handler.addFile('rtl.txt', rtlContent);
+
+      expect(handler.getFileAsString('rtl.txt')).toBe(rtlContent);
+    });
+
+    test('should preserve UTF-8 in XML files', () => {
+      const xmlContent = '<?xml version="1.0" encoding="UTF-8"?><root>Café ☕ 日本</root>';
+      handler.addFile('test.xml', xmlContent);
+
+      const retrieved = handler.getFileAsString('test.xml');
+      expect(retrieved).toBe(xmlContent);
+    });
+
+    test('should round-trip UTF-8 content (add, retrieve, verify)', () => {
+      const testCases = [
+        'Simple ASCII text',
+        'Accented: café, naïve, résumé',
+        'Symbols: © ® ™ € ¥ £',
+        'Mathematical: ± × ÷ ∞ ∑ √',
+        'Arrows: → ← ↑ ↓ ↔ ⟷',
+        'CJK: 漢字 ひらがな カタカナ 한글 中文',
+      ];
+
+      testCases.forEach((content, index) => {
+        const filename = `round-trip-${index}.txt`;
+        handler.addFile(filename, content);
+
+        const retrieved = handler.getFileAsString(filename);
+        expect(retrieved).toBe(content);
+      });
+    });
+
+    test('should handle UTF-8 with line breaks and whitespace', () => {
+      const multilineUtf8 = `Line 1: Hola
+Line 2: 你好
+Line 3: مرحبا
+Line 4: שלום
+Line 5: 🌍🌎🌏`;
+      handler.addFile('multiline-utf8.txt', multilineUtf8);
+
+      expect(handler.getFileAsString('multiline-utf8.txt')).toBe(multilineUtf8);
+    });
+
+    test('should handle Buffer containing valid UTF-8', () => {
+      const utf8String = 'UTF-8 テキスト 📝';
+      const utf8Buffer = Buffer.from(utf8String, 'utf8');
+      handler.addFile('buffer-utf8.bin', utf8Buffer, { binary: true });
+
+      const retrieved = handler.getFileAsBuffer('buffer-utf8.bin');
+      expect(retrieved).toEqual(utf8Buffer);
+      expect(retrieved?.toString('utf8')).toBe(utf8String);
+    });
+
+    test('should preserve UTF-8 when saving and loading from file', async () => {
+      const utf8Content = 'Testing UTF-8: 🎯 Café ☕ 你好 مرحبا';
+      handler.addFile('word/document.xml', utf8Content);
+      handler.addFile('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types/>');
+      handler.addFile('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships/>');
+
+      const testFile = path.join(testDir, 'utf8-test.docx');
+      await fs.mkdir(testDir, { recursive: true });
+
+      try {
+        // Save to file
+        await handler.save(testFile);
+
+        // Load from file
+        const handler2 = new ZipHandler();
+        await handler2.load(testFile, { validate: false });
+
+        // Verify content
+        const retrieved = handler2.getFileAsString('word/document.xml');
+        expect(retrieved).toBe(utf8Content);
+      } finally {
+        await fs.rm(testDir, { recursive: true, force: true });
+      }
+    });
+
+    test('should preserve complex UTF-8 sequences', () => {
+      // Test various UTF-8 encoded characters and sequences
+      const complexContent =
+        'ASCII: abc123\n' +
+        'Latin-1: à á â ã ä å\n' +
+        'Greek: α β γ δ ε ζ η θ\n' +
+        'Cyrillic: а б в г д е ё\n' +
+        'Devanagari: अ आ इ ई उ ऊ\n' +
+        'Arabic: ا ب ت ث ج ح\n' +
+        'Hebrew: א ב ג ד ה ו\n' +
+        'Thai: ก ข ค ง จ ฉ\n' +
+        'Chinese: 一 二 三 四 五 六\n' +
+        'Japanese: あ い う え お か\n' +
+        'Korean: 가 나 다 라 마 바\n' +
+        'Emoji: 👨‍👩‍👧‍👦 👍 🎓 💼 🏆';
+
+      handler.addFile('complex-utf8.txt', complexContent);
+
+      const retrieved = handler.getFileAsString('complex-utf8.txt');
+      expect(retrieved).toBe(complexContent);
+    });
+  });
 });

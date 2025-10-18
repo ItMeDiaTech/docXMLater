@@ -172,7 +172,12 @@ export class ZipHandler {
   /**
    * Gets the content of a specific file as a string
    * @param filePath - Path to the file within the archive
-   * @returns The file content as a string, or undefined if not found
+   * @returns The file content as a UTF-8 string, or undefined if not found
+   *
+   * **Encoding Note:**
+   * - Returns UTF-8 decoded string content
+   * - All text content in DOCX files must be UTF-8 per OpenXML specification
+   * - For binary files, converts Buffer to UTF-8 string (may fail for non-text binary)
    */
   getFileAsString(filePath: string): string | undefined {
     const file = this.getFile(filePath);
@@ -181,6 +186,7 @@ export class ZipHandler {
     }
 
     if (file.isBinary) {
+      // Convert binary buffer to UTF-8 string
       return (file.content as Buffer).toString('utf8');
     }
 
@@ -190,7 +196,12 @@ export class ZipHandler {
   /**
    * Gets the content of a specific file as a buffer
    * @param filePath - Path to the file within the archive
-   * @returns The file content as a buffer, or undefined if not found
+   * @returns The file content as a Buffer, or undefined if not found
+   *
+   * **Encoding Note:**
+   * - Returns Buffer with UTF-8 encoded content for text files
+   * - For binary files, returns raw bytes unchanged
+   * - All text content is guaranteed to be UTF-8 encoded
    */
   getFileAsBuffer(filePath: string): Buffer | undefined {
     const file = this.getFile(filePath);
@@ -202,6 +213,7 @@ export class ZipHandler {
       return file.content as Buffer;
     }
 
+    // Encode string content as UTF-8 Buffer
     return Buffer.from(file.content as string, 'utf8');
   }
 
