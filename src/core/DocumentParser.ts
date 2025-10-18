@@ -7,6 +7,8 @@ import { ZipHandler } from '../zip/ZipHandler';
 import { DOCX_PATHS } from '../zip/types';
 import { Paragraph } from '../elements/Paragraph';
 import { Run, RunFormatting } from '../elements/Run';
+import { Table } from '../elements/Table';
+import { TableCell } from '../elements/TableCell';
 import { Hyperlink } from '../elements/Hyperlink';
 import { XMLBuilder } from '../xml/XMLBuilder';
 import { XMLParser } from '../xml/XMLParser';
@@ -24,7 +26,7 @@ export interface ParseError {
 /**
  * Body element types
  */
-type BodyElement = Paragraph; // Table and TableOfContentsElement will be added later
+type BodyElement = Paragraph | Table; // Table and TableOfContentsElement will be added later
 
 /**
  * DocumentParser handles all document parsing logic
@@ -122,15 +124,23 @@ export class DocumentParser {
       }
     }
 
-    // Check for tables (not yet implemented)
-    const hasTable = bodyContent.includes('<w:tbl');
-    if (hasTable) {
-      const err = new Error(
-        'Document contains tables which are not yet fully supported in Phase 2. Tables will be ignored.'
-      );
-      this.parseErrors.push({ element: 'table', error: err });
-      if (this.strictParsing) {
-        throw err;
+    // Parse tables (w:tbl elements)
+    const tableRegex = /<w:tbl[^>]*>[\s\S]*?<\/w:tbl>/g;
+    let tableMatch;
+    while ((tableMatch = tableRegex.exec(bodyContent)) !== null) {
+      try {
+        const table = this.parseTable(tableMatch[0], relationshipManager);
+        if (table) {
+          bodyElements.push(table);
+        }
+      } catch (error) {
+        this.parseErrors.push({
+          element: 'table',
+          error: error instanceof Error ? error : new Error(String(error))
+        });
+        if (this.strictParsing) {
+          throw error;
+        }
       }
     }
 
@@ -563,6 +573,89 @@ export class DocumentParser {
       }
 
       // In lenient mode, log warning and continue
+      return null;
+    }
+  }
+
+  /**
+   * Parses a table element from XML
+   * Extracts rows and cells with their content
+   */
+  private parseTable(tableXml: string, relationshipManager: RelationshipManager): Table | null {
+    try {
+      // Extract table rows (w:tr)
+      const rowRegex = /<w:tr[^>]*>([\s\S]*?)<\/w:tr>/g;
+      const rows: Array<Array<string>> = [];
+      let rowMatch;
+
+      while ((rowMatch = rowRegex.exec(tableXml)) !== null) {
+        const rowContent = rowMatch[1] || '';
+        const cells: string[] = [];
+
+        // Extract cells (w:tc)
+        const cellRegex = /<w:tc[^>]*>([\s\S]*?)<\/w:tc>/g;
+        let cellMatch;
+        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+          cells.push(cellMatch[1] || '');
+        }
+
+        if (cells.length > 0) {
+          rows.push(cells);
+        }
+      }
+
+      if (rows.length === 0) {
+        return null; // No valid rows found
+      }
+
+      // Create table with row/column dimensions from first row
+      const firstRow = rows[0];
+      if (!firstRow) {
+        return null;
+      }
+
+      const colCount = firstRow.length;
+      const rowCount = rows.length;
+
+      if (colCount === 0) {
+        return null;
+      }
+
+      const table = new Table(rowCount, colCount);
+
+      // Populate table cells with content
+      for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+        const row = table.getRows()[rIdx];
+        if (!row) continue;
+
+        const cells = row.getCells();
+        const cellContents = rows[rIdx];
+        if (!cellContents) continue;
+
+        for (let cIdx = 0; cIdx < cellContents.length && cIdx < cells.length; cIdx++) {
+          const cell = cells[cIdx];
+          if (cell instanceof TableCell) {
+            // Parse paragraphs inside cell
+            const cellXml = cellContents[cIdx] || '';
+            const paraRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
+            let paraMatch;
+
+            while ((paraMatch = paraRegex.exec(cellXml)) !== null) {
+              const paraContent = paraMatch[1] || '';
+              const para = this.parseParagraph(`<w:p>${paraContent}</w:p>`, relationshipManager);
+              if (para) {
+                cell.addParagraph(para);
+              }
+            }
+          }
+        }
+      }
+
+      return table;
+    } catch (error) {
+      if (this.strictParsing) {
+        throw error;
+      }
       return null;
     }
   }

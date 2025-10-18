@@ -1733,6 +1733,107 @@ export class Document {
   }
 
   /**
+   * Gets the raw XML content of a document part without any processing
+   *
+   * Returns the unparsed XML string for any part in the document package.
+   * This is useful for OOXML validation, advanced manipulation, or accessing
+   * content types that don't have dedicated APIs.
+   *
+   * **Note**: For binary parts (images, fonts), this converts the Buffer to UTF-8
+   * string, which may not be appropriate. Check the content type first.
+   *
+   * @param partName - Part path (e.g., 'word/document.xml', '[Content_Types].xml')
+   * @returns Raw XML string, or null if part not found
+   *
+   * @example
+   * ```typescript
+   * // Get raw document XML
+   * const xml = await doc.getRawXml('word/document.xml');
+   * console.log(xml); // Complete XML as string
+   *
+   * // Get raw styles XML
+   * const stylesXml = await doc.getRawXml('word/styles.xml');
+   *
+   * // Get package metadata
+   * const coreProps = await doc.getRawXml('docProps/core.xml');
+   * ```
+   */
+  async getRawXml(partName: string): Promise<string | null> {
+    try {
+      const part = await this.getPart(partName);
+      if (!part) {
+        return null;
+      }
+
+      // If already a string, return as-is
+      if (typeof part.content === 'string') {
+        return part.content;
+      }
+
+      // If Buffer, decode as UTF-8 (standard for XML files)
+      if (Buffer.isBuffer(part.content)) {
+        return part.content.toString('utf8');
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Gets raw XML content for all text-based parts (non-binary files)
+   *
+   * Returns a map of part names to their raw XML content, excluding binary files
+   * like images and fonts. Useful for OOXML validation or batch processing.
+   *
+   * @returns Map of part names to raw XML content
+   *
+   * @example
+   * ```typescript
+   * // Get all XML parts
+   * const allXml = await doc.getAllRawXml();
+   * for (const [partName, xml] of allXml) {
+   *   console.log(`${partName}: ${xml.length} bytes`);
+   * }
+   *
+   * // Validate all XML parts
+   * for (const [partName, xml] of allXml) {
+   *   try {
+   *     // Parse and validate XML
+   *     const parser = new DOMParser();
+   *     parser.parseFromString(xml, 'text/xml');
+   *   } catch (e) {
+   *     console.error(`Invalid XML in ${partName}:`, e);
+   *   }
+   * }
+   * ```
+   */
+  async getAllRawXml(): Promise<Map<string, string>> {
+    const xmlMap = new Map<string, string>();
+
+    try {
+      const parts = await this.listParts();
+
+      for (const partName of parts) {
+        // Skip binary files (images, fonts, etc.)
+        if (partName.match(/\.(png|jpg|jpeg|gif|woff|woff2|ttf|otf|bin)$/i)) {
+          continue;
+        }
+
+        const xml = await this.getRawXml(partName);
+        if (xml) {
+          xmlMap.set(partName, xml);
+        }
+      }
+    } catch (error) {
+      // Return partial results on error
+    }
+
+    return xmlMap;
+  }
+
+  /**
    * Adds or updates a content type registration
    *
    * Registers a new content type in [Content_Types].xml. This is required

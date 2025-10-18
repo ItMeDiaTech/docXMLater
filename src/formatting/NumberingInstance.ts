@@ -28,6 +28,7 @@ export interface NumberingInstanceProperties {
 export class NumberingInstance {
   private numId: number;
   private abstractNumId: number;
+  private levelOverrides: Map<number, number> = new Map();
 
   /**
    * Creates a new numbering instance
@@ -84,20 +85,51 @@ export class NumberingInstance {
 
   /**
    * Gets level overrides
+   * Returns a map of level indices to their override starting values
    */
   getLevelOverrides(): Map<number, number> {
-    // Placeholder for level overrides (not yet implemented)
-    return new Map();
+    return new Map(this.levelOverrides);
   }
 
   /**
    * Sets level override for a specific level
-   * @param _level The level index
-   * @param _startValue The starting value for this level
+   * Overrides the starting value for a particular numbering level
+   *
+   * @param level The level index (0-based)
+   * @param startValue The starting value for this level
+   * @returns This instance for method chaining
    */
-  setLevelOverride(_level: number, _startValue: number): this {
-    // Placeholder for level overrides (not yet implemented in current version)
+  setLevelOverride(level: number, startValue: number): this {
+    if (level < 0) {
+      throw new Error('Level index must be non-negative');
+    }
+    if (startValue < 0) {
+      throw new Error('Start value must be non-negative');
+    }
+
+    this.levelOverrides.set(level, startValue);
     return this;
+  }
+
+  /**
+   * Clears a level override for a specific level
+   *
+   * @param level The level index to clear
+   * @returns This instance for method chaining
+   */
+  clearLevelOverride(level: number): this {
+    this.levelOverrides.delete(level);
+    return this;
+  }
+
+  /**
+   * Gets the override value for a specific level, if set
+   *
+   * @param level The level index
+   * @returns The override starting value, or undefined if not set
+   */
+  getLevelOverride(level: number): number | undefined {
+    return this.levelOverrides.get(level);
   }
 
   /**
@@ -110,6 +142,17 @@ export class NumberingInstance {
     children.push(
       XMLBuilder.wSelf('abstractNumId', { 'w:val': this.abstractNumId.toString() })
     );
+
+    // Add level overrides if any are set
+    for (const [level, startValue] of this.levelOverrides) {
+      children.push({
+        name: 'w:lvlOverride',
+        attributes: { 'w:ilvl': level.toString() },
+        children: [
+          XMLBuilder.wSelf('startOverride', { 'w:val': startValue.toString() })
+        ]
+      });
+    }
 
     return XMLBuilder.w('num', { 'w:numId': this.numId.toString() }, children);
   }
