@@ -1,55 +1,59 @@
-# Implementation Plan - Additional Helper Functions
+# Implementation Plan - RSID & Polish Fixes
 
-## Implementation Status
+## Source Analysis
+- **Source Type**: Best Practice Guidelines (ECMA-376 + Microsoft Recommendations)
+- **Core Features**:
+  1. Remove invalid all-zero RSID attributes (not needed for programmatic generation)
+  2. Normalize color values to uppercase hex
+  3. Optimize XML by omitting default property values
+- **Dependencies**: None (internal refactoring)
+- **Complexity**: LOW (120 LOC total, straightforward refactoring)
 
-### High Priority (11 methods)
-- [ ] Document.findText(text)
-- [ ] Document.replaceText(find, replace)
-- [ ] Document.getWordCount()
-- [ ] Document.getCharacterCount()
-- [ ] Document.removeParagraph(para/index)
-- [ ] Document.removeTable(table/index)
-- [ ] Document.insertParagraphAt(index, para)
-- [ ] Paragraph.getWordCount()
-- [ ] Paragraph.getLength()
-- [ ] Paragraph.clone()
-- [ ] Table.removeRow(index)
+## Target Integration
+- **Integration Points**:
+  - DocumentGenerator: Remove RSID generation
+  - Run.ts, Hyperlink.ts: Color normalization
+  - Paragraph.ts, Run.ts, TableCell.ts: Strip redundant defaults
+- **Affected Files**: 6-8 files
+- **Pattern Matching**: Existing defensive coding patterns → lean, optimized patterns
 
-### Medium Priority (10 methods)
-- [ ] Table.insertRow(index)
-- [ ] Table.addColumn()
-- [ ] Table.removeColumn(index)
-- [ ] Table.getColumnCount()
-- [ ] Table.setColumnWidths(widths)
-- [x] Run.setSubscript(subscript) - Already exists
-- [x] Run.setSuperscript(superscript) - Already exists
-- [x] Run.setSmallCaps(smallCaps) - Already exists
-- [x] Run.setAllCaps(allCaps) - Already exists
-- [ ] Paragraph.setBorder(border)
+## Implementation Tasks
 
-### Low Priority (8 methods)
-- [ ] Document.getHyperlinks()
-- [ ] Document.getBookmarks()
-- [ ] Document.getImages()
-- [ ] Document.setLanguage(lang)
-- [ ] Paragraph.setShading(shading)
-- [ ] Paragraph.setTabs(tabs)
-- [ ] Image.setAltText(text)
-- [ ] Image.rotate(degrees)
+### Phase 1: Remove RSID Generation (RECOMMENDED)
+- [ ] Search for all RSID attribute generation in codebase
+- [ ] Remove rsidR, rsidRDefault, rsidP, rsidRPr, rsidDel attributes
+- [ ] Document decision in CLAUDE.md
+- [ ] Update tests to not expect RSID values
+- [ ] Verify Word still opens documents without errors
 
-## Progress Tracking
-- Started: 2024-01-17
-- Completed: 2024-01-17
-- Target: 29 methods across 6 classes
-- Version: 0.6.0
-- Status: ✅ COMPLETED
+### Phase 2: Normalize Color Values (POLISH)
+- [ ] Add `normalizeColor()` utility function
+- [ ] Update all color setters (Run.ts, Hyperlink.ts)
+- [ ] Add validation for hex format
+- [ ] Normalize to uppercase per Microsoft convention
+- [ ] Write tests for color normalization
 
-## Summary
-All 29 helper methods have been successfully implemented and tested:
-- Document: 7 methods (findText, replaceText, getWordCount, getCharacterCount, removeParagraph, removeTable, insertParagraphAt, getHyperlinks, getBookmarks, getImages, setLanguage)
-- Paragraph: 6 methods (getWordCount, getLength, clone, setBorder, setShading, setTabs)
-- Table: 6 methods (removeRow, insertRow, addColumn, removeColumn, getColumnCount, setColumnWidths)
-- Image: 2 methods (setAltText, rotate)
-- Run: 4 methods already existed (setSubscript, setSuperscript, setSmallCaps, setAllCaps)
+### Phase 3: Strip Redundant Default Properties (OPTIMIZATION)
+- [ ] Create XMLOptimizer helper
+- [ ] Update property generation logic to skip defaults
+- [ ] Replace explicit false/0 values with element omission
+- [ ] Test file size reduction
+- [ ] Update tests to expect optimal XML
 
-All methods have comprehensive tests written and passing (48 tests total).
+## Validation Checklist
+- [ ] All RSIDs removed (or valid if kept)
+- [ ] Colors normalized to uppercase hex
+- [ ] No redundant default properties in XML
+- [ ] Tests passing (226+)
+- [ ] File size reduction verified (target: 20-30%)
+- [ ] No regressions in existing functionality
+- [ ] Documentation updated
+- [ ] Build succeeds with 0 errors
+
+## Success Criteria
+1. All RSIDs removed
+2. Colors consistently uppercase
+3. No default values in XML output
+4. File size reduced 20-30%
+5. All tests passing
+6. No Word compatibility issues

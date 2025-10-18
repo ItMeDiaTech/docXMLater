@@ -185,12 +185,39 @@ export class Run {
   }
 
   /**
-   * Sets text color
+   * Sets text color with normalization to uppercase hex
    * @param color - Color in hex format (with or without #)
+   * @throws Error if color format is invalid
    */
   setColor(color: string): this {
-    this.formatting.color = color.startsWith('#') ? color.substring(1) : color;
+    this.formatting.color = this.normalizeColor(color);
     return this;
+  }
+
+  /**
+   * Normalizes color to uppercase 6-character hex format per Microsoft convention
+   * @param color - Color in hex format (with or without #)
+   * @returns Normalized uppercase hex color
+   * @throws Error if color format is invalid
+   */
+  private normalizeColor(color: string): string {
+    // Remove # if present
+    const hex = color.replace(/^#/, '');
+
+    // Validate format: must be 3 or 6 character hex
+    if (!/^[0-9A-Fa-f]{3}$|^[0-9A-Fa-f]{6}$/.test(hex)) {
+      throw new Error(
+        `Invalid color format: "${color}". Expected 3 or 6-character hex ` +
+        `(e.g., "FF0000", "#FF0000", "F00", or "#F00")`
+      );
+    }
+
+    // Expand 3-char to 6-char format and normalize to uppercase
+    if (hex.length === 3) {
+      return (hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2)).toUpperCase();
+    }
+
+    return hex.toUpperCase();
   }
 
   /**
