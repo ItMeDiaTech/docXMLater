@@ -725,4 +725,117 @@ export class DocumentParser {
 
     return properties;
   }
+
+  /**
+   * Helper: Gets raw XML string from a document part
+   * Utility function for parser to retrieve unparsed XML content
+   * @param zipHandler - ZIP handler containing the document
+   * @param partName - Part path (e.g., 'word/document.xml')
+   * @returns Raw XML string or null if not found
+   */
+  static getRawXml(zipHandler: ZipHandler, partName: string): string | null {
+    try {
+      const file = zipHandler.getFile(partName);
+      if (!file) {
+        return null;
+      }
+
+      // If already a string, return as-is
+      if (typeof file.content === 'string') {
+        return file.content;
+      }
+
+      // If Buffer, decode as UTF-8
+      if (Buffer.isBuffer(file.content)) {
+        return file.content.toString('utf8');
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Helper: Updates raw XML content in a document part
+   * Utility function for parser to set unparsed XML content
+   * @param zipHandler - ZIP handler containing the document
+   * @param partName - Part path (e.g., 'word/document.xml')
+   * @param xmlContent - Raw XML string to set
+   * @returns True if successful, false otherwise
+   */
+  static setRawXml(zipHandler: ZipHandler, partName: string, xmlContent: string): boolean {
+    try {
+      if (typeof xmlContent !== 'string') {
+        return false;
+      }
+
+      // Add or update the file in the ZIP handler
+      // Convert string to UTF-8 Buffer for consistent encoding
+      zipHandler.addFile(partName, Buffer.from(xmlContent, 'utf8'), { binary: true });
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Helper: Gets relationships for a specific document part
+   * Utility function for parser to access .rels files
+   * @param zipHandler - ZIP handler containing the document
+   * @param partName - Part name to get relationships for (e.g., 'word/document.xml')
+   * @returns Array of relationships for that part, or empty array if none found
+   */
+  static getRelationships(zipHandler: ZipHandler, partName: string): Array<{ id?: string; type?: string; target?: string; targetMode?: string }> {
+    try {
+      // Construct the .rels path from the part name
+      // For 'word/document.xml' -> 'word/_rels/document.xml.rels'
+      const lastSlash = partName.lastIndexOf('/');
+      const relsPath = lastSlash === -1
+        ? `_rels/${partName}.rels`
+        : `${partName.substring(0, lastSlash)}/_rels/${partName.substring(lastSlash + 1)}.rels`;
+
+      const relsContent = zipHandler.getFileAsString(relsPath);
+      if (!relsContent) {
+        return [];
+      }
+
+      interface ParsedRelationship {
+        id?: string;
+        type?: string;
+        target?: string;
+        targetMode?: string;
+      }
+
+      const relationships: ParsedRelationship[] = [];
+
+      // Parse relationship XML
+      const relPattern = /<Relationship\s+([^>]+)\/>/g;
+      let match;
+
+      while ((match = relPattern.exec(relsContent)) !== null) {
+        const attrs = match[1];
+        if (!attrs) continue;
+
+        const rel: ParsedRelationship = {};
+
+        // Extract attributes
+        const idMatch = attrs.match(/Id="([^"]+)"/);
+        const typeMatch = attrs.match(/Type="([^"]+)"/);
+        const targetMatch = attrs.match(/Target="([^"]+)"/);
+        const modeMatch = attrs.match(/TargetMode="([^"]+)"/);
+
+        if (idMatch) rel.id = idMatch[1];
+        if (typeMatch) rel.type = typeMatch[1];
+        if (targetMatch) rel.target = targetMatch[1];
+        if (modeMatch) rel.targetMode = modeMatch[1];
+
+        relationships.push(rel);
+      }
+
+      return relationships;
+    } catch (error) {
+      return [];
+    }
+  }
 }
