@@ -271,87 +271,95 @@ export class DocumentParser {
    * Parses paragraph properties and applies them
    */
   private parseParagraphProperties(paraXml: string, paragraph: Paragraph): void {
-    const pPrMatch = paraXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
-    if (!pPrMatch || !pPrMatch[1]) {
+    // Use XMLParser to extract paragraph properties element
+    const pPr = XMLParser.extractBetweenTags(paraXml, '<w:pPr', '</w:pPr>');
+    if (!pPr) {
       return;
     }
 
-    const pPr = pPrMatch[1];
-
-    // Alignment
-    const alignMatch = pPr.match(/<w:jc\s+w:val="([^"]+)"/);
-    if (alignMatch && alignMatch[1]) {
-      // Validate alignment value before applying
-      const value = alignMatch[1];
-      const validAlignments = ['left', 'center', 'right', 'justify'];
-      if (validAlignments.includes(value)) {
-        const alignment = value as 'left' | 'center' | 'right' | 'justify';
-        paragraph.setAlignment(alignment);
-      }
-      // Invalid values are silently ignored to prevent crashes
-    }
-
-    // Style
-    const styleMatch = pPr.match(/<w:pStyle\s+w:val="([^"]+)"/);
-    if (styleMatch && styleMatch[1]) {
-      paragraph.setStyle(styleMatch[1]);
-    }
-
-    // Indentation
-    const indMatch = pPr.match(/<w:ind([^>]+)\/>/);
-    if (indMatch && indMatch[1]) {
-      const indStr = indMatch[1];
-      const leftMatch = indStr.match(/w:left="(\d+)"/);
-      const rightMatch = indStr.match(/w:right="(\d+)"/);
-      const firstLineMatch = indStr.match(/w:firstLine="(\d+)"/);
-
-      if (leftMatch && leftMatch[1]) {
-        paragraph.setLeftIndent(parseInt(leftMatch[1], 10));
-      }
-      if (rightMatch && rightMatch[1]) {
-        paragraph.setRightIndent(parseInt(rightMatch[1], 10));
-      }
-      if (firstLineMatch && firstLineMatch[1]) {
-        paragraph.setFirstLineIndent(parseInt(firstLineMatch[1], 10));
+    // Alignment - extract w:jc element and get w:val attribute
+    const jcElements = XMLParser.extractElements(pPr, 'w:jc');
+    if (jcElements.length > 0) {
+      // @ts-ignore
+      const value = XMLParser.extractAttribute(jcElements[0], 'w:val');
+      if (value) {
+        const validAlignments = ['left', 'center', 'right', 'justify'];
+        if (validAlignments.includes(value)) {
+          paragraph.setAlignment(value as 'left' | 'center' | 'right' | 'justify');
+        }
       }
     }
 
-    // Spacing
-    const spacingMatch = pPr.match(/<w:spacing([^>]+)\/>/);
-    if (spacingMatch && spacingMatch[1]) {
-      const spacingStr = spacingMatch[1];
-      const beforeMatch = spacingStr.match(/w:before="(\d+)"/);
-      const afterMatch = spacingStr.match(/w:after="(\d+)"/);
-      const lineMatch = spacingStr.match(/w:line="(\d+)"/);
+    // Style - extract w:pStyle element and get w:val attribute
+    const styleElements = XMLParser.extractElements(pPr, 'w:pStyle');
+    if (styleElements.length > 0) {
+      // @ts-ignore
+      const styleId = XMLParser.extractAttribute(styleElements[0], 'w:val');
+      if (styleId) {
+        paragraph.setStyle(styleId!);
+      }
+    }
 
-      if (beforeMatch && beforeMatch[1]) {
-        paragraph.setSpaceBefore(parseInt(beforeMatch[1], 10));
+    // Indentation - extract w:ind element and get attributes
+    const indElements = XMLParser.extractElements(pPr, 'w:ind');
+    if (indElements.length > 0) {
+      const indElement = indElements[0];
+      // @ts-ignore
+      const left = XMLParser.extractAttribute(indElement, 'w:left');
+      // @ts-ignore
+      const right = XMLParser.extractAttribute(indElement, 'w:right');
+      // @ts-ignore
+      const firstLine = XMLParser.extractAttribute(indElement, 'w:firstLine');
+
+      if (left) {
+        paragraph.setLeftIndent(parseInt(left!, 10));
       }
-      if (afterMatch && afterMatch[1]) {
-        paragraph.setSpaceAfter(parseInt(afterMatch[1], 10));
+      if (right) {
+        paragraph.setRightIndent(parseInt(right!, 10));
       }
-      if (lineMatch && lineMatch[1]) {
-        const lineRule = spacingStr.match(/w:lineRule="([^"]+)"/);
-        // Validate lineRule value before applying
+      if (firstLine) {
+        paragraph.setFirstLineIndent(parseInt(firstLine!, 10));
+      }
+    }
+
+    // Spacing - extract w:spacing element and get attributes
+    const spacingElements = XMLParser.extractElements(pPr, 'w:spacing');
+    if (spacingElements.length > 0) {
+      const spacingElement = spacingElements[0];
+      // @ts-ignore
+      const before = XMLParser.extractAttribute(spacingElement, 'w:before');
+      // @ts-ignore
+      const after = XMLParser.extractAttribute(spacingElement, 'w:after');
+      // @ts-ignore
+      const line = XMLParser.extractAttribute(spacingElement, 'w:line');
+      // @ts-ignore
+      const lineRule = XMLParser.extractAttribute(spacingElement, 'w:lineRule');
+
+      if (before) {
+        paragraph.setSpaceBefore(parseInt(before!, 10));
+      }
+      if (after) {
+        paragraph.setSpaceAfter(parseInt(after!, 10));
+      }
+      if (line) {
         let validatedLineRule: 'auto' | 'exact' | 'atLeast' | undefined;
-        if (lineRule && lineRule[1]) {
-          const value = lineRule[1];
+        if (lineRule) {
           const validLineRules = ['auto', 'exact', 'atLeast'];
-          if (validLineRules.includes(value)) {
-            validatedLineRule = value as 'auto' | 'exact' | 'atLeast';
+          if (validLineRules.includes(lineRule)) {
+            validatedLineRule = lineRule as 'auto' | 'exact' | 'atLeast';
           }
         }
-        paragraph.setLineSpacing(parseInt(lineMatch[1], 10), validatedLineRule);
+        paragraph.setLineSpacing(parseInt(line!, 10), validatedLineRule);
       }
     }
 
-    // Keep properties
-    if (pPr.includes('<w:keepNext')) paragraph.setKeepNext(true);
-    if (pPr.includes('<w:keepLines')) paragraph.setKeepLines(true);
-    if (pPr.includes('<w:pageBreakBefore')) paragraph.setPageBreakBefore(true);
+    // Keep properties - use XMLParser helper
+    if (XMLParser.hasSelfClosingTag(pPr, 'w:keepNext')) paragraph.setKeepNext(true);
+    if (XMLParser.hasSelfClosingTag(pPr, 'w:keepLines')) paragraph.setKeepLines(true);
+    if (XMLParser.hasSelfClosingTag(pPr, 'w:pageBreakBefore')) paragraph.setPageBreakBefore(true);
 
     // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
-    if (pPr.includes('<w:contextualSpacing')) {
+    if (XMLParser.hasSelfClosingTag(pPr, 'w:contextualSpacing')) {
       paragraph.setContextualSpacing(true);
     }
   }
@@ -388,122 +396,137 @@ export class DocumentParser {
    * Parses run properties and applies them
    */
   private parseRunProperties(runXml: string, run: Run): void {
-    const rPrMatch = runXml.match(/<w:rPr[^>]*>([\s\S]*?)<\/w:rPr>/);
-    if (!rPrMatch || !rPrMatch[1]) {
+    // Use XMLParser to extract run properties element
+    const rPr = XMLParser.extractBetweenTags(runXml, '<w:rPr', '</w:rPr>');
+    if (!rPr) {
       return;
     }
 
-    const rPr = rPrMatch[1];
-
-    // Bold
-    if (rPr.includes('<w:b/>') || rPr.includes('<w:b ')) {
+    // Bold - use XMLParser helper
+    if (XMLParser.hasSelfClosingTag(rPr, 'w:b')) {
       run.setBold(true);
     }
 
-    // Italic
-    if (rPr.includes('<w:i/>') || rPr.includes('<w:i ')) {
+    // Italic - use XMLParser helper
+    if (XMLParser.hasSelfClosingTag(rPr, 'w:i')) {
       run.setItalic(true);
     }
 
-    // Underline
-    const underlineMatch = rPr.match(/<w:u\s+w:val="([^"]+)"/);
-    if (underlineMatch && underlineMatch[1]) {
-      // Validate underline style before applying
-      const value = underlineMatch[1];
-      const validUnderlineStyles = [
-        'single',
-        'double',
-        'thick',
-        'dotted',
-        'dash',
-        'dotDash',
-        'dotDotDash',
-        'wave',
-      ];
-      if (
-        validUnderlineStyles.includes(value) ||
-        value === 'true' ||
-        value === 'false'
-      ) {
-        const underlineStyle = value as RunFormatting['underline'];
-        run.setUnderline(underlineStyle);
+    // Underline - extract w:u element
+    const underlineElements = XMLParser.extractElements(rPr, 'w:u');
+    if (underlineElements.length > 0) {
+      // @ts-ignore
+      const value = XMLParser.extractAttribute(underlineElements[0], 'w:val');
+      if (value) {
+        const validUnderlineStyles = [
+          'single',
+          'double',
+          'thick',
+          'dotted',
+          'dash',
+          'dotDash',
+          'dotDotDash',
+          'wave',
+        ];
+        if (
+          validUnderlineStyles.includes(value) ||
+          value === 'true' ||
+          value === 'false'
+        ) {
+          const underlineStyle = value as RunFormatting['underline'];
+          run.setUnderline(underlineStyle!);
+        }
+      } else {
+        // Self-closing <w:u/> means single underline
+        run.setUnderline(true);
       }
-      // Invalid values are silently ignored to prevent crashes
-    } else if (rPr.includes('<w:u/>')) {
-      run.setUnderline(true);
     }
 
-    // Strike
-    if (rPr.includes('<w:strike/>') || rPr.includes('<w:strike ')) {
+    // Strike - use XMLParser helper
+    if (XMLParser.hasSelfClosingTag(rPr, 'w:strike')) {
       run.setStrike(true);
     }
 
-    // Subscript/Superscript
-    const vertAlignMatch = rPr.match(/<w:vertAlign\s+w:val="([^"]+)"/);
-    if (vertAlignMatch && vertAlignMatch[1]) {
-      if (vertAlignMatch[1] === 'subscript') {
+    // Subscript/Superscript - extract w:vertAlign element
+    const vertAlignElements = XMLParser.extractElements(rPr, 'w:vertAlign');
+    if (vertAlignElements.length > 0) {
+      // @ts-ignore
+      const value = XMLParser.extractAttribute(vertAlignElements[0], 'w:val');
+      if (value === 'subscript') {
         run.setSubscript(true);
-      } else if (vertAlignMatch[1] === 'superscript') {
+      } else if (value === 'superscript') {
         run.setSuperscript(true);
       }
     }
 
-    // Font
-    const fontMatch = rPr.match(/<w:rFonts[^>]+w:ascii="([^"]+)"/);
-    if (fontMatch && fontMatch[1]) {
-      run.setFont(fontMatch[1]);
-    }
-
-    // Size (in half-points, convert to points)
-    const sizeMatch = rPr.match(/<w:sz\s+w:val="(\d+)"/);
-    if (sizeMatch && sizeMatch[1]) {
-      const halfPoints = parseInt(sizeMatch[1], 10);
-      run.setSize(halfPoints / 2);
-    }
-
-    // Color
-    const colorMatch = rPr.match(/<w:color\s+w:val="([^"]+)"/);
-    if (colorMatch && colorMatch[1]) {
-      run.setColor(colorMatch[1]);
-    }
-
-    // Highlight
-    const highlightMatch = rPr.match(/<w:highlight\s+w:val="([^"]+)"/);
-    if (highlightMatch && highlightMatch[1]) {
-      // Validate highlight color before applying
-      const value = highlightMatch[1];
-      const validHighlightColors = [
-        'yellow',
-        'green',
-        'cyan',
-        'magenta',
-        'blue',
-        'red',
-        'darkBlue',
-        'darkCyan',
-        'darkGreen',
-        'darkMagenta',
-        'darkRed',
-        'darkYellow',
-        'darkGray',
-        'lightGray',
-        'black',
-        'white',
-      ];
-      if (validHighlightColors.includes(value)) {
-        const highlightColor = value as RunFormatting['highlight'];
-        run.setHighlight(highlightColor);
+    // Font - extract w:rFonts element
+    const fontElements = XMLParser.extractElements(rPr, 'w:rFonts');
+    if (fontElements.length > 0) {
+      // @ts-ignore
+      const fontName = XMLParser.extractAttribute(fontElements[0], 'w:ascii');
+      if (fontName) {
+        run.setFont(fontName!);
       }
-      // Invalid values are silently ignored to prevent crashes
     }
 
-    // Small caps
-    if (rPr.includes('<w:smallCaps/>') || rPr.includes('<w:smallCaps ')) {
+    // Size (in half-points, convert to points) - extract w:sz element
+    const sizeElements = XMLParser.extractElements(rPr, 'w:sz');
+    if (sizeElements.length > 0) {
+      // @ts-ignore
+      const halfPoints = XMLParser.extractAttribute(sizeElements[0], 'w:val');
+      if (halfPoints) {
+        run.setSize(parseInt(halfPoints!, 10) / 2);
+      }
+    }
+
+    // Color - extract w:color element
+    const colorElements = XMLParser.extractElements(rPr, 'w:color');
+    if (colorElements.length > 0) {
+      // @ts-ignore
+      const colorValue = XMLParser.extractAttribute(colorElements[0], 'w:val');
+      if (colorValue) {
+        run.setColor(colorValue!);
+      }
+    }
+
+    // Highlight - extract w:highlight element
+    const highlightElements = XMLParser.extractElements(rPr, 'w:highlight');
+    if (highlightElements.length > 0) {
+      // @ts-ignore
+      const value = XMLParser.extractAttribute(highlightElements[0], 'w:val');
+      if (value) {
+        const validHighlightColors = [
+          'yellow',
+          'green',
+          'cyan',
+          'magenta',
+          'blue',
+          'red',
+          'darkBlue',
+          'darkCyan',
+          'darkGreen',
+          'darkMagenta',
+          'darkRed',
+          'darkYellow',
+          'darkGray',
+          'lightGray',
+          'black',
+          'white',
+        ];
+        if (validHighlightColors.includes(value)) {
+          const highlightColor = value as RunFormatting['highlight'];
+          run.setHighlight(highlightColor);
+        }
+      }
+    }
+
+    // Small caps - use XMLParser helper
+    if (XMLParser.hasSelfClosingTag(rPr, 'w:smallCaps')) {
       run.setSmallCaps(true);
     }
 
-    // All caps
-    if (rPr.includes('<w:caps/>') || rPr.includes('<w:caps ')) {
+    // All caps - use XMLParser helper
+    if (XMLParser.hasSelfClosingTag(rPr, 'w:caps')) {
       run.setAllCaps(true);
     }
   }
