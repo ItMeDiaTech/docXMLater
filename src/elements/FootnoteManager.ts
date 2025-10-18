@@ -7,6 +7,7 @@
 
 import { Footnote } from './Footnote';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { XMLParser } from '../xml/XMLParser';
 
 /**
  * Manages footnotes in a document
@@ -209,12 +210,17 @@ export class FootnoteManager {
    * @returns True if valid
    */
   static validate(xml: string): boolean {
-    // Basic validation
-    if (!xml || !xml.includes('<w:footnotes')) {
+    // Use XMLParser to extract root element
+    if (!xml) {
       return false;
     }
 
-    // Check for proper structure
+    const footnotesContent = XMLParser.extractBetweenTags(xml, '<w:footnotes', '</w:footnotes>');
+    if (!footnotesContent) {
+      return false;
+    }
+
+    // Check for proper structure - namespace declaration
     if (!xml.includes('xmlns:w=')) {
       return false;
     }

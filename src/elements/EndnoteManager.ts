@@ -7,6 +7,7 @@
 
 import { Endnote } from './Endnote';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { XMLParser } from '../xml/XMLParser';
 
 /**
  * Manages endnotes in a document
@@ -209,12 +210,17 @@ export class EndnoteManager {
    * @returns True if valid
    */
   static validate(xml: string): boolean {
-    // Basic validation
-    if (!xml || !xml.includes('<w:endnotes')) {
+    // Use XMLParser to extract root element
+    if (!xml) {
       return false;
     }
 
-    // Check for proper structure
+    const endnotesContent = XMLParser.extractBetweenTags(xml, '<w:endnotes', '</w:endnotes>');
+    if (!endnotesContent) {
+      return false;
+    }
+
+    // Check for proper structure - namespace declaration
     if (!xml.includes('xmlns:w=')) {
       return false;
     }
