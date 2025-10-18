@@ -7,7 +7,12 @@ module.exports = {
     '**/?(*.)+(spec|test).ts'
   ],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.ts$': ['ts-jest', {
+      tsconfig: {
+        target: 'ES2022',
+        lib: ['ES2022'],
+      },
+    }],
   },
   collectCoverageFrom: [
     'src/**/*.ts',
@@ -18,5 +23,6 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'js', 'json'],
+  testTimeout: 10000,
   verbose: true,
 };

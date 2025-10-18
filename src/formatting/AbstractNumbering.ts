@@ -78,6 +78,13 @@ export class AbstractNumbering {
   }
 
   /**
+   * Alias for getAbstractNumId for backward compatibility
+   */
+  getId(): number {
+    return this.abstractNumId;
+  }
+
+  /**
    * Gets the name
    */
   getName(): string | undefined {
@@ -90,6 +97,28 @@ export class AbstractNumbering {
    */
   setName(name: string): this {
     this.name = name;
+    return this;
+  }
+
+  /**
+   * Gets the multi-level type
+   */
+  getMultiLevelType(): string {
+    return this.multiLevelType === 1 ? 'multilevel' : 'singleLevel';
+  }
+
+  /**
+   * Sets the multi-level type
+   * @param type The multi-level type ('multilevel' or 'singleLevel')
+   */
+  setMultiLevelType(type: 'multilevel' | 'singleLevel' | 'hybridMultilevel'): this {
+    if (type === 'multilevel') {
+      this.multiLevelType = 1;
+    } else if (type === 'hybridMultilevel') {
+      this.multiLevelType = 2;
+    } else {
+      this.multiLevelType = 0;
+    }
     return this;
   }
 
@@ -121,6 +150,13 @@ export class AbstractNumbering {
    */
   getAllLevels(): NumberingLevel[] {
     return Array.from(this.levels.values()).sort((a, b) => a.getLevel() - b.getLevel());
+  }
+
+  /**
+   * Alias for getAllLevels for backward compatibility
+   */
+  getLevels(): NumberingLevel[] {
+    return this.getAllLevels();
   }
 
   /**
@@ -268,6 +304,47 @@ export class AbstractNumbering {
 
     // Level 3: 1, 2, 3, ... (with more indent)
     abstractNum.addLevel(NumberingLevel.createDecimalLevel(3, '%4.'));
+
+    return abstractNum;
+  }
+
+  /**
+   * Creates an outline list abstract numbering
+   * @param abstractNumId The abstract numbering ID
+   */
+  static createOutlineList(abstractNumId: number): AbstractNumbering {
+    const abstractNum = new AbstractNumbering({
+      abstractNumId,
+      name: 'Outline List',
+      multiLevelType: 1,
+    });
+
+    // Level 0: I, II, III, ...
+    abstractNum.addLevel(NumberingLevel.createUpperRomanLevel(0, '%1.'));
+
+    // Level 1: A, B, C, ...
+    abstractNum.addLevel(NumberingLevel.createUpperLetterLevel(1, '%2.'));
+
+    // Level 2: 1, 2, 3, ...
+    abstractNum.addLevel(NumberingLevel.createDecimalLevel(2, '%3.'));
+
+    // Level 3: a, b, c, ...
+    abstractNum.addLevel(NumberingLevel.createLowerLetterLevel(3, '%4.'));
+
+    // Level 4: i, ii, iii, ...
+    abstractNum.addLevel(NumberingLevel.createLowerRomanLevel(4, '%5.'));
+
+    // Level 5: A, B, C, ... (repeating)
+    abstractNum.addLevel(NumberingLevel.createUpperLetterLevel(5, '%6.'));
+
+    // Level 6: 1, 2, 3, ... (repeating)
+    abstractNum.addLevel(NumberingLevel.createDecimalLevel(6, '%7.'));
+
+    // Level 7: a, b, c, ... (repeating)
+    abstractNum.addLevel(NumberingLevel.createLowerLetterLevel(7, '%8.'));
+
+    // Level 8: i, ii, iii, ... (repeating)
+    abstractNum.addLevel(NumberingLevel.createLowerRomanLevel(8, '%9.'));
 
     return abstractNum;
   }

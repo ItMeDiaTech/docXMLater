@@ -31,11 +31,19 @@ export class NumberingInstance {
 
   /**
    * Creates a new numbering instance
-   * @param properties The instance properties
+   * @param numIdOrProps The numbering instance ID or properties object
+   * @param abstractNumId The abstract numbering ID (if first param is a number)
    */
-  constructor(properties: NumberingInstanceProperties) {
-    this.numId = properties.numId;
-    this.abstractNumId = properties.abstractNumId;
+  constructor(numIdOrProps: number | NumberingInstanceProperties, abstractNumId?: number) {
+    if (typeof numIdOrProps === 'number') {
+      // Support simple constructor: new NumberingInstance(numId, abstractNumId)
+      this.numId = numIdOrProps;
+      this.abstractNumId = abstractNumId ?? 0;
+    } else {
+      // Support object constructor: new NumberingInstance({ numId, abstractNumId })
+      this.numId = numIdOrProps.numId;
+      this.abstractNumId = numIdOrProps.abstractNumId;
+    }
 
     this.validate();
   }
@@ -65,6 +73,31 @@ export class NumberingInstance {
    */
   getAbstractNumId(): number {
     return this.abstractNumId;
+  }
+
+  /**
+   * Alias for getNumId for backward compatibility
+   */
+  getId(): number {
+    return this.numId;
+  }
+
+  /**
+   * Gets level overrides
+   */
+  getLevelOverrides(): Map<number, number> {
+    // Placeholder for level overrides (not yet implemented)
+    return new Map();
+  }
+
+  /**
+   * Sets level override for a specific level
+   * @param _level The level index
+   * @param _startValue The starting value for this level
+   */
+  setLevelOverride(_level: number, _startValue: number): this {
+    // Placeholder for level overrides (not yet implemented in current version)
+    return this;
   }
 
   /**

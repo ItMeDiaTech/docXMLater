@@ -43,6 +43,17 @@ export interface CellShading {
 export type CellVerticalAlignment = 'top' | 'center' | 'bottom';
 
 /**
+ * Cell margins (spacing inside cell borders)
+ * Per ECMA-376 Part 1 §17.4.43
+ */
+export interface CellMargins {
+  top?: number; // Margin in twips
+  bottom?: number; // Margin in twips
+  left?: number; // Margin in twips
+  right?: number; // Margin in twips
+}
+
+/**
  * Cell formatting options
  */
 export interface CellFormatting {
@@ -52,6 +63,7 @@ export interface CellFormatting {
   verticalAlignment?: CellVerticalAlignment;
   columnSpan?: number; // Number of columns to span
   rowSpan?: number; // Number of rows to span (gridSpan)
+  margins?: CellMargins; // Cell margins (spacing inside borders)
 }
 
 /**
@@ -160,6 +172,27 @@ export class TableCell {
   }
 
   /**
+   * Sets cell margins (spacing inside cell borders)
+   * Per ECMA-376 Part 1 §17.4.43
+   * @param margins - Margin definitions for each side
+   * @returns This cell for chaining
+   */
+  setMargins(margins: CellMargins): this {
+    this.formatting.margins = margins;
+    return this;
+  }
+
+  /**
+   * Sets all cell margins to the same value
+   * @param margin - Margin in twips to apply to all sides
+   * @returns This cell for chaining
+   */
+  setAllMargins(margin: number): this {
+    this.formatting.margins = { top: margin, bottom: margin, left: margin, right: margin };
+    return this;
+  }
+
+  /**
    * Gets the cell formatting
    * @returns Cell formatting
    */
@@ -221,6 +254,29 @@ export class TableCell {
       }
 
       tcPrChildren.push(XMLBuilder.wSelf('shd', shadingAttrs));
+    }
+
+    // Add cell margins (tcMar) per ECMA-376 Part 1 §17.4.43
+    if (this.formatting.margins) {
+      const margins = this.formatting.margins;
+      const marginChildren: XMLElement[] = [];
+
+      if (margins.top !== undefined) {
+        marginChildren.push(XMLBuilder.wSelf('w:top', { 'w:w': margins.top.toString(), 'w:type': 'dxa' }));
+      }
+      if (margins.bottom !== undefined) {
+        marginChildren.push(XMLBuilder.wSelf('w:bottom', { 'w:w': margins.bottom.toString(), 'w:type': 'dxa' }));
+      }
+      if (margins.left !== undefined) {
+        marginChildren.push(XMLBuilder.wSelf('w:left', { 'w:w': margins.left.toString(), 'w:type': 'dxa' }));
+      }
+      if (margins.right !== undefined) {
+        marginChildren.push(XMLBuilder.wSelf('w:right', { 'w:w': margins.right.toString(), 'w:type': 'dxa' }));
+      }
+
+      if (marginChildren.length > 0) {
+        tcPrChildren.push(XMLBuilder.w('w:tcMar', undefined, marginChildren));
+      }
     }
 
     // Add vertical alignment

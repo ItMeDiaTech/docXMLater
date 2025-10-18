@@ -49,6 +49,8 @@ export interface ParagraphFormatting {
     numId: number;
     level: number;
   };
+  /** Contextual spacing - removes spacing between paragraphs of same style */
+  contextualSpacing?: boolean;
 }
 
 /**
@@ -415,6 +417,18 @@ export class Paragraph {
   }
 
   /**
+   * Sets contextual spacing for this paragraph
+   * When enabled, removes spacing between consecutive paragraphs of the same style
+   * Per ECMA-376 Part 1 §17.3.1.8
+   * @param enable - Whether to enable contextual spacing
+   * @returns This paragraph for chaining
+   */
+  setContextualSpacing(enable: boolean = true): this {
+    this.formatting.contextualSpacing = enable;
+    return this;
+  }
+
+  /**
    * Removes numbering from this paragraph
    * @returns This paragraph for chaining
    */
@@ -481,7 +495,7 @@ export class Paragraph {
       pPrChildren.push(numPr);
     }
 
-    // 6. Spacing (before/after/line)
+    // 6. Spacing (before/after/line) per ECMA-376 Part 1 §17.3.1.33
     if (this.formatting.spacing) {
       const spc = this.formatting.spacing;
       const attributes: Record<string, number | string> = {};
@@ -489,9 +503,16 @@ export class Paragraph {
       if (spc.after !== undefined) attributes['w:after'] = spc.after;
       if (spc.line !== undefined) attributes['w:line'] = spc.line;
       if (spc.lineRule) attributes['w:lineRule'] = spc.lineRule;
+      // Only generate spacing element if it has attributes (prevents empty elements)
       if (Object.keys(attributes).length > 0) {
         pPrChildren.push(XMLBuilder.wSelf('spacing', attributes));
       }
+    }
+
+    // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
+    // Removes spacing between paragraphs of the same style (comes after spacing)
+    if (this.formatting.contextualSpacing) {
+      pPrChildren.push(XMLBuilder.wSelf('contextualSpacing'));
     }
 
     // 7. Indentation (left/right/firstLine/hanging)

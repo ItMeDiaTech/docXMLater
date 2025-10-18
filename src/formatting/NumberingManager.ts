@@ -130,11 +130,27 @@ export class NumberingManager {
   }
 
   /**
+   * Alias for addInstance for backward compatibility
+   * @param instance The numbering instance to add
+   */
+  addNumberingInstance(instance: NumberingInstance): this {
+    return this.addInstance(instance);
+  }
+
+  /**
    * Gets a numbering instance by ID
    * @param numId The numbering instance ID
    */
   getInstance(numId: number): NumberingInstance | undefined {
     return this.instances.get(numId);
+  }
+
+  /**
+   * Alias for getInstance for backward compatibility
+   * @param numId The numbering instance ID
+   */
+  getNumberingInstance(numId: number): NumberingInstance | undefined {
+    return this.getInstance(numId);
   }
 
   /**
@@ -144,6 +160,13 @@ export class NumberingManager {
     return Array.from(this.instances.values()).sort(
       (a, b) => a.getNumId() - b.getNumId()
     );
+  }
+
+  /**
+   * Alias for getAllInstances for backward compatibility
+   */
+  getAllNumberingInstances(): NumberingInstance[] {
+    return this.getAllInstances();
   }
 
   /**
@@ -210,6 +233,23 @@ export class NumberingManager {
     // Create abstract numbering
     const abstractNumId = this.nextAbstractNumId++;
     const abstractNumbering = AbstractNumbering.createMultiLevelList(abstractNumId);
+    this.addAbstractNumbering(abstractNumbering);
+
+    // Create instance
+    const numId = this.nextNumId++;
+    const instance = NumberingInstance.create({ numId, abstractNumId });
+    this.addInstance(instance);
+
+    return numId;
+  }
+
+  /**
+   * Creates a new outline list and returns its numId
+   */
+  createOutlineList(): number {
+    // Create abstract numbering
+    const abstractNumId = this.nextAbstractNumId++;
+    const abstractNumbering = AbstractNumbering.createOutlineList(abstractNumId);
     this.addAbstractNumbering(abstractNumbering);
 
     // Create instance
@@ -313,6 +353,30 @@ export class NumberingManager {
 
     // Generate XML with declaration
     return builder.build(true);
+  }
+
+  /**
+   * Generates the numbering.xml as XMLElement (for API compatibility)
+   */
+  toXML(): XMLElement {
+    const children: XMLElement[] = [];
+
+    // Add all abstract numberings
+    const abstractNumberings = this.getAllAbstractNumberings();
+    abstractNumberings.forEach(abstractNum => {
+      children.push(abstractNum.toXML());
+    });
+
+    // Add all numbering instances
+    const instances = this.getAllInstances();
+    instances.forEach(instance => {
+      children.push(instance.toXML());
+    });
+
+    return XMLBuilder.w('numbering', {
+      'xmlns:w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+      'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    }, children);
   }
 
   /**

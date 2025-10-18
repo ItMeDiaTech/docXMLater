@@ -339,6 +339,11 @@ export class DocumentParser {
     if (pPr.includes('<w:keepNext')) paragraph.setKeepNext(true);
     if (pPr.includes('<w:keepLines')) paragraph.setKeepLines(true);
     if (pPr.includes('<w:pageBreakBefore')) paragraph.setPageBreakBefore(true);
+
+    // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
+    if (pPr.includes('<w:contextualSpacing')) {
+      paragraph.setContextualSpacing(true);
+    }
   }
 
   /**

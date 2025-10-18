@@ -164,8 +164,14 @@ export class TableOfContents {
    *
    * A TOC in Word is represented as:
    * 1. A paragraph with the title (styled as TOC Heading)
-   * 2. A complex field (fldChar) with the TOC instruction
+   * 2. A complex field (fldChar) with the TOC instruction (begin → separate → end)
    * 3. Placeholder entries (updated by Word when opening)
+   *
+   * Per ECMA-376 Part 1 §17.16.5: All complex fields MUST have
+   * begin → instrText → separate → content → end structure.
+   * Missing any of these causes Word to reject the document as corrupted.
+   *
+   * @throws Error if field structure cannot be generated completely
    */
   toXML(): XMLElement[] {
     const elements: XMLElement[] = [];
@@ -198,13 +204,13 @@ export class TableOfContents {
       });
     }
 
-    // 2. TOC field paragraph
+    // 2. TOC field paragraph - CRITICAL: Must have complete begin → separate → end structure
     const tocParagraph: XMLElement = {
       name: 'w:p',
       children: [],
     };
 
-    // Begin field
+    // FIELD BEGIN (required)
     tocParagraph.children!.push({
       name: 'w:r',
       children: [
@@ -216,7 +222,7 @@ export class TableOfContents {
       ],
     });
 
-    // Field instruction
+    // FIELD INSTRUCTION (required)
     tocParagraph.children!.push({
       name: 'w:r',
       children: [
@@ -228,7 +234,7 @@ export class TableOfContents {
       ],
     });
 
-    // Separate field
+    // FIELD SEPARATE (required - marks boundary between instruction and result)
     tocParagraph.children!.push({
       name: 'w:r',
       children: [
@@ -240,7 +246,7 @@ export class TableOfContents {
       ],
     });
 
-    // Placeholder text (Word will replace this)
+    // FIELD CONTENT (placeholder - Word updates on open)
     tocParagraph.children!.push({
       name: 'w:r',
       children: [
@@ -260,7 +266,8 @@ export class TableOfContents {
       ],
     });
 
-    // End field
+    // FIELD END (CRITICAL - REQUIRED by ECMA-376 §17.16.5)
+    // Missing this causes Word to treat document as corrupted
     tocParagraph.children!.push({
       name: 'w:r',
       children: [
@@ -271,6 +278,15 @@ export class TableOfContents {
         },
       ],
     });
+
+    // Validate complete structure before returning
+    if (tocParagraph.children!.length !== 5) {
+      throw new Error(
+        `CRITICAL: TOC field structure incomplete. Expected 5 elements ` +
+        `(begin, instruction, separate, content, end), got ${tocParagraph.children!.length}. ` +
+        `This would create an invalid OpenXML document per ECMA-376 §17.16.5.`
+      );
+    }
 
     elements.push(tocParagraph);
 
