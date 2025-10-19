@@ -270,6 +270,14 @@ export class Paragraph {
   }
 
   /**
+   * Gets the paragraph style ID
+   * @returns Style ID or undefined if no style is set
+   */
+  getStyle(): string | undefined {
+    return this.formatting.style;
+  }
+
+  /**
    * Sets paragraph alignment
    * @param alignment - Alignment value
    * @returns This paragraph for chaining

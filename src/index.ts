@@ -63,6 +63,12 @@ export {
   CorruptionType,
 } from './utils/corruptionDetection';
 
+// TOC Repair
+export {
+  repairTOC,
+  TOCRepairResult,
+} from './utils/tocRepair';
+
 // Unit conversions
 export {
   STANDARD_DPI,

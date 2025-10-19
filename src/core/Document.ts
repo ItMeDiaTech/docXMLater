@@ -2615,4 +2615,30 @@ export class Document {
 
     return doc;
   }
+
+  /**
+   * Repairs Table of Contents by generating Header 2 only TOC
+   * and adding "Top of the Document" navigation links
+   *
+   * This method:
+   * - Finds Header 2 paragraphs in 1x1 tables
+   * - Generates Word TOC field with switches: \o "2-2" \h \z \t
+   * - Adds "Top of the Document" links before each Header 2 (except first)
+   * - Uses built-in "_top" bookmark (no need to create)
+   *
+   * @returns Repair result with statistics
+   *
+   * @example
+   * ```typescript
+   * const doc = await Document.load('document.docx');
+   * const result = doc.repairTOC();
+   * console.log(`Found ${result.header2Count} headers`);
+   * console.log(`Added ${result.topLinksAdded} navigation links`);
+   * await doc.save('repaired.docx');
+   * ```
+   */
+  repairTOC(): import('../utils/tocRepair').TOCRepairResult {
+    const { repairTOC } = require('../utils/tocRepair');
+    return repairTOC(this);
+  }
 }
