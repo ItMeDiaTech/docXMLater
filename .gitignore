@@ -39,14 +39,32 @@ tmp/
 temp/
 *.tmp
 
-# Claude AI files (not for public repo)
+# Claude AI files and development notes (not for public repo)
 CLAUDE.md
 **/CLAUDE.md
 .claude/
 Claude.cli
+
+# Development documentation (personal/internal use only)
+docs/dev/
 IMPLEMENTATION_SUMMARY.md
 QUICKSTART.md
 PROJECT_STATUS.md
+CODE_REVIEW_IMPROVEMENTS.md
+LOGGING_IMPLEMENTATION.md
+AUDIT_REPORT.md
+CORRECTED_AUDIT.md
+FRAMEWORK_STANDARDIZATION*.md
+REFACTORING_LOCATIONS.md
+API_METHODS_INVENTORY.md
+CLEAN_SUMMARY.md
+docxmlater-functions-and-structure.md
+
+# Personal status files
+*_STATUS.md
+*_PROGRESS.md
+TODO.md
+NOTES.md
 
 # Generated example outputs
 *.docx
