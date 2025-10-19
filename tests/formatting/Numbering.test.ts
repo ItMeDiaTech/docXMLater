@@ -651,7 +651,8 @@ describe('NumberingManager', () => {
       expect(instance).toBeDefined();
 
       const abstractId = instance?.getAbstractNumId();
-      const abstractNum = abstractId ? manager.getAbstractNumbering(abstractId) : undefined;
+      // Use explicit !== undefined check since abstractId could be 0 (falsy but valid)
+      const abstractNum = abstractId !== undefined ? manager.getAbstractNumbering(abstractId) : undefined;
       expect(abstractNum).toBeDefined();
     });
 
