@@ -193,7 +193,10 @@ export class NumberingManager {
   createBulletList(levels: number = 9, bullets?: string[]): number {
     // Create abstract numbering
     const abstractNumId = this.nextAbstractNumId++;
-    const abstractNumbering = AbstractNumbering.createBulletList(abstractNumId, levels, bullets);
+    // Only pass bullets if it's defined, so defaults are used otherwise
+    const abstractNumbering = bullets
+      ? AbstractNumbering.createBulletList(abstractNumId, levels, bullets)
+      : AbstractNumbering.createBulletList(abstractNumId, levels);
     this.addAbstractNumbering(abstractNumbering);
 
     // Create instance
@@ -206,16 +209,19 @@ export class NumberingManager {
 
   /**
    * Creates a new numbered list and returns its numId
-   * @param levels Number of levels (default: 3)
+   * @param levels Number of levels (default: 9)
    * @param formats Array of formats for each level
    */
   createNumberedList(
-    levels: number = 3,
+    levels: number = 9,
     formats?: Array<'decimal' | 'lowerLetter' | 'lowerRoman'>
   ): number {
     // Create abstract numbering
     const abstractNumId = this.nextAbstractNumId++;
-    const abstractNumbering = AbstractNumbering.createNumberedList(abstractNumId, levels, formats);
+    // Only pass formats if it's defined, so defaults are used otherwise
+    const abstractNumbering = formats
+      ? AbstractNumbering.createNumberedList(abstractNumId, levels, formats)
+      : AbstractNumbering.createNumberedList(abstractNumId, levels);
     this.addAbstractNumbering(abstractNumbering);
 
     // Create instance
