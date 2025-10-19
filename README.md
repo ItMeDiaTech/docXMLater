@@ -578,6 +578,69 @@ yarn add docxmlater
 pnpm add docxmlater
 ```
 
+## Troubleshooting
+
+### XML Corruption in Text
+
+**Problem**: Text displays with XML tags like `Important Information<w:t xml:space="preserve">1` in Word.
+
+**Cause**: Passing XML-like strings to text methods instead of using the API properly.
+
+```typescript
+// WRONG - Will display escaped XML as literal text
+paragraph.addText('Important Information<w:t>1</w:t>');
+// Displays as: "Important Information<w:t>1</w:t>"
+
+// CORRECT - Use separate text runs
+paragraph.addText('Important Information');
+paragraph.addText('1');
+// Displays as: "Important Information1"
+
+// Or combine in one call
+paragraph.addText('Important Information 1');
+```
+
+**Detection**: Use the corruption detection utility to find issues:
+
+```typescript
+import { detectCorruptionInDocument } from 'docxmlater';
+
+const doc = await Document.load('file.docx');
+const report = detectCorruptionInDocument(doc);
+
+if (report.isCorrupted) {
+  console.log(report.summary);
+  report.locations.forEach(loc => {
+    console.log(`Paragraph ${loc.paragraphIndex}, Run ${loc.runIndex}:`);
+    console.log(`  Original: ${loc.text}`);
+    console.log(`  Fixed:    ${loc.suggestedFix}`);
+  });
+}
+```
+
+**Auto-Cleaning**: XML patterns are automatically removed by default for defensive data handling:
+
+```typescript
+// Default behavior - auto-clean enabled
+const run = new Run('Text<w:t>value</w:t>');
+// Result: "Textvalue" (XML tags removed automatically)
+
+// Disable auto-cleaning (for debugging)
+const run = new Run('Text<w:t>value</w:t>', { cleanXmlFromText: false });
+// Result: "Text<w:t>value</w:t>" (XML tags preserved, will display in Word)
+```
+
+**Why This Happens**: The framework correctly escapes XML special characters per the XML specification. When you pass XML tags as text, they are properly escaped (`<` becomes `&lt;`) and Word displays them as literal text, not as markup.
+
+**The Right Approach**: Use the framework's API methods instead of embedding XML:
+- ✅ Use `paragraph.addText()` multiple times for separate text runs
+- ✅ Use formatting options: `{bold: true}`, `{italic: true}`, etc.
+- ✅ Use `paragraph.addHyperlink()` for links
+- ❌ Don't pass XML strings to text methods
+- ❌ Don't try to embed `<w:t>` or other XML tags in your text
+
+For more details, see the [corruption detection examples](examples/troubleshooting/).
+
 ## Contributing
 
 Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md).

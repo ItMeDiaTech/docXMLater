@@ -38,8 +38,9 @@ export interface RunFormatting {
   allCaps?: boolean;
   /**
    * Automatically clean XML-like patterns from text content.
-   * When enabled, removes XML tags like <w:t> from text to prevent display issues.
-   * Default: false (only warns about XML patterns)
+   * When true (default), removes XML tags like <w:t> from text to prevent display issues.
+   * Set to false to disable auto-cleaning (useful for debugging).
+   * Default: true (auto-clean enabled by default for defensive data handling)
    */
   cleanXmlFromText?: boolean;
 }
@@ -57,11 +58,14 @@ export class Run {
    * @param formatting - Formatting options
    */
   constructor(text: string, formatting: RunFormatting = {}) {
+    // Default to auto-cleaning XML patterns unless explicitly disabled
+    const shouldClean = formatting.cleanXmlFromText !== false;
+
     // Validate text for XML patterns
     const validation = validateRunText(text, {
       context: 'Run constructor',
-      autoClean: formatting.cleanXmlFromText || false,
-      warnToConsole: true,
+      autoClean: shouldClean,
+      warnToConsole: false,  // Silent by default - team expects dirty data
     });
 
     // Use cleaned text if available and cleaning was requested
@@ -84,11 +88,14 @@ export class Run {
    * @param text - New text content
    */
   setText(text: string): void {
+    // Auto-clean by default (consistent with constructor behavior)
+    const shouldClean = true;
+
     // Validate text for XML patterns
     const validation = validateRunText(text, {
       context: 'Run.setText',
-      autoClean: this.formatting.cleanXmlFromText || false,
-      warnToConsole: true,
+      autoClean: shouldClean,
+      warnToConsole: false,  // Silent by default
     });
 
     // Use cleaned text if available and cleaning was requested

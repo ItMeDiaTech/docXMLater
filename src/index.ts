@@ -46,7 +46,22 @@ export {
   validateNonEmptyString,
   validatePercentage,
   validateEmus,
+  detectXmlInText,
+  cleanXmlFromText,
+  validateRunText,
+  TextValidationResult,
 } from './utils/validation';
+
+// Corruption Detection
+export {
+  detectCorruptionInDocument,
+  detectCorruptionInText,
+  suggestFix,
+  looksCorrupted,
+  CorruptionReport,
+  CorruptionLocation,
+  CorruptionType,
+} from './utils/corruptionDetection';
 
 // Unit conversions
 export {

@@ -508,6 +508,100 @@ Decision framework:
 - [x] >90% test coverage (126 tests covering all modules)
 - [ ] Performance: Process 100-page document in <1 second (Not yet tested at scale)
 
+## Common User Mistakes & Troubleshooting
+
+### XML Corruption Issue (October 2025 Analysis)
+
+**Issue**: Users reported documents displaying text like "Important Information<w:t xml:space="preserve">1" in Word, appearing as corrupted XML.
+
+**Root Cause Analysis**: This was determined to be **USER ERROR**, not a framework bug.
+
+#### How It Happens
+
+Users pass XML-like strings to text methods:
+
+```javascript
+// WRONG - User code that causes corruption
+paragraph.addText('Important Information<w:t xml:space="preserve">1</w:t>');
+
+// What Word displays:
+// "Important Information<w:t xml:space="preserve">1"
+```
+
+#### Why This Is NOT A Bug
+
+1. **Proper XML Escaping**: Framework correctly escapes special characters per XML spec
+   - `<` becomes `&lt;`, `>` becomes `&gt;`, `"` becomes `&quot;`
+   - This is REQUIRED by XML standards (ECMA-376)
+
+2. **DOM-Based Generation**: Uses XMLBuilder to create proper element structure
+   - Never uses string concatenation
+   - All text goes through `escapeXmlText()` function
+   - See: `src/xml/XMLBuilder.ts:161-166`
+
+3. **Existing Protection**: Framework already has detection and cleaning:
+   - `validateRunText()` - Detects XML patterns and warns
+   - `cleanXmlFromText()` - Removes XML patterns
+   - `detectCorruptionInDocument()` - Full document scanning
+   - See: `src/utils/validation.ts` and `src/utils/corruptionDetection.ts`
+
+#### The Correct Approach
+
+```javascript
+// CORRECT - Separate runs
+paragraph.addText('Important Information');
+paragraph.addText('1');
+
+// Or combined
+paragraph.addText('Important Information 1');
+
+// With formatting
+paragraph.addText('Important Information', { bold: true });
+paragraph.addText('1', { italic: true });
+```
+
+#### Detection & Fixing Tools
+
+**Detection Utility** (`src/utils/corruptionDetection.ts`):
+```javascript
+import { detectCorruptionInDocument } from 'docxmlater';
+
+const doc = await Document.load('file.docx');
+const report = detectCorruptionInDocument(doc);
+
+if (report.isCorrupted) {
+  console.log(report.summary);
+  report.locations.forEach(loc => {
+    console.log(`Fix: "${loc.suggestedFix}"`);
+  });
+}
+```
+
+**Auto-Cleaning Option**:
+```javascript
+// Clean XML patterns automatically
+paragraph.addText('Text<w:t>value</w:t>', { cleanXmlFromText: true });
+// Result: "Textvalue"
+```
+
+#### Files Added for This Issue
+
+- `src/utils/corruptionDetection.ts` - Detection utility (300 lines)
+- `tests/utils/corruptionDetection.test.ts` - Comprehensive tests (15 test cases)
+- `examples/troubleshooting/xml-corruption.ts` - Common mistake demo
+- `examples/troubleshooting/fix-corrupted-document.ts` - Fix utility demo
+- `README.md` - Added troubleshooting section
+
+#### Key Takeaway
+
+**This is a user education issue, not a framework bug.** The framework:
+1. ✅ Works correctly per XML specifications
+2. ✅ Already has detection and cleaning capabilities
+3. ✅ Warns users about potential issues
+4. ✅ Provides auto-clean option
+
+The solution was better documentation and tooling to help users avoid and fix this common mistake.
+
 ## Anti-Goals
 - Not a complete Word replacement
 - No support for VBA macros
