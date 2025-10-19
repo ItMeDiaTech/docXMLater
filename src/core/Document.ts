@@ -1738,7 +1738,7 @@ export class Document {
    * Gets the raw XML content of a document part without any processing
    *
    * Returns the unparsed XML string for any part in the document package.
-   * This is useful for OOXML validation, advanced manipulation, or accessing
+   * This is useful for advanced manipulation, debugging, or accessing
    * content types that don't have dedicated APIs.
    *
    * **Note**: For binary parts (images, fonts), this converts the Buffer to UTF-8
@@ -1787,7 +1787,7 @@ export class Document {
    * Gets raw XML content for all text-based parts (non-binary files)
    *
    * Returns a map of part names to their raw XML content, excluding binary files
-   * like images and fonts. Useful for OOXML validation or batch processing.
+   * like images and fonts. Useful for debugging or batch processing.
    *
    * @returns Map of part names to raw XML content
    *
