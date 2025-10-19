@@ -629,6 +629,10 @@ describe('NumberingManager', () => {
 
     it('should get all numbering instances', () => {
       const manager = new NumberingManager();
+      // Add abstract numberings first
+      manager.addAbstractNumbering(AbstractNumbering.createBulletList(100));
+      manager.addAbstractNumbering(AbstractNumbering.createNumberedList(200));
+      // Then add instances that reference them
       manager.addNumberingInstance(new NumberingInstance(1, 100));
       manager.addNumberingInstance(new NumberingInstance(2, 200));
 

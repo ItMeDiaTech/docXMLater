@@ -187,10 +187,10 @@ export class NumberingManager {
 
   /**
    * Creates a new bullet list and returns its numId
-   * @param levels Number of levels (default: 3)
+   * @param levels Number of levels (default: 9)
    * @param bullets Array of bullet characters
    */
-  createBulletList(levels: number = 3, bullets?: string[]): number {
+  createBulletList(levels: number = 9, bullets?: string[]): number {
     // Create abstract numbering
     const abstractNumId = this.nextAbstractNumId++;
     const abstractNumbering = AbstractNumbering.createBulletList(abstractNumId, levels, bullets);
