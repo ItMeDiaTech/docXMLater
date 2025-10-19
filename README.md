@@ -7,6 +7,8 @@
 
 A comprehensive, production-ready TypeScript/JavaScript library for creating, reading, and manipulating Microsoft Word (.docx) documents programmatically. Full OpenXML compliance with extensive API coverage.
 
+I do a lot of professional documentation work. From the solutions that exist out there for working with .docx files and therefore .xml files, they are not amazing. Most of the frameworks that exist that do give you everything you want... charge thousands a year. I decided to make my own framework to interact with these filetypes and focus on ease of usability. I think most if not all functionality works right now with helper functions to interact wiht all aspects of a .docx / xml document.
+
 ## Quick Start
 
 ```bash
@@ -588,29 +590,29 @@ pnpm add docxmlater
 
 ```typescript
 // WRONG - Will display escaped XML as literal text
-paragraph.addText('Important Information<w:t>1</w:t>');
+paragraph.addText("Important Information<w:t>1</w:t>");
 // Displays as: "Important Information<w:t>1</w:t>"
 
 // CORRECT - Use separate text runs
-paragraph.addText('Important Information');
-paragraph.addText('1');
+paragraph.addText("Important Information");
+paragraph.addText("1");
 // Displays as: "Important Information1"
 
 // Or combine in one call
-paragraph.addText('Important Information 1');
+paragraph.addText("Important Information 1");
 ```
 
 **Detection**: Use the corruption detection utility to find issues:
 
 ```typescript
-import { detectCorruptionInDocument } from 'docxmlater';
+import { detectCorruptionInDocument } from "docxmlater";
 
-const doc = await Document.load('file.docx');
+const doc = await Document.load("file.docx");
 const report = detectCorruptionInDocument(doc);
 
 if (report.isCorrupted) {
   console.log(report.summary);
-  report.locations.forEach(loc => {
+  report.locations.forEach((loc) => {
     console.log(`Paragraph ${loc.paragraphIndex}, Run ${loc.runIndex}:`);
     console.log(`  Original: ${loc.text}`);
     console.log(`  Fixed:    ${loc.suggestedFix}`);
@@ -622,17 +624,18 @@ if (report.isCorrupted) {
 
 ```typescript
 // Default behavior - auto-clean enabled
-const run = new Run('Text<w:t>value</w:t>');
+const run = new Run("Text<w:t>value</w:t>");
 // Result: "Textvalue" (XML tags removed automatically)
 
 // Disable auto-cleaning (for debugging)
-const run = new Run('Text<w:t>value</w:t>', { cleanXmlFromText: false });
+const run = new Run("Text<w:t>value</w:t>", { cleanXmlFromText: false });
 // Result: "Text<w:t>value</w:t>" (XML tags preserved, will display in Word)
 ```
 
 **Why This Happens**: The framework correctly escapes XML special characters per the XML specification. When you pass XML tags as text, they are properly escaped (`<` becomes `&lt;`) and Word displays them as literal text, not as markup.
 
 **The Right Approach**: Use the framework's API methods instead of embedding XML:
+
 - ✅ Use `paragraph.addText()` multiple times for separate text runs
 - ✅ Use formatting options: `{bold: true}`, `{italic: true}`, etc.
 - ✅ Use `paragraph.addHyperlink()` for links
@@ -654,6 +657,7 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 ## Recent Updates (v0.20.1)
 
 **Critical Bug Fix Release:**
+
 - ✅ **Fixed Paragraph.getText()** - Now includes hyperlink text content (critical data loss bug)
 - ✅ **Added hyperlink integration tests** - 6 new comprehensive test cases
 - ✅ **Enhanced test suite** - 474/478 tests passing (98.1% pass rate)
