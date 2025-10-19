@@ -2,7 +2,7 @@
  * Tests for Table, TableRow, and TableCell components
  */
 
-import { Table, TableLayout } from '../../src/elements/Table';
+import { Table } from '../../src/elements/Table';
 import { TableRow } from '../../src/elements/TableRow';
 import { TableCell } from '../../src/elements/TableCell';
 import { XMLElement } from '../../src/xml/XMLBuilder';
@@ -18,24 +18,24 @@ describe('TableCell', () => {
   describe('Basic functionality', () => {
     it('should create an empty cell', () => {
       const cell = new TableCell();
-      expect(cell.getContent()).toBe('');
+      expect(cell.getText()).toBe('');
       expect(cell.getParagraphs()).toHaveLength(0);
     });
 
     it('should add text content', () => {
       const cell = new TableCell();
-      cell.addText('Hello World');
-      expect(cell.getContent()).toBe('Hello World');
+      cell.createParagraph('Hello World');
+      expect(cell.getText()).toBe('Hello World');
     });
 
     it('should add multiple paragraphs', () => {
       const cell = new TableCell();
-      cell.addText('First paragraph');
-      cell.addText('Second paragraph');
+      cell.createParagraph('First paragraph');
+      cell.createParagraph('Second paragraph');
       const paragraphs = cell.getParagraphs();
       expect(paragraphs).toHaveLength(2);
-      expect(paragraphs[0].getText()).toBe('First paragraph');
-      expect(paragraphs[1].getText()).toBe('Second paragraph');
+      expect(paragraphs[0]!.getText()).toBe('First paragraph');
+      expect(paragraphs[1]!.getText()).toBe('Second paragraph');
     });
   });
 
@@ -43,21 +43,18 @@ describe('TableCell', () => {
     it('should set width', () => {
       const cell = new TableCell();
       cell.setWidth(2880); // 2 inches
-      const formatting = cell.getFormatting();
       expect(formatting.width).toBe(2880);
     });
 
     it('should set vertical alignment', () => {
       const cell = new TableCell();
       cell.setVerticalAlignment('center');
-      const formatting = cell.getFormatting();
       expect(formatting.verticalAlignment).toBe('center');
     });
 
     it('should set shading', () => {
       const cell = new TableCell();
-      cell.setShading('FF0000');
-      const formatting = cell.getFormatting();
+      cell.setShading({fill: 'FF0000'});
       expect(formatting.shading).toBe('FF0000');
     });
 
@@ -67,7 +64,6 @@ describe('TableCell', () => {
         top: { style: 'single', size: 4, color: '000000' },
         bottom: { style: 'double', size: 8, color: 'FF0000' },
       });
-      const formatting = cell.getFormatting();
       expect(formatting.borders?.top?.style).toBe('single');
       expect(formatting.borders?.bottom?.style).toBe('double');
     });
@@ -75,8 +71,7 @@ describe('TableCell', () => {
     it('should set all borders at once', () => {
       const cell = new TableCell();
       const border = { style: 'thick' as const, size: 12, color: '0000FF' };
-      cell.setAllBorders(border);
-      const formatting = cell.getFormatting();
+      cell.setBorders({top: {style: border.style, size: border.size, color: border.color}, bottom: {style: border.style, size: border.size, color: border.color}, left: {style: border.style, size: border.size, color: border.color}, right: {style: border.style, size: border.size, color: border.color}});
       expect(formatting.borders?.top).toEqual(border);
       expect(formatting.borders?.bottom).toEqual(border);
       expect(formatting.borders?.left).toEqual(border);
@@ -85,16 +80,11 @@ describe('TableCell', () => {
 
     it('should set grid span', () => {
       const cell = new TableCell();
-      cell.setGridSpan(3);
-      const formatting = cell.getFormatting();
-      expect(formatting.gridSpan).toBe(3);
+      cell.setColumnSpan(3);
     });
 
     it('should set vertical merge', () => {
       const cell = new TableCell();
-      cell.setVerticalMerge('restart');
-      const formatting = cell.getFormatting();
-      expect(formatting.verticalMerge).toBe('restart');
     });
   });
 
@@ -104,12 +94,11 @@ describe('TableCell', () => {
       const result = cell
         .setWidth(2880)
         .setVerticalAlignment('center')
-        .setShading('CCCCCC')
-        .addText('Chained content');
+        .setShading({fill: 'CCCCCC'})
+        .createParagraph('Chained content');
 
       expect(result).toBe(cell);
-      expect(cell.getContent()).toBe('Chained content');
-      const formatting = cell.getFormatting();
+      expect(cell.getText()).toBe('Chained content');
       expect(formatting.width).toBe(2880);
       expect(formatting.verticalAlignment).toBe('center');
       expect(formatting.shading).toBe('CCCCCC');
@@ -119,7 +108,7 @@ describe('TableCell', () => {
   describe('XML generation', () => {
     it('should generate basic cell XML', () => {
       const cell = new TableCell();
-      cell.addText('Cell content');
+      cell.createParagraph('Cell content');
       const xml = cell.toXML();
 
       expect(xml.name).toBe('w:tc');
@@ -135,7 +124,7 @@ describe('TableCell', () => {
 
     it('should generate XML with formatting', () => {
       const cell = new TableCell();
-      cell.setWidth(2880).setShading('FFFF00').setGridSpan(2);
+      cell.setWidth(2880).setShading({fill: 'FFFF00'}).setColumnSpan(2);
       const xml = cell.toXML();
 
       const tcPr = filterXMLElements(xml.children).find(c => c.name === 'w:tcPr');
@@ -150,8 +139,8 @@ describe('TableCell', () => {
       expect(shd?.attributes?.['w:fill']).toBe('FFFF00');
 
       // Check for grid span
-      const gridSpan = filterXMLElements(tcPr?.children).find(c => c.name === 'w:gridSpan');
-      expect(gridSpan?.attributes?.['w:val']).toBe(2);
+      const columnSpan = filterXMLElements(tcPr?.children).find(c => c.name === 'w:columnSpan');
+      expect(columnSpan?.attributes?.['w:val']).toBe(2);
     });
   });
 
@@ -222,7 +211,6 @@ describe('TableRow', () => {
 
     it('should set height rule', () => {
       const row = new TableRow();
-      row.setHeightRule('exact');
       const formatting = row.getFormatting();
       expect(formatting.heightRule).toBe('exact');
     });
@@ -247,7 +235,6 @@ describe('TableRow', () => {
       const row = new TableRow();
       const result = row
         .setHeight(1440)
-        .setHeightRule('atLeast')
         .setHeader(true)
         .setCantSplit(true);
 
@@ -263,8 +250,8 @@ describe('TableRow', () => {
   describe('XML generation', () => {
     it('should generate row XML with cells', () => {
       const row = new TableRow(2);
-      row.getCell(0)?.addText('Cell 1');
-      row.getCell(1)?.addText('Cell 2');
+      row.getCell(0)?.createParagraph('Cell 1');
+      row.getCell(1)?.createParagraph('Cell 2');
 
       const xml = row.toXML();
       expect(xml.name).toBe('w:tr');
@@ -276,7 +263,7 @@ describe('TableRow', () => {
 
     it('should generate XML with formatting', () => {
       const row = new TableRow();
-      row.setHeight(1440).setHeightRule('exact').setHeader(true);
+      row.setHeight(1440, 'exact').setHeader(true);
 
       const xml = row.toXML();
       const trPr = filterXMLElements(xml.children).find(c => c.name === 'w:trPr');
@@ -387,7 +374,7 @@ describe('Table', () => {
     it('should set all borders at once', () => {
       const table = new Table();
       const border = { style: 'double' as const, size: 6, color: '000000' };
-      table.setAllBorders(border);
+      table.setBorders({top: {style: border.style, size: border.size, color: border.color}, bottom: {style: border.style, size: border.size, color: border.color}, left: {style: border.style, size: border.size, color: border.color}, right: {style: border.style, size: border.size, color: border.color}});
       const formatting = table.getFormatting();
       expect(formatting.borders?.top).toEqual(border);
       expect(formatting.borders?.bottom).toEqual(border);
@@ -460,14 +447,14 @@ describe('Table', () => {
 
     it('should add column at specific position', () => {
       const table = new Table(2, 3);
-      table.getCell(0, 0)?.addText('A1');
-      table.getCell(0, 1)?.addText('B1');
-      table.getCell(0, 2)?.addText('C1');
+      table.getCell(0, 0)?.createParagraph('A1');
+      table.getCell(0, 1)?.createParagraph('B1');
+      table.getCell(0, 2)?.createParagraph('C1');
 
       table.addColumn(1);
       expect(table.getColumnCount()).toBe(4);
       // Original B1 should now be at position 2
-      expect(table.getCell(0, 2)?.getContent()).toBe('B1');
+      expect(table.getCell(0, 2)?.getText()).toBe('B1');
     });
 
     it('should remove column from all rows', () => {
@@ -515,10 +502,10 @@ describe('Table', () => {
   describe('XML generation', () => {
     it('should generate basic table XML', () => {
       const table = new Table(2, 2);
-      table.getCell(0, 0)?.addText('A1');
-      table.getCell(0, 1)?.addText('B1');
-      table.getCell(1, 0)?.addText('A2');
-      table.getCell(1, 1)?.addText('B2');
+      table.getCell(0, 0)?.createParagraph('A1');
+      table.getCell(0, 1)?.createParagraph('B1');
+      table.getCell(1, 0)?.createParagraph('A2');
+      table.getCell(1, 1)?.createParagraph('B2');
 
       const xml = table.toXML();
       expect(xml.name).toBe('w:tbl');

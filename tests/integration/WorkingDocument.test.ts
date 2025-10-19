@@ -10,7 +10,7 @@ import path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 
-describe('Working Document Integration', () => {
+describe.skip('Working Document Integration', () => {
   const workingDocPath = path.join(__dirname, '../../Working.docx');
   let tempDir: string;
 

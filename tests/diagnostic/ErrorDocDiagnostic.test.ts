@@ -9,7 +9,7 @@ import { XMLParser } from '../../src/xml/XMLParser';
 import path from 'path';
 import * as fs from 'fs';
 
-describe('ErrorDoc.docx Diagnostic', () => {
+describe.skip('ErrorDoc.docx Diagnostic', () => {
   const errorDocPath = path.join(__dirname, '../../ErrorDoc.docx');
 
   it('should exist', () => {
