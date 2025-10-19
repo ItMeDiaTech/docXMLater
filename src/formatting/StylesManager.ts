@@ -356,6 +356,14 @@ export class StylesManager {
       return result;
     }
 
+    // Check for common corruption patterns FIRST (before parsing)
+    // This catches double-encoding issues that would break the parser
+    if (xml.includes('&lt;w:') || xml.includes('&gt;')) {
+      result.isValid = false;
+      result.errors.push('XML contains escaped tags - possible double-encoding corruption');
+      return result;
+    }
+
     // Skip complex XML structure validation - focus on w:styles specific validation
     // Checking balanced tags with regex is unreliable and can give false positives
 
@@ -440,12 +448,6 @@ export class StylesManager {
     // Check for required Normal style
     if (!foundStyleIds.has('Normal')) {
       result.warnings.push('Missing "Normal" style - document may not render correctly');
-    }
-
-    // Check for common corruption patterns
-    if (xml.includes('&lt;w:') || xml.includes('&gt;')) {
-      result.isValid = false;
-      result.errors.push('XML contains escaped tags - possible double-encoding corruption');
     }
 
     // Check for BOM or invalid characters
