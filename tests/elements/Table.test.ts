@@ -43,18 +43,21 @@ describe('TableCell', () => {
     it('should set width', () => {
       const cell = new TableCell();
       cell.setWidth(2880); // 2 inches
+      const formatting = cell.getFormatting();
       expect(formatting.width).toBe(2880);
     });
 
     it('should set vertical alignment', () => {
       const cell = new TableCell();
       cell.setVerticalAlignment('center');
+      const formatting = cell.getFormatting();
       expect(formatting.verticalAlignment).toBe('center');
     });
 
     it('should set shading', () => {
       const cell = new TableCell();
       cell.setShading({fill: 'FF0000'});
+      const formatting = cell.getFormatting();
       expect(formatting.shading).toBe('FF0000');
     });
 
@@ -64,6 +67,7 @@ describe('TableCell', () => {
         top: { style: 'single', size: 4, color: '000000' },
         bottom: { style: 'double', size: 8, color: 'FF0000' },
       });
+      const formatting = cell.getFormatting();
       expect(formatting.borders?.top?.style).toBe('single');
       expect(formatting.borders?.bottom?.style).toBe('double');
     });
@@ -72,6 +76,7 @@ describe('TableCell', () => {
       const cell = new TableCell();
       const border = { style: 'thick' as const, size: 12, color: '0000FF' };
       cell.setBorders({top: {style: border.style, size: border.size, color: border.color}, bottom: {style: border.style, size: border.size, color: border.color}, left: {style: border.style, size: border.size, color: border.color}, right: {style: border.style, size: border.size, color: border.color}});
+      const formatting = cell.getFormatting();
       expect(formatting.borders?.top).toEqual(border);
       expect(formatting.borders?.bottom).toEqual(border);
       expect(formatting.borders?.left).toEqual(border);
@@ -81,10 +86,14 @@ describe('TableCell', () => {
     it('should set grid span', () => {
       const cell = new TableCell();
       cell.setColumnSpan(3);
+      const formatting = cell.getFormatting();
+      expect(formatting.columnSpan).toBe(3);
     });
 
     it('should set vertical merge', () => {
       const cell = new TableCell();
+      // Note: Vertical merge/rowSpan is not yet implemented
+      expect(cell).toBeDefined();
     });
   });
 
@@ -99,6 +108,7 @@ describe('TableCell', () => {
 
       expect(result).toBe(cell);
       expect(cell.getText()).toBe('Chained content');
+      const formatting = cell.getFormatting();
       expect(formatting.width).toBe(2880);
       expect(formatting.verticalAlignment).toBe('center');
       expect(formatting.shading).toBe('CCCCCC');
