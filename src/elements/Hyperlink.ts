@@ -305,8 +305,9 @@ export class Hyperlink {
     // Update URL
     this.url = url;
 
-    // Keep the relationship ID - it will be updated in-place during save
-    // This is more efficient and maintains document integrity
+    // Clear the relationship ID so it will be re-registered during save
+    // This ensures the relationship target is updated to point to the new URL
+    this.relationshipId = undefined;
 
     // Update text ONLY if it was auto-generated from the old URL
     // This preserves user-provided text (even if it's "Link")
