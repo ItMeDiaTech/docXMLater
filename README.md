@@ -1,7 +1,7 @@
 # docXMLater - Professional DOCX Framework
 
 [![npm version](https://img.shields.io/npm/v/docxmlater.svg)](https://www.npmjs.com/package/docxmlater)
-[![Tests](https://img.shields.io/badge/tests-253%20passing-brightgreen)](https://github.com/ItMeDiaTech/docXMLater)
+[![Tests](https://img.shields.io/badge/tests-474%20passing-brightgreen)](https://github.com/ItMeDiaTech/docXMLater)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -494,7 +494,7 @@ npm run test:watch      # Watch mode
 npm run test:coverage   # Coverage report
 ```
 
-**Current:** 253 tests passing | 100% core functionality covered
+**Current:** 474 tests passing | 98.1% pass rate | 100% core functionality covered
 
 ## Development
 
@@ -587,6 +587,19 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 3. Commit changes (`git commit -m 'Add amazing feature'`)
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Recent Updates (v0.20.1)
+
+**Critical Bug Fix Release:**
+- ✅ **Fixed Paragraph.getText()** - Now includes hyperlink text content (critical data loss bug)
+- ✅ **Added hyperlink integration tests** - 6 new comprehensive test cases
+- ✅ **Enhanced test suite** - 474/478 tests passing (98.1% pass rate)
+- ✅ **Fixed type safety** - XMLElement handling improvements across test files
+- ✅ **Improved StylesManager** - XML corruption detection moved before parser
+- ✅ **Hyperlink management** - Proper relationship ID clearing on URL updates
+
+**What This Fixes:**
+When using `para.addText('foo') + para.addHyperlink(link)`, the hyperlink text is now properly included in `paragraph.getText()`, preventing silent text loss.
 
 ## License
 
