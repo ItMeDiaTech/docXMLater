@@ -116,7 +116,13 @@ export class AbstractNumbering {
    * Gets the multi-level type
    */
   getMultiLevelType(): string {
-    return this.multiLevelType === 1 ? 'multilevel' : 'singleLevel';
+    if (this.multiLevelType === 1) {
+      return 'multilevel';
+    } else if (this.multiLevelType === 2) {
+      return 'hybridMultilevel';
+    } else {
+      return 'singleLevel';
+    }
   }
 
   /**
@@ -217,9 +223,18 @@ export class AbstractNumbering {
     }
 
     // Add multiLevelType
+    let multiLevelTypeValue: string;
+    if (this.multiLevelType === 1) {
+      multiLevelTypeValue = 'multilevel';
+    } else if (this.multiLevelType === 2) {
+      multiLevelTypeValue = 'hybridMultilevel';
+    } else {
+      multiLevelTypeValue = 'singleLevel';
+    }
+
     children.push(
       XMLBuilder.wSelf('multiLevelType', {
-        'w:val': this.multiLevelType === 1 ? 'multilevel' : 'singleLevel'
+        'w:val': multiLevelTypeValue
       })
     );
 
@@ -240,12 +255,12 @@ export class AbstractNumbering {
   /**
    * Creates a bullet list abstract numbering with specified levels
    * @param abstractNumId The abstract numbering ID
-   * @param levels Number of levels (default: 3)
+   * @param levels Number of levels (default: 9)
    * @param bullets Array of bullet characters (default: ['•', '○', '▪'])
    */
   static createBulletList(
     abstractNumId: number,
-    levels: number = 3,
+    levels: number = 9,
     bullets: string[] = ['•', '○', '▪']
   ): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
@@ -265,12 +280,12 @@ export class AbstractNumbering {
   /**
    * Creates a numbered list abstract numbering with specified levels
    * @param abstractNumId The abstract numbering ID
-   * @param levels Number of levels (default: 3)
+   * @param levels Number of levels (default: 9)
    * @param formats Array of formats for each level
    */
   static createNumberedList(
     abstractNumId: number,
-    levels: number = 3,
+    levels: number = 9,
     formats: Array<'decimal' | 'lowerLetter' | 'lowerRoman'> = ['decimal', 'lowerLetter', 'lowerRoman']
   ): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
