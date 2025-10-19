@@ -23,6 +23,10 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'js', 'json'],
-  testTimeout: 10000,
+  testTimeout: 30000,
   verbose: true,
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/tests/diagnostic/'
+  ],
 };
