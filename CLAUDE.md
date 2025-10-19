@@ -526,4 +526,14 @@ Decision framework:
 
 ---
 
+## Documentation Guidelines
+
+**Important Rules for All Documentation:**
+
+1. **Never include emojis in any outward-facing documentation** - This includes README.md, release notes, CHANGELOG.md, and any public-facing materials. Keep documentation professional and plain.
+
+2. **Never include talk of AI or Claude in any outward-facing documentation** - Don't mention that code was "generated with Claude" or reference AI tools in public documentation. Keep focus on the actual product and its capabilities.
+
+3. **Internal Development Documentation** - CLAUDE.md files in the project (like this one) can be more informal and include implementation notes, but public-facing materials must remain professional.
+
 **Note**: Focus on clean, maintainable code over feature completeness. Better to have 80% of features working perfectly than 100% working poorly.
