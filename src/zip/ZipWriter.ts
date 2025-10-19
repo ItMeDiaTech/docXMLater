@@ -1,20 +1,20 @@
 /**
  * ZipWriter - Handles writing ZIP archives (DOCX files)
+ *
+ * DOCX Compliance Notes:
+ * - [Content_Types].xml MUST be the first entry in the ZIP
+ * - [Content_Types].xml MUST use STORE compression (uncompressed)
+ * - File order matters for Microsoft Word compatibility
  */
 
-import JSZip from 'jszip';
-import { promises as fs } from 'fs';
-import { ZipFile, FileMap, SaveOptions, AddFileOptions } from './types';
-import {
-  FileOperationError,
-} from './errors';
-import {
-  validateDocxStructure,
-  normalizePath,
-} from '../utils/validation';
+import JSZip from "jszip";
+import { promises as fs } from "fs";
+import { ZipFile, FileMap, SaveOptions, AddFileOptions } from "./types";
+import { FileOperationError } from "./errors";
+import { validateDocxStructure, normalizePath } from "../utils/validation";
 
 /**
- * Handles writing operations on ZIP archives
+ * Handles writing operations on ZIP archives with DOCX-specific compliance
  */
 export class ZipWriter {
   private zip: JSZip;
@@ -34,6 +34,9 @@ export class ZipWriter {
    * - String content is always encoded as UTF-8 per DOCX/OpenXML standard
    * - Buffer content is stored as-is (should already be UTF-8 encoded for text)
    * - XML files must use UTF-8 encoding as specified in their XML declaration
+   *
+   * **DOCX Compliance:**
+   * - [Content_Types].xml is automatically set to STORE compression
    */
   addFile(
     filePath: string,
@@ -51,19 +54,22 @@ export class ZipWriter {
     // Convert string content to UTF-8 Buffer if not already binary
     // This ensures consistent UTF-8 encoding regardless of system locale
     let processedContent = content;
-    if (typeof content === 'string') {
+    if (typeof content === "string") {
       // Explicitly encode string as UTF-8 Buffer
-      processedContent = Buffer.from(content, 'utf8');
+      processedContent = Buffer.from(content, "utf8");
     }
 
-    // Add to JSZip
-    // Note: JSZip will automatically handle the binary flag and compression
+    // DOCX REQUIREMENT: [Content_Types].xml MUST be uncompressed (STORE)
+    const isContentTypes = normalizedPath === "[Content_Types].xml";
+    const useCompression = isContentTypes ? "STORE" : (compression > 0 ? "DEFLATE" : "STORE");
+    const compressionLevel = isContentTypes ? 0 : compression;
+
     // For text content (XML), this ensures UTF-8 encoding is preserved
     this.zip.file(normalizedPath, processedContent, {
       binary: true, // Always treat as binary since we're using Buffers
-      compression: compression > 0 ? 'DEFLATE' : 'STORE',
+      compression: useCompression,
       compressionOptions: {
-        level: compression,
+        level: compressionLevel,
       },
       date,
     });
@@ -158,6 +164,65 @@ export class ZipWriter {
   }
 
   /**
+   * Sorts files according to DOCX best practices
+   * Microsoft Word expects files in a specific order for optimal compatibility
+   *
+   * @returns Sorted array of file paths
+   *
+   * **DOCX File Order (CRITICAL):**
+   * 1. [Content_Types].xml - MUST be first
+   * 2. _rels/.rels - Root relationships
+   * 3. docProps/* - Document properties
+   * 4. word/_rels/document.xml.rels - Document relationships
+   * 5. word/document.xml - Main document
+   * 6. word/* - Other word files (styles, numbering, etc.)
+   * 7. Everything else - Media, custom XML, etc.
+   */
+  private getSortedFilePaths(): string[] {
+    const paths = Array.from(this.files.keys());
+
+    return paths.sort((a, b) => {
+      // Priority 1: [Content_Types].xml MUST be first (CRITICAL for MS Word)
+      if (a === "[Content_Types].xml") return -1;
+      if (b === "[Content_Types].xml") return 1;
+
+      // Priority 2: Root relationships
+      if (a === "_rels/.rels") return -1;
+      if (b === "_rels/.rels") return 1;
+
+      // Priority 3: Document properties
+      const aIsDocProps = a.startsWith("docProps/");
+      const bIsDocProps = b.startsWith("docProps/");
+      if (aIsDocProps && !bIsDocProps) return -1;
+      if (!aIsDocProps && bIsDocProps) return 1;
+
+      // Priority 4: word/_rels/document.xml.rels
+      if (a === "word/_rels/document.xml.rels") return -1;
+      if (b === "word/_rels/document.xml.rels") return 1;
+
+      // Priority 5: word/document.xml
+      if (a === "word/document.xml") return -1;
+      if (b === "word/document.xml") return 1;
+
+      // Priority 6: Other word/ folder files (before relationships)
+      const aIsWordRels = a.startsWith("word/_rels/");
+      const bIsWordRels = b.startsWith("word/_rels/");
+      const aIsWord = a.startsWith("word/") && !aIsWordRels;
+      const bIsWord = b.startsWith("word/") && !bIsWordRels;
+
+      if (aIsWord && !bIsWord && !bIsWordRels) return -1;
+      if (!aIsWord && bIsWord && !aIsWordRels) return 1;
+
+      // Priority 7: word/_rels/ files
+      if (aIsWordRels && !bIsWordRels) return -1;
+      if (!aIsWordRels && bIsWordRels) return 1;
+
+      // Alphabetical for same priority
+      return a.localeCompare(b);
+    });
+  }
+
+  /**
    * Generates the ZIP archive as a buffer
    * @param options - Save options
    * @returns Buffer containing the ZIP archive
@@ -166,6 +231,11 @@ export class ZipWriter {
    * The generated buffer contains UTF-8 encoded XML and text files.
    * All string content within files has been explicitly UTF-8 encoded
    * before being added to the archive to ensure consistency.
+   *
+   * **DOCX Compliance:**
+   * - Files are ordered with [Content_Types].xml first (REQUIRED)
+   * - [Content_Types].xml uses STORE compression (uncompressed)
+   * - All other files use DEFLATE compression by default
    */
   async toBuffer(options: SaveOptions = {}): Promise<Buffer> {
     const { compression = 6, validate = true } = options;
@@ -176,22 +246,48 @@ export class ZipWriter {
     }
 
     try {
-      // Generate ZIP with specified compression
-      // All text content is UTF-8 encoded (done in addFile method)
-      const buffer = await this.zip.generateAsync({
-        type: 'nodebuffer', // Returns Node.js Buffer
-        compression: compression > 0 ? 'DEFLATE' : 'STORE',
+      // Create a new JSZip instance with proper file ordering
+      const orderedZip = new JSZip();
+      const sortedPaths = this.getSortedFilePaths();
+
+      // Add files in the correct order
+      for (const path of sortedPaths) {
+        const file = this.files.get(path);
+        if (!file) continue;
+
+        let processedContent = file.content;
+        if (typeof file.content === "string") {
+          processedContent = Buffer.from(file.content, "utf8");
+        }
+
+        // DOCX REQUIREMENT: [Content_Types].xml MUST be uncompressed
+        const isContentTypes = path === "[Content_Types].xml";
+        const useCompression = isContentTypes ? "STORE" : (compression > 0 ? "DEFLATE" : "STORE");
+        const compressionLevel = isContentTypes ? 0 : compression;
+
+        orderedZip.file(path, processedContent, {
+          binary: true,
+          compression: useCompression,
+          compressionOptions: {
+            level: compressionLevel,
+          },
+          date: file.date,
+        });
+      }
+
+      // Generate ZIP with the ordered files
+      const buffer = await orderedZip.generateAsync({
+        type: "nodebuffer",
+        compression: compression > 0 ? "DEFLATE" : "STORE",
         compressionOptions: {
           level: compression,
         },
-        // Use ZIP64 for large files
         streamFiles: true,
-        // Note: encoding defaults to UTF-8 for all content in JSZip 3.x
       });
 
       return buffer;
     } catch (error) {
-      throw new FileOperationError('generate', (error as Error).message);
+      throw new FileOperationError("generate", (error as Error).message);
     }
   }
 
@@ -208,7 +304,7 @@ export class ZipWriter {
       if (error instanceof FileOperationError) {
         throw error;
       }
-      throw new FileOperationError('save', (error as Error).message);
+      throw new FileOperationError("save", (error as Error).message);
     }
   }
 
