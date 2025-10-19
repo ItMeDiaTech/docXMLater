@@ -8,6 +8,7 @@ import { Table } from '../elements/Table';
 import { TableOfContentsElement } from '../elements/TableOfContentsElement';
 import { ImageManager } from '../elements/ImageManager';
 import { DocumentProperties } from './Document';
+import { LIMITS } from '../constants/limits';
 
 /**
  * Memory validation options
@@ -70,9 +71,6 @@ export class DocumentValidator {
    * @returns Validated and sanitized properties
    */
   static validateProperties(properties: DocumentProperties): DocumentProperties {
-    const MAX_STRING_LENGTH = 10000; // Reasonable limit for property strings
-    const MAX_REVISION = 999999; // Reasonable max revision number
-
     const validated: DocumentProperties = {};
 
     // Validate and truncate string properties
@@ -80,9 +78,9 @@ export class DocumentValidator {
       if (typeof properties.title !== 'string') {
         throw new Error('DocumentProperties.title must be a string');
       }
-      if (properties.title.length > MAX_STRING_LENGTH) {
+      if (properties.title.length > LIMITS.MAX_STRING_LENGTH) {
         throw new Error(
-          `DocumentProperties.title exceeds maximum length of ${MAX_STRING_LENGTH} characters`
+          `DocumentProperties.title exceeds maximum length of ${LIMITS.MAX_STRING_LENGTH} characters`
         );
       }
       validated.title = properties.title;
@@ -92,9 +90,9 @@ export class DocumentValidator {
       if (typeof properties.subject !== 'string') {
         throw new Error('DocumentProperties.subject must be a string');
       }
-      if (properties.subject.length > MAX_STRING_LENGTH) {
+      if (properties.subject.length > LIMITS.MAX_STRING_LENGTH) {
         throw new Error(
-          `DocumentProperties.subject exceeds maximum length of ${MAX_STRING_LENGTH} characters`
+          `DocumentProperties.subject exceeds maximum length of ${LIMITS.MAX_STRING_LENGTH} characters`
         );
       }
       validated.subject = properties.subject;
@@ -104,9 +102,9 @@ export class DocumentValidator {
       if (typeof properties.creator !== 'string') {
         throw new Error('DocumentProperties.creator must be a string');
       }
-      if (properties.creator.length > MAX_STRING_LENGTH) {
+      if (properties.creator.length > LIMITS.MAX_STRING_LENGTH) {
         throw new Error(
-          `DocumentProperties.creator exceeds maximum length of ${MAX_STRING_LENGTH} characters`
+          `DocumentProperties.creator exceeds maximum length of ${LIMITS.MAX_STRING_LENGTH} characters`
         );
       }
       validated.creator = properties.creator;
@@ -116,9 +114,9 @@ export class DocumentValidator {
       if (typeof properties.keywords !== 'string') {
         throw new Error('DocumentProperties.keywords must be a string');
       }
-      if (properties.keywords.length > MAX_STRING_LENGTH) {
+      if (properties.keywords.length > LIMITS.MAX_STRING_LENGTH) {
         throw new Error(
-          `DocumentProperties.keywords exceeds maximum length of ${MAX_STRING_LENGTH} characters`
+          `DocumentProperties.keywords exceeds maximum length of ${LIMITS.MAX_STRING_LENGTH} characters`
         );
       }
       validated.keywords = properties.keywords;
@@ -128,9 +126,9 @@ export class DocumentValidator {
       if (typeof properties.description !== 'string') {
         throw new Error('DocumentProperties.description must be a string');
       }
-      if (properties.description.length > MAX_STRING_LENGTH) {
+      if (properties.description.length > LIMITS.MAX_STRING_LENGTH) {
         throw new Error(
-          `DocumentProperties.description exceeds maximum length of ${MAX_STRING_LENGTH} characters`
+          `DocumentProperties.description exceeds maximum length of ${LIMITS.MAX_STRING_LENGTH} characters`
         );
       }
       validated.description = properties.description;
@@ -140,9 +138,9 @@ export class DocumentValidator {
       if (typeof properties.lastModifiedBy !== 'string') {
         throw new Error('DocumentProperties.lastModifiedBy must be a string');
       }
-      if (properties.lastModifiedBy.length > MAX_STRING_LENGTH) {
+      if (properties.lastModifiedBy.length > LIMITS.MAX_STRING_LENGTH) {
         throw new Error(
-          `DocumentProperties.lastModifiedBy exceeds maximum length of ${MAX_STRING_LENGTH} characters`
+          `DocumentProperties.lastModifiedBy exceeds maximum length of ${LIMITS.MAX_STRING_LENGTH} characters`
         );
       }
       validated.lastModifiedBy = properties.lastModifiedBy;
@@ -156,9 +154,9 @@ export class DocumentValidator {
       ) {
         throw new Error('DocumentProperties.revision must be an integer');
       }
-      if (properties.revision < 0 || properties.revision > MAX_REVISION) {
+      if (properties.revision < 0 || properties.revision > LIMITS.MAX_REVISION) {
         throw new Error(
-          `DocumentProperties.revision must be between 0 and ${MAX_REVISION}`
+          `DocumentProperties.revision must be between 0 and ${LIMITS.MAX_REVISION}`
         );
       }
       validated.revision = properties.revision;
@@ -298,9 +296,10 @@ export class DocumentValidator {
     const tableCount = tables.length;
     const imageCount = imageManager.getImageCount();
 
-    // Estimate XML size
-    // Average: 200 bytes per paragraph, 1000 bytes per table
-    const estimatedXml = paragraphCount * 200 + tableCount * 1000 + 50000; // +50KB for structure
+    // Estimate XML size using documented constants
+    const estimatedXml = paragraphCount * LIMITS.BYTES_PER_PARAGRAPH +
+                         tableCount * LIMITS.BYTES_PER_TABLE +
+                         LIMITS.BASE_STRUCTURE_BYTES;
 
     // Get actual image sizes
     const imageBytes = imageManager.getTotalSize();
@@ -309,19 +308,16 @@ export class DocumentValidator {
     const totalBytes = estimatedXml + imageBytes;
     const totalMB = totalBytes / (1024 * 1024);
 
-    // Thresholds
-    const WARNING_MB = 50;
-    const ERROR_MB = 100;
-
+    // Use documented threshold constants
     let warning: string | undefined;
 
-    if (totalMB > ERROR_MB) {
+    if (totalMB > LIMITS.ERROR_SIZE_MB) {
       warning =
-        `Document size (${totalMB.toFixed(1)}MB) exceeds recommended maximum of ${ERROR_MB}MB. ` +
+        `Document size (${totalMB.toFixed(1)}MB) exceeds recommended maximum of ${LIMITS.ERROR_SIZE_MB}MB. ` +
         `This may cause memory issues. Consider splitting into multiple documents or optimizing images.`;
-    } else if (totalMB > WARNING_MB) {
+    } else if (totalMB > LIMITS.WARNING_SIZE_MB) {
       warning =
-        `Document size (${totalMB.toFixed(1)}MB) exceeds ${WARNING_MB}MB. ` +
+        `Document size (${totalMB.toFixed(1)}MB) exceeds ${LIMITS.WARNING_SIZE_MB}MB. ` +
         `Large documents may take longer to process and use significant memory.`;
     }
 

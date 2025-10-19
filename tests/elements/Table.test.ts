@@ -5,6 +5,7 @@
 import { Table } from '../../src/elements/Table';
 import { TableRow } from '../../src/elements/TableRow';
 import { TableCell } from '../../src/elements/TableCell';
+import { Paragraph } from '../../src/elements/Paragraph';
 import { XMLElement } from '../../src/xml/XMLBuilder';
 
 /**
@@ -58,7 +59,7 @@ describe('TableCell', () => {
       const cell = new TableCell();
       cell.setShading({fill: 'FF0000'});
       const formatting = cell.getFormatting();
-      expect(formatting.shading).toBe('FF0000');
+      expect(formatting.shading).toEqual({fill: 'FF0000'});
     });
 
     it('should set borders', () => {
@@ -103,15 +104,17 @@ describe('TableCell', () => {
       const result = cell
         .setWidth(2880)
         .setVerticalAlignment('center')
-        .setShading({fill: 'CCCCCC'})
-        .createParagraph('Chained content');
+        .setShading({fill: 'CCCCCC'});
+
+      const paragraph = cell.createParagraph('Chained content');
 
       expect(result).toBe(cell);
+      expect(paragraph).toBeInstanceOf(Paragraph);
       expect(cell.getText()).toBe('Chained content');
       const formatting = cell.getFormatting();
       expect(formatting.width).toBe(2880);
       expect(formatting.verticalAlignment).toBe('center');
-      expect(formatting.shading).toBe('CCCCCC');
+      expect(formatting.shading).toEqual({fill: 'CCCCCC'});
     });
   });
 
@@ -124,12 +127,12 @@ describe('TableCell', () => {
       expect(xml.name).toBe('w:tc');
       expect(xml.children).toBeDefined();
 
-      // Should have tcPr and at least one paragraph
-      const tcPr = filterXMLElements(xml.children).find(c => c.name === 'w:tcPr');
-      expect(tcPr).toBeDefined();
-
+      // Should have at least one paragraph
       const paragraph = filterXMLElements(xml.children).find(c => c.name === 'w:p');
       expect(paragraph).toBeDefined();
+
+      // tcPr is optional - only added if cell has formatting
+      // An empty cell without formatting won't have tcPr
     });
 
     it('should generate XML with formatting', () => {
@@ -149,8 +152,8 @@ describe('TableCell', () => {
       expect(shd?.attributes?.['w:fill']).toBe('FFFF00');
 
       // Check for grid span
-      const columnSpan = filterXMLElements(tcPr?.children).find(c => c.name === 'w:columnSpan');
-      expect(columnSpan?.attributes?.['w:val']).toBe(2);
+      const gridSpan = filterXMLElements(tcPr?.children).find(c => c.name === 'w:gridSpan');
+      expect(gridSpan?.attributes?.['w:val']).toBe(2);
     });
   });
 
@@ -221,6 +224,7 @@ describe('TableRow', () => {
 
     it('should set height rule', () => {
       const row = new TableRow();
+      row.setHeight(720, 'exact');
       const formatting = row.getFormatting();
       expect(formatting.heightRule).toBe('exact');
     });
@@ -384,7 +388,14 @@ describe('Table', () => {
     it('should set all borders at once', () => {
       const table = new Table();
       const border = { style: 'double' as const, size: 6, color: '000000' };
-      table.setBorders({top: {style: border.style, size: border.size, color: border.color}, bottom: {style: border.style, size: border.size, color: border.color}, left: {style: border.style, size: border.size, color: border.color}, right: {style: border.style, size: border.size, color: border.color}});
+      table.setBorders({
+        top: border,
+        bottom: border,
+        left: border,
+        right: border,
+        insideH: border,
+        insideV: border
+      });
       const formatting = table.getFormatting();
       expect(formatting.borders?.top).toEqual(border);
       expect(formatting.borders?.bottom).toEqual(border);

@@ -287,7 +287,8 @@ export class ZipWriter {
 
       return buffer;
     } catch (error) {
-      throw new FileOperationError("generate", (error as Error).message);
+      const err = error instanceof Error ? error : new Error(String(error));
+      throw new FileOperationError("generate", err.message);
     }
   }
 
@@ -304,7 +305,8 @@ export class ZipWriter {
       if (error instanceof FileOperationError) {
         throw error;
       }
-      throw new FileOperationError("save", (error as Error).message);
+      const err = error instanceof Error ? error : new Error(String(error));
+      throw new FileOperationError("save", err.message);
     }
   }
 

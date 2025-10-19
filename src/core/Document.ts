@@ -35,6 +35,7 @@ import { RelationshipManager } from './RelationshipManager';
 import { DocumentParser } from './DocumentParser';
 import { DocumentGenerator } from './DocumentGenerator';
 import { DocumentValidator } from './DocumentValidator';
+import { ILogger, defaultLogger } from '../utils/logger';
 
 /**
  * Document properties
@@ -88,6 +89,20 @@ export interface DocumentOptions {
   maxTotalImageSizeMB?: number;
   /** Maximum size of a single image in MB. Default: 20 */
   maxSingleImageSizeMB?: number;
+  /**
+   * Logger instance for framework messages
+   * Allows control over how warnings, info, and debug messages are handled
+   * If not provided, uses ConsoleLogger with WARN minimum level
+   * Use SilentLogger to suppress all logging
+   * @example
+   * // Use custom logger
+   * const doc = Document.create({ logger: myCustomLogger });
+   *
+   * // Suppress all logging
+   * import { SilentLogger } from 'docxmlater';
+   * const doc = Document.create({ logger: new SilentLogger() });
+   */
+  logger?: ILogger;
 }
 
 /**
@@ -150,6 +165,7 @@ export class Document {
   private parser: DocumentParser;
   private generator: DocumentGenerator;
   private validator: DocumentValidator;
+  private logger: ILogger;
 
   /**
    * Private constructor - use Document.create() or Document.load()
@@ -159,6 +175,9 @@ export class Document {
    */
   private constructor(zipHandler?: ZipHandler, options: DocumentOptions = {}, initDefaults: boolean = true) {
     this.zipHandler = zipHandler || new ZipHandler();
+
+    // Initialize logger (use provided or default)
+    this.logger = options.logger || defaultLogger;
 
     // Initialize helper classes
     const strictParsing = options.strictParsing ?? false;
@@ -458,7 +477,12 @@ export class Document {
       // Check document size and warn if too large
       const sizeInfo = this.validator.estimateSize(this.bodyElements, this.imageManager);
       if (sizeInfo.warning) {
-        console.warn(`DocXML Warning: ${sizeInfo.warning}`);
+        this.logger.warn(sizeInfo.warning, {
+          totalMB: sizeInfo.totalEstimatedMB,
+          paragraphs: sizeInfo.paragraphs,
+          tables: sizeInfo.tables,
+          images: sizeInfo.images,
+        });
       }
 
       this.processHyperlinks();
@@ -515,7 +539,12 @@ export class Document {
       // Check document size and warn if too large
       const sizeInfo = this.validator.estimateSize(this.bodyElements, this.imageManager);
       if (sizeInfo.warning) {
-        console.warn(`DocXML Warning: ${sizeInfo.warning}`);
+        this.logger.warn(sizeInfo.warning, {
+          totalMB: sizeInfo.totalEstimatedMB,
+          paragraphs: sizeInfo.paragraphs,
+          tables: sizeInfo.tables,
+          images: sizeInfo.images,
+        });
       }
 
       this.processHyperlinks();

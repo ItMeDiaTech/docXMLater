@@ -186,3 +186,21 @@ export {
   ParsedXMLValue,
   ParsedXMLObject,
 } from './xml/XMLParser';
+
+// Logging utilities
+export {
+  ILogger,
+  LogLevel,
+  LogEntry,
+  ConsoleLogger,
+  SilentLogger,
+  CollectingLogger,
+  defaultLogger,
+  createScopedLogger,
+} from './utils/logger';
+
+// Error handling utilities
+export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandling';
+
+// Constants
+export { LIMITS } from './constants/limits';
