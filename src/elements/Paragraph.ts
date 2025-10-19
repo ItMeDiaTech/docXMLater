@@ -250,13 +250,14 @@ export class Paragraph {
   }
 
   /**
-   * Gets the text content of all runs combined
-   * @returns Combined text content
+   * Gets the text content of all runs and hyperlinks combined
+   * @returns Combined text content from all text-bearing elements
    */
   getText(): string {
     return this.content
-      .filter((item): item is Run => item instanceof Run)
-      .map(run => run.getText())
+      .filter((item): item is Run | Hyperlink =>
+        item instanceof Run || item instanceof Hyperlink)
+      .map(item => item.getText())
       .join('');
   }
 

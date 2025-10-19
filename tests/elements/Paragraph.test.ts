@@ -4,6 +4,7 @@
 
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';
+import { Hyperlink } from '../../src/elements/Hyperlink';
 import { XMLBuilder } from '../../src/xml/XMLBuilder';
 
 describe('Run', () => {
@@ -231,6 +232,52 @@ describe('Paragraph', () => {
       para.addText('!', { italic: true });
 
       expect(para.getText()).toBe('Hello World!');
+    });
+
+    test('should include hyperlink text in getText', () => {
+      const para = new Paragraph();
+      para.addText('Click ');
+      const link = Hyperlink.createExternal('https://example.com', 'here');
+      para.addHyperlink(link);
+      para.addText(' for more');
+
+      expect(para.getText()).toBe('Click here for more');
+    });
+
+    test('should handle hyperlink-only paragraph', () => {
+      const para = new Paragraph();
+      const link = Hyperlink.createExternal('https://example.com', 'Link Text');
+      para.addHyperlink(link);
+
+      expect(para.getText()).toBe('Link Text');
+    });
+
+    test('should handle multiple hyperlinks and runs', () => {
+      const para = new Paragraph();
+      para.addText('See ');
+      para.addHyperlink(Hyperlink.createExternal('https://site1.com', 'site 1'));
+      para.addText(' and ');
+      para.addHyperlink(Hyperlink.createExternal('https://site2.com', 'site 2'));
+      para.addText('.');
+
+      expect(para.getText()).toBe('See site 1 and site 2.');
+    });
+
+    test('should handle hyperlink before runs', () => {
+      const para = new Paragraph();
+      para.addHyperlink(Hyperlink.createExternal('https://example.com', 'Link'));
+      para.addText(' followed by text');
+
+      expect(para.getText()).toBe('Link followed by text');
+    });
+
+    test('should handle internal hyperlinks in getText', () => {
+      const para = new Paragraph();
+      para.addText('Go to ');
+      para.addHyperlink(Hyperlink.createInternal('Section1', 'Section 1'));
+      para.addText('.');
+
+      expect(para.getText()).toBe('Go to Section 1.');
     });
   });
 
