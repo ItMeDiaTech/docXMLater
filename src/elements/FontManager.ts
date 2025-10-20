@@ -208,4 +208,132 @@ export class FontManager {
   removeFont(path: string): boolean {
     return this.fonts.delete(path);
   }
+
+  /**
+   * Gets font by path
+   * @param path - Font path in archive
+   * @returns Font entry or undefined
+   */
+  getFontByPath(path: string): FontEntry | undefined {
+    return this.fonts.get(path);
+  }
+
+  /**
+   * Gets font by family name
+   * @param fontFamily - Font family name
+   * @returns Font entry or undefined
+   */
+  getFontByFamily(fontFamily: string): FontEntry | undefined {
+    for (const entry of this.fonts.values()) {
+      if (entry.fontFamily === fontFamily) {
+        return entry;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Parses Content_Types.xml to detect font extensions
+   * @param contentTypesXml - Content_Types.xml content
+   * @returns Array of font extensions found
+   */
+  static parseFontExtensionsFromContentTypes(contentTypesXml: string): string[] {
+    const fontExtensions: string[] = [];
+    const fontMimeTypes = [
+      'application/x-font-ttf',
+      'application/x-font-opentype',
+      'application/font-woff',
+      'font/woff2',
+    ];
+
+    // Parse XML to find Default elements with font MIME types
+    const defaultPattern = /<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"/g;
+    let match;
+
+    while ((match = defaultPattern.exec(contentTypesXml)) !== null) {
+      const extension = match[1];
+      const mimeType = match[2];
+
+      if (extension && mimeType && fontMimeTypes.includes(mimeType)) {
+        fontExtensions.push(extension);
+      }
+    }
+
+    return fontExtensions;
+  }
+
+  /**
+   * Detects font format from extension
+   * @param extension - File extension
+   * @returns FontFormat or undefined
+   */
+  static detectFormatFromExtension(extension: string): FontFormat | undefined {
+    const ext = extension.toLowerCase().replace('.', '');
+    if (ext === 'ttf' || ext === 'otf' || ext === 'woff' || ext === 'woff2') {
+      return ext as FontFormat;
+    }
+    return undefined;
+  }
+
+  /**
+   * Loads fonts from a ZIP archive
+   * Reads fonts from word/fonts/ directory and registers them
+   * @param zipFiles - Map of file paths to content (from ZipHandler)
+   * @param contentTypesXml - Content of [Content_Types].xml
+   */
+  loadFontsFromArchive(
+    zipFiles: Map<string, Buffer | string>,
+    contentTypesXml: string
+  ): void {
+    // First, detect which font formats are registered in Content_Types.xml
+    const registeredExtensions = FontManager.parseFontExtensionsFromContentTypes(contentTypesXml);
+
+    // Then, scan word/fonts/ directory for font files
+    for (const [path, content] of zipFiles.entries()) {
+      if (path.startsWith('word/fonts/') && content instanceof Buffer) {
+        const filename = path.split('/').pop() || '';
+        const extension = filename.split('.').pop()?.toLowerCase();
+
+        // Check if this extension is registered
+        if (extension && registeredExtensions.includes(extension)) {
+          const format = FontManager.detectFormatFromExtension(extension);
+
+          if (format) {
+            // Extract font family from filename (sanitize back)
+            const familyName = this.extractFontFamilyFromFilename(filename);
+
+            // Create font entry
+            const entry: FontEntry = {
+              filename,
+              format,
+              fontFamily: familyName,
+              data: content,
+              path,
+            };
+
+            this.fonts.set(path, entry);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Extracts font family name from filename
+   * @param filename - Font filename
+   * @returns Inferred font family name
+   */
+  private extractFontFamilyFromFilename(filename: string): string {
+    // Remove extension
+    const nameWithoutExt = filename.replace(/\.(ttf|otf|woff|woff2)$/i, '');
+
+    // Remove counter suffix (e.g., _1, _2)
+    const nameWithoutCounter = nameWithoutExt.replace(/_\d+$/, '');
+
+    // Replace underscores with spaces and title case
+    return nameWithoutCounter
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
 }
