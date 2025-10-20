@@ -481,13 +481,11 @@ async function createShowcaseDocument() {
   // Title row with merged cells
   const titleRow = complexTable.getRow(0);
   titleRow?.getCell(0)?.createParagraph('2024 Sales Performance Report');
-  titleRow?.getCell(0)?.setColumnSpan(4);
+  titleRow?.getCell(0)?.setColumnSpan(4);  // Merge across 4 columns
   titleRow?.getCell(0)?.setShading({ fill: '2F5496' });
   titleRow?.getCell(0)?.getParagraphs()[0]?.setAlignment('center');
   titleRow?.getCell(0)?.getParagraphs()[0]?.getRuns()[0]?.setBold(true).setColor('FFFFFF').setSize(14);
-  for (let i = 1; i < 4; i++) {
-    titleRow?.getCell(i)?.setWidth(0);
-  }
+  // Note: No need to set width=0 on cells 1-3, the framework skips them automatically
 
   // Header row
   const headerRow = complexTable.getRow(1);

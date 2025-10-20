@@ -164,9 +164,23 @@ export class TableRow {
       rowChildren.push(XMLBuilder.w('trPr', undefined, trPrChildren));
     }
 
-    // Add cells
-    for (const cell of this.cells) {
-      rowChildren.push(cell.toXML());
+    // Add cells, skipping those covered by gridSpan (column merging)
+    let skipCount = 0;
+    for (let i = 0; i < this.cells.length; i++) {
+      if (skipCount > 0) {
+        // This cell is covered by a previous cell's gridSpan, skip it
+        skipCount--;
+        continue;
+      }
+
+      const cell = this.cells[i];
+      rowChildren.push(cell!.toXML());
+
+      // If this cell has a gridSpan, skip the next (span - 1) cells
+      const formatting = cell!.getFormatting();
+      if (formatting.columnSpan && formatting.columnSpan > 1) {
+        skipCount = formatting.columnSpan - 1;
+      }
     }
 
     return XMLBuilder.w('tr', undefined, rowChildren);
