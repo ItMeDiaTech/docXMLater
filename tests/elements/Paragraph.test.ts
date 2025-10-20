@@ -425,4 +425,187 @@ describe('Paragraph', () => {
       expect(para.getFormatting().alignment).toBe('center');
     });
   });
+
+  describe('Detached paragraphs', () => {
+    describe('Paragraph.create()', () => {
+      test('should create empty detached paragraph', () => {
+        const para = Paragraph.create();
+        expect(para).toBeInstanceOf(Paragraph);
+        expect(para.getText()).toBe('');
+        expect(para.getContent()).toHaveLength(0);
+      });
+
+      test('should create detached paragraph with text', () => {
+        const para = Paragraph.create('Hello World');
+        expect(para.getText()).toBe('Hello World');
+        expect(para.getRuns()).toHaveLength(1);
+      });
+
+      test('should create detached paragraph with text and formatting', () => {
+        const para = Paragraph.create('Centered Text', { alignment: 'center' });
+        expect(para.getText()).toBe('Centered Text');
+        expect(para.getFormatting().alignment).toBe('center');
+      });
+
+      test('should create detached paragraph with just formatting', () => {
+        const para = Paragraph.create({ alignment: 'right', style: 'Heading1' });
+        expect(para.getText()).toBe('');
+        expect(para.getFormatting().alignment).toBe('right');
+        expect(para.getStyle()).toBe('Heading1');
+      });
+
+      test('should support method chaining after creation', () => {
+        const para = Paragraph.create('Initial')
+          .addText(' text', { bold: true })
+          .setAlignment('justify')
+          .setSpaceBefore(240);
+
+        expect(para.getText()).toBe('Initial text');
+        expect(para.getRuns()).toHaveLength(2);
+        expect(para.getFormatting().alignment).toBe('justify');
+        expect(para.getFormatting().spacing?.before).toBe(240);
+      });
+    });
+
+    describe('Paragraph.createWithStyle()', () => {
+      test('should create detached paragraph with style', () => {
+        const para = Paragraph.createWithStyle('Heading Text', 'Heading1');
+        expect(para.getText()).toBe('Heading Text');
+        expect(para.getStyle()).toBe('Heading1');
+      });
+
+      test('should support method chaining with styled paragraph', () => {
+        const para = Paragraph.createWithStyle('Title', 'Title')
+          .setAlignment('center')
+          .addText(' - Subtitle', { italic: true });
+
+        expect(para.getText()).toBe('Title - Subtitle');
+        expect(para.getStyle()).toBe('Title');
+        expect(para.getFormatting().alignment).toBe('center');
+      });
+    });
+
+    describe('Paragraph.createEmpty()', () => {
+      test('should create empty detached paragraph', () => {
+        const para = Paragraph.createEmpty();
+        expect(para.getText()).toBe('');
+        expect(para.getContent()).toHaveLength(0);
+      });
+
+      test('should allow adding content after creation', () => {
+        const para = Paragraph.createEmpty()
+          .addText('Added later')
+          .setAlignment('center');
+
+        expect(para.getText()).toBe('Added later');
+        expect(para.getFormatting().alignment).toBe('center');
+      });
+    });
+
+    describe('Paragraph.createFormatted()', () => {
+      test('should create detached paragraph with run and paragraph formatting', () => {
+        const para = Paragraph.createFormatted(
+          'Important Text',
+          { bold: true, color: 'FF0000' },
+          { alignment: 'center' }
+        );
+
+        expect(para.getText()).toBe('Important Text');
+        expect(para.getFormatting().alignment).toBe('center');
+
+        const run = para.getRuns()[0];
+        expect(run).toBeDefined();
+        expect(run!.getFormatting().bold).toBe(true);
+        expect(run!.getFormatting().color).toBe('FF0000');
+      });
+
+      test('should work without paragraph formatting', () => {
+        const para = Paragraph.createFormatted(
+          'Bold Text',
+          { bold: true }
+        );
+
+        expect(para.getText()).toBe('Bold Text');
+        const run = para.getRuns()[0];
+        expect(run).toBeDefined();
+        expect(run!.getFormatting().bold).toBe(true);
+      });
+
+      test('should work without run formatting', () => {
+        const para = Paragraph.createFormatted(
+          'Plain Text',
+          undefined,
+          { alignment: 'right' }
+        );
+
+        expect(para.getText()).toBe('Plain Text');
+        expect(para.getFormatting().alignment).toBe('right');
+      });
+    });
+
+    describe('Complex detached paragraph scenarios', () => {
+      test('should build complex paragraph with multiple runs', () => {
+        const para = Paragraph.create()
+          .addText('Normal ', {})
+          .addText('bold ', { bold: true })
+          .addText('italic ', { italic: true })
+          .addText('both', { bold: true, italic: true })
+          .setAlignment('justify');
+
+        expect(para.getText()).toBe('Normal bold italic both');
+        expect(para.getRuns()).toHaveLength(4);
+        expect(para.getFormatting().alignment).toBe('justify');
+      });
+
+      test('should clone detached paragraph', () => {
+        const original = Paragraph.create('Original Text', { alignment: 'center' });
+        const clone = original.clone();
+
+        // Verify clone has same content
+        expect(clone.getText()).toBe('Original Text');
+        expect(clone.getFormatting().alignment).toBe('center');
+
+        // Verify they are independent
+        clone.addText(' - Modified');
+        expect(original.getText()).toBe('Original Text');
+        expect(clone.getText()).toBe('Original Text - Modified');
+      });
+
+      test('should set complex formatting on detached paragraph', () => {
+        const para = Paragraph.create()
+          .addText('Complex Paragraph')
+          .setAlignment('center')
+          .setLeftIndent(720)
+          .setRightIndent(720)
+          .setSpaceBefore(240)
+          .setSpaceAfter(240)
+          .setLineSpacing(360, 'exact')
+          .setKeepNext(true)
+          .setKeepLines(true);
+
+        const formatting = para.getFormatting();
+        expect(formatting.alignment).toBe('center');
+        expect(formatting.indentation?.left).toBe(720);
+        expect(formatting.indentation?.right).toBe(720);
+        expect(formatting.spacing?.before).toBe(240);
+        expect(formatting.spacing?.after).toBe(240);
+        expect(formatting.spacing?.line).toBe(360);
+        expect(formatting.spacing?.lineRule).toBe('exact');
+        expect(formatting.keepNext).toBe(true);
+        expect(formatting.keepLines).toBe(true);
+      });
+
+      test('should generate proper XML from detached paragraph', () => {
+        const para = Paragraph.create('Test Content', { alignment: 'center' });
+        const xml = para.toXML();
+
+        expect(xml.name).toBe('w:p');
+        expect(xml.children).toBeDefined();
+
+        // Should have paragraph properties and at least one run
+        const children = xml.children || [];
+        expect(children.length).toBeGreaterThan(0);
+      });
+    });
+  });
 });

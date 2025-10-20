@@ -107,7 +107,51 @@ await doc.save("output.docx");
 | `smallCaps`   | `true/false`                     | `{smallCaps: true}`     |
 | `allCaps`     | `true/false`                     | `{allCaps: true}`       |
 
-### Paragraph Formatting
+### Paragraph Operations
+
+#### Creating Detached Paragraphs
+
+Create paragraphs independently before adding to a document:
+
+```typescript
+// Create empty paragraph
+const para1 = Paragraph.create();
+
+// Create with text
+const para2 = Paragraph.create("Hello World");
+
+// Create with text and formatting
+const para3 = Paragraph.create("Centered text", { alignment: "center" });
+
+// Create with just formatting
+const para4 = Paragraph.create({ alignment: "right", spacing: { before: 240 } });
+
+// Create with style
+const heading = Paragraph.createWithStyle("Chapter 1", "Heading1");
+
+// Create with both run and paragraph formatting
+const important = Paragraph.createFormatted(
+  "Important Text",
+  { bold: true, color: "FF0000" },
+  { alignment: "center" }
+);
+
+// Add to document later
+doc.addParagraph(para1);
+doc.addParagraph(heading);
+```
+
+#### Paragraph Factory Methods
+
+| Method                                                | Description                    | Example                                 |
+| ----------------------------------------------------- | ------------------------------ | --------------------------------------- |
+| `Paragraph.create(text?, formatting?)`                | Create detached paragraph      | `Paragraph.create('Text')`              |
+| `Paragraph.create(formatting?)`                       | Create with formatting only    | `Paragraph.create({alignment: 'left'})` |
+| `Paragraph.createWithStyle(text, styleId)`            | Create with style              | `Paragraph.createWithStyle('', 'H1')`   |
+| `Paragraph.createEmpty()`                             | Create empty paragraph         | `Paragraph.createEmpty()`               |
+| `Paragraph.createFormatted(text, run?, paragraph?)`   | Create with dual formatting    | See example above                       |
+
+#### Paragraph Formatting Methods
 
 | Method                         | Description         | Values                              |
 | ------------------------------ | ------------------- | ----------------------------------- |
@@ -388,6 +432,45 @@ const customStyle = Style.create({
 
 doc.addStyle(customStyle);
 doc.createParagraph("Custom Styled Text").setStyle("CustomHeading");
+```
+
+### Build Content with Detached Paragraphs
+
+Create paragraphs independently and add them conditionally:
+
+```typescript
+import { Paragraph } from "docxmlater";
+
+// Create reusable paragraph templates
+const warningTemplate = Paragraph.createFormatted(
+  "WARNING: ",
+  { bold: true, color: "FF6600" },
+  { spacing: { before: 120, after: 120 } }
+);
+
+// Clone and customize
+const warning1 = warningTemplate.clone();
+warning1.addText("Please read the documentation before proceeding.");
+
+// Build content from data
+const items = [
+  { title: "First Item", description: "Description here" },
+  { title: "Second Item", description: "Another description" },
+];
+
+items.forEach((item, index) => {
+  const titlePara = Paragraph.create(`${index + 1}. `);
+  titlePara.addText(item.title, { bold: true });
+
+  const descPara = Paragraph.create(item.description, {
+    indentation: { left: 360 },
+  });
+
+  doc.addParagraph(titlePara);
+  doc.addParagraph(descPara);
+});
+
+// See examples/advanced/detached-paragraphs.ts for more patterns
 ```
 
 ### Add Headers and Footers

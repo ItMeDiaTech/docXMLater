@@ -78,6 +78,87 @@ export class Paragraph {
   }
 
   /**
+   * Creates a detached paragraph (not yet added to a document)
+   * @param textOrFormatting - Optional text content or paragraph formatting
+   * @param formatting - Optional paragraph formatting (only used if first param is text)
+   * @returns New Paragraph instance
+   * @example
+   * // Create with text and formatting
+   * const para1 = Paragraph.create('Hello World', { alignment: 'center' });
+   *
+   * // Create with just formatting
+   * const para2 = Paragraph.create({ alignment: 'right' });
+   *
+   * // Create empty
+   * const para3 = Paragraph.create();
+   *
+   * // Add to document later
+   * doc.addParagraph(para1);
+   */
+  static create(textOrFormatting?: string | ParagraphFormatting, formatting?: ParagraphFormatting): Paragraph {
+    // Handle overloaded parameters
+    if (typeof textOrFormatting === 'string') {
+      // First param is text
+      const paragraph = new Paragraph(formatting);
+      paragraph.addText(textOrFormatting);
+      return paragraph;
+    } else {
+      // First param is formatting (or undefined)
+      return new Paragraph(textOrFormatting);
+    }
+  }
+
+  /**
+   * Creates a detached paragraph with a specific style
+   * @param text - Text content
+   * @param styleId - Style ID (e.g., 'Heading1', 'Title')
+   * @returns New Paragraph instance
+   * @example
+   * const heading = Paragraph.createWithStyle('Chapter 1', 'Heading1');
+   * doc.addParagraph(heading);
+   */
+  static createWithStyle(text: string, styleId: string): Paragraph {
+    const paragraph = new Paragraph({ style: styleId });
+    paragraph.addText(text);
+    return paragraph;
+  }
+
+  /**
+   * Creates a detached empty paragraph
+   * Useful for adding blank lines or spacing
+   * @returns New empty Paragraph instance
+   * @example
+   * const blank = Paragraph.createEmpty();
+   * doc.addParagraph(blank);
+   */
+  static createEmpty(): Paragraph {
+    return new Paragraph();
+  }
+
+  /**
+   * Creates a detached paragraph with formatted text
+   * @param text - Text content
+   * @param runFormatting - Run formatting (bold, italic, etc.)
+   * @param paragraphFormatting - Paragraph formatting (alignment, spacing, etc.)
+   * @returns New Paragraph instance
+   * @example
+   * const para = Paragraph.createFormatted(
+   *   'Important Text',
+   *   { bold: true, color: 'FF0000' },
+   *   { alignment: 'center' }
+   * );
+   */
+  static createFormatted(
+    text: string,
+    runFormatting?: RunFormatting,
+    paragraphFormatting?: ParagraphFormatting
+  ): Paragraph {
+    const paragraph = new Paragraph(paragraphFormatting);
+    paragraph.addText(text, runFormatting);
+    return paragraph;
+  }
+
+  /**
    * Adds a run to the paragraph
    * @param run - Run to add
    * @returns This paragraph for chaining
@@ -721,12 +802,4 @@ export class Paragraph {
     return this;
   }
 
-  /**
-   * Creates a new Paragraph with the specified formatting
-   * @param formatting - Paragraph formatting
-   * @returns New Paragraph instance
-   */
-  static create(formatting?: ParagraphFormatting): Paragraph {
-    return new Paragraph(formatting);
-  }
 }
