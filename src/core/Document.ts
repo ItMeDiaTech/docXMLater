@@ -215,6 +215,9 @@ export class Document {
     if (initDefaults) {
       this.relationshipManager.addStyles();
       this.relationshipManager.addNumbering();
+      this.relationshipManager.addFontTable();
+      this.relationshipManager.addSettings();
+      this.relationshipManager.addTheme();
     }
   }
 
@@ -284,6 +287,15 @@ export class Document {
 
     // word/numbering.xml
     this.zipHandler.addFile(DOCX_PATHS.NUMBERING, this.numberingManager.generateNumberingXml());
+
+    // word/fontTable.xml (REQUIRED for DOCX compliance)
+    this.zipHandler.addFile('word/fontTable.xml', this.generator.generateFontTable());
+
+    // word/settings.xml (REQUIRED for DOCX compliance)
+    this.zipHandler.addFile('word/settings.xml', this.generator.generateSettings());
+
+    // word/theme/theme1.xml (REQUIRED for DOCX compliance)
+    this.zipHandler.addFile('word/theme/theme1.xml', this.generator.generateTheme());
 
     // docProps/core.xml
     this.zipHandler.addFile(DOCX_PATHS.CORE_PROPS, this.generator.generateCoreProps(this.properties));

@@ -126,6 +126,33 @@ export class RelationshipManager {
   }
 
   /**
+   * Adds a fontTable relationship
+   * @returns The created relationship
+   */
+  addFontTable(): Relationship {
+    const id = this.generateId();
+    return this.addRelationship(Relationship.createFontTable(id));
+  }
+
+  /**
+   * Adds a settings relationship
+   * @returns The created relationship
+   */
+  addSettings(): Relationship {
+    const id = this.generateId();
+    return this.addRelationship(Relationship.createSettings(id));
+  }
+
+  /**
+   * Adds a theme relationship
+   * @returns The created relationship
+   */
+  addTheme(): Relationship {
+    const id = this.generateId();
+    return this.addRelationship(Relationship.createTheme(id));
+  }
+
+  /**
    * Adds an image relationship
    * @param target Image path relative to the part (e.g., 'media/image1.png')
    * @returns The created relationship

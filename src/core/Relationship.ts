@@ -215,6 +215,42 @@ export class Relationship {
   }
 
   /**
+   * Creates a fontTable relationship
+   * @param id Relationship ID (defaults to 'rId3')
+   */
+  static createFontTable(id: string = 'rId3'): Relationship {
+    return new Relationship({
+      id,
+      type: RelationshipType.FONT_TABLE,
+      target: 'fontTable.xml',
+    });
+  }
+
+  /**
+   * Creates a settings relationship
+   * @param id Relationship ID (defaults to 'rId4')
+   */
+  static createSettings(id: string = 'rId4'): Relationship {
+    return new Relationship({
+      id,
+      type: RelationshipType.SETTINGS,
+      target: 'settings.xml',
+    });
+  }
+
+  /**
+   * Creates a theme relationship
+   * @param id Relationship ID (defaults to 'rId5')
+   */
+  static createTheme(id: string = 'rId5'): Relationship {
+    return new Relationship({
+      id,
+      type: RelationshipType.THEME,
+      target: 'theme/theme1.xml',
+    });
+  }
+
+  /**
    * Creates an image relationship
    * @param id Relationship ID
    * @param target Image path (e.g., 'media/image1.png')

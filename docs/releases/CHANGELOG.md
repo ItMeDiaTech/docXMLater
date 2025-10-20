@@ -5,6 +5,36 @@ All notable changes to DocXML will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2025-01-20
+
+### Fixed
+
+- **CRITICAL**: Fixed Microsoft Word corruption error for documents with justified text alignment
+  - Mapped `alignment: 'justify'` to correct ECMA-376 value `w:val="both"` (was incorrectly using `w:val="justify"`)
+  - Fixed in both Style.ts and Paragraph.ts XML generation
+  - Resolves "Word found unreadable content" error when opening documents with justified paragraphs
+
+### Added
+
+- **REQUIRED**: Added three mandatory DOCX files per ECMA-376 standard to prevent corruption warnings
+  - `word/fontTable.xml` - Font metadata definitions for document fonts
+  - `word/settings.xml` - Document settings and Word compatibility configuration
+  - `word/theme/theme1.xml` - Office theme with color scheme and font definitions
+  - Added automatic registration in [Content_Types].xml and document relationships
+  - These files are now included in all documents created with `Document.create()`
+
+### Changed
+
+- Custom paragraph styles now correctly use `customStyle: true` flag to prevent invalid `qFormat` element
+- Updated showcase.ts example to demonstrate proper custom style creation
+- Improved hanging indent implementation to use `w:hanging` attribute instead of negative `w:firstLine`
+
+### Technical Details
+
+- **Alignment Fix**: Per ECMA-376 Part 1 §17.3.1.13, justified alignment uses enumeration value "both", not "justify"
+- **Required Files**: ECMA-376 §11-15 specifies fontTable, settings, and theme as required parts for Office 2007+ compatibility
+- **Custom Styles**: Per ECMA-376 §17.7.4.17, `qFormat` element should only appear on built-in Quick Styles, not user-defined custom styles
+
 ## [0.5.0] - 2025-01-17
 
 ### Security

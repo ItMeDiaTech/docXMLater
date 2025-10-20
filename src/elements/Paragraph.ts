@@ -620,7 +620,9 @@ export class Paragraph {
 
     // 8. Justification/Alignment (must be last per ECMA-376 §17.3.1.26)
     if (this.formatting.alignment) {
-      pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': this.formatting.alignment }));
+      // Map 'justify' to 'both' per ECMA-376 (Word uses 'both' for justified text)
+      const alignmentValue = this.formatting.alignment === 'justify' ? 'both' : this.formatting.alignment;
+      pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': alignmentValue }));
     }
 
     // Build paragraph element

@@ -281,7 +281,9 @@ export class Style {
 
     // Add alignment
     if (formatting.alignment) {
-      pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': formatting.alignment }));
+      // Map 'justify' to 'both' per ECMA-376 (Word uses 'both' for justified text)
+      const alignmentValue = formatting.alignment === 'justify' ? 'both' : formatting.alignment;
+      pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': alignmentValue }));
     }
 
     // Add indentation
