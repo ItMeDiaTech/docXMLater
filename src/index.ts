@@ -160,6 +160,7 @@ export {
 } from './elements/TableCell';
 export { Image, ImageFormat, ImageProperties } from './elements/Image';
 export { ImageManager } from './elements/ImageManager';
+export { FontManager, FontFormat, FontEntry } from './elements/FontManager';
 export { Field, FieldType, FieldProperties } from './elements/Field';
 export { Header, HeaderType, HeaderProperties } from './elements/Header';
 export { Footer, FooterType, FooterProperties } from './elements/Footer';

@@ -12,6 +12,7 @@ import { Hyperlink } from '../elements/Hyperlink';
 import { ImageManager } from '../elements/ImageManager';
 import { HeaderFooterManager } from '../elements/HeaderFooterManager';
 import { CommentManager } from '../elements/CommentManager';
+import { FontManager } from '../elements/FontManager';
 import { RelationshipManager } from './RelationshipManager';
 import { DocumentProperties } from './Document';
 
@@ -125,12 +126,13 @@ export class DocumentGenerator {
   }
 
   /**
-   * Generates [Content_Types].xml with image extensions, headers/footers, and comments
+   * Generates [Content_Types].xml with image extensions, headers/footers, comments, and fonts
    */
   generateContentTypesWithImagesHeadersFootersAndComments(
     imageManager: ImageManager,
     headerFooterManager: HeaderFooterManager,
-    commentManager: CommentManager
+    commentManager: CommentManager,
+    fontManager?: FontManager
   ): string {
     const images = imageManager.getAllImages();
     const headers = headerFooterManager.getAllHeaders();
@@ -156,6 +158,14 @@ export class DocumentGenerator {
     for (const ext of extensions) {
       const mimeType = ImageManager.getMimeType(ext);
       xml += `  <Default Extension="${ext}" ContentType="${mimeType}"/>\n`;
+    }
+
+    // Font extensions (if FontManager provided)
+    if (fontManager && fontManager.getCount() > 0) {
+      const fontEntries = fontManager.generateContentTypeEntries();
+      for (const entry of fontEntries) {
+        xml += entry + '\n';
+      }
     }
 
     // Override types
