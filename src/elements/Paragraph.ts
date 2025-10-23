@@ -17,6 +17,53 @@ import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 export type ParagraphAlignment = 'left' | 'center' | 'right' | 'justify' | 'both';
 
 /**
+ * Border style types for paragraph borders
+ */
+export type BorderStyle = 'single' | 'double' | 'dashed' | 'dotted' | 'thick' | 'none';
+
+/**
+ * Shading pattern types
+ */
+export type ShadingPattern = 'clear' | 'solid' | 'horzStripe' | 'vertStripe' |
+  'reverseDiagStripe' | 'diagStripe' | 'horzCross' | 'diagCross';
+
+/**
+ * Tab stop alignment types
+ */
+export type TabAlignment = 'clear' | 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'num';
+
+/**
+ * Tab stop leader types
+ */
+export type TabLeader = 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+
+/**
+ * Single border definition
+ */
+export interface BorderDefinition {
+  /** Border style */
+  style?: BorderStyle;
+  /** Border width in eighths of a point (1-96) */
+  size?: number;
+  /** Border color (hex without #) */
+  color?: string;
+  /** Space between border and text in points (0-31) */
+  space?: number;
+}
+
+/**
+ * Tab stop definition
+ */
+export interface TabStop {
+  /** Position in twips */
+  position: number;
+  /** Alignment type */
+  val?: TabAlignment;
+  /** Leader character */
+  leader?: TabLeader;
+}
+
+/**
  * Paragraph formatting options
  */
 export interface ParagraphFormatting {
@@ -53,6 +100,26 @@ export interface ParagraphFormatting {
   contextualSpacing?: boolean;
   /** Paragraph ID (Word 2010+) - required by modern Word for change tracking */
   paraId?: string;
+  /** Paragraph borders (top, bottom, left, right, between, bar) */
+  borders?: {
+    top?: BorderDefinition;
+    bottom?: BorderDefinition;
+    left?: BorderDefinition;
+    right?: BorderDefinition;
+    between?: BorderDefinition;
+    bar?: BorderDefinition;
+  };
+  /** Paragraph shading (background color and pattern) */
+  shading?: {
+    /** Background fill color (hex without #) */
+    fill?: string;
+    /** Foreground color for patterns (hex without #) */
+    color?: string;
+    /** Shading pattern type */
+    val?: ShadingPattern;
+  };
+  /** Tab stops */
+  tabs?: TabStop[];
 }
 
 /**
@@ -648,7 +715,77 @@ export class Paragraph {
       }
     }
 
-    // 8. Justification/Alignment (must be last per ECMA-376 §17.3.1.26)
+    // 8. Paragraph borders per ECMA-376 Part 1 §17.3.1.24
+    if (this.formatting.borders) {
+      const borderChildren: XMLElement[] = [];
+      const borders = this.formatting.borders;
+
+      // Helper function to create border element
+      const createBorder = (borderType: string, border: BorderDefinition | undefined): XMLElement | null => {
+        if (!border) return null;
+        const attributes: Record<string, string | number> = {};
+        if (border.style) attributes['w:val'] = border.style;
+        if (border.size !== undefined) attributes['w:sz'] = border.size;
+        if (border.color) attributes['w:color'] = border.color;
+        if (border.space !== undefined) attributes['w:space'] = border.space;
+        if (Object.keys(attributes).length > 0) {
+          return XMLBuilder.wSelf(borderType, attributes);
+        }
+        return null;
+      };
+
+      // Add borders in order: top, left, bottom, right, between, bar
+      const topBorder = createBorder('top', borders.top);
+      if (topBorder) borderChildren.push(topBorder);
+
+      const leftBorder = createBorder('left', borders.left);
+      if (leftBorder) borderChildren.push(leftBorder);
+
+      const bottomBorder = createBorder('bottom', borders.bottom);
+      if (bottomBorder) borderChildren.push(bottomBorder);
+
+      const rightBorder = createBorder('right', borders.right);
+      if (rightBorder) borderChildren.push(rightBorder);
+
+      const betweenBorder = createBorder('between', borders.between);
+      if (betweenBorder) borderChildren.push(betweenBorder);
+
+      const barBorder = createBorder('bar', borders.bar);
+      if (barBorder) borderChildren.push(barBorder);
+
+      if (borderChildren.length > 0) {
+        pPrChildren.push(XMLBuilder.w('pBdr', undefined, borderChildren));
+      }
+    }
+
+    // 9. Paragraph shading per ECMA-376 Part 1 §17.3.1.32
+    if (this.formatting.shading) {
+      const shd = this.formatting.shading;
+      const attributes: Record<string, string> = {};
+      if (shd.fill) attributes['w:fill'] = shd.fill;
+      if (shd.color) attributes['w:color'] = shd.color;
+      if (shd.val) attributes['w:val'] = shd.val;
+      if (Object.keys(attributes).length > 0) {
+        pPrChildren.push(XMLBuilder.wSelf('shd', attributes));
+      }
+    }
+
+    // 10. Tab stops per ECMA-376 Part 1 §17.3.1.38
+    if (this.formatting.tabs && this.formatting.tabs.length > 0) {
+      const tabChildren: XMLElement[] = [];
+      for (const tab of this.formatting.tabs) {
+        const attributes: Record<string, string | number> = {};
+        attributes['w:pos'] = tab.position;
+        if (tab.val) attributes['w:val'] = tab.val;
+        if (tab.leader) attributes['w:leader'] = tab.leader;
+        tabChildren.push(XMLBuilder.wSelf('tab', attributes));
+      }
+      if (tabChildren.length > 0) {
+        pPrChildren.push(XMLBuilder.w('tabs', undefined, tabChildren));
+      }
+    }
+
+    // 11. Justification/Alignment (must be last per ECMA-376 §17.3.1.26)
     if (this.formatting.alignment) {
       // Map 'justify' to 'both' per ECMA-376 (Word uses 'both' for justified text)
       const alignmentValue = this.formatting.alignment === 'justify' ? 'both' : this.formatting.alignment;
@@ -783,39 +920,58 @@ export class Paragraph {
    * Sets paragraph borders
    * @param borders - Border definitions for each side
    * @returns This paragraph for chaining
+   * @example
+   * ```typescript
+   * para.setBorder({
+   *   top: { style: 'single', size: 4, color: '000000', space: 1 },
+   *   bottom: { style: 'single', size: 4, color: '000000', space: 1 }
+   * });
+   * ```
    */
   setBorder(borders: {
-    top?: { style?: string; size?: number; color?: string; space?: number };
-    bottom?: { style?: string; size?: number; color?: string; space?: number };
-    left?: { style?: string; size?: number; color?: string; space?: number };
-    right?: { style?: string; size?: number; color?: string; space?: number };
+    top?: BorderDefinition;
+    bottom?: BorderDefinition;
+    left?: BorderDefinition;
+    right?: BorderDefinition;
+    between?: BorderDefinition;
+    bar?: BorderDefinition;
   }): this {
     if (!this.formatting) {
       this.formatting = {};
     }
 
-    // Store borders in formatting (will be handled in toXML)
-    (this.formatting as any).borders = borders;
+    this.formatting.borders = borders;
 
     return this;
   }
 
   /**
-   * Sets paragraph shading (background color)
+   * Sets paragraph shading (background color and pattern)
    * @param shading - Shading options
    * @returns This paragraph for chaining
+   * @example
+   * ```typescript
+   * // Solid background
+   * para.setShading({ fill: 'FFFF00', val: 'solid' });
+   *
+   * // Pattern with colors
+   * para.setShading({
+   *   fill: 'FFFF00',
+   *   color: '000000',
+   *   val: 'diagStripe'
+   * });
+   * ```
    */
   setShading(shading: {
-    fill?: string;  // Background color (hex)
-    color?: string;  // Foreground color (hex)
-    val?: 'clear' | 'solid' | 'horzStripe' | 'vertStripe' | 'reverseDiagStripe' | 'diagStripe' | 'horzCross' | 'diagCross';
+    fill?: string;
+    color?: string;
+    val?: ShadingPattern;
   }): this {
     if (!this.formatting) {
       this.formatting = {};
     }
 
-    // Store shading in formatting (will be handled in toXML)
-    (this.formatting as any).shading = shading;
+    this.formatting.shading = shading;
 
     return this;
   }
@@ -824,18 +980,21 @@ export class Paragraph {
    * Sets tab stops for the paragraph
    * @param tabs - Array of tab stop definitions
    * @returns This paragraph for chaining
+   * @example
+   * ```typescript
+   * para.setTabs([
+   *   { position: 720, val: 'left' },
+   *   { position: 1440, val: 'center', leader: 'dot' },
+   *   { position: 2160, val: 'right' }
+   * ]);
+   * ```
    */
-  setTabs(tabs: Array<{
-    position: number;  // Position in twips
-    val?: 'clear' | 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'num';
-    leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
-  }>): this {
+  setTabs(tabs: TabStop[]): this {
     if (!this.formatting) {
       this.formatting = {};
     }
 
-    // Store tabs in formatting (will be handled in toXML)
-    (this.formatting as any).tabs = tabs;
+    this.formatting.tabs = tabs;
 
     return this;
   }

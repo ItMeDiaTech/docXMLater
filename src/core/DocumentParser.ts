@@ -623,6 +623,74 @@ export class DocumentParser {
         paragraph.setNumbering(parseInt(numId, 10), parseInt(ilvl, 10));
       }
     }
+
+    // Borders per ECMA-376 Part 1 §17.3.1.24
+    if (pPrObj["w:pBdr"]) {
+      const pBdr = pPrObj["w:pBdr"];
+      const borders: any = {};
+
+      // Helper function to parse border definition
+      const parseBorder = (borderObj: any): any => {
+        if (!borderObj) return undefined;
+        const border: any = {};
+        if (borderObj["@_w:val"]) border.style = borderObj["@_w:val"];
+        if (borderObj["@_w:sz"]) border.size = parseInt(borderObj["@_w:sz"], 10);
+        if (borderObj["@_w:color"]) border.color = borderObj["@_w:color"];
+        if (borderObj["@_w:space"]) border.space = parseInt(borderObj["@_w:space"], 10);
+        return Object.keys(border).length > 0 ? border : undefined;
+      };
+
+      // Parse each border side
+      if (pBdr["w:top"]) borders.top = parseBorder(pBdr["w:top"]);
+      if (pBdr["w:bottom"]) borders.bottom = parseBorder(pBdr["w:bottom"]);
+      if (pBdr["w:left"]) borders.left = parseBorder(pBdr["w:left"]);
+      if (pBdr["w:right"]) borders.right = parseBorder(pBdr["w:right"]);
+      if (pBdr["w:between"]) borders.between = parseBorder(pBdr["w:between"]);
+      if (pBdr["w:bar"]) borders.bar = parseBorder(pBdr["w:bar"]);
+
+      if (Object.keys(borders).length > 0) {
+        paragraph.setBorder(borders);
+      }
+    }
+
+    // Shading per ECMA-376 Part 1 §17.3.1.32
+    if (pPrObj["w:shd"]) {
+      const shd = pPrObj["w:shd"];
+      const shading: any = {};
+      if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
+      if (shd["@_w:color"]) shading.color = shd["@_w:color"];
+      if (shd["@_w:val"]) shading.val = shd["@_w:val"];
+
+      if (Object.keys(shading).length > 0) {
+        paragraph.setShading(shading);
+      }
+    }
+
+    // Tab stops per ECMA-376 Part 1 §17.3.1.38
+    if (pPrObj["w:tabs"]) {
+      const tabsObj = pPrObj["w:tabs"];
+      const tabs: any[] = [];
+
+      // Handle both single tab and array of tabs
+      const tabElements = Array.isArray(tabsObj["w:tab"])
+        ? tabsObj["w:tab"]
+        : tabsObj["w:tab"] ? [tabsObj["w:tab"]] : [];
+
+      for (const tabObj of tabElements) {
+        const tab: any = {};
+        if (tabObj["@_w:pos"]) tab.position = parseInt(tabObj["@_w:pos"], 10);
+        if (tabObj["@_w:val"]) tab.val = tabObj["@_w:val"];
+        if (tabObj["@_w:leader"]) tab.leader = tabObj["@_w:leader"];
+
+        if (tab.position !== undefined) {
+          tabs.push(tab);
+        }
+      }
+
+      if (tabs.length > 0) {
+        paragraph.setTabs(tabs);
+      }
+    }
   }
 
   private parseRunFromObject(runObj: any): Run | null {
@@ -713,8 +781,49 @@ export class DocumentParser {
   private parseRunPropertiesFromObject(rPrObj: any, run: Run): void {
     if (!rPrObj) return;
 
+    // Parse character style reference (w:rStyle) per ECMA-376 Part 1 §17.3.2.36
+    if (rPrObj["w:rStyle"]) {
+      const styleId = rPrObj["w:rStyle"]["@_w:val"];
+      if (styleId) {
+        run.setCharacterStyle(styleId);
+      }
+    }
+
+    // Parse text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5
+    if (rPrObj["w:bdr"]) {
+      const bdr = rPrObj["w:bdr"];
+      const border: any = {};
+      if (bdr["@_w:val"]) border.style = bdr["@_w:val"];
+      if (bdr["@_w:sz"]) border.size = parseInt(bdr["@_w:sz"], 10);
+      if (bdr["@_w:color"]) border.color = bdr["@_w:color"];
+      if (bdr["@_w:space"]) border.space = parseInt(bdr["@_w:space"], 10);
+      if (Object.keys(border).length > 0) {
+        run.setBorder(border);
+      }
+    }
+
+    // Parse character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
+    if (rPrObj["w:shd"]) {
+      const shd = rPrObj["w:shd"];
+      const shading: any = {};
+      if (shd["@_w:val"]) shading.val = shd["@_w:val"];
+      if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
+      if (shd["@_w:color"]) shading.color = shd["@_w:color"];
+      if (Object.keys(shading).length > 0) {
+        run.setShading(shading);
+      }
+    }
+
+    // Parse emphasis marks (w:em) per ECMA-376 Part 1 §17.3.2.13
+    if (rPrObj["w:em"]) {
+      const val = rPrObj["w:em"]["@_w:val"];
+      if (val) run.setEmphasis(val as any);
+    }
+
     if (rPrObj["w:b"]) run.setBold(true);
+    if (rPrObj["w:bCs"]) run.setComplexScriptBold(true);
     if (rPrObj["w:i"]) run.setItalic(true);
+    if (rPrObj["w:iCs"]) run.setComplexScriptItalic(true);
     if (rPrObj["w:strike"]) run.setStrike(true);
     if (rPrObj["w:smallCaps"]) run.setSmallCaps(true);
     if (rPrObj["w:caps"]) run.setAllCaps(true);
@@ -723,6 +832,36 @@ export class DocumentParser {
       // XMLParser adds @_ prefix to attributes
       const uVal = rPrObj["w:u"]["@_w:val"];
       run.setUnderline(uVal || true);
+    }
+
+    // Parse character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.33
+    if (rPrObj["w:spacing"]) {
+      const val = rPrObj["w:spacing"]["@_w:val"];
+      if (val) run.setCharacterSpacing(parseInt(val, 10));
+    }
+
+    // Parse horizontal scaling (w:w) per ECMA-376 Part 1 §17.3.2.43
+    if (rPrObj["w:w"]) {
+      const val = rPrObj["w:w"]["@_w:val"];
+      if (val) run.setScaling(parseInt(val, 10));
+    }
+
+    // Parse vertical position (w:position) per ECMA-376 Part 1 §17.3.2.31
+    if (rPrObj["w:position"]) {
+      const val = rPrObj["w:position"]["@_w:val"];
+      if (val) run.setPosition(parseInt(val, 10));
+    }
+
+    // Parse kerning (w:kern) per ECMA-376 Part 1 §17.3.2.20
+    if (rPrObj["w:kern"]) {
+      const val = rPrObj["w:kern"]["@_w:val"];
+      if (val) run.setKerning(parseInt(val, 10));
+    }
+
+    // Parse language (w:lang) per ECMA-376 Part 1 §17.3.2.20
+    if (rPrObj["w:lang"]) {
+      const val = rPrObj["w:lang"]["@_w:val"];
+      if (val) run.setLanguage(val);
     }
 
     if (rPrObj["w:vertAlign"]) {
@@ -749,14 +888,115 @@ export class DocumentParser {
   }
 
   private async parseDrawingFromObject(
-    _drawingObj: any,
-    _zipHandler: ZipHandler,
-    _relationshipManager: RelationshipManager,
-    _imageManager: ImageManager
+    drawingObj: any,
+    zipHandler: ZipHandler,
+    relationshipManager: RelationshipManager,
+    imageManager: ImageManager
   ): Promise<ImageRun | null> {
-    // Implementation similar to parseDrawing but using object
-    // Extract relevant properties from drawingObj
-    return null; // Placeholder
+    try {
+      // Drawing can contain either wp:inline (inline image) or wp:anchor (floating image)
+      // For now, we'll focus on wp:inline which is more common
+      const inlineObj = drawingObj["wp:inline"];
+      if (!inlineObj) {
+        // Could be wp:anchor for floating images, but we'll skip those for now
+        return null;
+      }
+
+      // Extract dimensions from wp:extent
+      const extentObj = inlineObj["wp:extent"];
+      let width = 0;
+      let height = 0;
+      if (extentObj) {
+        width = parseInt(extentObj["@_cx"] || "0", 10);
+        height = parseInt(extentObj["@_cy"] || "0", 10);
+      }
+
+      // Extract name and description from wp:docPr
+      const docPrObj = inlineObj["wp:docPr"];
+      let name = "image";
+      let description = "Image";
+      if (docPrObj) {
+        name = docPrObj["@_name"] || "image";
+        description = docPrObj["@_descr"] || "Image";
+      }
+
+      // Navigate through the graphic structure to find the relationship ID
+      // Structure: a:graphic → a:graphicData → pic:pic → pic:blipFill → a:blip
+      const graphicObj = inlineObj["a:graphic"];
+      if (!graphicObj) {
+        return null;
+      }
+
+      const graphicDataObj = graphicObj["a:graphicData"];
+      if (!graphicDataObj) {
+        return null;
+      }
+
+      const picPicObj = graphicDataObj["pic:pic"];
+      if (!picPicObj) {
+        return null;
+      }
+
+      const blipFillObj = picPicObj["pic:blipFill"];
+      if (!blipFillObj) {
+        return null;
+      }
+
+      const blipObj = blipFillObj["a:blip"];
+      if (!blipObj) {
+        return null;
+      }
+
+      // Extract relationship ID (r:embed)
+      const relationshipId = blipObj["@_r:embed"];
+      if (!relationshipId) {
+        return null;
+      }
+
+      // Get the image from the relationship
+      const relationship = relationshipManager.getRelationship(relationshipId);
+      if (!relationship) {
+        console.warn(`[DocumentParser] Image relationship not found: ${relationshipId}`);
+        return null;
+      }
+
+      const imageTarget = relationship.getTarget();
+      if (!imageTarget) {
+        console.warn(`[DocumentParser] Image relationship has no target: ${relationshipId}`);
+        return null;
+      }
+
+      // Read image data from zip
+      const imagePath = `word/${imageTarget}`;
+      const imageData = zipHandler.getFileAsBuffer(imagePath);
+      if (!imageData) {
+        console.warn(`[DocumentParser] Image file not found: ${imagePath}`);
+        return null;
+      }
+
+      // Detect image extension from path
+      const extension = imagePath.split('.').pop()?.toLowerCase() || 'png';
+
+      // Create image from buffer with name and description
+      const { Image: ImageClass } = await import('../elements/Image');
+      const image = await ImageClass.create({
+        source: imageData,
+        width,
+        height,
+        name,
+        description,
+      });
+
+      // Register image with ImageManager (reuse existing relationship)
+      imageManager.registerImage(image, relationshipId);
+      image.setRelationshipId(relationshipId);
+
+      // Create and return ImageRun
+      return new ImageRun(image);
+    } catch (error) {
+      console.warn('[DocumentParser] Failed to parse drawing:', error);
+      return null;
+    }
   }
 
   private async parseTableFromObject(
@@ -834,6 +1074,92 @@ export class DocumentParser {
     try {
       // Create empty cell
       const cell = new TableCell();
+
+      // Parse cell properties (w:tcPr) per ECMA-376 Part 1 §17.4.42
+      const tcPr = cellObj["w:tcPr"];
+      if (tcPr) {
+        // Parse cell width (w:tcW)
+        if (tcPr["w:tcW"]) {
+          const widthVal = parseInt(tcPr["w:tcW"]["@_w:w"] || "0", 10);
+          if (widthVal > 0) {
+            cell.setWidth(widthVal);
+          }
+        }
+
+        // Parse cell borders (w:tcBorders)
+        if (tcPr["w:tcBorders"]) {
+          const bordersObj = tcPr["w:tcBorders"];
+          const borders: any = {};
+
+          const parseBorder = (borderObj: any) => {
+            if (!borderObj) return undefined;
+            return {
+              style: borderObj["@_w:val"] || "single",
+              size: borderObj["@_w:sz"] ? parseInt(borderObj["@_w:sz"], 10) : undefined,
+              color: borderObj["@_w:color"] || undefined,
+            };
+          };
+
+          if (bordersObj["w:top"]) borders.top = parseBorder(bordersObj["w:top"]);
+          if (bordersObj["w:bottom"]) borders.bottom = parseBorder(bordersObj["w:bottom"]);
+          if (bordersObj["w:left"]) borders.left = parseBorder(bordersObj["w:left"]);
+          if (bordersObj["w:right"]) borders.right = parseBorder(bordersObj["w:right"]);
+
+          if (Object.keys(borders).length > 0) {
+            cell.setBorders(borders);
+          }
+        }
+
+        // Parse cell shading (w:shd)
+        if (tcPr["w:shd"]) {
+          const shd = tcPr["w:shd"];
+          const shading: any = {};
+          if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
+          if (shd["@_w:color"]) shading.color = shd["@_w:color"];
+          if (Object.keys(shading).length > 0) {
+            cell.setShading(shading);
+          }
+        }
+
+        // Parse cell margins (w:tcMar) per ECMA-376 Part 1 §17.4.43
+        if (tcPr["w:tcMar"]) {
+          const tcMar = tcPr["w:tcMar"];
+          const margins: any = {};
+
+          if (tcMar["w:top"]) {
+            margins.top = parseInt(tcMar["w:top"]["@_w:w"] || "0", 10);
+          }
+          if (tcMar["w:bottom"]) {
+            margins.bottom = parseInt(tcMar["w:bottom"]["@_w:w"] || "0", 10);
+          }
+          if (tcMar["w:left"]) {
+            margins.left = parseInt(tcMar["w:left"]["@_w:w"] || "0", 10);
+          }
+          if (tcMar["w:right"]) {
+            margins.right = parseInt(tcMar["w:right"]["@_w:w"] || "0", 10);
+          }
+
+          if (Object.keys(margins).length > 0) {
+            cell.setMargins(margins);
+          }
+        }
+
+        // Parse vertical alignment (w:vAlign)
+        if (tcPr["w:vAlign"]) {
+          const valign = tcPr["w:vAlign"]["@_w:val"];
+          if (valign && (valign === "top" || valign === "center" || valign === "bottom")) {
+            cell.setVerticalAlignment(valign);
+          }
+        }
+
+        // Parse column span (w:gridSpan)
+        if (tcPr["w:gridSpan"]) {
+          const span = parseInt(tcPr["w:gridSpan"]["@_w:val"] || "1", 10);
+          if (span > 1) {
+            cell.setColumnSpan(span);
+          }
+        }
+      }
 
       // Parse paragraphs in cell (w:p)
       const paragraphs = cellObj["w:p"];

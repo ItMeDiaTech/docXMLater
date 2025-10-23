@@ -14,12 +14,14 @@ I do a lot of professional documentation work. From the solutions that exist out
 **ComplexField Support & Critical Bug Fixes!** Major enhancement release:
 
 ### New Features
+
 - **ComplexField Support:** Full implementation of begin/separate/end field structure per ECMA-376
 - **TOC Field Generator:** `createTOCField()` with all switches (\o, \h, \z, \u, \n, \t)
 - **Advanced Fields:** Foundation for cross-references, indexes, and dynamic content
 - **Style Color Fix:** Fixed critical bug where hex colors were corrupted during load/save
 
 ### What's New
+
 - `ComplexField` class for TOC, cross-references, and advanced field types
 - `createTOCField()` function with customizable options (levels, hyperlinks, styles)
 - Fixed style color parsing (colors no longer corrupted to size values)
@@ -27,21 +29,22 @@ I do a lot of professional documentation work. From the solutions that exist out
 - 41 new comprehensive tests (StylesRoundTrip + ComplexField)
 
 ### Field Support
+
 ```typescript
-import { createTOCField, ComplexField } from 'docxmlater';
+import { createTOCField, ComplexField } from "docxmlater";
 
 // Create TOC with custom options
 const toc = createTOCField({
-  levels: '1-3',
+  levels: "1-3",
   hyperlinks: true,
-  omitPageNumbers: false
+  omitPageNumbers: false,
 });
 
 // Create custom complex field
 const field = new ComplexField({
-  instruction: ' PAGE \\* MERGEFORMAT ',
-  result: '1',
-  resultFormatting: { bold: true }
+  instruction: " PAGE \\* MERGEFORMAT ",
+  result: "1",
+  resultFormatting: { bold: true },
 });
 ```
 
@@ -80,27 +83,27 @@ await doc.save("output.docx");
 
 ### Content Creation
 
-| Method                           | Description            | Example                          |
-| -------------------------------- | ---------------------- | -------------------------------- |
-| `createParagraph(text?)`         | Add paragraph          | `doc.createParagraph('Text')`    |
-| `createTable(rows, cols)`        | Add table              | `doc.createTable(3, 4)`          |
-| `addParagraph(para)`             | Add existing paragraph | `doc.addParagraph(myPara)`       |
-| `addTable(table)`                | Add existing table     | `doc.addTable(myTable)`          |
-| `addImage(image)`                | Add image              | `doc.addImage(myImage)`          |
-| `addTableOfContents(toc?)`       | Add TOC                | `doc.addTableOfContents()`       |
-| `insertParagraphAt(index, para)` | Insert at position     | `doc.insertParagraphAt(0, para)` |
+| Method                           | Description              | Example                          |
+| -------------------------------- | ------------------------ | -------------------------------- |
+| `createParagraph(text?)`         | Add paragraph            | `doc.createParagraph('Text')`    |
+| `createTable(rows, cols)`        | Add table                | `doc.createTable(3, 4)`          |
+| `addParagraph(para)`             | Add existing paragraph   | `doc.addParagraph(myPara)`       |
+| `addTable(table)`                | Add existing table       | `doc.addTable(myTable)`          |
+| `addImage(image)`                | Add image                | `doc.addImage(myImage)`          |
+| `addTableOfContents(toc?)`       | Add TOC                  | `doc.addTableOfContents()`       |
+| `insertParagraphAt(index, para)` | Insert at position       | `doc.insertParagraphAt(0, para)` |
 | `insertTableAt(index, table)`    | Insert table at position | `doc.insertTableAt(5, table)`    |
-| `insertTocAt(index, toc)`        | Insert TOC at position | `doc.insertTocAt(0, toc)`        |
+| `insertTocAt(index, toc)`        | Insert TOC at position   | `doc.insertTocAt(0, toc)`        |
 
 ### Content Manipulation
 
-| Method                                | Description                 | Returns   |
-| ------------------------------------- | --------------------------- | --------- |
-| `replaceParagraphAt(index, para)`     | Replace paragraph           | `boolean` |
-| `replaceTableAt(index, table)`        | Replace table               | `boolean` |
-| `moveElement(fromIndex, toIndex)`     | Move element to new position | `boolean` |
-| `swapElements(index1, index2)`        | Swap two elements           | `boolean` |
-| `removeTocAt(index)`                  | Remove TOC element          | `boolean` |
+| Method                            | Description                  | Returns   |
+| --------------------------------- | ---------------------------- | --------- |
+| `replaceParagraphAt(index, para)` | Replace paragraph            | `boolean` |
+| `replaceTableAt(index, table)`    | Replace table                | `boolean` |
+| `moveElement(fromIndex, toIndex)` | Move element to new position | `boolean` |
+| `swapElements(index1, index2)`    | Swap two elements            | `boolean` |
+| `removeTocAt(index)`              | Remove TOC element           | `boolean` |
 
 ### Content Retrieval
 
@@ -133,20 +136,21 @@ await doc.save("output.docx");
 
 ### Style Application
 
-| Method                                 | Description                     | Returns        |
-| -------------------------------------- | ------------------------------- | -------------- |
-| `applyStyleToAll(styleId, predicate)`  | Apply style to matching elements | `number`       |
-| `findElementsByStyle(styleId)`         | Find all elements using a style | `Array<Para\|Cell>` |
+| Method                                | Description                      | Returns             |
+| ------------------------------------- | -------------------------------- | ------------------- |
+| `applyStyleToAll(styleId, predicate)` | Apply style to matching elements | `number`            |
+| `findElementsByStyle(styleId)`        | Find all elements using a style  | `Array<Para\|Cell>` |
 
 **Example:**
+
 ```typescript
 // Apply Heading1 to all paragraphs containing "Chapter"
-const count = doc.applyStyleToAll('Heading1', (el) => {
-  return el instanceof Paragraph && el.getText().includes('Chapter');
+const count = doc.applyStyleToAll("Heading1", (el) => {
+  return el instanceof Paragraph && el.getText().includes("Chapter");
 });
 
 // Find all Heading1 elements
-const headings = doc.findElementsByStyle('Heading1');
+const headings = doc.findElementsByStyle("Heading1");
 ```
 
 ### Document Statistics
@@ -192,7 +196,10 @@ const para2 = Paragraph.create("Hello World");
 const para3 = Paragraph.create("Centered text", { alignment: "center" });
 
 // Create with just formatting
-const para4 = Paragraph.create({ alignment: "right", spacing: { before: 240 } });
+const para4 = Paragraph.create({
+  alignment: "right",
+  spacing: { before: 240 },
+});
 
 // Create with style
 const heading = Paragraph.createWithStyle("Chapter 1", "Heading1");
@@ -211,13 +218,13 @@ doc.addParagraph(heading);
 
 #### Paragraph Factory Methods
 
-| Method                                                | Description                    | Example                                 |
-| ----------------------------------------------------- | ------------------------------ | --------------------------------------- |
-| `Paragraph.create(text?, formatting?)`                | Create detached paragraph      | `Paragraph.create('Text')`              |
-| `Paragraph.create(formatting?)`                       | Create with formatting only    | `Paragraph.create({alignment: 'left'})` |
-| `Paragraph.createWithStyle(text, styleId)`            | Create with style              | `Paragraph.createWithStyle('', 'H1')`   |
-| `Paragraph.createEmpty()`                             | Create empty paragraph         | `Paragraph.createEmpty()`               |
-| `Paragraph.createFormatted(text, run?, paragraph?)`   | Create with dual formatting    | See example above                       |
+| Method                                              | Description                 | Example                                 |
+| --------------------------------------------------- | --------------------------- | --------------------------------------- |
+| `Paragraph.create(text?, formatting?)`              | Create detached paragraph   | `Paragraph.create('Text')`              |
+| `Paragraph.create(formatting?)`                     | Create with formatting only | `Paragraph.create({alignment: 'left'})` |
+| `Paragraph.createWithStyle(text, styleId)`          | Create with style           | `Paragraph.createWithStyle('', 'H1')`   |
+| `Paragraph.createEmpty()`                           | Create empty paragraph      | `Paragraph.createEmpty()`               |
+| `Paragraph.createFormatted(text, run?, paragraph?)` | Create with dual formatting | See example above                       |
 
 #### Paragraph Formatting Methods
 
@@ -237,54 +244,56 @@ doc.addParagraph(heading);
 
 #### Paragraph Manipulation Methods
 
-| Method                               | Description                 | Returns      |
-| ------------------------------------ | --------------------------- | ------------ |
-| `insertRunAt(index, run)`            | Insert run at position      | `this`       |
-| `removeRunAt(index)`                 | Remove run at position      | `boolean`    |
-| `replaceRunAt(index, run)`           | Replace run at position     | `boolean`    |
-| `findText(text, options?)`           | Find text in runs           | `number[]`   |
-| `replaceText(find, replace, options?)` | Replace text in runs       | `number`     |
-| `mergeWith(otherPara)`               | Merge another paragraph     | `this`       |
-| `clone()`                            | Clone paragraph             | `Paragraph`  |
+| Method                                 | Description             | Returns     |
+| -------------------------------------- | ----------------------- | ----------- |
+| `insertRunAt(index, run)`              | Insert run at position  | `this`      |
+| `removeRunAt(index)`                   | Remove run at position  | `boolean`   |
+| `replaceRunAt(index, run)`             | Replace run at position | `boolean`   |
+| `findText(text, options?)`             | Find text in runs       | `number[]`  |
+| `replaceText(find, replace, options?)` | Replace text in runs    | `number`    |
+| `mergeWith(otherPara)`                 | Merge another paragraph | `this`      |
+| `clone()`                              | Clone paragraph         | `Paragraph` |
 
 **Example:**
+
 ```typescript
-const para = doc.createParagraph('Hello World');
+const para = doc.createParagraph("Hello World");
 
 // Find and replace
-const indices = para.findText('World');  // [1]
-const count = para.replaceText('World', 'Universe', { caseSensitive: true });
+const indices = para.findText("World"); // [1]
+const count = para.replaceText("World", "Universe", { caseSensitive: true });
 
 // Manipulate runs
-para.insertRunAt(0, new Run('Start: ', { bold: true }));
-para.replaceRunAt(1, new Run('HELLO', { allCaps: true }));
+para.insertRunAt(0, new Run("Start: ", { bold: true }));
+para.replaceRunAt(1, new Run("HELLO", { allCaps: true }));
 
 // Merge paragraphs
-const para2 = Paragraph.create(' More text');
-para.mergeWith(para2);  // Combines runs
+const para2 = Paragraph.create(" More text");
+para.mergeWith(para2); // Combines runs
 ```
 
 ### Run (Text Span) Operations
 
-| Method                        | Description                  | Returns  |
-| ----------------------------- | ---------------------------- | -------- |
-| `clone()`                     | Clone run with formatting    | `Run`    |
-| `insertText(index, text)`     | Insert text at position      | `this`   |
-| `appendText(text)`            | Append text to end           | `this`   |
-| `replaceText(start, end, text)` | Replace text range          | `this`   |
+| Method                          | Description               | Returns |
+| ------------------------------- | ------------------------- | ------- |
+| `clone()`                       | Clone run with formatting | `Run`   |
+| `insertText(index, text)`       | Insert text at position   | `this`  |
+| `appendText(text)`              | Append text to end        | `this`  |
+| `replaceText(start, end, text)` | Replace text range        | `this`  |
 
 **Example:**
+
 ```typescript
-const run = new Run('Hello World', { bold: true });
+const run = new Run("Hello World", { bold: true });
 
 // Text manipulation
-run.insertText(6, 'Beautiful ');  // "Hello Beautiful World"
-run.appendText('!');               // "Hello Beautiful World!"
-run.replaceText(0, 5, 'Hi');      // "Hi Beautiful World!"
+run.insertText(6, "Beautiful "); // "Hello Beautiful World"
+run.appendText("!"); // "Hello Beautiful World!"
+run.replaceText(0, 5, "Hi"); // "Hi Beautiful World!"
 
 // Clone for reuse
 const copy = run.clone();
-copy.setColor('FF0000');  // Original unchanged
+copy.setColor("FF0000"); // Original unchanged
 ```
 
 ### Table Operations
@@ -304,19 +313,20 @@ copy.setColor('FF0000');  // Original unchanged
 
 #### Advanced Table Operations
 
-| Method                                      | Description                   | Returns       |
-| ------------------------------------------- | ----------------------------- | ------------- |
-| `mergeCells(startRow, startCol, endRow, endCol)` | Merge cells                   | `this`        |
-| `splitCell(row, col)`                       | Remove cell spanning          | `this`        |
-| `moveCell(fromRow, fromCol, toRow, toCol)`  | Move cell contents            | `this`        |
-| `swapCells(row1, col1, row2, col2)`         | Swap two cells                | `this`        |
-| `setColumnWidth(index, width)`              | Set specific column width     | `this`        |
-| `setColumnWidths(widths)`                   | Set all column widths         | `this`        |
-| `insertRows(startIndex, count)`             | Insert multiple rows          | `TableRow[]`  |
-| `removeRows(startIndex, count)`             | Remove multiple rows          | `boolean`     |
-| `clone()`                                   | Clone entire table            | `Table`       |
+| Method                                           | Description               | Returns      |
+| ------------------------------------------------ | ------------------------- | ------------ |
+| `mergeCells(startRow, startCol, endRow, endCol)` | Merge cells               | `this`       |
+| `splitCell(row, col)`                            | Remove cell spanning      | `this`       |
+| `moveCell(fromRow, fromCol, toRow, toCol)`       | Move cell contents        | `this`       |
+| `swapCells(row1, col1, row2, col2)`              | Swap two cells            | `this`       |
+| `setColumnWidth(index, width)`                   | Set specific column width | `this`       |
+| `setColumnWidths(widths)`                        | Set all column widths     | `this`       |
+| `insertRows(startIndex, count)`                  | Insert multiple rows      | `TableRow[]` |
+| `removeRows(startIndex, count)`                  | Remove multiple rows      | `boolean`    |
+| `clone()`                                        | Clone entire table        | `Table`      |
 
 **Example:**
+
 ```typescript
 const table = doc.createTable(3, 3);
 
@@ -330,12 +340,12 @@ table.moveCell(1, 1, 2, 2);
 table.swapCells(0, 0, 2, 2);
 
 // Batch row operations
-table.insertRows(1, 3);  // Insert 3 rows at position 1
-table.removeRows(4, 2);  // Remove 2 rows starting at position 4
+table.insertRows(1, 3); // Insert 3 rows at position 1
+table.removeRows(4, 2); // Remove 2 rows starting at position 4
 
 // Set column widths
-table.setColumnWidth(0, 2000);  // First column = 2000 twips
-table.setColumnWidths([2000, 3000, 2000]);  // All columns
+table.setColumnWidth(0, 2000); // First column = 2000 twips
+table.setColumnWidths([2000, 3000, 2000]); // All columns
 
 // Clone table for reuse
 const tableCopy = table.clone();
@@ -366,27 +376,28 @@ const tableCopy = table.clone();
 
 #### Style Manipulation
 
-| Method                  | Description                      | Returns   |
-| ----------------------- | -------------------------------- | --------- |
-| `style.clone()`         | Clone style                      | `Style`   |
-| `style.mergeWith(other)` | Merge properties from another style | `this`    |
+| Method                   | Description                         | Returns |
+| ------------------------ | ----------------------------------- | ------- |
+| `style.clone()`          | Clone style                         | `Style` |
+| `style.mergeWith(other)` | Merge properties from another style | `this`  |
 
 **Example:**
+
 ```typescript
 // Clone a style
-const heading1 = doc.getStyle('Heading1');
+const heading1 = doc.getStyle("Heading1");
 const customHeading = heading1.clone();
-customHeading.setRunFormatting({ color: 'FF0000' });
+customHeading.setRunFormatting({ color: "FF0000" });
 
 // Merge styles
 const baseStyle = Style.createNormalStyle();
 const overrideStyle = Style.create({
-  styleId: 'Override',
-  name: 'Override',
-  type: 'paragraph',
-  runFormatting: { bold: true, color: 'FF0000' }
+  styleId: "Override",
+  name: "Override",
+  type: "paragraph",
+  runFormatting: { bold: true, color: "FF0000" },
 });
-baseStyle.mergeWith(overrideStyle);  // baseStyle now has bold red text
+baseStyle.mergeWith(overrideStyle); // baseStyle now has bold red text
 ```
 
 #### Built-in Styles
@@ -409,90 +420,94 @@ baseStyle.mergeWith(overrideStyle);  // baseStyle now has bold red text
 
 #### Basic TOC Creation
 
-| Method                           | Description                  | Example                                    |
-| -------------------------------- | ---------------------------- | ------------------------------------------ |
-| `addTableOfContents(toc?)`       | Add TOC to document          | `doc.addTableOfContents()`                 |
-| `insertTocAt(index, toc)`        | Insert TOC at position       | `doc.insertTocAt(0, toc)`                  |
-| `removeTocAt(index)`             | Remove TOC at position       | `doc.removeTocAt(0)`                       |
+| Method                     | Description            | Example                    |
+| -------------------------- | ---------------------- | -------------------------- |
+| `addTableOfContents(toc?)` | Add TOC to document    | `doc.addTableOfContents()` |
+| `insertTocAt(index, toc)`  | Insert TOC at position | `doc.insertTocAt(0, toc)`  |
+| `removeTocAt(index)`       | Remove TOC at position | `doc.removeTocAt(0)`       |
 
 #### TOC Factory Methods
 
-| Method                                      | Description                      | Example                                         |
-| ------------------------------------------- | -------------------------------- | ----------------------------------------------- |
-| `TableOfContents.createStandard(title?)`    | Standard TOC (3 levels)          | `TableOfContents.createStandard()`              |
-| `TableOfContents.createSimple(title?)`      | Simple TOC (2 levels)            | `TableOfContents.createSimple()`                |
-| `TableOfContents.createDetailed(title?)`    | Detailed TOC (4 levels)          | `TableOfContents.createDetailed()`              |
-| `TableOfContents.createHyperlinked(title?)` | Hyperlinked TOC                  | `TableOfContents.createHyperlinked()`           |
-| `TableOfContents.createWithStyles(styles, opts?)` | TOC with specific styles   | `TableOfContents.createWithStyles(['H1','H3'])` |
-| `TableOfContents.createFlat(title?, styles?)` | Flat TOC (no indent)           | `TableOfContents.createFlat()`                  |
-| `TableOfContents.createNumbered(title?, format?)` | Numbered TOC               | `TableOfContents.createNumbered('TOC', 'roman')` |
-| `TableOfContents.createWithSpacing(spacing, opts?)` | TOC with custom spacing  | `TableOfContents.createWithSpacing(120)`        |
-| `TableOfContents.createWithHyperlinkColor(color, opts?)` | Custom hyperlink color | `TableOfContents.createWithHyperlinkColor('FF0000')` |
+| Method                                                   | Description              | Example                                              |
+| -------------------------------------------------------- | ------------------------ | ---------------------------------------------------- |
+| `TableOfContents.createStandard(title?)`                 | Standard TOC (3 levels)  | `TableOfContents.createStandard()`                   |
+| `TableOfContents.createSimple(title?)`                   | Simple TOC (2 levels)    | `TableOfContents.createSimple()`                     |
+| `TableOfContents.createDetailed(title?)`                 | Detailed TOC (4 levels)  | `TableOfContents.createDetailed()`                   |
+| `TableOfContents.createHyperlinked(title?)`              | Hyperlinked TOC          | `TableOfContents.createHyperlinked()`                |
+| `TableOfContents.createWithStyles(styles, opts?)`        | TOC with specific styles | `TableOfContents.createWithStyles(['H1','H3'])`      |
+| `TableOfContents.createFlat(title?, styles?)`            | Flat TOC (no indent)     | `TableOfContents.createFlat()`                       |
+| `TableOfContents.createNumbered(title?, format?)`        | Numbered TOC             | `TableOfContents.createNumbered('TOC', 'roman')`     |
+| `TableOfContents.createWithSpacing(spacing, opts?)`      | TOC with custom spacing  | `TableOfContents.createWithSpacing(120)`             |
+| `TableOfContents.createWithHyperlinkColor(color, opts?)` | Custom hyperlink color   | `TableOfContents.createWithHyperlinkColor('FF0000')` |
 
 #### TOC Configuration Methods
 
-| Method                              | Description                       | Values                              |
-| ----------------------------------- | --------------------------------- | ----------------------------------- |
-| `setIncludeStyles(styles)`          | Select specific heading styles    | `['Heading1', 'Heading3']`          |
-| `setNumbered(numbered, format?)`    | Enable/disable numbering          | `(true, 'roman')`                   |
-| `setNoIndent(noIndent)`             | Remove indentation                | `true/false`                        |
-| `setCustomIndents(indents)`         | Custom indents per level          | `[0, 200, 400]` (twips)             |
-| `setSpaceBetweenEntries(spacing)`   | Spacing between entries           | `120` (twips)                       |
-| `setHyperlinkColor(color)`          | Hyperlink color                   | `'0000FF'` (default blue)           |
-| `configure(options)`                | Bulk configuration                | See example below                   |
+| Method                            | Description                    | Values                     |
+| --------------------------------- | ------------------------------ | -------------------------- |
+| `setIncludeStyles(styles)`        | Select specific heading styles | `['Heading1', 'Heading3']` |
+| `setNumbered(numbered, format?)`  | Enable/disable numbering       | `(true, 'roman')`          |
+| `setNoIndent(noIndent)`           | Remove indentation             | `true/false`               |
+| `setCustomIndents(indents)`       | Custom indents per level       | `[0, 200, 400]` (twips)    |
+| `setSpaceBetweenEntries(spacing)` | Spacing between entries        | `120` (twips)              |
+| `setHyperlinkColor(color)`        | Hyperlink color                | `'0000FF'` (default blue)  |
+| `configure(options)`              | Bulk configuration             | See example below          |
 
 #### TOC Properties
 
-| Property             | Type                           | Default      | Description                           |
-| -------------------- | ------------------------------ | ------------ | ------------------------------------- |
-| `title`              | `string`                       | `'Table of Contents'` | TOC title                    |
-| `levels`             | `number` (1-9)                 | `3`          | Heading levels to include             |
-| `includeStyles`      | `string[]`                     | `undefined`  | Specific styles (overrides levels)    |
-| `showPageNumbers`    | `boolean`                      | `true`       | Show page numbers                     |
-| `useHyperlinks`      | `boolean`                      | `false`      | Use hyperlinks instead of page #s     |
-| `numbered`           | `boolean`                      | `false`      | Number TOC entries                    |
-| `numberingFormat`    | `'decimal'/'roman'/'alpha'`    | `'decimal'`  | Numbering format                      |
-| `noIndent`           | `boolean`                      | `false`      | Remove all indentation                |
-| `customIndents`      | `number[]`                     | `undefined`  | Custom indents in twips               |
-| `spaceBetweenEntries`| `number`                       | `0`          | Spacing in twips                      |
-| `hyperlinkColor`     | `string`                       | `'0000FF'`   | Hyperlink color (hex without #)       |
-| `tabLeader`          | `'dot'/'hyphen'/'underscore'/'none'` | `'dot'` | Tab leader character            |
+| Property              | Type                                 | Default               | Description                        |
+| --------------------- | ------------------------------------ | --------------------- | ---------------------------------- |
+| `title`               | `string`                             | `'Table of Contents'` | TOC title                          |
+| `levels`              | `number` (1-9)                       | `3`                   | Heading levels to include          |
+| `includeStyles`       | `string[]`                           | `undefined`           | Specific styles (overrides levels) |
+| `showPageNumbers`     | `boolean`                            | `true`                | Show page numbers                  |
+| `useHyperlinks`       | `boolean`                            | `false`               | Use hyperlinks instead of page #s  |
+| `numbered`            | `boolean`                            | `false`               | Number TOC entries                 |
+| `numberingFormat`     | `'decimal'/'roman'/'alpha'`          | `'decimal'`           | Numbering format                   |
+| `noIndent`            | `boolean`                            | `false`               | Remove all indentation             |
+| `customIndents`       | `number[]`                           | `undefined`           | Custom indents in twips            |
+| `spaceBetweenEntries` | `number`                             | `0`                   | Spacing in twips                   |
+| `hyperlinkColor`      | `string`                             | `'0000FF'`            | Hyperlink color (hex without #)    |
+| `tabLeader`           | `'dot'/'hyphen'/'underscore'/'none'` | `'dot'`               | Tab leader character               |
 
 **Example:**
+
 ```typescript
 // Basic TOC
 const simpleToc = TableOfContents.createStandard();
 doc.addTableOfContents(simpleToc);
 
 // Select specific styles (e.g., only Heading1 and Heading3)
-const customToc = TableOfContents.createWithStyles(['Heading1', 'Heading3']);
+const customToc = TableOfContents.createWithStyles(["Heading1", "Heading3"]);
 
 // Flat TOC with no indentation
-const flatToc = TableOfContents.createFlat('Contents');
+const flatToc = TableOfContents.createFlat("Contents");
 
 // Numbered TOC with roman numerals
-const numberedToc = TableOfContents.createNumbered('Table of Contents', 'roman');
+const numberedToc = TableOfContents.createNumbered(
+  "Table of Contents",
+  "roman"
+);
 
 // Custom hyperlink color (red instead of blue)
-const coloredToc = TableOfContents.createWithHyperlinkColor('FF0000');
+const coloredToc = TableOfContents.createWithHyperlinkColor("FF0000");
 
 // Advanced configuration
 const toc = TableOfContents.create()
-  .setIncludeStyles(['Heading1', 'Heading2', 'Heading3'])
-  .setNumbered(true, 'decimal')
-  .setSpaceBetweenEntries(120)  // 6pt spacing
-  .setHyperlinkColor('0000FF')
+  .setIncludeStyles(["Heading1", "Heading2", "Heading3"])
+  .setNumbered(true, "decimal")
+  .setSpaceBetweenEntries(120) // 6pt spacing
+  .setHyperlinkColor("0000FF")
   .setNoIndent(false);
 
 // Or use configure() for bulk settings
 toc.configure({
-  title: 'Table of Contents',
-  includeStyles: ['Heading1', 'CustomHeader'],
+  title: "Table of Contents",
+  includeStyles: ["Heading1", "CustomHeader"],
   numbered: true,
-  numberingFormat: 'alpha',
+  numberingFormat: "alpha",
   spaceBetweenEntries: 100,
-  hyperlinkColor: 'FF0000',
-  noIndent: true
+  hyperlinkColor: "FF0000",
+  noIndent: true,
 });
 
 // Insert at specific position
@@ -1012,6 +1027,7 @@ For more details, see the [corruption detection examples](examples/troubleshooti
 **Cause**: The `pageBreakBefore` property conflicting with `keepNext`/`keepLines` properties. When a paragraph has both `pageBreakBefore` and keep properties set to true, Word's layout engine tries to satisfy contradictory constraints (insert break vs. keep together), resulting in massive whitespace as it struggles to resolve the conflict.
 
 **Why This Causes Problems**:
+
 - `pageBreakBefore` tells Word to insert a page break before the paragraph
 - `keepNext` tells Word to keep the paragraph with the next one (no break)
 - `keepLines` tells Word to keep all lines together (no break)
@@ -1025,13 +1041,14 @@ The framework now automatically prevents these conflicts by **prioritizing keep 
 // When setting keepNext or keepLines, pageBreakBefore is automatically cleared
 const para = new Paragraph()
   .addText("Content")
-  .setPageBreakBefore(true)  // Set to true
-  .setKeepNext(true);         // Automatically clears pageBreakBefore
+  .setPageBreakBefore(true) // Set to true
+  .setKeepNext(true); // Automatically clears pageBreakBefore
 
 // Result: keepNext=true, pageBreakBefore=false (conflict resolved)
 ```
 
 **Why This Priority?**
+
 - Keep properties (`keepNext`/`keepLines`) represent explicit user intent to keep content together
 - Page breaks are often layout hints that may conflict with document flow
 - Removing `pageBreakBefore` eliminates whitespace while preserving the user's intention
@@ -1049,6 +1066,7 @@ const doc = await Document.load("document-with-conflicts.docx");
 ```
 
 **How It Works**:
+
 1. When `setKeepNext(true)` is called, `pageBreakBefore` is automatically set to `false`
 2. When `setKeepLines(true)` is called, `pageBreakBefore` is automatically set to `false`
 3. When parsing documents, if both properties exist, `pageBreakBefore` is cleared
@@ -1060,7 +1078,7 @@ If you need a page break despite keep properties, set it after:
 
 ```typescript
 const para = new Paragraph()
-  .setKeepNext(true)        // Set first
+  .setKeepNext(true) // Set first
   .setPageBreakBefore(true); // Override - you explicitly want this conflict
 
 // But note: This will cause layout issues (whitespace) in Word

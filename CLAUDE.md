@@ -1,23 +1,25 @@
 # DOCX Editing Framework - Project Specification
 
 ## Project Overview
+
 Build a comprehensive, production-ready DOCX editing framework from scratch that can create, read, modify, and manipulate Microsoft Word documents programmatically.
 
 ## Current Status (Updated: October 2025)
 
 **Phases Completed: 3 of 5 + Polish Fixes**
 
-| Phase | Status | Tests | Features |
-|-------|--------|-------|----------|
-| **Phase 1: Foundation** | Complete | 80 tests | ZIP handling, XML generation, validation |
-| **Phase 2: Core Elements** | Complete | 46 tests | Paragraph, Run, formatting |
-| **Phase 3: Advanced Formatting** | Complete | 100+ tests | Styles, tables, sections, lists |
-| **Phase 4: Rich Content** | Next | - | Images, headers, footers |
-| **Phase 5: Polish** | Planned | - | Track changes, comments, TOC |
+| Phase                            | Status   | Tests      | Features                                 |
+| -------------------------------- | -------- | ---------- | ---------------------------------------- |
+| **Phase 1: Foundation**          | Complete | 80 tests   | ZIP handling, XML generation, validation |
+| **Phase 2: Core Elements**       | Complete | 46 tests   | Paragraph, Run, formatting               |
+| **Phase 3: Advanced Formatting** | Complete | 100+ tests | Styles, tables, sections, lists          |
+| **Phase 4: Rich Content**        | Next     | -          | Images, headers, footers                 |
+| **Phase 5: Polish**              | Planned  | -          | Track changes, comments, TOC             |
 
 **Total: 226+ tests passing | 48 source files | ~10,000+ lines of code**
 
 ### What Works Now
+
 - Create DOCX files from scratch
 - Read and modify existing DOCX files
 - Format text (bold, italic, underline, colors, fonts)
@@ -31,7 +33,9 @@ Build a comprehensive, production-ready DOCX editing framework from scratch that
 - Full TypeScript support
 
 ### Module Documentation
+
 Each module has its own CLAUDE.md file:
+
 - `src/zip/CLAUDE.md` - ZIP archive handling
 - `src/xml/CLAUDE.md` - XML generation
 - `src/elements/CLAUDE.md` - Paragraph and Run classes
@@ -40,6 +44,7 @@ Each module has its own CLAUDE.md file:
 ## Core Requirements
 
 ### 1. DOCX Format Understanding
+
 - **File Structure**: DOCX files are ZIP archives containing XML files and resources
 - **Key Components**:
   - `[Content_Types].xml` - MIME types for all parts
@@ -58,18 +63,21 @@ Each module has its own CLAUDE.md file:
 ### 2. Core Features to Implement
 
 #### Text Manipulation
+
 - Insert, delete, and replace text
 - Find and replace with regex support
 - Text extraction
 - Preserve formatting during edits
 
 #### Formatting
+
 - **Character formatting**: Bold, italic, underline, strikethrough, subscript, superscript
 - **Font properties**: Font family, size, color (RGB and theme colors)
 - **Highlight colors**: Background highlighting
 - **Text effects**: Small caps, all caps, shadow, emboss, engrave
 
 #### Paragraph Formatting
+
 - Alignment (left, center, right, justify)
 - Indentation (first line, hanging, left, right)
 - Line spacing and spacing before/after
@@ -77,18 +85,21 @@ Each module has its own CLAUDE.md file:
 - Keep with next, keep lines together, page break before
 
 #### Styles
+
 - Read and apply existing styles
 - Create custom styles (paragraph, character, table, list)
 - Modify style definitions
 - Style inheritance and cascading
 
 #### Lists
+
 - Numbered lists (decimal, roman, alpha)
 - Bulleted lists (various bullet styles)
 - Multi-level lists
 - Custom numbering formats
 
 #### Tables
+
 - Create tables with specified rows/columns
 - Add/delete rows and columns
 - Merge and split cells
@@ -97,12 +108,14 @@ Each module has its own CLAUDE.md file:
 - Table styles
 
 #### Images
+
 - Insert images (PNG, JPEG, GIF, SVG)
 - Position and size images
 - Wrap text around images
 - Image relationships and part management
 
 #### Sections
+
 - Multiple sections with different properties
 - Page orientation (portrait/landscape)
 - Page size and margins
@@ -110,12 +123,14 @@ Each module has its own CLAUDE.md file:
 - Page numbering
 
 #### Headers and Footers
+
 - Different first page
 - Different odd/even pages
 - Page numbers with formatting
 - Dynamic fields (date, time, filename)
 
 #### Advanced Features
+
 - Track changes (insertions, deletions, formatting)
 - Comments and annotations
 - Hyperlinks (internal and external)
@@ -127,6 +142,7 @@ Each module has its own CLAUDE.md file:
 ### 3. API Design
 
 #### Core Classes
+
 ```
 Document
   - load(filepath) / loadFromBuffer(buffer)
@@ -176,6 +192,7 @@ Style
 ```
 
 #### Usage Examples
+
 ```javascript
 // Create document
 const doc = new Document();
@@ -197,12 +214,14 @@ doc.save("output.docx");
 ### 4. Technical Architecture
 
 #### Dependencies
+
 - **JSZip** or **AdmZip**: ZIP archive handling
 - **xml2js** or **fast-xml-parser**: XML parsing and generation
 - **Sharp** (optional): Image processing
 - **TypeScript**: Type safety (recommended)
 
 #### Module Structure
+
 ```
 src/
   ├── core/
@@ -237,18 +256,21 @@ src/
 #### Implementation Details
 
 **File I/O:**
+
 - All XML files include `encoding="UTF-8"` in their XML declaration
 - String content is explicitly converted to UTF-8 Buffers before being added to the ZIP archive
 - When reading, text files are decoded as UTF-8 strings
 - This ensures consistent encoding regardless of system locale or platform
 
 **Code Locations:**
+
 - `src/zip/ZipWriter.ts` - Converts string content to UTF-8 Buffer in `addFile()`
 - `src/zip/ZipReader.ts` - Extracts text as UTF-8 strings via `async('string')`
 - `src/zip/ZipHandler.ts` - Wrapper methods explicitly document UTF-8 handling
 
 **Character Support:**
 The framework correctly handles:
+
 - ASCII text (a-z, A-Z, 0-9)
 - Latin characters with diacritics (à, é, ñ, ü, etc.)
 - Greek letters (α, β, γ, δ, etc.)
@@ -262,11 +284,13 @@ The framework correctly handles:
 - Complex multi-byte sequences
 
 **Testing:**
+
 - 11 comprehensive UTF-8 encoding tests in `tests/zip/ZipHandler.test.ts`
 - Tests cover emoji, mixed scripts, RTL text, and round-trip verification
 - All 62 tests in ZipHandler suite pass with 100% success rate
 
 **Best Practices:**
+
 1. All string input is automatically UTF-8 encoded - no explicit encoding needed
 2. All text output is UTF-8 decoded - use as standard JavaScript strings
 3. Binary files (images) are preserved as-is without encoding conversion
@@ -277,6 +301,7 @@ The framework correctly handles:
 **New Feature (v0.11.0)**: XMLParser now includes `parseToObject()` method for converting XML to JavaScript objects.
 
 **Compatible with fast-xml-parser format:**
+
 - Attributes → `@_` prefix (e.g., `@_Id`, `@_Type`)
 - Text content → `#text` property
 - Multiple child elements → Array `[]`
@@ -285,8 +310,9 @@ The framework correctly handles:
 - Self-closing tags → Empty object `{}`
 
 **Usage Example:**
+
 ```typescript
-import { XMLParser } from 'docxmlater';
+import { XMLParser } from "docxmlater";
 
 const xml = `
   <Relationships xmlns="http://...">
@@ -300,14 +326,16 @@ const result = XMLParser.parseToObject(xml);
 ```
 
 **Parsing Options:**
+
 - `ignoreAttributes`: Ignore all attributes (default: false)
-- `attributeNamePrefix`: Custom attribute prefix (default: '@_')
+- `attributeNamePrefix`: Custom attribute prefix (default: '@\_')
 - `textNodeName`: Custom text property name (default: '#text')
 - `parseAttributeValue`: Parse numbers/booleans (default: true)
 - `trimValues`: Trim whitespace (default: true)
 - `alwaysArray`: Always return arrays for elements (default: false)
 
 **Key Features:**
+
 - Position-based parsing prevents ReDoS attacks
 - Automatic array coalescing for duplicate element names
 - Type conversion for numeric/boolean attribute values
@@ -317,7 +345,9 @@ const result = XMLParser.parseToObject(xml);
 - **39 comprehensive tests - 100% passing**
 
 ### 7. XML Namespaces
+
 Must handle these OpenXML namespaces:
+
 ```xml
 xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -328,7 +358,9 @@ xmlns:v="urn:schemas-microsoft-com:vml"
 ```
 
 ### 8. Unit Conversions
+
 Handle multiple measurement units:
+
 - **Twips**: 1/20th of a point (used for most measurements)
 - **EMUs**: English Metric Units (used for images, 914400 EMUs = 1 inch)
 - **Points**: Typography unit (72 points = 1 inch)
@@ -336,6 +368,7 @@ Handle multiple measurement units:
 - **Inches/Centimeters**: Human-readable units
 
 ### 8. Testing Requirements
+
 - Unit tests for each component
 - Integration tests for complex documents
 - Test against Microsoft Word for compatibility
@@ -349,6 +382,7 @@ Handle multiple measurement units:
   - Right-to-left text
 
 ### 9. Performance Considerations
+
 - Stream processing for large files
 - Lazy loading of document parts
 - Efficient XML parsing and generation
@@ -356,12 +390,14 @@ Handle multiple measurement units:
 - Caching of frequently accessed data
 
 ### 10. Error Handling
+
 - Validate DOCX structure on load
 - Graceful degradation for unsupported features
 - Clear error messages with context
 - Recovery from corrupted files where possible
 
 ### 11. Documentation
+
 - API reference with JSDoc comments
 - Architecture documentation
 - Examples for common use cases
@@ -371,6 +407,7 @@ Handle multiple measurement units:
 ## Implementation Phases
 
 ### Phase 1: Foundation (COMPLETED)
+
 - ZIP archive handling (ZipHandler, ZipReader, ZipWriter)
 - Basic XML generation (XMLBuilder)
 - Document structure validation
@@ -379,6 +416,7 @@ Handle multiple measurement units:
 - **Status:** Production-ready
 
 ### Phase 2: Core Elements (COMPLETED)
+
 - Paragraph class with formatting
 - Run class for formatted text spans
 - Character formatting (bold, italic, font, color, etc.)
@@ -389,6 +427,7 @@ Handle multiple measurement units:
 - **Status:** Production-ready with 126 total tests
 
 ### Phase 3: Advanced Formatting (COMPLETED)
+
 - Styles implementation (Style, StylesManager)
 - Lists and numbering (NumberingLevel, AbstractNumbering, NumberingManager)
 - Tables with advanced formatting (Table, TableRow, TableCell)
@@ -397,12 +436,14 @@ Handle multiple measurement units:
 - **Status:** Production-ready with 226+ total tests
 
 ### Phase 4: Rich Content (PLANNED)
+
 - [ ] Images and media
 - [ ] Headers and footers
 - [ ] Advanced table features
 - [ ] Hyperlinks and bookmarks
 
 ### Phase 5: Polish (IN PROGRESS)
+
 - [x] Color normalization (uppercase hex per Microsoft convention)
 - [x] ECMA-376 compliance validation (RSIDs, properties order)
 - [x] Cell margins support (table formatting)
@@ -419,24 +460,27 @@ Handle multiple measurement units:
 **The framework follows a lean approach to XML generation:**
 
 1. **No Optimizer Needed**
+
    - Properties are only serialized if explicitly set
    - Generator checks `if (property)` before adding elements
    - Empty attributes objects aren't included in output
    - Default values are naturally omitted - no special logic needed
 
    Example:
+
    ```typescript
    // Paragraph.ts - Already optimal
    if (this.formatting.spacing) {
      // Only build spacing if it has attributes
      if (Object.keys(attributes).length > 0) {
-       pPrChildren.push(XMLBuilder.wSelf('spacing', attributes));
+       pPrChildren.push(XMLBuilder.wSelf("spacing", attributes));
      }
    }
    // Result: Lean XML without explicit optimization
    ```
 
 2. **Why Complexity Was Avoided**
+
    - XMLOptimizer class would add 100+ lines
    - Solves problem that doesn't exist
    - Adds maintenance burden for zero benefit
@@ -444,6 +488,7 @@ Handle multiple measurement units:
    - **Better to write code you don't need than code you don't use**
 
 3. **RSID Handling (Revision Session IDs)**
+
    - Framework correctly omits RSIDs for programmatic generation
    - Word regenerates RSIDs automatically on first edit
    - RSIDs only matter for collaborative editing / change tracking
@@ -451,6 +496,7 @@ Handle multiple measurement units:
    - Per ECMA-376: RSIDs are OPTIONAL and may be omitted
 
 4. **Color Handling**
+
    - All colors normalized to uppercase 6-character hex
    - Supports both 3-char (#F00) and 6-char (#FF0000) formats
    - Automatic expansion and normalization on set/load
@@ -458,6 +504,7 @@ Handle multiple measurement units:
    - See: `src/elements/Run.ts - normalizeColor() method`
 
 5. **Paragraph Property Conflict Resolution** (Added v0.28.2)
+
    - Automatically prevents `pageBreakBefore` + `keepNext`/`keepLines` conflicts
    - The `pageBreakBefore` property causes massive whitespace in Word when combined with keep properties
    - **Design Decision**: "Keep together" properties take priority over page breaks
@@ -473,18 +520,21 @@ Handle multiple measurement units:
    - User documentation: `README.md` - Troubleshooting section
 
    **Why This Matters**:
+
    - Word's layout engine creates massive whitespace when `pageBreakBefore` conflicts with keep properties
    - The `pageBreakBefore` property is what causes the whitespace, not the keep properties
    - Removing `pageBreakBefore` eliminates whitespace while preserving user's intention to keep content together
    - Common issue when processing documents with complex layouts (discovered via Test4.docx analysis)
 
    **Discovery Process**:
+
    - Initial implementation had priority backwards (page breaks cleared keep properties)
    - XML analysis showed `pageBreakBefore` present after "fix" → whitespace persisted
    - Reversed priority: keep properties now clear `pageBreakBefore` → whitespace eliminated
    - Confirmed via Test4.docx: Element 18 now has only keepNext/keepLines (no pageBreakBefore)
 
    **Philosophy Alignment**:
+
    - Defensive: Prevents common mistakes automatically
    - Predictable: Clear priority (keep properties win)
    - Evidence-based: Reversed priority based on XML analysis of actual problem documents
@@ -496,6 +546,7 @@ Handle multiple measurement units:
 **"The best code is the code you don't write"**
 
 Decision framework:
+
 - ✅ Optimize WITH measurement (find actual problems first)
 - ✅ Use proven patterns that solve real problems
 - ✅ KISS: Simplest solution that works
@@ -508,7 +559,9 @@ Decision framework:
 ## Resources and References
 
 ### Official Specifications
+
 1. **ECMA-376 Office Open XML** - The official standard
+
    - Part 1: Fundamentals and Markup Language Reference
    - Part 4: Transitional Migration Features
 
@@ -517,29 +570,33 @@ Decision framework:
    - Element reference
 
 ### Existing Libraries (for reference)
+
 1. **docx (by dolanmiu)** - Modern JavaScript library
 2. **python-docx** - Python implementation (good design patterns)
 3. **Open XML SDK** - Official .NET library
 
 ### Tools
+
 1. **Open XML SDK Productivity Tool** - Inspect DOCX structure
 2. **7-Zip** - View DOCX contents
 3. **XML Tree Viewer** - Visualize XML structure
 
 ### Key Learning Resources
+
 1. Office Open XML specifications (ISO/IEC 29500)
 2. WordprocessingML reference
 3. DrawingML for images and graphics
 4. Relationship handling in Open XML
 
 ## Success Criteria
+
 - [x] Can create Word documents from scratch (Phase 2)
 - [x] Can read and modify existing documents (Phase 1)
 - [ ] Preserves document structure and formatting (Partial - basic formatting done)
 - [x] Compatible with Microsoft Word 2016+ (OpenXML compliant)
 - [x] Handles edge cases gracefully (Comprehensive error handling)
 - [x] Well-documented API (Complete documentation)
-- [x] >90% test coverage (126 tests covering all modules)
+- [x] > 90% test coverage (126 tests covering all modules)
 - [ ] Performance: Process 100-page document in <1 second (Not yet tested at scale)
 
 ## Common User Mistakes & Troubleshooting
@@ -565,10 +622,12 @@ paragraph.addText('Important Information<w:t xml:space="preserve">1</w:t>');
 #### Why This Is NOT A Bug
 
 1. **Proper XML Escaping**: Framework correctly escapes special characters per XML spec
+
    - `<` becomes `&lt;`, `>` becomes `&gt;`, `"` becomes `&quot;`
    - This is REQUIRED by XML standards (ECMA-376)
 
 2. **DOM-Based Generation**: Uses XMLBuilder to create proper element structure
+
    - Never uses string concatenation
    - All text goes through `escapeXmlText()` function
    - See: `src/xml/XMLBuilder.ts:161-166`
@@ -583,38 +642,40 @@ paragraph.addText('Important Information<w:t xml:space="preserve">1</w:t>');
 
 ```javascript
 // CORRECT - Separate runs
-paragraph.addText('Important Information');
-paragraph.addText('1');
+paragraph.addText("Important Information");
+paragraph.addText("1");
 
 // Or combined
-paragraph.addText('Important Information 1');
+paragraph.addText("Important Information 1");
 
 // With formatting
-paragraph.addText('Important Information', { bold: true });
-paragraph.addText('1', { italic: true });
+paragraph.addText("Important Information", { bold: true });
+paragraph.addText("1", { italic: true });
 ```
 
 #### Detection & Fixing Tools
 
 **Detection Utility** (`src/utils/corruptionDetection.ts`):
-```javascript
-import { detectCorruptionInDocument } from 'docxmlater';
 
-const doc = await Document.load('file.docx');
+```javascript
+import { detectCorruptionInDocument } from "docxmlater";
+
+const doc = await Document.load("file.docx");
 const report = detectCorruptionInDocument(doc);
 
 if (report.isCorrupted) {
   console.log(report.summary);
-  report.locations.forEach(loc => {
+  report.locations.forEach((loc) => {
     console.log(`Fix: "${loc.suggestedFix}"`);
   });
 }
 ```
 
 **Auto-Cleaning Option**:
+
 ```javascript
 // Clean XML patterns automatically
-paragraph.addText('Text<w:t>value</w:t>', { cleanXmlFromText: true });
+paragraph.addText("Text<w:t>value</w:t>", { cleanXmlFromText: true });
 // Result: "Textvalue"
 ```
 
@@ -629,6 +690,7 @@ paragraph.addText('Text<w:t>value</w:t>', { cleanXmlFromText: true });
 #### Key Takeaway
 
 **This is a user education issue, not a framework bug.** The framework:
+
 1. ✅ Works correctly per XML specifications
 2. ✅ Already has detection and cleaning capabilities
 3. ✅ Warns users about potential issues
@@ -637,12 +699,14 @@ paragraph.addText('Text<w:t>value</w:t>', { cleanXmlFromText: true });
 The solution was better documentation and tooling to help users avoid and fix this common mistake.
 
 ## Anti-Goals
+
 - Not a complete Word replacement
 - No support for VBA macros
 - No support for legacy .doc format
 - No GUI/editor component (API only)
 
 ## Next Steps
+
 1. Set up project structure and build system
 2. Implement ZIP handling and basic document loading
 3. Create XML parsing utilities

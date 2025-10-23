@@ -262,20 +262,20 @@ export class TableCell {
       const marginChildren: XMLElement[] = [];
 
       if (margins.top !== undefined) {
-        marginChildren.push(XMLBuilder.wSelf('w:top', { 'w:w': margins.top.toString(), 'w:type': 'dxa' }));
+        marginChildren.push(XMLBuilder.wSelf('top', { 'w:w': margins.top.toString(), 'w:type': 'dxa' }));
       }
       if (margins.bottom !== undefined) {
-        marginChildren.push(XMLBuilder.wSelf('w:bottom', { 'w:w': margins.bottom.toString(), 'w:type': 'dxa' }));
+        marginChildren.push(XMLBuilder.wSelf('bottom', { 'w:w': margins.bottom.toString(), 'w:type': 'dxa' }));
       }
       if (margins.left !== undefined) {
-        marginChildren.push(XMLBuilder.wSelf('w:left', { 'w:w': margins.left.toString(), 'w:type': 'dxa' }));
+        marginChildren.push(XMLBuilder.wSelf('left', { 'w:w': margins.left.toString(), 'w:type': 'dxa' }));
       }
       if (margins.right !== undefined) {
-        marginChildren.push(XMLBuilder.wSelf('w:right', { 'w:w': margins.right.toString(), 'w:type': 'dxa' }));
+        marginChildren.push(XMLBuilder.wSelf('right', { 'w:w': margins.right.toString(), 'w:type': 'dxa' }));
       }
 
       if (marginChildren.length > 0) {
-        tcPrChildren.push(XMLBuilder.w('w:tcMar', undefined, marginChildren));
+        tcPrChildren.push(XMLBuilder.w('tcMar', undefined, marginChildren));
       }
     }
 

@@ -7,13 +7,76 @@ import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { validateRunText } from '../utils/validation';
 
 /**
+ * Border style for text
+ */
+export type TextBorderStyle = 'single' | 'double' | 'dashed' | 'dotted' | 'thick' | 'wave' | 'dashDotStroked' | 'threeDEmboss' | 'threeDEngrave';
+
+/**
+ * Text border definition
+ */
+export interface TextBorder {
+  /** Border style */
+  style?: TextBorderStyle;
+  /** Border size in eighths of a point */
+  size?: number;
+  /** Border color in hex format (without #) */
+  color?: string;
+  /** Space between border and text in points */
+  space?: number;
+}
+
+/**
+ * Shading pattern for text background
+ */
+export type ShadingPattern = 'clear' | 'solid' | 'horzStripe' | 'vertStripe' | 'reverseDiagStripe' | 'diagStripe' | 'horzCross' | 'diagCross' | 'thinHorzStripe' | 'thinVertStripe' | 'thinReverseDiagStripe' | 'thinDiagStripe' | 'thinHorzCross' | 'thinDiagCross' | 'pct5' | 'pct10' | 'pct12' | 'pct15' | 'pct20' | 'pct25' | 'pct30' | 'pct35' | 'pct37' | 'pct40' | 'pct45' | 'pct50' | 'pct55' | 'pct60' | 'pct62' | 'pct65' | 'pct70' | 'pct75' | 'pct80' | 'pct85' | 'pct87' | 'pct90' | 'pct95';
+
+/**
+ * Character shading definition
+ */
+export interface CharacterShading {
+  /** Background fill color in hex format (without #) */
+  fill?: string;
+  /** Foreground pattern color in hex format (without #) */
+  color?: string;
+  /** Shading pattern */
+  val?: ShadingPattern;
+}
+
+/**
+ * Emphasis mark type - decorative marks above/below text
+ */
+export type EmphasisMark = 'dot' | 'comma' | 'circle' | 'underDot';
+
+/**
  * Text formatting options for a run
  */
 export interface RunFormatting {
+  /** Character style reference - links to a character style definition */
+  characterStyle?: string;
+  /** Text border - draws a border around the text */
+  border?: TextBorder;
+  /** Character shading - background color/pattern for text */
+  shading?: CharacterShading;
+  /** Emphasis mark - decorative mark above/below text (e.g., dot, comma) */
+  emphasis?: EmphasisMark;
   /** Bold text */
   bold?: boolean;
   /** Italic text */
   italic?: boolean;
+  /** Bold text for complex scripts (RTL languages like Arabic, Hebrew) */
+  complexScriptBold?: boolean;
+  /** Italic text for complex scripts (RTL languages like Arabic, Hebrew) */
+  complexScriptItalic?: boolean;
+  /** Character spacing (letter spacing) in twips (1/20th of a point) */
+  characterSpacing?: number;
+  /** Horizontal scaling percentage (e.g., 200 = 200% width, 50 = 50% width) */
+  scaling?: number;
+  /** Vertical position in half-points (positive = raised, negative = lowered) */
+  position?: number;
+  /** Kerning threshold in half-points (font size at which kerning starts) */
+  kerning?: number;
+  /** Language code (e.g., 'en-US', 'fr-FR', 'es-ES') */
+  language?: string;
   /** Underline text */
   underline?: boolean | 'single' | 'double' | 'thick' | 'dotted' | 'dash';
   /** Strikethrough text */
@@ -111,6 +174,50 @@ export class Run {
   }
 
   /**
+   * Sets character style reference
+   * Per ECMA-376 Part 1 §17.3.2.36
+   * @param styleId - Character style ID to apply
+   * @returns This run for chaining
+   */
+  setCharacterStyle(styleId: string): this {
+    this.formatting.characterStyle = styleId;
+    return this;
+  }
+
+  /**
+   * Sets text border
+   * Per ECMA-376 Part 1 §17.3.2.5
+   * @param border - Border definition
+   * @returns This run for chaining
+   */
+  setBorder(border: TextBorder): this {
+    this.formatting.border = border;
+    return this;
+  }
+
+  /**
+   * Sets character shading (background)
+   * Per ECMA-376 Part 1 §17.3.2.32
+   * @param shading - Shading definition
+   * @returns This run for chaining
+   */
+  setShading(shading: CharacterShading): this {
+    this.formatting.shading = shading;
+    return this;
+  }
+
+  /**
+   * Sets emphasis mark
+   * Per ECMA-376 Part 1 §17.3.2.13
+   * @param emphasis - Emphasis mark type ('dot', 'comma', 'circle', 'underDot')
+   * @returns This run for chaining
+   */
+  setEmphasis(emphasis: EmphasisMark): this {
+    this.formatting.emphasis = emphasis;
+    return this;
+  }
+
+  /**
    * Sets bold formatting
    * @param bold - Whether text is bold
    */
@@ -125,6 +232,76 @@ export class Run {
    */
   setItalic(italic: boolean = true): this {
     this.formatting.italic = italic;
+    return this;
+  }
+
+  /**
+   * Sets bold formatting for complex scripts (RTL languages)
+   * Per ECMA-376 Part 1 §17.3.2.3
+   * @param bold - Whether text is bold for complex scripts
+   */
+  setComplexScriptBold(bold: boolean = true): this {
+    this.formatting.complexScriptBold = bold;
+    return this;
+  }
+
+  /**
+   * Sets italic formatting for complex scripts (RTL languages)
+   * Per ECMA-376 Part 1 §17.3.2.17
+   * @param italic - Whether text is italic for complex scripts
+   */
+  setComplexScriptItalic(italic: boolean = true): this {
+    this.formatting.complexScriptItalic = italic;
+    return this;
+  }
+
+  /**
+   * Sets character spacing (letter spacing)
+   * Per ECMA-376 Part 1 §17.3.2.33
+   * @param spacing - Spacing in twips (1/20th of a point). Positive values expand, negative values condense.
+   */
+  setCharacterSpacing(spacing: number): this {
+    this.formatting.characterSpacing = spacing;
+    return this;
+  }
+
+  /**
+   * Sets horizontal text scaling
+   * Per ECMA-376 Part 1 §17.3.2.43
+   * @param scaling - Scaling percentage (e.g., 200 = 200% width, 50 = 50% width). Default is 100.
+   */
+  setScaling(scaling: number): this {
+    this.formatting.scaling = scaling;
+    return this;
+  }
+
+  /**
+   * Sets vertical text position
+   * Per ECMA-376 Part 1 §17.3.2.31
+   * @param position - Position in half-points. Positive values raise text, negative values lower it.
+   */
+  setPosition(position: number): this {
+    this.formatting.position = position;
+    return this;
+  }
+
+  /**
+   * Sets kerning threshold
+   * Per ECMA-376 Part 1 §17.3.2.20
+   * @param kerning - Font size in half-points at which kerning starts. 0 disables kerning.
+   */
+  setKerning(kerning: number): this {
+    this.formatting.kerning = kerning;
+    return this;
+  }
+
+  /**
+   * Sets language
+   * Per ECMA-376 Part 1 §17.3.2.20
+   * @param language - Language code (e.g., 'en-US', 'fr-FR', 'es-ES')
+   */
+  setLanguage(language: string): this {
+    this.formatting.language = language;
     return this;
   }
 
@@ -287,7 +464,14 @@ export class Run {
 
     const rPrChildren: XMLElement[] = [];
 
-    // 1. Font family (must be first per ECMA-376 §17.3.2.28)
+    // 1. Character style reference (must be absolutely first per ECMA-376 §17.3.2.36)
+    if (this.formatting.characterStyle) {
+      rPrChildren.push(XMLBuilder.wSelf('rStyle', {
+        'w:val': this.formatting.characterStyle,
+      }));
+    }
+
+    // 2. Font family (must be second per ECMA-376 §17.3.2.28)
     if (this.formatting.font) {
       rPrChildren.push(XMLBuilder.wSelf('rFonts', {
         'w:ascii': this.formatting.font,
@@ -296,17 +480,40 @@ export class Run {
       }));
     }
 
-    // 2. Bold
+    // 2.5. Text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5
+    if (this.formatting.border) {
+      const bdrAttrs: Record<string, string | number> = {};
+      if (this.formatting.border.style) bdrAttrs['w:val'] = this.formatting.border.style;
+      if (this.formatting.border.size !== undefined) bdrAttrs['w:sz'] = this.formatting.border.size;
+      if (this.formatting.border.color) bdrAttrs['w:color'] = this.formatting.border.color;
+      if (this.formatting.border.space !== undefined) bdrAttrs['w:space'] = this.formatting.border.space;
+
+      if (Object.keys(bdrAttrs).length > 0) {
+        rPrChildren.push(XMLBuilder.wSelf('bdr', bdrAttrs));
+      }
+    }
+
+    // 3. Bold
     if (this.formatting.bold) {
       rPrChildren.push(XMLBuilder.wSelf('b'));
     }
 
-    // 3. Italic
+    // 3.5. Bold for complex scripts (w:bCs) per ECMA-376 Part 1 §17.3.2.3
+    if (this.formatting.complexScriptBold) {
+      rPrChildren.push(XMLBuilder.wSelf('bCs'));
+    }
+
+    // 4. Italic
     if (this.formatting.italic) {
       rPrChildren.push(XMLBuilder.wSelf('i'));
     }
 
-    // 4. Capitalization (caps/smallCaps)
+    // 4.5. Italic for complex scripts (w:iCs) per ECMA-376 Part 1 §17.3.2.17
+    if (this.formatting.complexScriptItalic) {
+      rPrChildren.push(XMLBuilder.wSelf('iCs'));
+    }
+
+    // 5. Capitalization (caps/smallCaps)
     if (this.formatting.allCaps) {
       rPrChildren.push(XMLBuilder.wSelf('caps'));
     }
@@ -314,7 +521,24 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('smallCaps'));
     }
 
-    // 5. Strikethrough
+    // 6. Character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
+    if (this.formatting.shading) {
+      const shdAttrs: Record<string, string> = {};
+      if (this.formatting.shading.val) shdAttrs['w:val'] = this.formatting.shading.val;
+      if (this.formatting.shading.fill) shdAttrs['w:fill'] = this.formatting.shading.fill;
+      if (this.formatting.shading.color) shdAttrs['w:color'] = this.formatting.shading.color;
+
+      if (Object.keys(shdAttrs).length > 0) {
+        rPrChildren.push(XMLBuilder.wSelf('shd', shdAttrs));
+      }
+    }
+
+    // 6.5. Emphasis marks (w:em) per ECMA-376 Part 1 §17.3.2.13
+    if (this.formatting.emphasis) {
+      rPrChildren.push(XMLBuilder.wSelf('em', { 'w:val': this.formatting.emphasis }));
+    }
+
+    // 7. Strikethrough
     if (this.formatting.strike) {
       rPrChildren.push(XMLBuilder.wSelf('strike'));
     }
@@ -322,7 +546,7 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('dstrike'));
     }
 
-    // 6. Underline
+    // 8. Underline
     if (this.formatting.underline) {
       const underlineValue = typeof this.formatting.underline === 'string'
         ? this.formatting.underline
@@ -330,7 +554,32 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': underlineValue }));
     }
 
-    // 7. Font size
+    // 8.5. Character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.33
+    if (this.formatting.characterSpacing !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('spacing', { 'w:val': this.formatting.characterSpacing }));
+    }
+
+    // 8.6. Horizontal scaling (w:w) per ECMA-376 Part 1 §17.3.2.43
+    if (this.formatting.scaling !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('w', { 'w:val': this.formatting.scaling }));
+    }
+
+    // 8.7. Vertical position (w:position) per ECMA-376 Part 1 §17.3.2.31
+    if (this.formatting.position !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('position', { 'w:val': this.formatting.position }));
+    }
+
+    // 8.8. Kerning (w:kern) per ECMA-376 Part 1 §17.3.2.20
+    if (this.formatting.kerning !== undefined && this.formatting.kerning !== null) {
+      rPrChildren.push(XMLBuilder.wSelf('kern', { 'w:val': this.formatting.kerning }));
+    }
+
+    // 8.9. Language (w:lang) per ECMA-376 Part 1 §17.3.2.20
+    if (this.formatting.language) {
+      rPrChildren.push(XMLBuilder.wSelf('lang', { 'w:val': this.formatting.language }));
+    }
+
+    // 9. Font size
     if (this.formatting.size !== undefined) {
       // Word uses half-points (size * 2)
       const halfPoints = this.formatting.size * 2;
@@ -338,17 +587,17 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': halfPoints }));
     }
 
-    // 8. Text color
+    // 10. Text color
     if (this.formatting.color) {
       rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': this.formatting.color }));
     }
 
-    // 9. Highlight color
+    // 11. Highlight color
     if (this.formatting.highlight) {
       rPrChildren.push(XMLBuilder.wSelf('highlight', { 'w:val': this.formatting.highlight }));
     }
 
-    // 10. Vertical alignment (subscript/superscript) - must be last
+    // 12. Vertical alignment (subscript/superscript) - must be last
     if (this.formatting.subscript) {
       rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
     }
