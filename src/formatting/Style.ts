@@ -549,4 +549,92 @@ export class Style {
       },
     });
   }
+
+  /**
+   * Creates a deep clone of this style
+   * @returns New Style instance with copied properties
+   * @example
+   * ```typescript
+   * const original = Style.createHeadingStyle(1);
+   * const copy = original.clone();
+   * copy.setRunFormatting({ color: 'FF0000' });  // Doesn't affect original
+   * ```
+   */
+  clone(): Style {
+    // Deep copy all properties
+    const clonedProps: StyleProperties = JSON.parse(JSON.stringify(this.properties));
+    return new Style(clonedProps);
+  }
+
+  /**
+   * Merges properties from another style into this one
+   * @param otherStyle - Style to merge from
+   * @returns This style for chaining
+   * @example
+   * ```typescript
+   * const base = Style.createNormalStyle();
+   * const override = Style.create({
+   *   styleId: 'Override',
+   *   name: 'Override',
+   *   type: 'paragraph',
+   *   runFormatting: { bold: true, color: 'FF0000' }
+   * });
+   * base.mergeWith(override);  // base now has bold red text
+   * ```
+   */
+  mergeWith(otherStyle: Style): this {
+    const otherProps = otherStyle.getProperties();
+
+    // Merge paragraph formatting
+    if (otherProps.paragraphFormatting) {
+      if (!this.properties.paragraphFormatting) {
+        this.properties.paragraphFormatting = {};
+      }
+
+      // Merge top-level paragraph properties
+      if (otherProps.paragraphFormatting.alignment) {
+        this.properties.paragraphFormatting.alignment = otherProps.paragraphFormatting.alignment;
+      }
+      if (otherProps.paragraphFormatting.keepNext !== undefined) {
+        this.properties.paragraphFormatting.keepNext = otherProps.paragraphFormatting.keepNext;
+      }
+      if (otherProps.paragraphFormatting.keepLines !== undefined) {
+        this.properties.paragraphFormatting.keepLines = otherProps.paragraphFormatting.keepLines;
+      }
+      if (otherProps.paragraphFormatting.pageBreakBefore !== undefined) {
+        this.properties.paragraphFormatting.pageBreakBefore = otherProps.paragraphFormatting.pageBreakBefore;
+      }
+
+      // Merge indentation
+      if (otherProps.paragraphFormatting.indentation) {
+        if (!this.properties.paragraphFormatting.indentation) {
+          this.properties.paragraphFormatting.indentation = {};
+        }
+        Object.assign(this.properties.paragraphFormatting.indentation, otherProps.paragraphFormatting.indentation);
+      }
+
+      // Merge spacing
+      if (otherProps.paragraphFormatting.spacing) {
+        if (!this.properties.paragraphFormatting.spacing) {
+          this.properties.paragraphFormatting.spacing = {};
+        }
+        Object.assign(this.properties.paragraphFormatting.spacing, otherProps.paragraphFormatting.spacing);
+      }
+    }
+
+    // Merge run formatting
+    if (otherProps.runFormatting) {
+      if (!this.properties.runFormatting) {
+        this.properties.runFormatting = {};
+      }
+      Object.assign(this.properties.runFormatting, otherProps.runFormatting);
+    }
+
+    // Merge other properties (but don't override styleId)
+    if (otherProps.name) this.properties.name = otherProps.name;
+    if (otherProps.basedOn) this.properties.basedOn = otherProps.basedOn;
+    if (otherProps.next) this.properties.next = otherProps.next;
+
+    return this;
+  }
 }

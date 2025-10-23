@@ -4,6 +4,7 @@
 
 import { Document, DocumentProperties } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
+import { Table } from '../../src/elements/Table';
 import { DOCX_PATHS } from '../../src/zip/types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -469,6 +470,264 @@ describe('Document', () => {
 
       // Buffers should be similar in size
       expect(Math.abs(buffer1.length - buffer2.length)).toBeLessThan(100);
+    });
+
+    it('should preserve element order when loading and saving documents', async () => {
+      // This test addresses the critical bug in DocumentParser where elements
+      // were parsed by type (all paragraphs, then all tables) instead of by
+      // document order, causing massive content loss and structure corruption.
+
+      const doc1 = Document.create();
+
+      // Create a document with interleaved paragraphs and tables
+      // This structure is common in real-world documents
+
+      doc1.createParagraph('Paragraph 1');
+
+      const table1 = doc1.createTable(2, 2);
+      const t1r1c1 = new Paragraph();
+      t1r1c1.addText('Table 1, Row 1, Cell 1');
+      table1.getRow(0)?.getCell(0)?.addParagraph(t1r1c1);
+
+      const t1r1c2 = new Paragraph();
+      t1r1c2.addText('Table 1, Row 1, Cell 2');
+      table1.getRow(0)?.getCell(1)?.addParagraph(t1r1c2);
+
+      const t1r2c1 = new Paragraph();
+      t1r2c1.addText('Table 1, Row 2, Cell 1');
+      table1.getRow(1)?.getCell(0)?.addParagraph(t1r2c1);
+
+      const t1r2c2 = new Paragraph();
+      t1r2c2.addText('Table 1, Row 2, Cell 2');
+      table1.getRow(1)?.getCell(1)?.addParagraph(t1r2c2);
+
+      doc1.createParagraph('Paragraph 2');
+      doc1.createParagraph('Paragraph 3');
+
+      const table2 = doc1.createTable(3, 2);
+      const t2r1c1 = new Paragraph();
+      t2r1c1.addText('Table 2, Row 1, Cell 1');
+      table2.getRow(0)?.getCell(0)?.addParagraph(t2r1c1);
+
+      const t2r1c2 = new Paragraph();
+      t2r1c2.addText('Table 2, Row 1, Cell 2');
+      table2.getRow(0)?.getCell(1)?.addParagraph(t2r1c2);
+
+      doc1.createParagraph('Paragraph 4');
+
+      const table3 = doc1.createTable(1, 3);
+      const t3r1c1 = new Paragraph();
+      t3r1c1.addText('Table 3, Cell 1');
+      table3.getRow(0)?.getCell(0)?.addParagraph(t3r1c1);
+
+      const t3r1c2 = new Paragraph();
+      t3r1c2.addText('Table 3, Cell 2');
+      table3.getRow(0)?.getCell(1)?.addParagraph(t3r1c2);
+
+      const t3r1c3 = new Paragraph();
+      t3r1c3.addText('Table 3, Cell 3');
+      table3.getRow(0)?.getCell(2)?.addParagraph(t3r1c3);
+
+      doc1.createParagraph('Paragraph 5');
+      doc1.createParagraph('Paragraph 6');
+
+      // Expected order:
+      // 0: Paragraph 1
+      // 1: Table 1 (2x2)
+      // 2: Paragraph 2
+      // 3: Paragraph 3
+      // 4: Table 2 (3x2)
+      // 5: Paragraph 4
+      // 6: Table 3 (1x3)
+      // 7: Paragraph 5
+      // 8: Paragraph 6
+
+      // Save and reload
+      const buffer = await doc1.toBuffer();
+      const doc2 = await Document.loadFromBuffer(buffer);
+
+      // Verify element counts
+      const bodyElements = doc2.getBodyElements();
+      expect(bodyElements.length).toBe(9); // 6 paragraphs + 3 tables
+
+      // Verify element types in order
+      expect(bodyElements[0]).toBeInstanceOf(Paragraph);
+      expect(bodyElements[1]).toBeInstanceOf(Table);
+      expect(bodyElements[2]).toBeInstanceOf(Paragraph);
+      expect(bodyElements[3]).toBeInstanceOf(Paragraph);
+      expect(bodyElements[4]).toBeInstanceOf(Table);
+      expect(bodyElements[5]).toBeInstanceOf(Paragraph);
+      expect(bodyElements[6]).toBeInstanceOf(Table);
+      expect(bodyElements[7]).toBeInstanceOf(Paragraph);
+      expect(bodyElements[8]).toBeInstanceOf(Paragraph);
+
+      // Verify paragraph text content
+      expect((bodyElements[0] as any).getRuns()[0]?.getText()).toBe('Paragraph 1');
+      expect((bodyElements[2] as any).getRuns()[0]?.getText()).toBe('Paragraph 2');
+      expect((bodyElements[3] as any).getRuns()[0]?.getText()).toBe('Paragraph 3');
+      expect((bodyElements[5] as any).getRuns()[0]?.getText()).toBe('Paragraph 4');
+      expect((bodyElements[7] as any).getRuns()[0]?.getText()).toBe('Paragraph 5');
+      expect((bodyElements[8] as any).getRuns()[0]?.getText()).toBe('Paragraph 6');
+
+      // Verify table dimensions
+      expect((bodyElements[1] as any).getRowCount()).toBe(2);
+      expect((bodyElements[4] as any).getRowCount()).toBe(3);
+      expect((bodyElements[6] as any).getRowCount()).toBe(1);
+
+      // Verify table cell content (first cell of each table)
+      const table1Cell = (bodyElements[1] as any).getRow(0)?.getCell(0);
+      expect(table1Cell).toBeDefined();
+      const table1Text = table1Cell?.getParagraphs()[0]?.getRuns()[0]?.getText();
+      expect(table1Text).toBe('Table 1, Row 1, Cell 1');
+
+      const table2Cell = (bodyElements[4] as any).getRow(0)?.getCell(0);
+      expect(table2Cell).toBeDefined();
+      const table2Text = table2Cell?.getParagraphs()[0]?.getRuns()[0]?.getText();
+      expect(table2Text).toBe('Table 2, Row 1, Cell 1');
+
+      const table3Cell = (bodyElements[6] as any).getRow(0)?.getCell(0);
+      expect(table3Cell).toBeDefined();
+      const table3Text = table3Cell?.getParagraphs()[0]?.getRuns()[0]?.getText();
+      expect(table3Text).toBe('Table 3, Cell 1');
+
+      // Verify no content loss - count all paragraphs including those in tables
+      let totalParagraphs = 0;
+      for (const element of bodyElements) {
+        if (element instanceof Paragraph) {
+          totalParagraphs++;
+        } else if (element instanceof Table) {
+          const table = element as any;
+          for (const row of table.getRows()) {
+            for (const cell of row.getCells()) {
+              if (cell) {
+                totalParagraphs += cell.getParagraphs().length;
+              }
+            }
+          }
+        }
+      }
+
+      // 6 body paragraphs + 4 (table1) + 6 (table2) + 3 (table3) = 19 total
+      expect(totalParagraphs).toBe(19);
+    });
+  });
+
+  describe('Parsing documents with conflicting paragraph properties', () => {
+    test('should resolve pageBreakBefore + keepNext conflict during parsing', async () => {
+      // Create a document with conflicting properties
+      const doc = Document.create();
+      const para = new Paragraph()
+        .addText('Test content')
+        .setPageBreakBefore(true)
+        .setKeepNext(true)     // Clears pageBreakBefore
+        .setKeepLines(true);
+      doc.addParagraph(para);
+
+      // Save and reload
+      const buffer = await doc.toBuffer();
+      const loadedDoc = await Document.loadFromBuffer(buffer);
+
+      // Get the paragraph
+      const bodyElements = loadedDoc.getBodyElements();
+      const loadedPara = bodyElements[0] as Paragraph;
+      const formatting = loadedPara.getFormatting();
+
+      // Conflict should be resolved: keepNext/keepLines take priority
+      expect(formatting.keepNext).toBe(true);
+      expect(formatting.keepLines).toBe(true);
+      expect(formatting.pageBreakBefore).toBe(false);
+    });
+
+    test('should preserve keepNext/keepLines when pageBreakBefore is not set', async () => {
+      // Create a document without conflicts
+      const doc = Document.create();
+      const para = new Paragraph()
+        .addText('Test content')
+        .setKeepNext(true)
+        .setKeepLines(true);
+      doc.addParagraph(para);
+
+      // Save and reload
+      const buffer = await doc.toBuffer();
+      const loadedDoc = await Document.loadFromBuffer(buffer);
+
+      // Get the paragraph
+      const bodyElements = loadedDoc.getBodyElements();
+      const loadedPara = bodyElements[0] as Paragraph;
+      const formatting = loadedPara.getFormatting();
+
+      // Properties should be preserved (pageBreakBefore is false, not undefined, since keepNext was set)
+      expect(formatting.pageBreakBefore).toBe(false);
+      expect(formatting.keepNext).toBe(true);
+      expect(formatting.keepLines).toBe(true);
+    });
+
+    test('should handle multiple paragraphs with mixed conflict scenarios', async () => {
+      const doc = Document.create();
+
+      // Para 1: Has conflict - pageBreakBefore then keepNext (keepNext wins)
+      const para1 = new Paragraph()
+        .addText('Paragraph 1')
+        .setPageBreakBefore(true)
+        .setKeepNext(true);  // Clears pageBreakBefore
+      doc.addParagraph(para1);
+
+      // Para 2: No conflict, just keepNext
+      const para2 = new Paragraph()
+        .addText('Paragraph 2')
+        .setKeepNext(true);
+      doc.addParagraph(para2);
+
+      // Para 3: No conflict, just pageBreakBefore
+      const para3 = new Paragraph()
+        .addText('Paragraph 3')
+        .setPageBreakBefore(true);
+      doc.addParagraph(para3);
+
+      // Save and reload
+      const buffer = await doc.toBuffer();
+      const loadedDoc = await Document.loadFromBuffer(buffer);
+
+      const bodyElements = loadedDoc.getBodyElements();
+
+      // Para 1: Conflict resolved - keepNext wins
+      const loadedPara1 = bodyElements[0] as Paragraph;
+      expect(loadedPara1.getFormatting().keepNext).toBe(true);
+      expect(loadedPara1.getFormatting().pageBreakBefore).toBe(false);
+
+      // Para 2: keepNext preserved (pageBreakBefore is false since keepNext was set)
+      const loadedPara2 = bodyElements[1] as Paragraph;
+      expect(loadedPara2.getFormatting().keepNext).toBe(true);
+      expect(loadedPara2.getFormatting().pageBreakBefore).toBe(false);
+
+      // Para 3: pageBreakBefore preserved
+      const loadedPara3 = bodyElements[2] as Paragraph;
+      expect(loadedPara3.getFormatting().pageBreakBefore).toBe(true);
+      expect(loadedPara3.getFormatting().keepNext).toBeUndefined();
+    });
+
+    test('should resolve conflicts when properties come from XML with non-standard order', async () => {
+      const doc = Document.create();
+      const para = new Paragraph()
+        .addText('Test content')
+        .setKeepNext(true)
+        .setKeepLines(true)
+        .setPageBreakBefore(true)  // Can be set after
+        .setKeepNext(true);         // Call again to clear pageBreakBefore
+      doc.addParagraph(para);
+
+      // Save and reload
+      const buffer = await doc.toBuffer();
+      const loadedDoc = await Document.loadFromBuffer(buffer);
+
+      const bodyElements = loadedDoc.getBodyElements();
+      const loadedPara = bodyElements[0] as Paragraph;
+      const formatting = loadedPara.getFormatting();
+
+      // Conflict should be resolved - keepNext/keepLines win
+      expect(formatting.keepNext).toBe(true);
+      expect(formatting.keepLines).toBe(true);
+      expect(formatting.pageBreakBefore).toBe(false);
     });
   });
 });

@@ -320,6 +320,57 @@ export class Hyperlink {
   }
 
   /**
+   * Sets the anchor (for internal links)
+   * @param anchor Bookmark name to link to
+   * @returns This hyperlink for chaining
+   * @throws {Error} If clearing anchor would create empty hyperlink (no URL and no anchor)
+   * @example
+   * ```typescript
+   * const link = Hyperlink.createInternal('OldBookmark', 'Go there');
+   * link.setAnchor('NewBookmark');  // Update internal link target
+   * ```
+   */
+  setAnchor(anchor: string | undefined): this {
+    // Validate that clearing anchor doesn't create empty hyperlink
+    if (!anchor && !this.url) {
+      throw new Error(
+        `Cannot set anchor to undefined: Hyperlink "${this.text}" has no URL. ` +
+        `Clearing the anchor would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
+        `Either provide a new anchor or delete the hyperlink entirely.`
+      );
+    }
+
+    // Save old anchor before updating
+    const oldAnchor = this.anchor;
+
+    // Skip if anchor unchanged (optimization)
+    if (oldAnchor === anchor) {
+      return this;
+    }
+
+    // Update anchor
+    this.anchor = anchor;
+
+    // If converting from external to internal, clear URL and relationship
+    if (anchor && this.url) {
+      console.warn(
+        `DocXML Warning: Setting anchor "${anchor}" on hyperlink that has URL "${this.url}". ` +
+        `Clearing URL to make this an internal link. Use separate hyperlinks for external and internal links.`
+      );
+      this.url = undefined;
+      this.relationshipId = undefined;
+    }
+
+    // Update text ONLY if it was auto-generated from the old anchor
+    if (this.text === oldAnchor) {
+      this.text = anchor || this.url || 'Link';
+      this.run.setText(this.text);
+    }
+
+    return this;
+  }
+
+  /**
    * Gets the run
    */
   getRun(): Run {

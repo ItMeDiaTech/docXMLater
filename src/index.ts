@@ -160,6 +160,7 @@ export {
 } from './elements/TableCell';
 export { Image, ImageFormat, ImageProperties } from './elements/Image';
 export { ImageManager } from './elements/ImageManager';
+export { ImageRun } from './elements/ImageRun';
 export { FontManager, FontFormat, FontEntry } from './elements/FontManager';
 export { Field, FieldType, FieldProperties } from './elements/Field';
 export { Header, HeaderType, HeaderProperties } from './elements/Header';
@@ -170,6 +171,7 @@ export { TableOfContents, TOCProperties } from './elements/TableOfContents';
 export { TableOfContentsElement } from './elements/TableOfContentsElement';
 export { Bookmark, BookmarkProperties } from './elements/Bookmark';
 export { BookmarkManager } from './elements/BookmarkManager';
+export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent } from './elements/StructuredDocumentTag';
 export { Revision, RevisionType, RevisionProperties } from './elements/Revision';
 export { RevisionManager } from './elements/RevisionManager';
 export { Comment, CommentProperties } from './elements/Comment';

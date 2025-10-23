@@ -15,6 +15,8 @@ export interface TOCProperties {
   title?: string;
   /** Heading levels to include (1-9, default: 1-3) */
   levels?: number;
+  /** Specific styles to include (overrides levels if provided) */
+  includeStyles?: string[];
   /** Whether to show page numbers (default: true) */
   showPageNumbers?: boolean;
   /** Whether to right-align page numbers (default: true) */
@@ -27,6 +29,18 @@ export interface TOCProperties {
   tabLeader?: 'dot' | 'hyphen' | 'underscore' | 'none';
   /** Custom field switches */
   fieldSwitches?: string;
+  /** Whether TOC entries should be numbered (default: false) */
+  numbered?: boolean;
+  /** Numbering format for TOC entries */
+  numberingFormat?: 'decimal' | 'roman' | 'alpha';
+  /** Remove all indentation from TOC entries (default: false) */
+  noIndent?: boolean;
+  /** Custom indents for each TOC level in twips */
+  customIndents?: number[];
+  /** Space between TOC entries in twips (default: 0) */
+  spaceBetweenEntries?: number;
+  /** Hyperlink color in hex format without # (default: 0000FF) */
+  hyperlinkColor?: string;
 }
 
 /**
@@ -35,10 +49,17 @@ export interface TOCProperties {
 export class TableOfContents {
   private title: string;
   private levels: number;
+  private includeStyles?: string[];
   private showPageNumbers: boolean;
   private useHyperlinks: boolean;
   private tabLeader: 'dot' | 'hyphen' | 'underscore' | 'none';
   private fieldSwitches?: string;
+  private numbered: boolean;
+  private numberingFormat: 'decimal' | 'roman' | 'alpha';
+  private noIndent: boolean;
+  private customIndents?: number[];
+  private spaceBetweenEntries: number;
+  private hyperlinkColor: string;
 
   /**
    * Creates a new Table of Contents
@@ -47,13 +68,17 @@ export class TableOfContents {
   constructor(properties: TOCProperties = {}) {
     this.title = properties.title || 'Table of Contents';
     this.levels = properties.levels || 3;
+    this.includeStyles = properties.includeStyles;
     this.showPageNumbers = properties.showPageNumbers !== false;
     this.useHyperlinks = properties.useHyperlinks || false;
     this.tabLeader = properties.tabLeader || 'dot';
     this.fieldSwitches = properties.fieldSwitches;
-
-    // Note: rightAlignPageNumbers and style are stored in properties but not used in current implementation
-    // These can be used for future enhancements
+    this.numbered = properties.numbered || false;
+    this.numberingFormat = properties.numberingFormat || 'decimal';
+    this.noIndent = properties.noIndent || false;
+    this.customIndents = properties.customIndents;
+    this.spaceBetweenEntries = properties.spaceBetweenEntries || 0;
+    this.hyperlinkColor = properties.hyperlinkColor || '0000FF';
   }
 
   /**
@@ -120,13 +145,69 @@ export class TableOfContents {
   }
 
   /**
+   * Gets whether TOC entries are numbered
+   */
+  getNumbered(): boolean {
+    return this.numbered;
+  }
+
+  /**
+   * Gets the numbering format
+   */
+  getNumberingFormat(): 'decimal' | 'roman' | 'alpha' {
+    return this.numberingFormat;
+  }
+
+  /**
+   * Gets whether indentation is removed
+   */
+  getNoIndent(): boolean {
+    return this.noIndent;
+  }
+
+  /**
+   * Gets custom indents
+   */
+  getCustomIndents(): number[] | undefined {
+    return this.customIndents;
+  }
+
+  /**
+   * Gets spacing between entries
+   */
+  getSpaceBetweenEntries(): number {
+    return this.spaceBetweenEntries;
+  }
+
+  /**
+   * Gets hyperlink color
+   */
+  getHyperlinkColor(): string {
+    return this.hyperlinkColor;
+  }
+
+  /**
+   * Gets specific included styles
+   */
+  getIncludeStyles(): string[] | undefined {
+    return this.includeStyles;
+  }
+
+  /**
    * Builds the TOC field instruction string
    */
   private buildFieldInstruction(): string {
     let instruction = 'TOC';
 
-    // Add heading levels switch
-    instruction += ` \\o "1-${this.levels}"`;
+    // Add specific styles switch OR heading levels switch
+    if (this.includeStyles && this.includeStyles.length > 0) {
+      // Use \t switch to specify exact styles
+      const stylesString = this.includeStyles.map(s => `"${s}",1`).join(' ');
+      instruction += ` \\t ${stylesString}`;
+    } else {
+      // Use \o switch for heading levels
+      instruction += ` \\o "1-${this.levels}"`;
+    }
 
     // Add hyperlinks switch if enabled
     if (this.useHyperlinks) {
@@ -346,5 +427,157 @@ export class TableOfContents {
    */
   static create(properties?: TOCProperties): TableOfContents {
     return new TableOfContents(properties);
+  }
+
+  /**
+   * Sets specific styles to include in TOC (overrides levels)
+   * @param styles - Array of style names (e.g., ['Heading1', 'Heading3'])
+   * @returns This TOC for chaining
+   */
+  setIncludeStyles(styles: string[]): this {
+    this.includeStyles = styles;
+    return this;
+  }
+
+  /**
+   * Sets whether TOC entries should be numbered
+   * @param numbered - Whether to number entries
+   * @param format - Numbering format (decimal, roman, alpha)
+   * @returns This TOC for chaining
+   */
+  setNumbered(numbered: boolean, format: 'decimal' | 'roman' | 'alpha' = 'decimal'): this {
+    this.numbered = numbered;
+    this.numberingFormat = format;
+    return this;
+  }
+
+  /**
+   * Sets whether to remove indentation from TOC entries
+   * @param noIndent - Whether to remove indentation
+   * @returns This TOC for chaining
+   */
+  setNoIndent(noIndent: boolean): this {
+    this.noIndent = noIndent;
+    return this;
+  }
+
+  /**
+   * Sets custom indents for each TOC level
+   * @param indents - Array of indent values in twips
+   * @returns This TOC for chaining
+   */
+  setCustomIndents(indents: number[]): this {
+    this.customIndents = indents;
+    return this;
+  }
+
+  /**
+   * Sets spacing between TOC entries
+   * @param spacing - Spacing in twips
+   * @returns This TOC for chaining
+   */
+  setSpaceBetweenEntries(spacing: number): this {
+    this.spaceBetweenEntries = spacing;
+    return this;
+  }
+
+  /**
+   * Sets hyperlink color for TOC entries
+   * @param color - Hex color without # (e.g., '0000FF' for blue)
+   * @returns This TOC for chaining
+   */
+  setHyperlinkColor(color: string): this {
+    this.hyperlinkColor = color;
+    return this;
+  }
+
+  /**
+   * Configures multiple properties at once
+   * @param options - Partial TOC properties to apply
+   * @returns This TOC for chaining
+   */
+  configure(options: Partial<TOCProperties>): this {
+    if (options.title !== undefined) this.title = options.title;
+    if (options.levels !== undefined) this.levels = options.levels;
+    if (options.includeStyles !== undefined) this.includeStyles = options.includeStyles;
+    if (options.showPageNumbers !== undefined) this.showPageNumbers = options.showPageNumbers;
+    if (options.useHyperlinks !== undefined) this.useHyperlinks = options.useHyperlinks;
+    if (options.tabLeader !== undefined) this.tabLeader = options.tabLeader;
+    if (options.fieldSwitches !== undefined) this.fieldSwitches = options.fieldSwitches;
+    if (options.numbered !== undefined) this.numbered = options.numbered;
+    if (options.numberingFormat !== undefined) this.numberingFormat = options.numberingFormat;
+    if (options.noIndent !== undefined) this.noIndent = options.noIndent;
+    if (options.customIndents !== undefined) this.customIndents = options.customIndents;
+    if (options.spaceBetweenEntries !== undefined) this.spaceBetweenEntries = options.spaceBetweenEntries;
+    if (options.hyperlinkColor !== undefined) this.hyperlinkColor = options.hyperlinkColor;
+    return this;
+  }
+
+  /**
+   * Creates a TOC with specific styles
+   * @param styles - Array of style names to include
+   * @param options - Additional TOC options
+   * @returns New TableOfContents instance
+   */
+  static createWithStyles(styles: string[], options?: Partial<TOCProperties>): TableOfContents {
+    return new TableOfContents({
+      ...options,
+      includeStyles: styles,
+    });
+  }
+
+  /**
+   * Creates a flat (no indent) TOC
+   * @param title - Optional TOC title
+   * @param styles - Optional specific styles (default: all heading levels)
+   * @returns New TableOfContents instance
+   */
+  static createFlat(title?: string, styles?: string[]): TableOfContents {
+    return new TableOfContents({
+      title: title || 'Contents',
+      includeStyles: styles,
+      noIndent: true,
+      spaceBetweenEntries: 100, // Small spacing for flat TOC
+    });
+  }
+
+  /**
+   * Creates a numbered TOC
+   * @param title - Optional TOC title
+   * @param format - Numbering format (decimal, roman, alpha)
+   * @returns New TableOfContents instance
+   */
+  static createNumbered(title?: string, format: 'decimal' | 'roman' | 'alpha' = 'decimal'): TableOfContents {
+    return new TableOfContents({
+      title: title || 'Table of Contents',
+      numbered: true,
+      numberingFormat: format,
+    });
+  }
+
+  /**
+   * Creates a TOC with custom spacing
+   * @param spaceBetweenEntries - Spacing in twips
+   * @param options - Additional TOC options
+   * @returns New TableOfContents instance
+   */
+  static createWithSpacing(spaceBetweenEntries: number, options?: Partial<TOCProperties>): TableOfContents {
+    return new TableOfContents({
+      ...options,
+      spaceBetweenEntries,
+    });
+  }
+
+  /**
+   * Creates a TOC with custom hyperlink color
+   * @param color - Hex color without # (e.g., '0000FF' for blue)
+   * @param options - Additional TOC options
+   * @returns New TableOfContents instance
+   */
+  static createWithHyperlinkColor(color: string, options?: Partial<TOCProperties>): TableOfContents {
+    return new TableOfContents({
+      ...options,
+      hyperlinkColor: color,
+    });
   }
 }

@@ -61,7 +61,11 @@ export class ZipWriter {
 
     // DOCX REQUIREMENT: [Content_Types].xml MUST be uncompressed (STORE)
     const isContentTypes = normalizedPath === "[Content_Types].xml";
-    const useCompression = isContentTypes ? "STORE" : (compression > 0 ? "DEFLATE" : "STORE");
+    const useCompression = isContentTypes
+      ? "STORE"
+      : compression > 0
+      ? "DEFLATE"
+      : "STORE";
     const compressionLevel = isContentTypes ? 0 : compression;
 
     // For text content (XML), this ensures UTF-8 encoding is preserved
@@ -75,11 +79,14 @@ export class ZipWriter {
     });
 
     // Store in our file map
+    // IMPORTANT: Store the PROCESSED content (Buffer), not the original
+    // This ensures consistency with what was added to this.zip and prevents
+    // double UTF-8 conversion in toBuffer() method (Issue #1)
     this.files.set(normalizedPath, {
       path: normalizedPath,
-      content,
+      content: processedContent, // Store Buffer, not original string
       isBinary: binary,
-      size: Buffer.isBuffer(content) ? content.length : content.length,
+      size: processedContent.length, // Buffer.length is always correct (Issue #3)
       date,
     });
   }
@@ -255,14 +262,16 @@ export class ZipWriter {
         const file = this.files.get(path);
         if (!file) continue;
 
-        let processedContent = file.content;
-        if (typeof file.content === "string") {
-          processedContent = Buffer.from(file.content, "utf8");
-        }
+        // Content is already a Buffer from addFile() - no re-conversion needed (Issue #2)
+        const processedContent = file.content as Buffer;
 
         // DOCX REQUIREMENT: [Content_Types].xml MUST be uncompressed
         const isContentTypes = path === "[Content_Types].xml";
-        const useCompression = isContentTypes ? "STORE" : (compression > 0 ? "DEFLATE" : "STORE");
+        const useCompression = isContentTypes
+          ? "STORE"
+          : compression > 0
+          ? "DEFLATE"
+          : "STORE";
         const compressionLevel = isContentTypes ? 0 : compression;
 
         orderedZip.file(path, processedContent, {

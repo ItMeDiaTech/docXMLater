@@ -306,6 +306,170 @@ export class NumberingManager {
   }
 
   /**
+   * Gets the framework's standard indentation for a list level
+   *
+   * The framework uses a consistent indentation scheme:
+   * - leftIndent: 720 * (level + 1) twips
+   * - hangingIndent: 360 twips
+   *
+   * Examples:
+   * - Level 0: 720 twips (0.5 inch) left, 360 twips hanging
+   * - Level 1: 1440 twips (1 inch) left, 360 twips hanging
+   * - Level 2: 2160 twips (1.5 inch) left, 360 twips hanging
+   *
+   * @param level The level (0-8)
+   * @returns Object with leftIndent and hangingIndent in twips
+   * @example
+   * ```typescript
+   * const indent = manager.getStandardIndentation(0);
+   * // Returns: { leftIndent: 720, hangingIndent: 360 }
+   * ```
+   */
+  getStandardIndentation(level: number): { leftIndent: number; hangingIndent: number } {
+    if (level < 0 || level > 8) {
+      throw new Error(`Invalid level ${level}. Level must be between 0 and 8.`);
+    }
+
+    return {
+      leftIndent: 720 * (level + 1),
+      hangingIndent: 360,
+    };
+  }
+
+  /**
+   * Sets custom indentation for a specific level in a numbering definition
+   *
+   * This updates the indentation for a specific level across ALL paragraphs
+   * that use this numId and level combination.
+   *
+   * @param numId The numbering instance ID
+   * @param level The level to modify (0-8)
+   * @param leftIndent Left indentation in twips
+   * @param hangingIndent Hanging indentation in twips (optional, defaults to 360)
+   * @returns true if successful, false if numId doesn't exist
+   * @example
+   * ```typescript
+   * // Set level 0 to 0.5 inch left, 0.25 inch hanging
+   * manager.setListIndentation(1, 0, 720, 360);
+   * ```
+   */
+  setListIndentation(
+    numId: number,
+    level: number,
+    leftIndent: number,
+    hangingIndent: number = 360
+  ): boolean {
+    // Validate level
+    if (level < 0 || level > 8) {
+      throw new Error(`Invalid level ${level}. Level must be between 0 and 8.`);
+    }
+
+    // Validate indents (clamp negatives to 0)
+    leftIndent = Math.max(0, leftIndent);
+    hangingIndent = Math.max(0, hangingIndent);
+
+    // Get the numbering instance
+    const instance = this.getInstance(numId);
+    if (!instance) {
+      console.warn(`Numbering instance ${numId} does not exist`);
+      return false;
+    }
+
+    // Get the abstract numbering
+    const abstractNum = this.getAbstractNumbering(instance.getAbstractNumId());
+    if (!abstractNum) {
+      console.warn(`Abstract numbering for instance ${numId} does not exist`);
+      return false;
+    }
+
+    // Get the level from the abstract numbering
+    const numLevel = abstractNum.getLevel(level);
+    if (!numLevel) {
+      console.warn(`Level ${level} does not exist in abstract numbering`);
+      return false;
+    }
+
+    // Update the level's indentation
+    numLevel.setLeftIndent(leftIndent);
+    numLevel.setHangingIndent(hangingIndent);
+
+    return true;
+  }
+
+  /**
+   * Resets all levels in a numbering definition to standard indentation
+   *
+   * This applies the framework's standard indentation formula to all levels:
+   * - leftIndent: 720 * (level + 1) twips
+   * - hangingIndent: 360 twips
+   *
+   * @param numId The numbering instance ID
+   * @returns true if successful, false if numId doesn't exist
+   * @example
+   * ```typescript
+   * // Reset list 1 to standard indentation
+   * manager.normalizeListIndentation(1);
+   * ```
+   */
+  normalizeListIndentation(numId: number): boolean {
+    // Get the numbering instance
+    const instance = this.getInstance(numId);
+    if (!instance) {
+      console.warn(`Numbering instance ${numId} does not exist`);
+      return false;
+    }
+
+    // Get the abstract numbering
+    const abstractNum = this.getAbstractNumbering(instance.getAbstractNumId());
+    if (!abstractNum) {
+      console.warn(`Abstract numbering for instance ${numId} does not exist`);
+      return false;
+    }
+
+    // Get all levels
+    const levels = abstractNum.getAllLevels();
+
+    // Apply standard indentation to each level
+    for (const level of levels) {
+      const standardIndent = this.getStandardIndentation(level.getLevel());
+      level.setLeftIndent(standardIndent.leftIndent);
+      level.setHangingIndent(standardIndent.hangingIndent);
+    }
+
+    return true;
+  }
+
+  /**
+   * Normalizes indentation for all lists in the document
+   *
+   * Applies standard indentation to every numbering instance:
+   * - leftIndent: 720 * (level + 1) twips
+   * - hangingIndent: 360 twips
+   *
+   * This ensures consistent spacing across all lists in the document.
+   *
+   * @returns Number of numbering instances updated
+   * @example
+   * ```typescript
+   * const count = manager.normalizeAllListIndentation();
+   * console.log(`Normalized ${count} lists`);
+   * ```
+   */
+  normalizeAllListIndentation(): number {
+    let count = 0;
+
+    // Iterate over all instances
+    for (const instance of this.getAllInstances()) {
+      const success = this.normalizeListIndentation(instance.getNumId());
+      if (success) {
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  /**
    * Gets the total number of abstract numberings
    */
   getAbstractNumberingCount(): number {
@@ -328,6 +492,56 @@ export class NumberingManager {
     this.nextAbstractNumId = 0;
     this.nextNumId = 1;
     return this;
+  }
+
+  /**
+   * Removes unused numbering instances and abstract numberings
+   *
+   * This method cleans up numbering definitions that are no longer referenced
+   * by any paragraphs in the document. It removes:
+   * 1. Instances not in the usedNumIds set
+   * 2. Abstract numberings not referenced by any remaining instance
+   *
+   * @param usedNumIds Set of numIds currently used by paragraphs
+   * @returns Object with counts of removed instances and abstract numberings
+   */
+  cleanupUnusedNumbering(usedNumIds: Set<number>): { instancesRemoved: number; abstractsRemoved: number } {
+    let instancesRemoved = 0;
+    let abstractsRemoved = 0;
+
+    // Step 1: Remove unused instances
+    const instancesToRemove: number[] = [];
+    this.instances.forEach((_instance, numId) => {
+      if (!usedNumIds.has(numId)) {
+        instancesToRemove.push(numId);
+      }
+    });
+
+    for (const numId of instancesToRemove) {
+      this.instances.delete(numId);
+      instancesRemoved++;
+    }
+
+    // Step 2: Find abstract numberings still referenced by remaining instances
+    const referencedAbstractNumIds = new Set<number>();
+    this.instances.forEach(instance => {
+      referencedAbstractNumIds.add(instance.getAbstractNumId());
+    });
+
+    // Step 3: Remove unreferenced abstract numberings
+    const abstractsToRemove: number[] = [];
+    this.abstractNumberings.forEach((_abstractNum, abstractNumId) => {
+      if (!referencedAbstractNumIds.has(abstractNumId)) {
+        abstractsToRemove.push(abstractNumId);
+      }
+    });
+
+    for (const abstractNumId of abstractsToRemove) {
+      this.abstractNumberings.delete(abstractNumId);
+      abstractsRemoved++;
+    }
+
+    return { instancesRemoved, abstractsRemoved };
   }
 
   /**

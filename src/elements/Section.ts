@@ -118,7 +118,7 @@ export class Section {
    * @param properties Section properties
    */
   constructor(properties: SectionProperties = {}) {
-    // Set defaults
+    // Set defaults only where necessary
     this.properties = {
       pageSize: properties.pageSize || {
         width: PAGE_SIZES.LETTER.width,
@@ -133,16 +133,16 @@ export class Section {
         header: 720,  // 0.5 inch
         footer: 720,
       },
+      // Default to single column layout
       columns: properties.columns || {
         count: 1,
-        space: 720,
-        equalWidth: true,
       },
+      // Default to next page section break
       type: properties.type || 'nextPage',
       pageNumbering: properties.pageNumbering,
       headers: properties.headers,
       footers: properties.footers,
-      titlePage: properties.titlePage || false,
+      titlePage: properties.titlePage,
     };
   }
 
@@ -365,8 +365,8 @@ export class Section {
       children.push(XMLBuilder.wSelf('pgMar', attrs));
     }
 
-    // Columns
-    if (this.properties.columns && this.properties.columns.count > 1) {
+    // Columns - output when set (including single column)
+    if (this.properties.columns) {
       const attrs: Record<string, string> = {
         'w:num': this.properties.columns.count.toString(),
       };
@@ -377,14 +377,11 @@ export class Section {
         attrs['w:equalWidth'] = this.properties.columns.equalWidth ? '1' : '0';
       }
       children.push(XMLBuilder.wSelf('cols', attrs));
-    } else {
-      // Default single column
-      children.push(XMLBuilder.wSelf('cols', { 'w:space': '720' }));
     }
 
     // Title page
     if (this.properties.titlePage) {
-      children.push(XMLBuilder.wSelf('titlePg'));
+      children.push(XMLBuilder.wSelf('titlePg', { 'w:val': '1' }));
     }
 
     // Page numbering

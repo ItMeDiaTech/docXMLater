@@ -51,6 +51,8 @@ export interface ParagraphFormatting {
   };
   /** Contextual spacing - removes spacing between paragraphs of same style */
   contextualSpacing?: boolean;
+  /** Paragraph ID (Word 2010+) - required by modern Word for change tracking */
+  paraId?: string;
 }
 
 /**
@@ -63,7 +65,7 @@ type ParagraphContent = Run | Field | Hyperlink | Revision;
  */
 export class Paragraph {
   private content: ParagraphContent[] = [];
-  private formatting: ParagraphFormatting;
+  public formatting: ParagraphFormatting;
   private bookmarksStart: Bookmark[] = [];
   private bookmarksEnd: Bookmark[] = [];
   private commentsStart: Comment[] = [];
@@ -460,21 +462,49 @@ export class Paragraph {
 
   /**
    * Sets keep with next
+   *
+   * **Automatic Conflict Resolution:**
+   * When setting keepNext to true, pageBreakBefore is automatically cleared to prevent
+   * layout conflicts. The pageBreakBefore property creates contradictory constraints
+   * (breaking the page vs. keeping content together) that cause massive whitespace
+   * in Word as the layout engine tries to satisfy both. Keep properties take priority
+   * as they represent explicit user intent to keep content together.
+   *
    * @param keepNext - Whether to keep with next paragraph
    * @returns This paragraph for chaining
    */
   setKeepNext(keepNext: boolean = true): this {
     this.formatting.keepNext = keepNext;
+
+    // Resolve property conflicts: keepNext contradicts pageBreakBefore
+    if (keepNext) {
+      this.formatting.pageBreakBefore = false;
+    }
+
     return this;
   }
 
   /**
    * Sets keep lines together
+   *
+   * **Automatic Conflict Resolution:**
+   * When setting keepLines to true, pageBreakBefore is automatically cleared to prevent
+   * layout conflicts. The pageBreakBefore property creates contradictory constraints
+   * (breaking the page vs. keeping lines together) that cause massive whitespace
+   * in Word as the layout engine tries to satisfy both. Keep properties take priority
+   * as they represent explicit user intent to keep content together.
+   *
    * @param keepLines - Whether to keep lines together
    * @returns This paragraph for chaining
    */
   setKeepLines(keepLines: boolean = true): this {
     this.formatting.keepLines = keepLines;
+
+    // Resolve property conflicts: keepLines contradicts pageBreakBefore
+    if (keepLines) {
+      this.formatting.pageBreakBefore = false;
+    }
+
     return this;
   }
 
@@ -602,7 +632,7 @@ export class Paragraph {
     // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
     // Removes spacing between paragraphs of the same style (comes after spacing)
     if (this.formatting.contextualSpacing) {
-      pPrChildren.push(XMLBuilder.wSelf('contextualSpacing'));
+      pPrChildren.push(XMLBuilder.wSelf('contextualSpacing', { 'w:val': '1' }));
     }
 
     // 7. Indentation (left/right/firstLine/hanging)
@@ -679,7 +709,13 @@ export class Paragraph {
       paragraphChildren.push(bookmark.toEndXML());
     }
 
-    return XMLBuilder.w('p', undefined, paragraphChildren);
+    // Add paragraph-level attributes (Word 2010+ requires w14:paraId)
+    const paragraphAttributes: Record<string, string> = {};
+    if (this.formatting.paraId) {
+      paragraphAttributes['w14:paraId'] = this.formatting.paraId;
+    }
+
+    return XMLBuilder.w('p', Object.keys(paragraphAttributes).length > 0 ? paragraphAttributes : undefined, paragraphChildren);
   }
 
   /**
@@ -800,6 +836,297 @@ export class Paragraph {
 
     // Store tabs in formatting (will be handled in toXML)
     (this.formatting as any).tabs = tabs;
+
+    return this;
+  }
+
+  /**
+   * Inserts a run at a specific position
+   * @param index - Position to insert at (0-based)
+   * @param run - Run to insert
+   * @returns This paragraph for chaining
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * const run = new Run('Inserted', { bold: true });
+   * para.insertRunAt(0, run);
+   * ```
+   */
+  insertRunAt(index: number, run: Run): this {
+    if (index < 0) index = 0;
+    if (index > this.content.length) index = this.content.length;
+
+    this.content.splice(index, 0, run);
+    return this;
+  }
+
+  /**
+   * Removes a run at a specific position
+   * @param index - Position to remove (0-based)
+   * @returns True if removed, false if index invalid
+   * @example
+   * ```typescript
+   * para.removeRunAt(2);  // Remove third run
+   * ```
+   */
+  removeRunAt(index: number): boolean {
+    if (index >= 0 && index < this.content.length) {
+      const item = this.content[index];
+      if (item instanceof Run) {
+        this.content.splice(index, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Replaces a run at a specific position
+   * @param index - Position to replace (0-based)
+   * @param run - New run
+   * @returns True if replaced, false if index invalid or not a run
+   * @example
+   * ```typescript
+   * const newRun = new Run('Replacement', { italic: true });
+   * para.replaceRunAt(1, newRun);
+   * ```
+   */
+  replaceRunAt(index: number, run: Run): boolean {
+    if (index >= 0 && index < this.content.length) {
+      const item = this.content[index];
+      if (item instanceof Run) {
+        this.content[index] = run;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Finds text within the paragraph
+   * @param text - Text to search for
+   * @param options - Search options
+   * @returns Array of run indices containing the text
+   * @example
+   * ```typescript
+   * const indices = para.findText('important');
+   * console.log(`Found in runs: ${indices.join(', ')}`);
+   * ```
+   */
+  findText(text: string, options?: { caseSensitive?: boolean; wholeWord?: boolean }): number[] {
+    const indices: number[] = [];
+    const caseSensitive = options?.caseSensitive || false;
+    const wholeWord = options?.wholeWord || false;
+
+    const searchText = caseSensitive ? text : text.toLowerCase();
+
+    for (let i = 0; i < this.content.length; i++) {
+      const item = this.content[i];
+      if (item instanceof Run) {
+        const runText = caseSensitive ? item.getText() : item.getText().toLowerCase();
+
+        if (wholeWord) {
+          // Use word boundary regex
+          const wordPattern = new RegExp(`\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+          if (wordPattern.test(runText)) {
+            indices.push(i);
+          }
+        } else {
+          // Simple substring search
+          if (runText.includes(searchText)) {
+            indices.push(i);
+          }
+        }
+      }
+    }
+
+    return indices;
+  }
+
+  /**
+   * Replaces text within paragraph runs
+   * @param find - Text to find
+   * @param replace - Replacement text
+   * @param options - Search options
+   * @returns Number of replacements made
+   * @example
+   * ```typescript
+   * const count = para.replaceText('old', 'new');
+   * console.log(`Replaced ${count} occurrences`);
+   * ```
+   */
+  replaceText(find: string, replace: string, options?: { caseSensitive?: boolean; wholeWord?: boolean }): number {
+    let replacementCount = 0;
+    const caseSensitive = options?.caseSensitive || false;
+    const wholeWord = options?.wholeWord || false;
+
+    for (const item of this.content) {
+      if (item instanceof Run) {
+        const originalText = item.getText();
+        let newText = originalText;
+
+        if (wholeWord) {
+          // Use word boundary regex
+          const wordPattern = new RegExp(
+            `\\b${find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+            caseSensitive ? 'g' : 'gi'
+          );
+          const matches = originalText.match(wordPattern);
+          if (matches) {
+            replacementCount += matches.length;
+            newText = originalText.replace(wordPattern, replace);
+          }
+        } else {
+          // Simple substring replacement
+          const searchPattern = new RegExp(
+            find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+            caseSensitive ? 'g' : 'gi'
+          );
+          const matches = originalText.match(searchPattern);
+          if (matches) {
+            replacementCount += matches.length;
+            newText = originalText.replace(searchPattern, replace);
+          }
+        }
+
+        if (newText !== originalText) {
+          item.setText(newText);
+        }
+      }
+    }
+
+    return replacementCount;
+  }
+
+  /**
+   * Merges another paragraph's content into this one
+   * @param otherPara - Paragraph to merge
+   * @returns This paragraph for chaining
+   * @example
+   * ```typescript
+   * const para1 = new Paragraph().addText('Hello ');
+   * const para2 = new Paragraph().addText('World');
+   * para1.mergeWith(para2);  // para1 now contains "Hello World"
+   * ```
+   */
+  mergeWith(otherPara: Paragraph): this {
+    // Add all content from other paragraph
+    for (const item of otherPara.content) {
+      if (item instanceof Run) {
+        this.content.push(item.clone());
+      } else {
+        this.content.push(item);
+      }
+    }
+
+    // Merge bookmarks
+    this.bookmarksStart.push(...otherPara.bookmarksStart);
+    this.bookmarksEnd.push(...otherPara.bookmarksEnd);
+
+    // Merge comments
+    this.commentsStart.push(...otherPara.commentsStart);
+    this.commentsEnd.push(...otherPara.commentsEnd);
+
+    return this;
+  }
+
+  /**
+   * Clears direct run formatting from all runs in this paragraph
+   *
+   * This is useful when applying styles, as direct run formatting takes precedence
+   * over style formatting in Word. By clearing direct formatting, the style's
+   * formatting can take effect.
+   *
+   * @param properties - Optional array of specific properties to clear.
+   *                     If not specified, clears ALL direct formatting.
+   *                     Valid properties: 'bold', 'italic', 'underline', 'strike',
+   *                     'font', 'size', 'color', 'highlight', 'subscript', 'superscript',
+   *                     'smallCaps', 'allCaps', 'dstrike'
+   * @returns This paragraph for chaining
+   * @example
+   * ```typescript
+   * // Clear all direct formatting
+   * para.clearDirectRunFormatting();
+   *
+   * // Clear only font and color
+   * para.clearDirectRunFormatting(['font', 'color']);
+   *
+   * // Apply style and clear all formatting
+   * para.setStyle('Heading1').clearDirectRunFormatting();
+   * ```
+   */
+  clearDirectRunFormatting(properties?: string[]): this {
+    const runs = this.getRuns();
+
+    for (const run of runs) {
+      const formatting = run.getFormatting();
+
+      if (properties && properties.length > 0) {
+        // Clear only specified properties
+        const newFormatting: RunFormatting = { ...formatting };
+        for (const prop of properties) {
+          if (prop in newFormatting) {
+            delete (newFormatting as any)[prop];
+          }
+        }
+
+        // Create new run with cleared formatting
+        const text = run.getText();
+        const newRun = new Run(text, newFormatting);
+
+        // Replace in content array
+        const index = this.content.indexOf(run);
+        if (index !== -1) {
+          this.content[index] = newRun;
+        }
+      } else {
+        // Clear ALL direct formatting - replace with plain text run
+        const text = run.getText();
+        const newRun = new Run(text, {});
+
+        // Replace in content array
+        const index = this.content.indexOf(run);
+        if (index !== -1) {
+          this.content[index] = newRun;
+        }
+      }
+    }
+
+    return this;
+  }
+
+  /**
+   * Applies a style to this paragraph and optionally clears direct run formatting
+   *
+   * In Word, direct run formatting takes precedence over style formatting. This method
+   * provides a way to apply a style while ensuring it takes effect by clearing
+   * conflicting direct formatting.
+   *
+   * @param styleId - Style ID to apply (e.g., 'Normal', 'Heading1')
+   * @param clearProperties - Optional array of run properties to clear.
+   *                          If not specified, does NOT clear any formatting (style overlay behavior).
+   *                          Pass empty array [] to clear ALL formatting.
+   * @returns This paragraph for chaining
+   * @example
+   * ```typescript
+   * // Apply Heading1 and clear all direct formatting
+   * para.applyStyleAndClearFormatting('Heading1', []);
+   *
+   * // Apply Normal and clear only font and color
+   * para.applyStyleAndClearFormatting('Normal', ['font', 'color']);
+   *
+   * // Apply Title but keep existing run formatting (overlay style)
+   * para.applyStyleAndClearFormatting('Title');
+   * ```
+   */
+  applyStyleAndClearFormatting(styleId: string, clearProperties?: string[]): this {
+    // Apply the style
+    this.setStyle(styleId);
+
+    // Clear direct formatting if requested
+    if (clearProperties !== undefined) {
+      this.clearDirectRunFormatting(clearProperties.length === 0 ? undefined : clearProperties);
+    }
 
     return this;
   }

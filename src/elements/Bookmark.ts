@@ -15,6 +15,8 @@ export interface BookmarkProperties {
   id?: number;
   /** Bookmark name (must be unique within document) */
   name: string;
+  /** Skip name normalization (used when loading from existing documents) */
+  skipNormalization?: boolean;
 }
 
 /**
@@ -30,7 +32,9 @@ export class Bookmark {
    */
   constructor(properties: BookmarkProperties) {
     this.id = properties.id ?? 0; // ID will be assigned by BookmarkManager
-    this.name = this.normalizeName(properties.name);
+    // Preserve exact bookmark names when loading from documents (Word allows =, ., etc.)
+    // Only normalize when creating new bookmarks programmatically
+    this.name = properties.skipNormalization ? properties.name : this.normalizeName(properties.name);
   }
 
   /**

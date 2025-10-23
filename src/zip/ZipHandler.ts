@@ -173,11 +173,13 @@ export class ZipHandler {
    * Gets the content of a specific file as a string
    * @param filePath - Path to the file within the archive
    * @returns The file content as a UTF-8 string, or undefined if not found
+   * @throws Error if attempting to convert a binary file to string (Issue #12 fix)
    *
    * **Encoding Note:**
-   * - Returns UTF-8 decoded string content
+   * - Returns UTF-8 decoded string content for text files
    * - All text content in DOCX files must be UTF-8 per OpenXML specification
-   * - For binary files, converts Buffer to UTF-8 string (may fail for non-text binary)
+   * - For binary files (images, fonts), throws an error to prevent garbage output
+   * - Use getFileAsBuffer() for binary files instead
    */
   getFileAsString(filePath: string): string | undefined {
     const file = this.getFile(filePath);
@@ -185,9 +187,21 @@ export class ZipHandler {
       return undefined;
     }
 
+    // Issue #12 fix: Prevent converting binary files to UTF-8 strings
+    // This produces garbage output for images, fonts, etc.
     if (file.isBinary) {
-      // Convert binary buffer to UTF-8 string
-      return (file.content as Buffer).toString('utf8');
+      throw new Error(
+        `Cannot convert binary file "${filePath}" to string. ` +
+        `Binary files (images, fonts, etc.) cannot be safely converted to UTF-8 strings. ` +
+        `Use getFileAsBuffer() instead to access the raw bytes.`
+      );
+    }
+
+    // After ZipWriter fix (Issue #4), check actual content type instead of flag
+    // Content from ZipWriter is always Buffer, content from ZipReader may be string
+    if (Buffer.isBuffer(file.content)) {
+      // Convert buffer to UTF-8 string
+      return file.content.toString('utf8');
     }
 
     return file.content as string;
@@ -209,11 +223,13 @@ export class ZipHandler {
       return undefined;
     }
 
-    if (file.isBinary) {
-      return file.content as Buffer;
+    // After ZipWriter fix (Issue #4), check actual content type instead of flag
+    // Content from ZipWriter is always Buffer, content from ZipReader may be string
+    if (Buffer.isBuffer(file.content)) {
+      return file.content;
     }
 
-    // Encode string content as UTF-8 Buffer
+    // Encode string content as UTF-8 Buffer (for content from ZipReader)
     return Buffer.from(file.content as string, 'utf8');
   }
 

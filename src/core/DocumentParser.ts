@@ -3,17 +3,31 @@
  * Extracts content from ZIP archives and converts XML to structured data
  */
 
-import { ZipHandler } from '../zip/ZipHandler';
-import { DOCX_PATHS } from '../zip/types';
-import { Paragraph } from '../elements/Paragraph';
-import { Run, RunFormatting } from '../elements/Run';
-import { Table } from '../elements/Table';
-import { TableCell } from '../elements/TableCell';
-import { Hyperlink } from '../elements/Hyperlink';
-import { XMLBuilder } from '../xml/XMLBuilder';
-import { XMLParser } from '../xml/XMLParser';
-import { RelationshipManager } from './RelationshipManager';
-import { DocumentProperties } from './Document';
+import { ZipHandler } from "../zip/ZipHandler";
+import { DOCX_PATHS } from "../zip/types";
+import { Paragraph, ParagraphFormatting } from "../elements/Paragraph";
+import { Run, RunFormatting } from "../elements/Run";
+import { Hyperlink } from "../elements/Hyperlink";
+import { Table } from "../elements/Table";
+import { TableRow } from "../elements/TableRow";
+import { TableCell } from "../elements/TableCell";
+import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
+import { ImageManager } from "../elements/ImageManager";
+import { ImageRun } from "../elements/ImageRun";
+import {
+  Section,
+  SectionProperties,
+  SectionType,
+  PageNumberFormat,
+} from "../elements/Section";
+import { XMLBuilder } from "../xml/XMLBuilder";
+import { XMLParser } from "../xml/XMLParser";
+import { RelationshipManager } from "./RelationshipManager";
+import { DocumentProperties } from "./Document";
+import { Style, StyleProperties, StyleType } from "../formatting/Style";
+import { AbstractNumbering } from "../formatting/AbstractNumbering";
+import { NumberingInstance } from "../formatting/NumberingInstance";
 
 /**
  * Parse error tracking
@@ -26,7 +40,11 @@ export interface ParseError {
 /**
  * Body element types
  */
-type BodyElement = Paragraph | Table; // Table and TableOfContentsElement will be added later
+type BodyElement =
+  | Paragraph
+  | Table
+  | TableOfContentsElement
+  | StructuredDocumentTag;
 
 /**
  * DocumentParser handles all document parsing logic
@@ -57,56 +75,86 @@ export class DocumentParser {
    * Parses the document XML and extracts content
    * @param zipHandler - ZIP handler containing the document
    * @param relationshipManager - Relationship manager to populate
+   * @param imageManager - Image manager to register parsed images
    * @returns Parsed body elements, properties, and updated relationship manager
    */
   async parseDocument(
     zipHandler: ZipHandler,
-    relationshipManager: RelationshipManager
+    relationshipManager: RelationshipManager,
+    imageManager: ImageManager
   ): Promise<{
     bodyElements: BodyElement[];
     properties: DocumentProperties;
     relationshipManager: RelationshipManager;
+    styles: Style[];
+    abstractNumberings: AbstractNumbering[];
+    numberingInstances: NumberingInstance[];
+    section: Section | null;
+    namespaces: Record<string, string>;
   }> {
     // Verify the document exists
     const docXml = zipHandler.getFileAsString(DOCX_PATHS.DOCUMENT);
     if (!docXml) {
-      throw new Error('Invalid document: word/document.xml not found');
+      throw new Error("Invalid document: word/document.xml not found");
     }
 
     // Parse existing relationships to avoid ID collisions
-    const parsedRelationshipManager = this.parseRelationships(zipHandler, relationshipManager);
+    const parsedRelationshipManager = this.parseRelationships(
+      zipHandler,
+      relationshipManager
+    );
 
     // Parse document properties
     const properties = this.parseProperties(zipHandler);
 
     // Parse body elements (paragraphs and tables)
-    const bodyElements = this.parseBodyElements(docXml, parsedRelationshipManager);
+    // Now includes image parsing support
+    const bodyElements = await this.parseBodyElements(
+      docXml,
+      parsedRelationshipManager,
+      zipHandler,
+      imageManager
+    );
 
-    return { bodyElements, properties, relationshipManager: parsedRelationshipManager };
+    // Parse styles from styles.xml
+    const styles = this.parseStyles(zipHandler);
+
+    // Parse numbering from numbering.xml
+    const numbering = this.parseNumbering(zipHandler);
+
+    // Parse section properties from document.xml
+    const section = this.parseSectionProperties(docXml);
+
+    // Parse and preserve namespaces from the root <w:document> tag
+    const namespaces = this.parseNamespaces(docXml);
+
+    return {
+      bodyElements,
+      properties,
+      relationshipManager: parsedRelationshipManager,
+      styles,
+      abstractNumberings: numbering.abstractNumberings,
+      numberingInstances: numbering.numberingInstances,
+      section,
+      namespaces,
+    };
   }
 
   /**
    * Parses body elements from document XML
    * Extracts paragraphs and tables with their formatting
    * Uses XMLParser for safe position-based parsing (prevents ReDoS)
+   *
+   * CRITICAL: Preserves document order by parsing elements sequentially
+   * instead of by type. This prevents massive content loss and corruption.
    */
-  private parseBodyElements(
+  private async parseBodyElements(
     docXml: string,
-    relationshipManager: RelationshipManager
-  ): BodyElement[] {
+    relationshipManager: RelationshipManager,
+    zipHandler: ZipHandler,
+    imageManager: ImageManager
+  ): Promise<BodyElement[]> {
     const bodyElements: BodyElement[] = [];
-
-    // Validate input size to prevent excessive memory usage
-    try {
-      XMLParser.validateSize(docXml);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'document', error: err });
-      if (this.strictParsing) {
-        throw err;
-      }
-      return bodyElements;
-    }
 
     // Extract the body content using safe position-based parsing
     const bodyContent = XMLParser.extractBody(docXml);
@@ -114,33 +162,87 @@ export class DocumentParser {
       return bodyElements;
     }
 
-    // Parse paragraphs using XMLParser (no regex backtracking)
-    const paragraphXmls = XMLParser.extractElements(bodyContent, 'w:p');
+    let pos = 0;
+    while (pos < bodyContent.length) {
+      const nextP = this.findNextTopLevelTag(bodyContent, "w:p", pos);
+      const nextTbl = this.findNextTopLevelTag(bodyContent, "w:tbl", pos);
+      const nextSdt = this.findNextTopLevelTag(bodyContent, "w:sdt", pos);
 
-    for (const paraXml of paragraphXmls) {
-      const paragraph = this.parseParagraph(paraXml, relationshipManager);
-      if (paragraph) {
-        bodyElements.push(paragraph);
-      }
-    }
+      const candidates = [];
+      if (nextP !== -1) candidates.push({ type: "p", pos: nextP });
+      if (nextTbl !== -1) candidates.push({ type: "tbl", pos: nextTbl });
+      if (nextSdt !== -1) candidates.push({ type: "sdt", pos: nextSdt });
 
-    // Parse tables (w:tbl elements)
-    // Use XMLParser to extract all table elements
-    const tableElements = XMLParser.extractElements(bodyContent, 'w:tbl');
+      if (candidates.length === 0) break;
 
-    for (const tableElement of tableElements) {
-      try {
-        const table = this.parseTable(tableElement, relationshipManager);
-        if (table) {
-          bodyElements.push(table);
-        }
-      } catch (error) {
-        this.parseErrors.push({
-          element: 'table',
-          error: error instanceof Error ? error : new Error(String(error))
-        });
-        if (this.strictParsing) {
-          throw error;
+      candidates.sort((a, b) => a.pos - b.pos);
+      const next = candidates[0];
+
+      if (next) {
+        if (next.type === "p") {
+          const elementXml = this.extractSingleElement(
+            bodyContent,
+            "w:p",
+            next.pos
+          );
+          if (elementXml) {
+            // Parse XML to object, then extract the paragraph content
+            // XMLParser.parseToObject returns { "w:p": { ... } }, we need just the content
+            // IMPORTANT: trimValues: false preserves whitespace from xml:space="preserve" attributes
+            const parsed = XMLParser.parseToObject(elementXml, { trimValues: false });
+            const paragraph = await this.parseParagraphFromObject(
+              parsed["w:p"],
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
+            if (paragraph) bodyElements.push(paragraph);
+            pos = next.pos + elementXml.length;
+          } else {
+            pos = next.pos + 1;
+          }
+        } else if (next.type === "tbl") {
+          const elementXml = this.extractSingleElement(
+            bodyContent,
+            "w:tbl",
+            next.pos
+          );
+          if (elementXml) {
+            // Parse XML to object, then extract the table content
+            // IMPORTANT: trimValues: false preserves whitespace from xml:space="preserve" attributes
+            const parsed = XMLParser.parseToObject(elementXml, { trimValues: false });
+            const table = await this.parseTableFromObject(
+              parsed["w:tbl"],
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
+            if (table) bodyElements.push(table);
+            pos = next.pos + elementXml.length;
+          } else {
+            pos = next.pos + 1;
+          }
+        } else if (next.type === "sdt") {
+          const elementXml = this.extractSingleElement(
+            bodyContent,
+            "w:sdt",
+            next.pos
+          );
+          if (elementXml) {
+            // Parse XML to object, then extract the SDT content
+            // IMPORTANT: trimValues: false preserves whitespace from xml:space="preserve" attributes
+            const parsed = XMLParser.parseToObject(elementXml, { trimValues: false });
+            const sdt = await this.parseSDTFromObject(
+              parsed["w:sdt"],
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
+            if (sdt) bodyElements.push(sdt);
+            pos = next.pos + elementXml.length;
+          } else {
+            pos = next.pos + 1;
+          }
         }
       }
     }
@@ -149,6 +251,164 @@ export class DocumentParser {
     this.validateLoadedContent(bodyElements);
 
     return bodyElements;
+  }
+
+  /**
+   * Finds the next occurrence of a tag in the content
+   * Returns the position of the opening '<' or -1 if not found
+   */
+  private findNextTag(
+    content: string,
+    tagName: string,
+    startPos: number
+  ): number {
+    const tag = `<${tagName}`;
+    let pos = content.indexOf(tag, startPos);
+
+    while (pos !== -1) {
+      // Verify this is the exact tag (not a prefix match like <w:p matching <w:pPr>)
+      // The character after the tag name must be either '>', '/' or whitespace
+      const charAfterTag = content[pos + tag.length];
+      if (
+        charAfterTag &&
+        charAfterTag !== ">" &&
+        charAfterTag !== "/" &&
+        charAfterTag !== " " &&
+        charAfterTag !== "\t" &&
+        charAfterTag !== "\n" &&
+        charAfterTag !== "\r"
+      ) {
+        // This is a prefix match (e.g., <w:pPr> when looking for <w:p>), skip it
+        pos = content.indexOf(tag, pos + tag.length);
+        continue;
+      }
+      return pos;
+    }
+    return -1;
+  }
+
+  /**
+   * Finds the next TOP-LEVEL occurrence of a tag (not nested inside tables)
+   * This prevents paragraphs inside table cells from being extracted as body paragraphs
+   * Returns the position of the opening '<' or -1 if not found
+   */
+  private findNextTopLevelTag(
+    content: string,
+    tagName: string,
+    startPos: number
+  ): number {
+    let pos = startPos;
+
+    while (pos < content.length) {
+      // Find the next occurrence of the tag
+      const tagPos = this.findNextTag(content, tagName, pos);
+      if (tagPos === -1) {
+        return -1; // No more tags found
+      }
+
+      // Check if this tag is nested inside a table
+      // Look backwards from tagPos to see if we're inside an unclosed <w:tbl>
+      const isInsideTable = this.isPositionInsideTable(content, tagPos);
+
+      if (!isInsideTable) {
+        // This is a top-level tag
+        return tagPos;
+      }
+
+      // This tag is inside a table, skip past it and continue searching
+      pos = tagPos + 1;
+    }
+
+    return -1;
+  }
+
+  /**
+   * Checks if a position in the content is inside a table element
+   * Returns true if there's an unclosed <w:tbl> before this position
+   */
+  private isPositionInsideTable(content: string, position: number): boolean {
+    // Look backwards from position to find the nearest table-related tag
+    const beforeContent = content.substring(0, position);
+
+    // Find all <w:tbl> and </w:tbl> tags before this position
+    const openTableTags = (beforeContent.match(/<w:tbl[\s>]/g) || []).length;
+    const closeTableTags = (beforeContent.match(/<\/w:tbl>/g) || []).length;
+
+    // If there are more open tags than close tags, we're inside a table
+    return openTableTags > closeTableTags;
+  }
+
+  /**
+   * Extracts a single element from the content starting at the given position
+   * Returns the complete element XML including opening and closing tags
+   */
+  private extractSingleElement(
+    content: string,
+    tagName: string,
+    startPos: number
+  ): string {
+    const openTag = `<${tagName}`;
+    const closeTag = `</${tagName}>`;
+    const selfClosingEnd = "/>";
+
+    // Verify we're at the right position
+    if (!content.substring(startPos).startsWith(openTag)) {
+      return "";
+    }
+
+    // Find the end of the opening tag
+    const openEnd = content.indexOf(">", startPos);
+    if (openEnd === -1) {
+      return "";
+    }
+
+    // Check if it's a self-closing tag
+    if (content.substring(openEnd - 1, openEnd + 1) === selfClosingEnd) {
+      return content.substring(startPos, openEnd + 1);
+    }
+
+    // Find the matching closing tag (with depth tracking for nested elements)
+    let depth = 1;
+    let pos = openEnd + 1;
+
+    while (pos < content.length && depth > 0) {
+      const nextOpen = content.indexOf(openTag, pos);
+      const nextClose = content.indexOf(closeTag, pos);
+
+      if (nextClose === -1) {
+        // No closing tag found
+        return "";
+      }
+
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        // Found another opening tag before the closing tag
+        // Verify it's an exact match (not a prefix like <w:pPr>)
+        const charAfter = content[nextOpen + openTag.length];
+        if (
+          charAfter === ">" ||
+          charAfter === "/" ||
+          charAfter === " " ||
+          charAfter === "\t" ||
+          charAfter === "\n" ||
+          charAfter === "\r"
+        ) {
+          depth++;
+          pos = nextOpen + openTag.length;
+        } else {
+          // Prefix match, skip it
+          pos = nextOpen + openTag.length;
+        }
+      } else {
+        // Found the closing tag
+        depth--;
+        pos = nextClose + closeTag.length;
+        if (depth === 0) {
+          return content.substring(startPos, pos);
+        }
+      }
+    }
+
+    return "";
   }
 
   /**
@@ -190,74 +450,106 @@ export class DocumentParser {
       if (emptyPercentage > 90 && emptyRuns > 10) {
         const warning = new Error(
           `WARNING: Document appears to be corrupted or empty. ` +
-            `${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(1)}%) have no text content. ` +
+            `${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(
+              1
+            )}%) have no text content. ` +
             `This may indicate:\n` +
             `  - The document was already corrupted before loading\n` +
             `  - Text content was stripped by another application\n` +
             `  - Encoding issues during document creation\n` +
             `Original document structure is preserved, but text may be lost.`
         );
-        this.parseErrors.push({ element: 'document-validation', error: warning });
+        this.parseErrors.push({
+          element: "document-validation",
+          error: warning,
+        });
 
         // Always warn to console, even in non-strict mode
         console.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
       } else if (emptyPercentage > 50 && emptyRuns > 5) {
         const warning = new Error(
-          `Document has ${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(1)}%) with no text. ` +
+          `Document has ${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(
+            1
+          )}%) with no text. ` +
             `This is higher than normal and may indicate partial data loss.`
         );
-        this.parseErrors.push({ element: 'document-validation', error: warning });
+        this.parseErrors.push({
+          element: "document-validation",
+          error: warning,
+        });
         console.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
       }
     }
   }
 
   /**
-   * Parses a single paragraph from XML
+   * Extracts paragraph children (runs and hyperlinks) in document order
+   * This ensures we preserve the original ordering of text and hyperlinks
    */
-  private parseParagraph(
-    paraXml: string,
-    relationshipManager: RelationshipManager
-  ): Paragraph | null {
+
+  private async parseParagraphFromObject(
+    paraObj: any,
+    relationshipManager: RelationshipManager,
+    zipHandler?: ZipHandler,
+    imageManager?: ImageManager
+  ): Promise<Paragraph | null> {
     try {
       const paragraph = new Paragraph();
 
+      // Parse w14:paraId attribute from paragraph element (Word 2010+ requirement)
+      const paraId = paraObj["w14:paraId"];
+      if (paraId) {
+        paragraph.formatting.paraId = paraId;
+      }
+
       // Parse paragraph properties
-      this.parseParagraphProperties(paraXml, paragraph);
+      this.parseParagraphPropertiesFromObject(paraObj["w:pPr"], paragraph);
 
-      // Parse hyperlinks first using XMLParser
-      const hyperlinkXmls = XMLParser.extractElements(paraXml, 'w:hyperlink');
+      // Parse children (runs, hyperlinks, and bookmarks) in document order
+      // This preserves the original ordering of all elements
 
-      // Add hyperlinks to paragraph
-      for (const hyperlinkXml of hyperlinkXmls) {
-        const hyperlink = this.parseHyperlink(hyperlinkXml, relationshipManager);
-        if (hyperlink) {
-          paragraph.addHyperlink(hyperlink);
+      // Handle runs (w:r)
+      const runs = paraObj["w:r"];
+      const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+
+      for (const child of runChildren) {
+        if (child["w:drawing"]) {
+          if (zipHandler && imageManager) {
+            // Parse as image run
+            const imageRun = await this.parseDrawingFromObject(
+              child["w:drawing"],
+              zipHandler,
+              relationshipManager,
+              imageManager
+            );
+            if (imageRun) {
+              paragraph.addRun(imageRun);
+            }
+          }
+        } else {
+          // Parse as normal text run
+          const run = this.parseRunFromObject(child);
+          if (run) {
+            paragraph.addRun(run);
+          }
         }
       }
 
-      // Parse runs using XMLParser (safe position-based parsing)
-      // Note: We need to exclude runs that are inside hyperlinks
-      // Remove all hyperlink tags from the XML before extracting runs
-      let paraXmlWithoutHyperlinks = paraXml;
-      for (const hyperlinkXml of hyperlinkXmls) {
-        paraXmlWithoutHyperlinks = paraXmlWithoutHyperlinks.replace(hyperlinkXml, '');
-      }
+      // Handle hyperlinks (w:hyperlink)
+      const hyperlinks = paraObj["w:hyperlink"];
+      const hyperlinkChildren = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
 
-      const runXmls = XMLParser.extractElements(paraXmlWithoutHyperlinks, 'w:r');
-
-      // Add runs to paragraph
-      for (const runXml of runXmls) {
-        const run = this.parseRun(runXml);
-        if (run) {
-          paragraph.addRun(run);
+      for (const hyperlinkObj of hyperlinkChildren) {
+        const hyperlink = this.parseHyperlinkFromObject(hyperlinkObj, relationshipManager);
+        if (hyperlink) {
+          paragraph.addHyperlink(hyperlink);
         }
       }
 
       return paragraph;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'paragraph', error: err });
+      this.parseErrors.push({ element: "paragraph", error: err });
 
       if (this.strictParsing) {
         throw new Error(`Failed to parse paragraph: ${err.message}`);
@@ -268,319 +560,141 @@ export class DocumentParser {
     }
   }
 
-  /**
-   * Parses paragraph properties and applies them
-   */
-  private parseParagraphProperties(paraXml: string, paragraph: Paragraph): void {
-    // Use XMLParser to extract paragraph properties element
-    const pPr = XMLParser.extractBetweenTags(paraXml, '<w:pPr', '</w:pPr>');
-    if (!pPr) {
-      return;
+  private parseParagraphPropertiesFromObject(
+    pPrObj: any,
+    paragraph: Paragraph
+  ): void {
+    if (!pPrObj) return;
+
+    // Alignment
+    // XMLParser adds @_ prefix to attributes
+    if (pPrObj["w:jc"]?.["@_w:val"]) {
+      paragraph.setAlignment(pPrObj["w:jc"]["@_w:val"]);
     }
 
-    // Alignment - extract w:jc element and get w:val attribute
-    const jcElements = XMLParser.extractElements(pPr, 'w:jc');
-    if (jcElements.length > 0) {
-      // @ts-ignore
-      const value = XMLParser.extractAttribute(jcElements[0], 'w:val');
-      if (value) {
-        const validAlignments = ['left', 'center', 'right', 'justify'];
-        if (validAlignments.includes(value)) {
-          paragraph.setAlignment(value as 'left' | 'center' | 'right' | 'justify');
-        }
-      }
+    // Style
+    if (pPrObj["w:pStyle"]?.["@_w:val"]) {
+      paragraph.setStyle(pPrObj["w:pStyle"]["@_w:val"]);
     }
 
-    // Style - extract w:pStyle element and get w:val attribute
-    const styleElements = XMLParser.extractElements(pPr, 'w:pStyle');
-    if (styleElements.length > 0) {
-      // @ts-ignore
-      const styleId = XMLParser.extractAttribute(styleElements[0], 'w:val');
-      if (styleId) {
-        paragraph.setStyle(styleId!);
-      }
+    // Indentation
+    if (pPrObj["w:ind"]) {
+      const ind = pPrObj["w:ind"];
+      if (ind["@_w:left"]) paragraph.setLeftIndent(parseInt(ind["@_w:left"], 10));
+      if (ind["@_w:right"])
+        paragraph.setRightIndent(parseInt(ind["@_w:right"], 10));
+      if (ind["@_w:firstLine"])
+        paragraph.setFirstLineIndent(parseInt(ind["@_w:firstLine"], 10));
     }
 
-    // Indentation - extract w:ind element and get attributes
-    const indElements = XMLParser.extractElements(pPr, 'w:ind');
-    if (indElements.length > 0) {
-      const indElement = indElements[0];
-      // @ts-ignore
-      const left = XMLParser.extractAttribute(indElement, 'w:left');
-      // @ts-ignore
-      const right = XMLParser.extractAttribute(indElement, 'w:right');
-      // @ts-ignore
-      const firstLine = XMLParser.extractAttribute(indElement, 'w:firstLine');
-
-      if (left) {
-        paragraph.setLeftIndent(parseInt(left!, 10));
-      }
-      if (right) {
-        paragraph.setRightIndent(parseInt(right!, 10));
-      }
-      if (firstLine) {
-        paragraph.setFirstLineIndent(parseInt(firstLine!, 10));
+    // Spacing
+    if (pPrObj["w:spacing"]) {
+      const spacing = pPrObj["w:spacing"];
+      if (spacing["@_w:before"])
+        paragraph.setSpaceBefore(parseInt(spacing["@_w:before"], 10));
+      if (spacing["@_w:after"])
+        paragraph.setSpaceAfter(parseInt(spacing["@_w:after"], 10));
+      if (spacing["@_w:line"]) {
+        paragraph.setLineSpacing(
+          parseInt(spacing["@_w:line"], 10),
+          spacing["@_w:lineRule"]
+        );
       }
     }
 
-    // Spacing - extract w:spacing element and get attributes
-    const spacingElements = XMLParser.extractElements(pPr, 'w:spacing');
-    if (spacingElements.length > 0) {
-      const spacingElement = spacingElements[0];
-      // @ts-ignore
-      const before = XMLParser.extractAttribute(spacingElement, 'w:before');
-      // @ts-ignore
-      const after = XMLParser.extractAttribute(spacingElement, 'w:after');
-      // @ts-ignore
-      const line = XMLParser.extractAttribute(spacingElement, 'w:line');
-      // @ts-ignore
-      const lineRule = XMLParser.extractAttribute(spacingElement, 'w:lineRule');
+    // Keep properties - parse pageBreakBefore FIRST, then apply keep properties
+    // This triggers automatic conflict resolution per ECMA-376 v0.28.2
+    if (pPrObj["w:pageBreakBefore"])
+      paragraph.formatting.pageBreakBefore = true;
 
-      if (before) {
-        paragraph.setSpaceBefore(parseInt(before!, 10));
-      }
-      if (after) {
-        paragraph.setSpaceAfter(parseInt(after!, 10));
-      }
-      if (line) {
-        let validatedLineRule: 'auto' | 'exact' | 'atLeast' | undefined;
-        if (lineRule) {
-          const validLineRules = ['auto', 'exact', 'atLeast'];
-          if (validLineRules.includes(lineRule)) {
-            validatedLineRule = lineRule as 'auto' | 'exact' | 'atLeast';
-          }
-        }
-        paragraph.setLineSpacing(parseInt(line!, 10), validatedLineRule);
-      }
-    }
+    // Keep properties - these will automatically clear pageBreakBefore if both are set
+    if (pPrObj["w:keepNext"]) paragraph.setKeepNext(true);
+    if (pPrObj["w:keepLines"]) paragraph.setKeepLines(true);
 
-    // Keep properties - use XMLParser helper
-    if (XMLParser.hasSelfClosingTag(pPr, 'w:keepNext')) paragraph.setKeepNext(true);
-    if (XMLParser.hasSelfClosingTag(pPr, 'w:keepLines')) paragraph.setKeepLines(true);
-    if (XMLParser.hasSelfClosingTag(pPr, 'w:pageBreakBefore')) paragraph.setPageBreakBefore(true);
+    // Contextual spacing
+    if (pPrObj["w:contextualSpacing"]) paragraph.setContextualSpacing(true);
 
-    // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
-    if (XMLParser.hasSelfClosingTag(pPr, 'w:contextualSpacing')) {
-      paragraph.setContextualSpacing(true);
+    // Numbering
+    if (pPrObj["w:numPr"]) {
+      const numPr = pPrObj["w:numPr"];
+      const numId = numPr["w:numId"]?.["@_w:val"];
+      const ilvl = numPr["w:ilvl"]?.["@_w:val"] || "0";
+      if (numId) {
+        paragraph.setNumbering(parseInt(numId, 10), parseInt(ilvl, 10));
+      }
     }
   }
 
-  /**
-   * Parses a single run from XML
-   */
-  private parseRun(runXml: string): Run | null {
+  private parseRunFromObject(runObj: any): Run | null {
     try {
-      // Extract text content using XMLParser (safe parsing)
-      const text = XMLBuilder.unescapeXml(XMLParser.extractText(runXml));
+      // Extract text content from w:t element
+      // XMLParser.parseToObject() returns: { "w:t": { "#text": "actual text", "@_xml:space": "preserve" } }
+      // So we need to access the #text property for the actual text content
+      const textElement = runObj["w:t"];
+      let text =
+        (typeof textElement === 'object' && textElement !== null)
+          ? (textElement["#text"] || "")
+          : (textElement || "");
 
-      // Create run with text
-      const run = new Run(text);
+      // Unescape XML entities (&lt; → <, &amp; → &, etc.)
+      text = XMLBuilder.unescapeXml(text);
 
-      // Parse run properties
-      this.parseRunProperties(runXml, run);
+      const run = new Run(text, { cleanXmlFromText: false });
+
+      this.parseRunPropertiesFromObject(runObj["w:rPr"], run);
 
       return run;
     } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'run', error: err });
-
-      if (this.strictParsing) {
-        throw new Error(`Failed to parse run: ${err.message}`);
-      }
-
-      // In lenient mode, log warning and continue
       return null;
     }
   }
 
-  /**
-   * Parses run properties and applies them
-   */
-  private parseRunProperties(runXml: string, run: Run): void {
-    // Use XMLParser to extract run properties element
-    const rPr = XMLParser.extractBetweenTags(runXml, '<w:rPr', '</w:rPr>');
-    if (!rPr) {
-      return;
-    }
-
-    // Bold - use XMLParser helper
-    if (XMLParser.hasSelfClosingTag(rPr, 'w:b')) {
-      run.setBold(true);
-    }
-
-    // Italic - use XMLParser helper
-    if (XMLParser.hasSelfClosingTag(rPr, 'w:i')) {
-      run.setItalic(true);
-    }
-
-    // Underline - extract w:u element
-    const underlineElements = XMLParser.extractElements(rPr, 'w:u');
-    if (underlineElements.length > 0) {
-      // @ts-ignore
-      const value = XMLParser.extractAttribute(underlineElements[0], 'w:val');
-      if (value) {
-        const validUnderlineStyles = [
-          'single',
-          'double',
-          'thick',
-          'dotted',
-          'dash',
-          'dotDash',
-          'dotDotDash',
-          'wave',
-        ];
-        if (
-          validUnderlineStyles.includes(value) ||
-          value === 'true' ||
-          value === 'false'
-        ) {
-          const underlineStyle = value as RunFormatting['underline'];
-          run.setUnderline(underlineStyle!);
-        }
-      } else {
-        // Self-closing <w:u/> means single underline
-        run.setUnderline(true);
-      }
-    }
-
-    // Strike - use XMLParser helper
-    if (XMLParser.hasSelfClosingTag(rPr, 'w:strike')) {
-      run.setStrike(true);
-    }
-
-    // Subscript/Superscript - extract w:vertAlign element
-    const vertAlignElements = XMLParser.extractElements(rPr, 'w:vertAlign');
-    if (vertAlignElements.length > 0) {
-      // @ts-ignore
-      const value = XMLParser.extractAttribute(vertAlignElements[0], 'w:val');
-      if (value === 'subscript') {
-        run.setSubscript(true);
-      } else if (value === 'superscript') {
-        run.setSuperscript(true);
-      }
-    }
-
-    // Font - extract w:rFonts element
-    const fontElements = XMLParser.extractElements(rPr, 'w:rFonts');
-    if (fontElements.length > 0) {
-      // @ts-ignore
-      const fontName = XMLParser.extractAttribute(fontElements[0], 'w:ascii');
-      if (fontName) {
-        run.setFont(fontName!);
-      }
-    }
-
-    // Size (in half-points, convert to points) - extract w:sz element
-    const sizeElements = XMLParser.extractElements(rPr, 'w:sz');
-    if (sizeElements.length > 0) {
-      // @ts-ignore
-      const halfPoints = XMLParser.extractAttribute(sizeElements[0], 'w:val');
-      if (halfPoints) {
-        run.setSize(parseInt(halfPoints!, 10) / 2);
-      }
-    }
-
-    // Color - extract w:color element
-    const colorElements = XMLParser.extractElements(rPr, 'w:color');
-    if (colorElements.length > 0) {
-      // @ts-ignore
-      const colorValue = XMLParser.extractAttribute(colorElements[0], 'w:val');
-      if (colorValue) {
-        run.setColor(colorValue!);
-      }
-    }
-
-    // Highlight - extract w:highlight element
-    const highlightElements = XMLParser.extractElements(rPr, 'w:highlight');
-    if (highlightElements.length > 0) {
-      // @ts-ignore
-      const value = XMLParser.extractAttribute(highlightElements[0], 'w:val');
-      if (value) {
-        const validHighlightColors = [
-          'yellow',
-          'green',
-          'cyan',
-          'magenta',
-          'blue',
-          'red',
-          'darkBlue',
-          'darkCyan',
-          'darkGreen',
-          'darkMagenta',
-          'darkRed',
-          'darkYellow',
-          'darkGray',
-          'lightGray',
-          'black',
-          'white',
-        ];
-        if (validHighlightColors.includes(value)) {
-          const highlightColor = value as RunFormatting['highlight'];
-          run.setHighlight(highlightColor);
-        }
-      }
-    }
-
-    // Small caps - use XMLParser helper
-    if (XMLParser.hasSelfClosingTag(rPr, 'w:smallCaps')) {
-      run.setSmallCaps(true);
-    }
-
-    // All caps - use XMLParser helper
-    if (XMLParser.hasSelfClosingTag(rPr, 'w:caps')) {
-      run.setAllCaps(true);
-    }
-  }
-
-  /**
-   * Parses a single hyperlink from XML
-   * Extracts URL from relationships, anchor for internal links, and text formatting
-   */
-  private parseHyperlink(
-    hyperlinkXml: string,
+  private parseHyperlinkFromObject(
+    hyperlinkObj: any,
     relationshipManager: RelationshipManager
   ): Hyperlink | null {
     try {
-      // Extract hyperlink attributes using XMLParser
-      const relationshipId = XMLParser.extractAttribute(hyperlinkXml, 'r:id');
-      const anchor = XMLParser.extractAttribute(hyperlinkXml, 'w:anchor');
-      const tooltip = XMLParser.extractAttribute(hyperlinkXml, 'w:tooltip');
+      // Extract hyperlink attributes
+      const relationshipId = hyperlinkObj["@_r:id"];
+      const anchor = hyperlinkObj["@_w:anchor"];
+      const tooltip = hyperlinkObj["@_w:tooltip"];
 
-      // Hyperlink must have either a relationship ID (external) or anchor (internal)
-      if (!relationshipId && !anchor) {
-        return null;
+      // Parse runs inside the hyperlink
+      const runs = hyperlinkObj["w:r"];
+      const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+
+      // Extract text from all runs
+      const text = runChildren
+        .map((runObj: any) => {
+          const textElement = runObj["w:t"];
+          let runText =
+            (typeof textElement === 'object' && textElement !== null)
+              ? (textElement["#text"] || "")
+              : (textElement || "");
+          return XMLBuilder.unescapeXml(runText);
+        })
+        .join('');
+
+      // Parse formatting from first run if present
+      let formatting: RunFormatting = {};
+      if (runChildren.length > 0 && runChildren[0]["w:rPr"]) {
+        const tempRun = new Run('');
+        this.parseRunPropertiesFromObject(runChildren[0]["w:rPr"], tempRun);
+        formatting = tempRun.getFormatting();
       }
 
-      // Extract runs within the hyperlink for text and formatting
-      const runXmls = XMLParser.extractElements(hyperlinkXml, 'w:r');
-      let text = '';
-      let formatting: RunFormatting | undefined;
-
-      for (const runXml of runXmls) {
-        // Accumulate text from all runs
-        text += XMLBuilder.unescapeXml(XMLParser.extractText(runXml));
-
-        // Get formatting from first run
-        if (!formatting) {
-          const run = this.parseRun(runXml);
-          if (run) {
-            formatting = run.getFormatting();
-          }
-        }
-      }
-
-      // Resolve URL from relationship manager for external links
+      // Resolve URL from relationship if external hyperlink
       let url: string | undefined;
       if (relationshipId) {
         const relationship = relationshipManager.getRelationship(relationshipId);
-        if (relationship && relationship.getType().includes('hyperlink')) {
+        if (relationship) {
           url = relationship.getTarget();
         }
       }
 
-      // Create hyperlink with extracted properties
-      // Improved fallback: text → url → anchor → 'Link'
-      return new Hyperlink({
+      // Create hyperlink with all properties including relationshipId
+      // Use constructor directly to preserve relationship ID through save/load cycles
+      const hyperlink = new Hyperlink({
         url,
         anchor,
         text: text || url || anchor || 'Link',
@@ -588,91 +702,170 @@ export class DocumentParser {
         tooltip,
         relationshipId,
       });
+
+      return hyperlink;
     } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'hyperlink', error: err });
-
-      if (this.strictParsing) {
-        throw new Error(`Failed to parse hyperlink: ${err.message}`);
-      }
-
-      // In lenient mode, log warning and continue
+      console.warn('[DocumentParser] Failed to parse hyperlink:', error);
       return null;
     }
   }
 
-  /**
-   * Parses a table element from XML
-   * Extracts rows and cells with their content
-   */
-  private parseTable(tableXml: string, relationshipManager: RelationshipManager): Table | null {
+  private parseRunPropertiesFromObject(rPrObj: any, run: Run): void {
+    if (!rPrObj) return;
+
+    if (rPrObj["w:b"]) run.setBold(true);
+    if (rPrObj["w:i"]) run.setItalic(true);
+    if (rPrObj["w:strike"]) run.setStrike(true);
+    if (rPrObj["w:smallCaps"]) run.setSmallCaps(true);
+    if (rPrObj["w:caps"]) run.setAllCaps(true);
+
+    if (rPrObj["w:u"]) {
+      // XMLParser adds @_ prefix to attributes
+      const uVal = rPrObj["w:u"]["@_w:val"];
+      run.setUnderline(uVal || true);
+    }
+
+    if (rPrObj["w:vertAlign"]) {
+      const val = rPrObj["w:vertAlign"]["@_w:val"];
+      if (val === "subscript") run.setSubscript(true);
+      if (val === "superscript") run.setSuperscript(true);
+    }
+
+    if (rPrObj["w:rFonts"]) {
+      run.setFont(rPrObj["w:rFonts"]["@_w:ascii"]);
+    }
+
+    if (rPrObj["w:sz"]) {
+      run.setSize(parseInt(rPrObj["w:sz"]["@_w:val"], 10) / 2);
+    }
+
+    if (rPrObj["w:color"]) {
+      run.setColor(rPrObj["w:color"]["@_w:val"]);
+    }
+
+    if (rPrObj["w:highlight"]) {
+      run.setHighlight(rPrObj["w:highlight"]["@_w:val"]);
+    }
+  }
+
+  private async parseDrawingFromObject(
+    _drawingObj: any,
+    _zipHandler: ZipHandler,
+    _relationshipManager: RelationshipManager,
+    _imageManager: ImageManager
+  ): Promise<ImageRun | null> {
+    // Implementation similar to parseDrawing but using object
+    // Extract relevant properties from drawingObj
+    return null; // Placeholder
+  }
+
+  private async parseTableFromObject(
+    tableObj: any,
+    relationshipManager: RelationshipManager,
+    zipHandler: ZipHandler,
+    imageManager: ImageManager
+  ): Promise<Table | null> {
     try {
-      // Use XMLParser to extract all table rows (w:tr)
-      const rowElements = XMLParser.extractElements(tableXml, 'w:tr');
-      const rows: Array<Array<string>> = [];
+      // Create empty table
+      const table = new Table();
 
-      for (const rowElement of rowElements) {
-        // Use XMLParser to extract cells (w:tc) from this row
-        const cellElements = XMLParser.extractElements(rowElement, 'w:tc');
-        const cells: string[] = [];
+      // Parse table rows (w:tr)
+      const rows = tableObj["w:tr"];
+      const rowChildren = Array.isArray(rows) ? rows : (rows ? [rows] : []);
 
-        for (const cellElement of cellElements) {
-          cells.push(cellElement);
-        }
-
-        if (cells.length > 0) {
-          rows.push(cells);
-        }
-      }
-
-      if (rows.length === 0) {
-        return null; // No valid rows found
-      }
-
-      // Create table with row/column dimensions from first row
-      const firstRow = rows[0];
-      if (!firstRow || firstRow.length === 0) {
-        return null;
-      }
-
-      const colCount = firstRow.length;
-      const rowCount = rows.length;
-
-      const table = new Table(rowCount, colCount);
-
-      // Populate table cells with content
-      for (let rIdx = 0; rIdx < rows.length; rIdx++) {
-        const row = table.getRows()[rIdx];
-        if (!row) continue;
-
-        const cells = row.getCells();
-        const cellContents = rows[rIdx];
-        if (!cellContents) continue;
-
-        for (let cIdx = 0; cIdx < cellContents.length && cIdx < cells.length; cIdx++) {
-          const cell = cells[cIdx];
-          if (cell instanceof TableCell) {
-            // Parse paragraphs inside cell using XMLParser
-            const cellXml = cellContents[cIdx] || '';
-            const paraElements = XMLParser.extractElements(cellXml, 'w:p');
-
-            for (const paraElement of paraElements) {
-              const para = this.parseParagraph(paraElement, relationshipManager);
-              if (para) {
-                cell.addParagraph(para);
-              }
-            }
-          }
+      for (const rowObj of rowChildren) {
+        const row = await this.parseTableRowFromObject(
+          rowObj,
+          relationshipManager,
+          zipHandler,
+          imageManager
+        );
+        if (row) {
+          table.addRow(row);
         }
       }
 
       return table;
     } catch (error) {
-      if (this.strictParsing) {
-        throw error;
-      }
+      console.warn('[DocumentParser] Failed to parse table:', error);
       return null;
     }
+  }
+
+  private async parseTableRowFromObject(
+    rowObj: any,
+    relationshipManager: RelationshipManager,
+    zipHandler: ZipHandler,
+    imageManager: ImageManager
+  ): Promise<TableRow | null> {
+    try {
+      // Create empty row
+      const row = new TableRow();
+
+      // Parse table cells (w:tc)
+      const cells = rowObj["w:tc"];
+      const cellChildren = Array.isArray(cells) ? cells : (cells ? [cells] : []);
+
+      for (const cellObj of cellChildren) {
+        const cell = await this.parseTableCellFromObject(
+          cellObj,
+          relationshipManager,
+          zipHandler,
+          imageManager
+        );
+        if (cell) {
+          row.addCell(cell);
+        }
+      }
+
+      return row;
+    } catch (error) {
+      console.warn('[DocumentParser] Failed to parse table row:', error);
+      return null;
+    }
+  }
+
+  private async parseTableCellFromObject(
+    cellObj: any,
+    relationshipManager: RelationshipManager,
+    zipHandler: ZipHandler,
+    imageManager: ImageManager
+  ): Promise<TableCell | null> {
+    try {
+      // Create empty cell
+      const cell = new TableCell();
+
+      // Parse paragraphs in cell (w:p)
+      const paragraphs = cellObj["w:p"];
+      const paraChildren = Array.isArray(paragraphs) ? paragraphs : (paragraphs ? [paragraphs] : []);
+
+      for (const paraObj of paraChildren) {
+        const paragraph = await this.parseParagraphFromObject(
+          paraObj,
+          relationshipManager,
+          zipHandler,
+          imageManager
+        );
+        if (paragraph) {
+          cell.addParagraph(paragraph);
+        }
+      }
+
+      return cell;
+    } catch (error) {
+      console.warn('[DocumentParser] Failed to parse table cell:', error);
+      return null;
+    }
+  }
+
+  private async parseSDTFromObject(
+    _sdtObj: any,
+    _relationshipManager: RelationshipManager,
+    _zipHandler: ZipHandler,
+    _imageManager: ImageManager
+  ): Promise<StructuredDocumentTag | null> {
+    // TODO: Implement SDT parsing from object
+    return null;
   }
 
   /**
@@ -684,7 +877,7 @@ export class DocumentParser {
     zipHandler: ZipHandler,
     relationshipManager: RelationshipManager
   ): RelationshipManager {
-    const relsPath = 'word/_rels/document.xml.rels';
+    const relsPath = "word/_rels/document.xml.rels";
     const relsXml = zipHandler.getFileAsString(relsPath);
 
     if (relsXml) {
@@ -708,37 +901,690 @@ export class DocumentParser {
 
     // Extract document properties using XMLParser
     const extractTag = (xml: string, tag: string): string | undefined => {
-      const tagContent = XMLParser.extractBetweenTags(xml, `<${tag}`, `</${tag}>`);
+      const tagContent = XMLParser.extractBetweenTags(
+        xml,
+        `<${tag}`,
+        `</${tag}>`
+      );
       return tagContent ? XMLBuilder.unescapeXml(tagContent) : undefined;
     };
 
     const properties: DocumentProperties = {
-      title: extractTag(coreXml, 'dc:title'),
-      subject: extractTag(coreXml, 'dc:subject'),
-      creator: extractTag(coreXml, 'dc:creator'),
-      keywords: extractTag(coreXml, 'cp:keywords'),
-      description: extractTag(coreXml, 'dc:description'),
-      lastModifiedBy: extractTag(coreXml, 'cp:lastModifiedBy'),
+      title: extractTag(coreXml, "dc:title"),
+      subject: extractTag(coreXml, "dc:subject"),
+      creator: extractTag(coreXml, "dc:creator"),
+      keywords: extractTag(coreXml, "cp:keywords"),
+      description: extractTag(coreXml, "dc:description"),
+      lastModifiedBy: extractTag(coreXml, "cp:lastModifiedBy"),
     };
 
     // Parse revision as number
-    const revisionStr = extractTag(coreXml, 'cp:revision');
+    const revisionStr = extractTag(coreXml, "cp:revision");
     if (revisionStr) {
       properties.revision = parseInt(revisionStr, 10);
     }
 
     // Parse dates
-    const createdStr = extractTag(coreXml, 'dcterms:created');
+    const createdStr = extractTag(coreXml, "dcterms:created");
     if (createdStr) {
       properties.created = new Date(createdStr);
     }
 
-    const modifiedStr = extractTag(coreXml, 'dcterms:modified');
+    const modifiedStr = extractTag(coreXml, "dcterms:modified");
     if (modifiedStr) {
       properties.modified = new Date(modifiedStr);
     }
 
     return properties;
+  }
+
+  /**
+   * Parses styles from styles.xml
+   * @param zipHandler - ZIP handler containing the document
+   * @returns Array of parsed Style objects
+   */
+  private parseStyles(zipHandler: ZipHandler): Style[] {
+    const styles: Style[] = [];
+    const stylesXml = zipHandler.getFileAsString(DOCX_PATHS.STYLES);
+
+    if (!stylesXml) {
+      return styles; // No styles.xml file
+    }
+
+    try {
+      // Extract all <w:style> elements using XMLParser
+      const styleElements = XMLParser.extractElements(stylesXml, "w:style");
+
+      for (const styleXml of styleElements) {
+        try {
+          const style = this.parseStyle(styleXml);
+          if (style) {
+            styles.push(style);
+          }
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          this.parseErrors.push({ element: "style", error: err });
+
+          if (this.strictParsing) {
+            throw error;
+          }
+          // In lenient mode, continue parsing other styles
+        }
+      }
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.parseErrors.push({ element: "styles.xml", error: err });
+
+      if (this.strictParsing) {
+        throw new Error(`Failed to parse styles.xml: ${err.message}`);
+      }
+    }
+
+    return styles;
+  }
+
+  /**
+   * Parses numbering definitions from numbering.xml
+   * Extracts abstract numbering definitions and numbering instances
+   * @param zipHandler - ZIP handler containing the document
+   * @returns Object containing abstractNumberings and numberingInstances arrays
+   */
+  private parseNumbering(zipHandler: ZipHandler): {
+    abstractNumberings: AbstractNumbering[];
+    numberingInstances: NumberingInstance[];
+  } {
+    const abstractNumberings: AbstractNumbering[] = [];
+    const numberingInstances: NumberingInstance[] = [];
+
+    const numberingXml = zipHandler.getFileAsString(DOCX_PATHS.NUMBERING);
+
+    if (!numberingXml) {
+      return { abstractNumberings, numberingInstances }; // No numbering.xml file
+    }
+
+    try {
+      // Extract all <w:abstractNum> elements
+      const abstractNumElements = XMLParser.extractElements(
+        numberingXml,
+        "w:abstractNum"
+      );
+
+      for (const abstractNumXml of abstractNumElements) {
+        try {
+          const abstractNum = AbstractNumbering.fromXML(abstractNumXml);
+          abstractNumberings.push(abstractNum);
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          this.parseErrors.push({ element: "abstractNum", error: err });
+
+          if (this.strictParsing) {
+            throw error;
+          }
+          // In lenient mode, continue parsing other abstract numberings
+        }
+      }
+
+      // Extract all <w:num> elements (numbering instances)
+      const numElements = XMLParser.extractElements(numberingXml, "w:num");
+
+      for (const numXml of numElements) {
+        try {
+          const instance = NumberingInstance.fromXML(numXml);
+          numberingInstances.push(instance);
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          this.parseErrors.push({ element: "num", error: err });
+
+          if (this.strictParsing) {
+            throw error;
+          }
+          // In lenient mode, continue parsing other instances
+        }
+      }
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.parseErrors.push({ element: "numbering.xml", error: err });
+
+      if (this.strictParsing) {
+        throw new Error(`Failed to parse numbering.xml: ${err.message}`);
+      }
+    }
+
+    return { abstractNumberings, numberingInstances };
+  }
+
+  /**
+   * Parses section properties from document XML
+   * @param docXml - Document XML content
+   * @returns Parsed Section object or null if not found
+   */
+  private parseSectionProperties(docXml: string): Section | null {
+    try {
+      // Extract the final <w:sectPr> from <w:body>
+      const bodyElements = XMLParser.extractElements(docXml, "w:body");
+      if (bodyElements.length === 0) {
+        return null;
+      }
+      const bodyContent = bodyElements[0];
+      if (!bodyContent) {
+        return null;
+      }
+
+      const sectPrElements = XMLParser.extractElements(bodyContent, "w:sectPr");
+      if (sectPrElements.length === 0) {
+        return null;
+      }
+
+      // Use the last sectPr (document-level section properties)
+      const sectPr = sectPrElements[sectPrElements.length - 1];
+      if (!sectPr) {
+        return null;
+      }
+
+      const sectionProps: SectionProperties = {};
+
+      // Parse page size
+      const pgSzElements = XMLParser.extractElements(sectPr, "w:pgSz");
+      if (pgSzElements.length > 0) {
+        const pgSz = pgSzElements[0];
+        if (pgSz) {
+          const width = XMLParser.extractAttribute(pgSz, "w:w");
+          const height = XMLParser.extractAttribute(pgSz, "w:h");
+          const orient = XMLParser.extractAttribute(pgSz, "w:orient");
+
+          if (width && height) {
+            sectionProps.pageSize = {
+              width: parseInt(width, 10),
+              height: parseInt(height, 10),
+              orientation: orient === "landscape" ? "landscape" : "portrait",
+            };
+          }
+        }
+      }
+
+      // Parse margins
+      const pgMarElements = XMLParser.extractElements(sectPr, "w:pgMar");
+      if (pgMarElements.length > 0) {
+        const pgMar = pgMarElements[0];
+        if (pgMar) {
+          const top = XMLParser.extractAttribute(pgMar, "w:top");
+          const bottom = XMLParser.extractAttribute(pgMar, "w:bottom");
+          const left = XMLParser.extractAttribute(pgMar, "w:left");
+          const right = XMLParser.extractAttribute(pgMar, "w:right");
+          const header = XMLParser.extractAttribute(pgMar, "w:header");
+          const footer = XMLParser.extractAttribute(pgMar, "w:footer");
+          const gutter = XMLParser.extractAttribute(pgMar, "w:gutter");
+
+          if (top && bottom && left && right) {
+            sectionProps.margins = {
+              top: parseInt(top, 10),
+              bottom: parseInt(bottom, 10),
+              left: parseInt(left, 10),
+              right: parseInt(right, 10),
+              header: header ? parseInt(header, 10) : undefined,
+              footer: footer ? parseInt(footer, 10) : undefined,
+              gutter: gutter ? parseInt(gutter, 10) : undefined,
+            };
+          }
+        }
+      }
+
+      // Parse columns
+      const colsElements = XMLParser.extractElements(sectPr, "w:cols");
+      if (colsElements.length > 0) {
+        const cols = colsElements[0];
+        if (cols) {
+          const num = XMLParser.extractAttribute(cols, "w:num");
+          const space = XMLParser.extractAttribute(cols, "w:space");
+          const equalWidth = XMLParser.extractAttribute(cols, "w:equalWidth");
+
+          if (num) {
+            sectionProps.columns = {
+              count: parseInt(num, 10),
+              space: space ? parseInt(space, 10) : undefined,
+              equalWidth: equalWidth === "1" || equalWidth === "true",
+            };
+          }
+        }
+      }
+
+      // Parse section type
+      const typeElements = XMLParser.extractElements(sectPr, "w:type");
+      if (typeElements.length > 0) {
+        const type = typeElements[0];
+        if (type) {
+          const typeVal = XMLParser.extractAttribute(
+            type,
+            "w:val"
+          ) as SectionType;
+          if (typeVal) {
+            sectionProps.type = typeVal;
+          }
+        }
+      }
+
+      // Parse page numbering
+      const pgNumTypeElements = XMLParser.extractElements(
+        sectPr,
+        "w:pgNumType"
+      );
+      if (pgNumTypeElements.length > 0) {
+        const pgNumType = pgNumTypeElements[0];
+        if (pgNumType) {
+          const start = XMLParser.extractAttribute(pgNumType, "w:start");
+          const fmt = XMLParser.extractAttribute(
+            pgNumType,
+            "w:fmt"
+          ) as PageNumberFormat;
+
+          sectionProps.pageNumbering = {
+            start: start ? parseInt(start, 10) : undefined,
+            format: fmt,
+          };
+        }
+      }
+
+      // Parse title page flag
+      if (XMLParser.hasSelfClosingTag(sectPr, "w:titlePg")) {
+        sectionProps.titlePage = true;
+      }
+
+      // Parse header references
+      const headerRefs = XMLParser.extractElements(sectPr, "w:headerReference");
+      if (headerRefs.length > 0) {
+        sectionProps.headers = {};
+        for (const headerRef of headerRefs) {
+          const type = XMLParser.extractAttribute(headerRef, "w:type");
+          const rId = XMLParser.extractAttribute(headerRef, "r:id");
+          if (type && rId) {
+            if (type === "default") sectionProps.headers.default = rId;
+            else if (type === "first") sectionProps.headers.first = rId;
+            else if (type === "even") sectionProps.headers.even = rId;
+          }
+        }
+      }
+
+      // Parse footer references
+      const footerRefs = XMLParser.extractElements(sectPr, "w:footerReference");
+      if (footerRefs.length > 0) {
+        sectionProps.footers = {};
+        for (const footerRef of footerRefs) {
+          const type = XMLParser.extractAttribute(footerRef, "w:type");
+          const rId = XMLParser.extractAttribute(footerRef, "r:id");
+          if (type && rId) {
+            if (type === "default") sectionProps.footers.default = rId;
+            else if (type === "first") sectionProps.footers.first = rId;
+            else if (type === "even") sectionProps.footers.even = rId;
+          }
+        }
+      }
+
+      return new Section(sectionProps);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.parseErrors.push({ element: "sectPr", error: err });
+
+      if (this.strictParsing) {
+        throw new Error(`Failed to parse section properties: ${err.message}`);
+      }
+
+      return null;
+    }
+  }
+
+  /**
+   * Parses a single style element from XML
+   * @param styleXml - XML string of a single w:style element
+   * @returns Parsed Style object or null if invalid
+   */
+  private parseStyle(styleXml: string): Style | null {
+    // Extract style attributes
+    const typeAttr = XMLParser.extractAttribute(
+      styleXml,
+      "w:type"
+    ) as StyleType;
+    const styleId = XMLParser.extractAttribute(styleXml, "w:styleId") || "";
+    const defaultAttr = XMLParser.extractAttribute(styleXml, "w:default");
+    const customStyleAttr = XMLParser.extractAttribute(
+      styleXml,
+      "w:customStyle"
+    );
+
+    if (!styleId || !typeAttr) {
+      return null; // Invalid style, missing required attributes
+    }
+
+    // Extract style name
+    const nameElement = XMLParser.extractBetweenTags(
+      styleXml,
+      "<w:name",
+      "</w:name>"
+    );
+    const name = nameElement
+      ? XMLParser.extractAttribute(`<w:name${nameElement}`, "w:val") || styleId
+      : styleId;
+
+    // Extract basedOn
+    const basedOnElement = XMLParser.extractBetweenTags(
+      styleXml,
+      "<w:basedOn",
+      "</w:basedOn>"
+    );
+    const basedOn = basedOnElement
+      ? XMLParser.extractAttribute(`<w:basedOn${basedOnElement}`, "w:val")
+      : undefined;
+
+    // Extract next
+    const nextElement = XMLParser.extractBetweenTags(
+      styleXml,
+      "<w:next",
+      "</w:next>"
+    );
+    const next = nextElement
+      ? XMLParser.extractAttribute(`<w:next${nextElement}`, "w:val")
+      : undefined;
+
+    // Parse paragraph formatting (w:pPr)
+    let paragraphFormatting: ParagraphFormatting | undefined;
+    const pPrXml = XMLParser.extractBetweenTags(
+      styleXml,
+      "<w:pPr>",
+      "</w:pPr>"
+    );
+    if (pPrXml) {
+      paragraphFormatting = this.parseParagraphFormattingFromXml(pPrXml);
+    }
+
+    // Parse run formatting (w:rPr)
+    let runFormatting: RunFormatting | undefined;
+    const rPrXml = XMLParser.extractBetweenTags(
+      styleXml,
+      "<w:rPr>",
+      "</w:rPr>"
+    );
+    if (rPrXml) {
+      runFormatting = this.parseRunFormattingFromXml(rPrXml);
+    }
+
+    // Create style properties
+    const properties: StyleProperties = {
+      styleId,
+      name,
+      type: typeAttr,
+      basedOn,
+      next,
+      isDefault: defaultAttr === "1" || defaultAttr === "true",
+      customStyle: customStyleAttr === "1" || customStyleAttr === "true",
+      paragraphFormatting,
+      runFormatting,
+    };
+
+    return Style.create(properties);
+  }
+
+  /**
+   * Parses paragraph formatting from XML (w:pPr element content)
+   * @param pPrXml - XML content inside w:pPr tags
+   * @returns ParagraphFormatting object
+   */
+  private parseParagraphFormattingFromXml(pPrXml: string): ParagraphFormatting {
+    const formatting: ParagraphFormatting = {};
+
+    // Parse alignment (w:jc)
+    const jcElement = XMLParser.extractBetweenTags(pPrXml, "<w:jc", "/>");
+    if (jcElement) {
+      const alignment = XMLParser.extractAttribute(
+        `<w:jc${jcElement}`,
+        "w:val"
+      );
+      if (alignment) {
+        formatting.alignment = alignment as
+          | "left"
+          | "center"
+          | "right"
+          | "justify";
+      }
+    }
+
+    // Parse spacing (w:spacing)
+    const spacingElement = XMLParser.extractBetweenTags(
+      pPrXml,
+      "<w:spacing",
+      "/>"
+    );
+    if (spacingElement) {
+      const before = XMLParser.extractAttribute(
+        `<w:spacing${spacingElement}`,
+        "w:before"
+      );
+      const after = XMLParser.extractAttribute(
+        `<w:spacing${spacingElement}`,
+        "w:after"
+      );
+      const line = XMLParser.extractAttribute(
+        `<w:spacing${spacingElement}`,
+        "w:line"
+      );
+      const lineRule = XMLParser.extractAttribute(
+        `<w:spacing${spacingElement}`,
+        "w:lineRule"
+      );
+
+      // Validate lineRule
+      let validatedLineRule: "auto" | "exact" | "atLeast" | undefined;
+      if (lineRule) {
+        const validLineRules = ["auto", "exact", "atLeast"];
+        if (validLineRules.includes(lineRule)) {
+          validatedLineRule = lineRule as "auto" | "exact" | "atLeast";
+        }
+      }
+
+      formatting.spacing = {
+        before: before ? parseInt(before, 10) : undefined,
+        after: after ? parseInt(after, 10) : undefined,
+        // If lineRule exists without line, use default 240 twips
+        line: line ? parseInt(line, 10) : validatedLineRule ? 240 : undefined,
+        lineRule: validatedLineRule,
+      };
+    }
+
+    // Parse indentation (w:ind)
+    const indElement = XMLParser.extractBetweenTags(pPrXml, "<w:ind", "/>");
+    if (indElement) {
+      const left = XMLParser.extractAttribute(`<w:ind${indElement}`, "w:left");
+      const right = XMLParser.extractAttribute(
+        `<w:ind${indElement}`,
+        "w:right"
+      );
+      const firstLine = XMLParser.extractAttribute(
+        `<w:ind${indElement}`,
+        "w:firstLine"
+      );
+      const hanging = XMLParser.extractAttribute(
+        `<w:ind${indElement}`,
+        "w:hanging"
+      );
+
+      formatting.indentation = {
+        left: left ? parseInt(left, 10) : undefined,
+        right: right ? parseInt(right, 10) : undefined,
+        firstLine: firstLine ? parseInt(firstLine, 10) : undefined,
+        hanging: hanging ? parseInt(hanging, 10) : undefined,
+      };
+    }
+
+    // Parse boolean properties
+    if (pPrXml.includes("<w:keepNext/>") || pPrXml.includes("<w:keepNext ")) {
+      formatting.keepNext = true;
+    }
+    if (pPrXml.includes("<w:keepLines/>") || pPrXml.includes("<w:keepLines ")) {
+      formatting.keepLines = true;
+    }
+    if (
+      pPrXml.includes("<w:pageBreakBefore/>") ||
+      pPrXml.includes("<w:pageBreakBefore ")
+    ) {
+      formatting.pageBreakBefore = true;
+    }
+
+    return formatting;
+  }
+
+  /**
+   * Parses run formatting from XML (w:rPr element content)
+   * @param rPrXml - XML content inside w:rPr tags
+   * @returns RunFormatting object
+   */
+  private parseRunFormattingFromXml(rPrXml: string): RunFormatting {
+    const formatting: RunFormatting = {};
+
+    // Parse boolean properties
+    if (rPrXml.includes("<w:b/>") || rPrXml.includes("<w:b ")) {
+      formatting.bold = true;
+    }
+    if (rPrXml.includes("<w:i/>") || rPrXml.includes("<w:i ")) {
+      formatting.italic = true;
+    }
+    if (rPrXml.includes("<w:strike/>") || rPrXml.includes("<w:strike ")) {
+      formatting.strike = true;
+    }
+    if (rPrXml.includes("<w:smallCaps/>") || rPrXml.includes("<w:smallCaps ")) {
+      formatting.smallCaps = true;
+    }
+    if (rPrXml.includes("<w:caps/>") || rPrXml.includes("<w:caps ")) {
+      formatting.allCaps = true;
+    }
+
+    // Parse underline
+    const uElement = XMLParser.extractBetweenTags(rPrXml, "<w:u", "/>");
+    if (uElement) {
+      const uVal = XMLParser.extractAttribute(`<w:u${uElement}`, "w:val");
+      if (
+        uVal === "single" ||
+        uVal === "double" ||
+        uVal === "thick" ||
+        uVal === "dotted" ||
+        uVal === "dash"
+      ) {
+        formatting.underline = uVal as
+          | "single"
+          | "double"
+          | "thick"
+          | "dotted"
+          | "dash";
+      } else {
+        formatting.underline = true;
+      }
+    }
+
+    // Parse subscript/superscript
+    const vertAlignElement = XMLParser.extractBetweenTags(
+      rPrXml,
+      "<w:vertAlign",
+      "/>"
+    );
+    if (vertAlignElement) {
+      const val = XMLParser.extractAttribute(
+        `<w:vertAlign${vertAlignElement}`,
+        "w:val"
+      );
+      if (val === "subscript") {
+        formatting.subscript = true;
+      } else if (val === "superscript") {
+        formatting.superscript = true;
+      }
+    }
+
+    // Parse font (w:rFonts)
+    const rFontsElement = XMLParser.extractBetweenTags(
+      rPrXml,
+      "<w:rFonts",
+      "/>"
+    );
+    if (rFontsElement) {
+      const ascii = XMLParser.extractAttribute(
+        `<w:rFonts${rFontsElement}`,
+        "w:ascii"
+      );
+      if (ascii) {
+        formatting.font = ascii;
+      }
+    }
+
+    // Parse size (w:sz) - size is in half-points
+    const szElement = XMLParser.extractBetweenTags(rPrXml, "<w:sz", "/>");
+    if (szElement) {
+      const val = XMLParser.extractAttribute(`<w:sz${szElement}`, "w:val");
+      if (val) {
+        formatting.size = parseInt(val, 10) / 2; // Convert half-points to points
+      }
+    }
+
+    // Parse color (w:color)
+    const colorElement = XMLParser.extractBetweenTags(rPrXml, "<w:color", "/>");
+    if (colorElement) {
+      const val = XMLParser.extractAttribute(
+        `<w:color${colorElement}`,
+        "w:val"
+      );
+      if (val && val !== "auto") {
+        formatting.color = val;
+      }
+    }
+
+    // Parse highlight (w:highlight)
+    const highlightElement = XMLParser.extractBetweenTags(
+      rPrXml,
+      "<w:highlight",
+      "/>"
+    );
+    if (highlightElement) {
+      const val = XMLParser.extractAttribute(
+        `<w:highlight${highlightElement}`,
+        "w:val"
+      );
+      if (val) {
+        const validHighlights = [
+          "yellow",
+          "green",
+          "cyan",
+          "magenta",
+          "blue",
+          "red",
+          "darkBlue",
+          "darkCyan",
+          "darkGreen",
+          "darkMagenta",
+          "darkRed",
+          "darkYellow",
+          "darkGray",
+          "lightGray",
+          "black",
+          "white",
+        ];
+        if (validHighlights.includes(val)) {
+          formatting.highlight = val as
+            | "yellow"
+            | "green"
+            | "cyan"
+            | "magenta"
+            | "blue"
+            | "red"
+            | "darkBlue"
+            | "darkCyan"
+            | "darkGreen"
+            | "darkMagenta"
+            | "darkRed"
+            | "darkYellow"
+            | "darkGray"
+            | "lightGray"
+            | "black"
+            | "white";
+        }
+      }
+    }
+
+    return formatting;
   }
 
   /**
@@ -756,13 +1602,13 @@ export class DocumentParser {
       }
 
       // If already a string, return as-is
-      if (typeof file.content === 'string') {
+      if (typeof file.content === "string") {
         return file.content;
       }
 
       // If Buffer, decode as UTF-8
       if (Buffer.isBuffer(file.content)) {
-        return file.content.toString('utf8');
+        return file.content.toString("utf8");
       }
 
       return null;
@@ -779,15 +1625,21 @@ export class DocumentParser {
    * @param xmlContent - Raw XML string to set
    * @returns True if successful, false otherwise
    */
-  static setRawXml(zipHandler: ZipHandler, partName: string, xmlContent: string): boolean {
+  static setRawXml(
+    zipHandler: ZipHandler,
+    partName: string,
+    xmlContent: string
+  ): boolean {
     try {
-      if (typeof xmlContent !== 'string') {
+      if (typeof xmlContent !== "string") {
         return false;
       }
 
       // Add or update the file in the ZIP handler
       // Convert string to UTF-8 Buffer for consistent encoding
-      zipHandler.addFile(partName, Buffer.from(xmlContent, 'utf8'), { binary: true });
+      zipHandler.addFile(partName, Buffer.from(xmlContent, "utf8"), {
+        binary: true,
+      });
       return true;
     } catch (error) {
       return false;
@@ -801,14 +1653,25 @@ export class DocumentParser {
    * @param partName - Part name to get relationships for (e.g., 'word/document.xml')
    * @returns Array of relationships for that part, or empty array if none found
    */
-  static getRelationships(zipHandler: ZipHandler, partName: string): Array<{ id?: string; type?: string; target?: string; targetMode?: string }> {
+  static getRelationships(
+    zipHandler: ZipHandler,
+    partName: string
+  ): Array<{
+    id?: string;
+    type?: string;
+    target?: string;
+    targetMode?: string;
+  }> {
     try {
       // Construct the .rels path from the part name
       // For 'word/document.xml' -> 'word/_rels/document.xml.rels'
-      const lastSlash = partName.lastIndexOf('/');
-      const relsPath = lastSlash === -1
-        ? `_rels/${partName}.rels`
-        : `${partName.substring(0, lastSlash)}/_rels/${partName.substring(lastSlash + 1)}.rels`;
+      const lastSlash = partName.lastIndexOf("/");
+      const relsPath =
+        lastSlash === -1
+          ? `_rels/${partName}.rels`
+          : `${partName.substring(0, lastSlash)}/_rels/${partName.substring(
+              lastSlash + 1
+            )}.rels`;
 
       const relsContent = zipHandler.getFileAsString(relsPath);
       if (!relsContent) {
@@ -852,5 +1715,35 @@ export class DocumentParser {
     } catch (error) {
       return [];
     }
+  }
+
+  /**
+   * Parses and extracts all namespace declarations from the root <w:document> tag
+   * @param docXml - The full XML content of word/document.xml
+   * @returns A record of namespace prefixes to their URIs
+   */
+  private parseNamespaces(docXml: string): Record<string, string> {
+    const namespaces: Record<string, string> = {};
+    const docTagMatch = docXml.match(/<w:document([^>]+)>/);
+
+    if (docTagMatch && docTagMatch[1]) {
+      const attributes = docTagMatch[1];
+      const nsPattern = /xmlns:([^=]+)="([^"]+)"/g;
+      let match;
+
+      while ((match = nsPattern.exec(attributes)) !== null) {
+        if (match[1] && match[2]) {
+          namespaces[match[1]] = match[2];
+        }
+      }
+
+      // Extract default namespace (without prefix)
+      const defaultNsMatch = attributes.match(/xmlns="([^"]+)"/);
+      if (defaultNsMatch && defaultNsMatch[1]) {
+        namespaces["xmlns"] = defaultNsMatch[1];
+      }
+    }
+
+    return namespaces;
   }
 }

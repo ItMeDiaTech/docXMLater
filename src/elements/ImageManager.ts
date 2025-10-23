@@ -38,6 +38,7 @@ export interface ImageManagerOptions {
  */
 export class ImageManager {
   private images: Map<Image, ImageEntry>;
+  private imagesByRelId: Map<string, ImageEntry>; // Track by relationship ID (Issue #12 fix)
   private nextImageNumber: number;
   private nextDocPrId: number;
   private maxImageCount: number;
@@ -50,6 +51,7 @@ export class ImageManager {
    */
   constructor(options: ImageManagerOptions = {}) {
     this.images = new Map();
+    this.imagesByRelId = new Map(); // Issue #12 fix
     this.nextImageNumber = 1;
     this.nextDocPrId = 1;
     this.maxImageCount = options.maxImageCount ?? 20;
@@ -63,9 +65,21 @@ export class ImageManager {
    * @param relationshipId The relationship ID for this image
    * @returns The filename assigned to this image
    * @throws {Error} If image limits are exceeded
+   * 
+   * **Issue #12 Fix:** Tracks images by relationship ID to prevent duplicates
+   * during load-save round trips. Same rId = same image = same filename.
    */
   registerImage(image: Image, relationshipId: string): string {
-    // Check if already registered
+    // Issue #12 fix: Check by relationship ID FIRST to prevent duplicates
+    // During load-save, same image gets new object but same rId
+    const existingByRelId = this.imagesByRelId.get(relationshipId);
+    if (existingByRelId) {
+      // Same rId = same image, reuse filename and update object reference
+      this.images.set(image, existingByRelId);
+      return existingByRelId.filename;
+    }
+
+    // Check if already registered by object reference (fallback)
     const existing = this.images.get(image);
     if (existing) {
       return existing.filename;
@@ -143,6 +157,7 @@ export class ImageManager {
     };
 
     this.images.set(image, entry);
+    this.imagesByRelId.set(relationshipId, entry); // Issue #12 fix
 
     return filename;
   }
@@ -329,10 +344,35 @@ export class ImageManager {
   }
 
   /**
+   * Initializes nextImageNumber from already-loaded images
+   * Call after parsing to prevent filename collisions
+   * 
+   * **Issue #12 Fix:** Prevents collisions when adding new images after load
+   */
+  initializeFromLoadedImages(): void {
+    let maxNumber = 0;
+
+    for (const entry of this.images.values()) {
+      // Extract number from filename (e.g., "image5.png" → 5)
+      const match = entry.filename.match(/image(\d+)\./); 
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
+
+    // Start numbering after highest existing number
+    this.nextImageNumber = maxNumber + 1;
+  }
+
+  /**
    * Clears all images
    */
   clear(): this {
     this.images.clear();
+    this.imagesByRelId.clear(); // Issue #12 fix
     this.nextImageNumber = 1;
     this.nextDocPrId = 1;
     return this;

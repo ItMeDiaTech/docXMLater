@@ -22,6 +22,7 @@ export type TableLayout = 'auto' | 'fixed';
 export interface TableBorder {
   style?: 'none' | 'single' | 'double' | 'dashed' | 'dotted' | 'thick';
   size?: number;
+  space?: number; // Border spacing (padding) in points
   color?: string;
 }
 
@@ -41,12 +42,34 @@ export interface TableBorders {
  * Table formatting options
  */
 export interface TableFormatting {
+  style?: string; // Table style ID (e.g., 'Table1', 'TableGrid')
   width?: number; // Table width in twips
   alignment?: TableAlignment;
   layout?: TableLayout;
   borders?: TableBorders;
   cellSpacing?: number; // Cell spacing in twips
   indent?: number; // Left indent in twips
+  tblLook?: string; // Table look flags (appearance settings)
+}
+
+/**
+ * First row formatting options for table headers
+ */
+export interface FirstRowFormattingOptions {
+  /** Text alignment in cells */
+  alignment?: 'left' | 'center' | 'right';
+  /** Bold text */
+  bold?: boolean;
+  /** Italic text */
+  italic?: boolean;
+  /** Underline text */
+  underline?: boolean | 'single' | 'double' | 'thick' | 'dotted' | 'dash';
+  /** Spacing before paragraph (in twips) */
+  spacingBefore?: number;
+  /** Spacing after paragraph (in twips) */
+  spacingAfter?: number;
+  /** Background color (hex without #) */
+  shading?: string;
 }
 
 /**
@@ -63,6 +86,13 @@ export class Table {
    * @param formatting - Table formatting options
    */
   constructor(rows?: number, columns?: number, formatting: TableFormatting = {}) {
+    // Set default width if not specified
+    // Per ECMA-376, tables require <w:tblW> element for Word compatibility
+    // Default: Letter page width (12240 twips) minus standard margins (2*1440 twips) = 9360 twips
+    if (formatting.width === undefined) {
+      formatting.width = 9360; // ~6.5 inches
+    }
+
     this.formatting = formatting;
 
     if (rows !== undefined && rows > 0 && columns !== undefined && columns > 0) {
@@ -188,6 +218,110 @@ export class Table {
   }
 
   /**
+   * Sets shading (background color) for the first row of the table
+   * Useful for header rows in data tables
+   * @param color - Hex color without # (e.g., 'DFDFDF' for light gray)
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * table.setFirstRowShading('DFDFDF'); // Light gray header
+   * ```
+   */
+  setFirstRowShading(color: string): this {
+    if (this.rows.length > 0) {
+      const firstRow = this.rows[0];
+      if (firstRow) {
+        for (const cell of firstRow.getCells()) {
+          cell.setShading({ fill: color });
+        }
+      }
+    }
+    return this;
+  }
+
+  /**
+   * Sets comprehensive formatting for the first row of the table
+   *
+   * This is ideal for formatting table headers with alignment, text formatting,
+   * spacing, and background color in a single call.
+   *
+   * @param options - Formatting options for the first row
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * // Create a formatted table header
+   * table.setFirstRowFormatting({
+   *   alignment: 'center',
+   *   bold: true,
+   *   spacingBefore: 120,
+   *   spacingAfter: 120,
+   *   shading: 'DFDFDF'
+   * });
+   *
+   * // Format header with underline and custom spacing
+   * table.setFirstRowFormatting({
+   *   alignment: 'left',
+   *   bold: true,
+   *   underline: 'single',
+   *   spacingAfter: 80
+   * });
+   * ```
+   */
+  setFirstRowFormatting(options: FirstRowFormattingOptions): this {
+    if (this.rows.length === 0) {
+      return this; // No rows to format
+    }
+
+    const firstRow = this.rows[0];
+    if (!firstRow) {
+      return this;
+    }
+
+    // Apply formatting to each cell in the first row
+    for (const cell of firstRow.getCells()) {
+      const paragraphs = cell.getParagraphs();
+
+      // Apply shading to the cell if specified
+      if (options.shading) {
+        cell.setShading({ fill: options.shading });
+      }
+
+      // Apply formatting to each paragraph in the cell
+      for (const para of paragraphs) {
+        // Apply paragraph alignment
+        if (options.alignment) {
+          para.setAlignment(options.alignment as any);
+        }
+
+        // Apply spacing
+        if (options.spacingBefore !== undefined) {
+          para.setSpaceBefore(options.spacingBefore);
+        }
+        if (options.spacingAfter !== undefined) {
+          para.setSpaceAfter(options.spacingAfter);
+        }
+
+        // Apply run formatting to all runs in the paragraph
+        const runs = para.getRuns();
+        for (const run of runs) {
+          // Apply formatting using run's setter methods
+          if (options.bold !== undefined) {
+            run.setBold(options.bold);
+          }
+          if (options.italic !== undefined) {
+            run.setItalic(options.italic);
+          }
+          if (options.underline !== undefined) {
+            run.setUnderline(options.underline);
+          }
+        }
+      }
+    }
+
+    return this;
+  }
+
+  /**
    * Sets cell spacing
    * @param twips - Cell spacing in twips
    * @returns This table for chaining
@@ -208,6 +342,26 @@ export class Table {
   }
 
   /**
+   * Sets table style reference
+   * @param style - Table style ID (e.g., 'Table1', 'TableGrid')
+   * @returns This table for chaining
+   */
+  setStyle(style: string): this {
+    this.formatting.style = style;
+    return this;
+  }
+
+  /**
+   * Sets table look flags (appearance settings)
+   * @param tblLook - Table look value (e.g., '0000', '04A0')
+   * @returns This table for chaining
+   */
+  setTblLook(tblLook: string): this {
+    this.formatting.tblLook = tblLook;
+    return this;
+  }
+
+  /**
    * Gets the table formatting
    * @returns Table formatting
    */
@@ -221,6 +375,11 @@ export class Table {
    */
   toXML(): XMLElement {
     const tblPrChildren: XMLElement[] = [];
+
+    // Add table style (must come first per ECMA-376)
+    if (this.formatting.style) {
+      tblPrChildren.push(XMLBuilder.wSelf('tblStyle', { 'w:val': this.formatting.style }));
+    }
 
     // Add table width
     if (this.formatting.width !== undefined) {
@@ -293,6 +452,11 @@ export class Table {
       );
     }
 
+    // Add table look (appearance flags)
+    if (this.formatting.tblLook) {
+      tblPrChildren.push(XMLBuilder.wSelf('tblLook', { 'w:val': this.formatting.tblLook }));
+    }
+
     // Build table element
     const tableChildren: XMLElement[] = [];
 
@@ -334,11 +498,14 @@ export class Table {
       'w:val': border.style || 'single',
     };
 
-    if (border.size !== undefined) {
-      attrs['w:sz'] = border.size;
-    }
     if (border.color) {
       attrs['w:color'] = border.color;
+    }
+    if (border.space !== undefined) {
+      attrs['w:space'] = border.space;
+    }
+    if (border.size !== undefined) {
+      attrs['w:sz'] = border.size;
     }
 
     return XMLBuilder.wSelf(side, attrs);
@@ -459,5 +626,236 @@ export class Table {
    */
   static create(rows?: number, columns?: number, formatting?: TableFormatting): Table {
     return new Table(rows, columns, formatting);
+  }
+
+  /**
+   * Merges cells into a single cell (uses columnSpan and rowSpan)
+   * @param startRow - Starting row index (0-based)
+   * @param startCol - Starting column index (0-based)
+   * @param endRow - Ending row index (0-based, inclusive)
+   * @param endCol - Ending column index (0-based, inclusive)
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * table.mergeCells(0, 0, 0, 2);  // Merge cells across columns in first row
+   * table.mergeCells(0, 0, 2, 0);  // Merge cells down rows in first column
+   * ```
+   */
+  mergeCells(startRow: number, startCol: number, endRow: number, endCol: number): this {
+    if (startRow < 0 || endRow >= this.rows.length || startCol < 0 || endCol < 0) {
+      return this;
+    }
+
+    const cell = this.getCell(startRow, startCol);
+    if (!cell) {
+      return this;
+    }
+
+    // Set column span if merging horizontally
+    if (endCol > startCol) {
+      cell.setColumnSpan(endCol - startCol + 1);
+    }
+
+    // Note: Row spanning is more complex in Word and requires gridSpan and vMerge
+    // For now, we only handle column spanning properly
+    // TODO: Implement full row spanning with vMerge in future
+
+    return this;
+  }
+
+  /**
+   * Splits a cell (removes column/row span)
+   * @param row - Row index (0-based)
+   * @param col - Column index (0-based)
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * table.splitCell(0, 0);  // Remove any spanning from cell
+   * ```
+   */
+  splitCell(row: number, col: number): this {
+    const cell = this.getCell(row, col);
+    if (cell) {
+      cell.setColumnSpan(1);  // Reset to single cell
+    }
+    return this;
+  }
+
+  /**
+   * Moves cell contents from one position to another
+   * @param fromRow - Source row index
+   * @param fromCol - Source column index
+   * @param toRow - Target row index
+   * @param toCol - Target column index
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * table.moveCell(0, 0, 1, 1);  // Move cell from [0,0] to [1,1]
+   * ```
+   */
+  moveCell(fromRow: number, fromCol: number, toRow: number, toCol: number): this {
+    const fromCell = this.getCell(fromRow, fromCol);
+    const toCell = this.getCell(toRow, toCol);
+
+    if (!fromCell || !toCell) {
+      return this;
+    }
+
+    // Copy all paragraphs from source to target
+    const paragraphs = fromCell.getParagraphs();
+    for (const para of paragraphs) {
+      toCell.addParagraph(para);
+    }
+
+    // Copy formatting
+    const formatting = fromCell.getFormatting();
+    if (formatting.shading) toCell.setShading(formatting.shading);
+    if (formatting.borders) toCell.setBorders(formatting.borders);
+    if (formatting.width) toCell.setWidth(formatting.width);
+    if (formatting.verticalAlignment) toCell.setVerticalAlignment(formatting.verticalAlignment);
+
+    // Clear source cell (replace with empty paragraph)
+    const row = this.getRow(fromRow);
+    if (row) {
+      const cells = row.getCells();
+      cells[fromCol] = new TableCell();
+    }
+
+    return this;
+  }
+
+  /**
+   * Swaps contents of two cells
+   * @param row1 - First cell row index
+   * @param col1 - First cell column index
+   * @param row2 - Second cell row index
+   * @param col2 - Second cell column index
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * table.swapCells(0, 0, 1, 1);  // Swap cells at [0,0] and [1,1]
+   * ```
+   */
+  swapCells(row1: number, col1: number, row2: number, col2: number): this {
+    const row1Obj = this.getRow(row1);
+    const row2Obj = this.getRow(row2);
+
+    if (!row1Obj || !row2Obj) {
+      return this;
+    }
+
+    const cells1 = row1Obj.getCells();
+    const cells2 = row2Obj.getCells();
+
+    if (col1 >= cells1.length || col2 >= cells2.length) {
+      return this;
+    }
+
+    // Swap cells
+    const temp = cells1[col1];
+    cells1[col1] = cells2[col2]!;
+    cells2[col2] = temp!;
+
+    return this;
+  }
+
+  /**
+   * Sets width for a specific column
+   * @param columnIndex - Column index (0-based)
+   * @param width - Width in twips
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * table.setColumnWidth(0, 2000);  // Set first column to 2000 twips
+   * ```
+   */
+  setColumnWidth(columnIndex: number, width: number): this {
+    const columnWidths = (this.formatting as any).columnWidths || [];
+    columnWidths[columnIndex] = width;
+    (this.formatting as any).columnWidths = columnWidths;
+    return this;
+  }
+
+  /**
+   * Inserts multiple rows at once
+   * @param startIndex - Position to insert at (0-based)
+   * @param count - Number of rows to insert
+   * @returns Array of inserted rows
+   * @example
+   * ```typescript
+   * const rows = table.insertRows(2, 3);  // Insert 3 rows at position 2
+   * ```
+   */
+  insertRows(startIndex: number, count: number): TableRow[] {
+    const insertedRows: TableRow[] = [];
+    const columnCount = this.getColumnCount();
+
+    for (let i = 0; i < count; i++) {
+      const row = new TableRow(columnCount);
+      this.insertRow(startIndex + i, row);
+      insertedRows.push(row);
+    }
+
+    return insertedRows;
+  }
+
+  /**
+   * Removes multiple rows at once
+   * @param startIndex - Starting position (0-based)
+   * @param count - Number of rows to remove
+   * @returns True if rows were removed
+   * @example
+   * ```typescript
+   * table.removeRows(2, 3);  // Remove 3 rows starting at position 2
+   * ```
+   */
+  removeRows(startIndex: number, count: number): boolean {
+    if (startIndex < 0 || startIndex >= this.rows.length || count <= 0) {
+      return false;
+    }
+
+    const actualCount = Math.min(count, this.rows.length - startIndex);
+    this.rows.splice(startIndex, actualCount);
+    return actualCount > 0;
+  }
+
+  /**
+   * Creates a deep clone of this table
+   * @returns New Table instance with copied rows and formatting
+   * @example
+   * ```typescript
+   * const original = new Table(2, 3);
+   * const copy = original.clone();
+   * ```
+   */
+  clone(): Table {
+    // Clone formatting
+    const clonedFormatting: TableFormatting = JSON.parse(JSON.stringify(this.formatting));
+
+    // Create new table with same structure
+    const clonedTable = new Table(0, 0, clonedFormatting);
+
+    // Clone all rows
+    for (const row of this.rows) {
+      // Clone row by creating new cells with same content
+      const cells = row.getCells();
+      const clonedRow = new TableRow(0);
+
+      for (const cell of cells) {
+        const cellFormatting = cell.getFormatting();
+        const clonedCell = new TableCell(JSON.parse(JSON.stringify(cellFormatting)));
+
+        // Clone paragraphs in cell
+        for (const para of cell.getParagraphs()) {
+          clonedCell.addParagraph(para.clone());
+        }
+
+        clonedRow.addCell(clonedCell);
+      }
+
+      clonedTable.addRow(clonedRow);
+    }
+
+    return clonedTable;
   }
 }

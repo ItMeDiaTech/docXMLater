@@ -358,4 +358,84 @@ export class NumberingLevel {
   static create(properties: NumberingLevelProperties): NumberingLevel {
     return new NumberingLevel(properties);
   }
+
+  /**
+   * Creates a NumberingLevel from XML element
+   * @param xml The XML string of the <w:lvl> element
+   * @returns NumberingLevel instance
+   */
+  static fromXML(xml: string): NumberingLevel {
+    // Extract level index (required)
+    const ilvlMatch = xml.match(/<w:lvl[^>]*w:ilvl="([^"]+)"/);
+    if (!ilvlMatch || !ilvlMatch[1]) {
+      throw new Error('Missing required w:ilvl attribute');
+    }
+    const level = parseInt(ilvlMatch[1], 10);
+
+    // Extract number format (required)
+    const numFmtMatch = xml.match(/<w:numFmt[^>]*w:val="([^"]+)"/);
+    if (!numFmtMatch || !numFmtMatch[1]) {
+      throw new Error('Missing required w:numFmt element');
+    }
+    const format = numFmtMatch[1] as NumberFormat;
+
+    // Extract level text (required)
+    const lvlTextMatch = xml.match(/<w:lvlText[^>]*w:val="([^"]+)"/);
+    if (!lvlTextMatch || !lvlTextMatch[1]) {
+      throw new Error('Missing required w:lvlText element');
+    }
+    const text = lvlTextMatch[1];
+
+    // Extract alignment (optional, default: left)
+    const lvlJcMatch = xml.match(/<w:lvlJc[^>]*w:val="([^"]+)"/);
+    const alignment = (lvlJcMatch && lvlJcMatch[1] ? lvlJcMatch[1] : 'left') as NumberAlignment;
+
+    // Extract start value (optional, default: 1)
+    const startMatch = xml.match(/<w:start[^>]*w:val="([^"]+)"/);
+    const start = startMatch && startMatch[1] ? parseInt(startMatch[1], 10) : 1;
+
+    // Extract suffix (optional, default: tab)
+    const suffixMatch = xml.match(/<w:suff[^>]*w:val="([^"]+)"/);
+    const suffix = suffixMatch && suffixMatch[1] ? suffixMatch[1] as 'tab' | 'space' | 'nothing' : 'tab';
+
+    // Extract indentation from <w:pPr><w:ind>
+    let leftIndent = 720 * (level + 1); // default
+    let hangingIndent = 360; // default
+    const indMatch = xml.match(/<w:ind[^>]*\/>/);
+    if (indMatch) {
+      const indElement = indMatch[0];
+      const leftMatch = indElement.match(/w:left="([^"]+)"/);
+      const hangingMatch = indElement.match(/w:hanging="([^"]+)"/);
+
+      if (leftMatch && leftMatch[1]) leftIndent = parseInt(leftMatch[1], 10);
+      if (hangingMatch && hangingMatch[1]) hangingIndent = parseInt(hangingMatch[1], 10);
+    }
+
+    // Extract font and size from <w:rPr>
+    let font = format === 'bullet' ? 'Symbol' : 'Calibri';
+    let fontSize = 22;
+
+    const rFontsMatch = xml.match(/<w:rFonts[^>]*\/>/);
+    if (rFontsMatch) {
+      const rFontsElement = rFontsMatch[0];
+      const asciiMatch = rFontsElement.match(/w:ascii="([^"]+)"/);
+      if (asciiMatch && asciiMatch[1]) font = asciiMatch[1];
+    }
+
+    const szMatch = xml.match(/<w:sz[^>]*w:val="([^"]+)"/);
+    if (szMatch && szMatch[1]) fontSize = parseInt(szMatch[1], 10);
+
+    return new NumberingLevel({
+      level,
+      format,
+      text,
+      alignment,
+      start,
+      leftIndent,
+      hangingIndent,
+      font,
+      fontSize,
+      suffix,
+    });
+  }
 }

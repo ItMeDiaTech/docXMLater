@@ -171,4 +171,30 @@ export class NumberingInstance {
     }
     return new NumberingInstance(propertiesOrNumId);
   }
+
+  /**
+   * Creates a NumberingInstance from XML element
+   * @param xml The XML string of the <w:num> element
+   * @returns NumberingInstance instance
+   */
+  static fromXML(xml: string): NumberingInstance {
+    // Extract numId (required)
+    const numIdMatch = xml.match(/<w:num[^>]*w:numId="([^"]+)"/);
+    if (!numIdMatch || !numIdMatch[1]) {
+      throw new Error('Missing required w:numId attribute');
+    }
+    const numId = parseInt(numIdMatch[1], 10);
+
+    // Extract abstractNumId (required)
+    const abstractNumIdMatch = xml.match(/<w:abstractNumId[^>]*w:val="([^"]+)"/);
+    if (!abstractNumIdMatch || !abstractNumIdMatch[1]) {
+      throw new Error('Missing required w:abstractNumId element');
+    }
+    const abstractNumId = parseInt(abstractNumIdMatch[1], 10);
+
+    return new NumberingInstance({
+      numId,
+      abstractNumId,
+    });
+  }
 }

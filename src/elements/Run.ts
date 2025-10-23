@@ -88,8 +88,9 @@ export class Run {
    * @param text - New text content
    */
   setText(text: string): void {
-    // Auto-clean by default (consistent with constructor behavior)
-    const shouldClean = true;
+    // Respect original cleanXmlFromText setting (Issue #9 fix)
+    // This ensures consistent behavior with constructor
+    const shouldClean = this.formatting.cleanXmlFromText !== false;
 
     // Validate text for XML patterns
     const validation = validateRunText(text, {
@@ -406,5 +407,76 @@ export class Run {
    */
   static create(text: string, formatting?: RunFormatting): Run {
     return new Run(text, formatting);
+  }
+
+  /**
+   * Creates a deep clone of this run
+   * @returns New Run instance with copied text and formatting
+   * @example
+   * ```typescript
+   * const original = new Run('Hello', { bold: true });
+   * const copy = original.clone();
+   * copy.setText('World');  // Original unchanged
+   * ```
+   */
+  clone(): Run {
+    // Deep copy formatting to avoid shared references
+    const clonedFormatting: RunFormatting = JSON.parse(JSON.stringify(this.formatting));
+    return new Run(this.text, clonedFormatting);
+  }
+
+  /**
+   * Inserts text at a specific position
+   * @param index - Position to insert at (0-based)
+   * @param text - Text to insert
+   * @returns This run for chaining
+   * @example
+   * ```typescript
+   * const run = new Run('Hello World');
+   * run.insertText(6, 'Beautiful ');  // "Hello Beautiful World"
+   * ```
+   */
+  insertText(index: number, text: string): this {
+    if (index < 0) index = 0;
+    if (index > this.text.length) index = this.text.length;
+
+    this.text = this.text.slice(0, index) + text + this.text.slice(index);
+    return this;
+  }
+
+  /**
+   * Appends text to the end of the run
+   * @param text - Text to append
+   * @returns This run for chaining
+   * @example
+   * ```typescript
+   * const run = new Run('Hello');
+   * run.appendText(' World');  // "Hello World"
+   * ```
+   */
+  appendText(text: string): this {
+    this.text += text;
+    return this;
+  }
+
+  /**
+   * Replaces text in a specific range
+   * @param start - Start position (0-based, inclusive)
+   * @param end - End position (0-based, exclusive)
+   * @param text - Replacement text
+   * @returns This run for chaining
+   * @example
+   * ```typescript
+   * const run = new Run('Hello World');
+   * run.replaceText(0, 5, 'Hi');  // "Hi World"
+   * ```
+   */
+  replaceText(start: number, end: number, text: string): this {
+    if (start < 0) start = 0;
+    if (end > this.text.length) end = this.text.length;
+    if (start > end) [start, end] = [end, start];  // Swap if reversed
+
+    this.text = this.text.slice(0, start) + text + this.text.slice(end);
+    return this;
   }
 }

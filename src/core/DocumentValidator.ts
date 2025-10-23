@@ -6,6 +6,7 @@
 import { Paragraph } from '../elements/Paragraph';
 import { Table } from '../elements/Table';
 import { TableOfContentsElement } from '../elements/TableOfContentsElement';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
 import { ImageManager } from '../elements/ImageManager';
 import { DocumentProperties } from './Document';
 import { LIMITS } from '../constants/limits';
@@ -25,7 +26,7 @@ export interface MemoryOptions {
 /**
  * Body element types
  */
-type BodyElement = Paragraph | Table | TableOfContentsElement;
+type BodyElement = Paragraph | Table | TableOfContentsElement | StructuredDocumentTag;
 
 /**
  * Size estimation result

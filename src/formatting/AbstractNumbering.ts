@@ -392,4 +392,51 @@ export class AbstractNumbering {
   static create(properties: AbstractNumberingProperties): AbstractNumbering {
     return new AbstractNumbering(properties);
   }
+
+  /**
+   * Creates an AbstractNumbering from XML element
+   * @param xml The XML string of the <w:abstractNum> element
+   * @returns AbstractNumbering instance
+   */
+  static fromXML(xml: string): AbstractNumbering {
+    // Extract abstractNumId (required)
+    const abstractNumIdMatch = xml.match(/<w:abstractNum[^>]*w:abstractNumId="([^"]+)"/);
+    if (!abstractNumIdMatch || !abstractNumIdMatch[1]) {
+      throw new Error('Missing required w:abstractNumId attribute');
+    }
+    const abstractNumId = parseInt(abstractNumIdMatch[1], 10);
+
+    // Extract name (optional)
+    const nameMatch = xml.match(/<w:name[^>]*w:val="([^"]+)"/);
+    const name = nameMatch && nameMatch[1] ? nameMatch[1] : undefined;
+
+    // Extract multiLevelType (optional)
+    const multiLevelTypeMatch = xml.match(/<w:multiLevelType[^>]*w:val="([^"]+)"/);
+    const multiLevelType = multiLevelTypeMatch && multiLevelTypeMatch[1] ? parseInt(multiLevelTypeMatch[1], 10) : 1;
+
+    // Create abstract numbering
+    const abstractNum = new AbstractNumbering({
+      abstractNumId,
+      name,
+      multiLevelType,
+    });
+
+    // Extract and parse all levels
+    const lvlRegex = /<w:lvl[^>]*>[\s\S]*?<\/w:lvl>/g;
+    const lvlMatches = xml.match(lvlRegex);
+
+    if (lvlMatches) {
+      for (const lvlXml of lvlMatches) {
+        try {
+          const level = NumberingLevel.fromXML(lvlXml);
+          abstractNum.addLevel(level);
+        } catch (error) {
+          // Skip malformed levels but continue parsing
+          console.warn(`Failed to parse level: ${error}`);
+        }
+      }
+    }
+
+    return abstractNum;
+  }
 }

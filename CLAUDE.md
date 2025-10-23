@@ -457,6 +457,40 @@ Handle multiple measurement units:
    - Aligns with Microsoft conventions
    - See: `src/elements/Run.ts - normalizeColor() method`
 
+5. **Paragraph Property Conflict Resolution** (Added v0.28.2)
+   - Automatically prevents `pageBreakBefore` + `keepNext`/`keepLines` conflicts
+   - The `pageBreakBefore` property causes massive whitespace in Word when combined with keep properties
+   - **Design Decision**: "Keep together" properties take priority over page breaks
+   - Rationale: Keep properties represent explicit user intent to keep content together; page breaks are layout hints
+   - Implementation: `Paragraph.setKeepNext(true)` and `setKeepLines(true)` automatically clear `pageBreakBefore`
+   - Applies during both: creation (API calls) and parsing (loading documents)
+   - Files affected:
+     - `src/elements/Paragraph.ts:474-507` - Automatic conflict resolution in setKeepNext/setKeepLines
+     - `src/core/DocumentParser.ts:646-665` - Parse pageBreakBefore first, then resolve conflicts
+   - Test coverage:
+     - `tests/elements/Paragraph.test.ts` - 7 tests for setter behavior (all passing)
+     - `tests/core/Document.test.ts` - 4 tests for parsing round-trips (all passing)
+   - User documentation: `README.md` - Troubleshooting section
+
+   **Why This Matters**:
+   - Word's layout engine creates massive whitespace when `pageBreakBefore` conflicts with keep properties
+   - The `pageBreakBefore` property is what causes the whitespace, not the keep properties
+   - Removing `pageBreakBefore` eliminates whitespace while preserving user's intention to keep content together
+   - Common issue when processing documents with complex layouts (discovered via Test4.docx analysis)
+
+   **Discovery Process**:
+   - Initial implementation had priority backwards (page breaks cleared keep properties)
+   - XML analysis showed `pageBreakBefore` present after "fix" → whitespace persisted
+   - Reversed priority: keep properties now clear `pageBreakBefore` → whitespace eliminated
+   - Confirmed via Test4.docx: Element 18 now has only keepNext/keepLines (no pageBreakBefore)
+
+   **Philosophy Alignment**:
+   - Defensive: Prevents common mistakes automatically
+   - Predictable: Clear priority (keep properties win)
+   - Evidence-based: Reversed priority based on XML analysis of actual problem documents
+   - Documented: Users understand the behavior and rationale
+   - Testable: Comprehensive test coverage ensures reliability (596 tests passing)
+
 ### Senior Development Principle
 
 **"The best code is the code you don't write"**

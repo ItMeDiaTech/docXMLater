@@ -350,6 +350,21 @@ describe('Table', () => {
       expect(table.getCell(0, 5)).toBeUndefined();
       expect(table.getCell(5, 0)).toBeUndefined();
     });
+
+    it('should set default width for ECMA-376 compliance', () => {
+      // Per ECMA-376, tables require <w:tblW> element
+      // Default should be Letter page width minus margins: 9360 twips (~6.5 inches)
+      const table = new Table(1, 1);
+      const formatting = table.getFormatting();
+      expect(formatting.width).toBeDefined();
+      expect(formatting.width).toBe(9360);
+    });
+
+    it('should not override explicitly set width', () => {
+      const table = new Table(1, 1, { width: 5000 });
+      const formatting = table.getFormatting();
+      expect(formatting.width).toBe(5000);
+    });
   });
 
   describe('Table formatting', () => {
@@ -576,6 +591,227 @@ describe('Table', () => {
       expect(table).toBeInstanceOf(Table);
       expect(table.getRowCount()).toBe(3);
       expect(table.getColumnCount()).toBe(4);
+    });
+  });
+
+  describe('First row formatting', () => {
+    it('should set alignment for first row', () => {
+      const table = new Table(2, 3);
+      const para1 = new Paragraph();
+      para1.addText('Header 1');
+      table.getCell(0, 0)?.addParagraph(para1);
+
+      const para2 = new Paragraph();
+      para2.addText('Header 2');
+      table.getCell(0, 1)?.addParagraph(para2);
+
+      table.setFirstRowFormatting({ alignment: 'center' });
+
+      const firstRow = table.getRow(0);
+      const cells = firstRow?.getCells() || [];
+
+      for (const cell of cells) {
+        const paragraphs = cell.getParagraphs();
+        for (const para of paragraphs) {
+          expect(para.getFormatting().alignment).toBe('center');
+        }
+      }
+    });
+
+    it('should set text formatting (bold, italic, underline) for first row', () => {
+      const table = new Table(2, 2);
+      const para1 = new Paragraph();
+      para1.addText('Header 1');
+      table.getCell(0, 0)?.addParagraph(para1);
+
+      const para2 = new Paragraph();
+      para2.addText('Header 2');
+      table.getCell(0, 1)?.addParagraph(para2);
+
+      table.setFirstRowFormatting({
+        bold: true,
+        italic: true,
+        underline: 'single',
+      });
+
+      const firstRow = table.getRow(0);
+      const cells = firstRow?.getCells() || [];
+
+      for (const cell of cells) {
+        const paragraphs = cell.getParagraphs();
+        for (const para of paragraphs) {
+          const runs = para.getRuns();
+          for (const run of runs) {
+            const formatting = run.getFormatting();
+            expect(formatting.bold).toBe(true);
+            expect(formatting.italic).toBe(true);
+            expect(formatting.underline).toBe('single');
+          }
+        }
+      }
+    });
+
+    it('should set spacing for first row paragraphs', () => {
+      const table = new Table(2, 2);
+      const para = new Paragraph();
+      para.addText('Header');
+      table.getCell(0, 0)?.addParagraph(para);
+
+      table.setFirstRowFormatting({
+        spacingBefore: 120,
+        spacingAfter: 80,
+      });
+
+      const firstRow = table.getRow(0);
+      const cells = firstRow?.getCells() || [];
+
+      for (const cell of cells) {
+        const paragraphs = cell.getParagraphs();
+        for (const para of paragraphs) {
+          const formatting = para.getFormatting();
+          expect(formatting.spacing?.before).toBe(120);
+          expect(formatting.spacing?.after).toBe(80);
+        }
+      }
+    });
+
+    it('should set shading for first row cells', () => {
+      const table = new Table(2, 2);
+      const para = new Paragraph();
+      para.addText('Header');
+      table.getCell(0, 0)?.addParagraph(para);
+
+      table.setFirstRowFormatting({ shading: 'DFDFDF' });
+
+      const firstRow = table.getRow(0);
+      const cells = firstRow?.getCells() || [];
+
+      for (const cell of cells) {
+        const formatting = cell.getFormatting();
+        expect(formatting.shading?.fill).toBe('DFDFDF');
+      }
+    });
+
+    it('should apply all formatting options together', () => {
+      const table = new Table(3, 3);
+      const para1 = new Paragraph();
+      para1.addText('Header 1');
+      table.getCell(0, 0)?.addParagraph(para1);
+
+      const para2 = new Paragraph();
+      para2.addText('Header 2');
+      table.getCell(0, 1)?.addParagraph(para2);
+
+      const para3 = new Paragraph();
+      para3.addText('Header 3');
+      table.getCell(0, 2)?.addParagraph(para3);
+
+      table.setFirstRowFormatting({
+        alignment: 'center',
+        bold: true,
+        italic: true,
+        underline: 'double',
+        spacingBefore: 100,
+        spacingAfter: 100,
+        shading: 'BFBFBF',
+      });
+
+      const firstRow = table.getRow(0);
+      const cells = firstRow?.getCells() || [];
+
+      // Verify all cells in first row
+      for (const cell of cells) {
+        // Check shading
+        expect(cell.getFormatting().shading?.fill).toBe('BFBFBF');
+
+        // Check paragraphs
+        const paragraphs = cell.getParagraphs();
+        for (const para of paragraphs) {
+          // Check paragraph formatting
+          const paraFormatting = para.getFormatting();
+          expect(paraFormatting.alignment).toBe('center');
+          expect(paraFormatting.spacing?.before).toBe(100);
+          expect(paraFormatting.spacing?.after).toBe(100);
+
+          // Check run formatting
+          const runs = para.getRuns();
+          for (const run of runs) {
+            const runFormatting = run.getFormatting();
+            expect(runFormatting.bold).toBe(true);
+            expect(runFormatting.italic).toBe(true);
+            expect(runFormatting.underline).toBe('double');
+          }
+        }
+      }
+    });
+
+    it('should not affect other rows', () => {
+      const table = new Table(3, 2);
+      const para0 = new Paragraph();
+      para0.addText('Header');
+      table.getCell(0, 0)?.addParagraph(para0);
+
+      const para1 = new Paragraph();
+      para1.addText('Data 1');
+      table.getCell(1, 0)?.addParagraph(para1);
+
+      const para2 = new Paragraph();
+      para2.addText('Data 2');
+      table.getCell(2, 0)?.addParagraph(para2);
+
+      table.setFirstRowFormatting({
+        bold: true,
+        alignment: 'center',
+        shading: 'DFDFDF',
+      });
+
+      // Check second and third rows are not affected
+      for (let rowIndex = 1; rowIndex < 3; rowIndex++) {
+        const row = table.getRow(rowIndex);
+        const cells = row?.getCells() || [];
+
+        for (const cell of cells) {
+          // Shading should not be set
+          expect(cell.getFormatting().shading).toBeUndefined();
+
+          const paragraphs = cell.getParagraphs();
+          for (const para of paragraphs) {
+            // Alignment should not be set
+            expect(para.getFormatting().alignment).toBeUndefined();
+
+            const runs = para.getRuns();
+            for (const run of runs) {
+              // Bold should not be set
+              expect(run.getFormatting().bold).toBeUndefined();
+            }
+          }
+        }
+      }
+    });
+
+    it('should handle empty table gracefully', () => {
+      const table = new Table(0, 0);
+
+      // Should not throw
+      expect(() => {
+        table.setFirstRowFormatting({ bold: true });
+      }).not.toThrow();
+    });
+
+    it('should support method chaining', () => {
+      const table = new Table(2, 2);
+      const para = new Paragraph();
+      para.addText('Header');
+      table.getCell(0, 0)?.addParagraph(para);
+
+      const result = table
+        .setFirstRowFormatting({ bold: true })
+        .setWidth(8000)
+        .setAlignment('center');
+
+      expect(result).toBe(table);
+      expect(table.getFormatting().width).toBe(8000);
+      expect(table.getFormatting().alignment).toBe('center');
     });
   });
 });

@@ -3,39 +3,40 @@
  * Provides a simple interface for creating DOCX files without managing ZIP and XML manually
  */
 
-import { ZipHandler } from '../zip/ZipHandler';
-import { DOCX_PATHS } from '../zip/types';
-import { Paragraph } from '../elements/Paragraph';
-import { Table } from '../elements/Table';
-import { TableCell } from '../elements/TableCell';
-import { Section } from '../elements/Section';
-import { Image } from '../elements/Image';
-import { ImageManager } from '../elements/ImageManager';
-import { Header } from '../elements/Header';
-import { Footer } from '../elements/Footer';
-import { HeaderFooterManager } from '../elements/HeaderFooterManager';
-import { TableOfContents } from '../elements/TableOfContents';
-import { TableOfContentsElement } from '../elements/TableOfContentsElement';
-import { Bookmark } from '../elements/Bookmark';
-import { BookmarkManager } from '../elements/BookmarkManager';
-import { Revision, RevisionType } from '../elements/Revision';
-import { RevisionManager } from '../elements/RevisionManager';
-import { Comment } from '../elements/Comment';
-import { CommentManager } from '../elements/CommentManager';
-import { FootnoteManager } from '../elements/FootnoteManager';
-import { EndnoteManager } from '../elements/EndnoteManager';
-import { Run } from '../elements/Run';
-import { Hyperlink } from '../elements/Hyperlink';
-import { XMLElement } from '../xml/XMLBuilder';
-import { XMLParser } from '../xml/XMLParser';
-import { StylesManager } from '../formatting/StylesManager';
-import { Style, StyleProperties } from '../formatting/Style';
-import { NumberingManager } from '../formatting/NumberingManager';
-import { RelationshipManager } from './RelationshipManager';
-import { DocumentParser } from './DocumentParser';
-import { DocumentGenerator } from './DocumentGenerator';
-import { DocumentValidator } from './DocumentValidator';
-import { ILogger, defaultLogger } from '../utils/logger';
+import { ZipHandler } from "../zip/ZipHandler";
+import { DOCX_PATHS } from "../zip/types";
+import { Paragraph } from "../elements/Paragraph";
+import { Table } from "../elements/Table";
+import { TableCell } from "../elements/TableCell";
+import { Section } from "../elements/Section";
+import { Image } from "../elements/Image";
+import { ImageManager } from "../elements/ImageManager";
+import { ImageRun } from "../elements/ImageRun";
+import { Header } from "../elements/Header";
+import { Footer } from "../elements/Footer";
+import { HeaderFooterManager } from "../elements/HeaderFooterManager";
+import { TableOfContents } from "../elements/TableOfContents";
+import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { Bookmark } from "../elements/Bookmark";
+import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
+import { BookmarkManager } from "../elements/BookmarkManager";
+import { Revision, RevisionType } from "../elements/Revision";
+import { RevisionManager } from "../elements/RevisionManager";
+import { Comment } from "../elements/Comment";
+import { CommentManager } from "../elements/CommentManager";
+import { FootnoteManager } from "../elements/FootnoteManager";
+import { EndnoteManager } from "../elements/EndnoteManager";
+import { Run } from "../elements/Run";
+import { Hyperlink } from "../elements/Hyperlink";
+import { XMLParser } from "../xml/XMLParser";
+import { StylesManager } from "../formatting/StylesManager";
+import { Style, StyleProperties } from "../formatting/Style";
+import { NumberingManager } from "../formatting/NumberingManager";
+import { RelationshipManager } from "./RelationshipManager";
+import { DocumentParser } from "./DocumentParser";
+import { DocumentGenerator } from "./DocumentGenerator";
+import { DocumentValidator } from "./DocumentValidator";
+import { ILogger, defaultLogger } from "../utils/logger";
 
 /**
  * Document properties
@@ -108,37 +109,11 @@ export interface DocumentOptions {
 /**
  * Body element - can be a Paragraph, Table, or TableOfContentsElement
  */
-type BodyElement = Paragraph | Table | TableOfContentsElement;
-
-/**
- * ImageRun - A run that contains an image (drawing)
- * Extends Run class for type-safe paragraph content
- *
- * Note: This is a specialized Run that contains a drawing instead of text.
- * It generates proper w:r (run) XML with w:drawing child element.
- */
-class ImageRun extends Run {
-  private imageElement: Image;
-
-  constructor(image: Image) {
-    // Call parent constructor with empty text
-    // The text is irrelevant for image runs
-    super('');
-    this.imageElement = image;
-  }
-
-  /**
-   * Override toXML to generate image-specific XML
-   * @returns XMLElement with w:r containing w:drawing
-   */
-  toXML(): XMLElement {
-    const drawing = this.imageElement.toXML();
-    return {
-      name: 'w:r',
-      children: [drawing]
-    };
-  }
-}
+type BodyElement =
+  | Paragraph
+  | Table
+  | TableOfContentsElement
+  | StructuredDocumentTag;
 
 /**
  * Represents a Word document
@@ -147,6 +122,7 @@ export class Document {
   private zipHandler: ZipHandler;
   private bodyElements: BodyElement[] = [];
   private properties: DocumentProperties;
+  public namespaces: Record<string, string> = {};
   private stylesManager: StylesManager;
   private numberingManager: NumberingManager;
   private section: Section;
@@ -173,7 +149,11 @@ export class Document {
    * @param options Document options
    * @param initDefaults Whether to initialize with default relationships (false for loaded docs)
    */
-  private constructor(zipHandler?: ZipHandler, options: DocumentOptions = {}, initDefaults: boolean = true) {
+  private constructor(
+    zipHandler?: ZipHandler,
+    options: DocumentOptions = {},
+    initDefaults: boolean = true
+  ) {
     this.zipHandler = zipHandler || new ZipHandler();
 
     // Initialize logger (use provided or default)
@@ -192,7 +172,9 @@ export class Document {
     });
 
     // Validate and sanitize properties before storing
-    this.properties = options.properties ? DocumentValidator.validateProperties(options.properties) : {};
+    this.properties = options.properties
+      ? DocumentValidator.validateProperties(options.properties)
+      : {};
 
     // Initialize managers
     this.stylesManager = StylesManager.create();
@@ -238,7 +220,10 @@ export class Document {
    * @param options - Document options
    * @returns Document instance
    */
-  static async load(filePath: string, options?: DocumentOptions): Promise<Document> {
+  static async load(
+    filePath: string,
+    options?: DocumentOptions
+  ): Promise<Document> {
     const zipHandler = new ZipHandler();
     await zipHandler.load(filePath);
 
@@ -255,7 +240,10 @@ export class Document {
    * @param options - Document options
    * @returns Document instance
    */
-  static async loadFromBuffer(buffer: Buffer, options?: DocumentOptions): Promise<Document> {
+  static async loadFromBuffer(
+    buffer: Buffer,
+    options?: DocumentOptions
+  ): Promise<Document> {
     const zipHandler = new ZipHandler();
     await zipHandler.loadFromBuffer(buffer);
 
@@ -271,49 +259,114 @@ export class Document {
    */
   private initializeRequiredFiles(): void {
     // [Content_Types].xml
-    this.zipHandler.addFile(DOCX_PATHS.CONTENT_TYPES, this.generator.generateContentTypes());
+    this.zipHandler.addFile(
+      DOCX_PATHS.CONTENT_TYPES,
+      this.generator.generateContentTypes()
+    );
 
     // _rels/.rels
     this.zipHandler.addFile(DOCX_PATHS.RELS, this.generator.generateRels());
 
     // word/document.xml (will be updated when saving)
-    this.zipHandler.addFile(DOCX_PATHS.DOCUMENT, this.generator.generateDocumentXml(this.bodyElements, this.section));
+    this.zipHandler.addFile(
+      DOCX_PATHS.DOCUMENT,
+      this.generator.generateDocumentXml(
+        this.bodyElements,
+        this.section,
+        this.namespaces
+      )
+    );
 
     // word/_rels/document.xml.rels
-    this.zipHandler.addFile('word/_rels/document.xml.rels', this.relationshipManager.generateXml());
+    this.zipHandler.addFile(
+      "word/_rels/document.xml.rels",
+      this.relationshipManager.generateXml()
+    );
 
     // word/styles.xml
-    this.zipHandler.addFile(DOCX_PATHS.STYLES, this.stylesManager.generateStylesXml());
+    this.zipHandler.addFile(
+      DOCX_PATHS.STYLES,
+      this.stylesManager.generateStylesXml()
+    );
 
     // word/numbering.xml
-    this.zipHandler.addFile(DOCX_PATHS.NUMBERING, this.numberingManager.generateNumberingXml());
+    this.zipHandler.addFile(
+      DOCX_PATHS.NUMBERING,
+      this.numberingManager.generateNumberingXml()
+    );
 
     // word/fontTable.xml (REQUIRED for DOCX compliance)
-    this.zipHandler.addFile('word/fontTable.xml', this.generator.generateFontTable());
+    this.zipHandler.addFile(
+      "word/fontTable.xml",
+      this.generator.generateFontTable()
+    );
 
     // word/settings.xml (REQUIRED for DOCX compliance)
-    this.zipHandler.addFile('word/settings.xml', this.generator.generateSettings());
+    this.zipHandler.addFile(
+      "word/settings.xml",
+      this.generator.generateSettings()
+    );
 
     // word/theme/theme1.xml (REQUIRED for DOCX compliance)
-    this.zipHandler.addFile('word/theme/theme1.xml', this.generator.generateTheme());
+    this.zipHandler.addFile(
+      "word/theme/theme1.xml",
+      this.generator.generateTheme()
+    );
 
     // docProps/core.xml
-    this.zipHandler.addFile(DOCX_PATHS.CORE_PROPS, this.generator.generateCoreProps(this.properties));
+    this.zipHandler.addFile(
+      DOCX_PATHS.CORE_PROPS,
+      this.generator.generateCoreProps(this.properties)
+    );
 
     // docProps/app.xml
-    this.zipHandler.addFile(DOCX_PATHS.APP_PROPS, this.generator.generateAppProps());
+    this.zipHandler.addFile(
+      DOCX_PATHS.APP_PROPS,
+      this.generator.generateAppProps()
+    );
   }
 
   /**
-   * Parses the document XML and extracts paragraphs, runs, and tables
+   * Parses the document XML and extracts paragraphs, runs, tables, images, and styles
    */
   private async parseDocument(): Promise<void> {
-    const result = await this.parser.parseDocument(this.zipHandler, this.relationshipManager);
+    const result = await this.parser.parseDocument(
+      this.zipHandler,
+      this.relationshipManager,
+      this.imageManager
+    );
     this.bodyElements = result.bodyElements;
     this.properties = result.properties;
     this.relationshipManager = result.relationshipManager;
-  }
+    this.namespaces = result.namespaces;
 
+    // Load parsed section properties (preserves page size, margins, headers, etc.)
+    if (result.section) {
+      this.section = result.section;
+    }
+
+    // Load parsed styles into StylesManager
+    // This replaces built-in styles with document-specific styles
+    if (result.styles && result.styles.length > 0) {
+      for (const style of result.styles) {
+        this.stylesManager.addStyle(style);
+      }
+    }
+
+    // Load parsed numbering into NumberingManager
+    // This preserves existing list definitions from the document
+    if (result.abstractNumberings && result.abstractNumberings.length > 0) {
+      for (const abstractNum of result.abstractNumberings) {
+        this.numberingManager.addAbstractNumbering(abstractNum);
+      }
+    }
+
+    if (result.numberingInstances && result.numberingInstances.length > 0) {
+      for (const instance of result.numberingInstances) {
+        this.numberingManager.addInstance(instance);
+      }
+    }
+  }
 
   /**
    * Adds a paragraph to the document
@@ -369,9 +422,10 @@ export class Document {
    */
   addTableOfContents(toc?: TableOfContents | TableOfContentsElement): this {
     // Wrap in TableOfContentsElement if plain TableOfContents provided
-    const tocElement = toc instanceof TableOfContentsElement
-      ? toc
-      : new TableOfContentsElement(toc || TableOfContents.createStandard());
+    const tocElement =
+      toc instanceof TableOfContentsElement
+        ? toc
+        : new TableOfContentsElement(toc || TableOfContents.createStandard());
 
     this.bodyElements.push(tocElement);
     return this;
@@ -392,7 +446,9 @@ export class Document {
    * @returns Array of paragraphs
    */
   getParagraphs(): Paragraph[] {
-    return this.bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
+    return this.bodyElements.filter(
+      (el): el is Paragraph => el instanceof Paragraph
+    );
   }
 
   /**
@@ -408,7 +464,9 @@ export class Document {
    * @returns Array of TableOfContentsElement
    */
   getTableOfContentsElements(): TableOfContentsElement[] {
-    return this.bodyElements.filter((el): el is TableOfContentsElement => el instanceof TableOfContentsElement);
+    return this.bodyElements.filter(
+      (el): el is TableOfContentsElement => el instanceof TableOfContentsElement
+    );
   }
 
   /**
@@ -487,7 +545,10 @@ export class Document {
       this.validator.checkMemoryThreshold();
 
       // Check document size and warn if too large
-      const sizeInfo = this.validator.estimateSize(this.bodyElements, this.imageManager);
+      const sizeInfo = this.validator.estimateSize(
+        this.bodyElements,
+        this.imageManager
+      );
       if (sizeInfo.warning) {
         this.logger.warn(sizeInfo.warning, {
           totalMB: sizeInfo.totalEstimatedMB,
@@ -513,12 +574,12 @@ export class Document {
       await this.zipHandler.save(tempPath);
 
       // Atomic rename - only if save succeeded
-      const { promises: fs } = await import('fs');
+      const { promises: fs } = await import("fs");
       await fs.rename(tempPath, filePath);
     } catch (error) {
       // Cleanup temporary file on error
       try {
-        const { promises: fs } = await import('fs');
+        const { promises: fs } = await import("fs");
         await fs.unlink(tempPath);
       } catch {
         // Ignore cleanup errors
@@ -549,7 +610,10 @@ export class Document {
       this.validator.checkMemoryThreshold();
 
       // Check document size and warn if too large
-      const sizeInfo = this.validator.estimateSize(this.bodyElements, this.imageManager);
+      const sizeInfo = this.validator.estimateSize(
+        this.bodyElements,
+        this.imageManager
+      );
       if (sizeInfo.warning) {
         this.logger.warn(sizeInfo.warning, {
           totalMB: sizeInfo.totalEstimatedMB,
@@ -581,7 +645,11 @@ export class Document {
    * Updates the document.xml file with current paragraphs
    */
   private updateDocumentXml(): void {
-    const xml = this.generator.generateDocumentXml(this.bodyElements, this.section);
+    const xml = this.generator.generateDocumentXml(
+      this.bodyElements,
+      this.section,
+      this.namespaces
+    );
     this.zipHandler.updateFile(DOCX_PATHS.DOCUMENT, xml);
   }
 
@@ -608,7 +676,6 @@ export class Document {
     const xml = this.numberingManager.generateNumberingXml();
     this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
   }
-
 
   /**
    * Gets the StylesManager
@@ -679,7 +746,37 @@ export class Document {
 
     // Update the style properties
     const currentProps = style.getProperties();
-    const updatedProps = { ...currentProps, ...properties, styleId }; // Preserve styleId
+
+    // Deep merge nested properties (paragraphFormatting, runFormatting)
+    const updatedProps: StyleProperties = {
+      ...currentProps,
+      ...properties,
+      styleId, // Preserve styleId
+      // Deep merge paragraph formatting
+      paragraphFormatting: properties.paragraphFormatting
+        ? {
+            ...currentProps.paragraphFormatting,
+            ...properties.paragraphFormatting,
+            // Deep merge nested spacing and indentation
+            spacing: properties.paragraphFormatting.spacing
+              ? {
+                  ...currentProps.paragraphFormatting?.spacing,
+                  ...properties.paragraphFormatting.spacing,
+                }
+              : currentProps.paragraphFormatting?.spacing,
+            indentation: properties.paragraphFormatting.indentation
+              ? {
+                  ...currentProps.paragraphFormatting?.indentation,
+                  ...properties.paragraphFormatting.indentation,
+                }
+              : currentProps.paragraphFormatting?.indentation,
+          }
+        : currentProps.paragraphFormatting,
+      // Deep merge run formatting
+      runFormatting: properties.runFormatting
+        ? { ...currentProps.runFormatting, ...properties.runFormatting }
+        : currentProps.runFormatting,
+    };
 
     // Create new style with updated properties
     const updatedStyle = Style.create(updatedProps);
@@ -687,6 +784,774 @@ export class Document {
     // Replace in manager
     this.stylesManager.addStyle(updatedStyle);
     return true;
+  }
+
+  /**
+   * Applies a style to all elements matching a predicate
+   * @param styleId - Style ID to apply
+   * @param predicate - Function to test each element
+   * @returns Number of elements updated
+   * @example
+   * ```typescript
+   * // Apply Heading1 style to all paragraphs containing "Chapter"
+   * const count = doc.applyStyleToAll('Heading1', (el) => {
+   *   return el instanceof Paragraph && el.getText().includes('Chapter');
+   * });
+   * console.log(`Updated ${count} elements`);
+   * ```
+   */
+  applyStyleToAll(
+    styleId: string,
+    predicate: (
+      element:
+        | Paragraph
+        | Table
+        | TableOfContentsElement
+        | StructuredDocumentTag
+    ) => boolean
+  ): number {
+    let count = 0;
+
+    for (const element of this.bodyElements) {
+      if (predicate(element)) {
+        if (element instanceof Paragraph) {
+          element.setStyle(styleId);
+          count++;
+        }
+      }
+    }
+
+    // Also check paragraphs inside tables
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            if (predicate(para)) {
+              para.setStyle(styleId);
+              count++;
+            }
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Finds all elements using a specific style
+   * @param styleId - Style ID to search for
+   * @returns Array of paragraphs and table cells using this style
+   * @example
+   * ```typescript
+   * const heading1Elements = doc.findElementsByStyle('Heading1');
+   * console.log(`Found ${heading1Elements.length} Heading1 elements`);
+   * ```
+   */
+  findElementsByStyle(styleId: string): Array<Paragraph | TableCell> {
+    const results: Array<Paragraph | TableCell> = [];
+
+    // Check body paragraphs
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        const formatting = element.getFormatting();
+        if (formatting.style === styleId) {
+          results.push(element);
+        }
+      }
+    }
+
+    // Check paragraphs inside tables
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            const formatting = para.getFormatting();
+            if (formatting.style === styleId) {
+              results.push(para);
+            }
+          }
+
+          // Include the cell itself if it has styled paragraphs
+          const hasStyledParagraph = cell
+            .getParagraphs()
+            .some((p) => p.getFormatting().style === styleId);
+          if (hasStyledParagraph) {
+            results.push(cell);
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Applies a new style to all paragraphs currently using a specific style
+   * Useful for bulk style updates across the document
+   * @param currentStyleId - The style ID currently applied to paragraphs
+   * @param newStyleId - The style ID to apply
+   * @returns Number of paragraphs updated
+   * @example
+   * ```typescript
+   * // Change all Normal paragraphs to BodyText
+   * const count = doc.applyStyleToAllParagraphsWithStyle('Normal', 'BodyText');
+   * console.log(`Updated ${count} paragraphs`);
+   * ```
+   */
+  applyStyleToAllParagraphsWithStyle(
+    currentStyleId: string,
+    newStyleId: string
+  ): number {
+    let count = 0;
+
+    // Check body paragraphs
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        const formatting = element.getFormatting();
+        if (formatting.style === currentStyleId) {
+          element.setStyle(newStyleId);
+          count++;
+        }
+      }
+    }
+
+    // Check paragraphs inside tables
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            const formatting = para.getFormatting();
+            if (formatting.style === currentStyleId) {
+              para.setStyle(newStyleId);
+              count++;
+            }
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Applies a style to all paragraphs in the document with optional filtering and formatting control
+   *
+   * This method provides flexible bulk style application with the ability to:
+   * - Apply style to all paragraphs or filter by current style
+   * - Clear direct run formatting so the style takes full effect
+   * - Clear only specific formatting properties
+   *
+   * @param styleId - The style ID to apply (e.g., 'Normal', 'Heading1')
+   * @param options - Optional configuration
+   * @param options.currentStyleId - Only apply to paragraphs with this style (undefined = all paragraphs)
+   * @param options.clearFormatting - Whether to clear direct run formatting (default: false)
+   * @param options.clearProperties - Specific properties to clear (default: all if clearFormatting=true)
+   * @returns Number of paragraphs updated
+   * @example
+   * ```typescript
+   * // Apply Normal to all paragraphs and clear all direct formatting
+   * doc.applyStyleToAllParagraphs('Normal', { clearFormatting: true });
+   *
+   * // Apply Heading1 to all Normal paragraphs, clear only font and color
+   * doc.applyStyleToAllParagraphs('Heading1', {
+   *   currentStyleId: 'Normal',
+   *   clearFormatting: true,
+   *   clearProperties: ['font', 'color']
+   * });
+   *
+   * // Apply BodyText to all paragraphs without clearing formatting
+   * doc.applyStyleToAllParagraphs('BodyText');
+   * ```
+   */
+  applyStyleToAllParagraphs(
+    styleId: string,
+    options?: {
+      currentStyleId?: string;
+      clearFormatting?: boolean;
+      clearProperties?: string[];
+    }
+  ): number {
+    let count = 0;
+    const clearFormatting = options?.clearFormatting || false;
+    const clearProperties = options?.clearProperties;
+    const currentStyleId = options?.currentStyleId;
+
+    // Helper to apply style to a paragraph
+    const applyToParagraph = (para: Paragraph): void => {
+      const formatting = para.getFormatting();
+
+      // Check if this paragraph matches the filter
+      if (currentStyleId !== undefined && formatting.style !== currentStyleId) {
+        return; // Skip this paragraph
+      }
+
+      // Apply style
+      if (clearFormatting) {
+        para.applyStyleAndClearFormatting(
+          styleId,
+          clearProperties === undefined ? [] : clearProperties
+        );
+      } else {
+        para.setStyle(styleId);
+      }
+
+      count++;
+    };
+
+    // Process body paragraphs
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        applyToParagraph(element);
+      }
+    }
+
+    // Process paragraphs inside tables
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            applyToParagraph(para);
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Updates the color of all hyperlinks in the document
+   * @param color - Hex color without # (e.g., '0000FF' for blue)
+   * @returns Number of hyperlinks updated
+   * @example
+   * ```typescript
+   * // Make all hyperlinks blue
+   * const count = doc.updateAllHyperlinkColors('0000FF');
+   * console.log(`Updated ${count} hyperlinks`);
+   * ```
+   */
+  updateAllHyperlinkColors(color: string): number {
+    const hyperlinks = this.getHyperlinks();
+
+    for (const { hyperlink } of hyperlinks) {
+      const currentFormatting = hyperlink.getFormatting();
+      hyperlink.setFormatting({
+        ...currentFormatting,
+        color: color,
+      });
+    }
+
+    return hyperlinks.length;
+  }
+
+  /**
+   * Sets layout for all tables in the document
+   * @param layout - Layout type ('auto' for fit to window, 'fixed' for fixed width)
+   * @returns Number of tables updated
+   * @example
+   * ```typescript
+   * // Make all tables fit to window
+   * const count = doc.setAllTablesLayout('auto');
+   * console.log(`Updated ${count} tables`);
+   * ```
+   */
+  setAllTablesLayout(layout: "auto" | "fixed"): number {
+    const tables = this.getTables();
+
+    for (const table of tables) {
+      table.setLayout(layout);
+    }
+
+    return tables.length;
+  }
+
+  /**
+   * Applies different shading to tables based on their size
+   * 1x1 tables get one color, multi-cell tables get another color on first row
+   * @param singleCellShading - Hex color for 1x1 tables (e.g., 'BFBFBF')
+   * @param multiCellFirstRowShading - Hex color for first row of multi-cell tables (e.g., 'DFDFDF')
+   * @returns Object with counts of single-cell and multi-cell tables updated
+   * @example
+   * ```typescript
+   * const result = doc.applyTableFormattingBySize('BFBFBF', 'DFDFDF');
+   * console.log(`Updated ${result.singleCellCount} 1x1 tables and ${result.multiCellCount} multi-cell tables`);
+   * ```
+   */
+  applyTableFormattingBySize(
+    singleCellShading: string,
+    multiCellFirstRowShading: string
+  ): { singleCellCount: number; multiCellCount: number } {
+    const tables = this.getTables();
+    let singleCellCount = 0;
+    let multiCellCount = 0;
+
+    for (const table of tables) {
+      const rowCount = table.getRowCount();
+      const colCount = table.getColumnCount();
+
+      if (rowCount === 1 && colCount === 1) {
+        // 1x1 table - shade the single cell
+        const cell = table.getCell(0, 0);
+        if (cell) {
+          cell.setShading({ fill: singleCellShading });
+          singleCellCount++;
+        }
+      } else {
+        // Multi-cell table - shade first row
+        const firstRow = table.getRow(0);
+        if (firstRow) {
+          for (const cell of firstRow.getCells()) {
+            cell.setShading({ fill: multiCellFirstRowShading });
+          }
+          multiCellCount++;
+        }
+      }
+    }
+
+    return { singleCellCount, multiCellCount };
+  }
+
+  /**
+   * Fixes all "Top of Document" hyperlinks to use standard formatting and anchor
+   *
+   * Changes made to matching hyperlinks:
+   * - Text: Any variation → "Top of the Document"
+   * - Formatting: Verdana 12pt, underline, blue (0000FF)
+   * - Paragraph: Right aligned
+   * - Anchor: Points to "_top" bookmark at document start
+   *
+   * Creates "_top" bookmark at first paragraph if it doesn't exist
+   *
+   * @returns Number of hyperlinks updated
+   * @example
+   * ```typescript
+   * const count = doc.fixTODHyperlinks();
+   * console.log(`Fixed ${count} "Top of Document" links`);
+   * ```
+   */
+  fixTODHyperlinks(): number {
+    let count = 0;
+
+    // Ensure _top bookmark exists at document start
+    if (!this.hasBookmark("_top")) {
+      const paragraphs = this.getParagraphs();
+      if (paragraphs.length > 0) {
+        const firstPara = paragraphs[0];
+        if (firstPara) {
+          const bookmark = new Bookmark({ name: "_top" });
+          const registered = this.bookmarkManager.register(bookmark);
+          firstPara.addBookmark(registered);
+        }
+      }
+    }
+
+    // Find and fix all "Top of Document" hyperlinks
+    const hyperlinks = this.getHyperlinks();
+
+    for (const { hyperlink, paragraph } of hyperlinks) {
+      const text = hyperlink.getText().toLowerCase();
+
+      // Match variations: "top of document", "top of the document", etc.
+      if (text.includes("top") && text.includes("document")) {
+        // Update text
+        hyperlink.setText("Top of the Document");
+
+        // Update formatting
+        hyperlink.setFormatting({
+          font: "Verdana",
+          size: 12,
+          underline: "single",
+          color: "0000FF",
+        });
+
+        // Update anchor to _top
+        hyperlink.setAnchor("_top");
+
+        // Set paragraph alignment to right
+        paragraph.setAlignment("right");
+
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Sets width to 5% for first column of tables containing "If"
+   *
+   * For tables with 2+ columns where first column text contains "If",
+   * sets the first column width to 5% of table width.
+   *
+   * Common use case: If/Then decision tables
+   *
+   * @returns Number of table cells updated
+   * @example
+   * ```typescript
+   * const count = doc.setIfColumnWidth();
+   * console.log(`Updated ${count} If column cells`);
+   * ```
+   */
+  setIfColumnWidth(): number {
+    let count = 0;
+    const tables = this.getTables();
+
+    for (const table of tables) {
+      const columnCount = table.getColumnCount();
+
+      // Only process tables with at least 2 columns
+      if (columnCount < 2) continue;
+
+      // Check all rows for "If" in first column
+      let hasIfColumn = false;
+      const rows = table.getRows();
+
+      for (const row of rows) {
+        const cells = row.getCells();
+        const firstCell = cells[0];
+        if (firstCell) {
+          const text = firstCell.getText().toLowerCase();
+          if (text.includes("if")) {
+            hasIfColumn = true;
+            break;
+          }
+        }
+      }
+
+      // If "If" found, set width on all first column cells
+      if (hasIfColumn) {
+        const tableWidth = table.getFormatting().width || 12960; // Default page width in twips
+        const targetWidth = Math.round(tableWidth * 0.05); // 5%
+
+        for (const row of rows) {
+          const cells = row.getCells();
+          const firstCell = cells[0];
+          if (firstCell) {
+            firstCell.setWidth(targetWidth);
+            count++;
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Centers all images greater than specified pixel size
+   *
+   * Actually centers the paragraph containing the image, since images
+   * themselves don't have alignment properties in Word.
+   *
+   * Conversion: 100 pixels ≈ 952,500 EMUs (at 96 DPI)
+   *
+   * @param minPixels Minimum size in pixels for both width and height (default: 100)
+   * @returns Number of images centered
+   * @example
+   * ```typescript
+   * const count = doc.centerLargeImages(100);
+   * console.log(`Centered ${count} large images`);
+   * ```
+   */
+  centerLargeImages(minPixels: number = 100): number {
+    let count = 0;
+
+    // Convert pixels to EMUs (914400 EMUs per inch, 96 DPI)
+    // Formula: pixels * (914400 / 96) = pixels * 9525
+    const minEmus = Math.round(minPixels * 9525);
+
+    // Get all images with metadata
+    const images = this.imageManager.getAllImages();
+
+    // Create a Set of image IDs that meet size criteria
+    const largeImageIds = new Set<string>();
+
+    for (const entry of images) {
+      const image = entry.image;
+      const width = image.getWidth();
+      const height = image.getHeight();
+
+      // Check if both dimensions meet minimum
+      if (width >= minEmus && height >= minEmus) {
+        // Track this image's relationship ID
+        const relId = image.getRelationshipId();
+        if (relId) {
+          largeImageIds.add(relId);
+        }
+      }
+    }
+
+    // Find paragraphs containing these large images and center them
+    // Note: Images are embedded in paragraphs as ImageRun elements
+    for (const paragraph of this.getParagraphs()) {
+      const content = paragraph.getContent();
+
+      for (const item of content) {
+        // Check if this is an ImageRun (subclass of Run)
+        if (item instanceof ImageRun) {
+          const image = item.getImageElement();
+          const relId = image.getRelationshipId();
+
+          if (relId && largeImageIds.has(relId)) {
+            // Center this paragraph
+            paragraph.setAlignment("center");
+            count++;
+            break; // Only count paragraph once
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Sets line spacing for all list items (numbered or bulleted)
+   *
+   * @param spacingTwips Line spacing in twips (default: 240 = 12pt)
+   * @returns Number of list items updated
+   * @example
+   * ```typescript
+   * const count = doc.setListLineSpacing(240);
+   * console.log(`Updated ${count} list items`);
+   * ```
+   */
+  setListLineSpacing(spacingTwips: number = 240): number {
+    let count = 0;
+
+    for (const paragraph of this.getParagraphs()) {
+      const numbering = paragraph.getNumbering();
+
+      if (numbering) {
+        // Has numbering - it's a list item
+        paragraph.setLineSpacing(spacingTwips, "auto");
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Normalizes all numbered lists in the document to use consistent formatting
+   *
+   * Creates a standard numbered list format and applies it to all numbered lists:
+   * - Level 0: 1., 2., 3., ... (decimal)
+   * - Level 1: a., b., c., ... (lowerLetter)
+   * - Level 2: i., ii., iii., ... (lowerRoman)
+   * - Consistent indentation and spacing
+   *
+   * @returns Number of paragraphs updated
+   * @example
+   * ```typescript
+   * const count = doc.normalizeNumberedLists();
+   * console.log(`Normalized ${count} numbered list items`);
+   * ```
+   */
+  normalizeNumberedLists(): number {
+    let count = 0;
+
+    // Create a standard numbered list
+    const standardNumId = this.numberingManager.createNumberedList(3, [
+      "decimal",
+      "lowerLetter",
+      "lowerRoman",
+    ]);
+
+    // Collect all paragraphs with numbering and identify numbered lists
+    const paragraphs = this.getParagraphs();
+    const numberedParas: { para: Paragraph; level: number }[] = [];
+
+    for (const para of paragraphs) {
+      const numbering = para.getNumbering();
+      if (!numbering) continue;
+
+      // Get the abstract numbering for this numId
+      const instance = this.numberingManager.getInstance(numbering.numId);
+      if (!instance) continue;
+
+      const abstractNum = this.numberingManager.getAbstractNumbering(
+        instance.getAbstractNumId()
+      );
+      if (!abstractNum) continue;
+
+      // Check if level 0 is a numbered format (not bullet)
+      const level0 = abstractNum.getLevel(0);
+      if (!level0) continue;
+
+      const format = level0.getFormat();
+      // Numbered formats: decimal, lowerRoman, upperRoman, lowerLetter, upperLetter, etc.
+      if (format !== "bullet") {
+        numberedParas.push({ para, level: numbering.level });
+      }
+    }
+
+    // Apply standard numbering to all numbered paragraphs
+    for (const { para, level } of numberedParas) {
+      para.setNumbering(standardNumId, level);
+      count++;
+    }
+
+    // Clean up orphaned numbering definitions
+    this.cleanupUnusedNumbering();
+
+    return count;
+  }
+
+  /**
+   * Normalizes all bullet lists in the document to use consistent formatting
+   *
+   * Creates a standard bullet list format and applies it to all bullet lists:
+   * - Level 0: • (bullet)
+   * - Level 1: ○ (circle)
+   * - Level 2: ■ (square)
+   * - Consistent indentation and spacing
+   *
+   * @returns Number of paragraphs updated
+   * @example
+   * ```typescript
+   * const count = doc.normalizeBulletLists();
+   * console.log(`Normalized ${count} bullet list items`);
+   * ```
+   */
+  normalizeBulletLists(): number {
+    let count = 0;
+
+    // Create a standard bullet list with custom bullets
+    const standardNumId = this.numberingManager.createBulletList(3, [
+      "•",
+      "○",
+      "■",
+    ]);
+
+    // Collect all paragraphs with numbering and identify bullet lists
+    const paragraphs = this.getParagraphs();
+    const bulletParas: { para: Paragraph; level: number }[] = [];
+
+    for (const para of paragraphs) {
+      const numbering = para.getNumbering();
+      if (!numbering) continue;
+
+      // Get the abstract numbering for this numId
+      const instance = this.numberingManager.getInstance(numbering.numId);
+      if (!instance) continue;
+
+      const abstractNum = this.numberingManager.getAbstractNumbering(
+        instance.getAbstractNumId()
+      );
+      if (!abstractNum) continue;
+
+      // Check if level 0 is a bullet format
+      const level0 = abstractNum.getLevel(0);
+      if (!level0) continue;
+
+      const format = level0.getFormat();
+      if (format === "bullet") {
+        bulletParas.push({ para, level: numbering.level });
+      }
+    }
+
+    // Apply standard bullet numbering to all bullet paragraphs
+    for (const { para, level } of bulletParas) {
+      para.setNumbering(standardNumId, level);
+      count++;
+    }
+
+    // Clean up orphaned numbering definitions
+    this.cleanupUnusedNumbering();
+
+    return count;
+  }
+
+  /**
+   * Cleans up unused numbering definitions
+   *
+   * Removes numbering instances and abstract numberings that are no longer
+   * referenced by any paragraphs in the document. This prevents corruption
+   * from orphaned numbering definitions.
+   *
+   * @private
+   */
+  private cleanupUnusedNumbering(): void {
+    // Collect all numIds currently used by paragraphs
+    const usedNumIds = new Set<number>();
+    const paragraphs = this.getParagraphs();
+
+    for (const para of paragraphs) {
+      const numbering = para.getNumbering();
+      if (numbering) {
+        usedNumIds.add(numbering.numId);
+      }
+    }
+
+    // Clean up unused numbering definitions
+    this.numberingManager.cleanupUnusedNumbering(usedNumIds);
+  }
+
+  /**
+   * Removes all headers and footers from the document
+   *
+   * Clears all header and footer references including:
+   * - Default header/footer
+   * - First page header/footer
+   * - Even page header/footer
+   *
+   * @returns Number of headers and footers removed
+   * @example
+   * ```typescript
+   * const count = doc.removeAllHeadersFooters();
+   * console.log(`Removed ${count} headers and footers`);
+   * ```
+   */
+  removeAllHeadersFooters(): number {
+    let totalCount = 0;
+
+    // Step 1: Remove relationship entries for headers and footers
+    const headerRels = this.relationshipManager.getRelationshipsByType(
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"
+    );
+    const footerRels = this.relationshipManager.getRelationshipsByType(
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"
+    );
+
+    for (const rel of [...headerRels, ...footerRels]) {
+      this.relationshipManager.removeRelationship(rel.getId());
+      totalCount++;
+    }
+
+    // Step 2: Find and delete all header/footer XML files from ZIP archive
+    // Scan for word/header*.xml and word/footer*.xml files
+    const allFiles = this.zipHandler.getFilePaths();
+    const headerFooterFiles = allFiles.filter((path) =>
+      path.match(/^word\/(header|footer)\d+\.xml$/i)
+    );
+
+    for (const filePath of headerFooterFiles) {
+      this.zipHandler.removeFile(filePath);
+    }
+
+    // Step 3: Clear internal references
+    this.headerFooterManager.clear();
+
+    // Clear section header/footer references
+    const section = this.section;
+    const sectionProps = (section as any).properties as any;
+
+    if (sectionProps.headers) {
+      sectionProps.headers = {};
+    }
+
+    if (sectionProps.footers) {
+      sectionProps.footers = {};
+    }
+
+    // Disable title page if it was enabled for first page headers/footers
+    if (sectionProps.titlePage) {
+      sectionProps.titlePage = false;
+    }
+
+    return totalCount;
   }
 
   /**
@@ -748,7 +1613,7 @@ export class Document {
    */
   createNumberedList(
     levels: number = 3,
-    formats?: Array<'decimal' | 'lowerLetter' | 'lowerRoman'>
+    formats?: Array<"decimal" | "lowerLetter" | "lowerRoman">
   ): number {
     return this.numberingManager.createNumberedList(levels, formats);
   }
@@ -759,6 +1624,80 @@ export class Document {
    */
   createMultiLevelList(): number {
     return this.numberingManager.createMultiLevelList();
+  }
+
+  /**
+   * Gets the framework's standard indentation for a list level
+   *
+   * The framework uses a consistent indentation scheme:
+   * - leftIndent: 720 * (level + 1) twips
+   * - hangingIndent: 360 twips
+   *
+   * @param level The level (0-8)
+   * @returns Object with leftIndent and hangingIndent in twips
+   * @example
+   * ```typescript
+   * const indent = doc.getStandardIndentation(0);
+   * // Returns: { leftIndent: 720, hangingIndent: 360 }
+   * ```
+   */
+  getStandardIndentation(level: number): {
+    leftIndent: number;
+    hangingIndent: number;
+  } {
+    return this.numberingManager.getStandardIndentation(level);
+  }
+
+  /**
+   * Sets custom indentation for a specific level in a numbering definition
+   *
+   * This updates the indentation for a specific level across ALL paragraphs
+   * that use this numId and level combination.
+   *
+   * @param numId The numbering instance ID
+   * @param level The level to modify (0-8)
+   * @param leftIndent Left indentation in twips
+   * @param hangingIndent Hanging indentation in twips (optional, defaults to 360)
+   * @returns This document for chaining
+   * @example
+   * ```typescript
+   * // Set level 0 to 0.5 inch left, 0.25 inch hanging
+   * doc.setListIndentation(1, 0, 720, 360);
+   * ```
+   */
+  setListIndentation(
+    numId: number,
+    level: number,
+    leftIndent: number,
+    hangingIndent?: number
+  ): this {
+    this.numberingManager.setListIndentation(
+      numId,
+      level,
+      leftIndent,
+      hangingIndent
+    );
+    return this;
+  }
+
+  /**
+   * Normalizes indentation for all lists in the document
+   *
+   * Applies standard indentation to every numbering instance:
+   * - leftIndent: 720 * (level + 1) twips
+   * - hangingIndent: 360 twips
+   *
+   * This ensures consistent spacing across all lists in the document.
+   *
+   * @returns Number of numbering instances updated
+   * @example
+   * ```typescript
+   * const count = doc.normalizeAllListIndentation();
+   * console.log(`Normalized ${count} lists`);
+   * ```
+   */
+  normalizeAllListIndentation(): number {
+    return this.numberingManager.normalizeAllListIndentation();
   }
 
   /**
@@ -786,7 +1725,11 @@ export class Document {
    * @param orientation Page orientation
    * @returns This document for chaining
    */
-  setPageSize(width: number, height: number, orientation?: 'portrait' | 'landscape'): this {
+  setPageSize(
+    width: number,
+    height: number,
+    orientation?: "portrait" | "landscape"
+  ): this {
     this.section.setPageSize(width, height, orientation);
     return this;
   }
@@ -796,7 +1739,7 @@ export class Document {
    * @param orientation Page orientation
    * @returns This document for chaining
    */
-  setPageOrientation(orientation: 'portrait' | 'landscape'): this {
+  setPageOrientation(orientation: "portrait" | "landscape"): this {
     this.section.setOrientation(orientation);
     return this;
   }
@@ -806,7 +1749,15 @@ export class Document {
    * @param margins Margin properties
    * @returns This document for chaining
    */
-  setMargins(margins: { top: number; bottom: number; left: number; right: number; header?: number; footer?: number; gutter?: number }): this {
+  setMargins(margins: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+    header?: number;
+    footer?: number;
+    gutter?: number;
+  }): this {
     this.section.setMargins(margins);
     return this;
   }
@@ -818,13 +1769,15 @@ export class Document {
    */
   setHeader(header: Header): this {
     // Generate relationship for header
-    const relationship = this.relationshipManager.addHeader(`${header.getFilename(1)}`);
+    const relationship = this.relationshipManager.addHeader(
+      `${header.getFilename(1)}`
+    );
 
     // Register with manager
     this.headerFooterManager.registerHeader(header, relationship.getId());
 
     // Link to section
-    this.section.setHeaderReference('default', relationship.getId());
+    this.section.setHeaderReference("default", relationship.getId());
 
     return this;
   }
@@ -839,13 +1792,15 @@ export class Document {
     this.section.setTitlePage(true);
 
     // Generate relationship for header
-    const relationship = this.relationshipManager.addHeader(`${header.getFilename(this.headerFooterManager.getHeaderCount() + 1)}`);
+    const relationship = this.relationshipManager.addHeader(
+      `${header.getFilename(this.headerFooterManager.getHeaderCount() + 1)}`
+    );
 
     // Register with manager
     this.headerFooterManager.registerHeader(header, relationship.getId());
 
     // Link to section
-    this.section.setHeaderReference('first', relationship.getId());
+    this.section.setHeaderReference("first", relationship.getId());
 
     return this;
   }
@@ -857,13 +1812,15 @@ export class Document {
    */
   setEvenPageHeader(header: Header): this {
     // Generate relationship for header
-    const relationship = this.relationshipManager.addHeader(`${header.getFilename(this.headerFooterManager.getHeaderCount() + 1)}`);
+    const relationship = this.relationshipManager.addHeader(
+      `${header.getFilename(this.headerFooterManager.getHeaderCount() + 1)}`
+    );
 
     // Register with manager
     this.headerFooterManager.registerHeader(header, relationship.getId());
 
     // Link to section
-    this.section.setHeaderReference('even', relationship.getId());
+    this.section.setHeaderReference("even", relationship.getId());
 
     return this;
   }
@@ -875,13 +1832,15 @@ export class Document {
    */
   setFooter(footer: Footer): this {
     // Generate relationship for footer
-    const relationship = this.relationshipManager.addFooter(`${footer.getFilename(1)}`);
+    const relationship = this.relationshipManager.addFooter(
+      `${footer.getFilename(1)}`
+    );
 
     // Register with manager
     this.headerFooterManager.registerFooter(footer, relationship.getId());
 
     // Link to section
-    this.section.setFooterReference('default', relationship.getId());
+    this.section.setFooterReference("default", relationship.getId());
 
     return this;
   }
@@ -896,13 +1855,15 @@ export class Document {
     this.section.setTitlePage(true);
 
     // Generate relationship for footer
-    const relationship = this.relationshipManager.addFooter(`${footer.getFilename(this.headerFooterManager.getFooterCount() + 1)}`);
+    const relationship = this.relationshipManager.addFooter(
+      `${footer.getFilename(this.headerFooterManager.getFooterCount() + 1)}`
+    );
 
     // Register with manager
     this.headerFooterManager.registerFooter(footer, relationship.getId());
 
     // Link to section
-    this.section.setFooterReference('first', relationship.getId());
+    this.section.setFooterReference("first", relationship.getId());
 
     return this;
   }
@@ -914,13 +1875,15 @@ export class Document {
    */
   setEvenPageFooter(footer: Footer): this {
     // Generate relationship for footer
-    const relationship = this.relationshipManager.addFooter(`${footer.getFilename(this.headerFooterManager.getFooterCount() + 1)}`);
+    const relationship = this.relationshipManager.addFooter(
+      `${footer.getFilename(this.headerFooterManager.getFooterCount() + 1)}`
+    );
 
     // Register with manager
     this.headerFooterManager.registerFooter(footer, relationship.getId());
 
     // Link to section
-    this.section.setFooterReference('even', relationship.getId());
+    this.section.setFooterReference("even", relationship.getId());
 
     return this;
   }
@@ -940,7 +1903,9 @@ export class Document {
    */
   addImage(image: Image): this {
     // Generate relationship ID
-    const target = `media/image${this.imageManager.getImageCount() + 1}.${image.getExtension()}`;
+    const target = `media/image${
+      this.imageManager.getImageCount() + 1
+    }.${image.getExtension()}`;
     const relationship = this.relationshipManager.addImage(target);
 
     // Register image with manager
@@ -1040,7 +2005,7 @@ export class Document {
    */
   private updateRelationships(): void {
     const xml = this.relationshipManager.generateXml();
-    this.zipHandler.updateFile('word/_rels/document.xml.rels', xml);
+    this.zipHandler.updateFile("word/_rels/document.xml.rels", xml);
   }
 
   /**
@@ -1050,7 +2015,7 @@ export class Document {
     // Only save comments.xml if there are comments
     if (this.commentManager.getCount() > 0) {
       const xml = this.commentManager.generateCommentsXml();
-      this.zipHandler.addFile('word/comments.xml', xml);
+      this.zipHandler.addFile("word/comments.xml", xml);
 
       // Add comments relationship
       this.relationshipManager.addComments();
@@ -1059,13 +2024,16 @@ export class Document {
 
   /**
    * Updates [Content_Types].xml to include image extensions, headers/footers, and comments
+   * Preserves entries for files that exist in the loaded document
    */
   private updateContentTypesWithImagesHeadersFootersAndComments(): void {
-    const contentTypes = this.generator.generateContentTypesWithImagesHeadersFootersAndComments(
-      this.imageManager,
-      this.headerFooterManager,
-      this.commentManager
-    );
+    const contentTypes =
+      this.generator.generateContentTypesWithImagesHeadersFootersAndComments(
+        this.imageManager,
+        this.headerFooterManager,
+        this.commentManager,
+        this.zipHandler // Pass zipHandler to check file existence
+      );
     this.zipHandler.updateFile(DOCX_PATHS.CONTENT_TYPES, contentTypes);
   }
 
@@ -1121,10 +2089,14 @@ export class Document {
    * @param bookmarkOrName - Bookmark object or bookmark name
    * @returns The bookmark that was added
    */
-  addBookmarkToParagraph(paragraph: Paragraph, bookmarkOrName: Bookmark | string): Bookmark {
-    const bookmark = typeof bookmarkOrName === 'string'
-      ? this.createBookmark(bookmarkOrName)
-      : bookmarkOrName;
+  addBookmarkToParagraph(
+    paragraph: Paragraph,
+    bookmarkOrName: Bookmark | string
+  ): Bookmark {
+    const bookmark =
+      typeof bookmarkOrName === "string"
+        ? this.createBookmark(bookmarkOrName)
+        : bookmarkOrName;
 
     paragraph.addBookmark(bookmark);
     return bookmark;
@@ -1145,11 +2117,7 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created and registered revision
    */
-  createInsertion(
-    author: string,
-    content: Run | Run[],
-    date?: Date
-  ): Revision {
+  createInsertion(author: string, content: Run | Run[], date?: Date): Revision {
     const revision = Revision.createInsertion(author, content, date);
     return this.revisionManager.register(revision);
   }
@@ -1161,11 +2129,7 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created and registered revision
    */
-  createDeletion(
-    author: string,
-    content: Run | Run[],
-    date?: Date
-  ): Revision {
+  createDeletion(author: string, content: Run | Run[], date?: Date): Revision {
     const revision = Revision.createDeletion(author, content, date);
     return this.revisionManager.register(revision);
   }
@@ -1203,7 +2167,7 @@ export class Document {
     text: string,
     date?: Date
   ): Revision {
-    const revision = this.createRevisionFromText('insert', author, text, date);
+    const revision = this.createRevisionFromText("insert", author, text, date);
     paragraph.addRevision(revision);
     return revision;
   }
@@ -1222,7 +2186,7 @@ export class Document {
     text: string,
     date?: Date
   ): Revision {
-    const revision = this.createRevisionFromText('delete', author, text, date);
+    const revision = this.createRevisionFromText("delete", author, text, date);
     paragraph.addRevision(revision);
     return revision;
   }
@@ -1286,7 +2250,12 @@ export class Document {
     content: string | Run | Run[],
     initials?: string
   ): Comment {
-    return this.commentManager.createReply(parentCommentId, author, content, initials);
+    return this.commentManager.createReply(
+      parentCommentId,
+      author,
+      content,
+      initials
+    );
   }
 
   /**
@@ -1321,9 +2290,10 @@ export class Document {
     content?: string | Run | Run[],
     initials?: string
   ): Comment {
-    const comment = typeof commentOrAuthor === 'string'
-      ? this.createComment(commentOrAuthor, content!, initials)
-      : commentOrAuthor;
+    const comment =
+      typeof commentOrAuthor === "string"
+        ? this.createComment(commentOrAuthor, content!, initials)
+        : commentOrAuthor;
 
     paragraph.addComment(comment);
     return comment;
@@ -1364,7 +2334,9 @@ export class Document {
    * @param commentId - ID of the top-level comment
    * @returns Object with the comment and its replies, or undefined if not found
    */
-  getCommentThread(commentId: number): { comment: Comment; replies: Comment[] } | undefined {
+  getCommentThread(
+    commentId: number
+  ): { comment: Comment; replies: Comment[] } | undefined {
     return this.commentManager.getCommentThread(commentId);
   }
 
@@ -1496,7 +2468,11 @@ export class Document {
 
     // Two-phase update to handle circular URL swaps correctly
     // Phase 1: Collect all updates without modifying hyperlinks
-    const updates: Array<{ hyperlink: Hyperlink; newUrl: string; relationshipId?: string }> = [];
+    const updates: Array<{
+      hyperlink: Hyperlink;
+      newUrl: string;
+      relationshipId?: string;
+    }> = [];
 
     // Iterate through all paragraphs in document body
     for (const para of this.getParagraphs()) {
@@ -1512,7 +2488,7 @@ export class Document {
             updates.push({
               hyperlink: content,
               newUrl,
-              relationshipId: content.getRelationshipId()
+              relationshipId: content.getRelationshipId(),
             });
           }
         }
@@ -1624,9 +2600,16 @@ export class Document {
         return null;
       }
 
+      // Convert Buffer to string for text files
+      // ZipWriter stores all content as Buffer internally, but DocumentPart expects string for text
+      let content: string | Buffer = file.content;
+      if (!file.isBinary && Buffer.isBuffer(file.content)) {
+        content = file.content.toString('utf-8');
+      }
+
       return {
         name: partName,
-        content: file.content,
+        content,
         contentType: this.getContentTypeForPart(partName),
         isBinary: file.isBinary,
         size: file.size,
@@ -1746,14 +2729,17 @@ export class Document {
     const contentTypes = new Map<string, string>();
 
     try {
-      const contentTypesXml = this.zipHandler.getFileAsString('[Content_Types].xml');
+      const contentTypesXml = this.zipHandler.getFileAsString(
+        "[Content_Types].xml"
+      );
       if (!contentTypesXml) {
         return contentTypes;
       }
 
       // Parse content types XML
       // Match Default elements (by extension)
-      const defaultPattern = /<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"/g;
+      const defaultPattern =
+        /<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"/g;
       let match;
       while ((match = defaultPattern.exec(contentTypesXml)) !== null) {
         if (match[1] && match[2]) {
@@ -1762,7 +2748,8 @@ export class Document {
       }
 
       // Match Override elements (by part name)
-      const overridePattern = /<Override\s+PartName="([^"]+)"\s+ContentType="([^"]+)"/g;
+      const overridePattern =
+        /<Override\s+PartName="([^"]+)"\s+ContentType="([^"]+)"/g;
       while ((match = overridePattern.exec(contentTypesXml)) !== null) {
         if (match[1] && match[2]) {
           contentTypes.set(match[1], match[2]);
@@ -1809,13 +2796,13 @@ export class Document {
       }
 
       // If already a string, return as-is
-      if (typeof part.content === 'string') {
+      if (typeof part.content === "string") {
         return part.content;
       }
 
       // If Buffer, decode as UTF-8 (standard for XML files)
       if (Buffer.isBuffer(part.content)) {
-        return part.content.toString('utf8');
+        return part.content.toString("utf8");
       }
 
       return null;
@@ -1902,8 +2889,8 @@ export class Document {
    * ```
    */
   async setRawXml(partName: string, xmlContent: string): Promise<void> {
-    if (typeof xmlContent !== 'string') {
-      throw new Error('XML content must be a string');
+    if (typeof xmlContent !== "string") {
+      throw new Error("XML content must be a string");
     }
 
     // Use setPart to update the part (handles both string and binary detection)
@@ -1929,21 +2916,29 @@ export class Document {
    * await doc.addContentType('.json', 'application/json');
    * ```
    */
-  async addContentType(partNameOrExtension: string, contentType: string): Promise<boolean> {
+  async addContentType(
+    partNameOrExtension: string,
+    contentType: string
+  ): Promise<boolean> {
     try {
-      let contentTypesXml = this.zipHandler.getFileAsString('[Content_Types].xml');
+      let contentTypesXml = this.zipHandler.getFileAsString(
+        "[Content_Types].xml"
+      );
       if (!contentTypesXml) {
         return false;
       }
 
-      const isExtension = partNameOrExtension.startsWith('.');
+      const isExtension = partNameOrExtension.startsWith(".");
 
       if (isExtension) {
         // Add as Default element (for extensions)
         const extension = partNameOrExtension.substring(1);
 
         // Check if already exists
-        const existingPattern = new RegExp(`<Default\\s+Extension="${extension}"\\s+ContentType="[^"]+"/?>`, 'g');
+        const existingPattern = new RegExp(
+          `<Default\\s+Extension="${extension}"\\s+ContentType="[^"]+"/?>`,
+          "g"
+        );
         if (existingPattern.test(contentTypesXml)) {
           // Update existing
           contentTypesXml = contentTypesXml.replace(
@@ -1953,16 +2948,24 @@ export class Document {
         } else {
           // Add new before closing tag
           contentTypesXml = contentTypesXml.replace(
-            '</Types>',
+            "</Types>",
             `  <Default Extension="${extension}" ContentType="${contentType}"/>\n</Types>`
           );
         }
       } else {
         // Add as Override element (for specific parts)
-        const partName = partNameOrExtension.startsWith('/') ? partNameOrExtension : `/${partNameOrExtension}`;
+        const partName = partNameOrExtension.startsWith("/")
+          ? partNameOrExtension
+          : `/${partNameOrExtension}`;
 
         // Check if already exists
-        const existingPattern = new RegExp(`<Override\\s+PartName="${partName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s+ContentType="[^"]+"/?>`, 'g');
+        const existingPattern = new RegExp(
+          `<Override\\s+PartName="${partName.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}"\\s+ContentType="[^"]+"/?>`,
+          "g"
+        );
         if (existingPattern.test(contentTypesXml)) {
           // Update existing
           contentTypesXml = contentTypesXml.replace(
@@ -1972,14 +2975,14 @@ export class Document {
         } else {
           // Add new before closing tag
           contentTypesXml = contentTypesXml.replace(
-            '</Types>',
+            "</Types>",
             `  <Override PartName="${partName}" ContentType="${contentType}"/>\n</Types>`
           );
         }
       }
 
       // Update the content types file
-      this.zipHandler.updateFile('[Content_Types].xml', contentTypesXml);
+      this.zipHandler.updateFile("[Content_Types].xml", contentTypesXml);
       return true;
     } catch (error) {
       return false;
@@ -2007,7 +3010,9 @@ export class Document {
 
     try {
       // Get all .rels files
-      const relsPaths = this.zipHandler.getFilePaths().filter(path => path.endsWith('.rels'));
+      const relsPaths = this.zipHandler
+        .getFilePaths()
+        .filter((path) => path.endsWith(".rels"));
 
       for (const relsPath of relsPaths) {
         const relsContent = this.zipHandler.getFileAsString(relsPath);
@@ -2022,16 +3027,22 @@ export class Document {
           const rels: ParsedRelationship[] = [];
 
           // Use XMLParser to extract all Relationship elements
-          const relationshipElements = XMLParser.extractElements(relsContent, 'Relationship');
+          const relationshipElements = XMLParser.extractElements(
+            relsContent,
+            "Relationship"
+          );
 
           for (const relElement of relationshipElements) {
             const rel: ParsedRelationship = {};
 
             // Extract attributes using XMLParser
-            const id = XMLParser.extractAttribute(relElement, 'Id');
-            const type = XMLParser.extractAttribute(relElement, 'Type');
-            const target = XMLParser.extractAttribute(relElement, 'Target');
-            const targetMode = XMLParser.extractAttribute(relElement, 'TargetMode');
+            const id = XMLParser.extractAttribute(relElement, "Id");
+            const type = XMLParser.extractAttribute(relElement, "Type");
+            const target = XMLParser.extractAttribute(relElement, "Target");
+            const targetMode = XMLParser.extractAttribute(
+              relElement,
+              "TargetMode"
+            );
 
             if (id) rel.id = id;
             if (type) rel.type = type;
@@ -2078,14 +3089,21 @@ export class Document {
    * const headerRels = await doc.getRelationships('word/header1.xml');
    * ```
    */
-  async getRelationships(partName: string): Promise<Array<{ id?: string; type?: string; target?: string; targetMode?: string }>> {
+  async getRelationships(
+    partName: string
+  ): Promise<
+    Array<{ id?: string; type?: string; target?: string; targetMode?: string }>
+  > {
     try {
       // Construct the .rels path from the part name
       // For 'word/document.xml' -> 'word/_rels/document.xml.rels'
-      const lastSlash = partName.lastIndexOf('/');
-      const relsPath = lastSlash === -1
-        ? `_rels/${partName}.rels`
-        : `${partName.substring(0, lastSlash)}/_rels/${partName.substring(lastSlash + 1)}.rels`;
+      const lastSlash = partName.lastIndexOf("/");
+      const relsPath =
+        lastSlash === -1
+          ? `_rels/${partName}.rels`
+          : `${partName.substring(0, lastSlash)}/_rels/${partName.substring(
+              lastSlash + 1
+            )}.rels`;
 
       const relsContent = this.zipHandler.getFileAsString(relsPath);
       if (!relsContent) {
@@ -2102,16 +3120,19 @@ export class Document {
       const relationships: ParsedRelationship[] = [];
 
       // Use XMLParser to extract all Relationship elements
-      const relationshipElements = XMLParser.extractElements(relsContent, 'Relationship');
+      const relationshipElements = XMLParser.extractElements(
+        relsContent,
+        "Relationship"
+      );
 
       for (const relElement of relationshipElements) {
         const rel: ParsedRelationship = {};
 
         // Extract attributes using XMLParser
-        const id = XMLParser.extractAttribute(relElement, 'Id');
-        const type = XMLParser.extractAttribute(relElement, 'Type');
-        const target = XMLParser.extractAttribute(relElement, 'Target');
-        const targetMode = XMLParser.extractAttribute(relElement, 'TargetMode');
+        const id = XMLParser.extractAttribute(relElement, "Id");
+        const type = XMLParser.extractAttribute(relElement, "Type");
+        const target = XMLParser.extractAttribute(relElement, "Target");
+        const targetMode = XMLParser.extractAttribute(relElement, "TargetMode");
 
         if (id) rel.id = id;
         if (type) rel.type = type;
@@ -2134,22 +3155,35 @@ export class Document {
    */
   private getContentTypeForPart(partName: string): string | undefined {
     try {
-      const contentTypesXml = this.zipHandler.getFileAsString('[Content_Types].xml');
+      const contentTypesXml = this.zipHandler.getFileAsString(
+        "[Content_Types].xml"
+      );
       if (!contentTypesXml) {
         return undefined;
       }
 
       // Check for specific override
-      const overridePattern = new RegExp(`<Override\\s+PartName="${partName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s+ContentType="([^"]+)"`, 'i');
+      const overridePattern = new RegExp(
+        `<Override\\s+PartName="${partName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}"\\s+ContentType="([^"]+)"`,
+        "i"
+      );
       const overrideMatch = contentTypesXml.match(overridePattern);
       if (overrideMatch) {
         return overrideMatch[1];
       }
 
       // Check for extension default
-      const ext = partName.substring(partName.lastIndexOf('.'));
+      const ext = partName.substring(partName.lastIndexOf("."));
       if (ext) {
-        const defaultPattern = new RegExp(`<Default\\s+Extension="${ext.substring(1)}"\\s+ContentType="([^"]+)"`, 'i');
+        const defaultPattern = new RegExp(
+          `<Default\\s+Extension="${ext.substring(
+            1
+          )}"\\s+ContentType="([^"]+)"`,
+          "i"
+        );
         const defaultMatch = contentTypesXml.match(defaultPattern);
         if (defaultMatch) {
           return defaultMatch[1];
@@ -2168,7 +3202,10 @@ export class Document {
    * @param options - Search options
    * @returns Array of search results with paragraph and run information
    */
-  findText(text: string, options?: { caseSensitive?: boolean; wholeWord?: boolean }): Array<{
+  findText(
+    text: string,
+    options?: { caseSensitive?: boolean; wholeWord?: boolean }
+  ): Array<{
     paragraph: Paragraph;
     paragraphIndex: number;
     run: Run;
@@ -2203,7 +3240,10 @@ export class Document {
 
         if (wholeWord) {
           // Create word boundary regex
-          const wordPattern = new RegExp(`\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, caseSensitive ? 'g' : 'gi');
+          const wordPattern = new RegExp(
+            `\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+            caseSensitive ? "g" : "gi"
+          );
           let match;
           while ((match = wordPattern.exec(runText)) !== null) {
             results.push({
@@ -2218,7 +3258,9 @@ export class Document {
         } else {
           // Simple substring search
           let startIndex = 0;
-          while ((startIndex = compareText.indexOf(searchText, startIndex)) !== -1) {
+          while (
+            (startIndex = compareText.indexOf(searchText, startIndex)) !== -1
+          ) {
             results.push({
               paragraph,
               paragraphIndex: pIndex,
@@ -2248,11 +3290,19 @@ export class Document {
                 const run = runs[rIndex];
                 if (!run) continue;
                 const runText = run.getText();
-                const compareText = caseSensitive ? runText : runText.toLowerCase();
+                const compareText = caseSensitive
+                  ? runText
+                  : runText.toLowerCase();
 
                 if (wholeWord) {
                   // Create word boundary regex
-                  const wordPattern = new RegExp(`\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, caseSensitive ? 'g' : 'gi');
+                  const wordPattern = new RegExp(
+                    `\\b${searchText.replace(
+                      /[.*+?^${}()|[\]\\]/g,
+                      "\\$&"
+                    )}\\b`,
+                    caseSensitive ? "g" : "gi"
+                  );
                   let match;
                   while ((match = wordPattern.exec(runText)) !== null) {
                     results.push({
@@ -2267,7 +3317,12 @@ export class Document {
                 } else {
                   // Simple substring search
                   let startIndex = 0;
-                  while ((startIndex = compareText.indexOf(searchText, startIndex)) !== -1) {
+                  while (
+                    (startIndex = compareText.indexOf(
+                      searchText,
+                      startIndex
+                    )) !== -1
+                  ) {
                     results.push({
                       paragraph,
                       paragraphIndex: -1, // Not in main body, in table
@@ -2296,7 +3351,11 @@ export class Document {
    * @param options - Replace options
    * @returns Number of replacements made
    */
-  replaceText(find: string, replace: string, options?: { caseSensitive?: boolean; wholeWord?: boolean }): number {
+  replaceText(
+    find: string,
+    replace: string,
+    options?: { caseSensitive?: boolean; wholeWord?: boolean }
+  ): number {
     let replacementCount = 0;
     const caseSensitive = options?.caseSensitive ?? false;
     const wholeWord = options?.wholeWord ?? false;
@@ -2312,8 +3371,8 @@ export class Document {
         if (wholeWord) {
           // Use word boundary regex for whole word replacement
           const wordPattern = new RegExp(
-            `\\b${find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
-            caseSensitive ? 'g' : 'gi'
+            `\\b${find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+            caseSensitive ? "g" : "gi"
           );
           const matches = originalText.match(wordPattern);
           if (matches) {
@@ -2323,8 +3382,8 @@ export class Document {
         } else {
           // Simple substring replacement
           const searchPattern = new RegExp(
-            find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-            caseSensitive ? 'g' : 'gi'
+            find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+            caseSensitive ? "g" : "gi"
           );
           const matches = originalText.match(searchPattern);
           if (matches) {
@@ -2354,7 +3413,7 @@ export class Document {
       const text = paragraph.getText().trim();
       if (text) {
         // Split by whitespace and filter out empty strings
-        const words = text.split(/\s+/).filter(word => word.length > 0);
+        const words = text.split(/\s+/).filter((word) => word.length > 0);
         totalWords += words.length;
       }
     }
@@ -2370,7 +3429,7 @@ export class Document {
           for (const para of cellParas) {
             const text = para.getText().trim();
             if (text) {
-              const words = text.split(/\s+/).filter(word => word.length > 0);
+              const words = text.split(/\s+/).filter((word) => word.length > 0);
               totalWords += words.length;
             }
           }
@@ -2395,7 +3454,7 @@ export class Document {
       if (includeSpaces) {
         totalChars += text.length;
       } else {
-        totalChars += text.replace(/\s/g, '').length;
+        totalChars += text.replace(/\s/g, "").length;
       }
     }
 
@@ -2412,7 +3471,7 @@ export class Document {
             if (includeSpaces) {
               totalChars += text.length;
             } else {
-              totalChars += text.replace(/\s/g, '').length;
+              totalChars += text.replace(/\s/g, "").length;
             }
           }
         }
@@ -2430,7 +3489,7 @@ export class Document {
   removeParagraph(paragraphOrIndex: Paragraph | number): boolean {
     let index: number;
 
-    if (typeof paragraphOrIndex === 'number') {
+    if (typeof paragraphOrIndex === "number") {
       index = paragraphOrIndex;
     } else {
       // Find the index of the paragraph
@@ -2456,7 +3515,7 @@ export class Document {
   removeTable(tableOrIndex: Table | number): boolean {
     let index: number;
 
-    if (typeof tableOrIndex === 'number') {
+    if (typeof tableOrIndex === "number") {
       // If number provided, find the nth table
       const tables = this.getTables();
       if (tableOrIndex >= 0 && tableOrIndex < tables.length) {
@@ -2500,11 +3559,172 @@ export class Document {
   }
 
   /**
+   * Inserts a table at a specific position
+   * @param index - The position to insert at (0-based)
+   * @param table - The table to insert
+   * @returns This document for chaining
+   * @example
+   * ```typescript
+   * const table = new Table(2, 3);
+   * doc.insertTableAt(5, table);  // Insert at position 5
+   * ```
+   */
+  insertTableAt(index: number, table: Table): this {
+    if (index < 0) {
+      index = 0;
+    } else if (index > this.bodyElements.length) {
+      index = this.bodyElements.length;
+    }
+
+    this.bodyElements.splice(index, 0, table);
+    return this;
+  }
+
+  /**
+   * Inserts a Table of Contents at a specific position
+   * @param index - The position to insert at (0-based)
+   * @param toc - The TableOfContentsElement to insert
+   * @returns This document for chaining
+   * @example
+   * ```typescript
+   * const toc = TableOfContentsElement.createStandard();
+   * doc.insertTocAt(0, toc);  // Insert at beginning
+   * ```
+   */
+  insertTocAt(index: number, toc: TableOfContentsElement): this {
+    if (index < 0) {
+      index = 0;
+    } else if (index > this.bodyElements.length) {
+      index = this.bodyElements.length;
+    }
+
+    this.bodyElements.splice(index, 0, toc);
+    return this;
+  }
+
+  /**
+   * Replaces a paragraph at a specific position
+   * @param index - The position to replace at (0-based)
+   * @param paragraph - The new paragraph
+   * @returns True if replaced, false if index invalid
+   * @example
+   * ```typescript
+   * const newPara = new Paragraph();
+   * newPara.addText('Replacement text');
+   * doc.replaceParagraphAt(3, newPara);
+   * ```
+   */
+  replaceParagraphAt(index: number, paragraph: Paragraph): boolean {
+    if (index >= 0 && index < this.bodyElements.length) {
+      const element = this.bodyElements[index];
+      if (element instanceof Paragraph) {
+        this.bodyElements[index] = paragraph;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Replaces a table at a specific position
+   * @param index - The position to replace at (0-based)
+   * @param table - The new table
+   * @returns True if replaced, false if index invalid or not a table
+   * @example
+   * ```typescript
+   * const newTable = new Table(3, 4);
+   * doc.replaceTableAt(2, newTable);
+   * ```
+   */
+  replaceTableAt(index: number, table: Table): boolean {
+    if (index >= 0 && index < this.bodyElements.length) {
+      const element = this.bodyElements[index];
+      if (element instanceof Table) {
+        this.bodyElements[index] = table;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Moves an element from one position to another
+   * @param fromIndex - Current position (0-based)
+   * @param toIndex - Target position (0-based)
+   * @returns True if moved, false if indices invalid
+   * @example
+   * ```typescript
+   * doc.moveElement(5, 2);  // Move element from position 5 to position 2
+   * ```
+   */
+  moveElement(fromIndex: number, toIndex: number): boolean {
+    if (
+      fromIndex < 0 ||
+      fromIndex >= this.bodyElements.length ||
+      toIndex < 0 ||
+      toIndex >= this.bodyElements.length
+    ) {
+      return false;
+    }
+
+    const [element] = this.bodyElements.splice(fromIndex, 1);
+    this.bodyElements.splice(toIndex, 0, element!);
+    return true;
+  }
+
+  /**
+   * Swaps two elements' positions
+   * @param index1 - First element position (0-based)
+   * @param index2 - Second element position (0-based)
+   * @returns True if swapped, false if indices invalid
+   * @example
+   * ```typescript
+   * doc.swapElements(2, 5);  // Swap elements at positions 2 and 5
+   * ```
+   */
+  swapElements(index1: number, index2: number): boolean {
+    if (
+      index1 < 0 ||
+      index1 >= this.bodyElements.length ||
+      index2 < 0 ||
+      index2 >= this.bodyElements.length
+    ) {
+      return false;
+    }
+
+    const temp = this.bodyElements[index1];
+    this.bodyElements[index1] = this.bodyElements[index2]!;
+    this.bodyElements[index2] = temp!;
+    return true;
+  }
+
+  /**
+   * Removes a Table of Contents element at a specific position
+   * @param index - The position to remove (0-based)
+   * @returns True if removed, false if index invalid or not a TOC
+   * @example
+   * ```typescript
+   * doc.removeTocAt(0);  // Remove TOC at beginning
+   * ```
+   */
+  removeTocAt(index: number): boolean {
+    if (index >= 0 && index < this.bodyElements.length) {
+      const element = this.bodyElements[index];
+      if (element instanceof TableOfContentsElement) {
+        this.bodyElements.splice(index, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Gets all hyperlinks in the document
    * @returns Array of hyperlinks with their containing paragraph
    */
   getHyperlinks(): Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> {
-    const hyperlinks: Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> = [];
+    const hyperlinks: Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> =
+      [];
 
     for (const paragraph of this.getParagraphs()) {
       for (const content of paragraph.getContent()) {
@@ -2519,7 +3739,8 @@ export class Document {
       for (const row of table.getRows()) {
         for (const cell of row.getCells()) {
           // TableCell has getParagraphs method
-          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
+          const cellParagraphs =
+            cell instanceof TableCell ? cell.getParagraphs() : [];
           for (const para of cellParagraphs) {
             for (const content of para.getContent()) {
               if (content instanceof Hyperlink) {
@@ -2623,38 +3844,41 @@ export class Document {
     const zipHandler = doc.getZipHandler();
 
     // [Content_Types].xml - minimal
-    zipHandler.addFile('[Content_Types].xml',
+    zipHandler.addFile(
+      "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
-      '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
-      '  <Default Extension="xml" ContentType="application/xml"/>\n' +
-      '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>\n' +
-      '</Types>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
+        '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
+        '  <Default Extension="xml" ContentType="application/xml"/>\n' +
+        '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>\n' +
+        "</Types>"
     );
 
     // _rels/.rels - minimal
-    zipHandler.addFile('_rels/.rels',
+    zipHandler.addFile(
+      "_rels/.rels",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
-      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>\n' +
-      '</Relationships>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>\n' +
+        "</Relationships>"
     );
 
     // word/document.xml - empty body
-    zipHandler.addFile('word/document.xml',
+    zipHandler.addFile(
+      "word/document.xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">\n' +
-      '  <w:body/>\n' +
-      '</w:document>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">\n' +
+        "  <w:body/>\n" +
+        "</w:document>"
     );
 
     // word/_rels/document.xml.rels - empty relationships
-    zipHandler.addFile('word/_rels/document.xml.rels',
+    zipHandler.addFile(
+      "word/_rels/document.xml.rels",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
     );
 
     return doc;
   }
-
 }

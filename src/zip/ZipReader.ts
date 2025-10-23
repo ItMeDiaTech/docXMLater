@@ -179,9 +179,11 @@ export class ZipReader {
       return undefined;
     }
 
-    if (file.isBinary) {
+    // Check actual content type instead of flag (Issue #4)
+    // Content is Buffer for binary files, string for text files
+    if (Buffer.isBuffer(file.content)) {
       // Convert binary buffer to UTF-8 string
-      return (file.content as Buffer).toString('utf8');
+      return file.content.toString('utf8');
     }
 
     return file.content as string;
@@ -203,8 +205,10 @@ export class ZipReader {
       return undefined;
     }
 
-    if (file.isBinary) {
-      return file.content as Buffer;
+    // Check actual content type instead of flag (Issue #4)
+    // Content is Buffer for binary files, string for text files
+    if (Buffer.isBuffer(file.content)) {
+      return file.content;
     }
 
     // Encode string content as UTF-8 Buffer

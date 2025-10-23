@@ -3,23 +3,28 @@
  * Converts structured data to OpenXML format
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { Paragraph } from '../elements/Paragraph';
-import { Table } from '../elements/Table';
-import { TableOfContentsElement } from '../elements/TableOfContentsElement';
-import { Section } from '../elements/Section';
-import { Hyperlink } from '../elements/Hyperlink';
-import { ImageManager } from '../elements/ImageManager';
-import { HeaderFooterManager } from '../elements/HeaderFooterManager';
-import { CommentManager } from '../elements/CommentManager';
-import { FontManager } from '../elements/FontManager';
-import { RelationshipManager } from './RelationshipManager';
-import { DocumentProperties } from './Document';
+import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
+import { Paragraph } from "../elements/Paragraph";
+import { Table } from "../elements/Table";
+import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
+import { Section } from "../elements/Section";
+import { Hyperlink } from "../elements/Hyperlink";
+import { ImageManager } from "../elements/ImageManager";
+import { HeaderFooterManager } from "../elements/HeaderFooterManager";
+import { CommentManager } from "../elements/CommentManager";
+import { FontManager } from "../elements/FontManager";
+import { RelationshipManager } from "./RelationshipManager";
+import { DocumentProperties } from "./Document";
 
 /**
  * Body element types
  */
-type BodyElement = Paragraph | Table | TableOfContentsElement;
+type BodyElement =
+  | Paragraph
+  | Table
+  | TableOfContentsElement
+  | StructuredDocumentTag;
 
 /**
  * DocumentGenerator handles all XML generation logic
@@ -59,7 +64,11 @@ export class DocumentGenerator {
   /**
    * Generates word/document.xml with current body elements
    */
-  generateDocumentXml(bodyElements: BodyElement[], section: Section): string {
+  generateDocumentXml(
+    bodyElements: BodyElement[],
+    section: Section,
+    namespaces: Record<string, string>
+  ): string {
     const bodyXmls: XMLElement[] = [];
 
     // Generate XML for each body element
@@ -77,7 +86,7 @@ export class DocumentGenerator {
 
     // Add section properties at the end
     bodyXmls.push(section.toXML());
-    return XMLBuilder.createDocument(bodyXmls);
+    return XMLBuilder.createDocument(bodyXmls, namespaces);
   }
 
   /**
@@ -98,15 +107,29 @@ export class DocumentGenerator {
                    xmlns:dcterms="http://purl.org/dc/terms/"
                    xmlns:dcmitype="http://purl.org/dc/dcmitype/"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>${XMLBuilder.escapeXmlText(properties.title || '')}</dc:title>
-  <dc:subject>${XMLBuilder.escapeXmlText(properties.subject || '')}</dc:subject>
-  <dc:creator>${XMLBuilder.escapeXmlText(properties.creator || 'DocXML')}</dc:creator>
-  <cp:keywords>${XMLBuilder.escapeXmlText(properties.keywords || '')}</cp:keywords>
-  <dc:description>${XMLBuilder.escapeXmlText(properties.description || '')}</dc:description>
-  <cp:lastModifiedBy>${XMLBuilder.escapeXmlText(properties.lastModifiedBy || properties.creator || 'DocXML')}</cp:lastModifiedBy>
+  <dc:title>${XMLBuilder.sanitizeXmlContent(properties.title || "")}</dc:title>
+  <dc:subject>${XMLBuilder.sanitizeXmlContent(
+    properties.subject || ""
+  )}</dc:subject>
+  <dc:creator>${XMLBuilder.sanitizeXmlContent(
+    properties.creator || "DocXML"
+  )}</dc:creator>
+  <cp:keywords>${XMLBuilder.sanitizeXmlContent(
+    properties.keywords || ""
+  )}</cp:keywords>
+  <dc:description>${XMLBuilder.sanitizeXmlContent(
+    properties.description || ""
+  )}</dc:description>
+  <cp:lastModifiedBy>${XMLBuilder.sanitizeXmlContent(
+    properties.lastModifiedBy || properties.creator || "DocXML"
+  )}</cp:lastModifiedBy>
   <cp:revision>${properties.revision || 1}</cp:revision>
-  <dcterms:created xsi:type="dcterms:W3CDTF">${formatDate(created)}</dcterms:created>
-  <dcterms:modified xsi:type="dcterms:W3CDTF">${formatDate(modified)}</dcterms:modified>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${formatDate(
+    created
+  )}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${formatDate(
+    modified
+  )}</dcterms:modified>
 </cp:coreProperties>`;
   }
 
@@ -130,11 +153,13 @@ export class DocumentGenerator {
 
   /**
    * Generates [Content_Types].xml with image extensions, headers/footers, comments, and fonts
+   * Preserves entries for files that exist in the loaded document (customXML, etc.)
    */
   generateContentTypesWithImagesHeadersFootersAndComments(
     imageManager: ImageManager,
     headerFooterManager: HeaderFooterManager,
     commentManager: CommentManager,
+    zipHandler: any, // ZipHandler - to check file existence
     fontManager?: FontManager
   ): string {
     const images = imageManager.getAllImages();
@@ -167,8 +192,16 @@ export class DocumentGenerator {
     if (fontManager && fontManager.getCount() > 0) {
       const fontEntries = fontManager.generateContentTypeEntries();
       for (const entry of fontEntries) {
-        xml += entry + '\n';
+        xml += entry + "\n";
       }
+    }
+
+    // Check for embedded .ttf fonts from original document
+    const files = zipHandler.getFilePaths?.() || [];
+    const hasTtfFonts = files.some((f: string) => f.endsWith(".ttf"));
+    if (hasTtfFonts) {
+      xml +=
+        '  <Default Extension="ttf" ContentType="application/x-font-ttf"/>\n';
     }
 
     // Override types
@@ -205,21 +238,120 @@ export class DocumentGenerator {
 
     xml +=
       '  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>\n';
-    xml +=
-      '  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>\n';
-    xml += '</Types>';
+
+    // Only add app.xml if it exists (not all documents have it)
+    if (zipHandler.hasFile?.("docProps/app.xml")) {
+      xml +=
+        '  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>\n';
+    }
+
+    // Preserve custom properties if exists
+    if (zipHandler.hasFile?.("docProps/custom.xml")) {
+      xml +=
+        '  <Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>\n';
+    }
+
+    // Preserve customXML entries if they exist
+    if (zipHandler.hasFile?.("customXML/item1.xml")) {
+      xml +=
+        '  <Override PartName="/customXML/item1.xml" ContentType="application/xml"/>\n';
+    }
+    if (zipHandler.hasFile?.("customXML/itemProps1.xml")) {
+      xml +=
+        '  <Override PartName="/customXML/itemProps1.xml" ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/>\n';
+    }
+
+    xml += "</Types>";
 
     return xml;
   }
 
   /**
+   * Clears ORPHANED hyperlink relationships from the RelationshipManager
+   * Only removes relationships that don't have corresponding hyperlinks in the document
+   *
+   * This prevents corruption when paragraphs with hyperlinks are removed but
+   * their relationships remain, causing Word's "unreadable content" error.
+   * Preserves relationships for existing hyperlinks to maintain round-trip integrity.
+   */
+  private clearOrphanedHyperlinkRelationships(
+    bodyElements: BodyElement[],
+    headerFooterManager: HeaderFooterManager,
+    relationshipManager: RelationshipManager
+  ): void {
+    // Step 1: Collect all relationship IDs currently used by hyperlinks
+    const usedRelIds = new Set<string>();
+
+    // Helper to scan paragraphs for hyperlink relationship IDs
+    const scanParagraph = (para: Paragraph) => {
+      for (const item of para.getContent()) {
+        if (item instanceof Hyperlink && item.isExternal()) {
+          const relId = item.getRelationshipId();
+          if (relId) {
+            usedRelIds.add(relId);
+          }
+        }
+      }
+    };
+
+    // Scan body elements
+    for (const element of bodyElements) {
+      if (element instanceof Paragraph) {
+        scanParagraph(element);
+      }
+    }
+
+    // Scan headers
+    const headers = headerFooterManager.getAllHeaders();
+    for (const header of headers) {
+      for (const element of header.header.getElements()) {
+        if (element instanceof Paragraph) {
+          scanParagraph(element);
+        }
+      }
+    }
+
+    // Scan footers
+    const footers = headerFooterManager.getAllFooters();
+    for (const footer of footers) {
+      for (const element of footer.footer.getElements()) {
+        if (element instanceof Paragraph) {
+          scanParagraph(element);
+        }
+      }
+    }
+
+    // Step 2: Remove ONLY orphaned relationships (not used by any hyperlink)
+    const allHyperlinkRels = relationshipManager.getRelationshipsByType(
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+    );
+
+    for (const rel of allHyperlinkRels) {
+      if (!usedRelIds.has(rel.getId())) {
+        // This relationship is orphaned - remove it
+        relationshipManager.removeRelationship(rel.getId());
+      }
+    }
+  }
+
+  /**
    * Processes all hyperlinks in paragraphs and registers them with RelationshipManager
+   * Clears orphaned hyperlink relationships to prevent corruption while preserving valid ones
    */
   processHyperlinks(
     bodyElements: BodyElement[],
     headerFooterManager: HeaderFooterManager,
     relationshipManager: RelationshipManager
   ): void {
+    // Clear ORPHANED hyperlink relationships to prevent corruption
+    // This is critical when paragraphs are removed (e.g., via clearParagraphs())
+    // but preserves relationships for existing hyperlinks (round-trip integrity)
+    this.clearOrphanedHyperlinkRelationships(
+      bodyElements,
+      headerFooterManager,
+      relationshipManager
+    );
+
     // Get all paragraphs (from body and from headers/footers)
     const paragraphs = bodyElements.filter(
       (el): el is Paragraph => el instanceof Paragraph
@@ -279,8 +411,8 @@ export class DocumentGenerator {
         if (!url) {
           throw new Error(
             `Invalid hyperlink in paragraph: External hyperlink "${item.getText()}" has no URL. ` +
-            `This would create a corrupted document per ECMA-376 §17.16.22. ` +
-            `Fix the hyperlink by providing a valid URL before saving.`
+              `This would create a corrupted document per ECMA-376 §17.16.22. ` +
+              `Fix the hyperlink by providing a valid URL before saving.`
           );
         }
 

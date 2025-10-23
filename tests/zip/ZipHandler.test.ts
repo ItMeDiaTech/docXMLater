@@ -510,7 +510,8 @@ describe('ZipHandler', () => {
         const sourcePath = path.join(testDir, 'source.txt');
         await fs.writeFile(sourcePath, 'Import me!');
 
-        await handler.importFile(sourcePath, 'imported.txt');
+        // Import as text file (not binary) so getFileAsString() works (Issue #12 fix)
+        await handler.importFile(sourcePath, 'imported.txt', { binary: false });
 
         expect(handler.hasFile('imported.txt')).toBe(true);
         expect(handler.getFileAsString('imported.txt')).toBe('Import me!');

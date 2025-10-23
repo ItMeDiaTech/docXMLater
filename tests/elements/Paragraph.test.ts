@@ -607,5 +607,224 @@ describe('Paragraph', () => {
         expect(children.length).toBeGreaterThan(0);
       });
     });
+
+    describe('Style application with formatting control', () => {
+      test('should clear all direct run formatting', () => {
+        const para = new Paragraph();
+        para.addText('Bold text', { bold: true, color: 'FF0000', font: 'Arial' });
+        para.addText('Italic text', { italic: true, size: 14 });
+
+        // Clear all formatting
+        para.clearDirectRunFormatting();
+
+        const runs = para.getRuns();
+        expect(runs[0]!.getFormatting().bold).toBeUndefined();
+        expect(runs[0]!.getFormatting().color).toBeUndefined();
+        expect(runs[0]!.getFormatting().font).toBeUndefined();
+        expect(runs[1]!.getFormatting().italic).toBeUndefined();
+        expect(runs[1]!.getFormatting().size).toBeUndefined();
+
+        // Text should be preserved
+        expect(runs[0]!.getText()).toBe('Bold text');
+        expect(runs[1]!.getText()).toBe('Italic text');
+      });
+
+      test('should clear only specified run properties', () => {
+        const para = new Paragraph();
+        para.addText('Formatted', { bold: true, color: 'FF0000', font: 'Arial', size: 14 });
+
+        // Clear only font and color
+        para.clearDirectRunFormatting(['font', 'color']);
+
+        const run = para.getRuns()[0]!;
+        expect(run.getFormatting().font).toBeUndefined();
+        expect(run.getFormatting().color).toBeUndefined();
+        // Bold and size should remain
+        expect(run.getFormatting().bold).toBe(true);
+        expect(run.getFormatting().size).toBe(14);
+      });
+
+      test('should apply style and clear all formatting', () => {
+        const para = new Paragraph();
+        para.addText('Text with formatting', { bold: true, italic: true, color: 'FF0000' });
+
+        // Apply style and clear all formatting
+        para.applyStyleAndClearFormatting('Heading1', []);
+
+        expect(para.getStyle()).toBe('Heading1');
+        const run = para.getRuns()[0]!;
+        expect(run.getFormatting().bold).toBeUndefined();
+        expect(run.getFormatting().italic).toBeUndefined();
+        expect(run.getFormatting().color).toBeUndefined();
+      });
+
+      test('should apply style and clear specific properties', () => {
+        const para = new Paragraph();
+        para.addText('Text', { bold: true, color: 'FF0000', font: 'Arial' });
+
+        // Apply style and clear only font
+        para.applyStyleAndClearFormatting('Normal', ['font']);
+
+        expect(para.getStyle()).toBe('Normal');
+        const run = para.getRuns()[0]!;
+        expect(run.getFormatting().font).toBeUndefined();
+        // Bold and color should remain
+        expect(run.getFormatting().bold).toBe(true);
+        expect(run.getFormatting().color).toBe('FF0000');
+      });
+
+      test('should apply style without clearing formatting when not specified', () => {
+        const para = new Paragraph();
+        para.addText('Text', { bold: true, color: 'FF0000' });
+
+        // Apply style without clearing (overlay style)
+        para.applyStyleAndClearFormatting('Title');
+
+        expect(para.getStyle()).toBe('Title');
+        const run = para.getRuns()[0]!;
+        // Formatting should be preserved
+        expect(run.getFormatting().bold).toBe(true);
+        expect(run.getFormatting().color).toBe('FF0000');
+      });
+
+      test('should handle paragraph with multiple runs', () => {
+        const para = new Paragraph();
+        para.addText('Bold ', { bold: true });
+        para.addText('Italic ', { italic: true });
+        para.addText('Underline', { underline: true });
+
+        para.clearDirectRunFormatting();
+
+        const runs = para.getRuns();
+        expect(runs.length).toBe(3);
+        expect(runs[0]!.getFormatting().bold).toBeUndefined();
+        expect(runs[1]!.getFormatting().italic).toBeUndefined();
+        expect(runs[2]!.getFormatting().underline).toBeUndefined();
+
+        // Text should be preserved
+        expect(runs[0]!.getText()).toBe('Bold ');
+        expect(runs[1]!.getText()).toBe('Italic ');
+        expect(runs[2]!.getText()).toBe('Underline');
+      });
+
+      test('should support method chaining', () => {
+        const para = new Paragraph();
+        para
+          .addText('Text', { bold: true, color: 'FF0000' })
+          .setStyle('Heading1')
+          .clearDirectRunFormatting(['color'])
+          .setAlignment('center');
+
+        expect(para.getStyle()).toBe('Heading1');
+        expect(para.getFormatting().alignment).toBe('center');
+        const run = para.getRuns()[0]!;
+        expect(run.getFormatting().color).toBeUndefined();
+        expect(run.getFormatting().bold).toBe(true);
+      });
+    });
+
+    describe('Property conflict resolution', () => {
+      test('should clear pageBreakBefore when keepNext is set', () => {
+        const para = new Paragraph();
+        para.setPageBreakBefore(true);
+
+        // Setting keepNext should clear the conflicting pageBreakBefore
+        para.setKeepNext(true);
+
+        const formatting = para.getFormatting();
+        expect(formatting.keepNext).toBe(true);
+        expect(formatting.pageBreakBefore).toBe(false);
+      });
+
+      test('should clear pageBreakBefore when keepLines is set', () => {
+        const para = new Paragraph();
+        para.setPageBreakBefore(true);
+
+        // Setting keepLines should clear the conflicting pageBreakBefore
+        para.setKeepLines(true);
+
+        const formatting = para.getFormatting();
+        expect(formatting.keepLines).toBe(true);
+        expect(formatting.pageBreakBefore).toBe(false);
+      });
+
+      test('should not affect pageBreakBefore when keepNext is set to false', () => {
+        const para = new Paragraph();
+        para.setPageBreakBefore(true);
+
+        // Setting keepNext to false should not affect pageBreakBefore
+        para.setKeepNext(false);
+
+        const formatting = para.getFormatting();
+        expect(formatting.keepNext).toBe(false);
+        expect(formatting.pageBreakBefore).toBe(true);
+      });
+
+      test('should work with method chaining', () => {
+        const para = new Paragraph()
+          .setPageBreakBefore(true)
+          .setKeepNext(true)        // Should clear pageBreakBefore
+          .setKeepLines(true);      // pageBreakBefore already cleared
+
+        const formatting = para.getFormatting();
+        expect(formatting.keepNext).toBe(true);
+        expect(formatting.keepLines).toBe(true);
+        expect(formatting.pageBreakBefore).toBe(false);
+      });
+
+      test('should work when keepNext/keepLines are set first', () => {
+        const para = new Paragraph()
+          .setKeepNext(true)
+          .setKeepLines(true)
+          .setPageBreakBefore(true); // This can be set after
+
+        // User explicitly set pageBreakBefore after keepNext/keepLines
+        const formatting = para.getFormatting();
+        expect(formatting.pageBreakBefore).toBe(true);
+        expect(formatting.keepNext).toBe(true);
+        expect(formatting.keepLines).toBe(true);
+
+        // But if keepNext is set again, pageBreakBefore should be cleared
+        para.setKeepNext(true);
+        const formatting2 = para.getFormatting();
+        expect(formatting2.keepNext).toBe(true);
+        expect(formatting2.pageBreakBefore).toBe(false);
+      });
+
+      test('should produce correct XML without conflicting properties', () => {
+        const para = new Paragraph()
+          .addText('Content')
+          .setPageBreakBefore(true)
+          .setKeepNext(true)        // Clears pageBreakBefore
+          .setKeepLines(true);
+
+        const xmlElement = para.toXML();
+        const builder = new XMLBuilder();
+        builder.element(xmlElement.name, xmlElement.attributes, xmlElement.children);
+        const xml = builder.build();
+
+        // Should have keepNext and keepLines
+        expect(xml).toContain('<w:keepNext/>');
+        expect(xml).toContain('<w:keepLines/>');
+
+        // Should NOT have pageBreakBefore
+        expect(xml).not.toContain('<w:pageBreakBefore/>');
+      });
+
+      test('should handle conflicts in constructor formatting', () => {
+        const para = new Paragraph({
+          pageBreakBefore: true,
+          keepNext: false,
+          keepLines: false
+        });
+
+        // Set keepNext after construction
+        para.setKeepNext(true);
+
+        const formatting = para.getFormatting();
+        expect(formatting.keepNext).toBe(true);
+        expect(formatting.pageBreakBefore).toBe(false);
+      });
+    });
   });
 });
