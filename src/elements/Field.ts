@@ -375,3 +375,333 @@ export class Field {
     return new Field(properties);
   }
 }
+
+/**
+ * Field character type for complex fields
+ */
+export type FieldCharType = 'begin' | 'separate' | 'end';
+
+/**
+ * Complex field properties
+ * Complex fields use begin/separate/end structure instead of fldSimple
+ */
+export interface ComplexFieldProperties {
+  /** Field instruction (e.g., " TOC \\o \"1-3\" \\h \\z \\u ") */
+  instruction: string;
+
+  /** Current field result text (optional) */
+  result?: string;
+
+  /** Run formatting for instruction */
+  instructionFormatting?: RunFormatting;
+
+  /** Run formatting for result */
+  resultFormatting?: RunFormatting;
+}
+
+/**
+ * Represents a complex field (begin/separate/end structure)
+ * Used for TOC, cross-references, and other advanced fields
+ *
+ * Structure:
+ * <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+ * <w:r><w:instrText>INSTRUCTION</w:instrText></w:r>
+ * <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+ * <w:r><w:t>RESULT</w:t></w:r>
+ * <w:r><w:fldChar w:fldCharType="end"/></w:r>
+ */
+export class ComplexField {
+  private instruction: string;
+  private result?: string;
+  private instructionFormatting?: RunFormatting;
+  private resultFormatting?: RunFormatting;
+
+  /**
+   * Creates a new complex field
+   * @param properties Complex field properties
+   */
+  constructor(properties: ComplexFieldProperties) {
+    this.instruction = properties.instruction;
+    this.result = properties.result;
+    this.instructionFormatting = properties.instructionFormatting;
+    this.resultFormatting = properties.resultFormatting;
+  }
+
+  /**
+   * Gets the field instruction
+   */
+  getInstruction(): string {
+    return this.instruction;
+  }
+
+  /**
+   * Sets the field instruction
+   */
+  setInstruction(instruction: string): this {
+    this.instruction = instruction;
+    return this;
+  }
+
+  /**
+   * Gets the field result text
+   */
+  getResult(): string | undefined {
+    return this.result;
+  }
+
+  /**
+   * Sets the field result text
+   */
+  setResult(result: string): this {
+    this.result = result;
+    return this;
+  }
+
+  /**
+   * Sets instruction formatting
+   */
+  setInstructionFormatting(formatting: RunFormatting): this {
+    this.instructionFormatting = formatting;
+    return this;
+  }
+
+  /**
+   * Sets result formatting
+   */
+  setResultFormatting(formatting: RunFormatting): this {
+    this.resultFormatting = formatting;
+    return this;
+  }
+
+  /**
+   * Generates XML for the complex field
+   * Returns array of run elements (begin, instr, sep, result, end)
+   */
+  toXML(): XMLElement[] {
+    const runs: XMLElement[] = [];
+
+    // 1. Begin marker run
+    runs.push({
+      name: 'w:r',
+      children: [
+        {
+          name: 'w:fldChar',
+          attributes: { 'w:fldCharType': 'begin' },
+          selfClosing: true,
+        },
+      ],
+    });
+
+    // 2. Instruction run
+    const instrChildren: XMLElement[] = [];
+    if (this.instructionFormatting) {
+      instrChildren.push(this.createRunProperties(this.instructionFormatting));
+    }
+    instrChildren.push({
+      name: 'w:instrText',
+      attributes: { 'xml:space': 'preserve' },
+      children: [this.instruction],
+    });
+    runs.push({
+      name: 'w:r',
+      children: instrChildren,
+    });
+
+    // 3. Separator run
+    runs.push({
+      name: 'w:r',
+      children: [
+        {
+          name: 'w:fldChar',
+          attributes: { 'w:fldCharType': 'separate' },
+          selfClosing: true,
+        },
+      ],
+    });
+
+    // 4. Result run (optional)
+    if (this.result) {
+      const resultChildren: XMLElement[] = [];
+      if (this.resultFormatting) {
+        resultChildren.push(this.createRunProperties(this.resultFormatting));
+      }
+      resultChildren.push({
+        name: 'w:t',
+        attributes: { 'xml:space': 'preserve' },
+        children: [this.result],
+      });
+      runs.push({
+        name: 'w:r',
+        children: resultChildren,
+      });
+    }
+
+    // 5. End marker run
+    runs.push({
+      name: 'w:r',
+      children: [
+        {
+          name: 'w:fldChar',
+          attributes: { 'w:fldCharType': 'end' },
+          selfClosing: true,
+        },
+      ],
+    });
+
+    return runs;
+  }
+
+  /**
+   * Creates run properties XML from formatting
+   */
+  private createRunProperties(formatting: RunFormatting): XMLElement {
+    const children: XMLElement[] = [];
+
+    if (formatting.bold) {
+      children.push({ name: 'w:b', selfClosing: true });
+    }
+
+    if (formatting.italic) {
+      children.push({ name: 'w:i', selfClosing: true });
+    }
+
+    if (formatting.underline) {
+      const val =
+        typeof formatting.underline === 'string'
+          ? formatting.underline
+          : 'single';
+      children.push({
+        name: 'w:u',
+        attributes: { 'w:val': val },
+        selfClosing: true,
+      });
+    }
+
+    if (formatting.strike) {
+      children.push({ name: 'w:strike', selfClosing: true });
+    }
+
+    if (formatting.font) {
+      children.push({
+        name: 'w:rFonts',
+        attributes: {
+          'w:ascii': formatting.font,
+          'w:hAnsi': formatting.font,
+          'w:cs': formatting.font,
+        },
+        selfClosing: true,
+      });
+    }
+
+    if (formatting.size) {
+      const sizeValue = (formatting.size * 2).toString();
+      children.push({
+        name: 'w:sz',
+        attributes: { 'w:val': sizeValue },
+        selfClosing: true,
+      });
+      children.push({
+        name: 'w:szCs',
+        attributes: { 'w:val': sizeValue },
+        selfClosing: true,
+      });
+    }
+
+    if (formatting.color) {
+      const color = formatting.color.replace('#', '');
+      children.push({
+        name: 'w:color',
+        attributes: { 'w:val': color },
+        selfClosing: true,
+      });
+    }
+
+    if (formatting.highlight) {
+      children.push({
+        name: 'w:highlight',
+        attributes: { 'w:val': formatting.highlight },
+        selfClosing: true,
+      });
+    }
+
+    return { name: 'w:rPr', children };
+  }
+}
+
+/**
+ * TOC field options
+ */
+export interface TOCFieldOptions {
+  /** Heading levels to include (e.g., "1-3" for levels 1-3) */
+  levels?: string;
+
+  /** Make entries hyperlinks (\h switch) */
+  hyperlinks?: boolean;
+
+  /** Hide tab leaders and page numbers in Web Layout (\z switch) */
+  hideInWebLayout?: boolean;
+
+  /** Use outline levels (\u switch) */
+  useOutlineLevels?: boolean;
+
+  /** Omit page numbers (\n switch) */
+  omitPageNumbers?: boolean;
+
+  /** Custom styles to use (\t switch) */
+  customStyles?: string;
+}
+
+/**
+ * Creates a TOC (Table of Contents) complex field
+ * Generates proper field instruction with switches
+ *
+ * @param options TOC field options
+ * @returns ComplexField configured for TOC
+ *
+ * @example
+ * const toc = createTOCField({ levels: '1-3', hyperlinks: true });
+ * // Generates: TOC \o "1-3" \h \z \u
+ */
+export function createTOCField(options: TOCFieldOptions = {}): ComplexField {
+  // Build instruction string
+  let instruction = ' TOC';
+
+  // Add outline levels switch
+  if (options.levels !== undefined) {
+    instruction += ` \\o "${options.levels}"`;
+  } else {
+    instruction += ' \\o "1-3"'; // Default: levels 1-3
+  }
+
+  // Add hyperlinks switch
+  if (options.hyperlinks !== false) {
+    instruction += ' \\h';
+  }
+
+  // Add hide in web layout switch
+  if (options.hideInWebLayout !== false) {
+    instruction += ' \\z';
+  }
+
+  // Add use outline levels switch
+  if (options.useOutlineLevels !== false) {
+    instruction += ' \\u';
+  }
+
+  // Add omit page numbers switch
+  if (options.omitPageNumbers) {
+    instruction += ' \\n';
+  }
+
+  // Add custom styles switch
+  if (options.customStyles) {
+    instruction += ` \\t "${options.customStyles}"`;
+  }
+
+  instruction += ' '; // Trailing space per Microsoft convention
+
+  return new ComplexField({
+    instruction,
+    result: 'Table of Contents', // Placeholder result
+  });
+}

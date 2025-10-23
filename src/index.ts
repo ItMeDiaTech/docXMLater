@@ -162,7 +162,16 @@ export { Image, ImageFormat, ImageProperties } from './elements/Image';
 export { ImageManager } from './elements/ImageManager';
 export { ImageRun } from './elements/ImageRun';
 export { FontManager, FontFormat, FontEntry } from './elements/FontManager';
-export { Field, FieldType, FieldProperties } from './elements/Field';
+export {
+  Field,
+  FieldType,
+  FieldProperties,
+  ComplexField,
+  ComplexFieldProperties,
+  FieldCharType,
+  TOCFieldOptions,
+  createTOCField,
+} from './elements/Field';
 export { Header, HeaderType, HeaderProperties } from './elements/Header';
 export { Footer, FooterType, FooterProperties } from './elements/Footer';
 export { HeaderFooterManager } from './elements/HeaderFooterManager';

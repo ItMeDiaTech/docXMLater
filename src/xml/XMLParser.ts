@@ -339,6 +339,57 @@ export class XMLParser {
   }
 
   /**
+   * Extracts a complete self-closing tag with its attributes
+   * Handles cases where multiple similar tags exist (e.g., <w:sz.../> and <w:szCs.../>)
+   *
+   * @param xml - XML string to search
+   * @param tagName - Tag name to find (e.g., "w:color", "w:sz")
+   * @returns The complete tag content (attributes portion) or undefined if not found
+   *
+   * @example
+   * const xml = '<w:sz w:val="36"/><w:color w:val="FF0000"/>';
+   * const colorTag = XMLParser.extractSelfClosingTag(xml, 'w:color');
+   * // Returns: ' w:val="FF0000"'
+   */
+  static extractSelfClosingTag(
+    xml: string,
+    tagName: string
+  ): string | undefined {
+    const startPattern = `<${tagName}`;
+    let searchPos = 0;
+
+    // Search for the exact tag (not tags that start with this pattern)
+    while (true) {
+      const startIdx = xml.indexOf(startPattern, searchPos);
+      if (startIdx === -1) return undefined;
+
+      // Check what character follows the tag name
+      const charAfterTag = xml[startIdx + startPattern.length];
+
+      // Valid separators after tag name: space, '/', or '>'
+      if (charAfterTag === ' ' || charAfterTag === '/' || charAfterTag === '>') {
+        // Found the exact tag, now find its end
+        const endIdx = xml.indexOf('/>', startIdx);
+        if (endIdx === -1) {
+          // Try finding a closing tag instead (non-self-closing)
+          const closeTagStart = xml.indexOf('>', startIdx);
+          if (closeTagStart === -1) return undefined;
+
+          // Return attributes portion
+          return xml.substring(startIdx + startPattern.length, closeTagStart);
+        }
+
+        // Return attributes portion (between tag name and />)
+        return xml.substring(startIdx + startPattern.length, endIdx);
+      }
+
+      // Not the exact tag (e.g., found "w:sz" when looking for "w:s")
+      // Continue searching
+      searchPos = startIdx + 1;
+    }
+  }
+
+  /**
    * Parse XML string to JavaScript object
    * Compatible with fast-xml-parser output format
    *
@@ -753,6 +804,12 @@ export class XMLParser {
   private static parseValue(value: string): string | number | boolean {
     if (value === "true") return true;
     if (value === "false") return false;
+
+    // Preserve hex color codes (3 or 6 hex characters)
+    // These should remain as strings even if they're all digits (e.g., "000000")
+    if (/^[0-9A-Fa-f]{3}$/.test(value) || /^[0-9A-Fa-f]{6}$/.test(value)) {
+      return value.toUpperCase(); // Normalize to uppercase per Microsoft convention
+    }
 
     // Try parsing as number
     if (/^-?\d+$/.test(value)) {

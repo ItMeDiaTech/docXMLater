@@ -1,7 +1,7 @@
 # docXMLater - Professional DOCX Framework
 
 [![npm version](https://img.shields.io/npm/v/docxmlater.svg)](https://www.npmjs.com/package/docxmlater)
-[![Tests](https://img.shields.io/badge/tests-596%20passing-brightgreen)](https://github.com/ItMeDiaTech/docXMLater)
+[![Tests](https://img.shields.io/badge/tests-635%20passing-brightgreen)](https://github.com/ItMeDiaTech/docXMLater)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -9,30 +9,43 @@ A comprehensive, production-ready TypeScript/JavaScript library for creating, re
 
 I do a lot of professional documentation work. From the solutions that exist out there for working with .docx files and therefore .xml files, they are not amazing. Most of the frameworks that exist that do give you everything you want... charge thousands a year. I decided to make my own framework to interact with these filetypes and focus on ease of usability. All functionality works with helper functions to interact with all aspects of a .docx / xml document.
 
-## ✨ Latest Updates - v0.29.0
+## ✨ Latest Updates - v0.31.0
 
-**100% Test Coverage Achieved!** Major bug fix release with 44 critical fixes:
+**ComplexField Support & Critical Bug Fixes!** Major enhancement release:
 
-### Critical Fixes
-- **Text Parsing:** Fixed complete text loss during document load/save cycles
-- **Hyperlink Support:** Implemented full hyperlink parsing and relationship preservation
-- **Table Parsing:** Implemented complete table structure parsing (was returning null)
-- **XML Escaping:** Fixed 3 broken escape functions causing corruption with special characters
-- **Document Parts API:** Fixed Buffer/string type conversion for text files
-- **Conflict Resolution:** Auto-resolve pageBreakBefore + keepNext/keepLines conflicts
-- **XML Validation:** Added self-closing tag validation to prevent Word corruption
-- **Element Order:** Preserve correct paragraph/table order through load/save cycles
+### New Features
+- **ComplexField Support:** Full implementation of begin/separate/end field structure per ECMA-376
+- **TOC Field Generator:** `createTOCField()` with all switches (\o, \h, \z, \u, \n, \t)
+- **Advanced Fields:** Foundation for cross-references, indexes, and dynamic content
+- **Style Color Fix:** Fixed critical bug where hex colors were corrupted during load/save
 
-### What's Fixed
-- Text preservation through save/load cycles (including Unicode, emoji, special chars)
-- Hyperlink parsing with formatting, tooltips, and relationship IDs
-- Table parsing and element order preservation
-- XML entity escaping in document properties
-- Boolean property XML generation (w:b, w:i, w:keepNext, etc.)
-- Section default values (columns, type)
-- Whitespace preservation with xml:space="preserve"
+### What's New
+- `ComplexField` class for TOC, cross-references, and advanced field types
+- `createTOCField()` function with customizable options (levels, hyperlinks, styles)
+- Fixed style color parsing (colors no longer corrupted to size values)
+- New `XMLParser.extractSelfClosingTag()` for accurate XML parsing
+- 41 new comprehensive tests (StylesRoundTrip + ComplexField)
 
-**Test Results:** 596/596 tests passing (100% - up from 92.7%)
+### Field Support
+```typescript
+import { createTOCField, ComplexField } from 'docxmlater';
+
+// Create TOC with custom options
+const toc = createTOCField({
+  levels: '1-3',
+  hyperlinks: true,
+  omitPageNumbers: false
+});
+
+// Create custom complex field
+const field = new ComplexField({
+  instruction: ' PAGE \\* MERGEFORMAT ',
+  result: '1',
+  resultFormatting: { bold: true }
+});
+```
+
+**Test Results:** 635/635 tests passing (100% - up from 596)
 
 ## Quick Start
 

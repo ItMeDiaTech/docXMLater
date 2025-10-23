@@ -1455,8 +1455,8 @@ export class DocumentParser {
       formatting.allCaps = true;
     }
 
-    // Parse underline
-    const uElement = XMLParser.extractBetweenTags(rPrXml, "<w:u", "/>");
+    // Parse underline - use extractSelfClosingTag for accuracy
+    const uElement = XMLParser.extractSelfClosingTag(rPrXml, "w:u");
     if (uElement) {
       const uVal = XMLParser.extractAttribute(`<w:u${uElement}`, "w:val");
       if (
@@ -1477,11 +1477,10 @@ export class DocumentParser {
       }
     }
 
-    // Parse subscript/superscript
-    const vertAlignElement = XMLParser.extractBetweenTags(
+    // Parse subscript/superscript - use extractSelfClosingTag
+    const vertAlignElement = XMLParser.extractSelfClosingTag(
       rPrXml,
-      "<w:vertAlign",
-      "/>"
+      "w:vertAlign"
     );
     if (vertAlignElement) {
       const val = XMLParser.extractAttribute(
@@ -1495,12 +1494,8 @@ export class DocumentParser {
       }
     }
 
-    // Parse font (w:rFonts)
-    const rFontsElement = XMLParser.extractBetweenTags(
-      rPrXml,
-      "<w:rFonts",
-      "/>"
-    );
+    // Parse font (w:rFonts) - use extractSelfClosingTag
+    const rFontsElement = XMLParser.extractSelfClosingTag(rPrXml, "w:rFonts");
     if (rFontsElement) {
       const ascii = XMLParser.extractAttribute(
         `<w:rFonts${rFontsElement}`,
@@ -1512,7 +1507,8 @@ export class DocumentParser {
     }
 
     // Parse size (w:sz) - size is in half-points
-    const szElement = XMLParser.extractBetweenTags(rPrXml, "<w:sz", "/>");
+    // Use extractSelfClosingTag to avoid matching w:szCs
+    const szElement = XMLParser.extractSelfClosingTag(rPrXml, "w:sz");
     if (szElement) {
       const val = XMLParser.extractAttribute(`<w:sz${szElement}`, "w:val");
       if (val) {
@@ -1521,7 +1517,8 @@ export class DocumentParser {
     }
 
     // Parse color (w:color)
-    const colorElement = XMLParser.extractBetweenTags(rPrXml, "<w:color", "/>");
+    // Use extractSelfClosingTag to avoid matching other tags
+    const colorElement = XMLParser.extractSelfClosingTag(rPrXml, "w:color");
     if (colorElement) {
       const val = XMLParser.extractAttribute(
         `<w:color${colorElement}`,
@@ -1532,11 +1529,10 @@ export class DocumentParser {
       }
     }
 
-    // Parse highlight (w:highlight)
-    const highlightElement = XMLParser.extractBetweenTags(
+    // Parse highlight (w:highlight) - use extractSelfClosingTag
+    const highlightElement = XMLParser.extractSelfClosingTag(
       rPrXml,
-      "<w:highlight",
-      "/>"
+      "w:highlight"
     );
     if (highlightElement) {
       const val = XMLParser.extractAttribute(
