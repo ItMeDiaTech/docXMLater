@@ -691,6 +691,68 @@ export class DocumentParser {
         paragraph.setTabs(tabs);
       }
     }
+
+    // Widow control per ECMA-376 Part 1 §17.3.1.40
+    if (pPrObj["w:widowControl"] !== undefined) {
+      const widowControlVal = pPrObj["w:widowControl"]?.["@_w:val"];
+      // Parse w:val attribute - can be "0"/"1" or "false"/"true"
+      if (widowControlVal === "0" || widowControlVal === "false" || widowControlVal === false || widowControlVal === 0) {
+        paragraph.setWidowControl(false);
+      } else {
+        // If w:val is "1", "true", true, 1, or undefined (element present without val), default to true
+        paragraph.setWidowControl(true);
+      }
+    }
+
+    // Outline level per ECMA-376 Part 1 §17.3.1.19
+    if (pPrObj["w:outlineLvl"] !== undefined && pPrObj["w:outlineLvl"]["@_w:val"] !== undefined) {
+      const level = parseInt(pPrObj["w:outlineLvl"]["@_w:val"], 10);
+      if (!isNaN(level) && level >= 0 && level <= 9) {
+        paragraph.setOutlineLevel(level);
+      }
+    }
+
+    // Suppress line numbers per ECMA-376 Part 1 §17.3.1.34
+    if (pPrObj["w:suppressLineNumbers"]) {
+      paragraph.setSuppressLineNumbers(true);
+    }
+
+    // Bidirectional layout per ECMA-376 Part 1 §17.3.1.6
+    if (pPrObj["w:bidi"] !== undefined) {
+      const bidiVal = pPrObj["w:bidi"]?.["@_w:val"];
+      if (bidiVal === "0" || bidiVal === "false" || bidiVal === false || bidiVal === 0) {
+        paragraph.setBidi(false);
+      } else {
+        // Default is true when element present without val attribute or val="1"
+        paragraph.setBidi(true);
+      }
+    }
+
+    // Text direction per ECMA-376 Part 1 §17.3.1.36
+    if (pPrObj["w:textDirection"]?.["@_w:val"]) {
+      paragraph.setTextDirection(pPrObj["w:textDirection"]["@_w:val"]);
+    }
+
+    // Text vertical alignment per ECMA-376 Part 1 §17.3.1.35
+    if (pPrObj["w:textAlignment"]?.["@_w:val"]) {
+      paragraph.setTextAlignment(pPrObj["w:textAlignment"]["@_w:val"]);
+    }
+
+    // Mirror indents per ECMA-376 Part 1 §17.3.1.18
+    if (pPrObj["w:mirrorIndents"]) {
+      paragraph.setMirrorIndents(true);
+    }
+
+    // Auto-adjust right indent per ECMA-376 Part 1 §17.3.1.1
+    if (pPrObj["w:adjustRightInd"] !== undefined) {
+      const adjustRightIndVal = pPrObj["w:adjustRightInd"]?.["@_w:val"];
+      if (adjustRightIndVal === "0" || adjustRightIndVal === "false" || adjustRightIndVal === false || adjustRightIndVal === 0) {
+        paragraph.setAdjustRightInd(false);
+      } else {
+        // Default is true when element present without val attribute or val="1"
+        paragraph.setAdjustRightInd(true);
+      }
+    }
   }
 
   private parseRunFromObject(runObj: any): Run | null {

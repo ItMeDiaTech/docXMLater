@@ -38,6 +38,16 @@ export type TabAlignment = 'clear' | 'left' | 'center' | 'right' | 'decimal' | '
 export type TabLeader = 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 
 /**
+ * Text direction types for paragraphs
+ */
+export type TextDirection = 'lrTb' | 'tbRl' | 'btLr' | 'lrTbV' | 'tbRlV' | 'tbLrV';
+
+/**
+ * Text vertical alignment types
+ */
+export type TextAlignment = 'top' | 'center' | 'baseline' | 'bottom' | 'auto';
+
+/**
  * Single border definition
  */
 export interface BorderDefinition {
@@ -120,6 +130,22 @@ export interface ParagraphFormatting {
   };
   /** Tab stops */
   tabs?: TabStop[];
+  /** Widow/orphan control - prevents single lines at top/bottom of pages */
+  widowControl?: boolean;
+  /** Outline level (0-9) for table of contents hierarchy */
+  outlineLevel?: number;
+  /** Suppress line numbers for this paragraph */
+  suppressLineNumbers?: boolean;
+  /** Right-to-left paragraph layout (for Arabic, Hebrew, etc.) */
+  bidi?: boolean;
+  /** Text flow direction */
+  textDirection?: TextDirection;
+  /** Vertical text alignment */
+  textAlignment?: TextAlignment;
+  /** Use inside/outside indents instead of left/right (for double-sided printing) */
+  mirrorIndents?: boolean;
+  /** Auto-adjust right indent when document grid is defined */
+  adjustRightInd?: boolean;
 }
 
 /**
@@ -633,20 +659,139 @@ export class Paragraph {
   }
 
   /**
+   * Sets widow/orphan control for this paragraph
+   * Controls whether to prevent single lines at the top or bottom of a page.
+   * Word's default is true - set to false to allow widows/orphans.
+   * Per ECMA-376 Part 1 §17.3.1.40
+   * @param enable - Whether to enable widow/orphan control
+   * @returns This paragraph for chaining
+   */
+  setWidowControl(enable: boolean = true): this {
+    this.formatting.widowControl = enable;
+    return this;
+  }
+
+  /**
+   * Sets outline level for this paragraph (for table of contents)
+   * Level 0-9 indicates hierarchy in document structure.
+   * Level 0 = highest level (like Heading 1)
+   * Level 9 = lowest level
+   * Per ECMA-376 Part 1 §17.3.1.19
+   * @param level - Outline level (0-9)
+   * @returns This paragraph for chaining
+   */
+  setOutlineLevel(level: number): this {
+    if (level < 0 || level > 9) {
+      throw new Error('Outline level must be between 0 and 9');
+    }
+    this.formatting.outlineLevel = level;
+    return this;
+  }
+
+  /**
+   * Sets whether to suppress line numbers for this paragraph
+   * Per ECMA-376 Part 1 §17.3.1.34
+   * @param suppress - Whether to suppress line numbers
+   * @returns This paragraph for chaining
+   */
+  setSuppressLineNumbers(suppress: boolean = true): this {
+    this.formatting.suppressLineNumbers = suppress;
+    return this;
+  }
+
+  /**
+   * Sets bidirectional text layout (right-to-left)
+   * Enables right-to-left paragraph layout for languages like Arabic and Hebrew.
+   * Per ECMA-376 Part 1 §17.3.1.6
+   * @param enable - Whether to enable bidirectional (RTL) layout
+   * @returns This paragraph for chaining
+   */
+  setBidi(enable: boolean = true): this {
+    this.formatting.bidi = enable;
+    return this;
+  }
+
+  /**
+   * Sets text flow direction for this paragraph
+   * Per ECMA-376 Part 1 §17.3.1.36
+   * @param direction - Text flow direction
+   *   - 'lrTb': Left-to-right, top-to-bottom (default for English)
+   *   - 'tbRl': Top-to-bottom, right-to-left (traditional Chinese/Japanese)
+   *   - 'btLr': Bottom-to-top, left-to-right (Mongolian)
+   *   - 'lrTbV': Left-to-right, top-to-bottom vertical
+   *   - 'tbRlV': Top-to-bottom, right-to-left vertical
+   *   - 'tbLrV': Top-to-bottom, left-to-right vertical
+   * @returns This paragraph for chaining
+   */
+  setTextDirection(direction: TextDirection): this {
+    this.formatting.textDirection = direction;
+    return this;
+  }
+
+  /**
+   * Sets vertical text alignment for this paragraph
+   * Per ECMA-376 Part 1 §17.3.1.35
+   * @param alignment - Vertical alignment
+   *   - 'top': Align to top of line
+   *   - 'center': Align to center of line
+   *   - 'baseline': Align to baseline
+   *   - 'bottom': Align to bottom of line
+   *   - 'auto': Automatic alignment
+   * @returns This paragraph for chaining
+   */
+  setTextAlignment(alignment: TextAlignment): this {
+    this.formatting.textAlignment = alignment;
+    return this;
+  }
+
+  /**
+   * Sets mirror indents for this paragraph
+   * When enabled, uses inside/outside indents instead of left/right for double-sided printing.
+   * Per ECMA-376 Part 1 §17.3.1.18
+   * @param enable - Whether to enable mirror indents
+   * @returns This paragraph for chaining
+   */
+  setMirrorIndents(enable: boolean = true): this {
+    this.formatting.mirrorIndents = enable;
+    return this;
+  }
+
+  /**
+   * Sets auto-adjust right indent for this paragraph
+   * When enabled, automatically adjusts right indent when a document grid is defined.
+   * Per ECMA-376 Part 1 §17.3.1.1
+   * @param enable - Whether to enable auto-adjust right indent
+   * @returns This paragraph for chaining
+   */
+  setAdjustRightInd(enable: boolean = true): this {
+    this.formatting.adjustRightInd = enable;
+    return this;
+  }
+
+  /**
    * Converts the paragraph to WordprocessingML XML element
    *
    * **ECMA-376 Compliance:** Properties are generated in the order specified by
    * ECMA-376 Part 1 §17.3.1.26 to ensure strict OpenXML conformance.
    *
-   * Per spec, the order is:
+   * Per spec, the order includes (partial list):
    * 1. pStyle (style reference)
    * 2. keepNext (keep with next paragraph)
    * 3. keepLines (keep lines together)
    * 4. pageBreakBefore (page break before)
-   * 5. numPr (numbering properties)
-   * 6. spacing (spacing before/after/line)
-   * 7. ind (indentation)
-   * 8. jc (justification/alignment)
+   * 5. widowControl (widow/orphan control)
+   * 6. numPr (numbering properties)
+   * 7. suppressLineNumbers (suppress line numbers)
+   * 8-10. borders, shading, tabs
+   * 11-19. East Asian typography properties
+   * 20. bidi (bidirectional layout)
+   * 21. adjustRightInd (auto-adjust right indent)
+   * 22. spacing, indentation, contextualSpacing
+   * 23. mirrorIndents (mirror indents)
+   * 24. jc (justification/alignment)
+   * 25. textAlignment (vertical text alignment)
+   * 26. textDirection (text flow direction)
+   * 27. outlineLvl (outline level)
    *
    * @returns XMLElement representing the paragraph
    */
@@ -673,7 +818,12 @@ export class Paragraph {
       pPrChildren.push(XMLBuilder.wSelf('pageBreakBefore'));
     }
 
-    // 5. Numbering properties
+    // 5. Widow/orphan control per ECMA-376 Part 1 §17.3.1.40
+    if (this.formatting.widowControl !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf('widowControl', { 'w:val': this.formatting.widowControl ? '1' : '0' }));
+    }
+
+    // 6. Numbering properties
     if (this.formatting.numbering) {
       const numPr = XMLBuilder.w('numPr', undefined, [
         XMLBuilder.wSelf('ilvl', { 'w:val': this.formatting.numbering.level.toString() }),
@@ -682,7 +832,12 @@ export class Paragraph {
       pPrChildren.push(numPr);
     }
 
-    // 6. Spacing (before/after/line) per ECMA-376 Part 1 §17.3.1.33
+    // 7. Suppress line numbers per ECMA-376 Part 1 §17.3.1.34
+    if (this.formatting.suppressLineNumbers) {
+      pPrChildren.push(XMLBuilder.wSelf('suppressLineNumbers'));
+    }
+
+    // 8. Spacing (before/after/line) per ECMA-376 Part 1 §17.3.1.33
     if (this.formatting.spacing) {
       const spc = this.formatting.spacing;
       const attributes: Record<string, number | string> = {};
@@ -713,6 +868,11 @@ export class Paragraph {
       if (Object.keys(attributes).length > 0) {
         pPrChildren.push(XMLBuilder.wSelf('ind', attributes));
       }
+    }
+
+    // 7a. Mirror indents per ECMA-376 Part 1 §17.3.1.18
+    if (this.formatting.mirrorIndents) {
+      pPrChildren.push(XMLBuilder.wSelf('mirrorIndents'));
     }
 
     // 8. Paragraph borders per ECMA-376 Part 1 §17.3.1.24
@@ -785,11 +945,36 @@ export class Paragraph {
       }
     }
 
-    // 11. Justification/Alignment (must be last per ECMA-376 §17.3.1.26)
+    // 11. Bidirectional layout per ECMA-376 Part 1 §17.3.1.6
+    if (this.formatting.bidi !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf('bidi', { 'w:val': this.formatting.bidi ? '1' : '0' }));
+    }
+
+    // 12. Auto-adjust right indent per ECMA-376 Part 1 §17.3.1.1
+    if (this.formatting.adjustRightInd !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf('adjustRightInd', { 'w:val': this.formatting.adjustRightInd ? '1' : '0' }));
+    }
+
+    // 13. Justification/Alignment per ECMA-376 §17.3.1.13
     if (this.formatting.alignment) {
       // Map 'justify' to 'both' per ECMA-376 (Word uses 'both' for justified text)
       const alignmentValue = this.formatting.alignment === 'justify' ? 'both' : this.formatting.alignment;
       pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': alignmentValue }));
+    }
+
+    // 14. Text vertical alignment per ECMA-376 Part 1 §17.3.1.35
+    if (this.formatting.textAlignment) {
+      pPrChildren.push(XMLBuilder.wSelf('textAlignment', { 'w:val': this.formatting.textAlignment }));
+    }
+
+    // 15. Text direction per ECMA-376 Part 1 §17.3.1.36
+    if (this.formatting.textDirection) {
+      pPrChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': this.formatting.textDirection }));
+    }
+
+    // 16. Outline level per ECMA-376 Part 1 §17.3.1.19
+    if (this.formatting.outlineLevel !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf('outlineLvl', { 'w:val': this.formatting.outlineLevel.toString() }));
     }
 
     // Build paragraph element
