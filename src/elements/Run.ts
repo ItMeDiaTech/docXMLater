@@ -43,6 +43,22 @@ export interface CharacterShading {
 }
 
 /**
+ * East Asian typography layout options
+ */
+export interface EastAsianLayout {
+  /** Layout ID for specific Asian typography */
+  id?: number;
+  /** Vertical text layout */
+  vert?: boolean;
+  /** Compress vertical text */
+  vertCompress?: boolean;
+  /** Combine characters into single character space */
+  combine?: boolean;
+  /** Bracket characters for combined text */
+  combineBrackets?: 'none' | 'round' | 'square' | 'angle' | 'curly';
+}
+
+/**
  * Emphasis mark type - decorative marks above/below text
  */
 export type EmphasisMark = 'dot' | 'comma' | 'circle' | 'underDot';
@@ -99,6 +115,30 @@ export interface RunFormatting {
   smallCaps?: boolean;
   /** All caps */
   allCaps?: boolean;
+  /** Outline text effect - displays text with an outline */
+  outline?: boolean;
+  /** Shadow text effect - displays text with a shadow */
+  shadow?: boolean;
+  /** Emboss text effect - displays text with a 3D embossed appearance */
+  emboss?: boolean;
+  /** Imprint/engrave text effect - displays text with a pressed-in appearance */
+  imprint?: boolean;
+  /** Right-to-left text direction (for languages like Arabic, Hebrew) */
+  rtl?: boolean;
+  /** Hidden/vanish text (not displayed but present in document) */
+  vanish?: boolean;
+  /** No proofing - skip spell check and grammar check for this text */
+  noProof?: boolean;
+  /** Snap to grid - align text to document grid */
+  snapToGrid?: boolean;
+  /** Special vanish - hidden text for specific scenarios (like TOC entries) */
+  specVanish?: boolean;
+  /** Text effect/animation type */
+  effect?: 'none' | 'lights' | 'blinkBackground' | 'sparkleText' | 'marchingBlackAnts' | 'marchingRedAnts' | 'shimmer' | 'antsBlack' | 'antsRed';
+  /** Fit text to width in twips (1/20th of a point) */
+  fitText?: number;
+  /** East Asian typography layout options */
+  eastAsianLayout?: EastAsianLayout;
   /**
    * Automatically clean XML-like patterns from text content.
    * When true (default), removes XML tags like <w:t> from text to prevent display issues.
@@ -433,6 +473,126 @@ export class Run {
   }
 
   /**
+   * Sets outline text effect
+   * @param outline - Whether to apply outline effect (default: true)
+   * @returns This run for method chaining
+   */
+  setOutline(outline: boolean = true): this {
+    this.formatting.outline = outline;
+    return this;
+  }
+
+  /**
+   * Sets shadow text effect
+   * @param shadow - Whether to apply shadow effect (default: true)
+   * @returns This run for method chaining
+   */
+  setShadow(shadow: boolean = true): this {
+    this.formatting.shadow = shadow;
+    return this;
+  }
+
+  /**
+   * Sets emboss text effect
+   * @param emboss - Whether to apply emboss effect (default: true)
+   * @returns This run for method chaining
+   */
+  setEmboss(emboss: boolean = true): this {
+    this.formatting.emboss = emboss;
+    return this;
+  }
+
+  /**
+   * Sets imprint/engrave text effect
+   * @param imprint - Whether to apply imprint effect (default: true)
+   * @returns This run for method chaining
+   */
+  setImprint(imprint: boolean = true): this {
+    this.formatting.imprint = imprint;
+    return this;
+  }
+
+  /**
+   * Sets right-to-left text direction
+   * @param rtl - Whether text is RTL (default: true)
+   * @returns This run for method chaining
+   */
+  setRTL(rtl: boolean = true): this {
+    this.formatting.rtl = rtl;
+    return this;
+  }
+
+  /**
+   * Sets hidden/vanish text
+   * @param vanish - Whether text is hidden (default: true)
+   * @returns This run for method chaining
+   */
+  setVanish(vanish: boolean = true): this {
+    this.formatting.vanish = vanish;
+    return this;
+  }
+
+  /**
+   * Sets no proofing (skip spell/grammar check)
+   * @param noProof - Whether to skip proofing (default: true)
+   * @returns This run for method chaining
+   */
+  setNoProof(noProof: boolean = true): this {
+    this.formatting.noProof = noProof;
+    return this;
+  }
+
+  /**
+   * Sets snap to grid alignment
+   * @param snapToGrid - Whether to snap to grid (default: true)
+   * @returns This run for method chaining
+   */
+  setSnapToGrid(snapToGrid: boolean = true): this {
+    this.formatting.snapToGrid = snapToGrid;
+    return this;
+  }
+
+  /**
+   * Sets special vanish (hidden for specific scenarios like TOC)
+   * @param specVanish - Whether to apply special vanish (default: true)
+   * @returns This run for method chaining
+   */
+  setSpecVanish(specVanish: boolean = true): this {
+    this.formatting.specVanish = specVanish;
+    return this;
+  }
+
+  /**
+   * Sets text effect/animation
+   * @param effect - Effect type (e.g., 'shimmer', 'sparkleText')
+   * @returns This run for method chaining
+   */
+  setEffect(effect: 'none' | 'lights' | 'blinkBackground' | 'sparkleText' | 'marchingBlackAnts' | 'marchingRedAnts' | 'shimmer' | 'antsBlack' | 'antsRed'): this {
+    this.formatting.effect = effect;
+    return this;
+  }
+
+  /**
+   * Sets fit text to width
+   * @param width - Width in twips (1/20th of a point)
+   * @returns This run for method chaining
+   */
+  setFitText(width: number): this {
+    this.formatting.fitText = width;
+    return this;
+  }
+
+  /**
+   * Sets East Asian typography layout
+   * @param layout - East Asian layout options
+   * @returns This run for method chaining
+   */
+  setEastAsianLayout(layout: EastAsianLayout): this {
+    this.formatting.eastAsianLayout = layout;
+    return this;
+  }
+
+  /**
    * Converts the run to WordprocessingML XML element
    *
    * **ECMA-376 Compliance:** Properties are generated in the order specified by
@@ -538,6 +698,51 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('em', { 'w:val': this.formatting.emphasis }));
     }
 
+    // 6.6. Outline text effect (w:outline) per ECMA-376 Part 1 §17.3.2.23
+    if (this.formatting.outline) {
+      rPrChildren.push(XMLBuilder.wSelf('outline'));
+    }
+
+    // 6.7. Shadow text effect (w:shadow) per ECMA-376 Part 1 §17.3.2.32
+    if (this.formatting.shadow) {
+      rPrChildren.push(XMLBuilder.wSelf('shadow'));
+    }
+
+    // 6.8. Emboss text effect (w:emboss) per ECMA-376 Part 1 §17.3.2.13
+    if (this.formatting.emboss) {
+      rPrChildren.push(XMLBuilder.wSelf('emboss'));
+    }
+
+    // 6.9. Imprint/engrave text effect (w:imprint) per ECMA-376 Part 1 §17.3.2.18
+    if (this.formatting.imprint) {
+      rPrChildren.push(XMLBuilder.wSelf('imprint'));
+    }
+
+    // 6.10. No proofing (w:noProof) per ECMA-376 Part 1 §17.3.2.21
+    if (this.formatting.noProof) {
+      rPrChildren.push(XMLBuilder.wSelf('noProof'));
+    }
+
+    // 6.11. Snap to grid (w:snapToGrid) per ECMA-376 Part 1 §17.3.2.35
+    if (this.formatting.snapToGrid) {
+      rPrChildren.push(XMLBuilder.wSelf('snapToGrid'));
+    }
+
+    // 6.12. Vanish/hidden (w:vanish) per ECMA-376 Part 1 §17.3.2.42
+    if (this.formatting.vanish) {
+      rPrChildren.push(XMLBuilder.wSelf('vanish'));
+    }
+
+    // 6.12.5. Special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
+    if (this.formatting.specVanish) {
+      rPrChildren.push(XMLBuilder.wSelf('specVanish'));
+    }
+
+    // 6.13. RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
+    if (this.formatting.rtl) {
+      rPrChildren.push(XMLBuilder.wSelf('rtl'));
+    }
+
     // 7. Strikethrough
     if (this.formatting.strike) {
       rPrChildren.push(XMLBuilder.wSelf('strike'));
@@ -577,6 +782,31 @@ export class Run {
     // 8.9. Language (w:lang) per ECMA-376 Part 1 §17.3.2.20
     if (this.formatting.language) {
       rPrChildren.push(XMLBuilder.wSelf('lang', { 'w:val': this.formatting.language }));
+    }
+
+    // 8.9.5. East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
+    if (this.formatting.eastAsianLayout) {
+      const layout = this.formatting.eastAsianLayout;
+      const attrs: Record<string, string | number> = {};
+      if (layout.id !== undefined) attrs['w:id'] = layout.id;
+      if (layout.vert) attrs['w:vert'] = '1';
+      if (layout.vertCompress) attrs['w:vertCompress'] = '1';
+      if (layout.combine) attrs['w:combine'] = '1';
+      if (layout.combineBrackets) attrs['w:combineBrackets'] = layout.combineBrackets;
+
+      if (Object.keys(attrs).length > 0) {
+        rPrChildren.push(XMLBuilder.wSelf('eastAsianLayout', attrs));
+      }
+    }
+
+    // 8.10. Fit text to width (w:fitText) per ECMA-376 Part 1 §17.3.2.15
+    if (this.formatting.fitText !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('fitText', { 'w:val': this.formatting.fitText }));
+    }
+
+    // 8.11. Text effect/animation (w:effect) per ECMA-376 Part 1 §17.3.2.12
+    if (this.formatting.effect) {
+      rPrChildren.push(XMLBuilder.wSelf('effect', { 'w:val': this.formatting.effect }));
     }
 
     // 9. Font size

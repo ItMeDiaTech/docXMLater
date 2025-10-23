@@ -820,6 +820,33 @@ export class DocumentParser {
       if (val) run.setEmphasis(val as any);
     }
 
+    // Parse outline text effect (w:outline) per ECMA-376 Part 1 §17.3.2.23
+    if (rPrObj["w:outline"]) run.setOutline(true);
+
+    // Parse shadow text effect (w:shadow) per ECMA-376 Part 1 §17.3.2.32
+    if (rPrObj["w:shadow"]) run.setShadow(true);
+
+    // Parse emboss text effect (w:emboss) per ECMA-376 Part 1 §17.3.2.13
+    if (rPrObj["w:emboss"]) run.setEmboss(true);
+
+    // Parse imprint text effect (w:imprint) per ECMA-376 Part 1 §17.3.2.18
+    if (rPrObj["w:imprint"]) run.setImprint(true);
+
+    // Parse no proofing (w:noProof) per ECMA-376 Part 1 §17.3.2.21
+    if (rPrObj["w:noProof"]) run.setNoProof(true);
+
+    // Parse snap to grid (w:snapToGrid) per ECMA-376 Part 1 §17.3.2.35
+    if (rPrObj["w:snapToGrid"]) run.setSnapToGrid(true);
+
+    // Parse vanish/hidden (w:vanish) per ECMA-376 Part 1 §17.3.2.42
+    if (rPrObj["w:vanish"]) run.setVanish(true);
+
+    // Parse special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
+    if (rPrObj["w:specVanish"]) run.setSpecVanish(true);
+
+    // Parse RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
+    if (rPrObj["w:rtl"]) run.setRTL(true);
+
     if (rPrObj["w:b"]) run.setBold(true);
     if (rPrObj["w:bCs"]) run.setComplexScriptBold(true);
     if (rPrObj["w:i"]) run.setItalic(true);
@@ -862,6 +889,33 @@ export class DocumentParser {
     if (rPrObj["w:lang"]) {
       const val = rPrObj["w:lang"]["@_w:val"];
       if (val) run.setLanguage(val);
+    }
+
+    // Parse East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
+    if (rPrObj["w:eastAsianLayout"]) {
+      const layoutObj = rPrObj["w:eastAsianLayout"];
+      const layout: any = {};
+      if (layoutObj["@_w:id"] !== undefined) layout.id = Number(layoutObj["@_w:id"]);
+      if (layoutObj["@_w:vert"]) layout.vert = true;
+      if (layoutObj["@_w:vertCompress"]) layout.vertCompress = true;
+      if (layoutObj["@_w:combine"]) layout.combine = true;
+      if (layoutObj["@_w:combineBrackets"]) layout.combineBrackets = layoutObj["@_w:combineBrackets"];
+
+      if (Object.keys(layout).length > 0) {
+        run.setEastAsianLayout(layout);
+      }
+    }
+
+    // Parse fit text (w:fitText) per ECMA-376 Part 1 §17.3.2.15
+    if (rPrObj["w:fitText"]) {
+      const val = rPrObj["w:fitText"]["@_w:val"];
+      if (val !== undefined) run.setFitText(Number(val));
+    }
+
+    // Parse text effect (w:effect) per ECMA-376 Part 1 §17.3.2.12
+    if (rPrObj["w:effect"]) {
+      const val = rPrObj["w:effect"]["@_w:val"];
+      if (val) run.setEffect(val as any);
     }
 
     if (rPrObj["w:vertAlign"]) {

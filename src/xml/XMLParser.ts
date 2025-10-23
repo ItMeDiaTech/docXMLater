@@ -805,13 +805,15 @@ export class XMLParser {
     if (value === "true") return true;
     if (value === "false") return false;
 
-    // Preserve hex color codes (3 or 6 hex characters)
-    // These should remain as strings even if they're all digits (e.g., "000000")
-    if (/^[0-9A-Fa-f]{3}$/.test(value) || /^[0-9A-Fa-f]{6}$/.test(value)) {
+    // Preserve 6-character hex color codes (OpenXML standard for colors)
+    // This includes "000000" (black) which should stay as a string
+    if (/^[0-9A-Fa-f]{6}$/.test(value)) {
       return value.toUpperCase(); // Normalize to uppercase per Microsoft convention
     }
 
     // Try parsing as number
+    // 3-character values like "240" will be parsed as numbers
+    // 6-character hex values are already handled above
     if (/^-?\d+$/.test(value)) {
       const num = parseInt(value, 10);
       if (!isNaN(num)) return num;
@@ -820,6 +822,12 @@ export class XMLParser {
     if (/^-?\d+\.\d+$/.test(value)) {
       const num = parseFloat(value);
       if (!isNaN(num)) return num;
+    }
+
+    // Preserve 3-character hex codes (like "F0A") that have letters
+    // Pure numeric 3-char values (like "240") are already parsed as numbers above
+    if (/^[0-9A-Fa-f]{3}$/.test(value) && /[A-Fa-f]/.test(value)) {
+      return value.toUpperCase();
     }
 
     return value;
