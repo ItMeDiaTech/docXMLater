@@ -378,30 +378,55 @@ ${properties}
       }
     };
 
-    // Scan body elements
-    for (const element of bodyElements) {
+    // Helper to recursively scan any element type for hyperlinks
+    const scanElement = (element: BodyElement | Paragraph | Table | StructuredDocumentTag): void => {
       if (element instanceof Paragraph) {
+        // Scan paragraph content for hyperlinks
         scanParagraph(element);
       }
+      else if (element instanceof Table) {
+        // Scan all cells in the table
+        for (let row = 0; row < element.getRowCount(); row++) {
+          for (let col = 0; col < element.getColumnCount(); col++) {
+            const cell = element.getCell(row, col);
+            if (cell) {
+              // Scan each paragraph in the cell
+              const paragraphs = cell.getParagraphs();
+              for (const para of paragraphs) {
+                scanParagraph(para);
+              }
+            }
+          }
+        }
+      }
+      else if (element instanceof StructuredDocumentTag) {
+        // Recursively scan SDT content (can contain Paragraphs, Tables, or nested SDTs)
+        const content = element.getContent();
+        for (const item of content) {
+          scanElement(item); // Recursive call handles nested structures
+        }
+      }
+      // TableOfContentsElement is for programmatic TOCs - real TOCs come as SDTs
+    };
+
+    // Scan body elements (handles all nested structures)
+    for (const element of bodyElements) {
+      scanElement(element);
     }
 
-    // Scan headers
+    // Scan headers (including tables and SDTs in headers)
     const headers = headerFooterManager.getAllHeaders();
     for (const header of headers) {
       for (const element of header.header.getElements()) {
-        if (element instanceof Paragraph) {
-          scanParagraph(element);
-        }
+        scanElement(element);
       }
     }
 
-    // Scan footers
+    // Scan footers (including tables and SDTs in footers)
     const footers = headerFooterManager.getAllFooters();
     for (const footer of footers) {
       for (const element of footer.footer.getElements()) {
-        if (element instanceof Paragraph) {
-          scanParagraph(element);
-        }
+        scanElement(element);
       }
     }
 
