@@ -3,7 +3,7 @@
  */
 
 import { TableRow, RowFormatting } from './TableRow';
-import { TableCell } from './TableCell';
+import { TableCell, CellFormatting } from './TableCell';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
@@ -420,6 +420,169 @@ export class Table {
   setTblLook(tblLook: string): this {
     this.formatting.tblLook = tblLook;
     return this;
+  }
+
+  /**
+   * Applies conditional formatting to table cells based on rules
+   *
+   * Enables advanced table formatting including:
+   * - Automatic header row detection and styling
+   * - Alternating row colors (zebra striping)
+   * - Content-based formatting rules
+   *
+   * @param rules - Conditional formatting rules
+   * @returns This table for chaining
+   *
+   * @example
+   * ```typescript
+   * // Apply header formatting and alternating rows
+   * table.applyConditionalFormatting({
+   *   headerRow: true,
+   *   alternatingRows: {
+   *     even: { shading: { fill: 'F0F0F0' } },
+   *     odd: { shading: { fill: 'FFFFFF' } }
+   *   }
+   * });
+   *
+   * // Custom header formatting
+   * table.applyConditionalFormatting({
+   *   headerRow: {
+   *     shading: { fill: '4472C4' },
+   *     textColor: 'FFFFFF'
+   *   }
+   * });
+   *
+   * // Content-based formatting
+   * table.applyConditionalFormatting({
+   *   contentRules: [
+   *     {
+   *       condition: (text, row, col) => parseFloat(text) > 1000,
+   *       formatting: { shading: { fill: 'FFD700' } } // Gold for large numbers
+   *     },
+   *     {
+   *       condition: (text) => text.toLowerCase().includes('error'),
+   *       formatting: { shading: { fill: 'FF0000' } } // Red for errors
+   *     }
+   *   ]
+   * });
+   *
+   * // Combined rules
+   * table.applyConditionalFormatting({
+   *   headerRow: { shading: { fill: '2F5496' } },
+   *   alternatingRows: {
+   *     even: { shading: { fill: 'D9E1F2' } }
+   *   },
+   *   contentRules: [
+   *     {
+   *       condition: (text, row, col) => col === 0 && row > 0,
+   *       formatting: { textColor: '000000' }
+   *     }
+   *   ]
+   * });
+   * ```
+   */
+  applyConditionalFormatting(rules: {
+    headerRow?: boolean | Partial<CellFormatting>;
+    alternatingRows?: {
+      even?: Partial<CellFormatting>;
+      odd?: Partial<CellFormatting>;
+    };
+    contentRules?: Array<{
+      condition: (cellText: string, rowIndex: number, colIndex: number) => boolean;
+      formatting: Partial<CellFormatting>;
+    }>;
+  }): this {
+    const rows = this.getRows();
+
+    // Apply header row formatting
+    if (rules.headerRow && rows.length > 0) {
+      const headerFormatting: Partial<CellFormatting> =
+        rules.headerRow === true
+          ? { shading: { fill: '4472C4' } } // Default blue header
+          : rules.headerRow;
+
+      const headerRow = rows[0];
+      if (headerRow) {
+        for (const cell of headerRow.getCells()) {
+          this.applyCellFormatting(cell, headerFormatting);
+        }
+      }
+    }
+
+    // Apply alternating rows
+    if (rules.alternatingRows) {
+      rows.forEach((row, index) => {
+        const isEven = index % 2 === 0;
+        const formatting = isEven
+          ? rules.alternatingRows?.even
+          : rules.alternatingRows?.odd;
+
+        if (formatting) {
+          for (const cell of row.getCells()) {
+            this.applyCellFormatting(cell, formatting);
+          }
+        }
+      });
+    }
+
+    // Apply content-based rules
+    if (rules.contentRules && rules.contentRules.length > 0) {
+      rows.forEach((row, rowIndex) => {
+        row.getCells().forEach((cell, colIndex) => {
+          const cellText = cell
+            .getParagraphs()
+            .map((p) => p.getText())
+            .join('');
+
+          for (const rule of rules.contentRules!) {
+            if (rule.condition(cellText, rowIndex, colIndex)) {
+              this.applyCellFormatting(cell, rule.formatting);
+            }
+          }
+        });
+      });
+    }
+
+    return this;
+  }
+
+  /**
+   * Helper method to apply formatting to a cell
+   * @private
+   */
+  private applyCellFormatting(
+    cell: TableCell,
+    formatting: Partial<CellFormatting>
+  ): void {
+    // Apply shading
+    if (formatting.shading) {
+      cell.setShading(formatting.shading);
+    }
+
+    // Apply borders
+    if (formatting.borders) {
+      cell.setBorders(formatting.borders);
+    }
+
+    // Apply text direction
+    if (formatting.textDirection) {
+      cell.setTextDirection(formatting.textDirection);
+    }
+
+    // Apply vertical alignment
+    if (formatting.verticalAlignment) {
+      cell.setVerticalAlignment(formatting.verticalAlignment);
+    }
+
+    // Apply width
+    if (formatting.width !== undefined) {
+      cell.setWidth(formatting.width);
+    }
+
+    // Apply margins
+    if (formatting.margins) {
+      cell.setMargins(formatting.margins);
+    }
   }
 
   /**

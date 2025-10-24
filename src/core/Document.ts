@@ -3623,6 +3623,115 @@ export class Document {
   }
 
   /**
+   * Advanced find and replace with regex support and track changes integration
+   *
+   * Performs global find and replace operations with support for:
+   * - Regular expressions for complex pattern matching
+   * - Case-sensitive and whole-word matching
+   * - Track changes integration (creates revision objects)
+   * - Replacement across paragraphs and table cells
+   *
+   * @param pattern - String or RegExp pattern to find
+   * @param replacement - Replacement text
+   * @param options - Search and tracking options
+   * @returns Object with replacement count and optional revisions
+   *
+   * @example
+   * ```typescript
+   * // Simple text replacement
+   * const result = doc.findAndReplaceAll('old text', 'new text');
+   * console.log(`Made ${result.count} replacements`);
+   *
+   * // Regex replacement
+   * const phoneResult = doc.findAndReplaceAll(
+   *   /\d{3}-\d{4}/g,
+   *   '***-****',
+   *   { caseSensitive: true }
+   * );
+   *
+   * // With track changes
+   * const tracked = doc.findAndReplaceAll('error', 'correction', {
+   *   trackChanges: true,
+   *   author: 'John Doe'
+   * });
+   * console.log(`Created ${tracked.revisions?.length} revisions`);
+   *
+   * // Whole word replacement
+   * doc.findAndReplaceAll('test', 'exam', { wholeWord: true });
+   * ```
+   */
+  findAndReplaceAll(
+    pattern: string | RegExp,
+    replacement: string,
+    options?: {
+      caseSensitive?: boolean;
+      wholeWord?: boolean;
+      trackChanges?: boolean;
+      author?: string;
+    }
+  ): { count: number; revisions?: Revision[] } {
+    const {
+      caseSensitive = false,
+      wholeWord = false,
+      trackChanges = false,
+      author = 'Unknown',
+    } = options || {};
+
+    let count = 0;
+    const revisions: Revision[] = [];
+
+    // Convert pattern to RegExp if it's a string
+    let regex: RegExp;
+    if (typeof pattern === 'string') {
+      // Escape special regex characters
+      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const boundaryPattern = wholeWord ? `\\b${escaped}\\b` : escaped;
+      const flags = caseSensitive ? 'g' : 'gi';
+      regex = new RegExp(boundaryPattern, flags);
+    } else {
+      // Use provided RegExp, ensure global flag
+      const flags = pattern.flags.includes('g')
+        ? pattern.flags
+        : pattern.flags + 'g';
+      regex = new RegExp(pattern.source, flags);
+    }
+
+    // Process all runs in document
+    const runs = this.getAllRuns();
+
+    for (const run of runs) {
+      const originalText = run.getText();
+      const matches = originalText.match(regex);
+
+      if (matches && matches.length > 0) {
+        const newText = originalText.replace(regex, replacement);
+
+        if (trackChanges) {
+          // Create deletion revision for original text
+          const deletionRun = new Run(originalText, run.getFormatting());
+          const deletion = Revision.createDeletion(author, deletionRun);
+          revisions.push(deletion);
+
+          // Create insertion revision for new text
+          const insertionRun = new Run(newText, run.getFormatting());
+          const insertion = Revision.createInsertion(author, insertionRun);
+          revisions.push(insertion);
+
+          // Register revisions with the document
+          this.revisionManager.register(deletion);
+          this.revisionManager.register(insertion);
+        }
+
+        // Update the run text
+        run.setText(newText);
+        count += matches.length;
+      }
+    }
+
+    return trackChanges ? { count, revisions } : { count };
+  }
+
+  /**
    * Gets the total word count in the document
    * @returns Total number of words
    */
@@ -4189,6 +4298,162 @@ export class Document {
     }
 
     return hyperlinks.length;
+  }
+
+  /**
+   * Normalizes spacing throughout the document
+   *
+   * Ensures consistent spacing by:
+   * - Removing duplicate consecutive empty paragraphs
+   * - Applying standard paragraph spacing (before/after)
+   * - Standardizing line spacing
+   * - Removing trailing spaces from runs
+   *
+   * @param rules - Normalization rules
+   * @returns Object with counts of elements removed and normalized
+   *
+   * @example
+   * ```typescript
+   * // Remove duplicate empty paragraphs only
+   * const result = doc.normalizeSpacing({
+   *   removeDuplicateEmptyParagraphs: true
+   * });
+   * console.log(`Removed ${result.removed} empty paragraphs`);
+   *
+   * // Apply standard spacing
+   * doc.normalizeSpacing({
+   *   standardParagraphSpacing: { before: 0, after: 200 }, // 200 twips = 10pt
+   *   standardLineSpacing: 240, // Single spacing
+   *   removeTrailingSpaces: true
+   * });
+   *
+   * // Full normalization
+   * const stats = doc.normalizeSpacing({
+   *   removeDuplicateEmptyParagraphs: true,
+   *   standardParagraphSpacing: { after: 200 },
+   *   removeTrailingSpaces: true
+   * });
+   * console.log(`Removed: ${stats.removed}, Normalized: ${stats.normalized}`);
+   * ```
+   */
+  normalizeSpacing(rules: {
+    removeDuplicateEmptyParagraphs?: boolean;
+    standardParagraphSpacing?: { before?: number; after?: number };
+    standardLineSpacing?: number;
+    removeTrailingSpaces?: boolean;
+  } = {}): { removed: number; normalized: number } {
+    const {
+      removeDuplicateEmptyParagraphs = true,
+      standardParagraphSpacing,
+      standardLineSpacing,
+      removeTrailingSpaces = true,
+    } = rules;
+
+    let removed = 0;
+    let normalized = 0;
+
+    // Remove duplicate empty paragraphs
+    if (removeDuplicateEmptyParagraphs) {
+      let lastWasEmpty = false;
+      const toRemove: number[] = [];
+
+      this.bodyElements.forEach((element, index) => {
+        if (element instanceof Paragraph) {
+          const isEmpty = element.getText().trim() === '';
+          if (isEmpty && lastWasEmpty) {
+            toRemove.push(index);
+          }
+          lastWasEmpty = isEmpty;
+        } else {
+          lastWasEmpty = false; // Reset for non-paragraph elements
+        }
+      });
+
+      // Remove in reverse order to maintain indices
+      toRemove.reverse().forEach((index) => {
+        this.bodyElements.splice(index, 1);
+        removed++;
+      });
+    }
+
+    // Apply standard spacing to all paragraphs
+    for (const para of this.getParagraphs()) {
+      if (standardParagraphSpacing) {
+        if (standardParagraphSpacing.before !== undefined) {
+          para.setSpaceBefore(standardParagraphSpacing.before);
+          normalized++;
+        }
+        if (standardParagraphSpacing.after !== undefined) {
+          para.setSpaceAfter(standardParagraphSpacing.after);
+          normalized++;
+        }
+      }
+
+      if (standardLineSpacing !== undefined) {
+        para.setLineSpacing(standardLineSpacing, 'auto');
+        normalized++;
+      }
+
+      // Remove trailing spaces from runs
+      if (removeTrailingSpaces) {
+        const runs = para.getRuns();
+        if (runs.length > 0) {
+          const lastRun = runs[runs.length - 1];
+          if (lastRun) {
+            const text = lastRun.getText();
+            const trimmed = text.trimEnd();
+            if (text !== trimmed) {
+              lastRun.setText(trimmed);
+              normalized++;
+            }
+          }
+        }
+      }
+    }
+
+    // Also process tables
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          const cellParagraphs =
+            cell instanceof TableCell ? cell.getParagraphs() : [];
+          for (const para of cellParagraphs) {
+            if (standardParagraphSpacing) {
+              if (standardParagraphSpacing.before !== undefined) {
+                para.setSpaceBefore(standardParagraphSpacing.before);
+                normalized++;
+              }
+              if (standardParagraphSpacing.after !== undefined) {
+                para.setSpaceAfter(standardParagraphSpacing.after);
+                normalized++;
+              }
+            }
+
+            if (standardLineSpacing !== undefined) {
+              para.setLineSpacing(standardLineSpacing, 'auto');
+              normalized++;
+            }
+
+            if (removeTrailingSpaces) {
+              const runs = para.getRuns();
+              if (runs.length > 0) {
+                const lastRun = runs[runs.length - 1];
+                if (lastRun) {
+                  const text = lastRun.getText();
+                  const trimmed = text.trimEnd();
+                  if (text !== trimmed) {
+                    lastRun.setText(trimmed);
+                    normalized++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return { removed, normalized };
   }
 
   /**

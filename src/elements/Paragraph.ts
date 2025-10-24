@@ -640,6 +640,88 @@ export class Paragraph {
   }
 
   /**
+   * Detects if this paragraph is a heading and returns its level (1-9)
+   *
+   * Detection is performed using multiple methods in order of reliability:
+   * 1. **Style ID matching** - Checks for 'Heading1', 'Heading2', etc. (most reliable)
+   * 2. **Outline level** - Uses ECMA-376 outlineLevel property (0-based, where 0 = H1)
+   * 3. **Formatting heuristics** - Analyzes text size, boldness, and patterns
+   *
+   * @returns Heading level (1-9) if detected, null if not a heading
+   *
+   * @example
+   * ```typescript
+   * const para = doc.createParagraph('Chapter 1');
+   * para.setStyle('Heading1');
+   *
+   * const level = para.detectHeadingLevel();
+   * console.log(level); // 1
+   *
+   * // Use for TOC generation
+   * for (const para of doc.getParagraphs()) {
+   *   const level = para.detectHeadingLevel();
+   *   if (level) {
+   *     console.log(`H${level}: ${para.getText()}`);
+   *   }
+   * }
+   * ```
+   */
+  detectHeadingLevel(): number | null {
+    // Method 1: Check style ID (most reliable)
+    const style = this.formatting.style;
+    if (style) {
+      const match = style.match(/^Heading(\d)$/i);
+      if (match && match[1]) {
+        const level = parseInt(match[1], 10);
+        // Word supports Heading1-Heading9
+        return level >= 1 && level <= 9 ? level : null;
+      }
+    }
+
+    // Method 2: Check outline level (ECMA-376 property)
+    // Per ECMA-376 Part 1 §17.3.1.20, outlineLevel is 0-based (0 = Level 1)
+    if (this.formatting.outlineLevel !== undefined) {
+      const level = this.formatting.outlineLevel + 1;
+      return level >= 1 && level <= 9 ? level : null;
+    }
+
+    // Method 3: Formatting heuristics (least reliable, use as fallback)
+    // Only attempt if paragraph has text
+    const text = this.getText().trim();
+    if (!text) return null;
+
+    // Get formatting from first run (headings typically have uniform formatting)
+    const runs = this.getRuns();
+    if (runs.length === 0) return null;
+
+    const firstRun = runs[0];
+    if (!firstRun) return null;
+
+    const fmt = firstRun.getFormatting();
+    if (!fmt) return null;
+
+    // Heuristic: Large bold text suggests a heading
+    if (fmt.bold && fmt.size) {
+      // H1: Very large (>= 24pt)
+      if (fmt.size >= 24) return 1;
+      // H2: Large (>= 20pt)
+      if (fmt.size >= 20) return 2;
+      // H3: Medium-large (>= 16pt)
+      if (fmt.size >= 16) return 3;
+      // H4-H6: Moderate size (14pt+)
+      if (fmt.size >= 14) return 4;
+    }
+
+    // Additional heuristic: All caps bold text (common for headings)
+    if (fmt.bold && fmt.allCaps && text.length < 100) {
+      return 2; // Often used for section headings
+    }
+
+    // Not detected as a heading
+    return null;
+  }
+
+  /**
    * Sets paragraph alignment
    * @param alignment - Alignment value
    * @returns This paragraph for chaining

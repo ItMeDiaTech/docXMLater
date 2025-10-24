@@ -331,6 +331,177 @@ export class Hyperlink {
   }
 
   /**
+   * Validates the hyperlink URL and optionally fixes common issues
+   *
+   * Performs validation and fixing of hyperlink URLs including:
+   * - Checking URL accessibility (HTTP HEAD request for external links)
+   * - Fixing common URL issues (missing protocol, double slashes, spaces)
+   * - Validating internal bookmark references
+   * - Detecting broken links
+   *
+   * **Note:** This method is async due to network requests for accessibility checks.
+   *
+   * @param options - Validation options
+   * @returns Promise with validation results
+   *
+   * @example
+   * ```typescript
+   * // Basic URL fixing without network check
+   * const result = await link.validateAndFix({
+   *   fixCommonIssues: true,
+   *   checkAccessibility: false
+   * });
+   * console.log(`Fixed: ${result.fixed.join(', ')}`);
+   *
+   * // Full validation with accessibility check
+   * const validation = await link.validateAndFix({
+   *   checkAccessibility: true,
+   *   timeout: 5000
+   * });
+   * if (!validation.valid) {
+   *   console.log(`Issues: ${validation.issues.join(', ')}`);
+   * }
+   *
+   * // Batch validate all hyperlinks in document
+   * for (const { hyperlink } of doc.getHyperlinks()) {
+   *   const result = await hyperlink.validateAndFix();
+   *   if (result.fixed.length > 0) {
+   *     console.log(`Fixed ${hyperlink.getUrl()}: ${result.fixed.join(', ')}`);
+   *   }
+   * }
+   * ```
+   */
+  async validateAndFix(options?: {
+    checkAccessibility?: boolean;
+    fixCommonIssues?: boolean;
+    timeout?: number;
+    bookmarkManager?: any; // BookmarkManager for internal link validation
+  }): Promise<{
+    valid: boolean;
+    issues: string[];
+    fixed: string[];
+    originalUrl?: string;
+    fixedUrl?: string;
+  }> {
+    const {
+      checkAccessibility = false,
+      fixCommonIssues = true,
+      timeout = 5000,
+      bookmarkManager,
+    } = options || {};
+
+    const issues: string[] = [];
+    const fixed: string[] = [];
+    let fixedUrl = this.url;
+    const originalUrl = this.url;
+
+    // Internal link validation (bookmarks)
+    if (this.anchor) {
+      if (bookmarkManager) {
+        const bookmarkExists = bookmarkManager.hasBookmark(this.anchor);
+        if (!bookmarkExists) {
+          issues.push(`Internal bookmark "${this.anchor}" not found`);
+        }
+      }
+      return {
+        valid: issues.length === 0,
+        issues,
+        fixed,
+        originalUrl,
+      };
+    }
+
+    // External link validation
+    if (!this.url) {
+      issues.push('No URL or anchor specified');
+      return { valid: false, issues, fixed, originalUrl };
+    }
+
+    // Fix common issues
+    if (fixCommonIssues && fixedUrl) {
+      // Fix 1: Add missing protocol
+      if (!fixedUrl.match(/^[a-z]+:\/\//i)) {
+        fixedUrl = 'https://' + fixedUrl;
+        fixed.push('Added missing protocol (https://)');
+      }
+
+      // Fix 2: Fix double slashes (except after protocol)
+      const protocolMatch = fixedUrl.match(/^([a-z]+:\/\/)/i);
+      if (protocolMatch && protocolMatch[1]) {
+        const protocol = protocolMatch[1];
+        const rest = fixedUrl.substring(protocol.length);
+        const fixedRest = rest.replace(/\/\//g, '/');
+        if (rest !== fixedRest) {
+          fixedUrl = protocol + fixedRest;
+          fixed.push('Fixed double slashes');
+        }
+      }
+
+      // Fix 3: Encode spaces
+      if (fixedUrl.includes(' ')) {
+        fixedUrl = fixedUrl.replace(/ /g, '%20');
+        fixed.push('Encoded spaces as %20');
+      }
+
+      // Fix 4: Remove trailing slashes for non-root URLs
+      if (fixedUrl.match(/^https?:\/\/[^/]+\/.+\/$/)) {
+        fixedUrl = fixedUrl.replace(/\/$/, '');
+        fixed.push('Removed trailing slash');
+      }
+
+      // Fix 5: Fix common typos
+      fixedUrl = fixedUrl.replace(/^http:\/\//i, 'https://'); // Prefer HTTPS
+      if (fixedUrl !== this.url && fixedUrl.startsWith('https://')) {
+        fixed.push('Upgraded HTTP to HTTPS');
+      }
+
+      // Update URL if fixes were applied
+      if (fixedUrl !== this.url) {
+        this.setUrl(fixedUrl);
+      }
+    }
+
+    // Check accessibility (HTTP HEAD request)
+    if (checkAccessibility && fixedUrl && fixedUrl.match(/^https?:\/\//i)) {
+      try {
+        // Use fetch with AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        const response = await fetch(fixedUrl, {
+          method: 'HEAD',
+          signal: controller.signal,
+          redirect: 'follow',
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          issues.push(
+            `HTTP ${response.status}: ${response.statusText || 'Error'}`
+          );
+        }
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          issues.push(`Timeout after ${timeout}ms`);
+        } else if (error.message?.includes('fetch')) {
+          issues.push(`Unreachable: ${error.message}`);
+        } else {
+          issues.push(`Network error: ${error.message || 'Unknown error'}`);
+        }
+      }
+    }
+
+    return {
+      valid: issues.length === 0,
+      issues,
+      fixed,
+      originalUrl,
+      fixedUrl: fixedUrl !== originalUrl ? fixedUrl : undefined,
+    };
+  }
+
+  /**
    * Checks if this is an external link
    */
   isExternal(): boolean {
