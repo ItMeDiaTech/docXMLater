@@ -365,7 +365,7 @@ describe('Document', () => {
       const xml = zipHandler.getFileAsString(DOCX_PATHS.APP_PROPS);
 
       expect(xml).toContain('<?xml version="1.0"');
-      expect(xml).toContain('DocXML');
+      expect(xml).toContain('docxmlater');
       expect(xml).toContain('<Properties');
     });
 

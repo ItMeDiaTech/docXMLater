@@ -16,6 +16,94 @@ import { Table } from './Table';
 export type SDTLockType = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 /**
+ * Content control type
+ */
+export type ContentControlType =
+  | 'richText'
+  | 'plainText'
+  | 'comboBox'
+  | 'dropDownList'
+  | 'datePicker'
+  | 'checkbox'
+  | 'picture'
+  | 'buildingBlock'
+  | 'group';
+
+/**
+ * List item for combo box or dropdown
+ */
+export interface ListItem {
+  /** Display text shown to user */
+  displayText: string;
+  /** Internal value */
+  value: string;
+}
+
+/**
+ * Plain text control properties
+ */
+export interface PlainTextProperties {
+  /** Allow multiple lines */
+  multiLine?: boolean;
+}
+
+/**
+ * Combo box control properties
+ */
+export interface ComboBoxProperties {
+  /** List of items */
+  items: ListItem[];
+  /** Last selected value */
+  lastValue?: string;
+}
+
+/**
+ * Dropdown list control properties
+ */
+export interface DropDownListProperties {
+  /** List of items */
+  items: ListItem[];
+  /** Last selected value */
+  lastValue?: string;
+}
+
+/**
+ * Date picker control properties
+ */
+export interface DatePickerProperties {
+  /** Date format string (e.g., 'M/d/yyyy') */
+  dateFormat?: string;
+  /** Full date value */
+  fullDate?: Date;
+  /** Locale ID */
+  lid?: string;
+  /** Calendar type */
+  calendar?: 'gregorian' | 'hijri' | 'hebrew' | 'taiwan' | 'japan' | 'thai' | 'korean';
+}
+
+/**
+ * Checkbox control properties
+ */
+export interface CheckboxProperties {
+  /** Whether the checkbox is checked */
+  checked?: boolean;
+  /** Character code for checked state (default: '2612' - ☒) */
+  checkedState?: string;
+  /** Character code for unchecked state (default: '2610' - ☐) */
+  uncheckedState?: string;
+}
+
+/**
+ * Building block control properties
+ */
+export interface BuildingBlockProperties {
+  /** Building block gallery name */
+  gallery?: string;
+  /** Building block category */
+  category?: string;
+}
+
+/**
  * Properties for a Structured Document Tag
  */
 export interface SDTProperties {
@@ -27,6 +115,20 @@ export interface SDTProperties {
   lock?: SDTLockType;
   /** Alias (display name) */
   alias?: string;
+  /** Content control type */
+  controlType?: ContentControlType;
+  /** Plain text properties */
+  plainText?: PlainTextProperties;
+  /** Combo box properties */
+  comboBox?: ComboBoxProperties;
+  /** Dropdown list properties */
+  dropDownList?: DropDownListProperties;
+  /** Date picker properties */
+  datePicker?: DatePickerProperties;
+  /** Checkbox properties */
+  checkbox?: CheckboxProperties;
+  /** Building block properties */
+  buildingBlock?: BuildingBlockProperties;
 }
 
 /**
@@ -135,6 +237,131 @@ export class StructuredDocumentTag {
   }
 
   /**
+   * Get the content control type
+   * @returns Control type or undefined
+   */
+  getControlType(): ContentControlType | undefined {
+    return this.properties.controlType;
+  }
+
+  /**
+   * Set the content control type
+   * @param type - Control type
+   */
+  setControlType(type: ContentControlType): this {
+    this.properties.controlType = type;
+    return this;
+  }
+
+  /**
+   * Get plain text properties
+   * @returns Plain text properties or undefined
+   */
+  getPlainTextProperties(): PlainTextProperties | undefined {
+    return this.properties.plainText;
+  }
+
+  /**
+   * Set plain text properties
+   * @param properties - Plain text properties
+   */
+  setPlainTextProperties(properties: PlainTextProperties): this {
+    this.properties.controlType = 'plainText';
+    this.properties.plainText = properties;
+    return this;
+  }
+
+  /**
+   * Get combo box properties
+   * @returns Combo box properties or undefined
+   */
+  getComboBoxProperties(): ComboBoxProperties | undefined {
+    return this.properties.comboBox;
+  }
+
+  /**
+   * Set combo box properties
+   * @param properties - Combo box properties
+   */
+  setComboBoxProperties(properties: ComboBoxProperties): this {
+    this.properties.controlType = 'comboBox';
+    this.properties.comboBox = properties;
+    return this;
+  }
+
+  /**
+   * Get dropdown list properties
+   * @returns Dropdown list properties or undefined
+   */
+  getDropDownListProperties(): DropDownListProperties | undefined {
+    return this.properties.dropDownList;
+  }
+
+  /**
+   * Set dropdown list properties
+   * @param properties - Dropdown list properties
+   */
+  setDropDownListProperties(properties: DropDownListProperties): this {
+    this.properties.controlType = 'dropDownList';
+    this.properties.dropDownList = properties;
+    return this;
+  }
+
+  /**
+   * Get date picker properties
+   * @returns Date picker properties or undefined
+   */
+  getDatePickerProperties(): DatePickerProperties | undefined {
+    return this.properties.datePicker;
+  }
+
+  /**
+   * Set date picker properties
+   * @param properties - Date picker properties
+   */
+  setDatePickerProperties(properties: DatePickerProperties): this {
+    this.properties.controlType = 'datePicker';
+    this.properties.datePicker = properties;
+    return this;
+  }
+
+  /**
+   * Get checkbox properties
+   * @returns Checkbox properties or undefined
+   */
+  getCheckboxProperties(): CheckboxProperties | undefined {
+    return this.properties.checkbox;
+  }
+
+  /**
+   * Set checkbox properties
+   * @param properties - Checkbox properties
+   */
+  setCheckboxProperties(properties: CheckboxProperties): this {
+    this.properties.controlType = 'checkbox';
+    this.properties.checkbox = properties;
+    return this;
+  }
+
+  /**
+   * Get building block properties
+   * @returns Building block properties or undefined
+   */
+  getBuildingBlockProperties(): BuildingBlockProperties | undefined {
+    return this.properties.buildingBlock;
+  }
+
+  /**
+   * Set building block properties
+   * @param properties - Building block properties
+   */
+  setBuildingBlockProperties(properties: BuildingBlockProperties): this {
+    this.properties.controlType = 'buildingBlock';
+    this.properties.buildingBlock = properties;
+    return this;
+  }
+
+  /**
    * Get all content elements
    * @returns Array of content elements
    */
@@ -193,6 +420,142 @@ export class StructuredDocumentTag {
       );
     }
 
+    // Add control type-specific XML
+    if (this.properties.controlType) {
+      switch (this.properties.controlType) {
+        case 'richText':
+          sdtPrChildren.push(XMLBuilder.wSelf('richText', {}));
+          break;
+
+        case 'plainText':
+          if (this.properties.plainText) {
+            const attrs: Record<string, string> = {};
+            if (this.properties.plainText.multiLine !== undefined) {
+              attrs['w:multiLine'] = this.properties.plainText.multiLine ? '1' : '0';
+            }
+            sdtPrChildren.push(XMLBuilder.wSelf('text', attrs));
+          } else {
+            sdtPrChildren.push(XMLBuilder.wSelf('text', {}));
+          }
+          break;
+
+        case 'comboBox':
+          if (this.properties.comboBox) {
+            const comboBoxChildren: XMLElement[] = [];
+            for (const item of this.properties.comboBox.items) {
+              comboBoxChildren.push(
+                XMLBuilder.wSelf('listItem', {
+                  'w:displayText': item.displayText,
+                  'w:value': item.value,
+                })
+              );
+            }
+            sdtPrChildren.push(XMLBuilder.w('comboBox', {}, comboBoxChildren));
+          }
+          break;
+
+        case 'dropDownList':
+          if (this.properties.dropDownList) {
+            const dropDownChildren: XMLElement[] = [];
+            for (const item of this.properties.dropDownList.items) {
+              dropDownChildren.push(
+                XMLBuilder.wSelf('listItem', {
+                  'w:displayText': item.displayText,
+                  'w:value': item.value,
+                })
+              );
+            }
+            sdtPrChildren.push(XMLBuilder.w('dropDownList', {}, dropDownChildren));
+          }
+          break;
+
+        case 'datePicker':
+          if (this.properties.datePicker) {
+            const dateAttrs: Record<string, string> = {};
+            if (this.properties.datePicker.dateFormat) {
+              dateAttrs['w:dateFormat'] = this.properties.datePicker.dateFormat;
+            }
+            if (this.properties.datePicker.lid) {
+              dateAttrs['w:lid'] = this.properties.datePicker.lid;
+            }
+            if (this.properties.datePicker.fullDate) {
+              dateAttrs['w:fullDate'] = this.properties.datePicker.fullDate.toISOString();
+            }
+            if (this.properties.datePicker.calendar) {
+              dateAttrs['w:calendar'] = this.properties.datePicker.calendar;
+            }
+            sdtPrChildren.push(XMLBuilder.wSelf('date', dateAttrs));
+          }
+          break;
+
+        case 'checkbox':
+          if (this.properties.checkbox) {
+            const checkboxChildren: XMLElement[] = [];
+
+            // Add checked state
+            if (this.properties.checkbox.checked !== undefined) {
+              checkboxChildren.push(
+                XMLBuilder.wSelf('checked', {
+                  'w:val': this.properties.checkbox.checked ? '1' : '0',
+                })
+              );
+            }
+
+            // Add checked state symbol
+            if (this.properties.checkbox.checkedState) {
+              checkboxChildren.push(
+                XMLBuilder.wSelf('checkedState', {
+                  'w:val': this.properties.checkbox.checkedState,
+                  'w:font': 'MS Gothic',
+                })
+              );
+            }
+
+            // Add unchecked state symbol
+            if (this.properties.checkbox.uncheckedState) {
+              checkboxChildren.push(
+                XMLBuilder.wSelf('uncheckedState', {
+                  'w:val': this.properties.checkbox.uncheckedState,
+                  'w:font': 'MS Gothic',
+                })
+              );
+            }
+
+            sdtPrChildren.push(XMLBuilder.w14('checkbox', {}, checkboxChildren));
+          }
+          break;
+
+        case 'picture':
+          sdtPrChildren.push(XMLBuilder.wSelf('picture', {}));
+          break;
+
+        case 'buildingBlock':
+          if (this.properties.buildingBlock) {
+            const bbChildren: XMLElement[] = [];
+            if (this.properties.buildingBlock.gallery) {
+              bbChildren.push(
+                XMLBuilder.wSelf('docPartGallery', {
+                  'w:val': this.properties.buildingBlock.gallery,
+                })
+              );
+            }
+            if (this.properties.buildingBlock.category) {
+              bbChildren.push(
+                XMLBuilder.wSelf('docPartCategory', {
+                  'w:val': this.properties.buildingBlock.category,
+                })
+              );
+            }
+            sdtPrChildren.push(XMLBuilder.w('docPartObj', {}, bbChildren));
+          }
+          break;
+
+        case 'group':
+          sdtPrChildren.push(XMLBuilder.wSelf('group', {}));
+          break;
+      }
+    }
+
     if (sdtPrChildren.length > 0) {
       children.push(XMLBuilder.w('sdtPr', {}, sdtPrChildren));
     }
@@ -248,5 +611,210 @@ export class StructuredDocumentTag {
    */
   static create(properties: SDTProperties = {}): StructuredDocumentTag {
     return new StructuredDocumentTag(properties);
+  }
+
+  /**
+   * Create a rich text content control
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   * @returns New SDT instance
+   */
+  static createRichText(
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: 'richText',
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a plain text content control
+   * @param content - Initial content
+   * @param multiLine - Allow multiple lines
+   * @param properties - Additional SDT properties
+   * @returns New SDT instance
+   */
+  static createPlainText(
+    content: SDTContent[] = [],
+    multiLine: boolean = false,
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: 'plainText',
+        plainText: { multiLine },
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a combo box content control
+   * @param items - List items
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   * @returns New SDT instance
+   */
+  static createComboBox(
+    items: ListItem[],
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: 'comboBox',
+        comboBox: { items },
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a dropdown list content control
+   * @param items - List items
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   * @returns New SDT instance
+   */
+  static createDropDownList(
+    items: ListItem[],
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: 'dropDownList',
+        dropDownList: { items },
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a date picker content control
+   * @param dateFormat - Date format string (e.g., 'M/d/yyyy')
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   * @returns New SDT instance
+   */
+  static createDatePicker(
+    dateFormat: string = 'M/d/yyyy',
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: 'datePicker',
+        datePicker: { dateFormat },
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a checkbox content control
+   * @param checked - Initial checked state
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   * @returns New SDT instance
+   */
+  static createCheckbox(
+    checked: boolean = false,
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: 'checkbox',
+        checkbox: {
+          checked,
+          checkedState: '2612', // ☒
+          uncheckedState: '2610', // ☐
+        },
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a picture content control
+   * @param content - Initial content (typically contains an image)
+   * @param properties - Additional SDT properties
+   * @returns New SDT instance
+   */
+  static createPicture(
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: 'picture',
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a building block content control
+   * @param gallery - Building block gallery name
+   * @param category - Building block category
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   * @returns New SDT instance
+   */
+  static createBuildingBlock(
+    gallery: string,
+    category: string,
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: 'buildingBlock',
+        buildingBlock: { gallery, category },
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a group content control
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   * @returns New SDT instance
+   */
+  static createGroup(
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: 'group',
+        lock: 'sdtContentLocked', // Groups typically lock content
+        ...properties,
+      },
+      content
+    );
   }
 }

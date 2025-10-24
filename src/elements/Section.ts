@@ -65,6 +65,10 @@ export interface Columns {
   space?: number;
   /** Equal column widths */
   equalWidth?: boolean;
+  /** Show column separator line */
+  separator?: boolean;
+  /** Individual column widths (for unequal columns) in twips */
+  columnWidths?: number[];
 }
 
 /**
@@ -76,6 +80,26 @@ export interface PageNumbering {
   /** Number format */
   format?: PageNumberFormat;
 }
+
+/**
+ * Paper source (printer tray) properties
+ */
+export interface PaperSource {
+  /** First page tray number */
+  first?: number;
+  /** Other pages tray number */
+  other?: number;
+}
+
+/**
+ * Vertical page alignment
+ */
+export type VerticalAlignment = 'top' | 'center' | 'bottom' | 'both';
+
+/**
+ * Text direction
+ */
+export type TextDirection = 'ltr' | 'rtl' | 'tbRl' | 'btLr';
 
 /**
  * Section properties
@@ -105,6 +129,12 @@ export interface SectionProperties {
   };
   /** Title page (different first page) */
   titlePage?: boolean;
+  /** Vertical page alignment */
+  verticalAlignment?: VerticalAlignment;
+  /** Paper source (printer tray) */
+  paperSource?: PaperSource;
+  /** Text direction (LTR/RTL support) */
+  textDirection?: TextDirection;
 }
 
 /**
@@ -143,6 +173,10 @@ export class Section {
       headers: properties.headers,
       footers: properties.footers,
       titlePage: properties.titlePage,
+      // Phase 4.5 - New properties
+      verticalAlignment: properties.verticalAlignment,
+      paperSource: properties.paperSource,
+      textDirection: properties.textDirection,
     };
   }
 
@@ -265,6 +299,62 @@ export class Section {
   }
 
   /**
+   * Sets vertical page alignment
+   * Controls how content is vertically aligned on the page
+   * @param alignment Vertical alignment (top, center, bottom, both=justified)
+   */
+  setVerticalAlignment(alignment: VerticalAlignment): this {
+    this.properties.verticalAlignment = alignment;
+    return this;
+  }
+
+  /**
+   * Sets paper source (printer tray selection)
+   * @param first First page tray number
+   * @param other Other pages tray number
+   */
+  setPaperSource(first?: number, other?: number): this {
+    this.properties.paperSource = { first, other };
+    return this;
+  }
+
+  /**
+   * Sets column separator line
+   * Shows a vertical line between columns
+   * @param separator Whether to show column separator line
+   */
+  setColumnSeparator(separator: boolean = true): this {
+    if (!this.properties.columns) {
+      this.properties.columns = { count: 1 };
+    }
+    this.properties.columns.separator = separator;
+    return this;
+  }
+
+  /**
+   * Sets custom column widths (for unequal columns)
+   * @param widths Array of column widths in twips
+   */
+  setColumnWidths(widths: number[]): this {
+    if (!this.properties.columns) {
+      this.properties.columns = { count: widths.length };
+    }
+    this.properties.columns.columnWidths = widths;
+    this.properties.columns.equalWidth = false;
+    this.properties.columns.count = widths.length;
+    return this;
+  }
+
+  /**
+   * Sets text direction for the section
+   * @param direction Text direction (ltr=left-to-right, rtl=right-to-left, tbRl=top-to-bottom-right-to-left, btLr=bottom-to-top-left-to-right)
+   */
+  setTextDirection(direction: TextDirection): this {
+    this.properties.textDirection = direction;
+    return this;
+  }
+
+  /**
    * Generates WordprocessingML XML for section properties
    */
   toXML(): XMLElement {
@@ -376,7 +466,25 @@ export class Section {
       if (this.properties.columns.equalWidth !== undefined) {
         attrs['w:equalWidth'] = this.properties.columns.equalWidth ? '1' : '0';
       }
-      children.push(XMLBuilder.wSelf('cols', attrs));
+      if (this.properties.columns.separator !== undefined) {
+        attrs['w:sep'] = this.properties.columns.separator ? '1' : '0';
+      }
+
+      // Add individual column widths if specified
+      const colChildren: XMLElement[] = [];
+      if (this.properties.columns.columnWidths) {
+        for (const width of this.properties.columns.columnWidths) {
+          colChildren.push(
+            XMLBuilder.wSelf('col', { 'w:w': width.toString() })
+          );
+        }
+      }
+
+      children.push(
+        colChildren.length > 0
+          ? XMLBuilder.w('cols', attrs, colChildren)
+          : XMLBuilder.wSelf('cols', attrs)
+      );
     }
 
     // Title page
@@ -396,6 +504,34 @@ export class Section {
       if (Object.keys(attrs).length > 0) {
         children.push(XMLBuilder.wSelf('pgNumType', attrs));
       }
+    }
+
+    // Vertical alignment
+    if (this.properties.verticalAlignment) {
+      children.push(
+        XMLBuilder.wSelf('vAlign', { 'w:val': this.properties.verticalAlignment })
+      );
+    }
+
+    // Paper source
+    if (this.properties.paperSource) {
+      const attrs: Record<string, string> = {};
+      if (this.properties.paperSource.first !== undefined) {
+        attrs['w:first'] = this.properties.paperSource.first.toString();
+      }
+      if (this.properties.paperSource.other !== undefined) {
+        attrs['w:other'] = this.properties.paperSource.other.toString();
+      }
+      if (Object.keys(attrs).length > 0) {
+        children.push(XMLBuilder.wSelf('paperSrc', attrs));
+      }
+    }
+
+    // Text direction
+    if (this.properties.textDirection) {
+      children.push(
+        XMLBuilder.wSelf('textDirection', { 'w:val': this.properties.textDirection })
+      );
     }
 
     return XMLBuilder.w('sectPr', undefined, children);

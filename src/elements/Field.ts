@@ -26,7 +26,12 @@ export type FieldType =
   | 'SAVEDATE'       // Last save date
   | 'PRINTDATE'      // Last print date
   | 'SECTIONPAGES'   // Pages in current section
-  | 'SECTION';       // Current section number
+  | 'SECTION'        // Current section number
+  | 'REF'            // Cross-reference to bookmark
+  | 'HYPERLINK'      // Hyperlink field
+  | 'SEQ'            // Sequence numbering
+  | 'TC'             // Table of contents entry
+  | 'XE';            // Index entry
 
 /**
  * Field properties
@@ -188,6 +193,16 @@ export class Field {
         return 'Subject';
       case 'KEYWORDS':
         return 'Keywords';
+      case 'REF':
+        return '1'; // Reference typically shows page number or heading text
+      case 'HYPERLINK':
+        return 'Link'; // Hyperlink displays the link text
+      case 'SEQ':
+        return '1'; // Sequence shows the current number
+      case 'TC':
+        return ''; // TC fields are hidden
+      case 'XE':
+        return ''; // XE fields are hidden
       default:
         return '';
     }
@@ -350,6 +365,138 @@ export class Field {
   static createTitle(formatting?: RunFormatting): Field {
     return new Field({
       type: 'TITLE',
+      formatting,
+    });
+  }
+
+  /**
+   * Creates a section pages field (pages in current section)
+   * @param formatting Optional run formatting
+   */
+  static createSectionPages(formatting?: RunFormatting): Field {
+    return new Field({
+      type: 'SECTIONPAGES',
+      formatting,
+    });
+  }
+
+  /**
+   * Creates a cross-reference field
+   * @param bookmark Bookmark name to reference
+   * @param format Reference format (\h for hyperlink, \p for page number, etc.)
+   * @param formatting Optional run formatting
+   */
+  static createRef(bookmark: string, format?: string, formatting?: RunFormatting): Field {
+    const formatSwitch = format || '\\h'; // Default to hyperlink format
+    const instruction = `REF ${bookmark} ${formatSwitch} \\* MERGEFORMAT`;
+
+    return new Field({
+      type: 'REF',
+      instruction,
+      formatting,
+    });
+  }
+
+  /**
+   * Creates a hyperlink field
+   * @param url The URL to link to
+   * @param displayText The text to display
+   * @param tooltip Optional tooltip text
+   * @param formatting Optional run formatting
+   */
+  static createHyperlink(
+    url: string,
+    displayText: string = url,
+    tooltip?: string,
+    formatting?: RunFormatting
+  ): Field {
+    let instruction = `HYPERLINK "${url}"`;
+
+    if (tooltip) {
+      instruction += ` \\o "${tooltip}"`;
+    }
+
+    instruction += ' \\* MERGEFORMAT';
+
+    return new Field({
+      type: 'HYPERLINK',
+      instruction,
+      formatting,
+    });
+  }
+
+  /**
+   * Creates a sequence numbering field
+   * @param identifier Sequence identifier (e.g., 'Figure', 'Table')
+   * @param format Number format (\* ARABIC, \* ROMAN, etc.)
+   * @param formatting Optional run formatting
+   */
+  static createSeq(
+    identifier: string,
+    format?: string,
+    formatting?: RunFormatting
+  ): Field {
+    let instruction = `SEQ ${identifier}`;
+
+    if (format) {
+      instruction += ` ${format}`;
+    } else {
+      instruction += ' \\* ARABIC'; // Default to Arabic numerals
+    }
+
+    instruction += ' \\* MERGEFORMAT';
+
+    return new Field({
+      type: 'SEQ',
+      instruction,
+      formatting,
+    });
+  }
+
+  /**
+   * Creates a table of contents entry field (TC)
+   * @param text Entry text
+   * @param level TOC level (1-9)
+   * @param formatting Optional run formatting
+   */
+  static createTCEntry(
+    text: string,
+    level: number = 1,
+    formatting?: RunFormatting
+  ): Field {
+    if (level < 1 || level > 9) {
+      throw new Error('TC level must be between 1 and 9');
+    }
+
+    const instruction = `TC "${text}" \\f C \\l ${level}`;
+
+    return new Field({
+      type: 'TC',
+      instruction,
+      formatting,
+    });
+  }
+
+  /**
+   * Creates an index entry field (XE)
+   * @param text Entry text
+   * @param subEntry Optional sub-entry text
+   * @param formatting Optional run formatting
+   */
+  static createXEEntry(
+    text: string,
+    subEntry?: string,
+    formatting?: RunFormatting
+  ): Field {
+    let instruction = `XE "${text}"`;
+
+    if (subEntry) {
+      instruction += `:${subEntry}`;
+    }
+
+    return new Field({
+      type: 'XE',
+      instruction,
       formatting,
     });
   }

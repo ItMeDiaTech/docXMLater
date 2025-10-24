@@ -811,6 +811,12 @@ export class XMLParser {
       return value.toUpperCase(); // Normalize to uppercase per Microsoft convention
     }
 
+    // Preserve long digit-only strings (e.g., cnfStyle binary strings like "100000000000")
+    // These should not be converted to numbers to avoid losing leading zeros
+    if (/^\d{7,}$/.test(value)) {
+      return value; // Keep as string for values with 7+ digits
+    }
+
     // Try parsing as number
     // 3-character values like "240" will be parsed as numbers
     // 6-character hex values are already handled above

@@ -15,6 +15,140 @@ import { inchesToEmus } from '../utils/units';
 export type ImageFormat = 'png' | 'jpeg' | 'jpg' | 'gif' | 'bmp' | 'tiff';
 
 /**
+ * Image extent (dimensions)
+ */
+export interface ImageExtent {
+  /** Width in EMUs */
+  width: number;
+  /** Height in EMUs */
+  height: number;
+}
+
+/**
+ * Effect extent (additional space for shadows, reflections, glows)
+ * Specifies additional space to add to each edge to prevent clipping of effects
+ */
+export interface EffectExtent {
+  /** Left extent in EMUs */
+  left: number;
+  /** Top extent in EMUs */
+  top: number;
+  /** Right extent in EMUs */
+  right: number;
+  /** Bottom extent in EMUs */
+  bottom: number;
+}
+
+/**
+ * Text wrapping type
+ */
+export type WrapType = 'square' | 'tight' | 'through' | 'topAndBottom' | 'none';
+
+/**
+ * Text wrapping side
+ */
+export type WrapSide = 'bothSides' | 'left' | 'right' | 'largest';
+
+/**
+ * Text wrap settings
+ */
+export interface TextWrapSettings {
+  /** Wrap type */
+  type: WrapType;
+  /** Which side(s) to wrap text */
+  side?: WrapSide;
+  /** Distance from top in EMUs */
+  distanceTop?: number;
+  /** Distance from bottom in EMUs */
+  distanceBottom?: number;
+  /** Distance from left in EMUs */
+  distanceLeft?: number;
+  /** Distance from right in EMUs */
+  distanceRight?: number;
+}
+
+/**
+ * Position anchor type (what to position relative to)
+ */
+export type PositionAnchor = 'page' | 'margin' | 'column' | 'character' | 'paragraph';
+
+/**
+ * Horizontal alignment options
+ */
+export type HorizontalAlignment = 'left' | 'center' | 'right' | 'inside' | 'outside';
+
+/**
+ * Vertical alignment options
+ */
+export type VerticalAlignment = 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+
+/**
+ * Image position configuration
+ */
+export interface ImagePosition {
+  /** Horizontal positioning */
+  horizontal: {
+    /** Anchor point */
+    anchor: PositionAnchor;
+    /** Offset in EMUs (absolute positioning) */
+    offset?: number;
+    /** Alignment (relative positioning) */
+    alignment?: HorizontalAlignment;
+  };
+  /** Vertical positioning */
+  vertical: {
+    /** Anchor point */
+    anchor: PositionAnchor;
+    /** Offset in EMUs (absolute positioning) */
+    offset?: number;
+    /** Alignment (relative positioning) */
+    alignment?: VerticalAlignment;
+  };
+}
+
+/**
+ * Image anchor configuration (floating images)
+ */
+export interface ImageAnchor {
+  /** Position behind text */
+  behindDoc: boolean;
+  /** Lock anchor (prevent movement) */
+  locked: boolean;
+  /** Layout in table cell */
+  layoutInCell: boolean;
+  /** Allow overlap with other objects */
+  allowOverlap: boolean;
+  /** Z-order (higher = in front) */
+  relativeHeight: number;
+}
+
+/**
+ * Image crop settings (percentage-based)
+ */
+export interface ImageCrop {
+  /** Left crop percentage (0-100) */
+  left: number;
+  /** Top crop percentage (0-100) */
+  top: number;
+  /** Right crop percentage (0-100) */
+  right: number;
+  /** Bottom crop percentage (0-100) */
+  bottom: number;
+}
+
+/**
+ * Image visual effects
+ */
+export interface ImageEffects {
+  /** Brightness adjustment (-100 to +100) */
+  brightness?: number;
+  /** Contrast adjustment (-100 to +100) */
+  contrast?: number;
+  /** Convert to grayscale */
+  grayscale?: boolean;
+}
+
+/**
  * Image properties
  */
 export interface ImageProperties {
@@ -32,6 +166,18 @@ export interface ImageProperties {
   name?: string;
   /** Relationship ID (will be set by ImageManager) */
   relationshipId?: string;
+  /** Effect extent (space for shadows/glows) */
+  effectExtent?: EffectExtent;
+  /** Text wrapping configuration */
+  wrap?: TextWrapSettings;
+  /** Position configuration (floating images) */
+  position?: ImagePosition;
+  /** Anchor configuration (floating images) */
+  anchor?: ImageAnchor;
+  /** Crop settings */
+  crop?: ImageCrop;
+  /** Visual effects */
+  effects?: ImageEffects;
 }
 
 /**
@@ -47,6 +193,14 @@ export class Image {
   private imageData?: Buffer;
   private extension: string;
   private docPrId: number = 1;
+
+  // Advanced image properties (Phase 4.4)
+  private effectExtent?: EffectExtent;
+  private wrap?: TextWrapSettings;
+  private position?: ImagePosition;
+  private anchor?: ImageAnchor;
+  private crop?: ImageCrop;
+  private effects?: ImageEffects;
 
   /**
    * Creates a new image
@@ -66,6 +220,14 @@ export class Image {
     // Will be overridden if we can detect actual dimensions
     this.width = properties.width || inchesToEmus(6);
     this.height = properties.height || inchesToEmus(4);
+
+    // Initialize advanced properties (Phase 4.4)
+    this.effectExtent = properties.effectExtent;
+    this.wrap = properties.wrap;
+    this.position = properties.position;
+    this.anchor = properties.anchor;
+    this.crop = properties.crop;
+    this.effects = properties.effects;
 
     // Note: Dimension detection now happens in factory methods
     // This keeps constructor synchronous
@@ -673,18 +835,175 @@ export class Image {
   }
 
   /**
+   * Sets the effect extent (additional space for shadows, reflections, glows)
+   * This prevents effects from being clipped by the image boundaries
+   * @param left Left extent in EMUs
+   * @param top Top extent in EMUs
+   * @param right Right extent in EMUs
+   * @param bottom Bottom extent in EMUs
+   * @returns This image for chaining
+   */
+  setEffectExtent(left: number, top: number, right: number, bottom: number): this {
+    this.effectExtent = { left, top, right, bottom };
+    return this;
+  }
+
+  /**
+   * Gets the effect extent
+   * @returns Effect extent or undefined
+   */
+  getEffectExtent(): EffectExtent | undefined {
+    return this.effectExtent;
+  }
+
+  /**
+   * Sets text wrapping configuration
+   * Controls how text flows around the image
+   * @param type Wrap type ('square', 'tight', 'through', 'topAndBottom', 'none')
+   * @param side Which side to wrap text (optional)
+   * @param distances Distance from text on each side in EMUs (optional)
+   * @returns This image for chaining
+   */
+  setWrap(
+    type: WrapType,
+    side?: WrapSide,
+    distances?: { top?: number; bottom?: number; left?: number; right?: number }
+  ): this {
+    this.wrap = {
+      type,
+      side,
+      distanceTop: distances?.top,
+      distanceBottom: distances?.bottom,
+      distanceLeft: distances?.left,
+      distanceRight: distances?.right,
+    };
+    return this;
+  }
+
+  /**
+   * Gets the text wrap settings
+   * @returns Text wrap settings or undefined
+   */
+  getWrap(): TextWrapSettings | undefined {
+    return this.wrap;
+  }
+
+  /**
+   * Sets image position (for floating images)
+   * @param horizontal Horizontal positioning configuration
+   * @param vertical Vertical positioning configuration
+   * @returns This image for chaining
+   */
+  setPosition(
+    horizontal: { anchor: PositionAnchor; offset?: number; alignment?: HorizontalAlignment },
+    vertical: { anchor: PositionAnchor; offset?: number; alignment?: VerticalAlignment }
+  ): this {
+    this.position = { horizontal, vertical };
+    return this;
+  }
+
+  /**
+   * Gets the image position
+   * @returns Image position or undefined
+   */
+  getPosition(): ImagePosition | undefined {
+    return this.position;
+  }
+
+  /**
+   * Sets anchor configuration (converts image to floating)
+   * @param options Anchor configuration
+   * @returns This image for chaining
+   */
+  setAnchor(options: ImageAnchor): this {
+    this.anchor = options;
+    return this;
+  }
+
+  /**
+   * Gets the anchor configuration
+   * @returns Anchor configuration or undefined
+   */
+  getAnchor(): ImageAnchor | undefined {
+    return this.anchor;
+  }
+
+  /**
+   * Sets image crop (percentage-based)
+   * @param left Left crop percentage (0-100)
+   * @param top Top crop percentage (0-100)
+   * @param right Right crop percentage (0-100)
+   * @param bottom Bottom crop percentage (0-100)
+   * @returns This image for chaining
+   */
+  setCrop(left: number, top: number, right: number, bottom: number): this {
+    // Validate crop percentages
+    const clamp = (val: number) => Math.max(0, Math.min(100, val));
+    this.crop = {
+      left: clamp(left),
+      top: clamp(top),
+      right: clamp(right),
+      bottom: clamp(bottom),
+    };
+    return this;
+  }
+
+  /**
+   * Gets the crop settings
+   * @returns Crop settings or undefined
+   */
+  getCrop(): ImageCrop | undefined {
+    return this.crop;
+  }
+
+  /**
+   * Sets visual effects (brightness, contrast, grayscale)
+   * @param options Effect options
+   * @returns This image for chaining
+   */
+  setEffects(options: ImageEffects): this {
+    // Validate brightness and contrast ranges
+    const clamp = (val: number | undefined) =>
+      val !== undefined ? Math.max(-100, Math.min(100, val)) : undefined;
+
+    this.effects = {
+      brightness: clamp(options.brightness),
+      contrast: clamp(options.contrast),
+      grayscale: options.grayscale,
+    };
+    return this;
+  }
+
+  /**
+   * Gets the visual effects
+   * @returns Visual effects or undefined
+   */
+  getEffects(): ImageEffects | undefined {
+    return this.effects;
+  }
+
+  /**
+   * Checks if this image is floating (has anchor configuration)
+   * @returns True if image is floating, false if inline
+   */
+  isFloating(): boolean {
+    return this.anchor !== undefined || this.position !== undefined;
+  }
+
+  /**
    * Generates DrawingML XML for the image
-   * This creates an inline image in the document
+   * Creates either inline or floating (anchor) image based on configuration
    */
   toXML(): XMLElement {
     if (!this.relationshipId) {
       throw new Error('Image must have a relationship ID before generating XML');
     }
 
+    // Choose between inline and anchor (floating) based on configuration
+    const imageElement = this.isFloating() ? this.createAnchor() : this.createInline();
+
     // Create the drawing structure
-    const drawing = XMLBuilder.w('drawing', undefined, [
-      this.createInline(),
-    ]);
+    const drawing = XMLBuilder.w('drawing', undefined, [imageElement]);
 
     return drawing;
   }
@@ -706,13 +1025,14 @@ export class Image {
     });
 
     // Effect extent (for shadows, etc.)
+    const effectExt = this.effectExtent || { left: 0, top: 0, right: 0, bottom: 0 };
     children.push({
       name: 'wp:effectExtent',
       attributes: {
-        l: '0',
-        t: '0',
-        r: '0',
-        b: '0',
+        l: effectExt.left.toString(),
+        t: effectExt.top.toString(),
+        r: effectExt.right.toString(),
+        b: effectExt.bottom.toString(),
       },
       selfClosing: true,
     });
@@ -811,24 +1131,7 @@ export class Image {
         // Blip fill (reference to image)
         {
           name: 'pic:blipFill',
-          children: [
-            {
-              name: 'a:blip',
-              attributes: {
-                'r:embed': this.relationshipId!,
-              },
-              selfClosing: true,
-            },
-            {
-              name: 'a:stretch',
-              children: [
-                {
-                  name: 'a:fillRect',
-                  selfClosing: true,
-                },
-              ],
-            },
-          ],
+          children: this.createBlipFillChildren(),
         },
         // Shape properties (size and position)
         {
@@ -871,6 +1174,294 @@ export class Image {
           ],
         },
       ],
+    };
+  }
+
+  /**
+   * Creates the blipFill children (image reference with crop and effects)
+   * @private
+   */
+  private createBlipFillChildren(): XMLElement[] {
+    const children: XMLElement[] = [];
+
+    // Create blip element with effects
+    const blipChildren: XMLElement[] = [];
+
+    // Add crop if specified
+    if (this.crop) {
+      blipChildren.push({
+        name: 'a:srcRect',
+        attributes: {
+          l: Math.round(this.crop.left * 1000).toString(), // Convert % to per-mille
+          t: Math.round(this.crop.top * 1000).toString(),
+          r: Math.round(this.crop.right * 1000).toString(),
+          b: Math.round(this.crop.bottom * 1000).toString(),
+        },
+        selfClosing: true,
+      });
+    }
+
+    // Add effects if specified
+    if (this.effects) {
+      // Build lum attributes (brightness and contrast combined per ECMA-376)
+      const lumAttrs: Record<string, string> = {};
+
+      if (this.effects.brightness !== undefined) {
+        lumAttrs.bright = Math.round(this.effects.brightness * 1000).toString(); // Convert % to per-mille
+      }
+
+      if (this.effects.contrast !== undefined) {
+        lumAttrs.contrast = Math.round(this.effects.contrast * 1000).toString(); // Convert % to per-mille
+      }
+
+      // Add lum element if brightness or contrast specified
+      if (Object.keys(lumAttrs).length > 0) {
+        blipChildren.push({
+          name: 'a:lum',
+          attributes: lumAttrs,
+          selfClosing: true,
+        });
+      }
+
+      // Add grayscale if specified
+      if (this.effects.grayscale) {
+        blipChildren.push({
+          name: 'a:grayscl',
+          selfClosing: true,
+        });
+      }
+    }
+
+    children.push({
+      name: 'a:blip',
+      attributes: {
+        'r:embed': this.relationshipId!,
+      },
+      ...(blipChildren.length > 0 ? { children: blipChildren } : { selfClosing: true }),
+    });
+
+    // Stretch element with crop support
+    children.push({
+      name: 'a:stretch',
+      children: [
+        {
+          name: 'a:fillRect',
+          selfClosing: true,
+        },
+      ],
+    });
+
+    return children;
+  }
+
+  /**
+   * Creates the wp:anchor element for floating images
+   * @private
+   */
+  private createAnchor(): XMLElement {
+    const children: XMLElement[] = [];
+
+    // Simple offset (position for anchored images)
+    const anchorConfig = this.anchor || {
+      behindDoc: false,
+      locked: false,
+      layoutInCell: true,
+      allowOverlap: false,
+      relativeHeight: 251658240,
+    };
+
+    // Position H (horizontal)
+    if (this.position) {
+      const posH = this.position.horizontal;
+      const posHChildren: XMLElement[] = [];
+
+      if (posH.offset !== undefined) {
+        posHChildren.push({
+          name: 'wp:posOffset',
+          children: [posH.offset.toString()],
+        });
+      } else if (posH.alignment) {
+        posHChildren.push({
+          name: 'wp:align',
+          children: [posH.alignment],
+        });
+      }
+
+      children.push({
+        name: 'wp:positionH',
+        attributes: {
+          relativeFrom: posH.anchor,
+        },
+        children: posHChildren,
+      });
+    }
+
+    // Position V (vertical)
+    if (this.position) {
+      const posV = this.position.vertical;
+      const posVChildren: XMLElement[] = [];
+
+      if (posV.offset !== undefined) {
+        posVChildren.push({
+          name: 'wp:posOffset',
+          children: [posV.offset.toString()],
+        });
+      } else if (posV.alignment) {
+        posVChildren.push({
+          name: 'wp:align',
+          children: [posV.alignment],
+        });
+      }
+
+      children.push({
+        name: 'wp:positionV',
+        attributes: {
+          relativeFrom: posV.anchor,
+        },
+        children: posVChildren,
+      });
+    }
+
+    // Extent (size)
+    children.push({
+      name: 'wp:extent',
+      attributes: {
+        cx: this.width.toString(),
+        cy: this.height.toString(),
+      },
+      selfClosing: true,
+    });
+
+    // Effect extent
+    const effectExt = this.effectExtent || { left: 0, top: 0, right: 0, bottom: 0 };
+    children.push({
+      name: 'wp:effectExtent',
+      attributes: {
+        l: effectExt.left.toString(),
+        t: effectExt.top.toString(),
+        r: effectExt.right.toString(),
+        b: effectExt.bottom.toString(),
+      },
+      selfClosing: true,
+    });
+
+    // Wrap element (text wrapping)
+    if (this.wrap) {
+      children.push(this.createWrapElement());
+    } else {
+      // Default: wrap square both sides
+      children.push({
+        name: 'wp:wrapSquare',
+        attributes: {
+          wrapText: 'bothSides',
+        },
+        selfClosing: true,
+      });
+    }
+
+    // Document properties
+    children.push({
+      name: 'wp:docPr',
+      attributes: {
+        id: this.docPrId.toString(),
+        name: this.name,
+        descr: this.description,
+      },
+      selfClosing: true,
+    });
+
+    // Non-visual graphic frame properties
+    children.push({
+      name: 'wp:cNvGraphicFramePr',
+      children: [
+        {
+          name: 'a:graphicFrameLocks',
+          attributes: {
+            'xmlns:a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+            noChangeAspect: '1',
+          },
+          selfClosing: true,
+        },
+      ],
+    });
+
+    // Graphic (the actual image)
+    children.push(this.createGraphic());
+
+    return {
+      name: 'wp:anchor',
+      attributes: {
+        distT: this.wrap?.distanceTop?.toString() || '0',
+        distB: this.wrap?.distanceBottom?.toString() || '0',
+        distL: this.wrap?.distanceLeft?.toString() || '0',
+        distR: this.wrap?.distanceRight?.toString() || '0',
+        simplePos: '0',
+        relativeHeight: anchorConfig.relativeHeight.toString(),
+        behindDoc: anchorConfig.behindDoc ? '1' : '0',
+        locked: anchorConfig.locked ? '1' : '0',
+        layoutInCell: anchorConfig.layoutInCell ? '1' : '0',
+        allowOverlap: anchorConfig.allowOverlap ? '1' : '0',
+      },
+      children,
+    };
+  }
+
+  /**
+   * Creates the wrap element for text wrapping
+   * @private
+   */
+  private createWrapElement(): XMLElement {
+    if (!this.wrap) {
+      // Default wrap
+      return {
+        name: 'wp:wrapSquare',
+        attributes: {
+          wrapText: 'bothSides',
+        },
+        selfClosing: true,
+      };
+    }
+
+    const wrapAttributes: Record<string, string> = {
+      wrapText: this.wrap.side || 'bothSides',
+    };
+
+    // Add distances if specified
+    if (this.wrap.distanceTop !== undefined) {
+      wrapAttributes.distT = this.wrap.distanceTop.toString();
+    }
+    if (this.wrap.distanceBottom !== undefined) {
+      wrapAttributes.distB = this.wrap.distanceBottom.toString();
+    }
+    if (this.wrap.distanceLeft !== undefined) {
+      wrapAttributes.distL = this.wrap.distanceLeft.toString();
+    }
+    if (this.wrap.distanceRight !== undefined) {
+      wrapAttributes.distR = this.wrap.distanceRight.toString();
+    }
+
+    // Map wrap type to element name
+    const wrapElementName = (() => {
+      switch (this.wrap.type) {
+        case 'square':
+          return 'wp:wrapSquare';
+        case 'tight':
+          return 'wp:wrapTight';
+        case 'through':
+          return 'wp:wrapThrough';
+        case 'topAndBottom':
+          return 'wp:wrapTopAndBottom';
+        case 'none':
+          return 'wp:wrapNone';
+        default:
+          return 'wp:wrapSquare';
+      }
+    })();
+
+    return {
+      name: wrapElementName,
+      attributes: wrapAttributes,
+      selfClosing: true,
     };
   }
 

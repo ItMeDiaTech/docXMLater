@@ -315,6 +315,42 @@ export class XMLBuilder {
   }
 
   /**
+   * Helper method to create a w14 element (Word 2010+ features)
+   * @param name - Element name (without 'w14:' prefix)
+   * @param attributes - Element attributes
+   * @param children - Child elements
+   * @returns XMLElement
+   */
+  static w14(
+    name: string,
+    attributes?: Record<string, string | number | boolean | undefined>,
+    children?: (XMLElement | string)[]
+  ): XMLElement {
+    return {
+      name: `w14:${name}`,
+      attributes,
+      children,
+    };
+  }
+
+  /**
+   * Helper method to create a self-closing w14 element
+   * @param name - Element name (without 'w14:' prefix)
+   * @param attributes - Element attributes
+   * @returns XMLElement
+   */
+  static w14Self(
+    name: string,
+    attributes?: Record<string, string | number | boolean | undefined>
+  ): XMLElement {
+    return {
+      name: `w14:${name}`,
+      attributes,
+      selfClosing: true,
+    };
+  }
+
+  /**
    * Creates a complete WordprocessingML document structure
    * @param bodyContent - Content for the document body
    * @returns XML string for word/document.xml

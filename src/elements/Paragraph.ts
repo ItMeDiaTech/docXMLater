@@ -9,6 +9,8 @@ import { Hyperlink } from './Hyperlink';
 import { Bookmark } from './Bookmark';
 import { Revision } from './Revision';
 import { Comment } from './Comment';
+import { Shape } from './Shape';
+import { TextBox } from './TextBox';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
@@ -46,6 +48,61 @@ export type TextDirection = 'lrTb' | 'tbRl' | 'btLr' | 'lrTbV' | 'tbRlV' | 'tbLr
  * Text vertical alignment types
  */
 export type TextAlignment = 'top' | 'center' | 'baseline' | 'bottom' | 'auto';
+
+/**
+ * Textbox tight wrap modes
+ */
+export type TextboxTightWrap = 'none' | 'allLines' | 'firstAndLastLine' | 'firstLineOnly' | 'lastLineOnly';
+
+/**
+ * Paragraph property change tracking (for revision history)
+ */
+export interface ParagraphPropertiesChange {
+  /** Author of the change */
+  author?: string;
+  /** Date of the change */
+  date?: string;
+  /** Unique ID for this revision */
+  id?: string;
+  /** Previous paragraph properties before the change (stored as object) */
+  previousProperties?: Partial<ParagraphFormatting>;
+}
+
+/**
+ * Frame/text box properties
+ */
+export interface FrameProperties {
+  /** Width in twips */
+  w?: number;
+  /** Height in twips */
+  h?: number;
+  /** Height rule */
+  hRule?: 'auto' | 'atLeast' | 'exact';
+  /** Absolute horizontal position in twips */
+  x?: number;
+  /** Absolute vertical position in twips */
+  y?: number;
+  /** Relative horizontal alignment */
+  xAlign?: 'left' | 'center' | 'right' | 'inside' | 'outside';
+  /** Relative vertical alignment */
+  yAlign?: 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+  /** Horizontal anchor/positioning base */
+  hAnchor?: 'page' | 'margin' | 'text';
+  /** Vertical anchor/positioning base */
+  vAnchor?: 'page' | 'margin' | 'text';
+  /** Horizontal padding in twips */
+  hSpace?: number;
+  /** Vertical padding in twips */
+  vSpace?: number;
+  /** Text wrapping around frame */
+  wrap?: 'around' | 'notBeside' | 'none' | 'tight';
+  /** Drop cap style */
+  dropCap?: 'none' | 'drop' | 'margin';
+  /** Drop cap height in lines */
+  lines?: number;
+  /** Lock frame anchor to paragraph */
+  anchorLock?: boolean;
+}
 
 /**
  * Single border definition
@@ -146,12 +203,30 @@ export interface ParagraphFormatting {
   mirrorIndents?: boolean;
   /** Auto-adjust right indent when document grid is defined */
   adjustRightInd?: boolean;
+  /** Text frame/box properties (positioning, wrapping, drop cap) */
+  framePr?: FrameProperties;
+  /** Suppress automatic hyphenation for this paragraph */
+  suppressAutoHyphens?: boolean;
+  /** Prevent text frames from overlapping */
+  suppressOverlap?: boolean;
+  /** Tight wrapping mode for text boxes */
+  textboxTightWrap?: TextboxTightWrap;
+  /** Associated HTML div ID (for HTML round-trip) */
+  divId?: number;
+  /** Conditional table style formatting (bitmask string, e.g., "101000000100") */
+  cnfStyle?: string;
+  /** Section properties at paragraph level (for section breaks) */
+  sectPr?: any; // Complex object - simplified for now
+  /** Paragraph property change tracking (revision history) */
+  pPrChange?: ParagraphPropertiesChange;
+  /** Run properties for the paragraph mark (¶ symbol formatting) */
+  paragraphMarkRunProperties?: RunFormatting;
 }
 
 /**
  * Paragraph content (runs, fields, hyperlinks, or revisions)
  */
-type ParagraphContent = Run | Field | Hyperlink | Revision;
+type ParagraphContent = Run | Field | Hyperlink | Revision | Shape | TextBox;
 
 /**
  * Represents a paragraph in a document
@@ -294,6 +369,32 @@ export class Paragraph {
   }
 
   /**
+   * Adds a shape to the paragraph
+   * @param shape - Shape to add
+   * @returns This paragraph for chaining
+   * @example
+   * const rect = Shape.createRectangle(inchesToEmus(2), inchesToEmus(1));
+   * paragraph.addShape(rect);
+   */
+  addShape(shape: Shape): this {
+    this.content.push(shape);
+    return this;
+  }
+
+  /**
+   * Adds a text box to the paragraph
+   * @param textbox - TextBox to add
+   * @returns This paragraph for chaining
+   * @example
+   * const textbox = TextBox.create(inchesToEmus(3), inchesToEmus(2));
+   * paragraph.addTextBox(textbox);
+   */
+  addTextBox(textbox: TextBox): this {
+    this.content.push(textbox);
+    return this;
+  }
+
+  /**
    * Adds a bookmark start marker at the beginning of this paragraph
    * @param bookmark - Bookmark to add
    * @returns This paragraph for chaining
@@ -385,6 +486,91 @@ export class Paragraph {
    */
   getCommentsEnd(): Comment[] {
     return [...this.commentsEnd];
+  }
+
+  /**
+   * Adds a page number field
+   * @param formatting - Optional run formatting for the page number
+   * @returns This paragraph for chaining
+   * @example
+   * paragraph.addPageNumber();
+   * paragraph.addPageNumber({ bold: true, size: 12 });
+   */
+  addPageNumber(formatting?: RunFormatting): this {
+    return this.addField(Field.createPageNumber(formatting));
+  }
+
+  /**
+   * Adds a total pages field (NUMPAGES)
+   * @param formatting - Optional run formatting
+   * @returns This paragraph for chaining
+   * @example
+   * paragraph.addTotalPages();
+   */
+  addTotalPages(formatting?: RunFormatting): this {
+    return this.addField(Field.createTotalPages(formatting));
+  }
+
+  /**
+   * Adds a date field
+   * @param format - Date format (e.g., 'MMMM d, yyyy', 'M/d/yyyy')
+   * @param formatting - Optional run formatting
+   * @returns This paragraph for chaining
+   * @example
+   * paragraph.addDate();
+   * paragraph.addDate('MMMM d, yyyy');
+   * paragraph.addDate('M/d/yyyy', { italic: true });
+   */
+  addDate(format?: string, formatting?: RunFormatting): this {
+    return this.addField(Field.createDate(format, formatting));
+  }
+
+  /**
+   * Adds a time field
+   * @param format - Time format
+   * @param formatting - Optional run formatting
+   * @returns This paragraph for chaining
+   * @example
+   * paragraph.addTime();
+   * paragraph.addTime('h:mm:ss tt');
+   */
+  addTime(format?: string, formatting?: RunFormatting): this {
+    return this.addField(Field.createTime(format, formatting));
+  }
+
+  /**
+   * Adds a filename field
+   * @param includePath - Whether to include full path
+   * @param formatting - Optional run formatting
+   * @returns This paragraph for chaining
+   * @example
+   * paragraph.addFilename();
+   * paragraph.addFilename(true); // Includes full path
+   */
+  addFilename(includePath: boolean = false, formatting?: RunFormatting): this {
+    return this.addField(Field.createFilename(includePath, formatting));
+  }
+
+  /**
+   * Adds an author field
+   * @param formatting - Optional run formatting
+   * @returns This paragraph for chaining
+   * @example
+   * paragraph.addAuthor();
+   */
+  addAuthor(formatting?: RunFormatting): this {
+    return this.addField(Field.createAuthor(formatting));
+  }
+
+  /**
+   * Adds a title field
+   * @param formatting - Optional run formatting
+   * @returns This paragraph for chaining
+   * @example
+   * paragraph.addTitle();
+   */
+  addTitle(formatting?: RunFormatting): this {
+    return this.addField(Field.createTitle(formatting));
   }
 
   /**
@@ -769,6 +955,160 @@ export class Paragraph {
   }
 
   /**
+   * Sets text frame/box properties for this paragraph
+   * Text frames allow positioning paragraphs in specific locations with text wrapping.
+   * Per ECMA-376 Part 1 §17.3.1.11
+   * @param props - Frame properties
+   *   - w, h: Width and height in twips
+   *   - hRule: Height rule ('auto', 'atLeast', 'exact')
+   *   - x, y: Absolute positioning in twips
+   *   - xAlign, yAlign: Relative alignment
+   *   - hAnchor, vAnchor: Positioning base ('page', 'margin', 'text')
+   *   - hSpace, vSpace: Padding around frame in twips
+   *   - wrap: Text wrapping ('around', 'notBeside', 'none', 'tight')
+   *   - dropCap: Drop cap style ('none', 'drop', 'margin')
+   *   - lines: Drop cap height in lines
+   *   - anchorLock: Lock frame anchor to paragraph
+   * @returns This paragraph for chaining
+   */
+  setFrameProperties(props: FrameProperties): this {
+    this.formatting.framePr = props;
+    return this;
+  }
+
+  /**
+   * Suppress automatic hyphenation for this paragraph
+   * Per ECMA-376 Part 1 §17.3.1.33
+   * @param suppress - Whether to suppress hyphenation (default: true)
+   * @returns This paragraph for chaining
+   */
+  setSuppressAutoHyphens(suppress: boolean = true): this {
+    this.formatting.suppressAutoHyphens = suppress;
+    return this;
+  }
+
+  /**
+   * Prevent text frames from overlapping with this paragraph
+   * Per ECMA-376 Part 1 §17.3.1.34
+   * @param suppress - Whether to prevent overlap (default: true)
+   * @returns This paragraph for chaining
+   */
+  setSuppressOverlap(suppress: boolean = true): this {
+    this.formatting.suppressOverlap = suppress;
+    return this;
+  }
+
+  /**
+   * Sets tight wrapping mode for text boxes
+   * Controls how tightly surrounding text wraps around text box content.
+   * Per ECMA-376 Part 1 §17.3.1.37
+   * @param wrap - Tight wrap mode
+   *   - 'none': No tight wrapping
+   *   - 'allLines': Tight wrap all lines
+   *   - 'firstAndLastLine': Tight wrap first and last lines only
+   *   - 'firstLineOnly': Tight wrap first line only
+   *   - 'lastLineOnly': Tight wrap last line only
+   * @returns This paragraph for chaining
+   */
+  setTextboxTightWrap(wrap: TextboxTightWrap): this {
+    this.formatting.textboxTightWrap = wrap;
+    return this;
+  }
+
+  /**
+   * Sets the HTML div ID associated with this paragraph
+   * Used for HTML round-trip conversion to preserve div structure.
+   * Per ECMA-376 Part 1 §17.3.1.9
+   * @param id - Decimal ID referencing a div in the web settings part
+   * @returns This paragraph for chaining
+   */
+  setDivId(id: number): this {
+    this.formatting.divId = id;
+    return this;
+  }
+
+  /**
+   * Sets conditional table style formatting for this paragraph
+   * Used to apply conditional formatting based on table position (first row, last column, etc.).
+   * Per ECMA-376 Part 1 §17.3.1.8
+   * @param bitmask - Bitmask string (e.g., "101000000100")
+   *   Each bit represents a conditional formatting property:
+   *   - Bit 0: First row
+   *   - Bit 1: Last row
+   *   - Bit 2: First column
+   *   - Bit 3: Last column
+   *   - Bit 4: Band 1 vertical
+   *   - Bit 5: Band 2 vertical
+   *   - Bit 6: Band 1 horizontal
+   *   - Bit 7: Band 2 horizontal
+   *   - Bit 8-11: Corner cells (NE, NW, SE, SW)
+   * @returns This paragraph for chaining
+   */
+  setConditionalFormatting(bitmask: string): this {
+    this.formatting.cnfStyle = bitmask;
+    return this;
+  }
+
+  /**
+   * Sets section properties for this paragraph
+   * Used to define section breaks and section-specific formatting.
+   * Per ECMA-376 Part 1 §17.3.1.30
+   * @param properties - Section properties object
+   * @returns This paragraph for chaining
+   */
+  setSectionProperties(properties: any): this {
+    this.formatting.sectPr = properties;
+    return this;
+  }
+
+  /**
+   * Sets paragraph property change tracking information
+   * Used for revision history and change tracking.
+   * Per ECMA-376 Part 1 §17.3.1.27
+   * @param change - Change tracking information
+   * @returns This paragraph for chaining
+   */
+  setParagraphPropertiesChange(change: ParagraphPropertiesChange): this {
+    this.formatting.pPrChange = change;
+    return this;
+  }
+
+  /**
+   * Sets run properties for the paragraph mark (¶ symbol)
+   *
+   * The paragraph mark is the invisible character at the end of every paragraph.
+   * It can have its own formatting independent of the text runs in the paragraph.
+   * This is useful for controlling formatting behavior when text is inserted after
+   * the paragraph mark.
+   *
+   * Per ECMA-376 Part 1 §17.3.1.29 (Run Properties for the Paragraph Mark)
+   *
+   * Common use cases:
+   * - Set default font for new text added to paragraph
+   * - Control paragraph mark visibility in "Show/Hide ¶" mode
+   * - Apply highlighting to paragraph mark for visual consistency
+   *
+   * @param properties - Run formatting properties for the paragraph mark
+   * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * // Set paragraph mark to be red and bold
+   * paragraph.setParagraphMarkFormatting({ bold: true, color: 'FF0000' });
+   *
+   * // Hide paragraph mark
+   * paragraph.setParagraphMarkFormatting({ vanish: true });
+   *
+   * // Set default font for new text in this paragraph
+   * paragraph.setParagraphMarkFormatting({ font: 'Arial', size: 12 });
+   * ```
+   */
+  setParagraphMarkFormatting(properties: RunFormatting): this {
+    this.formatting.paragraphMarkRunProperties = properties;
+    return this;
+  }
+
+  /**
    * Converts the paragraph to WordprocessingML XML element
    *
    * **ECMA-376 Compliance:** Properties are generated in the order specified by
@@ -803,6 +1143,15 @@ export class Paragraph {
       pPrChildren.push(XMLBuilder.wSelf('pStyle', { 'w:val': this.formatting.style }));
     }
 
+    // 1.5. Paragraph mark run properties per ECMA-376 Part 1 §17.3.1.29
+    // Controls formatting of the paragraph mark (¶ symbol) itself
+    if (this.formatting.paragraphMarkRunProperties) {
+      const rPr = Run.generateRunPropertiesXML(this.formatting.paragraphMarkRunProperties);
+      if (rPr) {
+        pPrChildren.push(rPr);
+      }
+    }
+
     // 2. Keep with next paragraph
     if (this.formatting.keepNext) {
       pPrChildren.push(XMLBuilder.wSelf('keepNext'));
@@ -835,6 +1184,11 @@ export class Paragraph {
     // 7. Suppress line numbers per ECMA-376 Part 1 §17.3.1.34
     if (this.formatting.suppressLineNumbers) {
       pPrChildren.push(XMLBuilder.wSelf('suppressLineNumbers'));
+    }
+
+    // 7a. Suppress automatic hyphenation per ECMA-376 Part 1 §17.3.1.33
+    if (this.formatting.suppressAutoHyphens) {
+      pPrChildren.push(XMLBuilder.wSelf('suppressAutoHyphens'));
     }
 
     // 8. Spacing (before/after/line) per ECMA-376 Part 1 §17.3.1.33
@@ -945,6 +1299,35 @@ export class Paragraph {
       }
     }
 
+    // 10a. Text frame properties per ECMA-376 Part 1 §17.3.1.11
+    if (this.formatting.framePr) {
+      const attrs: Record<string, string> = {};
+      const f = this.formatting.framePr;
+      if (f.w !== undefined) attrs['w:w'] = f.w.toString();
+      if (f.h !== undefined) attrs['w:h'] = f.h.toString();
+      if (f.hRule) attrs['w:hRule'] = f.hRule;
+      if (f.x !== undefined) attrs['w:x'] = f.x.toString();
+      if (f.y !== undefined) attrs['w:y'] = f.y.toString();
+      if (f.xAlign) attrs['w:xAlign'] = f.xAlign;
+      if (f.yAlign) attrs['w:yAlign'] = f.yAlign;
+      if (f.hAnchor) attrs['w:hAnchor'] = f.hAnchor;
+      if (f.vAnchor) attrs['w:vAnchor'] = f.vAnchor;
+      if (f.hSpace !== undefined) attrs['w:hSpace'] = f.hSpace.toString();
+      if (f.vSpace !== undefined) attrs['w:vSpace'] = f.vSpace.toString();
+      if (f.wrap) attrs['w:wrap'] = f.wrap;
+      if (f.dropCap) attrs['w:dropCap'] = f.dropCap;
+      if (f.lines !== undefined) attrs['w:lines'] = f.lines.toString();
+      if (f.anchorLock !== undefined) attrs['w:anchorLock'] = f.anchorLock ? '1' : '0';
+      if (Object.keys(attrs).length > 0) {
+        pPrChildren.push(XMLBuilder.wSelf('framePr', attrs));
+      }
+    }
+
+    // 10b. Suppress text frame overlap per ECMA-376 Part 1 §17.3.1.34
+    if (this.formatting.suppressOverlap) {
+      pPrChildren.push(XMLBuilder.wSelf('suppressOverlap'));
+    }
+
     // 11. Bidirectional layout per ECMA-376 Part 1 §17.3.1.6
     if (this.formatting.bidi !== undefined) {
       pPrChildren.push(XMLBuilder.wSelf('bidi', { 'w:val': this.formatting.bidi ? '1' : '0' }));
@@ -953,6 +1336,11 @@ export class Paragraph {
     // 12. Auto-adjust right indent per ECMA-376 Part 1 §17.3.1.1
     if (this.formatting.adjustRightInd !== undefined) {
       pPrChildren.push(XMLBuilder.wSelf('adjustRightInd', { 'w:val': this.formatting.adjustRightInd ? '1' : '0' }));
+    }
+
+    // 12a. Textbox tight wrap per ECMA-376 Part 1 §17.3.1.37
+    if (this.formatting.textboxTightWrap) {
+      pPrChildren.push(XMLBuilder.wSelf('textboxTightWrap', { 'w:val': this.formatting.textboxTightWrap }));
     }
 
     // 13. Justification/Alignment per ECMA-376 §17.3.1.13
@@ -977,6 +1365,36 @@ export class Paragraph {
       pPrChildren.push(XMLBuilder.wSelf('outlineLvl', { 'w:val': this.formatting.outlineLevel.toString() }));
     }
 
+    // 17. HTML div ID per ECMA-376 Part 1 §17.3.1.9
+    if (this.formatting.divId !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf('divId', { 'w:val': this.formatting.divId.toString() }));
+    }
+
+    // 18. Conditional table style formatting per ECMA-376 Part 1 §17.3.1.8
+    if (this.formatting.cnfStyle) {
+      pPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
+    }
+
+    // 19. Paragraph property change tracking per ECMA-376 Part 1 §17.3.1.27
+    if (this.formatting.pPrChange) {
+      const change = this.formatting.pPrChange;
+      const attrs: Record<string, string> = {};
+      if (change.author) attrs['w:author'] = change.author;
+      if (change.date) attrs['w:date'] = change.date;
+      if (change.id) attrs['w:id'] = change.id;
+      // Note: Full implementation would serialize previousProperties as child <w:pPr>
+      // For now, we store the metadata attributes only
+      pPrChildren.push(XMLBuilder.wSelf('pPrChange', attrs));
+    }
+
+    // 20. Section properties per ECMA-376 Part 1 §17.3.1.30
+    // Note: sectPr is typically the last child of pPr
+    if (this.formatting.sectPr) {
+      // Simplified: serialize as-is (complex structure)
+      // Full implementation would generate complete sectPr XML structure
+      pPrChildren.push(XMLBuilder.wSelf('sectPr', this.formatting.sectPr));
+    }
+
     // Build paragraph element
     const paragraphChildren: XMLElement[] = [];
 
@@ -995,7 +1413,7 @@ export class Paragraph {
       paragraphChildren.push(comment.toRangeStartXML());
     }
 
-    // Add content (runs, fields, hyperlinks, and revisions)
+    // Add content (runs, fields, hyperlinks, revisions, shapes, textboxes)
     for (const item of this.content) {
       if (item instanceof Field) {
         // Fields need to be wrapped in a run
@@ -1006,6 +1424,12 @@ export class Paragraph {
       } else if (item instanceof Revision) {
         // Revisions (track changes) are their own element
         paragraphChildren.push(item.toXML());
+      } else if (item instanceof Shape) {
+        // Shapes are wrapped in a run
+        paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
+      } else if (item instanceof TextBox) {
+        // Text boxes are wrapped in a run
+        paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
       } else {
         paragraphChildren.push(item.toXML());
       }

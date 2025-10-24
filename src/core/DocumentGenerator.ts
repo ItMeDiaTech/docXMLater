@@ -90,7 +90,7 @@ export class DocumentGenerator {
   }
 
   /**
-   * Generates docProps/core.xml
+   * Generates docProps/core.xml with extended properties
    */
   generateCoreProps(properties: DocumentProperties): string {
     const now = new Date();
@@ -123,7 +123,25 @@ export class DocumentGenerator {
   <cp:lastModifiedBy>${XMLBuilder.sanitizeXmlContent(
     properties.lastModifiedBy || properties.creator || "DocXML"
   )}</cp:lastModifiedBy>
-  <cp:revision>${properties.revision || 1}</cp:revision>
+  <cp:revision>${properties.revision || 1}</cp:revision>${
+    properties.category
+      ? `\n  <cp:category>${XMLBuilder.sanitizeXmlContent(
+          properties.category
+        )}</cp:category>`
+      : ""
+  }${
+    properties.contentStatus
+      ? `\n  <cp:contentStatus>${XMLBuilder.sanitizeXmlContent(
+          properties.contentStatus
+        )}</cp:contentStatus>`
+      : ""
+  }${
+    properties.language
+      ? `\n  <dc:language>${XMLBuilder.sanitizeXmlContent(
+          properties.language
+        )}</dc:language>`
+      : ""
+  }
   <dcterms:created xsi:type="dcterms:W3CDTF">${formatDate(
     created
   )}</dcterms:created>
@@ -134,20 +152,85 @@ export class DocumentGenerator {
   }
 
   /**
-   * Generates docProps/app.xml
+   * Generates docProps/app.xml with extended properties
    */
-  generateAppProps(): string {
+  generateAppProps(properties: DocumentProperties = {}): string {
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
             xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>DocXML</Application>
+  <Application>${XMLBuilder.sanitizeXmlContent(
+    properties.application || "docxmlater"
+  )}</Application>
   <DocSecurity>0</DocSecurity>
   <ScaleCrop>false</ScaleCrop>
-  <Company></Company>
+  <Company>${XMLBuilder.sanitizeXmlContent(properties.company || "")}</Company>${
+    properties.manager
+      ? `\n  <Manager>${XMLBuilder.sanitizeXmlContent(
+          properties.manager
+        )}</Manager>`
+      : ""
+  }
   <LinksUpToDate>false</LinksUpToDate>
   <SharedDoc>false</SharedDoc>
   <HyperlinksChanged>false</HyperlinksChanged>
-  <AppVersion>0.1.0</AppVersion>
+  <AppVersion>${XMLBuilder.sanitizeXmlContent(
+    properties.appVersion || properties.version || "1.0.0"
+  )}</AppVersion>
+</Properties>`;
+  }
+
+  /**
+   * Generates docProps/custom.xml with custom properties
+   */
+  generateCustomProps(
+    customProps: Record<string, string | number | boolean | Date>
+  ): string {
+    if (!customProps || Object.keys(customProps).length === 0) {
+      return "";
+    }
+
+    const formatCustomValue = (
+      key: string,
+      value: string | number | boolean | Date,
+      pid: number
+    ): string => {
+      if (typeof value === "string") {
+        return `  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="${pid}" name="${XMLBuilder.sanitizeXmlContent(
+          key
+        )}">
+    <vt:lpwstr>${XMLBuilder.sanitizeXmlContent(value)}</vt:lpwstr>
+  </property>`;
+      } else if (typeof value === "number") {
+        return `  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="${pid}" name="${XMLBuilder.sanitizeXmlContent(
+          key
+        )}">
+    <vt:r8>${value}</vt:r8>
+  </property>`;
+      } else if (typeof value === "boolean") {
+        return `  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="${pid}" name="${XMLBuilder.sanitizeXmlContent(
+          key
+        )}">
+    <vt:bool>${value ? "true" : "false"}</vt:bool>
+  </property>`;
+      } else if (value instanceof Date) {
+        return `  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="${pid}" name="${XMLBuilder.sanitizeXmlContent(
+          key
+        )}">
+    <vt:filetime>${value.toISOString()}</vt:filetime>
+  </property>`;
+      }
+      return "";
+    };
+
+    const properties = Object.entries(customProps)
+      .map(([key, value], index) => formatCustomValue(key, value, index + 2))
+      .filter((prop) => prop !== "")
+      .join("\n");
+
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+            xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+${properties}
 </Properties>`;
   }
 
@@ -160,7 +243,8 @@ export class DocumentGenerator {
     headerFooterManager: HeaderFooterManager,
     commentManager: CommentManager,
     zipHandler: any, // ZipHandler - to check file existence
-    fontManager?: FontManager
+    fontManager?: FontManager,
+    hasCustomProperties: boolean = false
   ): string {
     const images = imageManager.getAllImages();
     const headers = headerFooterManager.getAllHeaders();
@@ -245,8 +329,8 @@ export class DocumentGenerator {
         '  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>\n';
     }
 
-    // Preserve custom properties if exists
-    if (zipHandler.hasFile?.("docProps/custom.xml")) {
+    // Include custom properties if exists or will be created
+    if (zipHandler.hasFile?.("docProps/custom.xml") || hasCustomProperties) {
       xml +=
         '  <Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>\n';
     }

@@ -161,6 +161,9 @@ export {
 export { Image, ImageFormat, ImageProperties } from './elements/Image';
 export { ImageManager } from './elements/ImageManager';
 export { ImageRun } from './elements/ImageRun';
+export { Shape, ShapeType, ShapeProperties, ShapeFill, ShapeOutline } from './elements/Shape';
+export { TextBox, TextBoxProperties, TextBoxFill, TextBoxMargins } from './elements/TextBox';
+export { DrawingManager, DrawingElement, DrawingType, PreservedDrawing } from './managers/DrawingManager';
 export { FontManager, FontFormat, FontEntry } from './elements/FontManager';
 export {
   Field,

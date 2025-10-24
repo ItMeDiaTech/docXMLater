@@ -13,6 +13,178 @@ import { RunFormatting } from '../elements/Run';
 export type StyleType = 'paragraph' | 'character' | 'table' | 'numbering';
 
 /**
+ * Table alignment
+ */
+export type TableAlignment = 'left' | 'center' | 'right';
+
+/**
+ * Border properties
+ */
+export interface BorderProperties {
+  /** Border style */
+  style?: 'none' | 'single' | 'double' | 'dashed' | 'dotted' | 'thick';
+  /** Border size in eighths of a point */
+  size?: number;
+  /** Border spacing/padding in points */
+  space?: number;
+  /** Border color (hex without #) */
+  color?: string;
+}
+
+/**
+ * Table borders (6 possible borders)
+ */
+export interface TableBorders {
+  top?: BorderProperties;
+  bottom?: BorderProperties;
+  left?: BorderProperties;
+  right?: BorderProperties;
+  /** Inside horizontal borders */
+  insideH?: BorderProperties;
+  /** Inside vertical borders */
+  insideV?: BorderProperties;
+}
+
+/**
+ * Cell borders (8 possible borders, includes diagonals)
+ */
+export interface CellBorders extends TableBorders {
+  /** Top-left to bottom-right diagonal */
+  tl2br?: BorderProperties;
+  /** Top-right to bottom-left diagonal */
+  tr2bl?: BorderProperties;
+}
+
+/**
+ * Shading properties
+ */
+export interface ShadingProperties {
+  /** Background fill color (hex without #) */
+  fill?: string;
+  /** Foreground color for patterns (hex without #) */
+  color?: string;
+  /** Shading pattern */
+  val?: 'clear' | 'solid' | 'pct5' | 'pct10' | 'pct20' | 'pct25'
+       | 'pct30' | 'pct40' | 'pct50' | 'pct60' | 'pct70' | 'pct75'
+       | 'pct80' | 'pct90' | 'diagStripe' | 'horzStripe' | 'vertStripe'
+       | 'reverseDiagStripe' | 'horzCross' | 'diagCross';
+}
+
+/**
+ * Cell margins
+ */
+export interface CellMargins {
+  /** Top margin in twips */
+  top?: number;
+  /** Bottom margin in twips */
+  bottom?: number;
+  /** Left margin in twips */
+  left?: number;
+  /** Right margin in twips */
+  right?: number;
+}
+
+/**
+ * Table-level formatting properties (tblPr)
+ */
+export interface TableStyleFormatting {
+  /** Table indentation from left margin in twips */
+  indent?: number;
+  /** Default cell spacing in twips */
+  cellSpacing?: number;
+  /** Table borders */
+  borders?: TableBorders;
+  /** Default cell margins */
+  cellMargins?: CellMargins;
+  /** Table background shading */
+  shading?: ShadingProperties;
+  /** Table alignment */
+  alignment?: TableAlignment;
+}
+
+/**
+ * Table cell formatting properties (tcPr)
+ */
+export interface TableCellStyleFormatting {
+  /** Cell borders (8 possible borders) */
+  borders?: CellBorders;
+  /** Cell background shading */
+  shading?: ShadingProperties;
+  /** Cell-specific margins */
+  margins?: CellMargins;
+  /** Vertical alignment in cell */
+  verticalAlignment?: 'top' | 'center' | 'bottom';
+}
+
+/**
+ * Table row formatting properties (trPr)
+ */
+export interface TableRowStyleFormatting {
+  /** Prevent row from splitting across pages */
+  cantSplit?: boolean;
+  /** Mark row as header row */
+  isHeader?: boolean;
+  /** Row height in twips */
+  height?: number;
+  /** Row height rule */
+  heightRule?: 'auto' | 'exact' | 'atLeast';
+}
+
+/**
+ * Conditional formatting type for table regions
+ */
+export type ConditionalFormattingType =
+  | 'wholeTable'   // Entire table
+  | 'firstRow'     // First row
+  | 'lastRow'      // Last row
+  | 'firstCol'     // First column
+  | 'lastCol'      // Last column
+  | 'band1Vert'    // Odd column banding
+  | 'band2Vert'    // Even column banding
+  | 'band1Horz'    // Odd row banding
+  | 'band2Horz'    // Even row banding
+  | 'nwCell'       // Northwest (top-left) corner cell
+  | 'neCell'       // Northeast (top-right) corner cell
+  | 'swCell'       // Southwest (bottom-left) corner cell
+  | 'seCell';      // Southeast (bottom-right) corner cell
+
+/**
+ * Conditional table formatting for a specific region
+ */
+export interface ConditionalTableFormatting {
+  /** Region type */
+  type: ConditionalFormattingType;
+  /** Paragraph formatting for this region */
+  paragraphFormatting?: ParagraphFormatting;
+  /** Run formatting for this region */
+  runFormatting?: RunFormatting;
+  /** Table formatting for this region */
+  tableFormatting?: TableStyleFormatting;
+  /** Cell formatting for this region */
+  cellFormatting?: TableCellStyleFormatting;
+  /** Row formatting for this region */
+  rowFormatting?: TableRowStyleFormatting;
+}
+
+/**
+ * Table style properties (Phase 5.1)
+ */
+export interface TableStyleProperties {
+  /** Table-level formatting */
+  table?: TableStyleFormatting;
+  /** Default cell formatting */
+  cell?: TableCellStyleFormatting;
+  /** Default row formatting */
+  row?: TableRowStyleFormatting;
+  /** Rows per band for row banding (default 1) */
+  rowBandSize?: number;
+  /** Columns per band for column banding (default 1) */
+  colBandSize?: number;
+  /** Conditional formatting for specific table regions */
+  conditionalFormatting?: ConditionalTableFormatting[];
+}
+
+/**
  * Style properties
  */
 export interface StyleProperties {
@@ -34,6 +206,28 @@ export interface StyleProperties {
   paragraphFormatting?: ParagraphFormatting;
   /** Run formatting (for character and paragraph styles) */
   runFormatting?: RunFormatting;
+  /** Table style properties (for table styles only - Phase 5.1) */
+  tableStyle?: TableStyleProperties;
+
+  // Style Gallery Metadata (Phase 5.3)
+  /** Quick style - show in style gallery */
+  qFormat?: boolean;
+  /** UI priority - sort order in style picker (0-99, lower = higher priority) */
+  uiPriority?: number;
+  /** Semi-hidden - hide from gallery unless in use */
+  semiHidden?: boolean;
+  /** Unhide when used - auto-show when applied */
+  unhideWhenUsed?: boolean;
+  /** Locked - prevent modification */
+  locked?: boolean;
+  /** Personal - user-specific style */
+  personal?: boolean;
+  /** Link - linked character/paragraph style ID */
+  link?: string;
+  /** Auto-redefine - update style from manual formatting */
+  autoRedefine?: boolean;
+  /** Aliases - alternative names (comma-separated) */
+  aliases?: string;
 }
 
 /**
@@ -119,6 +313,186 @@ export class Style {
    */
   setRunFormatting(formatting: RunFormatting): this {
     this.properties.runFormatting = { ...formatting };
+    return this;
+  }
+
+  /**
+   * Sets whether this is a quick style (appears in style gallery)
+   * @param enabled - True to show in quick style gallery
+   * @returns This style for chaining
+   */
+  setQFormat(enabled: boolean): this {
+    this.properties.qFormat = enabled;
+    return this;
+  }
+
+  /**
+   * Sets the UI priority (sort order in style picker)
+   * @param priority - Priority value (0-99, lower = higher priority)
+   * @returns This style for chaining
+   */
+  setUiPriority(priority: number): this {
+    if (priority < 0 || priority > 99) {
+      throw new Error('UI priority must be between 0 and 99');
+    }
+    this.properties.uiPriority = priority;
+    return this;
+  }
+
+  /**
+   * Sets whether this style is semi-hidden (hidden from recommended list)
+   * @param hidden - True to hide from recommended list
+   * @returns This style for chaining
+   */
+  setSemiHidden(hidden: boolean): this {
+    this.properties.semiHidden = hidden;
+    return this;
+  }
+
+  /**
+   * Sets whether to unhide this style when first used
+   * @param enabled - True to auto-show when applied
+   * @returns This style for chaining
+   */
+  setUnhideWhenUsed(enabled: boolean): this {
+    this.properties.unhideWhenUsed = enabled;
+    return this;
+  }
+
+  /**
+   * Sets whether this style is locked (prevents modification)
+   * @param locked - True to lock the style
+   * @returns This style for chaining
+   */
+  setLocked(locked: boolean): this {
+    this.properties.locked = locked;
+    return this;
+  }
+
+  /**
+   * Sets whether this is a personal style (user-specific)
+   * @param personal - True to mark as personal
+   * @returns This style for chaining
+   */
+  setPersonal(personal: boolean): this {
+    this.properties.personal = personal;
+    return this;
+  }
+
+  /**
+   * Sets the linked style ID (for character/paragraph style linking)
+   * @param styleId - ID of the linked style
+   * @returns This style for chaining
+   */
+  setLink(styleId: string): this {
+    this.properties.link = styleId;
+    return this;
+  }
+
+  /**
+   * Sets whether to auto-redefine this style from manual formatting
+   * @param enabled - True to enable auto-redefine
+   * @returns This style for chaining
+   */
+  setAutoRedefine(enabled: boolean): this {
+    this.properties.autoRedefine = enabled;
+    return this;
+  }
+
+  /**
+   * Sets alternative names for this style (comma-separated)
+   * @param aliases - Comma-separated list of alternative names
+   * @returns This style for chaining
+   */
+  setAliases(aliases: string): this {
+    this.properties.aliases = aliases;
+    return this;
+  }
+
+  /**
+   * Sets table-level formatting properties (Phase 5.1)
+   * @param formatting - Table formatting options
+   * @returns This style for chaining
+   */
+  setTableFormatting(formatting: TableStyleFormatting): this {
+    if (!this.properties.tableStyle) {
+      this.properties.tableStyle = {};
+    }
+    this.properties.tableStyle.table = { ...formatting };
+    return this;
+  }
+
+  /**
+   * Sets table cell formatting properties (Phase 5.1)
+   * @param formatting - Cell formatting options
+   * @returns This style for chaining
+   */
+  setTableCellFormatting(formatting: TableCellStyleFormatting): this {
+    if (!this.properties.tableStyle) {
+      this.properties.tableStyle = {};
+    }
+    this.properties.tableStyle.cell = { ...formatting };
+    return this;
+  }
+
+  /**
+   * Sets table row formatting properties (Phase 5.1)
+   * @param formatting - Row formatting options
+   * @returns This style for chaining
+   */
+  setTableRowFormatting(formatting: TableRowStyleFormatting): this {
+    if (!this.properties.tableStyle) {
+      this.properties.tableStyle = {};
+    }
+    this.properties.tableStyle.row = { ...formatting };
+    return this;
+  }
+
+  /**
+   * Sets row band size for row banding (Phase 5.1)
+   * @param size - Number of rows per band (default 1)
+   * @returns This style for chaining
+   */
+  setRowBandSize(size: number): this {
+    if (!this.properties.tableStyle) {
+      this.properties.tableStyle = {};
+    }
+    if (size < 0) {
+      throw new Error('Row band size must be non-negative');
+    }
+    this.properties.tableStyle.rowBandSize = size;
+    return this;
+  }
+
+  /**
+   * Sets column band size for column banding (Phase 5.1)
+   * @param size - Number of columns per band (default 1)
+   * @returns This style for chaining
+   */
+  setColBandSize(size: number): this {
+    if (!this.properties.tableStyle) {
+      this.properties.tableStyle = {};
+    }
+    if (size < 0) {
+      throw new Error('Column band size must be non-negative');
+    }
+    this.properties.tableStyle.colBandSize = size;
+    return this;
+  }
+
+  /**
+   * Adds conditional formatting for a specific table region (Phase 5.1)
+   * @param conditional - Conditional formatting definition
+   * @returns This style for chaining
+   */
+  addConditionalFormatting(conditional: ConditionalTableFormatting): this {
+    if (!this.properties.tableStyle) {
+      this.properties.tableStyle = {};
+    }
+    if (!this.properties.tableStyle.conditionalFormatting) {
+      this.properties.tableStyle.conditionalFormatting = [];
+    }
+    this.properties.tableStyle.conditionalFormatting.push({ ...conditional });
     return this;
   }
 
@@ -210,6 +584,18 @@ export class Style {
         }
       }
 
+      // Check metadata properties (Phase 5.3)
+      if (this.properties.uiPriority !== undefined) {
+        if (this.properties.uiPriority < 0 || this.properties.uiPriority > 99) {
+          return false;
+        }
+      }
+
+      // Check linked style doesn't reference self
+      if (this.properties.link === this.properties.styleId) {
+        return false;
+      }
+
       return true;
     } catch {
       return false;
@@ -249,9 +635,55 @@ export class Style {
       styleChildren.push(XMLBuilder.wSelf('next', { 'w:val': this.properties.next }));
     }
 
-    // Add qFormat for built-in styles (makes them appear in quick styles)
-    if (!this.properties.customStyle) {
+    // Add link (linked character/paragraph style)
+    if (this.properties.link) {
+      styleChildren.push(XMLBuilder.wSelf('link', { 'w:val': this.properties.link }));
+    }
+
+    // Add autoRedefine
+    if (this.properties.autoRedefine) {
+      styleChildren.push(XMLBuilder.wSelf('autoRedefine'));
+    }
+
+    // Add metadata properties (Phase 5.3)
+    // qFormat - Quick style gallery appearance
+    if (this.properties.qFormat !== undefined) {
+      if (this.properties.qFormat) {
+        styleChildren.push(XMLBuilder.wSelf('qFormat'));
+      }
+    } else if (!this.properties.customStyle) {
+      // Default: built-in styles have qFormat
       styleChildren.push(XMLBuilder.wSelf('qFormat'));
+    }
+
+    // semiHidden - Hide from recommended list
+    if (this.properties.semiHidden) {
+      styleChildren.push(XMLBuilder.wSelf('semiHidden'));
+    }
+
+    // unhideWhenUsed - Auto-show when applied
+    if (this.properties.unhideWhenUsed) {
+      styleChildren.push(XMLBuilder.wSelf('unhideWhenUsed'));
+    }
+
+    // uiPriority - Sort order in style picker
+    if (this.properties.uiPriority !== undefined) {
+      styleChildren.push(XMLBuilder.wSelf('uiPriority', { 'w:val': String(this.properties.uiPriority) }));
+    }
+
+    // locked - Prevent modification
+    if (this.properties.locked) {
+      styleChildren.push(XMLBuilder.wSelf('locked'));
+    }
+
+    // personal - User-specific style
+    if (this.properties.personal) {
+      styleChildren.push(XMLBuilder.wSelf('personal'));
+    }
+
+    // aliases - Alternative names
+    if (this.properties.aliases) {
+      styleChildren.push(XMLBuilder.wSelf('aliases', { 'w:val': this.properties.aliases }));
     }
 
     // Add paragraph properties
@@ -267,6 +699,43 @@ export class Style {
       const rPr = this.generateRunProperties(this.properties.runFormatting);
       if (rPr.children && rPr.children.length > 0) {
         styleChildren.push(rPr);
+      }
+    }
+
+    // Add table style properties (Phase 5.1)
+    if (this.properties.tableStyle) {
+      // Add tblPr (table properties)
+      if (this.properties.tableStyle.table) {
+        const tblPr = this.generateTableProperties(this.properties.tableStyle.table, this.properties.tableStyle);
+        if (tblPr.children && tblPr.children.length > 0) {
+          styleChildren.push(tblPr);
+        }
+      }
+
+      // Add tcPr (table cell properties)
+      if (this.properties.tableStyle.cell) {
+        const tcPr = this.generateTableCellProperties(this.properties.tableStyle.cell);
+        if (tcPr.children && tcPr.children.length > 0) {
+          styleChildren.push(tcPr);
+        }
+      }
+
+      // Add trPr (table row properties)
+      if (this.properties.tableStyle.row) {
+        const trPr = this.generateTableRowProperties(this.properties.tableStyle.row);
+        if (trPr.children && trPr.children.length > 0) {
+          styleChildren.push(trPr);
+        }
+      }
+
+      // Add conditional formatting (tblStylePr)
+      if (this.properties.tableStyle.conditionalFormatting) {
+        for (const conditional of this.properties.tableStyle.conditionalFormatting) {
+          const tblStylePr = this.generateConditionalFormatting(conditional);
+          if (tblStylePr.children && tblStylePr.children.length > 0) {
+            styleChildren.push(tblStylePr);
+          }
+        }
       }
     }
 
@@ -384,6 +853,269 @@ export class Style {
     }
 
     return XMLBuilder.w('rPr', undefined, rPrChildren);
+  }
+
+  /**
+   * Generates table properties XML (tblPr) - Phase 5.1
+   */
+  private generateTableProperties(formatting: TableStyleFormatting, tableStyle: TableStyleProperties): XMLElement {
+    const tblPrChildren: XMLElement[] = [];
+
+    // Table width (defaulting to auto if not specified)
+    tblPrChildren.push(
+      XMLBuilder.wSelf('tblW', { 'w:w': '0', 'w:type': 'auto' })
+    );
+
+    // Table indentation
+    if (formatting.indent !== undefined) {
+      tblPrChildren.push(XMLBuilder.wSelf('tblInd', { 'w:w': formatting.indent, 'w:type': 'dxa' }));
+    }
+
+    // Table alignment
+    if (formatting.alignment) {
+      tblPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': formatting.alignment }));
+    }
+
+    // Cell spacing
+    if (formatting.cellSpacing !== undefined) {
+      tblPrChildren.push(
+        XMLBuilder.wSelf('tblCellSpacing', { 'w:w': formatting.cellSpacing, 'w:type': 'dxa' })
+      );
+    }
+
+    // Table borders
+    if (formatting.borders) {
+      const borderElements = this.generateBorderElements(formatting.borders, false);
+      if (borderElements.length > 0) {
+        tblPrChildren.push(XMLBuilder.w('tblBorders', undefined, borderElements));
+      }
+    }
+
+    // Table shading
+    if (formatting.shading) {
+      tblPrChildren.push(this.generateShadingElement(formatting.shading));
+    }
+
+    // Cell margins
+    if (formatting.cellMargins) {
+      const marginElements: XMLElement[] = [];
+      if (formatting.cellMargins.top !== undefined) {
+        marginElements.push(XMLBuilder.wSelf('top', { 'w:w': formatting.cellMargins.top, 'w:type': 'dxa' }));
+      }
+      if (formatting.cellMargins.left !== undefined) {
+        marginElements.push(XMLBuilder.wSelf('left', { 'w:w': formatting.cellMargins.left, 'w:type': 'dxa' }));
+      }
+      if (formatting.cellMargins.bottom !== undefined) {
+        marginElements.push(XMLBuilder.wSelf('bottom', { 'w:w': formatting.cellMargins.bottom, 'w:type': 'dxa' }));
+      }
+      if (formatting.cellMargins.right !== undefined) {
+        marginElements.push(XMLBuilder.wSelf('right', { 'w:w': formatting.cellMargins.right, 'w:type': 'dxa' }));
+      }
+      if (marginElements.length > 0) {
+        tblPrChildren.push(XMLBuilder.w('tblCellMar', undefined, marginElements));
+      }
+    }
+
+    // Row band size
+    if (tableStyle.rowBandSize !== undefined) {
+      tblPrChildren.push(XMLBuilder.wSelf('tblStyleRowBandSize', { 'w:val': tableStyle.rowBandSize }));
+    }
+
+    // Column band size
+    if (tableStyle.colBandSize !== undefined) {
+      tblPrChildren.push(XMLBuilder.wSelf('tblStyleColBandSize', { 'w:val': tableStyle.colBandSize }));
+    }
+
+    return XMLBuilder.w('tblPr', undefined, tblPrChildren);
+  }
+
+  /**
+   * Generates table cell properties XML (tcPr) - Phase 5.1
+   */
+  private generateTableCellProperties(formatting: TableCellStyleFormatting): XMLElement {
+    const tcPrChildren: XMLElement[] = [];
+
+    // Cell borders
+    if (formatting.borders) {
+      const borderElements = this.generateBorderElements(formatting.borders, true);
+      if (borderElements.length > 0) {
+        tcPrChildren.push(XMLBuilder.w('tcBorders', undefined, borderElements));
+      }
+    }
+
+    // Cell shading
+    if (formatting.shading) {
+      tcPrChildren.push(this.generateShadingElement(formatting.shading));
+    }
+
+    // Cell margins
+    if (formatting.margins) {
+      const marginElements: XMLElement[] = [];
+      if (formatting.margins.top !== undefined) {
+        marginElements.push(XMLBuilder.wSelf('top', { 'w:w': formatting.margins.top, 'w:type': 'dxa' }));
+      }
+      if (formatting.margins.left !== undefined) {
+        marginElements.push(XMLBuilder.wSelf('left', { 'w:w': formatting.margins.left, 'w:type': 'dxa' }));
+      }
+      if (formatting.margins.bottom !== undefined) {
+        marginElements.push(XMLBuilder.wSelf('bottom', { 'w:w': formatting.margins.bottom, 'w:type': 'dxa' }));
+      }
+      if (formatting.margins.right !== undefined) {
+        marginElements.push(XMLBuilder.wSelf('right', { 'w:w': formatting.margins.right, 'w:type': 'dxa' }));
+      }
+      if (marginElements.length > 0) {
+        tcPrChildren.push(XMLBuilder.w('tcMar', undefined, marginElements));
+      }
+    }
+
+    // Vertical alignment
+    if (formatting.verticalAlignment) {
+      tcPrChildren.push(XMLBuilder.wSelf('vAlign', { 'w:val': formatting.verticalAlignment }));
+    }
+
+    return XMLBuilder.w('tcPr', undefined, tcPrChildren);
+  }
+
+  /**
+   * Generates table row properties XML (trPr) - Phase 5.1
+   */
+  private generateTableRowProperties(formatting: TableRowStyleFormatting): XMLElement {
+    const trPrChildren: XMLElement[] = [];
+
+    // Row height
+    if (formatting.height !== undefined) {
+      const heightRule = formatting.heightRule || 'auto';
+      trPrChildren.push(
+        XMLBuilder.wSelf('trHeight', { 'w:val': formatting.height, 'w:hRule': heightRule })
+      );
+    }
+
+    // Can't split row across pages
+    if (formatting.cantSplit) {
+      trPrChildren.push(XMLBuilder.wSelf('cantSplit'));
+    }
+
+    // Header row
+    if (formatting.isHeader) {
+      trPrChildren.push(XMLBuilder.wSelf('tblHeader'));
+    }
+
+    return XMLBuilder.w('trPr', undefined, trPrChildren);
+  }
+
+  /**
+   * Generates conditional formatting XML (tblStylePr) - Phase 5.1
+   */
+  private generateConditionalFormatting(conditional: ConditionalTableFormatting): XMLElement {
+    const tblStylePrChildren: XMLElement[] = [];
+
+    // Add paragraph properties if specified
+    if (conditional.paragraphFormatting) {
+      const pPr = this.generateParagraphProperties(conditional.paragraphFormatting);
+      if (pPr.children && pPr.children.length > 0) {
+        tblStylePrChildren.push(pPr);
+      }
+    }
+
+    // Add run properties if specified
+    if (conditional.runFormatting) {
+      const rPr = this.generateRunProperties(conditional.runFormatting);
+      if (rPr.children && rPr.children.length > 0) {
+        tblStylePrChildren.push(rPr);
+      }
+    }
+
+    // Add table properties if specified
+    if (conditional.tableFormatting) {
+      const tblPr = this.generateTableProperties(conditional.tableFormatting, {});
+      if (tblPr.children && tblPr.children.length > 0) {
+        tblStylePrChildren.push(tblPr);
+      }
+    }
+
+    // Add cell properties if specified
+    if (conditional.cellFormatting) {
+      const tcPr = this.generateTableCellProperties(conditional.cellFormatting);
+      if (tcPr.children && tcPr.children.length > 0) {
+        tblStylePrChildren.push(tcPr);
+      }
+    }
+
+    // Add row properties if specified
+    if (conditional.rowFormatting) {
+      const trPr = this.generateTableRowProperties(conditional.rowFormatting);
+      if (trPr.children && trPr.children.length > 0) {
+        tblStylePrChildren.push(trPr);
+      }
+    }
+
+    return XMLBuilder.w('tblStylePr', { 'w:type': conditional.type }, tblStylePrChildren);
+  }
+
+  /**
+   * Generates border elements for tables or cells - Phase 5.1
+   * @param borders - Border properties
+   * @param includeDiagonals - Whether to include diagonal borders (for cells)
+   */
+  private generateBorderElements(borders: TableBorders | CellBorders, includeDiagonals: boolean): XMLElement[] {
+    const borderElements: XMLElement[] = [];
+
+    const borderProps = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'] as const;
+    for (const prop of borderProps) {
+      const border = borders[prop];
+      if (border) {
+        const attrs: Record<string, string | number> = {};
+        if (border.style) attrs['w:val'] = border.style;
+        if (border.size !== undefined) attrs['w:sz'] = border.size;
+        if (border.space !== undefined) attrs['w:space'] = border.space;
+        if (border.color) attrs['w:color'] = border.color;
+
+        if (Object.keys(attrs).length > 0) {
+          borderElements.push(XMLBuilder.wSelf(prop, attrs));
+        }
+      }
+    }
+
+    // Add diagonal borders for cells
+    if (includeDiagonals) {
+      const cellBorders = borders as CellBorders;
+      if (cellBorders.tl2br) {
+        const attrs: Record<string, string | number> = {};
+        if (cellBorders.tl2br.style) attrs['w:val'] = cellBorders.tl2br.style;
+        if (cellBorders.tl2br.size !== undefined) attrs['w:sz'] = cellBorders.tl2br.size;
+        if (cellBorders.tl2br.space !== undefined) attrs['w:space'] = cellBorders.tl2br.space;
+        if (cellBorders.tl2br.color) attrs['w:color'] = cellBorders.tl2br.color;
+
+        if (Object.keys(attrs).length > 0) {
+          borderElements.push(XMLBuilder.wSelf('tl2br', attrs));
+        }
+      }
+      if (cellBorders.tr2bl) {
+        const attrs: Record<string, string | number> = {};
+        if (cellBorders.tr2bl.style) attrs['w:val'] = cellBorders.tr2bl.style;
+        if (cellBorders.tr2bl.size !== undefined) attrs['w:sz'] = cellBorders.tr2bl.size;
+        if (cellBorders.tr2bl.space !== undefined) attrs['w:space'] = cellBorders.tr2bl.space;
+        if (cellBorders.tr2bl.color) attrs['w:color'] = cellBorders.tr2bl.color;
+
+        if (Object.keys(attrs).length > 0) {
+          borderElements.push(XMLBuilder.wSelf('tr2bl', attrs));
+        }
+      }
+    }
+
+    return borderElements;
+  }
+
+  /**
+   * Generates shading element - Phase 5.1
+   */
+  private generateShadingElement(shading: ShadingProperties): XMLElement {
+    const attrs: Record<string, string> = {};
+    if (shading.val) attrs['w:val'] = shading.val;
+    if (shading.color) attrs['w:color'] = shading.color;
+    if (shading.fill) attrs['w:fill'] = shading.fill;
+
+    return XMLBuilder.wSelf('shd', attrs);
   }
 
   /**
@@ -546,6 +1278,64 @@ export class Style {
           before: 480, // Larger spacing before TOC
           after: 240,
         },
+      },
+    });
+  }
+
+  /**
+   * Creates a Table Normal style (Phase 5.1)
+   * @returns Table Normal style
+   */
+  static createTableNormalStyle(): Style {
+    return new Style({
+      styleId: 'TableNormal',
+      name: 'Table Normal',
+      type: 'table',
+      basedOn: 'Normal',
+      tableStyle: {
+        table: {
+          cellMargins: {
+            top: 0,
+            left: 108,  // ~0.075 inch
+            bottom: 0,
+            right: 108,
+          },
+        },
+        rowBandSize: 1,
+        colBandSize: 1,
+      },
+    });
+  }
+
+  /**
+   * Creates a Table Grid style with borders (Phase 5.1)
+   * @returns Table Grid style
+   */
+  static createTableGridStyle(): Style {
+    return new Style({
+      styleId: 'TableGrid',
+      name: 'Table Grid',
+      type: 'table',
+      basedOn: 'TableNormal',
+      tableStyle: {
+        table: {
+          borders: {
+            top: { style: 'single', size: 4, color: '000000' },
+            bottom: { style: 'single', size: 4, color: '000000' },
+            left: { style: 'single', size: 4, color: '000000' },
+            right: { style: 'single', size: 4, color: '000000' },
+            insideH: { style: 'single', size: 4, color: '000000' },
+            insideV: { style: 'single', size: 4, color: '000000' },
+          },
+          cellMargins: {
+            top: 0,
+            left: 108,
+            bottom: 0,
+            right: 108,
+          },
+        },
+        rowBandSize: 1,
+        colBandSize: 1,
       },
     });
   }

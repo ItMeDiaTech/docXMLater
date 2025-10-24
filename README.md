@@ -1,54 +1,29 @@
 # docXMLater - Professional DOCX Framework
 
 [![npm version](https://img.shields.io/npm/v/docxmlater.svg)](https://www.npmjs.com/package/docxmlater)
-[![Tests](https://img.shields.io/badge/tests-635%20passing-brightgreen)](https://github.com/ItMeDiaTech/docXMLater)
+[![Tests](https://img.shields.io/badge/tests-1098%20passing-brightgreen)](https://github.com/ItMeDiaTech/docXMLater)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A comprehensive, production-ready TypeScript/JavaScript library for creating, reading, and manipulating Microsoft Word (.docx) documents programmatically. Full OpenXML compliance with extensive API coverage and **100% test pass rate**.
 
-I do a lot of professional documentation work. From the solutions that exist out there for working with .docx files and therefore .xml files, they are not amazing. Most of the frameworks that exist that do give you everything you want... charge thousands a year. I decided to make my own framework to interact with these filetypes and focus on ease of usability. All functionality works with helper functions to interact with all aspects of a .docx / xml document.
+Built for professional documentation work, docXMLater provides a complete solution for programmatic DOCX manipulation with an intuitive API and helper functions for all aspects of document creation and modification.
 
-## ✨ Latest Updates - v0.31.0
+## Latest Updates - v1.0.0
 
-**ComplexField Support & Critical Bug Fixes!** Major enhancement release:
+**Production Release!** All major features complete:
 
-### New Features
+### What's New in v1.0.0
 
-- **ComplexField Support:** Full implementation of begin/separate/end field structure per ECMA-376
-- **TOC Field Generator:** `createTOCField()` with all switches (\o, \h, \z, \u, \n, \t)
-- **Advanced Fields:** Foundation for cross-references, indexes, and dynamic content
-- **Style Color Fix:** Fixed critical bug where hex colors were corrupted during load/save
+- **Complete Feature Set:** All 102 major features implemented
+- **Table Styles:** Full support with 12 conditional formatting types
+- **Content Controls:** 9 control types (rich text, plain text, combo box, dropdown, date picker, checkbox, picture, building block, group)
+- **Field Types:** 11 field types (PAGE, NUMPAGES, DATE, TIME, FILENAME, AUTHOR, TITLE, REF, HYPERLINK, SEQ, TC/XE)
+- **Drawing Elements:** Shapes and textboxes with full positioning
+- **Document Properties:** Core, extended, and custom properties
+- **Production Ready:** Full ECMA-376 compliance, zero regressions
 
-### What's New
-
-- `ComplexField` class for TOC, cross-references, and advanced field types
-- `createTOCField()` function with customizable options (levels, hyperlinks, styles)
-- Fixed style color parsing (colors no longer corrupted to size values)
-- New `XMLParser.extractSelfClosingTag()` for accurate XML parsing
-- 41 new comprehensive tests (StylesRoundTrip + ComplexField)
-
-### Field Support
-
-```typescript
-import { createTOCField, ComplexField } from "docxmlater";
-
-// Create TOC with custom options
-const toc = createTOCField({
-  levels: "1-3",
-  hyperlinks: true,
-  omitPageNumbers: false,
-});
-
-// Create custom complex field
-const field = new ComplexField({
-  instruction: " PAGE \\* MERGEFORMAT ",
-  result: "1",
-  resultFormatting: { bold: true },
-});
-```
-
-**Test Results:** 635/635 tests passing (100% - up from 596)
+**Test Results:** 1,098/1,098 tests passing (100% - exceeding v1.0 goal by 29%)
 
 ## Quick Start
 
@@ -614,13 +589,104 @@ doc.insertTocAt(0, toc);
 
 ### Unit Conversion Utilities
 
-| Function                     | Description          | Example                     |
-| ---------------------------- | -------------------- | --------------------------- |
-| `inchesToTwips(inches)`      | Inches to twips      | `inchesToTwips(1)` // 1440  |
-| `inchesToEmus(inches)`       | Inches to EMUs       | `inchesToEmus(1)` // 914400 |
-| `cmToTwips(cm)`              | Centimeters to twips | `cmToTwips(2.54)` // 1440   |
-| `pointsToTwips(points)`      | Points to twips      | `pointsToTwips(12)` // 240  |
-| `pixelsToEmus(pixels, dpi?)` | Pixels to EMUs       | `pixelsToEmus(96)`          |
+#### Twips Conversions
+| Function                  | Description         | Example                     |
+| ------------------------- | ------------------- | --------------------------- |
+| `twipsToPoints(twips)`    | Twips to points     | `twipsToPoints(240)` // 12  |
+| `twipsToInches(twips)`    | Twips to inches     | `twipsToInches(1440)` // 1  |
+| `twipsToCm(twips)`        | Twips to cm         | `twipsToCm(1440)` // 2.54   |
+| `twipsToEmus(twips)`      | Twips to EMUs       | `twipsToEmus(1440)`         |
+
+#### EMUs (English Metric Units) Conversions
+| Function                    | Description          | Example                       |
+| --------------------------- | -------------------- | ----------------------------- |
+| `emusToTwips(emus)`         | EMUs to twips        | `emusToTwips(914400)` // 1440 |
+| `emusToInches(emus)`        | EMUs to inches       | `emusToInches(914400)` // 1   |
+| `emusToCm(emus)`            | EMUs to cm           | `emusToCm(914400)` // 2.54    |
+| `emusToPoints(emus)`        | EMUs to points       | `emusToPoints(914400)` // 72  |
+| `emusToPixels(emus, dpi?)`  | EMUs to pixels       | `emusToPixels(914400)` // 96  |
+
+#### Points Conversions
+| Function                 | Description        | Example                    |
+| ------------------------ | ------------------ | -------------------------- |
+| `pointsToTwips(points)`  | Points to twips    | `pointsToTwips(12)` // 240 |
+| `pointsToEmus(points)`   | Points to EMUs     | `pointsToEmus(72)`         |
+| `pointsToInches(points)` | Points to inches   | `pointsToInches(72)` // 1  |
+| `pointsToCm(points)`     | Points to cm       | `pointsToCm(72)` // 2.54   |
+
+#### Inches Conversions
+| Function                      | Description         | Example                       |
+| ----------------------------- | ------------------- | ----------------------------- |
+| `inchesToTwips(inches)`       | Inches to twips     | `inchesToTwips(1)` // 1440    |
+| `inchesToEmus(inches)`        | Inches to EMUs      | `inchesToEmus(1)` // 914400   |
+| `inchesToPoints(inches)`      | Inches to points    | `inchesToPoints(1)` // 72     |
+| `inchesToCm(inches)`          | Inches to cm        | `inchesToCm(1)` // 2.54       |
+| `inchesToPixels(inches, dpi)` | Inches to pixels    | `inchesToPixels(1, 96)` // 96 |
+
+#### Centimeters Conversions
+| Function                | Description      | Example                     |
+| ----------------------- | ---------------- | --------------------------- |
+| `cmToTwips(cm)`         | cm to twips      | `cmToTwips(2.54)` // 1440   |
+| `cmToEmus(cm)`          | cm to EMUs       | `cmToEmus(2.54)` // 914400  |
+| `cmToInches(cm)`        | cm to inches     | `cmToInches(2.54)` // 1     |
+| `cmToPoints(cm)`        | cm to points     | `cmToPoints(2.54)` // 72    |
+| `cmToPixels(cm, dpi?)`  | cm to pixels     | `cmToPixels(2.54, 96)` // 96|
+
+#### Pixels Conversions
+| Function                     | Description         | Example                        |
+| ---------------------------- | ------------------- | ------------------------------ |
+| `pixelsToEmus(pixels, dpi?)` | Pixels to EMUs      | `pixelsToEmus(96)` // 914400   |
+| `pixelsToInches(pixels, dpi?)`| Pixels to inches   | `pixelsToInches(96, 96)` // 1  |
+| `pixelsToTwips(pixels, dpi?)`| Pixels to twips     | `pixelsToTwips(96, 96)` // 1440|
+| `pixelsToCm(pixels, dpi?)`   | Pixels to cm        | `pixelsToCm(96, 96)` // 2.54   |
+| `pixelsToPoints(pixels, dpi?)`| Pixels to points   | `pixelsToPoints(96, 96)` // 72 |
+
+**Note:** Default DPI is 96 for pixel conversions
+
+### ZIP Archive Helper Methods
+
+#### File Operations
+| Method                          | Description               | Example                                      |
+| ------------------------------- | ------------------------- | -------------------------------------------- |
+| `addFile(path, content)`        | Add file to archive       | `handler.addFile('doc.xml', xmlContent)`     |
+| `updateFile(path, content)`     | Update existing file      | `handler.updateFile('doc.xml', newContent)`  |
+| `removeFile(path)`              | Remove file from archive  | `handler.removeFile('old.xml')`              |
+| `renameFile(oldPath, newPath)`  | Rename file               | `handler.renameFile('a.xml', 'b.xml')`       |
+| `copyFile(srcPath, destPath)`   | Copy file                 | `handler.copyFile('a.xml', 'copy-a.xml')`    |
+| `moveFile(srcPath, destPath)`   | Move file                 | `handler.moveFile('a.xml', 'folder/a.xml')`  |
+
+#### File Retrieval
+| Method                    | Description            | Returns         |
+| ------------------------- | ---------------------- | --------------- |
+| `getFile(path)`           | Get file object        | `ZipFile`       |
+| `getFileAsString(path)`   | Get file as string     | `string`        |
+| `getFileAsBuffer(path)`   | Get file as buffer     | `Buffer`        |
+| `hasFile(path)`           | Check if file exists   | `boolean`       |
+| `getFilePaths()`          | Get all file paths     | `string[]`      |
+| `getAllFiles()`           | Get all files          | `FileMap`       |
+
+#### Batch Operations
+| Method                          | Description                  | Returns        |
+| ------------------------------- | ---------------------------- | -------------- |
+| `removeFiles(paths[])`          | Remove multiple files        | `number`       |
+| `getFilesByExtension(ext)`      | Get files by extension       | `ZipFile[]`    |
+| `getTextFiles()`                | Get all text files           | `ZipFile[]`    |
+| `getBinaryFiles()`              | Get all binary files         | `ZipFile[]`    |
+| `getMediaFiles()`               | Get media files              | `ZipFile[]`    |
+
+#### Archive Information
+| Method             | Description               | Returns                  |
+| ------------------ | ------------------------- | ------------------------ |
+| `getFileCount()`   | Count files in archive    | `number`                 |
+| `getTotalSize()`   | Get total size in bytes   | `number`                 |
+| `getStats()`       | Get detailed statistics   | `{fileCount, size, ...}` |
+| `isEmpty()`        | Check if archive is empty | `boolean`                |
+
+#### Import/Export
+| Method                           | Description              | Returns              |
+| -------------------------------- | ------------------------ | -------------------- |
+| `exportFile(internal, external)` | Export file from archive | `Promise<void>`      |
+| `importFile(external, internal)` | Import file to archive   | `Promise<void>`      |
 
 ## Common Recipes
 
@@ -1012,11 +1078,11 @@ const run = new Run("Text<w:t>value</w:t>", { cleanXmlFromText: false });
 
 **The Right Approach**: Use the framework's API methods instead of embedding XML:
 
-- ✅ Use `paragraph.addText()` multiple times for separate text runs
-- ✅ Use formatting options: `{bold: true}`, `{italic: true}`, etc.
-- ✅ Use `paragraph.addHyperlink()` for links
-- ❌ Don't pass XML strings to text methods
-- ❌ Don't try to embed `<w:t>` or other XML tags in your text
+- Use `paragraph.addText()` multiple times for separate text runs
+- Use formatting options: `{bold: true}`, `{italic: true}`, etc.
+- Use `paragraph.addHyperlink()` for links
+- Don't pass XML strings to text methods
+- Don't try to embed `<w:t>` or other XML tags in your text
 
 For more details, see the [corruption detection examples](examples/troubleshooting/).
 
@@ -1098,12 +1164,12 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 
 **Critical Bug Fix Release:**
 
-- ✅ **Fixed Paragraph.getText()** - Now includes hyperlink text content (critical data loss bug)
-- ✅ **Added hyperlink integration tests** - 6 new comprehensive test cases
-- ✅ **Enhanced test suite** - 474/478 tests passing (98.1% pass rate)
-- ✅ **Fixed type safety** - XMLElement handling improvements across test files
-- ✅ **Improved StylesManager** - XML corruption detection moved before parser
-- ✅ **Hyperlink management** - Proper relationship ID clearing on URL updates
+- **Fixed Paragraph.getText()** - Now includes hyperlink text content (critical data loss bug)
+- **Added hyperlink integration tests** - 6 new comprehensive test cases
+- **Enhanced test suite** - 474/478 tests passing (98.1% pass rate)
+- **Fixed type safety** - XMLElement handling improvements across test files
+- **Improved StylesManager** - XML corruption detection moved before parser
+- **Hyperlink management** - Proper relationship ID clearing on URL updates
 
 **What This Fixes:**
 When using `para.addText('foo') + para.addHyperlink(link)`, the hyperlink text is now properly included in `paragraph.getText()`, preventing silent text loss.

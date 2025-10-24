@@ -2,7 +2,7 @@
  * TableCell - Represents a cell in a table
  */
 
-import { Paragraph } from './Paragraph';
+import { Paragraph, TextDirection } from './Paragraph';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
@@ -54,16 +54,35 @@ export interface CellMargins {
 }
 
 /**
+ * Cell width type
+ * Per ECMA-376 Part 1 §17.18.87
+ */
+export type CellWidthType = 'auto' | 'dxa' | 'pct';
+
+/**
+ * Vertical merge type for cells
+ * Per ECMA-376 Part 1 §17.4.85
+ */
+export type VerticalMerge = 'restart' | 'continue';
+
+/**
  * Cell formatting options
  */
 export interface CellFormatting {
   width?: number; // Width in twips
+  widthType?: CellWidthType; // Width type (auto, dxa, pct)
   borders?: CellBorders;
   shading?: CellShading;
   verticalAlignment?: CellVerticalAlignment;
-  columnSpan?: number; // Number of columns to span
+  columnSpan?: number; // Number of columns to span (gridSpan)
   rowSpan?: number; // Number of rows to span (gridSpan)
   margins?: CellMargins; // Cell margins (spacing inside borders)
+  textDirection?: TextDirection; // Text flow direction
+  fitText?: boolean; // Fit text to cell width
+  noWrap?: boolean; // Prevent text wrapping
+  hideMark?: boolean; // Hide end-of-cell mark
+  cnfStyle?: string; // Conditional formatting style (14-char binary string)
+  vMerge?: VerticalMerge; // Vertical cell merge
 }
 
 /**
@@ -193,6 +212,94 @@ export class TableCell {
   }
 
   /**
+   * Sets text direction for cell content
+   * Per ECMA-376 Part 1 §17.4.72
+   * @param direction - Text flow direction
+   *   - 'lrTb': Left-to-right, top-to-bottom (default)
+   *   - 'tbRl': Top-to-bottom, right-to-left (vertical text, East Asian)
+   *   - 'btLr': Bottom-to-top, left-to-right (vertical text)
+   *   - 'lrTbV': Left-to-right, top-to-bottom, vertical
+   *   - 'tbRlV': Top-to-bottom, right-to-left, vertical
+   *   - 'tbLrV': Top-to-bottom, left-to-right, vertical
+   * @returns This cell for chaining
+   */
+  setTextDirection(direction: TextDirection): this {
+    this.formatting.textDirection = direction;
+    return this;
+  }
+
+  /**
+   * Sets whether to fit text to cell width
+   * Per ECMA-376 Part 1 §17.4.68
+   * @param fit - Whether to expand/compress text to fit cell width
+   * @returns This cell for chaining
+   */
+  setFitText(fit: boolean = true): this {
+    this.formatting.fitText = fit;
+    return this;
+  }
+
+  /**
+   * Sets whether to prevent text wrapping in cell
+   * Per ECMA-376 Part 1 §17.4.34
+   * @param noWrap - Whether to prevent wrapping (default: true)
+   * @returns This cell for chaining
+   */
+  setNoWrap(noWrap: boolean = true): this {
+    this.formatting.noWrap = noWrap;
+    return this;
+  }
+
+  /**
+   * Sets whether to hide the end-of-cell mark
+   * Per ECMA-376 Part 1 §17.4.24
+   * @param hide - Whether to ignore cell end mark in height calculations (default: true)
+   * @returns This cell for chaining
+   */
+  setHideMark(hide: boolean = true): this {
+    this.formatting.hideMark = hide;
+    return this;
+  }
+
+  /**
+   * Sets conditional formatting style for this cell
+   * Per ECMA-376 Part 1 §17.4.7
+   * @param cnfStyle - 14-character binary string representing which conditional formats to apply
+   *   Each bit position controls a different conditional format (e.g., "100000000000" for first row)
+   * @returns This cell for chaining
+   */
+  setConditionalStyle(cnfStyle: string): this {
+    this.formatting.cnfStyle = cnfStyle;
+    return this;
+  }
+
+  /**
+   * Sets cell width with type specification
+   * Per ECMA-376 Part 1 §17.4.81
+   * @param width - Width value
+   * @param type - Width type: 'auto' (automatic), 'dxa' (twips), or 'pct' (percentage * 50)
+   * @returns This cell for chaining
+   */
+  setWidthType(width: number, type: CellWidthType = 'dxa'): this {
+    this.formatting.width = width;
+    this.formatting.widthType = type;
+    return this;
+  }
+
+  /**
+   * Sets vertical merge for this cell
+   * Per ECMA-376 Part 1 §17.4.85
+   * @param merge - Vertical merge type:
+   *   - 'restart': Start a new vertically merged region (top cell)
+   *   - 'continue': Continue the current vertically merged region (cells below)
+   * @returns This cell for chaining
+   */
+  setVerticalMerge(merge: VerticalMerge): this {
+    this.formatting.vMerge = merge;
+    return this;
+  }
+
+  /**
    * Gets the cell formatting
    * @returns Cell formatting
    */
@@ -207,14 +314,18 @@ export class TableCell {
   toXML(): XMLElement {
     const tcPrChildren: XMLElement[] = [];
 
-    // Add cell width
+    // Add cell width (tcW) per ECMA-376 Part 1 §17.4.81
     if (this.formatting.width !== undefined) {
-      tcPrChildren.push(
-        XMLBuilder.wSelf('tcW', {
-          'w:w': this.formatting.width,
-          'w:type': 'dxa',
-        })
-      );
+      const widthAttrs: Record<string, string | number> = {
+        'w:w': this.formatting.width,
+        'w:type': this.formatting.widthType || 'dxa',
+      };
+      tcPrChildren.push(XMLBuilder.wSelf('tcW', widthAttrs));
+    }
+
+    // Add conditional formatting style (cnfStyle) per ECMA-376 Part 1 §17.4.7
+    if (this.formatting.cnfStyle) {
+      tcPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
     }
 
     // Add cell borders
@@ -291,6 +402,36 @@ export class TableCell {
       tcPrChildren.push(
         XMLBuilder.wSelf('gridSpan', { 'w:val': this.formatting.columnSpan })
       );
+    }
+
+    // Add text direction (textDirection) per ECMA-376 Part 1 §17.4.72
+    if (this.formatting.textDirection) {
+      tcPrChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': this.formatting.textDirection }));
+    }
+
+    // Add no wrap (noWrap) per ECMA-376 Part 1 §17.4.34
+    if (this.formatting.noWrap) {
+      tcPrChildren.push(XMLBuilder.wSelf('noWrap'));
+    }
+
+    // Add hide mark (hideMark) per ECMA-376 Part 1 §17.4.24
+    if (this.formatting.hideMark) {
+      tcPrChildren.push(XMLBuilder.wSelf('hideMark'));
+    }
+
+    // Add fit text (tcFitText) per ECMA-376 Part 1 §17.4.68
+    if (this.formatting.fitText) {
+      tcPrChildren.push(XMLBuilder.wSelf('tcFitText'));
+    }
+
+    // Add vertical merge (vMerge) per ECMA-376 Part 1 §17.4.85
+    if (this.formatting.vMerge) {
+      if (this.formatting.vMerge === 'restart') {
+        tcPrChildren.push(XMLBuilder.wSelf('vMerge', { 'w:val': 'restart' }));
+      } else {
+        // 'continue' uses empty element (no val attribute)
+        tcPrChildren.push(XMLBuilder.wSelf('vMerge'));
+      }
     }
 
     // Build cell element

@@ -622,225 +622,13 @@ export class Run {
       this.text = '';
     }
 
-    const rPrChildren: XMLElement[] = [];
-
-    // 1. Character style reference (must be absolutely first per ECMA-376 §17.3.2.36)
-    if (this.formatting.characterStyle) {
-      rPrChildren.push(XMLBuilder.wSelf('rStyle', {
-        'w:val': this.formatting.characterStyle,
-      }));
-    }
-
-    // 2. Font family (must be second per ECMA-376 §17.3.2.28)
-    if (this.formatting.font) {
-      rPrChildren.push(XMLBuilder.wSelf('rFonts', {
-        'w:ascii': this.formatting.font,
-        'w:hAnsi': this.formatting.font,
-        'w:cs': this.formatting.font,
-      }));
-    }
-
-    // 2.5. Text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5
-    if (this.formatting.border) {
-      const bdrAttrs: Record<string, string | number> = {};
-      if (this.formatting.border.style) bdrAttrs['w:val'] = this.formatting.border.style;
-      if (this.formatting.border.size !== undefined) bdrAttrs['w:sz'] = this.formatting.border.size;
-      if (this.formatting.border.color) bdrAttrs['w:color'] = this.formatting.border.color;
-      if (this.formatting.border.space !== undefined) bdrAttrs['w:space'] = this.formatting.border.space;
-
-      if (Object.keys(bdrAttrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf('bdr', bdrAttrs));
-      }
-    }
-
-    // 3. Bold
-    if (this.formatting.bold) {
-      rPrChildren.push(XMLBuilder.wSelf('b'));
-    }
-
-    // 3.5. Bold for complex scripts (w:bCs) per ECMA-376 Part 1 §17.3.2.3
-    if (this.formatting.complexScriptBold) {
-      rPrChildren.push(XMLBuilder.wSelf('bCs'));
-    }
-
-    // 4. Italic
-    if (this.formatting.italic) {
-      rPrChildren.push(XMLBuilder.wSelf('i'));
-    }
-
-    // 4.5. Italic for complex scripts (w:iCs) per ECMA-376 Part 1 §17.3.2.17
-    if (this.formatting.complexScriptItalic) {
-      rPrChildren.push(XMLBuilder.wSelf('iCs'));
-    }
-
-    // 5. Capitalization (caps/smallCaps)
-    if (this.formatting.allCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('caps'));
-    }
-    if (this.formatting.smallCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('smallCaps'));
-    }
-
-    // 6. Character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
-    if (this.formatting.shading) {
-      const shdAttrs: Record<string, string> = {};
-      if (this.formatting.shading.val) shdAttrs['w:val'] = this.formatting.shading.val;
-      if (this.formatting.shading.fill) shdAttrs['w:fill'] = this.formatting.shading.fill;
-      if (this.formatting.shading.color) shdAttrs['w:color'] = this.formatting.shading.color;
-
-      if (Object.keys(shdAttrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf('shd', shdAttrs));
-      }
-    }
-
-    // 6.5. Emphasis marks (w:em) per ECMA-376 Part 1 §17.3.2.13
-    if (this.formatting.emphasis) {
-      rPrChildren.push(XMLBuilder.wSelf('em', { 'w:val': this.formatting.emphasis }));
-    }
-
-    // 6.6. Outline text effect (w:outline) per ECMA-376 Part 1 §17.3.2.23
-    if (this.formatting.outline) {
-      rPrChildren.push(XMLBuilder.wSelf('outline'));
-    }
-
-    // 6.7. Shadow text effect (w:shadow) per ECMA-376 Part 1 §17.3.2.32
-    if (this.formatting.shadow) {
-      rPrChildren.push(XMLBuilder.wSelf('shadow'));
-    }
-
-    // 6.8. Emboss text effect (w:emboss) per ECMA-376 Part 1 §17.3.2.13
-    if (this.formatting.emboss) {
-      rPrChildren.push(XMLBuilder.wSelf('emboss'));
-    }
-
-    // 6.9. Imprint/engrave text effect (w:imprint) per ECMA-376 Part 1 §17.3.2.18
-    if (this.formatting.imprint) {
-      rPrChildren.push(XMLBuilder.wSelf('imprint'));
-    }
-
-    // 6.10. No proofing (w:noProof) per ECMA-376 Part 1 §17.3.2.21
-    if (this.formatting.noProof) {
-      rPrChildren.push(XMLBuilder.wSelf('noProof'));
-    }
-
-    // 6.11. Snap to grid (w:snapToGrid) per ECMA-376 Part 1 §17.3.2.35
-    if (this.formatting.snapToGrid) {
-      rPrChildren.push(XMLBuilder.wSelf('snapToGrid'));
-    }
-
-    // 6.12. Vanish/hidden (w:vanish) per ECMA-376 Part 1 §17.3.2.42
-    if (this.formatting.vanish) {
-      rPrChildren.push(XMLBuilder.wSelf('vanish'));
-    }
-
-    // 6.12.5. Special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
-    if (this.formatting.specVanish) {
-      rPrChildren.push(XMLBuilder.wSelf('specVanish'));
-    }
-
-    // 6.13. RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
-    if (this.formatting.rtl) {
-      rPrChildren.push(XMLBuilder.wSelf('rtl'));
-    }
-
-    // 7. Strikethrough
-    if (this.formatting.strike) {
-      rPrChildren.push(XMLBuilder.wSelf('strike'));
-    }
-    if (this.formatting.dstrike) {
-      rPrChildren.push(XMLBuilder.wSelf('dstrike'));
-    }
-
-    // 8. Underline
-    if (this.formatting.underline) {
-      const underlineValue = typeof this.formatting.underline === 'string'
-        ? this.formatting.underline
-        : 'single';
-      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': underlineValue }));
-    }
-
-    // 8.5. Character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.33
-    if (this.formatting.characterSpacing !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf('spacing', { 'w:val': this.formatting.characterSpacing }));
-    }
-
-    // 8.6. Horizontal scaling (w:w) per ECMA-376 Part 1 §17.3.2.43
-    if (this.formatting.scaling !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf('w', { 'w:val': this.formatting.scaling }));
-    }
-
-    // 8.7. Vertical position (w:position) per ECMA-376 Part 1 §17.3.2.31
-    if (this.formatting.position !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf('position', { 'w:val': this.formatting.position }));
-    }
-
-    // 8.8. Kerning (w:kern) per ECMA-376 Part 1 §17.3.2.20
-    if (this.formatting.kerning !== undefined && this.formatting.kerning !== null) {
-      rPrChildren.push(XMLBuilder.wSelf('kern', { 'w:val': this.formatting.kerning }));
-    }
-
-    // 8.9. Language (w:lang) per ECMA-376 Part 1 §17.3.2.20
-    if (this.formatting.language) {
-      rPrChildren.push(XMLBuilder.wSelf('lang', { 'w:val': this.formatting.language }));
-    }
-
-    // 8.9.5. East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
-    if (this.formatting.eastAsianLayout) {
-      const layout = this.formatting.eastAsianLayout;
-      const attrs: Record<string, string | number> = {};
-      if (layout.id !== undefined) attrs['w:id'] = layout.id;
-      if (layout.vert) attrs['w:vert'] = '1';
-      if (layout.vertCompress) attrs['w:vertCompress'] = '1';
-      if (layout.combine) attrs['w:combine'] = '1';
-      if (layout.combineBrackets) attrs['w:combineBrackets'] = layout.combineBrackets;
-
-      if (Object.keys(attrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf('eastAsianLayout', attrs));
-      }
-    }
-
-    // 8.10. Fit text to width (w:fitText) per ECMA-376 Part 1 §17.3.2.15
-    if (this.formatting.fitText !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf('fitText', { 'w:val': this.formatting.fitText }));
-    }
-
-    // 8.11. Text effect/animation (w:effect) per ECMA-376 Part 1 §17.3.2.12
-    if (this.formatting.effect) {
-      rPrChildren.push(XMLBuilder.wSelf('effect', { 'w:val': this.formatting.effect }));
-    }
-
-    // 9. Font size
-    if (this.formatting.size !== undefined) {
-      // Word uses half-points (size * 2)
-      const halfPoints = this.formatting.size * 2;
-      rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': halfPoints }));
-      rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': halfPoints }));
-    }
-
-    // 10. Text color
-    if (this.formatting.color) {
-      rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': this.formatting.color }));
-    }
-
-    // 11. Highlight color
-    if (this.formatting.highlight) {
-      rPrChildren.push(XMLBuilder.wSelf('highlight', { 'w:val': this.formatting.highlight }));
-    }
-
-    // 12. Vertical alignment (subscript/superscript) - must be last
-    if (this.formatting.subscript) {
-      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
-    }
-    if (this.formatting.superscript) {
-      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'superscript' }));
-    }
-
     // Build the run element
     const runChildren: XMLElement[] = [];
 
-    // Add run properties if there are any
-    if (rPrChildren.length > 0) {
-      runChildren.push(XMLBuilder.w('rPr', undefined, rPrChildren));
+    // Add run properties using the static helper
+    const rPr = Run.generateRunPropertiesXML(this.formatting);
+    if (rPr) {
+      runChildren.push(rPr);
     }
 
     // Add text element
@@ -876,6 +664,237 @@ export class Run {
    */
   isValid(): boolean {
     return this.hasText() || this.hasFormatting();
+  }
+
+  /**
+   * Generates run properties XML (<w:rPr>) from RunFormatting
+   * This is a static helper used by both Run and Paragraph (for paragraph mark properties)
+   *
+   * Per ECMA-376 Part 1 §17.3.2.28, properties must be in specific order for strict compliance
+   *
+   * @param formatting - Run formatting options
+   * @returns XMLElement representing <w:rPr> or null if no formatting
+   */
+  static generateRunPropertiesXML(formatting: RunFormatting): XMLElement | null {
+    const rPrChildren: XMLElement[] = [];
+
+    // 1. Character style reference (must be absolutely first per ECMA-376 §17.3.2.36)
+    if (formatting.characterStyle) {
+      rPrChildren.push(XMLBuilder.wSelf('rStyle', {
+        'w:val': formatting.characterStyle,
+      }));
+    }
+
+    // 2. Font family (must be second per ECMA-376 §17.3.2.28)
+    if (formatting.font) {
+      rPrChildren.push(XMLBuilder.wSelf('rFonts', {
+        'w:ascii': formatting.font,
+        'w:hAnsi': formatting.font,
+        'w:cs': formatting.font,
+      }));
+    }
+
+    // 2.5. Text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5
+    if (formatting.border) {
+      const bdrAttrs: Record<string, string | number> = {};
+      if (formatting.border.style) bdrAttrs['w:val'] = formatting.border.style;
+      if (formatting.border.size !== undefined) bdrAttrs['w:sz'] = formatting.border.size;
+      if (formatting.border.color) bdrAttrs['w:color'] = formatting.border.color;
+      if (formatting.border.space !== undefined) bdrAttrs['w:space'] = formatting.border.space;
+
+      if (Object.keys(bdrAttrs).length > 0) {
+        rPrChildren.push(XMLBuilder.wSelf('bdr', bdrAttrs));
+      }
+    }
+
+    // 3. Bold
+    if (formatting.bold) {
+      rPrChildren.push(XMLBuilder.wSelf('b'));
+    }
+
+    // 3.5. Bold for complex scripts (w:bCs) per ECMA-376 Part 1 §17.3.2.3
+    if (formatting.complexScriptBold) {
+      rPrChildren.push(XMLBuilder.wSelf('bCs'));
+    }
+
+    // 4. Italic
+    if (formatting.italic) {
+      rPrChildren.push(XMLBuilder.wSelf('i'));
+    }
+
+    // 4.5. Italic for complex scripts (w:iCs) per ECMA-376 Part 1 §17.3.2.17
+    if (formatting.complexScriptItalic) {
+      rPrChildren.push(XMLBuilder.wSelf('iCs'));
+    }
+
+    // 5. Capitalization (caps/smallCaps)
+    if (formatting.allCaps) {
+      rPrChildren.push(XMLBuilder.wSelf('caps'));
+    }
+    if (formatting.smallCaps) {
+      rPrChildren.push(XMLBuilder.wSelf('smallCaps'));
+    }
+
+    // 6. Character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
+    if (formatting.shading) {
+      const shdAttrs: Record<string, string> = {};
+      if (formatting.shading.val) shdAttrs['w:val'] = formatting.shading.val;
+      if (formatting.shading.fill) shdAttrs['w:fill'] = formatting.shading.fill;
+      if (formatting.shading.color) shdAttrs['w:color'] = formatting.shading.color;
+
+      if (Object.keys(shdAttrs).length > 0) {
+        rPrChildren.push(XMLBuilder.wSelf('shd', shdAttrs));
+      }
+    }
+
+    // 6.5. Emphasis marks (w:em) per ECMA-376 Part 1 §17.3.2.13
+    if (formatting.emphasis) {
+      rPrChildren.push(XMLBuilder.wSelf('em', { 'w:val': formatting.emphasis }));
+    }
+
+    // 6.6. Outline text effect (w:outline) per ECMA-376 Part 1 §17.3.2.23
+    if (formatting.outline) {
+      rPrChildren.push(XMLBuilder.wSelf('outline'));
+    }
+
+    // 6.7. Shadow text effect (w:shadow) per ECMA-376 Part 1 §17.3.2.32
+    if (formatting.shadow) {
+      rPrChildren.push(XMLBuilder.wSelf('shadow'));
+    }
+
+    // 6.8. Emboss text effect (w:emboss) per ECMA-376 Part 1 §17.3.2.13
+    if (formatting.emboss) {
+      rPrChildren.push(XMLBuilder.wSelf('emboss'));
+    }
+
+    // 6.9. Imprint/engrave text effect (w:imprint) per ECMA-376 Part 1 §17.3.2.18
+    if (formatting.imprint) {
+      rPrChildren.push(XMLBuilder.wSelf('imprint'));
+    }
+
+    // 6.10. No proofing (w:noProof) per ECMA-376 Part 1 §17.3.2.21
+    if (formatting.noProof) {
+      rPrChildren.push(XMLBuilder.wSelf('noProof'));
+    }
+
+    // 6.11. Snap to grid (w:snapToGrid) per ECMA-376 Part 1 §17.3.2.35
+    if (formatting.snapToGrid) {
+      rPrChildren.push(XMLBuilder.wSelf('snapToGrid'));
+    }
+
+    // 6.12. Vanish/hidden (w:vanish) per ECMA-376 Part 1 §17.3.2.42
+    if (formatting.vanish) {
+      rPrChildren.push(XMLBuilder.wSelf('vanish'));
+    }
+
+    // 6.12.5. Special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
+    if (formatting.specVanish) {
+      rPrChildren.push(XMLBuilder.wSelf('specVanish'));
+    }
+
+    // 6.13. RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
+    if (formatting.rtl) {
+      rPrChildren.push(XMLBuilder.wSelf('rtl'));
+    }
+
+    // 7. Strikethrough
+    if (formatting.strike) {
+      rPrChildren.push(XMLBuilder.wSelf('strike'));
+    }
+    if (formatting.dstrike) {
+      rPrChildren.push(XMLBuilder.wSelf('dstrike'));
+    }
+
+    // 8. Underline
+    if (formatting.underline) {
+      const underlineValue = typeof formatting.underline === 'string'
+        ? formatting.underline
+        : 'single';
+      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': underlineValue }));
+    }
+
+    // 8.5. Character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.33
+    if (formatting.characterSpacing !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('spacing', { 'w:val': formatting.characterSpacing }));
+    }
+
+    // 8.6. Horizontal scaling (w:w) per ECMA-376 Part 1 §17.3.2.43
+    if (formatting.scaling !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('w', { 'w:val': formatting.scaling }));
+    }
+
+    // 8.7. Vertical position (w:position) per ECMA-376 Part 1 §17.3.2.31
+    if (formatting.position !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('position', { 'w:val': formatting.position }));
+    }
+
+    // 8.8. Kerning (w:kern) per ECMA-376 Part 1 §17.3.2.20
+    if (formatting.kerning !== undefined && formatting.kerning !== null) {
+      rPrChildren.push(XMLBuilder.wSelf('kern', { 'w:val': formatting.kerning }));
+    }
+
+    // 8.9. Language (w:lang) per ECMA-376 Part 1 §17.3.2.20
+    if (formatting.language) {
+      rPrChildren.push(XMLBuilder.wSelf('lang', { 'w:val': formatting.language }));
+    }
+
+    // 8.9.5. East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
+    if (formatting.eastAsianLayout) {
+      const layout = formatting.eastAsianLayout;
+      const attrs: Record<string, string | number> = {};
+      if (layout.id !== undefined) attrs['w:id'] = layout.id;
+      if (layout.vert) attrs['w:vert'] = '1';
+      if (layout.vertCompress) attrs['w:vertCompress'] = '1';
+      if (layout.combine) attrs['w:combine'] = '1';
+      if (layout.combineBrackets) attrs['w:combineBrackets'] = layout.combineBrackets;
+
+      if (Object.keys(attrs).length > 0) {
+        rPrChildren.push(XMLBuilder.wSelf('eastAsianLayout', attrs));
+      }
+    }
+
+    // 8.10. Fit text to width (w:fitText) per ECMA-376 Part 1 §17.3.2.15
+    if (formatting.fitText !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('fitText', { 'w:val': formatting.fitText }));
+    }
+
+    // 8.11. Text effect/animation (w:effect) per ECMA-376 Part 1 §17.3.2.12
+    if (formatting.effect) {
+      rPrChildren.push(XMLBuilder.wSelf('effect', { 'w:val': formatting.effect }));
+    }
+
+    // 9. Font size
+    if (formatting.size !== undefined) {
+      // Word uses half-points (size * 2)
+      const halfPoints = formatting.size * 2;
+      rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': halfPoints }));
+      rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': halfPoints }));
+    }
+
+    // 10. Text color
+    if (formatting.color) {
+      rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': formatting.color }));
+    }
+
+    // 11. Highlight color
+    if (formatting.highlight) {
+      rPrChildren.push(XMLBuilder.wSelf('highlight', { 'w:val': formatting.highlight }));
+    }
+
+    // 12. Vertical alignment (subscript/superscript) - must be last
+    if (formatting.subscript) {
+      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
+    }
+    if (formatting.superscript) {
+      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'superscript' }));
+    }
+
+    // Return null if no properties (prevents empty <w:rPr/> elements)
+    if (rPrChildren.length === 0) {
+      return null;
+    }
+
+    return XMLBuilder.w('rPr', undefined, rPrChildren);
   }
 
   /**

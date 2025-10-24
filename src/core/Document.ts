@@ -39,9 +39,10 @@ import { DocumentValidator } from "./DocumentValidator";
 import { ILogger, defaultLogger } from "../utils/logger";
 
 /**
- * Document properties
+ * Document properties (core and extended)
  */
 export interface DocumentProperties {
+  // Core Properties (docProps/core.xml)
   title?: string;
   subject?: string;
   creator?: string;
@@ -52,6 +53,18 @@ export interface DocumentProperties {
   created?: Date;
   modified?: Date;
   language?: string;
+  category?: string;
+  contentStatus?: string;
+
+  // Extended Properties (docProps/app.xml)
+  application?: string;
+  appVersion?: string;
+  company?: string;
+  manager?: string;
+  version?: string;
+
+  // Custom Properties (docProps/custom.xml)
+  customProperties?: Record<string, string | number | boolean | Date>;
 }
 
 /**
@@ -322,8 +335,10 @@ export class Document {
     // docProps/app.xml
     this.zipHandler.addFile(
       DOCX_PATHS.APP_PROPS,
-      this.generator.generateAppProps()
+      this.generator.generateAppProps(this.properties)
     );
+
+    // Note: docProps/custom.xml is added during save() if custom properties exist
   }
 
   /**
@@ -413,6 +428,16 @@ export class Document {
     const table = new Table(rows, columns);
     this.bodyElements.push(table);
     return table;
+  }
+
+  /**
+   * Adds a structured document tag (content control) to the document
+   * @param sdt - Structured document tag to add
+   * @returns This document for chaining
+   */
+  addStructuredDocumentTag(sdt: StructuredDocumentTag): this {
+    this.bodyElements.push(sdt);
+    return this;
   }
 
   /**
@@ -523,6 +548,167 @@ export class Document {
   }
 
   /**
+   * Sets document property value
+   * @param key - Property key
+   * @param value - Property value
+   * @returns This document for chaining
+   */
+  setProperty(key: keyof DocumentProperties, value: any): this {
+    (this.properties as any)[key] = value;
+    return this;
+  }
+
+  /**
+   * Sets the document title
+   * @param title - Document title
+   * @returns This document for chaining
+   */
+  setTitle(title: string): this {
+    this.properties.title = title;
+    return this;
+  }
+
+  /**
+   * Sets the document subject
+   * @param subject - Document subject
+   * @returns This document for chaining
+   */
+  setSubject(subject: string): this {
+    this.properties.subject = subject;
+    return this;
+  }
+
+  /**
+   * Sets the document creator/author
+   * @param creator - Document creator
+   * @returns This document for chaining
+   */
+  setCreator(creator: string): this {
+    this.properties.creator = creator;
+    return this;
+  }
+
+  /**
+   * Sets the document keywords
+   * @param keywords - Document keywords (comma-separated)
+   * @returns This document for chaining
+   */
+  setKeywords(keywords: string): this {
+    this.properties.keywords = keywords;
+    return this;
+  }
+
+  /**
+   * Sets the document description
+   * @param description - Document description
+   * @returns This document for chaining
+   */
+  setDescription(description: string): this {
+    this.properties.description = description;
+    return this;
+  }
+
+  /**
+   * Sets the document category
+   * @param category - Document category
+   * @returns This document for chaining
+   */
+  setCategory(category: string): this {
+    this.properties.category = category;
+    return this;
+  }
+
+  /**
+   * Sets the document content status
+   * @param status - Content status (e.g., "Draft", "Final", "In Review")
+   * @returns This document for chaining
+   */
+  setContentStatus(status: string): this {
+    this.properties.contentStatus = status;
+    return this;
+  }
+
+  /**
+   * Sets the application name
+   * @param application - Application name
+   * @returns This document for chaining
+   */
+  setApplication(application: string): this {
+    this.properties.application = application;
+    return this;
+  }
+
+  /**
+   * Sets the application version
+   * @param version - Application version
+   * @returns This document for chaining
+   */
+  setAppVersion(version: string): this {
+    this.properties.appVersion = version;
+    return this;
+  }
+
+  /**
+   * Sets the company name
+   * @param company - Company name
+   * @returns This document for chaining
+   */
+  setCompany(company: string): this {
+    this.properties.company = company;
+    return this;
+  }
+
+  /**
+   * Sets the manager name
+   * @param manager - Manager name
+   * @returns This document for chaining
+   */
+  setManager(manager: string): this {
+    this.properties.manager = manager;
+    return this;
+  }
+
+  /**
+   * Sets a custom property
+   * @param name - Property name
+   * @param value - Property value (string, number, boolean, or Date)
+   * @returns This document for chaining
+   */
+  setCustomProperty(
+    name: string,
+    value: string | number | boolean | Date
+  ): this {
+    if (!this.properties.customProperties) {
+      this.properties.customProperties = {};
+    }
+    this.properties.customProperties[name] = value;
+    return this;
+  }
+
+  /**
+   * Sets multiple custom properties
+   * @param properties - Object containing custom properties
+   * @returns This document for chaining
+   */
+  setCustomProperties(
+    properties: Record<string, string | number | boolean | Date>
+  ): this {
+    this.properties.customProperties = { ...properties };
+    return this;
+  }
+
+  /**
+   * Gets a custom property value
+   * @param name - Property name
+   * @returns Property value or undefined
+   */
+  getCustomProperty(
+    name: string
+  ): string | number | boolean | Date | undefined {
+    return this.properties.customProperties?.[name];
+  }
+
+  /**
    * Saves the document to a file
    * @param filePath - Output file path
    */
@@ -563,10 +749,12 @@ export class Document {
       this.updateStylesXml();
       this.updateNumberingXml();
       this.updateCoreProps();
+      this.updateAppProps(); // Update app.xml with current property values
       this.saveImages();
       this.saveHeaders();
       this.saveFooters();
       this.saveComments();
+      this.saveCustomProperties(); // Add custom.xml if custom properties exist
       this.updateRelationships();
       this.updateContentTypesWithImagesHeadersFootersAndComments();
 
@@ -628,6 +816,7 @@ export class Document {
       this.updateStylesXml();
       this.updateNumberingXml();
       this.updateCoreProps();
+      this.updateAppProps(); // Update app.xml with current property values
       this.saveImages();
       this.saveHeaders();
       this.saveFooters();
@@ -659,6 +848,14 @@ export class Document {
   private updateCoreProps(): void {
     const xml = this.generator.generateCoreProps(this.properties);
     this.zipHandler.updateFile(DOCX_PATHS.CORE_PROPS, xml);
+  }
+
+  /**
+   * Updates the app properties with current values
+   */
+  private updateAppProps(): void {
+    const xml = this.generator.generateAppProps(this.properties);
+    this.zipHandler.updateFile(DOCX_PATHS.APP_PROPS, xml);
   }
 
   /**
@@ -2023,16 +2220,40 @@ export class Document {
   }
 
   /**
-   * Updates [Content_Types].xml to include image extensions, headers/footers, and comments
+   * Saves custom properties to the ZIP archive
+   */
+  private saveCustomProperties(): void {
+    // Only save custom.xml if there are custom properties
+    if (
+      this.properties.customProperties &&
+      Object.keys(this.properties.customProperties).length > 0
+    ) {
+      const customXml = this.generator.generateCustomProps(
+        this.properties.customProperties
+      );
+      if (customXml) {
+        this.zipHandler.addFile("docProps/custom.xml", customXml);
+      }
+    }
+  }
+
+  /**
+   * Updates [Content_Types].xml to include image extensions, headers/footers, comments, and custom properties
    * Preserves entries for files that exist in the loaded document
    */
   private updateContentTypesWithImagesHeadersFootersAndComments(): void {
+    const hasCustomProps =
+      this.properties.customProperties &&
+      Object.keys(this.properties.customProperties).length > 0;
+
     const contentTypes =
       this.generator.generateContentTypesWithImagesHeadersFootersAndComments(
         this.imageManager,
         this.headerFooterManager,
         this.commentManager,
-        this.zipHandler // Pass zipHandler to check file existence
+        this.zipHandler, // Pass zipHandler to check file existence
+        undefined, // fontManager (optional)
+        hasCustomProps // Flag to include custom.xml override
       );
     this.zipHandler.updateFile(DOCX_PATHS.CONTENT_TYPES, contentTypes);
   }

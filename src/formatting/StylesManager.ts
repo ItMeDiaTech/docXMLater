@@ -49,6 +49,8 @@ export class StylesManager {
     ['Subtitle', () => Style.createSubtitleStyle()],
     ['ListParagraph', () => Style.createListParagraphStyle()],
     ['TOCHeading', () => Style.createTOCHeadingStyle()],
+    ['TableNormal', () => Style.createTableNormalStyle()],
+    ['TableGrid', () => Style.createTableGridStyle()],
   ]);
 
   /**
@@ -151,6 +153,95 @@ export class StylesManager {
    */
   getStylesByType(type: StyleType): Style[] {
     return this.getAllStyles().filter(style => style.getType() === type);
+  }
+
+  /**
+   * Gets quick styles (styles that appear in the style gallery)
+   * A style appears in the gallery when qFormat=true AND semiHidden=false
+   * @returns Array of quick styles
+   */
+  getQuickStyles(): Style[] {
+    return this.getAllStyles().filter(style => {
+      const props = style.getProperties();
+      const isQuick = props.qFormat === true || (!props.customStyle && props.qFormat !== false);
+      const isVisible = !props.semiHidden;
+      return isQuick && isVisible;
+    });
+  }
+
+  /**
+   * Gets visible styles (not semi-hidden)
+   * @returns Array of visible styles
+   */
+  getVisibleStyles(): Style[] {
+    return this.getAllStyles().filter(style => {
+      const props = style.getProperties();
+      return !props.semiHidden;
+    });
+  }
+
+  /**
+   * Gets styles sorted by UI priority
+   * Lower priority values appear first (higher importance)
+   * Styles without priority appear last
+   * @returns Array of styles sorted by priority
+   */
+  getStylesByPriority(): Style[] {
+    return this.getAllStyles().sort((a, b) => {
+      const propsA = a.getProperties();
+      const propsB = b.getProperties();
+
+      const priorityA = propsA.uiPriority ?? 999;
+      const priorityB = propsB.uiPriority ?? 999;
+
+      return priorityA - priorityB;
+    });
+  }
+
+  /**
+   * Gets the linked style for a given style
+   * @param styleId - Style ID to find the linked style for
+   * @returns The linked style, or undefined if not found
+   */
+  getLinkedStyle(styleId: string): Style | undefined {
+    const style = this.getStyle(styleId);
+    if (!style) {
+      return undefined;
+    }
+
+    const props = style.getProperties();
+    if (!props.link) {
+      return undefined;
+    }
+
+    return this.getStyle(props.link);
+  }
+
+  /**
+   * Gets all table styles (Phase 5.1)
+   * @returns Array of table styles
+   */
+  getTableStyles(): Style[] {
+    return this.getAllStyles().filter(style => style.getType() === 'table');
+  }
+
+  /**
+   * Creates and adds a table style (Phase 5.1)
+   * @param styleId - Style ID
+   * @param name - Style name
+   * @param basedOn - Base style ID (optional)
+   * @returns The created table style
+   */
+  createTableStyle(styleId: string, name: string, basedOn?: string): Style {
+    const style = Style.create({
+      styleId,
+      name,
+      type: 'table',
+      basedOn,
+      customStyle: true,
+    });
+    this.addStyle(style);
+    return style;
   }
 
   /**

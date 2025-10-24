@@ -39,17 +39,78 @@ export interface TableBorders {
 }
 
 /**
+ * Horizontal anchor for table positioning
+ */
+export type TableHorizontalAnchor = 'text' | 'margin' | 'page';
+
+/**
+ * Vertical anchor for table positioning
+ */
+export type TableVerticalAnchor = 'text' | 'margin' | 'page';
+
+/**
+ * Horizontal alignment for relative table positioning
+ */
+export type TableHorizontalAlignment = 'left' | 'center' | 'right' | 'inside' | 'outside';
+
+/**
+ * Vertical alignment for relative table positioning
+ */
+export type TableVerticalAlignment = 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+
+/**
+ * Table positioning properties (for floating tables)
+ * Per ECMA-376 Part 1 §17.4.57 (tblpPr)
+ */
+export interface TablePositionProperties {
+  /** Horizontal position in twips (absolute positioning) */
+  x?: number;
+  /** Vertical position in twips (absolute positioning) */
+  y?: number;
+  /** Horizontal anchor/positioning base */
+  horizontalAnchor?: TableHorizontalAnchor;
+  /** Vertical anchor/positioning base */
+  verticalAnchor?: TableVerticalAnchor;
+  /** Horizontal alignment (relative positioning) */
+  horizontalAlignment?: TableHorizontalAlignment;
+  /** Vertical alignment (relative positioning) */
+  verticalAlignment?: TableVerticalAlignment;
+  /** Left padding from anchor in twips */
+  leftFromText?: number;
+  /** Right padding from anchor in twips */
+  rightFromText?: number;
+  /** Top padding from anchor in twips */
+  topFromText?: number;
+  /** Bottom padding from anchor in twips */
+  bottomFromText?: number;
+}
+
+/**
+ * Table width type
+ */
+export type TableWidthType = 'auto' | 'dxa' | 'pct';
+
+/**
  * Table formatting options
  */
 export interface TableFormatting {
   style?: string; // Table style ID (e.g., 'Table1', 'TableGrid')
   width?: number; // Table width in twips
+  widthType?: TableWidthType; // Width type (auto, dxa=twips, pct=percentage)
   alignment?: TableAlignment;
   layout?: TableLayout;
   borders?: TableBorders;
   cellSpacing?: number; // Cell spacing in twips
+  cellSpacingType?: TableWidthType; // Cell spacing type
   indent?: number; // Left indent in twips
   tblLook?: string; // Table look flags (appearance settings)
+  // Batch 1 properties
+  position?: TablePositionProperties; // Floating table positioning
+  overlap?: boolean; // Allow table overlap with other floating tables
+  bidiVisual?: boolean; // Right-to-left table layout
+  tableGrid?: number[]; // Column widths in twips
+  caption?: string; // Table caption for accessibility
+  description?: string; // Table description for accessibility
 }
 
 /**
@@ -362,6 +423,116 @@ export class Table {
   }
 
   /**
+   * Sets table positioning properties for floating tables
+   * Per ECMA-376 Part 1 §17.4.57
+   * @param position - Table position properties
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * // Position table at absolute coordinates
+   * table.setPosition({
+   *   x: 1440, // 1 inch from left
+   *   y: 1440, // 1 inch from top
+   *   horizontalAnchor: 'page',
+   *   verticalAnchor: 'page'
+   * });
+   *
+   * // Position table with relative alignment
+   * table.setPosition({
+   *   horizontalAlignment: 'center',
+   *   verticalAlignment: 'top',
+   *   horizontalAnchor: 'margin',
+   *   verticalAnchor: 'page'
+   * });
+   * ```
+   */
+  setPosition(position: TablePositionProperties): this {
+    this.formatting.position = position;
+    return this;
+  }
+
+  /**
+   * Sets whether table can overlap with other floating tables
+   * Per ECMA-376 Part 1 §17.4.30
+   * @param overlap - True to allow overlap, false to prevent
+   * @returns This table for chaining
+   */
+  setOverlap(overlap: boolean): this {
+    this.formatting.overlap = overlap;
+    return this;
+  }
+
+  /**
+   * Sets bidirectional (right-to-left) visual layout
+   * Per ECMA-376 Part 1 §17.4.1
+   * @param bidi - True for RTL layout, false for LTR
+   * @returns This table for chaining
+   */
+  setBidiVisual(bidi: boolean): this {
+    this.formatting.bidiVisual = bidi;
+    return this;
+  }
+
+  /**
+   * Sets table grid column widths
+   * Per ECMA-376 Part 1 §17.4.49
+   * @param widths - Array of column widths in twips
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * // 3 columns: 2 inches, 3 inches, 2 inches
+   * table.setTableGrid([2880, 4320, 2880]);
+   * ```
+   */
+  setTableGrid(widths: number[]): this {
+    this.formatting.tableGrid = widths;
+    return this;
+  }
+
+  /**
+   * Sets table caption for accessibility
+   * Per ECMA-376 Part 1 §17.4.58
+   * @param caption - Table caption text
+   * @returns This table for chaining
+   */
+  setCaption(caption: string): this {
+    this.formatting.caption = caption;
+    return this;
+  }
+
+  /**
+   * Sets table description for accessibility
+   * Per ECMA-376 Part 1 §17.4.63
+   * @param description - Table description text
+   * @returns This table for chaining
+   */
+  setDescription(description: string): this {
+    this.formatting.description = description;
+    return this;
+  }
+
+  /**
+   * Sets table width type
+   * Per ECMA-376 Part 1 §17.4.64
+   * @param type - Width type ('auto', 'dxa' for twips, 'pct' for percentage)
+   * @returns This table for chaining
+   */
+  setWidthType(type: TableWidthType): this {
+    this.formatting.widthType = type;
+    return this;
+  }
+
+  /**
+   * Sets cell spacing type
+   * @param type - Cell spacing type
+   * @returns This table for chaining
+   */
+  setCellSpacingType(type: TableWidthType): this {
+    this.formatting.cellSpacingType = type;
+    return this;
+  }
+
+  /**
    * Gets the table formatting
    * @returns Table formatting
    */
@@ -381,12 +552,46 @@ export class Table {
       tblPrChildren.push(XMLBuilder.wSelf('tblStyle', { 'w:val': this.formatting.style }));
     }
 
+    // Add table positioning properties (tblpPr) - for floating tables
+    if (this.formatting.position) {
+      const pos = this.formatting.position;
+      const posAttrs: Record<string, string | number> = {};
+
+      if (pos.x !== undefined) posAttrs['w:tblpX'] = pos.x;
+      if (pos.y !== undefined) posAttrs['w:tblpY'] = pos.y;
+      if (pos.horizontalAnchor) posAttrs['w:tblpXSpec'] = pos.horizontalAnchor;
+      if (pos.verticalAnchor) posAttrs['w:tblpYSpec'] = pos.verticalAnchor;
+      if (pos.horizontalAlignment) posAttrs['w:tblpXAlign'] = pos.horizontalAlignment;
+      if (pos.verticalAlignment) posAttrs['w:tblpYAlign'] = pos.verticalAlignment;
+      if (pos.leftFromText !== undefined) posAttrs['w:leftFromText'] = pos.leftFromText;
+      if (pos.rightFromText !== undefined) posAttrs['w:rightFromText'] = pos.rightFromText;
+      if (pos.topFromText !== undefined) posAttrs['w:topFromText'] = pos.topFromText;
+      if (pos.bottomFromText !== undefined) posAttrs['w:bottomFromText'] = pos.bottomFromText;
+
+      if (Object.keys(posAttrs).length > 0) {
+        tblPrChildren.push(XMLBuilder.wSelf('tblpPr', posAttrs));
+      }
+    }
+
+    // Add table overlap
+    if (this.formatting.overlap !== undefined) {
+      tblPrChildren.push(XMLBuilder.wSelf('tblOverlap', {
+        'w:val': this.formatting.overlap ? 'overlap' : 'never'
+      }));
+    }
+
+    // Add bidirectional visual layout
+    if (this.formatting.bidiVisual) {
+      tblPrChildren.push(XMLBuilder.wSelf('bidiVisual'));
+    }
+
     // Add table width
     if (this.formatting.width !== undefined) {
+      const widthType = this.formatting.widthType || 'dxa';
       tblPrChildren.push(
         XMLBuilder.wSelf('tblW', {
           'w:w': this.formatting.width,
-          'w:type': 'dxa',
+          'w:type': widthType,
         })
       );
     }
@@ -434,10 +639,11 @@ export class Table {
 
     // Add cell spacing
     if (this.formatting.cellSpacing !== undefined) {
+      const cellSpacingType = this.formatting.cellSpacingType || 'dxa';
       tblPrChildren.push(
         XMLBuilder.wSelf('tblCellSpacing', {
           'w:w': this.formatting.cellSpacing,
-          'w:type': 'dxa',
+          'w:type': cellSpacingType,
         })
       );
     }
@@ -457,6 +663,16 @@ export class Table {
       tblPrChildren.push(XMLBuilder.wSelf('tblLook', { 'w:val': this.formatting.tblLook }));
     }
 
+    // Add table caption (accessibility)
+    if (this.formatting.caption) {
+      tblPrChildren.push(XMLBuilder.wSelf('tblCaption', { 'w:val': this.formatting.caption }));
+    }
+
+    // Add table description (accessibility)
+    if (this.formatting.description) {
+      tblPrChildren.push(XMLBuilder.wSelf('tblDescription', { 'w:val': this.formatting.description }));
+    }
+
     // Build table element
     const tableChildren: XMLElement[] = [];
 
@@ -464,19 +680,20 @@ export class Table {
     tableChildren.push(XMLBuilder.w('tblPr', undefined, tblPrChildren));
 
     // Add table grid (column definitions)
-    const maxColumns = Math.max(...this.rows.map(row => row.getCellCount()), 0);
+    // Use custom tableGrid if specified, otherwise auto-generate
+    const gridWidths = this.formatting.tableGrid;
+    const maxColumns = gridWidths ? gridWidths.length : Math.max(...this.rows.map(row => row.getCellCount()), 0);
+
     if (maxColumns > 0) {
       const tblGridChildren: XMLElement[] = [];
-      const columnWidths = (this.formatting as any).columnWidths;
 
       for (let i = 0; i < maxColumns; i++) {
-        // Use specified width if available, otherwise default
-        const width = columnWidths && columnWidths[i] !== null ? columnWidths[i] : 2880;
-        if (width !== null) {
-          tblGridChildren.push(XMLBuilder.wSelf('gridCol', { 'w:w': width }));
+        if (gridWidths && gridWidths[i] !== undefined) {
+          // Use specified grid width
+          tblGridChildren.push(XMLBuilder.wSelf('gridCol', { 'w:w': gridWidths[i] }));
         } else {
-          // Auto width (no w:w attribute)
-          tblGridChildren.push(XMLBuilder.wSelf('gridCol', {}));
+          // Auto width (default to 2880 twips = 2 inches)
+          tblGridChildren.push(XMLBuilder.wSelf('gridCol', { 'w:w': 2880 }));
         }
       }
       tableChildren.push(XMLBuilder.w('tblGrid', undefined, tblGridChildren));
