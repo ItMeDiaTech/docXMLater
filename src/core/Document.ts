@@ -26,7 +26,7 @@ import { Comment } from "../elements/Comment";
 import { CommentManager } from "../elements/CommentManager";
 import { FootnoteManager } from "../elements/FootnoteManager";
 import { EndnoteManager } from "../elements/EndnoteManager";
-import { Run } from "../elements/Run";
+import { Run, RunFormatting } from "../elements/Run";
 import { Hyperlink } from "../elements/Hyperlink";
 import { XMLParser } from "../xml/XMLParser";
 import { StylesManager } from "../formatting/StylesManager";
@@ -4016,6 +4016,179 @@ export class Document {
     filename: string;
   }> {
     return this.imageManager.getAllImages();
+  }
+
+  /**
+   * Gets all runs in the document (flattened from all paragraphs)
+   *
+   * This method returns all Run objects from:
+   * - All body paragraphs
+   * - All paragraphs inside table cells
+   *
+   * Useful for bulk operations on text formatting across the entire document.
+   *
+   * @returns Array of all Run objects in the document
+   *
+   * @example
+   * ```typescript
+   * // Get all runs
+   * const runs = doc.getAllRuns();
+   * console.log(`Document has ${runs.length} text runs`);
+   *
+   * // Make all text bold
+   * for (const run of doc.getAllRuns()) {
+   *   run.setBold(true);
+   * }
+   * ```
+   */
+  getAllRuns(): Run[] {
+    const runs: Run[] = [];
+
+    // Get runs from all body paragraphs
+    for (const paragraph of this.getParagraphs()) {
+      runs.push(...paragraph.getRuns());
+    }
+
+    // Get runs from paragraphs inside table cells
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          const cellParagraphs =
+            cell instanceof TableCell ? cell.getParagraphs() : [];
+          for (const para of cellParagraphs) {
+            runs.push(...para.getRuns());
+          }
+        }
+      }
+    }
+
+    return runs;
+  }
+
+  /**
+   * Removes a specific formatting type from all runs in the document
+   *
+   * This is a bulk operation that removes the specified formatting property
+   * from ALL text runs in the document (including runs inside table cells).
+   *
+   * @param type - The formatting property to remove
+   * @returns Number of runs that were modified
+   *
+   * @example
+   * ```typescript
+   * // Remove all bold formatting from document
+   * const count = doc.removeFormattingFromAll('bold');
+   * console.log(`Removed bold from ${count} runs`);
+   *
+   * // Remove all highlighting
+   * doc.removeFormattingFromAll('highlight');
+   *
+   * // Remove all font color
+   * doc.removeFormattingFromAll('color');
+   *
+   * // Remove underlines
+   * doc.removeFormattingFromAll('underline');
+   * ```
+   */
+  removeFormattingFromAll(
+    type:
+      | 'bold'
+      | 'italic'
+      | 'underline'
+      | 'strike'
+      | 'dstrike'
+      | 'highlight'
+      | 'color'
+      | 'font'
+      | 'size'
+      | 'subscript'
+      | 'superscript'
+      | 'smallCaps'
+      | 'allCaps'
+      | 'outline'
+      | 'shadow'
+      | 'emboss'
+      | 'imprint'
+  ): number {
+    let modifiedCount = 0;
+
+    // Get all runs in the document
+    const runs = this.getAllRuns();
+
+    for (const run of runs) {
+      const formatting = run.getFormatting();
+
+      // Check if the property exists before removing it
+      if (type in formatting) {
+        // Access the private formatting property to modify it
+        // This is a valid pattern for bulk operations in the framework
+        (run as any).formatting[type] = undefined;
+        delete (run as any).formatting[type];
+
+        modifiedCount++;
+      }
+    }
+
+    return modifiedCount;
+  }
+
+  /**
+   * Applies a formatting function to all hyperlinks in the document
+   *
+   * This is a bulk operation that calls the provided formatter function
+   * for each hyperlink in the document (including hyperlinks inside table cells).
+   *
+   * The formatter function receives the hyperlink and its containing paragraph,
+   * allowing for sophisticated conditional formatting based on context.
+   *
+   * @param formatter - Function to apply to each hyperlink
+   * @returns Number of hyperlinks processed
+   *
+   * @example
+   * ```typescript
+   * // Make all hyperlinks red and bold
+   * doc.updateAllHyperlinks((link) => {
+   *   link.setFormatting({ color: 'FF0000', bold: true });
+   * });
+   *
+   * // Remove underline from all hyperlinks
+   * doc.updateAllHyperlinks((link) => {
+   *   const fmt = link.getFormatting();
+   *   delete fmt.underline;
+   *   link.setFormatting(fmt);
+   * });
+   *
+   * // Conditional formatting based on URL
+   * doc.updateAllHyperlinks((link) => {
+   *   const url = link.getUrl();
+   *   if (url?.includes('internal')) {
+   *     link.setFormatting({ color: '0000FF' }); // Blue for internal links
+   *   } else if (url?.includes('external')) {
+   *     link.setFormatting({ color: 'FF0000' }); // Red for external links
+   *   }
+   * });
+   *
+   * // Access paragraph context for advanced logic
+   * doc.updateAllHyperlinks((link, para) => {
+   *   const paraStyle = para.getFormatting().style;
+   *   if (paraStyle === 'Heading1') {
+   *     link.setFormatting({ bold: true, size: 16 });
+   *   }
+   * });
+   * ```
+   */
+  updateAllHyperlinks(
+    formatter: (hyperlink: Hyperlink, paragraph: Paragraph) => void
+  ): number {
+    // Get all hyperlinks with their containing paragraphs
+    const hyperlinks = this.getHyperlinks();
+
+    // Apply formatter to each hyperlink
+    for (const { hyperlink, paragraph } of hyperlinks) {
+      formatter(hyperlink, paragraph);
+    }
+
+    return hyperlinks.length;
   }
 
   /**
