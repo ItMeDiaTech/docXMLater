@@ -31,7 +31,12 @@ export type FieldType =
   | 'HYPERLINK'      // Hyperlink field
   | 'SEQ'            // Sequence numbering
   | 'TC'             // Table of contents entry
-  | 'XE';            // Index entry
+  | 'XE'             // Index entry
+  | 'IF'             // Conditional field
+  | 'MERGEFIELD'     // Mail merge field
+  | 'INCLUDE'        // Include text from external file
+  | 'INCLUDETEXT'    // Include text from external file (alias)
+  | 'CUSTOM';        // Custom field type for unknown/specialized fields
 
 /**
  * Field properties

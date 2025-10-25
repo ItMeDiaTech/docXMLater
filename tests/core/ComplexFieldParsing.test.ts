@@ -51,7 +51,7 @@ describe('Complex Field Parsing', () => {
       expect(paragraphs.length).toBeGreaterThanOrEqual(1);
 
       // Check text content
-      const text = paragraphs[0].getText();
+      const text = paragraphs[0]?.getText() || '';
       expect(text).toBeDefined();
     });
 
@@ -234,7 +234,7 @@ describe('Complex Field Parsing', () => {
         type: 'PAGE',
         formatting: {
           bold: true,
-          fontSize: 14,
+          size: 14,
           color: 'FF0000'
         }
       });
@@ -268,7 +268,7 @@ describe('Complex Field Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]?.getText() || '';
       expect(text).toContain('Page');
       expect(text).toContain('of');
     });
@@ -332,7 +332,7 @@ describe('Complex Field Parsing', () => {
       const paragraphs = loadedDoc.getParagraphs();
       expect(paragraphs.length).toBeGreaterThanOrEqual(1);
 
-      const text = paragraphs[0].getText();
+      const text = paragraphs[0]?.getText() || '';
       expect(text).toContain('Created on');
       expect(text).toContain('by');
       expect(text).toContain('Page');

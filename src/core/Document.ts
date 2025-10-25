@@ -361,8 +361,12 @@ export class Document {
     }
 
     // Load parsed styles into StylesManager
-    // This replaces built-in styles with document-specific styles
+    // Clear built-in styles and use document-specific styles
     if (result.styles && result.styles.length > 0) {
+      // Clear all existing styles to avoid conflicts with built-in styles
+      this.stylesManager.clear();
+
+      // Add all parsed styles from the document
       for (const style of result.styles) {
         this.stylesManager.addStyle(style);
       }
@@ -492,6 +496,16 @@ export class Document {
     return this.bodyElements.filter(
       (el): el is TableOfContentsElement => el instanceof TableOfContentsElement
     );
+  }
+
+  /**
+   * Adds a body element (paragraph, table, SDT, etc.) to the document
+   * @param element - The body element to add
+   * @returns This document for chaining
+   */
+  addBodyElement(element: BodyElement): this {
+    this.bodyElements.push(element);
+    return this;
   }
 
   /**

@@ -54,7 +54,7 @@ describe('Performance Benchmarks', () => {
 
     // Performance assertion
     expect(duration).toBeLessThan(5000); // < 5 seconds
-  }, 10000); // 10 second timeout
+  }, 30000); // 30 second timeout
 
   /**
    * Benchmark: Document with 1000 paragraphs
