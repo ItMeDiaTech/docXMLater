@@ -334,7 +334,9 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   addRun(run: Run): this {
+    console.log(`[DEBUG-Paragraph] Adding run: "${run.getText()}"`);
     this.content.push(run);
+    console.log(`[DEBUG-Paragraph] Content array now has ${this.content.length} items`);
     return this;
   }
 
@@ -344,7 +346,9 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   addField(field: Field): this {
+    console.log(`[DEBUG-Paragraph] Adding field`);
     this.content.push(field);
+    console.log(`[DEBUG-Paragraph] Content array now has ${this.content.length} items`);
     return this;
   }
 
@@ -354,7 +358,9 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   addHyperlink(hyperlink: Hyperlink): this {
+    console.log(`[DEBUG-Paragraph] Adding hyperlink: "${hyperlink.getText()}"`);
     this.content.push(hyperlink);
+    console.log(`[DEBUG-Paragraph] Content array now has ${this.content.length} items`);
     return this;
   }
 
@@ -1496,23 +1502,32 @@ export class Paragraph {
     }
 
     // Add content (runs, fields, hyperlinks, revisions, shapes, textboxes)
-    for (const item of this.content) {
+    console.log(`[DEBUG-Paragraph-toXML] Generating XML for ${this.content.length} content items`);
+    for (let i = 0; i < this.content.length; i++) {
+      const item = this.content[i];
       if (item instanceof Field) {
+        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Field`);
         // Fields need to be wrapped in a run
         paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
       } else if (item instanceof Hyperlink) {
+        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Hyperlink - "${item.getText()}"`);
         // Hyperlinks are their own element
         paragraphChildren.push(item.toXML());
       } else if (item instanceof Revision) {
+        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Revision`);
         // Revisions (track changes) are their own element
         paragraphChildren.push(item.toXML());
       } else if (item instanceof Shape) {
+        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Shape`);
         // Shapes are wrapped in a run
         paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
       } else if (item instanceof TextBox) {
+        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: TextBox`);
         // Text boxes are wrapped in a run
         paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
-      } else {
+      } else if (item) {
+        const runItem = item as Run;
+        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Run - "${runItem ? runItem.getText() : '(unknown)'}"`);
         paragraphChildren.push(item.toXML());
       }
     }

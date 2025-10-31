@@ -293,14 +293,13 @@ describe('SDT (Structured Document Tag) Parsing', () => {
 
       // TOC is typically a buildingBlock SDT
       const tocPara = new Paragraph().addText('Table of Contents');
-      const sdt = StructuredDocumentTag.create({
+      const sdt = new StructuredDocumentTag({
         controlType: 'buildingBlock',
         buildingBlock: {
           gallery: 'Table of Contents',
           category: 'Built-In'
-        },
-        content: [tocPara]
-      });
+        }
+      }, [tocPara]);
       doc.addBodyElement(sdt);
 
       const buffer = await doc.toBuffer();
@@ -310,7 +309,7 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const bodyElements = loadedDoc.getBodyElements();
       const tocSdt = bodyElements.find(el => {
         if (el instanceof StructuredDocumentTag) {
-          const bb = el.getBuildingBlock();
+          const bb = el.getBuildingBlockProperties();
           return bb?.gallery === 'Table of Contents';
         }
         return false;
@@ -324,11 +323,10 @@ describe('SDT (Structured Document Tag) Parsing', () => {
 
       // Google Docs wraps tables in SDTs with contentLocked
       const table = Table.create(2, 2);
-      const sdt = StructuredDocumentTag.create({
+      const sdt = new StructuredDocumentTag({
         lock: 'contentLocked',
-        controlType: 'richText',
-        content: [table]
-      });
+        controlType: 'richText'
+      }, [table]);
       doc.addBodyElement(sdt);
 
       const buffer = await doc.toBuffer();
@@ -343,17 +341,16 @@ describe('SDT (Structured Document Tag) Parsing', () => {
 
       // Verify table is preserved
       const content = loadedSdt.getContent();
-      const table = content.find(c => c instanceof Table);
-      expect(table).toBeDefined();
+      const loadedTable = content.find(c => c instanceof Table);
+      expect(loadedTable).toBeDefined();
     });
 
     it('should handle empty SDT content', async () => {
       const doc = Document.create();
 
-      const sdt = StructuredDocumentTag.create({
-        controlType: 'richText',
-        content: []
-      });
+      const sdt = new StructuredDocumentTag({
+        controlType: 'richText'
+      }, []);
       doc.addBodyElement(sdt);
 
       const buffer = await doc.toBuffer();

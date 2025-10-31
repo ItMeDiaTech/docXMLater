@@ -170,6 +170,13 @@ export class Comment {
   }
 
   /**
+   * Gets the comment content (alias for getText for compatibility)
+   */
+  getContent(): string {
+    return this.getText();
+  }
+
+  /**
    * Formats a date to ISO 8601 format for XML
    */
   private formatDate(date: Date): string {

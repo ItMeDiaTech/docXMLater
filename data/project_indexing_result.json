@@ -1,0 +1,64 @@
+{
+  "success": true,
+  "technologies": [
+    {
+      "name": "JavaScript",
+      "type": "language",
+      "version": null,
+      "confidence": 1.0,
+      "source_file": "package.json"
+    },
+    {
+      "name": "TypeScript",
+      "type": "language",
+      "version": null,
+      "confidence": 1.0,
+      "source_file": "tsconfig.json"
+    }
+  ],
+  "sources": [
+    {
+      "name": "JavaScript",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+      "priority": 1,
+      "doc_type": "official"
+    },
+    {
+      "name": "TypeScript",
+      "url": "https://www.typescriptlang.org/docs/",
+      "priority": 1,
+      "doc_type": "official"
+    },
+    {
+      "name": "JavaScript",
+      "url": "https://javascript.info/",
+      "priority": 2,
+      "doc_type": "tutorial"
+    }
+  ],
+  "results": [
+    {
+      "source": "JavaScript",
+      "documents_added": 367,
+      "success": true,
+      "error": null,
+      "duration_seconds": 442.0694570541382
+    },
+    {
+      "source": "TypeScript",
+      "documents_added": 241,
+      "success": true,
+      "error": null,
+      "duration_seconds": 417.8531219959259
+    },
+    {
+      "source": "JavaScript",
+      "documents_added": 157,
+      "success": true,
+      "error": null,
+      "duration_seconds": 405.5925853252411
+    }
+  ],
+  "total_documents": 765,
+  "duration_seconds": 1268.316959619522
+}

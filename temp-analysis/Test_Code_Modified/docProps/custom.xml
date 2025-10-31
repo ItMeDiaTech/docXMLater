@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+            xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="MSIP_Label_1ecdf243-b9b0-4f63-8694-76742e4201b7_Enabled">
+    <vt:lpwstr>true</vt:lpwstr>
+  </property>
+  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="3" name="MSIP_Label_1ecdf243-b9b0-4f63-8694-76742e4201b7_SetDate">
+    <vt:lpwstr>2025-06-15T05:30:11Z</vt:lpwstr>
+  </property>
+  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="4" name="MSIP_Label_1ecdf243-b9b0-4f63-8694-76742e4201b7_Method">
+    <vt:lpwstr>Standard</vt:lpwstr>
+  </property>
+  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="5" name="MSIP_Label_1ecdf243-b9b0-4f63-8694-76742e4201b7_Name">
+    <vt:lpwstr>Proprietary general</vt:lpwstr>
+  </property>
+  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="6" name="MSIP_Label_1ecdf243-b9b0-4f63-8694-76742e4201b7_SiteId">
+    <vt:lpwstr>fabb61b8-3afe-4e75-b934-a47f782b8cd7</vt:lpwstr>
+  </property>
+  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="7" name="MSIP_Label_1ecdf243-b9b0-4f63-8694-76742e4201b7_ActionId">
+    <vt:lpwstr>e5a4f3e4-4961-4543-95e6-a546d0bff0f1</vt:lpwstr>
+  </property>
+  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="8" name="MSIP_Label_1ecdf243-b9b0-4f63-8694-76742e4201b7_ContentBits">
+    <vt:lpwstr>0</vt:lpwstr>
+  </property>
+  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="9" name="MSIP_Label_1ecdf243-b9b0-4f63-8694-76742e4201b7_Tag">
+    <vt:lpwstr>10, 3, 0, 1</vt:lpwstr>
+  </property>
+</Properties>
