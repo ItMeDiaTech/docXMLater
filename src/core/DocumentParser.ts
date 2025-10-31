@@ -93,11 +93,13 @@ export class DocumentParser {
     section: Section | null;
     namespaces: Record<string, string>;
   }> {
+    console.log('[DEBUG] DocumentParser.parseDocument called');
     // Verify the document exists
     const docXml = zipHandler.getFileAsString(DOCX_PATHS.DOCUMENT);
     if (!docXml) {
       throw new Error("Invalid document: word/document.xml not found");
     }
+    console.log('[DEBUG] Document XML loaded, length:', docXml.length);
 
     // Parse existing relationships to avoid ID collisions
     const parsedRelationshipManager = this.parseRelationships(
@@ -155,13 +157,16 @@ export class DocumentParser {
     zipHandler: ZipHandler,
     imageManager: ImageManager
   ): Promise<BodyElement[]> {
+    console.log('[DEBUG] parseBodyElements called');
     const bodyElements: BodyElement[] = [];
 
     // Extract the body content using safe position-based parsing
     const bodyContent = XMLParser.extractBody(docXml);
     if (!bodyContent) {
+      console.log('[DEBUG] No body content found');
       return bodyElements;
     }
+    console.log('[DEBUG] Body content extracted, length:', bodyContent.length);
 
     let pos = 0;
     while (pos < bodyContent.length) {
@@ -187,12 +192,10 @@ export class DocumentParser {
             next.pos
           );
           if (elementXml) {
-            // Parse XML to object, then extract the paragraph content
-            // XMLParser.parseToObject returns { "w:p": { ... } }, we need just the content
-            // IMPORTANT: trimValues: false preserves whitespace from xml:space="preserve" attributes
-            const parsed = XMLParser.parseToObject(elementXml, { trimValues: false });
-            const paragraph = await this.parseParagraphFromObject(
-              parsed["w:p"],
+            // Parse paragraph with order preservation
+            // Use the new method that preserves the exact order of runs and hyperlinks
+            const paragraph = await this.parseParagraphWithOrder(
+              elementXml,
               relationshipManager,
               zipHandler,
               imageManager
@@ -488,6 +491,177 @@ export class DocumentParser {
    * This ensures we preserve the original ordering of text and hyperlinks
    */
 
+  private async parseParagraphWithOrder(
+    paraXml: string,
+    relationshipManager: RelationshipManager,
+    zipHandler?: ZipHandler,
+    imageManager?: ImageManager
+  ): Promise<Paragraph | null> {
+    try {
+      console.log('[DEBUG] parseParagraphWithOrder called');
+      const paragraph = new Paragraph();
+
+      // Parse the paragraph object with order preservation
+      // IMPORTANT: trimValues: false preserves whitespace from xml:space="preserve" attributes
+      const paraObj = XMLParser.parseToObject(paraXml, { trimValues: false });
+      const pElement = paraObj["w:p"] as any;
+      if (!pElement) {
+        console.log('[DEBUG] No w:p element found');
+        return null;
+      }
+
+      // Parse paragraph properties
+      this.parseParagraphPropertiesFromObject(pElement["w:pPr"], paragraph);
+
+      // Parse w14:paraId if present
+      const paraId = pElement["w14:paraId"];
+      if (paraId) {
+        paragraph.formatting.paraId = paraId as string;
+      }
+
+      // Check if we have ordered children metadata from the enhanced parser
+      const orderedChildren = pElement["_orderedChildren"] as Array<{type: string, index: number}> | undefined;
+
+      console.log('[DEBUG] _orderedChildren present?', orderedChildren ? 'YES' : 'NO');
+      if (orderedChildren) {
+        console.log('[DEBUG] _orderedChildren contents:', JSON.stringify(orderedChildren));
+      }
+
+      if (orderedChildren && orderedChildren.length > 0) {
+        console.log('[DEBUG] Using ordered children path');
+        // Use the preserved order from the parser
+        for (const childInfo of orderedChildren) {
+          const elementType = childInfo.type;
+          const elementIndex = childInfo.index;
+          console.log(`[DEBUG] Processing ${elementType}[${elementIndex}]`);
+
+          if (elementType === "w:r") {
+            const runs = pElement["w:r"];
+            const runArray = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+            console.log(`[DEBUG]   Run array length: ${runArray.length}`);
+            if (elementIndex < runArray.length) {
+              const child = runArray[elementIndex];
+              if (child["w:drawing"]) {
+                console.log('[DEBUG]   Processing drawing run');
+                if (zipHandler && imageManager) {
+                  const imageRun = await this.parseDrawingFromObject(
+                    child["w:drawing"],
+                    zipHandler,
+                    relationshipManager,
+                    imageManager
+                  );
+                  if (imageRun) {
+                    paragraph.addRun(imageRun);
+                    console.log('[DEBUG]   Added image run');
+                  }
+                }
+              } else {
+                const run = this.parseRunFromObject(child);
+                if (run) {
+                  const text = run.getText();
+                  console.log(`[DEBUG]   Adding run with text: "${text}"`);
+                  paragraph.addRun(run);
+                }
+              }
+            } else {
+              console.log(`[DEBUG]   WARNING: Run index ${elementIndex} out of bounds`);
+            }
+          } else if (elementType === "w:hyperlink") {
+            const hyperlinks = pElement["w:hyperlink"];
+            const hyperlinkArray = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
+            console.log(`[DEBUG]   Hyperlink array length: ${hyperlinkArray.length}`);
+            if (elementIndex < hyperlinkArray.length) {
+              const hyperlink = this.parseHyperlinkFromObject(hyperlinkArray[elementIndex], relationshipManager);
+              if (hyperlink) {
+                const text = hyperlink.getText();
+                console.log(`[DEBUG]   Adding hyperlink with text: "${text}"`);
+                paragraph.addHyperlink(hyperlink);
+              }
+            } else {
+              console.log(`[DEBUG]   WARNING: Hyperlink index ${elementIndex} out of bounds`);
+            }
+          } else if (elementType === "w:fldSimple") {
+            const fields = pElement["w:fldSimple"];
+            const fieldArray = Array.isArray(fields) ? fields : (fields ? [fields] : []);
+            console.log(`[DEBUG]   Field array length: ${fieldArray.length}`);
+            if (elementIndex < fieldArray.length) {
+              const field = this.parseSimpleFieldFromObject(fieldArray[elementIndex]);
+              if (field) {
+                console.log('[DEBUG]   Adding field');
+                paragraph.addField(field);
+              }
+            } else {
+              console.log(`[DEBUG]   WARNING: Field index ${elementIndex} out of bounds`);
+            }
+          }
+        }
+        console.log('[DEBUG] Finished processing ordered children');
+      } else {
+        console.log('[DEBUG] Using fallback path (no ordered children)');
+        // Fallback to sequential processing if no order metadata
+        // (This will still have the wrong order, but at least it processes the elements)
+
+        // Handle runs (w:r)
+        const runs = pElement["w:r"];
+        const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+
+        for (const child of runChildren) {
+          if (child["w:drawing"]) {
+            if (zipHandler && imageManager) {
+              const imageRun = await this.parseDrawingFromObject(
+                child["w:drawing"],
+                zipHandler,
+                relationshipManager,
+                imageManager
+              );
+              if (imageRun) {
+                paragraph.addRun(imageRun);
+              }
+            }
+          } else {
+            const run = this.parseRunFromObject(child);
+            if (run) {
+              paragraph.addRun(run);
+            }
+          }
+        }
+
+        // Handle hyperlinks (w:hyperlink)
+        const hyperlinks = pElement["w:hyperlink"];
+        const hyperlinkChildren = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
+
+        for (const hyperlinkObj of hyperlinkChildren) {
+          const hyperlink = this.parseHyperlinkFromObject(hyperlinkObj, relationshipManager);
+          if (hyperlink) {
+            paragraph.addHyperlink(hyperlink);
+          }
+        }
+
+        // Handle simple fields (w:fldSimple)
+        const fields = pElement["w:fldSimple"];
+        const fieldChildren = Array.isArray(fields) ? fields : (fields ? [fields] : []);
+
+        for (const fieldObj of fieldChildren) {
+          const field = this.parseSimpleFieldFromObject(fieldObj);
+          if (field) {
+            paragraph.addField(field);
+          }
+        }
+      }
+
+      return paragraph;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.parseErrors.push({ element: "paragraph", error: err });
+
+      if (this.strictParsing) {
+        throw new Error(`Failed to parse paragraph: ${err.message}`);
+      }
+
+      return null;
+    }
+  }
+
   private async parseParagraphFromObject(
     paraObj: any,
     relationshipManager: RelationshipManager,
@@ -506,55 +680,108 @@ export class DocumentParser {
       // Parse paragraph properties
       this.parseParagraphPropertiesFromObject(paraObj["w:pPr"], paragraph);
 
-      // Parse children (runs, hyperlinks, and bookmarks) in document order
-      // This preserves the original ordering of all elements
+      // Check if we have ordered children metadata from the enhanced parser
+      const orderedChildren = paraObj["_orderedChildren"] as Array<{type: string, index: number}> | undefined;
 
-      // Handle runs (w:r)
-      const runs = paraObj["w:r"];
-      const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+      if (orderedChildren && orderedChildren.length > 0) {
+        // Use the preserved order from the parser
+        for (const childInfo of orderedChildren) {
+          const elementType = childInfo.type;
+          const elementIndex = childInfo.index;
 
-      for (const child of runChildren) {
-        if (child["w:drawing"]) {
-          if (zipHandler && imageManager) {
-            // Parse as image run
-            const imageRun = await this.parseDrawingFromObject(
-              child["w:drawing"],
-              zipHandler,
-              relationshipManager,
-              imageManager
-            );
-            if (imageRun) {
-              paragraph.addRun(imageRun);
+          if (elementType === "w:r") {
+            const runs = paraObj["w:r"];
+            const runArray = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+            if (elementIndex < runArray.length) {
+              const child = runArray[elementIndex];
+              if (child["w:drawing"]) {
+                if (zipHandler && imageManager) {
+                  const imageRun = await this.parseDrawingFromObject(
+                    child["w:drawing"],
+                    zipHandler,
+                    relationshipManager,
+                    imageManager
+                  );
+                  if (imageRun) {
+                    paragraph.addRun(imageRun);
+                  }
+                }
+              } else {
+                const run = this.parseRunFromObject(child);
+                if (run) {
+                  paragraph.addRun(run);
+                }
+              }
+            }
+          } else if (elementType === "w:hyperlink") {
+            const hyperlinks = paraObj["w:hyperlink"];
+            const hyperlinkArray = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
+            if (elementIndex < hyperlinkArray.length) {
+              const hyperlink = this.parseHyperlinkFromObject(hyperlinkArray[elementIndex], relationshipManager);
+              if (hyperlink) {
+                paragraph.addHyperlink(hyperlink);
+              }
+            }
+          } else if (elementType === "w:fldSimple") {
+            const fields = paraObj["w:fldSimple"];
+            const fieldArray = Array.isArray(fields) ? fields : (fields ? [fields] : []);
+            if (elementIndex < fieldArray.length) {
+              const field = this.parseSimpleFieldFromObject(fieldArray[elementIndex]);
+              if (field) {
+                paragraph.addField(field);
+              }
             }
           }
-        } else {
-          // Parse as normal text run
-          const run = this.parseRunFromObject(child);
-          if (run) {
-            paragraph.addRun(run);
+        }
+      } else {
+        // Fallback to sequential processing if no order metadata
+        // Handle runs (w:r)
+        const runs = paraObj["w:r"];
+        const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+
+        for (const child of runChildren) {
+          if (child["w:drawing"]) {
+            if (zipHandler && imageManager) {
+              // Parse as image run
+              const imageRun = await this.parseDrawingFromObject(
+                child["w:drawing"],
+                zipHandler,
+                relationshipManager,
+                imageManager
+              );
+              if (imageRun) {
+                paragraph.addRun(imageRun);
+              }
+            }
+          } else {
+            // Parse as normal text run
+            const run = this.parseRunFromObject(child);
+            if (run) {
+              paragraph.addRun(run);
+            }
           }
         }
-      }
 
-      // Handle hyperlinks (w:hyperlink)
-      const hyperlinks = paraObj["w:hyperlink"];
-      const hyperlinkChildren = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
+        // Handle hyperlinks (w:hyperlink)
+        const hyperlinks = paraObj["w:hyperlink"];
+        const hyperlinkChildren = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
 
-      for (const hyperlinkObj of hyperlinkChildren) {
-        const hyperlink = this.parseHyperlinkFromObject(hyperlinkObj, relationshipManager);
-        if (hyperlink) {
-          paragraph.addHyperlink(hyperlink);
+        for (const hyperlinkObj of hyperlinkChildren) {
+          const hyperlink = this.parseHyperlinkFromObject(hyperlinkObj, relationshipManager);
+          if (hyperlink) {
+            paragraph.addHyperlink(hyperlink);
+          }
         }
-      }
 
-      // Handle simple fields (w:fldSimple)
-      const fields = paraObj["w:fldSimple"];
-      const fieldChildren = Array.isArray(fields) ? fields : (fields ? [fields] : []);
+        // Handle simple fields (w:fldSimple)
+        const fields = paraObj["w:fldSimple"];
+        const fieldChildren = Array.isArray(fields) ? fields : (fields ? [fields] : []);
 
-      for (const fieldObj of fieldChildren) {
-        const field = this.parseSimpleFieldFromObject(fieldObj);
-        if (field) {
-          paragraph.addField(field);
+        for (const fieldObj of fieldChildren) {
+          const field = this.parseSimpleFieldFromObject(fieldObj);
+          if (field) {
+            paragraph.addField(field);
+          }
         }
       }
 
@@ -1562,6 +1789,14 @@ export class DocumentParser {
       if (spacing > 0) {
         table.setCellSpacing(spacing);
         table.setCellSpacingType(spacingType as any);
+      }
+    }
+
+    // Parse table alignment (w:jc) - IMPORTANT for preserving table centering
+    if (tblPrObj["w:jc"]) {
+      const alignment = tblPrObj["w:jc"]["@_w:val"];
+      if (alignment) {
+        table.setAlignment(alignment as 'left' | 'center' | 'right');
       }
     }
   }

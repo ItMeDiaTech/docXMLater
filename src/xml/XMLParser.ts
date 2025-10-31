@@ -773,25 +773,49 @@ export class XMLParser {
   ): ParsedXMLObject {
     const result: ParsedXMLObject = {};
     const nameCounts: Record<string, number> = {};
+    const nameIndices: Record<string, number> = {};
 
     // Count occurrences of each child name
     for (const child of children) {
       nameCounts[child.name] = (nameCounts[child.name] || 0) + 1;
     }
 
+    // Build ordered children array to preserve document order
+    const orderedChildren: Array<{type: string, index: number}> = [];
+
     // Build result object
     for (const child of children) {
       const shouldBeArray =
         options.alwaysArray || (nameCounts[child.name] || 0) > 1;
+
+      // Track which index in the array this element is
+      if (nameIndices[child.name] === undefined) {
+        nameIndices[child.name] = 0;
+      }
+      const currentIndex = nameIndices[child.name]!; // We just set it if undefined
+
+      // Add to ordered children array
+      orderedChildren.push({
+        type: child.name,
+        index: currentIndex
+      });
 
       if (shouldBeArray) {
         if (!result[child.name]) {
           result[child.name] = [];
         }
         (result[child.name] as ParsedXMLValue[]).push(child.value);
+        nameIndices[child.name] = currentIndex + 1;
       } else {
         result[child.name] = child.value;
       }
+    }
+
+    // Add the ordered children metadata if there are multiple types of children
+    // This preserves the original document order
+    const uniqueTypes = Object.keys(nameCounts);
+    if (uniqueTypes.length > 1 && orderedChildren.length > 0) {
+      result["_orderedChildren"] = orderedChildren;
     }
 
     return result;

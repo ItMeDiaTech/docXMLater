@@ -28,8 +28,8 @@ describe('Comment Parsing', () => {
       // Verify comment was preserved
       const comments = loadedDoc.getAllComments();
       expect(comments).toHaveLength(1);
-      expect(comments[0].getAuthor()).toBe('John Doe');
-      expect(comments[0].getInitials()).toBe('JD');
+      expect(comments[0]?.getAuthor()).toBe('John Doe');
+      expect(comments[0]?.getInitials()).toBe('JD');
     });
 
     it('should preserve comment metadata', async () => {
@@ -55,10 +55,10 @@ describe('Comment Parsing', () => {
       expect(loadedComments).toHaveLength(1);
 
       const loadedComment = loadedComments[0];
-      expect(loadedComment.getAuthor()).toBe('Alice Smith');
-      expect(loadedComment.getInitials()).toBe('AS');
+      expect(loadedComment?.getAuthor()).toBe('Alice Smith');
+      expect(loadedComment?.getInitials()).toBe('AS');
       // Date comparison may need tolerance due to serialization
-      expect(loadedComment.getDate()).toBeDefined();
+      expect(loadedComment?.getDate()).toBeDefined();
     });
 
     it('should handle comment replies', async () => {
@@ -155,7 +155,7 @@ describe('Comment Parsing', () => {
       expect(loadedComments).toHaveLength(1);
 
       // Comment content should be preserved
-      const content = loadedComments[0].getContent();
+      const content = loadedComments[0]?.getContent();
       expect(content).toBeDefined();
     });
 
@@ -176,7 +176,7 @@ describe('Comment Parsing', () => {
 
       const comments = loadedDoc.getAllComments();
       expect(comments).toHaveLength(1);
-      expect(comments[0].getAuthor()).toBe('User');
+      expect(comments[0]?.getAuthor()).toBe('User');
     });
   });
 
