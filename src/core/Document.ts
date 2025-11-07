@@ -2351,6 +2351,7 @@ export class Document {
    * - Empty Heading2 paragraphs are skipped (not wrapped in tables)
    * - Hyperlinks with "Top of the Document" or "Top of Document" text are right-aligned with 0pt spacing before/after
    * - All hyperlinks are set to blue (#0000FF)
+   * - All TOC elements have page numbers hidden (showPageNumbers=false, hideInWebLayout=true)
    *
    * @returns Object indicating which styles were successfully modified
    */
@@ -2542,6 +2543,14 @@ export class Document {
 
     // Set all hyperlinks to blue (#0000FF)
     this.updateAllHyperlinkColors('0000FF');
+
+    // Hide page numbers in all TOC elements
+    const tocElements = this.getTableOfContentsElements();
+    for (const tocElement of tocElements) {
+      const toc = tocElement.getTableOfContents();
+      toc.setShowPageNumbers(false);
+      toc.setHideInWebLayout(true);
+    }
 
     return results;
   }

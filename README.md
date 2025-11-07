@@ -628,7 +628,7 @@ High-level helper methods for common document formatting tasks:
 
 | Method                                   | Description                                                                                 |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `applyCustomFormattingToExistingStyles()`| Modify Heading1, Heading2, Normal styles with Verdana font, specific spacing, single line spacing, wrap Heading2 in tables, right-align "Top of Document" hyperlinks, and set all hyperlinks to blue |
+| `applyCustomFormattingToExistingStyles()`| Modify Heading1, Heading2, Normal styles with Verdana font, specific spacing, single line spacing, wrap Heading2 in tables, right-align "Top of Document" hyperlinks, set all hyperlinks to blue, and hide TOC page numbers |
 | `wrapParagraphInTable(para, options?)`   | Wrap a paragraph in a 1x1 table with optional shading, margins, and width settings         |
 | `isParagraphInTable(para)`               | Check if a paragraph is inside a table; returns `{inTable: boolean, cell?: TableCell}`      |
 | `updateAllHyperlinkColors(color)`        | Set all hyperlinks in the document to a specific color (e.g., '0000FF' for blue)           |
@@ -676,6 +676,7 @@ This helper function applies a comprehensive set of formatting rules:
 - **All Styles**: Removes italic and underline formatting
 - **Hyperlinks**: "Top of the Document" links are right-aligned with 0pt spacing; all hyperlinks set to blue (#0000FF)
 - **Empty Paragraphs**: Empty Heading2 paragraphs are skipped (not wrapped in tables)
+- **TOC Elements**: All Table of Contents have page numbers hidden (showPageNumbers=false, hideInWebLayout=true with \n and \z switches)
 
 Per ECMA-376 §17.7.2, direct formatting in document.xml overrides style definitions. This method automatically clears conflicting direct formatting to ensure style changes take effect.
 
