@@ -460,6 +460,8 @@ baseStyle.mergeWith(overrideStyle); // baseStyle now has bold red text
 | `TableOfContents.createWithSpacing(spacing, opts?)`      | TOC with custom spacing  | `TableOfContents.createWithSpacing(120)`             |
 | `TableOfContents.createWithHyperlinkColor(color, opts?)` | Custom hyperlink color   | `TableOfContents.createWithHyperlinkColor('FF0000')` |
 
+**Note:** All TOC elements are automatically wrapped in an SDT (Structured Document Tag) for native Word integration. This enables Word's "Update Table" button and provides better compatibility with Microsoft Word's TOC features.
+
 #### TOC Configuration Methods
 
 | Method                            | Description                    | Values                     |
