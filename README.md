@@ -453,6 +453,7 @@ baseStyle.mergeWith(overrideStyle); // baseStyle now has bold red text
 | `TableOfContents.createSimple(title?)`                   | Simple TOC (2 levels)    | `TableOfContents.createSimple()`                     |
 | `TableOfContents.createDetailed(title?)`                 | Detailed TOC (4 levels)  | `TableOfContents.createDetailed()`                   |
 | `TableOfContents.createHyperlinked(title?)`              | Hyperlinked TOC          | `TableOfContents.createHyperlinked()`                |
+| `TableOfContents.createNoPageNumbers(opts?)`             | TOC without page numbers | `TableOfContents.createNoPageNumbers()`              |
 | `TableOfContents.createWithStyles(styles, opts?)`        | TOC with specific styles | `TableOfContents.createWithStyles(['H1','H3'])`      |
 | `TableOfContents.createFlat(title?, styles?)`            | Flat TOC (no indent)     | `TableOfContents.createFlat()`                       |
 | `TableOfContents.createNumbered(title?, format?)`        | Numbered TOC             | `TableOfContents.createNumbered('TOC', 'roman')`     |
@@ -469,6 +470,7 @@ baseStyle.mergeWith(overrideStyle); // baseStyle now has bold red text
 | `setCustomIndents(indents)`       | Custom indents per level       | `[0, 200, 400]` (twips)    |
 | `setSpaceBetweenEntries(spacing)` | Spacing between entries        | `120` (twips)              |
 | `setHyperlinkColor(color)`        | Hyperlink color                | `'0000FF'` (default blue)  |
+| `setHideInWebLayout(hide)`        | Hide page numbers in web view  | `true/false`               |
 | `configure(options)`              | Bulk configuration             | See example below          |
 
 #### TOC Properties
@@ -480,6 +482,7 @@ baseStyle.mergeWith(overrideStyle); // baseStyle now has bold red text
 | `includeStyles`       | `string[]`                           | `undefined`           | Specific styles (overrides levels) |
 | `showPageNumbers`     | `boolean`                            | `true`                | Show page numbers                  |
 | `useHyperlinks`       | `boolean`                            | `false`               | Use hyperlinks instead of page #s  |
+| `hideInWebLayout`     | `boolean`                            | `false`               | Hide page numbers in web layout    |
 | `numbered`            | `boolean`                            | `false`               | Number TOC entries                 |
 | `numberingFormat`     | `'decimal'/'roman'/'alpha'`          | `'decimal'`           | Numbering format                   |
 | `noIndent`            | `boolean`                            | `false`               | Remove all indentation             |
