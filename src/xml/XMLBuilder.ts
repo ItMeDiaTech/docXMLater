@@ -351,6 +351,46 @@ export class XMLBuilder {
   }
 
   /**
+   * Creates an SDT (Structured Document Tag) wrapper for content
+   * @param content - Content to wrap (paragraphs, tables, etc.)
+   * @param options - SDT options
+   * @returns XMLElement representing the SDT wrapper
+   */
+  static createSDT(
+    content: XMLElement[],
+    options?: {
+      id?: number;
+      docPartGallery?: string;
+      docPartUnique?: boolean;
+    }
+  ): XMLElement {
+    const sdtId = options?.id ?? Math.floor(Math.random() * 2000000000) - 1000000000;
+
+    // Build SDT properties
+    const sdtPrChildren: XMLElement[] = [
+      XMLBuilder.wSelf('id', { 'w:val': sdtId })
+    ];
+
+    // Add docPartObj if docPartGallery is specified
+    if (options?.docPartGallery) {
+      sdtPrChildren.push(
+        XMLBuilder.w('docPartObj', undefined, [
+          XMLBuilder.wSelf('docPartGallery', { 'w:val': options.docPartGallery }),
+          XMLBuilder.wSelf('docPartUnique', {
+            'w:val': options?.docPartUnique !== false ? '1' : '0'
+          })
+        ])
+      );
+    }
+
+    // Create complete SDT structure
+    return XMLBuilder.w('sdt', undefined, [
+      XMLBuilder.w('sdtPr', undefined, sdtPrChildren),
+      XMLBuilder.w('sdtContent', undefined, content)
+    ]);
+  }
+
+  /**
    * Creates a complete WordprocessingML document structure
    * @param bodyContent - Content for the document body
    * @returns XML string for word/document.xml

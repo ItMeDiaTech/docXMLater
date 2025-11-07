@@ -5,7 +5,7 @@
  * based on heading styles (Heading1, Heading2, etc.) in the document.
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
  * TOC properties
@@ -269,12 +269,14 @@ export class TableOfContents {
   }
 
   /**
-   * Generates XML for the TOC field
+   * Generates XML for the TOC field wrapped in an SDT (Structured Document Tag)
    *
    * A TOC in Word is represented as:
-   * 1. A paragraph with the title (styled as TOC Heading)
-   * 2. A complex field (fldChar) with the TOC instruction (begin → separate → end)
-   * 3. Placeholder entries (updated by Word when opening)
+   * 1. SDT wrapper with docPartGallery="Table of Contents"
+   * 2. SDT content containing:
+   *    a. A paragraph with the title (styled as TOC Heading)
+   *    b. A complex field (fldChar) with the TOC instruction (begin → separate → end)
+   *    c. Placeholder entries (updated by Word when opening)
    *
    * Per ECMA-376 Part 1 §17.16.5: All complex fields MUST have
    * begin → instrText → separate → content → end structure.
@@ -283,11 +285,11 @@ export class TableOfContents {
    * @throws Error if field structure cannot be generated completely
    */
   toXML(): XMLElement[] {
-    const elements: XMLElement[] = [];
+    const sdtContent: XMLElement[] = [];
 
     // 1. Title paragraph
     if (this.title) {
-      elements.push({
+      sdtContent.push({
         name: 'w:p',
         children: [
           {
@@ -388,7 +390,7 @@ export class TableOfContents {
       ],
     });
 
-    // Validate complete structure before returning
+    // Validate complete structure before adding to SDT content
     if (tocParagraph.children!.length !== 5) {
       throw new Error(
         `CRITICAL: TOC field structure incomplete. Expected 5 elements ` +
@@ -397,9 +399,15 @@ export class TableOfContents {
       );
     }
 
-    elements.push(tocParagraph);
+    sdtContent.push(tocParagraph);
 
-    return elements;
+    // Wrap TOC content in SDT (Structured Document Tag) for Word native integration
+    const sdtWrapper = XMLBuilder.createSDT(sdtContent, {
+      docPartGallery: 'Table of Contents',
+      docPartUnique: true
+    });
+
+    return [sdtWrapper];
   }
 
   /**
