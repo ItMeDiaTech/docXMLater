@@ -334,16 +334,16 @@ export class TableCell {
       const borders = this.formatting.borders;
 
       if (borders.top) {
-        borderElements.push(this.createBorderElement('top', borders.top));
+        borderElements.push(XMLBuilder.createBorder('top', borders.top));
       }
       if (borders.bottom) {
-        borderElements.push(this.createBorderElement('bottom', borders.bottom));
+        borderElements.push(XMLBuilder.createBorder('bottom', borders.bottom));
       }
       if (borders.left) {
-        borderElements.push(this.createBorderElement('left', borders.left));
+        borderElements.push(XMLBuilder.createBorder('left', borders.left));
       }
       if (borders.right) {
-        borderElements.push(this.createBorderElement('right', borders.right));
+        borderElements.push(XMLBuilder.createBorder('right', borders.right));
       }
 
       if (borderElements.length > 0) {
@@ -455,23 +455,6 @@ export class TableCell {
     return XMLBuilder.w('tc', undefined, cellChildren);
   }
 
-  /**
-   * Creates a border element
-   */
-  private createBorderElement(side: string, border: CellBorder): XMLElement {
-    const attrs: Record<string, string | number> = {
-      'w:val': border.style || 'single',
-    };
-
-    if (border.size !== undefined) {
-      attrs['w:sz'] = border.size;
-    }
-    if (border.color) {
-      attrs['w:color'] = border.color;
-    }
-
-    return XMLBuilder.wSelf(side, attrs);
-  }
 
   /**
    * Creates a new TableCell

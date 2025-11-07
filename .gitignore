@@ -66,6 +66,38 @@ docxmlater-functions-and-structure.md
 TODO.md
 NOTES.md
 
+# Analysis and summary files
+*_SUMMARY.md
+*_ANALYSIS.md
+*_RESULTS.md
+*_SUGGESTIONS.md
+*_FIXES.md
+*_IMPLEMENTATION.md
+COMPLETION_*.md
+HELPER_FUNCTIONS_*.md
+ISSUE_FIXES_*.md
+OPENXML_COMPLIANCE_*.md
+RAG_CLI_*.md
+STYLE_VERIFICATION_*.md
+TEXT_DIRECTION_*.md
+
+# Test scripts (temporary development scripts)
+test-*.ts
+check-*.ts
+diagnose-*.ts
+extract-*.ts
+verify-*.ts
+modify-*.ts
+
+# Extracted XML files
+*.xml
+!src/**/*.xml
+!tests/**/*.xml
+
+# Extraction directories
+*_Extract/
+*_extracted/
+
 # Generated example outputs
 *.docx
 
@@ -73,6 +105,13 @@ NOTES.md
 !tests/**/*.docx
 !ErrorDoc.docx
 !Working.docx
+!Test_Code.docx
+
+# RAG-CLI data
+data/vectors/
+data/cache/*.db
+config/rag_settings.json
+
 /SKILL.md
 /OPENXML_STRUCTURE_GUIDE.md
 /jest.config.js

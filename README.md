@@ -82,16 +82,60 @@ await doc.save("output.docx");
 
 ### Content Retrieval
 
-| Method                | Description           | Returns                                    |
-| --------------------- | --------------------- | ------------------------------------------ |
-| `getParagraphs()`     | Get all paragraphs    | `Paragraph[]`                              |
-| `getTables()`         | Get all tables        | `Table[]`                                  |
-| `getBodyElements()`   | Get all body elements | `BodyElement[]`                            |
-| `getParagraphCount()` | Count paragraphs      | `number`                                   |
-| `getTableCount()`     | Count tables          | `number`                                   |
-| `getHyperlinks()`     | Get all links         | `Array<{hyperlink, paragraph}>`            |
-| `getBookmarks()`      | Get all bookmarks     | `Array<{bookmark, paragraph}>`             |
-| `getImages()`         | Get all images        | `Array<{image, relationshipId, filename}>` |
+| Method                 | Description                             | Returns                                    |
+| ---------------------- | --------------------------------------- | ------------------------------------------ |
+| `getParagraphs()`      | Get top-level paragraphs                | `Paragraph[]`                              |
+| `getAllParagraphs()`   | Get all paragraphs (recursive)          | `Paragraph[]`                              |
+| `getTables()`          | Get top-level tables                    | `Table[]`                                  |
+| `getAllTables()`       | Get all tables (recursive)              | `Table[]`                                  |
+| `getBodyElements()`    | Get all body elements                   | `BodyElement[]`                            |
+| `getParagraphCount()`  | Count paragraphs                        | `number`                                   |
+| `getTableCount()`      | Count tables                            | `number`                                   |
+| `getHyperlinks()`      | Get all links                           | `Array<{hyperlink, paragraph}>`            |
+| `getBookmarks()`       | Get all bookmarks                       | `Array<{bookmark, paragraph}>`             |
+| `getImages()`          | Get all images                          | `Array<{image, relationshipId, filename}>` |
+
+**Note**: The `getAllParagraphs()` and `getAllTables()` methods recursively search inside tables and SDTs (Structured Document Tags), while the non-prefixed methods only return top-level elements.
+
+**Example - Recursive Element Access:**
+
+```typescript
+import { Document, Hyperlink } from 'docxmlater';
+
+// Load document with complex structure (tables, SDTs, nested content)
+const doc = await Document.load('complex.docx');
+
+// Get only top-level paragraphs (misses nested content)
+const topLevel = doc.getParagraphs();
+console.log(`Top-level paragraphs: ${topLevel.length}`); // e.g., 37
+
+// Get ALL paragraphs including those in tables and SDTs
+const allParas = doc.getAllParagraphs();
+console.log(`All paragraphs: ${allParas.length}`); // e.g., 52
+
+// Apply formatting to ALL paragraphs (including nested ones)
+for (const para of allParas) {
+  para.setSpaceAfter(120); // Set 6pt spacing after each paragraph
+}
+
+// Get all tables including those inside SDTs
+const allTables = doc.getAllTables();
+for (const table of allTables) {
+  table.setWidth(5000).setWidthType('pct'); // Set to 100% width
+}
+
+// Find all hyperlinks in the entire document
+let hyperlinkCount = 0;
+for (const para of allParas) {
+  for (const content of para.getContent()) {
+    if (content instanceof Hyperlink) {
+      hyperlinkCount++;
+      content.setFormatting({ color: '0000FF' }); // Make all links blue
+    }
+  }
+}
+console.log(`Updated ${hyperlinkCount} hyperlinks`);
+```
 
 ### Content Removal
 
@@ -574,6 +618,63 @@ doc.insertTocAt(0, toc);
 | -------------------------- | ---------------- |
 | `FootnoteManager.create()` | Manage footnotes |
 | `EndnoteManager.create()`  | Manage endnotes  |
+
+#### Document Helper Functions
+
+High-level helper methods for common document formatting tasks:
+
+| Method                                   | Description                                                                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `applyCustomFormattingToExistingStyles()`| Modify Heading1, Heading2, Normal styles with Verdana font, specific spacing, single line spacing, wrap Heading2 in tables, right-align "Top of Document" hyperlinks, and set all hyperlinks to blue |
+| `wrapParagraphInTable(para, options?)`   | Wrap a paragraph in a 1x1 table with optional shading, margins, and width settings         |
+| `isParagraphInTable(para)`               | Check if a paragraph is inside a table; returns `{inTable: boolean, cell?: TableCell}`      |
+| `updateAllHyperlinkColors(color)`        | Set all hyperlinks in the document to a specific color (e.g., '0000FF' for blue)           |
+
+**Example - Using Helper Functions:**
+
+```typescript
+import { Document } from 'docxmlater';
+
+const doc = await Document.load('document.docx');
+
+// Apply comprehensive formatting to standard styles
+const results = doc.applyCustomFormattingToExistingStyles();
+console.log(`Modified styles:`, results);
+// Output: { heading1: true, heading2: true, normal: true }
+
+// Wrap a specific paragraph in a table
+const para = doc.getParagraphs()[0];
+doc.wrapParagraphInTable(para, {
+  shading: 'BFBFBF',           // Gray background
+  marginLeft: 101,             // 5pt margins
+  marginRight: 101,
+  tableWidthPercent: 5000      // 100% width
+});
+
+// Check if a paragraph is in a table
+const { inTable, cell } = doc.isParagraphInTable(para);
+if (inTable && cell) {
+  console.log('Paragraph is in a table cell');
+  cell.setShading({ fill: 'FFFF00' }); // Change to yellow
+}
+
+// Set all hyperlinks to blue
+doc.updateAllHyperlinkColors('0000FF');
+
+await doc.save('formatted.docx');
+```
+
+**Note on `applyCustomFormattingToExistingStyles()`:**
+
+This helper function applies a comprehensive set of formatting rules:
+- **Heading1**: 18pt black bold Verdana, left aligned, 0pt before/12pt after, single line spacing
+- **Heading2**: 14pt black bold Verdana, left aligned, 6pt before/after, single line spacing, wrapped in gray tables (100% width)
+- **Normal**: 12pt Verdana, left aligned, 3pt before/after, single line spacing
+- **All Styles**: Removes italic and underline formatting
+- **Hyperlinks**: "Top of the Document" links are right-aligned with 0pt spacing; all hyperlinks set to blue (#0000FF)
+- **Empty Paragraphs**: Empty Heading2 paragraphs are skipped (not wrapped in tables)
+
+Per ECMA-376 §17.7.2, direct formatting in document.xml overrides style definitions. This method automatically clears conflicting direct formatting to ensure style changes take effect.
 
 ### Low-Level Document Parts
 
@@ -1149,6 +1250,81 @@ const para = new Paragraph()
 
 // But note: This will cause layout issues (whitespace) in Word
 ```
+
+## Known Limitations
+
+While docXMLater provides comprehensive DOCX manipulation capabilities, there are some features that are not yet fully implemented:
+
+### 1. Table Row Spanning with vMerge
+
+**Status:** FULLY IMPLEMENTED ✅
+
+**What Works:**
+- Column spanning (horizontal cell merging) is fully supported
+- Row spanning (vertical cell merging) is now fully implemented
+- Both horizontal and vertical merging can be combined
+- Uses Word's proper `vMerge` attribute ('restart' and 'continue')
+
+**Usage:**
+```typescript
+// Merge cells horizontally (column spanning)
+table.mergeCells(0, 0, 0, 2); // Merge columns 0-2 in row 0
+
+// Merge cells vertically (row spanning)
+table.mergeCells(0, 0, 2, 0); // Merge rows 0-2 in column 0
+
+// Merge both horizontally and vertically (2x2 block)
+table.mergeCells(0, 0, 1, 1); // Merge 2x2 block starting at (0,0)
+```
+
+### 2. Structured Document Tags (SDT) Parsing
+
+**Status:** FULLY IMPLEMENTED ✅
+
+**What Works:**
+- Complete SDT parsing from existing documents
+- All 9 control types supported (richText, plainText, comboBox, dropDownList, datePicker, checkbox, picture, buildingBlock, group)
+- SDT properties fully extracted (id, tag, lock, alias, controlType)
+- Nested content parsing (paragraphs, tables, nested SDTs)
+- Preserves element order using XMLParser's `_orderedChildren` metadata
+- Round-trip operations fully supported
+
+**Control Types Supported:**
+- **Rich Text** - Multi-formatted text content
+- **Plain Text** - Simple text with optional multiLine support
+- **Combo Box** - User-editable dropdown with list items
+- **Dropdown List** - Fixed selection from list items
+- **Date Picker** - Date selection with format and calendar type
+- **Checkbox** - Boolean selection with custom checked/unchecked states
+- **Picture** - Image content control
+- **Building Block** - Gallery and category-based content
+- **Group** - Grouping of other controls
+
+**Usage:**
+```typescript
+// Load documents with SDTs - fully parsed
+const doc = await Document.load('document-with-sdts.docx');
+
+// Access parsed SDT content
+const sdts = doc.getBodyElements().filter(el => el instanceof StructuredDocumentTag);
+for (const sdt of sdts) {
+  console.log('ID:', sdt.getId());
+  console.log('Tag:', sdt.getTag());
+  console.log('Type:', sdt.getControlType());
+  console.log('Content:', sdt.getContent());
+}
+
+// Create new SDTs programmatically
+const sdt = new StructuredDocumentTag({
+  id: 123456,
+  tag: 'MyControl',
+  controlType: 'richText',
+  alias: 'Rich Text Control'
+});
+sdt.addContent(paragraph);
+```
+
+All known limitations have been resolved! For feature requests or bug reports, please visit our [GitHub Issues](https://github.com/ItMeDiaTech/docXMLater/issues).
 
 ## Contributing
 

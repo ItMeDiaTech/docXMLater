@@ -6,7 +6,7 @@
 import { ZipHandler } from "../zip/ZipHandler";
 import { DOCX_PATHS } from "../zip/types";
 import { Paragraph } from "../elements/Paragraph";
-import { Table } from "../elements/Table";
+import { Table, TableBorder } from "../elements/Table";
 import { TableCell } from "../elements/TableCell";
 import { Section } from "../elements/Section";
 import { Image } from "../elements/Image";
@@ -486,6 +486,71 @@ export class Document {
    */
   getTables(): Table[] {
     return this.bodyElements.filter((el): el is Table => el instanceof Table);
+  }
+
+  /**
+   * Gets all paragraphs in the document recursively
+   * Includes paragraphs in tables and SDTs
+   * @returns Array of all paragraphs
+   */
+  getAllParagraphs(): Paragraph[] {
+    const result: Paragraph[] = [];
+
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        result.push(element);
+      } else if (element instanceof Table) {
+        // Recurse into table cells
+        for (const row of element.getRows()) {
+          for (const cell of row.getCells()) {
+            result.push(...cell.getParagraphs());
+          }
+        }
+      } else if (element instanceof StructuredDocumentTag) {
+        // Recurse into SDT content
+        for (const content of element.getContent()) {
+          if (content instanceof Paragraph) {
+            result.push(content);
+          } else if (content instanceof Table) {
+            // Recurse into tables inside SDTs
+            for (const row of content.getRows()) {
+              for (const cell of row.getCells()) {
+                result.push(...cell.getParagraphs());
+              }
+            }
+          }
+          // Handle nested SDTs recursively
+          // Note: This could be extended to handle deeply nested SDTs
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Gets all tables in the document recursively
+   * Includes tables inside SDTs
+   * @returns Array of all tables
+   */
+  getAllTables(): Table[] {
+    const result: Table[] = [];
+
+    for (const element of this.bodyElements) {
+      if (element instanceof Table) {
+        result.push(element);
+      } else if (element instanceof StructuredDocumentTag) {
+        // Recurse into SDT content
+        for (const content of element.getContent()) {
+          if (content instanceof Table) {
+            result.push(content);
+          }
+          // Note: Could extend to handle tables nested in SDTs inside SDTs
+        }
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -1278,6 +1343,32 @@ export class Document {
   }
 
   /**
+   * Applies borders to all cells in all tables throughout the document
+   * Useful for ensuring consistent border styling across all tables
+   * @param border - Border definition to apply to all sides of every cell
+   * @returns Number of tables updated
+   * @example
+   * ```typescript
+   * // Add single black borders to all tables
+   * const count = doc.applyBordersToAllTables({
+   *   style: 'single',
+   *   size: 8,
+   *   color: '000000'
+   * });
+   * console.log(`Applied borders to ${count} tables`);
+   * ```
+   */
+  applyBordersToAllTables(border: TableBorder): number {
+    const tables = this.getAllTables();
+
+    for (const table of tables) {
+      table.setAllBorders(border);
+    }
+
+    return tables.length;
+  }
+
+  /**
    * Applies different shading to tables based on their size
    * 1x1 tables get one color, multi-cell tables get another color on first row
    * @param singleCellShading - Hex color for 1x1 tables (e.g., 'BFBFBF')
@@ -1909,6 +2000,550 @@ export class Document {
    */
   normalizeAllListIndentation(): number {
     return this.numberingManager.normalizeAllListIndentation();
+  }
+
+  /**
+   * Applies standard formatting to all bullet lists in the document
+   *
+   * Standardizes bullet lists with:
+   * - Alternating bullet symbols: • (solid) for even levels, ○ (open) for odd levels
+   * - Indentation: 0.5" increments (720 twips per level)
+   * - Hanging indent: 0.25" (360 twips)
+   * - Paragraph text: Verdana 12pt
+   * - Spacing: 0pt before, 3pt after (60 twips)
+   * - Contextual spacing enabled (no spacing between same-type paragraphs)
+   *
+   * @returns Number of bullet lists updated
+   * @example
+   * ```typescript
+   * const doc = await Document.load('document.docx');
+   * const count = doc.applyStandardListFormatting();
+   * console.log(`Standardized ${count} bullet lists`);
+   * await doc.save('document-formatted.docx');
+   * ```
+   */
+  applyStandardListFormatting(): number {
+    const instances = this.numberingManager.getAllInstances();
+    let count = 0;
+
+    for (const instance of instances) {
+      const abstractNumId = instance.getAbstractNumId();
+      const abstractNum = this.numberingManager.getAbstractNumbering(abstractNumId);
+
+      if (!abstractNum) continue;
+
+      // Only process bullet lists (skip numbered lists)
+      const level0 = abstractNum.getLevel(0);
+      if (!level0 || level0.getFormat() !== 'bullet') continue;
+
+      // Update all 9 levels (0-8) with standard formatting
+      for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
+        const numLevel = abstractNum.getLevel(levelIndex);
+        if (!numLevel) continue;
+
+        // Alternate bullets: even levels = solid (•), odd levels = open (○)
+        const bullet = levelIndex % 2 === 0 ? '•' : '○';
+        numLevel.setText(bullet);
+
+        // Set bullet font to Arial (Unicode bullets require a regular font, not Symbol)
+        numLevel.setFont('Arial');
+
+        // Set bullet size to 12pt (24 half-points)
+        numLevel.setFontSize(24);
+
+        // Indentation: 0.5" per level (720 twips)
+        // Level 0 = 720, Level 1 = 1440, Level 2 = 2160, etc.
+        numLevel.setLeftIndent(720 * (levelIndex + 1));
+
+        // Hanging indent: 0.25" (360 twips) for all levels
+        numLevel.setHangingIndent(360);
+      }
+
+      // Apply paragraph formatting to all paragraphs using this list
+      this.applyFormattingToListParagraphs(instance.getNumId());
+      count++;
+    }
+
+    return count;
+  }
+
+  /**
+   * Applies formatting to all paragraphs that use a specific numbering instance
+   * Sets font, spacing, and contextual spacing properties
+   * @param numId The numbering instance ID
+   * @private
+   */
+  private applyFormattingToListParagraphs(numId: number): void {
+    const paragraphs = this.getAllParagraphs();
+
+    for (const para of paragraphs) {
+      const numbering = para.getNumbering();
+      if (numbering?.numId === numId) {
+        // Apply font to all runs in the paragraph
+        const runs = para.getRuns();
+        for (const run of runs) {
+          run.setFont('Verdana', 12);
+        }
+
+        // Apply paragraph spacing
+        para.setSpaceBefore(0);        // 0pt before
+        para.setSpaceAfter(60);        // 3pt after (60 twips)
+        para.setContextualSpacing(true); // No spacing between same-type paragraphs
+
+        // Clear paragraph-level indentation so numbering definition indentation takes effect
+        // Paragraph-level indentation overrides numbering indentation, so we need to remove it
+        para.formatting.indentation = undefined;
+      }
+    }
+  }
+
+  /**
+   * Checks if a paragraph is contained within a table cell
+   * @param para The paragraph to check
+   * @returns Object with inTable boolean and cell reference if found
+   * @private
+   */
+  private isParagraphInTable(para: Paragraph): { inTable: boolean; cell?: TableCell } {
+    const allTables = this.getAllTables();
+
+    for (const table of allTables) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          const cellParas = cell.getParagraphs();
+          for (const cellPara of cellParas) {
+            if (cellPara === para) {
+              return { inTable: true, cell };
+            }
+          }
+        }
+      }
+    }
+
+    return { inTable: false };
+  }
+
+  /**
+   * Wraps a paragraph in a 1x1 table and applies cell formatting
+   * @param para The paragraph to wrap
+   * @param options Formatting options for the table cell
+   * @returns The created table
+   * @private
+   */
+  private wrapParagraphInTable(
+    para: Paragraph,
+    options: {
+      shading?: string;
+      marginTop?: number;
+      marginBottom?: number;
+      marginLeft?: number;
+      marginRight?: number;
+      tableWidthPercent?: number;
+    }
+  ): Table {
+    // Find the paragraph index in bodyElements
+    const paraIndex = this.bodyElements.indexOf(para);
+    if (paraIndex === -1) {
+      throw new Error('Paragraph not found in document body elements');
+    }
+
+    // Create 1x1 table
+    const table = new Table(1, 1);
+    const cell = table.getCell(0, 0);
+
+    if (!cell) {
+      throw new Error('Failed to get cell from newly created table');
+    }
+
+    // Move paragraph to cell
+    // Remove paragraph from document body
+    this.bodyElements.splice(paraIndex, 1);
+
+    // Add paragraph to cell
+    cell.addParagraph(para);
+
+    // Apply cell formatting
+    if (options.shading) {
+      cell.setShading({ fill: options.shading });
+    }
+
+    if (options.marginTop !== undefined || options.marginBottom !== undefined ||
+        options.marginLeft !== undefined || options.marginRight !== undefined) {
+      cell.setMargins({
+        top: options.marginTop ?? 100,
+        bottom: options.marginBottom ?? 100,
+        left: options.marginLeft ?? 100,
+        right: options.marginRight ?? 100
+      });
+    }
+
+    // Set table width (percentage of page width)
+    if (options.tableWidthPercent !== undefined) {
+      table.setWidth(options.tableWidthPercent);
+      table.setWidthType('pct');
+    }
+
+    // Insert table where paragraph was
+    this.bodyElements.splice(paraIndex, 0, table);
+
+    return table;
+  }
+
+  /**
+   * Creates and applies custom styles to the document
+   * Applies three custom styles: Header1, Header2, and Normal
+   *
+   * - Header1: 18pt black bold Verdana, left aligned, 0pt before / 12pt after
+   * - Header2: 14pt black bold Verdana, left aligned, 6pt before/after, wrapped in gray table
+   * - Normal: 12pt Verdana, left aligned, 3pt before/after
+   *
+   * @returns Object with counts of modified paragraphs
+   */
+  public applyCustomStylesToDocument(): {
+    heading1: number;
+    heading2: number;
+    normal: number;
+  } {
+    const counts = { heading1: 0, heading2: 0, normal: 0 };
+
+    // Create custom styles
+    const header1Style = Style.create({
+      styleId: 'CustomHeader1',
+      name: 'Custom Header 1',
+      type: 'paragraph',
+      basedOn: 'Normal',
+      runFormatting: {
+        font: 'Verdana',
+        size: 18,
+        bold: true,
+        color: '000000'
+      },
+      paragraphFormatting: {
+        alignment: 'left',
+        spacing: {
+          before: 0,      // 0pt before
+          after: 240      // 12pt after (240 twips)
+        }
+      }
+    });
+
+    const header2Style = Style.create({
+      styleId: 'CustomHeader2',
+      name: 'Custom Header 2',
+      type: 'paragraph',
+      basedOn: 'Normal',
+      runFormatting: {
+        font: 'Verdana',
+        size: 14,
+        bold: true,
+        color: '000000'
+      },
+      paragraphFormatting: {
+        alignment: 'left',
+        spacing: {
+          before: 120,    // 6pt before (120 twips)
+          after: 120      // 6pt after (120 twips)
+        }
+      }
+    });
+
+    const normalStyle = Style.create({
+      styleId: 'CustomNormal',
+      name: 'Custom Normal',
+      type: 'paragraph',
+      basedOn: 'Normal',
+      runFormatting: {
+        font: 'Verdana',
+        size: 12,
+        color: '000000'
+      },
+      paragraphFormatting: {
+        alignment: 'left',
+        spacing: {
+          before: 60,     // 3pt before (60 twips)
+          after: 60       // 3pt after (60 twips)
+        }
+      }
+    });
+
+    // Add styles to document
+    this.addStyle(header1Style);
+    this.addStyle(header2Style);
+    this.addStyle(normalStyle);
+
+    // Get all paragraphs (this will be modified as we wrap some in tables)
+    // We need to work with a copy since we'll be modifying bodyElements
+    const allParagraphs = this.getAllParagraphs();
+
+    // Process each paragraph
+    for (const para of allParagraphs) {
+      const currentStyle = para.getStyle();
+
+      // Match Heading1 / Heading 1
+      if (currentStyle === 'Heading1' || currentStyle === 'Heading 1') {
+        para.setStyle('CustomHeader1');
+        counts.heading1++;
+      }
+      // Match Heading2 / Heading 2
+      else if (currentStyle === 'Heading2' || currentStyle === 'Heading 2') {
+        para.setStyle('CustomHeader2');
+
+        // Check if paragraph is in a table
+        const { inTable, cell } = this.isParagraphInTable(para);
+
+        if (inTable && cell) {
+          // Paragraph is already in a table - apply cell formatting
+          cell.setShading({ fill: 'BFBFBF' });
+          cell.setMargins({ top: 0, bottom: 0, left: 101, right: 101 });
+
+          // Set table width to 100%
+          const table = this.getAllTables().find(t => {
+            for (const row of t.getRows()) {
+              for (const c of row.getCells()) {
+                if (c === cell) return true;
+              }
+            }
+            return false;
+          });
+          if (table) {
+            table.setWidth(5000); // 100% width
+            table.setWidthType('pct');
+          }
+        } else {
+          // Paragraph is not in a table - wrap it
+          this.wrapParagraphInTable(para, {
+            shading: 'BFBFBF',
+            marginTop: 0,
+            marginBottom: 0,
+            marginLeft: 101,
+            marginRight: 101,
+            tableWidthPercent: 5000 // 100% in Word's percentage units
+          });
+        }
+
+        counts.heading2++;
+      }
+      // Match Normal (explicit "Normal" style or undefined/no style set)
+      // In Word, paragraphs without an explicit pStyle default to "Normal"
+      else if (currentStyle === 'Normal' || currentStyle === undefined) {
+        para.setStyle('CustomNormal');
+        counts.normal++;
+      }
+    }
+
+    return counts;
+  }
+
+  /**
+   * Modifies the existing Heading1, Heading2, and Normal style definitions
+   * instead of creating new custom styles. This approach preserves the original
+   * style names while updating their formatting.
+   *
+   * Per ECMA-376 §17.7.2, direct formatting in document.xml ALWAYS overrides
+   * style definitions in styles.xml. This method clears conflicting direct
+   * formatting from paragraphs to allow style modifications to take effect.
+   *
+   * Formatting applied:
+   * - Heading1: 18pt black bold Verdana, left aligned, 0pt before / 12pt after, single line spacing, no italic/underline
+   * - Heading2: 14pt black bold Verdana, left aligned, 6pt before/after, single line spacing, wrapped in gray tables, no italic/underline
+   * - Normal: 12pt Verdana, left aligned, 3pt before/after, single line spacing, no italic/underline
+   *
+   * Additional processing:
+   * - Empty Heading2 paragraphs are skipped (not wrapped in tables)
+   * - Hyperlinks with "Top of the Document" or "Top of Document" text are right-aligned with 0pt spacing before/after
+   * - All hyperlinks are set to blue (#0000FF)
+   *
+   * @returns Object indicating which styles were successfully modified
+   */
+  public applyCustomFormattingToExistingStyles(): {
+    heading1: boolean;
+    heading2: boolean;
+    normal: boolean;
+  } {
+    const results = { heading1: false, heading2: false, normal: false };
+
+    // Get existing styles from StylesManager
+    const heading1 = this.stylesManager.getStyle('Heading1');
+    const heading2 = this.stylesManager.getStyle('Heading2');
+    const normal = this.stylesManager.getStyle('Normal');
+
+    // Modify Heading1 definition
+    if (heading1) {
+      heading1.setRunFormatting({
+        font: 'Verdana',
+        size: 18,
+        bold: true,
+        color: '000000'
+      });
+      heading1.setParagraphFormatting({
+        alignment: 'left',
+        spacing: { before: 0, after: 240, line: 240, lineRule: 'auto' }  // 0pt before, 12pt after, single line spacing
+      });
+      results.heading1 = true;
+    }
+
+    // Modify Heading2 definition
+    if (heading2) {
+      heading2.setRunFormatting({
+        font: 'Verdana',
+        size: 14,
+        bold: true,
+        color: '000000'
+      });
+      heading2.setParagraphFormatting({
+        alignment: 'left',
+        spacing: { before: 120, after: 120, line: 240, lineRule: 'auto' }  // 6pt before, 6pt after, single line spacing
+      });
+      results.heading2 = true;
+    }
+
+    // Modify Normal definition
+    if (normal) {
+      normal.setRunFormatting({
+        font: 'Verdana',
+        size: 12,
+        color: '000000'
+      });
+      normal.setParagraphFormatting({
+        alignment: 'left',
+        spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' }  // 3pt before, 3pt after, single line spacing
+      });
+      results.normal = true;
+    }
+
+    // Clear direct formatting from affected paragraphs and wrap Heading2 in tables
+    // Use a Set to track processed paragraphs and prevent duplicate wrapping
+    const processedParagraphs = new Set<Paragraph>();
+
+    // Get all paragraphs ONCE before modifications to prevent processing duplicates
+    const allParas = this.getAllParagraphs();
+
+    for (const para of allParas) {
+      // Skip if already processed
+      if (processedParagraphs.has(para)) {
+        continue;
+      }
+
+      const styleId = para.getStyle();
+
+      // Process Heading1 paragraphs
+      if (styleId === 'Heading1' && heading1) {
+        para.clearDirectFormattingConflicts(heading1);
+
+        // Explicitly clear italic and underline from all runs
+        for (const run of para.getRuns()) {
+          run.setItalic(false);
+          run.setUnderline(false);
+        }
+
+        // Clear italic and underline from paragraph mark properties
+        if (para.formatting.paragraphMarkRunProperties) {
+          delete para.formatting.paragraphMarkRunProperties.italic;
+          delete para.formatting.paragraphMarkRunProperties.underline;
+        }
+
+        processedParagraphs.add(para);
+      }
+
+      // Process Heading2 paragraphs
+      else if (styleId === 'Heading2' && heading2) {
+        // Check if paragraph has actual text content (skip empty paragraphs)
+        const hasContent = para.getRuns().some(run => run.getText().trim().length > 0);
+
+        if (!hasContent) {
+          // Skip empty Heading2 paragraphs - don't wrap them in tables
+          processedParagraphs.add(para);
+          continue;
+        }
+
+        // Clear direct formatting first
+        para.clearDirectFormattingConflicts(heading2);
+
+        // Explicitly clear italic and underline from all runs
+        for (const run of para.getRuns()) {
+          run.setItalic(false);
+          run.setUnderline(false);
+        }
+
+        // Clear italic and underline from paragraph mark properties
+        if (para.formatting.paragraphMarkRunProperties) {
+          delete para.formatting.paragraphMarkRunProperties.italic;
+          delete para.formatting.paragraphMarkRunProperties.underline;
+        }
+
+        // Check if paragraph is in a table
+        const { inTable, cell } = this.isParagraphInTable(para);
+
+        if (inTable && cell) {
+          // Paragraph is already in a table - apply cell formatting
+          cell.setShading({ fill: 'BFBFBF' });
+          cell.setMargins({ top: 0, bottom: 0, left: 101, right: 101 });
+
+          // Set table width to 100%
+          const table = this.getAllTables().find(t => {
+            for (const row of t.getRows()) {
+              for (const c of row.getCells()) {
+                if (c === cell) return true;
+              }
+            }
+            return false;
+          });
+          if (table) {
+            table.setWidth(5000);
+            table.setWidthType('pct');
+          }
+        } else {
+          // Paragraph is not in a table - wrap it
+          this.wrapParagraphInTable(para, {
+            shading: 'BFBFBF',
+            marginTop: 0,
+            marginBottom: 0,
+            marginLeft: 101,
+            marginRight: 101,
+            tableWidthPercent: 5000
+          });
+        }
+
+        processedParagraphs.add(para);
+      }
+
+      // Process Normal paragraphs (including undefined style which defaults to Normal)
+      else if ((styleId === 'Normal' || styleId === undefined) && normal) {
+        para.clearDirectFormattingConflicts(normal);
+
+        // Explicitly clear italic and underline from all runs
+        for (const run of para.getRuns()) {
+          run.setItalic(false);
+          run.setUnderline(false);
+        }
+
+        // Clear italic and underline from paragraph mark properties
+        if (para.formatting.paragraphMarkRunProperties) {
+          delete para.formatting.paragraphMarkRunProperties.italic;
+          delete para.formatting.paragraphMarkRunProperties.underline;
+        }
+
+        processedParagraphs.add(para);
+      }
+    }
+
+    // Handle hyperlinks: right-align "Top of Document" hyperlinks and set all to blue
+    const hyperlinks = this.getHyperlinks();
+
+    for (const { hyperlink, paragraph } of hyperlinks) {
+      const text = hyperlink.getText().trim();
+
+      // Right-align hyperlinks with specific text and set spacing to 0pt
+      if (text === 'Top of the Document' || text === 'Top of Document') {
+        paragraph.setAlignment('right');
+        paragraph.setSpaceBefore(0);
+        paragraph.setSpaceAfter(0);
+      }
+    }
+
+    // Set all hyperlinks to blue (#0000FF)
+    this.updateAllHyperlinkColors('0000FF');
+
+    return results;
   }
 
   /**

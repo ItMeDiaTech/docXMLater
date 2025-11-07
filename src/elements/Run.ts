@@ -4,7 +4,39 @@
  */
 
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { validateRunText } from '../utils/validation';
+import { validateRunText, normalizeColor } from '../utils/validation';
+import { logSerialization, logTextDirection } from '../utils/diagnostics';
+
+/**
+ * Run content element types
+ * Per ECMA-376 Part 1 §17.3.3 EG_RunInnerContent, runs can contain multiple types of content
+ */
+export type RunContentType =
+  | 'text'            // <w:t> - Regular text
+  | 'tab'             // <w:tab/> - Tab character (used in TOC entries)
+  | 'break'           // <w:br/> - Line/page/column break
+  | 'carriageReturn'  // <w:cr/> - Carriage return
+  | 'softHyphen'      // <w:softHyphen/> - Optional hyphen
+  | 'noBreakHyphen';  // <w:noBreakHyphen/> - Non-breaking hyphen
+
+/**
+ * Break type for <w:br> elements
+ * Per ECMA-376 Part 1 §17.18.3
+ */
+export type BreakType = 'page' | 'column' | 'textWrapping';
+
+/**
+ * Run content element
+ * Represents a single content element within a run (text, tab, break, etc.)
+ */
+export interface RunContent {
+  /** Type of content element */
+  type: RunContentType;
+  /** Text value (only for 'text' type) */
+  value?: string;
+  /** Break type (only for 'break' type) */
+  breakType?: BreakType;
+}
 
 /**
  * Border style for text
@@ -152,7 +184,7 @@ export interface RunFormatting {
  * Represents a run of formatted text
  */
 export class Run {
-  private text: string;
+  private content: RunContent[];
   private formatting: RunFormatting;
 
   /**
@@ -172,7 +204,10 @@ export class Run {
     });
 
     // Use cleaned text if available and cleaning was requested
-    this.text = validation.cleanedText || text;
+    const cleanedText = validation.cleanedText || text;
+
+    // Initialize content as array with single text element
+    this.content = cleanedText ? [{ type: 'text', value: cleanedText }] : [];
 
     // Remove cleanXmlFromText from formatting as it's not a display property
     const { cleanXmlFromText, ...displayFormatting } = formatting;
@@ -180,14 +215,19 @@ export class Run {
   }
 
   /**
-   * Gets the text content
+   * Gets the text content (concatenates all text elements)
+   * Backward-compatible method that extracts text from all content elements
    */
   getText(): string {
-    return this.text;
+    return this.content
+      .filter(c => c.type === 'text')
+      .map(c => c.value || '')
+      .join('');
   }
 
   /**
-   * Sets the text content
+   * Sets the text content (replaces all content with single text element)
+   * Backward-compatible method that preserves existing API
    * @param text - New text content
    */
   setText(text: string): void {
@@ -203,7 +243,10 @@ export class Run {
     });
 
     // Use cleaned text if available and cleaning was requested
-    this.text = validation.cleanedText || text;
+    const cleanedText = validation.cleanedText || text;
+
+    // Replace all content with single text element
+    this.content = cleanedText ? [{ type: 'text', value: cleanedText }] : [];
   }
 
   /**
@@ -415,35 +458,10 @@ export class Run {
    * @throws Error if color format is invalid
    */
   setColor(color: string): this {
-    this.formatting.color = this.normalizeColor(color);
+    this.formatting.color = normalizeColor(color);
     return this;
   }
 
-  /**
-   * Normalizes color to uppercase 6-character hex format per Microsoft convention
-   * @param color - Color in hex format (with or without #)
-   * @returns Normalized uppercase hex color
-   * @throws Error if color format is invalid
-   */
-  private normalizeColor(color: string): string {
-    // Remove # if present
-    const hex = color.replace(/^#/, '');
-
-    // Validate format: must be 3 or 6 character hex
-    if (!/^[0-9A-Fa-f]{3}$|^[0-9A-Fa-f]{6}$/.test(hex)) {
-      throw new Error(
-        `Invalid color format: "${color}". Expected 3 or 6-character hex ` +
-        `(e.g., "FF0000", "#FF0000", "F00", or "#F00")`
-      );
-    }
-
-    // Expand 3-char to 6-char format and normalize to uppercase
-    if (hex.length === 3) {
-      return (hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2)).toUpperCase();
-    }
-
-    return hex.toUpperCase();
-  }
 
   /**
    * Sets highlight color
@@ -613,13 +631,13 @@ export class Run {
    * @returns XMLElement representing the run
    */
   toXML(): XMLElement {
-    // Validate text content before serialization
-    if (this.text === undefined || this.text === null) {
-      console.warn(
-        'DocXML Warning: Run has undefined/null text content - using empty string. ' +
-        'This may indicate a bug in your code.'
-      );
-      this.text = '';
+    // Get text for diagnostic logging (backward compatibility)
+    const text = this.getText();
+
+    // Diagnostic logging before serialization
+    logSerialization(`Serializing run: "${text}"`, { rtl: this.formatting.rtl || false });
+    if (this.formatting.rtl) {
+      logTextDirection(`Run with RTL being serialized: "${text}"`);
     }
 
     // Build the run element
@@ -631,10 +649,44 @@ export class Run {
       runChildren.push(rPr);
     }
 
-    // Add text element
-    runChildren.push(XMLBuilder.w('t', {
-      'xml:space': 'preserve',
-    }, [this.text]));
+    // Add run content elements (text, tabs, breaks, etc.) in order
+    for (const contentElement of this.content) {
+      switch (contentElement.type) {
+        case 'text':
+          if (contentElement.value !== undefined && contentElement.value !== null) {
+            runChildren.push(XMLBuilder.w('t', {
+              'xml:space': 'preserve',
+            }, [contentElement.value]));
+          }
+          break;
+
+        case 'tab':
+          runChildren.push(XMLBuilder.wSelf('tab'));
+          break;
+
+        case 'break':
+          {
+            const attrs: Record<string, string> = {};
+            if (contentElement.breakType) {
+              attrs['w:type'] = contentElement.breakType;
+            }
+            runChildren.push(XMLBuilder.wSelf('br', Object.keys(attrs).length > 0 ? attrs : undefined));
+          }
+          break;
+
+        case 'carriageReturn':
+          runChildren.push(XMLBuilder.wSelf('cr'));
+          break;
+
+        case 'softHyphen':
+          runChildren.push(XMLBuilder.wSelf('softHyphen'));
+          break;
+
+        case 'noBreakHyphen':
+          runChildren.push(XMLBuilder.wSelf('noBreakHyphen'));
+          break;
+      }
+    }
 
     return XMLBuilder.w('r', undefined, runChildren);
   }
@@ -644,9 +696,8 @@ export class Run {
    * @returns True if the run has text with length > 0
    */
   hasText(): boolean {
-    return this.text !== undefined &&
-           this.text !== null &&
-           this.text.length > 0;
+    const text = this.getText();
+    return text.length > 0;
   }
 
   /**
@@ -664,6 +715,70 @@ export class Run {
    */
   isValid(): boolean {
     return this.hasText() || this.hasFormatting();
+  }
+
+  /**
+   * Gets the run content elements (text, tabs, breaks, etc.)
+   * @returns Array of run content elements
+   */
+  getContent(): RunContent[] {
+    return [...this.content];
+  }
+
+  /**
+   * Adds a tab character to the run
+   * Used in TOC entries to separate heading text from page numbers
+   * @returns This run for method chaining
+   */
+  addTab(): this {
+    this.content.push({ type: 'tab' });
+    return this;
+  }
+
+  /**
+   * Adds a line, page, or column break to the run
+   * @param breakType - Type of break ('page' | 'column' | 'textWrapping')
+   * @returns This run for method chaining
+   */
+  addBreak(breakType?: BreakType): this {
+    this.content.push({ type: 'break', breakType });
+    return this;
+  }
+
+  /**
+   * Appends text to the run (adds new text element)
+   * @param text - Text to append
+   * @returns This run for method chaining
+   */
+  appendText(text: string): this {
+    if (text) {
+      this.content.push({ type: 'text', value: text });
+    }
+    return this;
+  }
+
+  /**
+   * Adds a carriage return to the run
+   * @returns This run for method chaining
+   */
+  addCarriageReturn(): this {
+    this.content.push({ type: 'carriageReturn' });
+    return this;
+  }
+
+  /**
+   * Creates a Run from an array of content elements
+   * Factory method for advanced use cases (used by DocumentParser)
+   * @param content - Array of run content elements
+   * @param formatting - Run formatting options
+   * @returns New Run instance
+   */
+  static createFromContent(content: RunContent[], formatting: RunFormatting = {}): Run {
+    const run = Object.create(Run.prototype) as Run;
+    run.content = content;
+    const { cleanXmlFromText, ...displayFormatting } = formatting;
+    run.formatting = displayFormatting;
+    return run;
   }
 
   /**
@@ -709,30 +824,30 @@ export class Run {
 
     // 3. Bold
     if (formatting.bold) {
-      rPrChildren.push(XMLBuilder.wSelf('b'));
+      rPrChildren.push(XMLBuilder.wSelf('b', { 'w:val': '1' }));
     }
 
     // 3.5. Bold for complex scripts (w:bCs) per ECMA-376 Part 1 §17.3.2.3
     if (formatting.complexScriptBold) {
-      rPrChildren.push(XMLBuilder.wSelf('bCs'));
+      rPrChildren.push(XMLBuilder.wSelf('bCs', { 'w:val': '1' }));
     }
 
     // 4. Italic
     if (formatting.italic) {
-      rPrChildren.push(XMLBuilder.wSelf('i'));
+      rPrChildren.push(XMLBuilder.wSelf('i', { 'w:val': '1' }));
     }
 
     // 4.5. Italic for complex scripts (w:iCs) per ECMA-376 Part 1 §17.3.2.17
     if (formatting.complexScriptItalic) {
-      rPrChildren.push(XMLBuilder.wSelf('iCs'));
+      rPrChildren.push(XMLBuilder.wSelf('iCs', { 'w:val': '1' }));
     }
 
     // 5. Capitalization (caps/smallCaps)
     if (formatting.allCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('caps'));
+      rPrChildren.push(XMLBuilder.wSelf('caps', { 'w:val': '1' }));
     }
     if (formatting.smallCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('smallCaps'));
+      rPrChildren.push(XMLBuilder.wSelf('smallCaps', { 'w:val': '1' }));
     }
 
     // 6. Character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
@@ -754,55 +869,56 @@ export class Run {
 
     // 6.6. Outline text effect (w:outline) per ECMA-376 Part 1 §17.3.2.23
     if (formatting.outline) {
-      rPrChildren.push(XMLBuilder.wSelf('outline'));
+      rPrChildren.push(XMLBuilder.wSelf('outline', { 'w:val': '1' }));
     }
 
     // 6.7. Shadow text effect (w:shadow) per ECMA-376 Part 1 §17.3.2.32
     if (formatting.shadow) {
-      rPrChildren.push(XMLBuilder.wSelf('shadow'));
+      rPrChildren.push(XMLBuilder.wSelf('shadow', { 'w:val': '1' }));
     }
 
     // 6.8. Emboss text effect (w:emboss) per ECMA-376 Part 1 §17.3.2.13
     if (formatting.emboss) {
-      rPrChildren.push(XMLBuilder.wSelf('emboss'));
+      rPrChildren.push(XMLBuilder.wSelf('emboss', { 'w:val': '1' }));
     }
 
     // 6.9. Imprint/engrave text effect (w:imprint) per ECMA-376 Part 1 §17.3.2.18
     if (formatting.imprint) {
-      rPrChildren.push(XMLBuilder.wSelf('imprint'));
+      rPrChildren.push(XMLBuilder.wSelf('imprint', { 'w:val': '1' }));
     }
 
     // 6.10. No proofing (w:noProof) per ECMA-376 Part 1 §17.3.2.21
     if (formatting.noProof) {
-      rPrChildren.push(XMLBuilder.wSelf('noProof'));
+      rPrChildren.push(XMLBuilder.wSelf('noProof', { 'w:val': '1' }));
     }
 
     // 6.11. Snap to grid (w:snapToGrid) per ECMA-376 Part 1 §17.3.2.35
     if (formatting.snapToGrid) {
-      rPrChildren.push(XMLBuilder.wSelf('snapToGrid'));
+      rPrChildren.push(XMLBuilder.wSelf('snapToGrid', { 'w:val': '1' }));
     }
 
     // 6.12. Vanish/hidden (w:vanish) per ECMA-376 Part 1 §17.3.2.42
     if (formatting.vanish) {
-      rPrChildren.push(XMLBuilder.wSelf('vanish'));
+      rPrChildren.push(XMLBuilder.wSelf('vanish', { 'w:val': '1' }));
     }
 
     // 6.12.5. Special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
     if (formatting.specVanish) {
-      rPrChildren.push(XMLBuilder.wSelf('specVanish'));
+      rPrChildren.push(XMLBuilder.wSelf('specVanish', { 'w:val': '1' }));
     }
 
     // 6.13. RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
+    // FIX: Must include w:val="1" to explicitly enable RTL, otherwise Word interprets empty tag incorrectly
     if (formatting.rtl) {
-      rPrChildren.push(XMLBuilder.wSelf('rtl'));
+      rPrChildren.push(XMLBuilder.wSelf('rtl', { 'w:val': '1' }));
     }
 
     // 7. Strikethrough
     if (formatting.strike) {
-      rPrChildren.push(XMLBuilder.wSelf('strike'));
+      rPrChildren.push(XMLBuilder.wSelf('strike', { 'w:val': '1' }));
     }
     if (formatting.dstrike) {
-      rPrChildren.push(XMLBuilder.wSelf('dstrike'));
+      rPrChildren.push(XMLBuilder.wSelf('dstrike', { 'w:val': '1' }));
     }
 
     // 8. Underline
@@ -918,13 +1034,15 @@ export class Run {
    * ```
    */
   clone(): Run {
-    // Deep copy formatting to avoid shared references
+    // Deep copy content and formatting to avoid shared references
+    const clonedContent: RunContent[] = JSON.parse(JSON.stringify(this.content));
     const clonedFormatting: RunFormatting = JSON.parse(JSON.stringify(this.formatting));
-    return new Run(this.text, clonedFormatting);
+    return Run.createFromContent(clonedContent, clonedFormatting);
   }
 
   /**
    * Inserts text at a specific position
+   * NOTE: This flattens run content (loses tabs/breaks). Use with caution.
    * @param index - Position to insert at (0-based)
    * @param text - Text to insert
    * @returns This run for chaining
@@ -935,30 +1053,18 @@ export class Run {
    * ```
    */
   insertText(index: number, text: string): this {
+    const currentText = this.getText();
     if (index < 0) index = 0;
-    if (index > this.text.length) index = this.text.length;
+    if (index > currentText.length) index = currentText.length;
 
-    this.text = this.text.slice(0, index) + text + this.text.slice(index);
-    return this;
-  }
-
-  /**
-   * Appends text to the end of the run
-   * @param text - Text to append
-   * @returns This run for chaining
-   * @example
-   * ```typescript
-   * const run = new Run('Hello');
-   * run.appendText(' World');  // "Hello World"
-   * ```
-   */
-  appendText(text: string): this {
-    this.text += text;
+    const newText = currentText.slice(0, index) + text + currentText.slice(index);
+    this.setText(newText);
     return this;
   }
 
   /**
    * Replaces text in a specific range
+   * NOTE: This flattens run content (loses tabs/breaks). Use with caution.
    * @param start - Start position (0-based, inclusive)
    * @param end - End position (0-based, exclusive)
    * @param text - Replacement text
@@ -970,11 +1076,62 @@ export class Run {
    * ```
    */
   replaceText(start: number, end: number, text: string): this {
+    const currentText = this.getText();
     if (start < 0) start = 0;
-    if (end > this.text.length) end = this.text.length;
+    if (end > currentText.length) end = currentText.length;
     if (start > end) [start, end] = [end, start];  // Swap if reversed
 
-    this.text = this.text.slice(0, start) + text + this.text.slice(end);
+    const newText = currentText.slice(0, start) + text + currentText.slice(end);
+    this.setText(newText);
+    return this;
+  }
+
+  /**
+   * Clears run formatting properties that conflict with a style definition.
+   * Uses smart clearing: only removes properties that DIFFER from the style.
+   * Preserves properties not defined in the style (e.g., if style doesn't define bold, keeps run's bold).
+   *
+   * This is critical for allowing style definitions to apply properly, as direct formatting
+   * in document.xml ALWAYS overrides style definitions in styles.xml per ECMA-376 §17.7.2.
+   *
+   * @param styleRunFormatting - Run formatting from the style definition to compare against
+   * @returns This run for method chaining
+   * @example
+   * ```typescript
+   * // Style says: black, 14pt Verdana
+   * // Run has: red, 12pt Arial, bold
+   * run.clearFormattingConflicts({
+   *   color: '000000',
+   *   size: 14,
+   *   font: 'Verdana'
+   * });
+   * // Result: Run keeps bold (not in style), but color/size/font are cleared
+   * ```
+   */
+  clearFormattingConflicts(styleRunFormatting: RunFormatting): this {
+    // For each property in run's formatting, check if it conflicts with style
+    const conflictingProperties: (keyof RunFormatting)[] = [];
+
+    // Compare each property
+    for (const key in this.formatting) {
+      const propKey = key as keyof RunFormatting;
+
+      // Skip if style doesn't define this property (preserve run's property)
+      if (styleRunFormatting[propKey] === undefined) {
+        continue;
+      }
+
+      // If style defines this property AND run's value differs, it's a conflict
+      if (this.formatting[propKey] !== styleRunFormatting[propKey]) {
+        conflictingProperties.push(propKey);
+      }
+    }
+
+    // Clear conflicting properties
+    for (const prop of conflictingProperties) {
+      delete this.formatting[prop];
+    }
+
     return this;
   }
 }

@@ -12,6 +12,7 @@ import { Comment } from './Comment';
 import { Shape } from './Shape';
 import { TextBox } from './TextBox';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { logSerialization, logParagraphContent, logTextDirection } from '../utils/diagnostics';
 
 /**
  * Paragraph alignment options
@@ -334,9 +335,7 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   addRun(run: Run): this {
-    console.log(`[DEBUG-Paragraph] Adding run: "${run.getText()}"`);
     this.content.push(run);
-    console.log(`[DEBUG-Paragraph] Content array now has ${this.content.length} items`);
     return this;
   }
 
@@ -346,9 +345,7 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   addField(field: Field): this {
-    console.log(`[DEBUG-Paragraph] Adding field`);
     this.content.push(field);
-    console.log(`[DEBUG-Paragraph] Content array now has ${this.content.length} items`);
     return this;
   }
 
@@ -358,9 +355,7 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   addHyperlink(hyperlink: Hyperlink): this {
-    console.log(`[DEBUG-Paragraph] Adding hyperlink: "${hyperlink.getText()}"`);
     this.content.push(hyperlink);
-    console.log(`[DEBUG-Paragraph] Content array now has ${this.content.length} items`);
     return this;
   }
 
@@ -1224,6 +1219,17 @@ export class Paragraph {
    * @returns XMLElement representing the paragraph
    */
   toXML(): XMLElement {
+    // Diagnostic logging before serialization
+    const runData = this.getRuns().map(run => ({
+      text: run.getText(),
+      rtl: run.getFormatting().rtl,
+    }));
+    logParagraphContent('serialization', -1, runData, this.formatting.bidi);
+
+    if (this.formatting.bidi) {
+      logTextDirection(`Serializing paragraph with BiDi enabled`);
+    }
+
     const pPrChildren: XMLElement[] = [];
 
     // 1. Paragraph style (must be first per ECMA-376 §17.3.1.26)
@@ -1502,32 +1508,24 @@ export class Paragraph {
     }
 
     // Add content (runs, fields, hyperlinks, revisions, shapes, textboxes)
-    console.log(`[DEBUG-Paragraph-toXML] Generating XML for ${this.content.length} content items`);
     for (let i = 0; i < this.content.length; i++) {
       const item = this.content[i];
       if (item instanceof Field) {
-        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Field`);
         // Fields need to be wrapped in a run
         paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
       } else if (item instanceof Hyperlink) {
-        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Hyperlink - "${item.getText()}"`);
         // Hyperlinks are their own element
         paragraphChildren.push(item.toXML());
       } else if (item instanceof Revision) {
-        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Revision`);
         // Revisions (track changes) are their own element
         paragraphChildren.push(item.toXML());
       } else if (item instanceof Shape) {
-        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Shape`);
         // Shapes are wrapped in a run
         paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
       } else if (item instanceof TextBox) {
-        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: TextBox`);
         // Text boxes are wrapped in a run
         paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
       } else if (item) {
-        const runItem = item as Run;
-        console.log(`[DEBUG-Paragraph-toXML]   Item ${i}: Run - "${runItem ? runItem.getText() : '(unknown)'}"`);
         paragraphChildren.push(item.toXML());
       }
     }
@@ -1991,6 +1989,86 @@ export class Paragraph {
     // Clear direct formatting if requested
     if (clearProperties !== undefined) {
       this.clearDirectRunFormatting(clearProperties.length === 0 ? undefined : clearProperties);
+    }
+
+    return this;
+  }
+
+  /**
+   * Clears paragraph and run formatting that conflicts with a style definition.
+   * Uses smart clearing per ECMA-376 §17.7.2 formatting hierarchy.
+   *
+   * This is critical because direct formatting in document.xml ALWAYS overrides
+   * style definitions in styles.xml. To make style modifications take effect,
+   * we must remove conflicting direct formatting.
+   *
+   * Strategy:
+   * - Compare paragraph properties with style's paragraph properties
+   * - Clear only properties that DIFFER from the style
+   * - For each run, call run.clearFormattingConflicts() with style's run formatting
+   * - Preserve style reference (pStyle element)
+   *
+   * @param styleDefinition - Style object containing both paragraph and run formatting
+   * @returns This paragraph for method chaining
+   * @example
+   * ```typescript
+   * // Style defines: left alignment, 14pt black Verdana, 6pt spacing
+   * // Paragraph has: center alignment (conflict!), 120 twips spacing (conflict!)
+   * // Runs have: red color (conflict!), 12pt size (conflict!), bold (not in style - keep!)
+   * const style = stylesManager.getStyle('Heading2');
+   * paragraph.clearDirectFormattingConflicts(style);
+   * // Result: Alignment cleared, spacing cleared, runs' color/size cleared, bold preserved
+   * ```
+   */
+  clearDirectFormattingConflicts(styleDefinition: { getProperties(): { paragraphFormatting?: ParagraphFormatting; runFormatting?: RunFormatting } }): this {
+    const styleProperties = styleDefinition.getProperties();
+    const styleParagraphFormatting = styleProperties.paragraphFormatting || {};
+    const styleRunFormatting = styleProperties.runFormatting || {};
+
+    // Clear conflicting paragraph-level properties
+    // Keep only pStyle (style reference) - clear everything else that conflicts
+    const conflictingParaProps: (keyof ParagraphFormatting)[] = [];
+
+    for (const key in this.formatting) {
+      const propKey = key as keyof ParagraphFormatting;
+
+      // Always preserve style reference
+      if (propKey === 'style') {
+        continue;
+      }
+
+      // Skip if style doesn't define this property
+      if (styleParagraphFormatting[propKey] === undefined) {
+        continue;
+      }
+
+      // Handle complex objects (indentation, spacing, etc.)
+      if (propKey === 'indentation' || propKey === 'spacing' || propKey === 'borders' || propKey === 'shading' || propKey === 'numbering') {
+        // Deep comparison for objects
+        const paraValue = this.formatting[propKey];
+        const styleValue = styleParagraphFormatting[propKey];
+
+        if (JSON.stringify(paraValue) !== JSON.stringify(styleValue)) {
+          conflictingParaProps.push(propKey);
+        }
+      } else {
+        // Simple value comparison
+        if (this.formatting[propKey] !== styleParagraphFormatting[propKey]) {
+          conflictingParaProps.push(propKey);
+        }
+      }
+    }
+
+    // Clear conflicting paragraph properties
+    for (const prop of conflictingParaProps) {
+      delete this.formatting[prop];
+    }
+
+    // Clear conflicting run-level properties from all runs
+    for (const item of this.content) {
+      if (item instanceof Run) {
+        item.clearFormattingConflicts(styleRunFormatting);
+      }
     }
 
     return this;

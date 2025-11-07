@@ -549,6 +549,15 @@ export interface ComplexFieldProperties {
 
   /** Run formatting for result */
   resultFormatting?: RunFormatting;
+
+  /** Nested fields to include within this field */
+  nestedFields?: ComplexField[];
+
+  /** Custom XML content for result section */
+  resultContent?: XMLElement[];
+
+  /** Whether field spans multiple paragraphs */
+  multiParagraph?: boolean;
 }
 
 /**
@@ -567,6 +576,9 @@ export class ComplexField {
   private result?: string;
   private instructionFormatting?: RunFormatting;
   private resultFormatting?: RunFormatting;
+  private nestedFields: ComplexField[];
+  private resultContent: XMLElement[];
+  private multiParagraph: boolean;
 
   /**
    * Creates a new complex field
@@ -577,6 +589,9 @@ export class ComplexField {
     this.result = properties.result;
     this.instructionFormatting = properties.instructionFormatting;
     this.resultFormatting = properties.resultFormatting;
+    this.nestedFields = properties.nestedFields || [];
+    this.resultContent = properties.resultContent || [];
+    this.multiParagraph = properties.multiParagraph || false;
   }
 
   /**
@@ -626,6 +641,52 @@ export class ComplexField {
   }
 
   /**
+   * Adds a nested field within this field
+   * Nested fields appear between instruction and separator
+   */
+  addNestedField(field: ComplexField): this {
+    this.nestedFields.push(field);
+    return this;
+  }
+
+  /**
+   * Gets all nested fields
+   */
+  getNestedFields(): ComplexField[] {
+    return [...this.nestedFields];
+  }
+
+  /**
+   * Adds custom XML content to the result section
+   */
+  addResultContent(content: XMLElement): this {
+    this.resultContent.push(content);
+    return this;
+  }
+
+  /**
+   * Gets result content XML elements
+   */
+  getResultContent(): XMLElement[] {
+    return [...this.resultContent];
+  }
+
+  /**
+   * Sets whether this field spans multiple paragraphs
+   */
+  setMultiParagraph(multiParagraph: boolean): this {
+    this.multiParagraph = multiParagraph;
+    return this;
+  }
+
+  /**
+   * Gets whether this field spans multiple paragraphs
+   */
+  isMultiParagraph(): boolean {
+    return this.multiParagraph;
+  }
+
+  /**
    * Generates XML for the complex field
    * Returns array of run elements (begin, instr, sep, result, end)
    */
@@ -659,6 +720,11 @@ export class ComplexField {
       children: instrChildren,
     });
 
+    // 2a. Nested fields (if any)
+    for (const nestedField of this.nestedFields) {
+      runs.push(...nestedField.toXML());
+    }
+
     // 3. Separator run
     runs.push({
       name: 'w:r',
@@ -671,8 +737,12 @@ export class ComplexField {
       ],
     });
 
-    // 4. Result run (optional)
-    if (this.result) {
+    // 4. Result content (prioritize custom XML content, then simple text)
+    if (this.resultContent.length > 0) {
+      // Use custom XML content
+      runs.push(...this.resultContent);
+    } else if (this.result) {
+      // Use simple text result
       const resultChildren: XMLElement[] = [];
       if (this.resultFormatting) {
         resultChildren.push(this.createRunProperties(this.resultFormatting));

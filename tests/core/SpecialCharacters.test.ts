@@ -21,7 +21,7 @@ describe('Special Characters in Runs', () => {
       const paragraphs = loadedDoc.getParagraphs();
       expect(paragraphs).toHaveLength(1);
 
-      const text = paragraphs[0].getText();
+      const text = paragraphs[0]!.getText();
       expect(text).toContain('\t');
 
       // Count tabs
@@ -49,7 +49,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       const tabCount = (text.match(/\t/g) || []).length;
       expect(tabCount).toBe(3);
     });
@@ -63,7 +63,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       expect(text).toContain('\n');
 
       // Count line breaks
@@ -92,7 +92,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       // Should normalize to just \n
       expect(text).toContain('Line1');
       expect(text).toContain('Line2');
@@ -107,7 +107,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
 
       // Check content preserved
       expect(text).toContain('Name:');
@@ -129,7 +129,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
 
       // Verify exact sequence
       expect(text).toBe('A\tB\nC\tD');
@@ -165,7 +165,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       expect(text).toContain('\u2011');
     });
 
@@ -189,7 +189,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       expect(text).toContain('\u00AD');
     });
   });
@@ -202,7 +202,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       expect(text).toContain('α');
       expect(text).toContain('β');
       expect(text).toContain('γ');
@@ -215,7 +215,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       expect(text).toContain('😀');
       expect(text).toContain('🎉');
     });
@@ -227,7 +227,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       expect(text).toContain('"');
       expect(text).toContain('"');
       expect(text).toContain('—');
@@ -249,7 +249,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       expect(text).toBe('\t\n\t\n');
     });
 
@@ -267,7 +267,7 @@ describe('Special Characters in Runs', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const text = loadedDoc.getParagraphs()[0].getText();
+      const text = loadedDoc.getParagraphs()[0]!.getText();
       const tabCount = (text.match(/\t/g) || []).length;
       const breakCount = (text.match(/\n/g) || []).length;
 
