@@ -29,6 +29,8 @@ export interface TOCProperties {
   tabLeader?: 'dot' | 'hyphen' | 'underscore' | 'none';
   /** Custom field switches */
   fieldSwitches?: string;
+  /** Hide page numbers in web layout with \z switch (default: false) */
+  hideInWebLayout?: boolean;
   /** Whether TOC entries should be numbered (default: false) */
   numbered?: boolean;
   /** Numbering format for TOC entries */
@@ -54,6 +56,7 @@ export class TableOfContents {
   private useHyperlinks: boolean;
   private tabLeader: 'dot' | 'hyphen' | 'underscore' | 'none';
   private fieldSwitches?: string;
+  private hideInWebLayout: boolean;
   private numbered: boolean;
   private numberingFormat: 'decimal' | 'roman' | 'alpha';
   private noIndent: boolean;
@@ -73,6 +76,7 @@ export class TableOfContents {
     this.useHyperlinks = properties.useHyperlinks || false;
     this.tabLeader = properties.tabLeader || 'dot';
     this.fieldSwitches = properties.fieldSwitches;
+    this.hideInWebLayout = properties.hideInWebLayout || false;
     this.numbered = properties.numbered || false;
     this.numberingFormat = properties.numberingFormat || 'decimal';
     this.noIndent = properties.noIndent || false;
@@ -194,6 +198,25 @@ export class TableOfContents {
   }
 
   /**
+   * Gets whether page numbers are hidden in web layout
+   * @returns True if \z switch will be generated
+   */
+  getHideInWebLayout(): boolean {
+    return this.hideInWebLayout;
+  }
+
+  /**
+   * Sets whether to hide page numbers in web layout
+   * Generates the \z field switch
+   * @param hide - True to hide page numbers in web layout
+   * @returns This instance for chaining
+   */
+  setHideInWebLayout(hide: boolean): this {
+    this.hideInWebLayout = hide;
+    return this;
+  }
+
+  /**
    * Builds the TOC field instruction string
    */
   private buildFieldInstruction(): string {
@@ -217,6 +240,11 @@ export class TableOfContents {
     // Add page number switches
     if (!this.showPageNumbers) {
       instruction += ' \\n';
+    }
+
+    // Add web layout hide switch
+    if (this.hideInWebLayout) {
+      instruction += ' \\z';
     }
 
     // Add tab leader switch
@@ -423,6 +451,21 @@ export class TableOfContents {
   }
 
   /**
+   * Creates a hyperlinked TOC without page numbers
+   * Combines \h, \n, and \z switches for complete page number hiding
+   * @param options - TOC configuration options
+   * @returns New TableOfContents instance
+   */
+  static createNoPageNumbers(options: Partial<TOCProperties> = {}): TableOfContents {
+    return new TableOfContents({
+      ...options,
+      useHyperlinks: true,
+      showPageNumbers: false,
+      hideInWebLayout: true,
+    });
+  }
+
+  /**
    * Creates a TOC with custom properties
    */
   static create(properties?: TOCProperties): TableOfContents {
@@ -504,6 +547,7 @@ export class TableOfContents {
     if (options.useHyperlinks !== undefined) this.useHyperlinks = options.useHyperlinks;
     if (options.tabLeader !== undefined) this.tabLeader = options.tabLeader;
     if (options.fieldSwitches !== undefined) this.fieldSwitches = options.fieldSwitches;
+    if (options.hideInWebLayout !== undefined) this.hideInWebLayout = options.hideInWebLayout;
     if (options.numbered !== undefined) this.numbered = options.numbered;
     if (options.numberingFormat !== undefined) this.numberingFormat = options.numberingFormat;
     if (options.noIndent !== undefined) this.noIndent = options.noIndent;
