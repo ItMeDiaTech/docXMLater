@@ -13,6 +13,7 @@ import { Table } from "../elements/Table";
 import { TableRow } from "../elements/TableRow";
 import { TableCell } from "../elements/TableCell";
 import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { TableOfContents } from "../elements/TableOfContents";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { ImageManager } from "../elements/ImageManager";
 import { ImageRun } from "../elements/ImageRun";
@@ -2227,7 +2228,7 @@ export class DocumentParser {
     relationshipManager: RelationshipManager,
     zipHandler: ZipHandler,
     imageManager: ImageManager
-  ): Promise<StructuredDocumentTag | null> {
+  ): Promise<StructuredDocumentTag | TableOfContentsElement | null> {
     try {
       if (!sdtObj) return null;
 
@@ -2376,9 +2377,125 @@ export class DocumentParser {
         }
       }
 
+      // Check if this is a Table of Contents SDT
+      if (properties.buildingBlock?.gallery === 'Table of Contents') {
+        // This is a TOC - create TableOfContentsElement instead
+        const toc = this.parseTOCFromSDTContent(content, properties, sdtContent);
+        if (toc) {
+          return new TableOfContentsElement(toc);
+        }
+      }
+
       return new StructuredDocumentTag(properties, content);
     } catch (error) {
       console.warn('[DocumentParser] Failed to parse SDT:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Helper to parse TOC from SDT content
+   */
+  private parseTOCFromSDTContent(content: any[], properties: any, sdtContent: any): TableOfContents | null {
+    try {
+      let title: string | undefined;
+      let fieldInstruction: string | undefined;
+
+      // Extract title from parsed content
+      for (const element of content) {
+        if (element instanceof Paragraph) {
+          const style = element.getStyle();
+          if (style === 'TOCHeading') {
+            // Extract title text
+            const runs = element.getRuns();
+            title = runs.map(r => r.getText()).join('');
+          }
+        }
+      }
+
+      // Extract field instruction from raw XML
+      const paragraphs = sdtContent['w:p'];
+      const paraArray = Array.isArray(paragraphs) ? paragraphs : (paragraphs ? [paragraphs] : []);
+
+      for (const paraObj of paraArray) {
+        // Look for w:instrText in runs
+        const runs = paraObj['w:r'];
+        const runArray = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+
+        for (const runObj of runArray) {
+          const instrText = runObj['w:instrText'];
+          if (instrText) {
+            // Extract text content
+            if (typeof instrText === 'string') {
+              fieldInstruction = instrText.trim();
+            } else if (instrText['#text']) {
+              fieldInstruction = instrText['#text'].trim();
+            }
+
+            if (fieldInstruction) break;
+          }
+        }
+
+        if (fieldInstruction) break;
+      }
+
+      if (!fieldInstruction) {
+        console.warn('[DocumentParser] No TOC field instruction found in SDT content');
+        return null;
+      }
+
+      // Parse field switches from instruction
+      const tocOptions: any = { title };
+
+      // Check for \h (hyperlinks)
+      if (fieldInstruction.includes('\\h')) {
+        tocOptions.useHyperlinks = true;
+      }
+
+      // Check for \n (omit page numbers)
+      if (fieldInstruction.includes('\\n')) {
+        tocOptions.showPageNumbers = false;
+      }
+
+      // Check for \z (hide in web layout)
+      if (fieldInstruction.includes('\\z')) {
+        tocOptions.hideInWebLayout = true;
+      }
+
+      // Check for \o "x-y" (outline levels)
+      const outlineMatch = fieldInstruction.match(/\\o\s+"(\d+)-(\d+)"/);
+      if (outlineMatch && outlineMatch[1] && outlineMatch[2]) {
+        tocOptions.minLevel = parseInt(outlineMatch[1], 10);
+        tocOptions.maxLevel = parseInt(outlineMatch[2], 10);
+      }
+
+      // Check for \t "styles..." (include styles)
+      const stylesMatch = fieldInstruction.match(/\\t\s+"([^"]+)"/);
+      if (stylesMatch && stylesMatch[1]) {
+        const stylesStr = stylesMatch[1];
+        const styles: Array<{ styleName: string; level: number }> = [];
+
+        // Parse "StyleName,Level,StyleName2,Level2,..."
+        const parts = stylesStr.split(',').filter(p => p.trim());
+        for (let i = 0; i < parts.length; i += 2) {
+          const styleName = parts[i];
+          const levelStr = parts[i + 1];
+          if (styleName && levelStr) {
+            styles.push({
+              styleName: styleName.trim(),
+              level: parseInt(levelStr.trim(), 10)
+            });
+          }
+        }
+
+        if (styles.length > 0) {
+          tocOptions.includeStyles = styles;
+        }
+      }
+
+      return new TableOfContents(tocOptions);
+    } catch (error) {
+      console.warn('[DocumentParser] Failed to parse TOC from SDT content:', error);
       return null;
     }
   }

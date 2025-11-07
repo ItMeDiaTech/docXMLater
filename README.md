@@ -634,6 +634,7 @@ High-level helper methods for common document formatting tasks:
 | `wrapParagraphInTable(para, options?)`   | Wrap a paragraph in a 1x1 table with optional shading, margins, and width settings         |
 | `isParagraphInTable(para)`               | Check if a paragraph is inside a table; returns `{inTable: boolean, cell?: TableCell}`      |
 | `updateAllHyperlinkColors(color)`        | Set all hyperlinks in the document to a specific color (e.g., '0000FF' for blue)           |
+| `removeAllHeadersFooters()`              | Remove all headers and footers from the document; returns count of headers/footers removed  |
 
 **Example - Using Helper Functions:**
 
@@ -665,6 +666,10 @@ if (inTable && cell) {
 
 // Set all hyperlinks to blue
 doc.updateAllHyperlinkColors('0000FF');
+
+// Remove all headers and footers
+const removedCount = doc.removeAllHeadersFooters();
+console.log(`Removed ${removedCount} headers and footers`);
 
 await doc.save('formatted.docx');
 ```
