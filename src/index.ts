@@ -39,6 +39,7 @@ export {
   validateTwips,
   validateColor,
   validateHexColor,
+  normalizeColor,
   validateNumberingId,
   validateLevel,
   validateAlignment,
@@ -51,6 +52,16 @@ export {
   validateRunText,
   TextValidationResult,
 } from './utils/validation';
+
+// Formatting utilities
+export {
+  mergeFormatting,
+  cloneFormatting,
+  hasFormatting,
+  cleanFormatting,
+  isEqualFormatting,
+  applyDefaults,
+} from './utils/formatting';
 
 // Corruption Detection
 export {
@@ -175,6 +186,13 @@ export {
   TOCFieldOptions,
   createTOCField,
 } from './elements/Field';
+export {
+  createNestedIFMergeField,
+  createMergeField,
+  createRefField,
+  createIFField,
+  createNestedField,
+} from './elements/FieldHelpers';
 export { Header, HeaderType, HeaderProperties } from './elements/Header';
 export { Footer, FooterType, FooterProperties } from './elements/Footer';
 export { HeaderFooterManager } from './elements/HeaderFooterManager';

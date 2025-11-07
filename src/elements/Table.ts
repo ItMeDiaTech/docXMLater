@@ -777,22 +777,22 @@ export class Table {
       const borders = this.formatting.borders;
 
       if (borders.top) {
-        borderElements.push(this.createBorderElement('top', borders.top));
+        borderElements.push(XMLBuilder.createBorder('top', borders.top));
       }
       if (borders.bottom) {
-        borderElements.push(this.createBorderElement('bottom', borders.bottom));
+        borderElements.push(XMLBuilder.createBorder('bottom', borders.bottom));
       }
       if (borders.left) {
-        borderElements.push(this.createBorderElement('left', borders.left));
+        borderElements.push(XMLBuilder.createBorder('left', borders.left));
       }
       if (borders.right) {
-        borderElements.push(this.createBorderElement('right', borders.right));
+        borderElements.push(XMLBuilder.createBorder('right', borders.right));
       }
       if (borders.insideH) {
-        borderElements.push(this.createBorderElement('insideH', borders.insideH));
+        borderElements.push(XMLBuilder.createBorder('insideH', borders.insideH));
       }
       if (borders.insideV) {
-        borderElements.push(this.createBorderElement('insideV', borders.insideV));
+        borderElements.push(XMLBuilder.createBorder('insideV', borders.insideV));
       }
 
       if (borderElements.length > 0) {
@@ -870,26 +870,6 @@ export class Table {
     return XMLBuilder.w('tbl', undefined, tableChildren);
   }
 
-  /**
-   * Creates a border element
-   */
-  private createBorderElement(side: string, border: TableBorder): XMLElement {
-    const attrs: Record<string, string | number> = {
-      'w:val': border.style || 'single',
-    };
-
-    if (border.color) {
-      attrs['w:color'] = border.color;
-    }
-    if (border.space !== undefined) {
-      attrs['w:space'] = border.space;
-    }
-    if (border.size !== undefined) {
-      attrs['w:sz'] = border.size;
-    }
-
-    return XMLBuilder.wSelf(side, attrs);
-  }
 
   /**
    * Removes a row from the table
@@ -1036,9 +1016,23 @@ export class Table {
       cell.setColumnSpan(endCol - startCol + 1);
     }
 
-    // Note: Row spanning is more complex in Word and requires gridSpan and vMerge
-    // For now, we only handle column spanning properly
-    // TODO: Implement full row spanning with vMerge in future
+    // Set vertical merge if merging vertically
+    if (endRow > startRow) {
+      // First cell starts the merge region
+      cell.setVerticalMerge('restart');
+
+      // Subsequent cells continue the merge
+      for (let row = startRow + 1; row <= endRow; row++) {
+        const mergeCell = this.getCell(row, startCol);
+        if (mergeCell) {
+          mergeCell.setVerticalMerge('continue');
+          // If also merging horizontally, set column span on all merged cells
+          if (endCol > startCol) {
+            mergeCell.setColumnSpan(endCol - startCol + 1);
+          }
+        }
+      }
+    }
 
     return this;
   }

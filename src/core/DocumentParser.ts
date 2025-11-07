@@ -6,7 +6,7 @@
 import { ZipHandler } from "../zip/ZipHandler";
 import { DOCX_PATHS } from "../zip/types";
 import { Paragraph, ParagraphFormatting } from "../elements/Paragraph";
-import { Run, RunFormatting } from "../elements/Run";
+import { Run, RunFormatting, RunContent, BreakType } from "../elements/Run";
 import { Field } from "../elements/Field";
 import { Hyperlink } from "../elements/Hyperlink";
 import { Table } from "../elements/Table";
@@ -29,6 +29,7 @@ import { DocumentProperties } from "./Document";
 import { Style, StyleProperties, StyleType } from "../formatting/Style";
 import { AbstractNumbering } from "../formatting/AbstractNumbering";
 import { NumberingInstance } from "../formatting/NumberingInstance";
+import { logParsing, logParagraphContent, logTextDirection } from "../utils/diagnostics";
 
 /**
  * Parse error tracking
@@ -93,13 +94,11 @@ export class DocumentParser {
     section: Section | null;
     namespaces: Record<string, string>;
   }> {
-    console.log('[DEBUG] DocumentParser.parseDocument called');
     // Verify the document exists
     const docXml = zipHandler.getFileAsString(DOCX_PATHS.DOCUMENT);
     if (!docXml) {
       throw new Error("Invalid document: word/document.xml not found");
     }
-    console.log('[DEBUG] Document XML loaded, length:', docXml.length);
 
     // Parse existing relationships to avoid ID collisions
     const parsedRelationshipManager = this.parseRelationships(
@@ -157,16 +156,13 @@ export class DocumentParser {
     zipHandler: ZipHandler,
     imageManager: ImageManager
   ): Promise<BodyElement[]> {
-    console.log('[DEBUG] parseBodyElements called');
     const bodyElements: BodyElement[] = [];
 
     // Extract the body content using safe position-based parsing
     const bodyContent = XMLParser.extractBody(docXml);
     if (!bodyContent) {
-      console.log('[DEBUG] No body content found');
       return bodyElements;
     }
-    console.log('[DEBUG] Body content extracted, length:', bodyContent.length);
 
     let pos = 0;
     while (pos < bodyContent.length) {
@@ -191,6 +187,7 @@ export class DocumentParser {
             "w:p",
             next.pos
           );
+
           if (elementXml) {
             // Parse paragraph with order preservation
             // Use the new method that preserves the exact order of runs and hyperlinks
@@ -345,74 +342,28 @@ export class DocumentParser {
   /**
    * Extracts a single element from the content starting at the given position
    * Returns the complete element XML including opening and closing tags
+   *
+   * FIX (v1.3.1): Uses XMLParser.extractElements to ensure consistent extraction
+   * behavior and prevent loss of self-closing elements like <w:tab/>
+   * This fixes the TOC tab preservation bug where tabs were lost during extraction.
    */
   private extractSingleElement(
     content: string,
     tagName: string,
     startPos: number
   ): string {
-    const openTag = `<${tagName}`;
-    const closeTag = `</${tagName}>`;
-    const selfClosingEnd = "/>";
+    // Extract the substring starting from the position
+    const remainingContent = content.substring(startPos);
 
-    // Verify we're at the right position
-    if (!content.substring(startPos).startsWith(openTag)) {
-      return "";
-    }
+    // Use XMLParser.extractElements to get all elements of this type
+    // This ensures we use the same proven extraction logic throughout
+    const elements = XMLParser.extractElements(remainingContent, tagName);
 
-    // Find the end of the opening tag
-    const openEnd = content.indexOf(">", startPos);
-    if (openEnd === -1) {
-      return "";
-    }
+    // Return the first element (which starts at position 0 in remainingContent)
+    // This is the element at the specified startPos in the original content
+    const extracted = elements.length > 0 ? elements[0]! : "";
 
-    // Check if it's a self-closing tag
-    if (content.substring(openEnd - 1, openEnd + 1) === selfClosingEnd) {
-      return content.substring(startPos, openEnd + 1);
-    }
-
-    // Find the matching closing tag (with depth tracking for nested elements)
-    let depth = 1;
-    let pos = openEnd + 1;
-
-    while (pos < content.length && depth > 0) {
-      const nextOpen = content.indexOf(openTag, pos);
-      const nextClose = content.indexOf(closeTag, pos);
-
-      if (nextClose === -1) {
-        // No closing tag found
-        return "";
-      }
-
-      if (nextOpen !== -1 && nextOpen < nextClose) {
-        // Found another opening tag before the closing tag
-        // Verify it's an exact match (not a prefix like <w:pPr>)
-        const charAfter = content[nextOpen + openTag.length];
-        if (
-          charAfter === ">" ||
-          charAfter === "/" ||
-          charAfter === " " ||
-          charAfter === "\t" ||
-          charAfter === "\n" ||
-          charAfter === "\r"
-        ) {
-          depth++;
-          pos = nextOpen + openTag.length;
-        } else {
-          // Prefix match, skip it
-          pos = nextOpen + openTag.length;
-        }
-      } else {
-        // Found the closing tag
-        depth--;
-        pos = nextClose + closeTag.length;
-        if (depth === 0) {
-          return content.substring(startPos, pos);
-        }
-      }
-    }
-
-    return "";
+    return extracted;
   }
 
   /**
@@ -498,7 +449,6 @@ export class DocumentParser {
     imageManager?: ImageManager
   ): Promise<Paragraph | null> {
     try {
-      console.log('[DEBUG] parseParagraphWithOrder called');
       const paragraph = new Paragraph();
 
       // Parse the paragraph object with order preservation
@@ -506,7 +456,6 @@ export class DocumentParser {
       const paraObj = XMLParser.parseToObject(paraXml, { trimValues: false });
       const pElement = paraObj["w:p"] as any;
       if (!pElement) {
-        console.log('[DEBUG] No w:p element found');
         return null;
       }
 
@@ -522,27 +471,18 @@ export class DocumentParser {
       // Check if we have ordered children metadata from the enhanced parser
       const orderedChildren = pElement["_orderedChildren"] as Array<{type: string, index: number}> | undefined;
 
-      console.log('[DEBUG] _orderedChildren present?', orderedChildren ? 'YES' : 'NO');
-      if (orderedChildren) {
-        console.log('[DEBUG] _orderedChildren contents:', JSON.stringify(orderedChildren));
-      }
-
       if (orderedChildren && orderedChildren.length > 0) {
-        console.log('[DEBUG] Using ordered children path');
         // Use the preserved order from the parser
         for (const childInfo of orderedChildren) {
           const elementType = childInfo.type;
           const elementIndex = childInfo.index;
-          console.log(`[DEBUG] Processing ${elementType}[${elementIndex}]`);
 
           if (elementType === "w:r") {
             const runs = pElement["w:r"];
             const runArray = Array.isArray(runs) ? runs : (runs ? [runs] : []);
-            console.log(`[DEBUG]   Run array length: ${runArray.length}`);
             if (elementIndex < runArray.length) {
               const child = runArray[elementIndex];
               if (child["w:drawing"]) {
-                console.log('[DEBUG]   Processing drawing run');
                 if (zipHandler && imageManager) {
                   const imageRun = await this.parseDrawingFromObject(
                     child["w:drawing"],
@@ -552,52 +492,36 @@ export class DocumentParser {
                   );
                   if (imageRun) {
                     paragraph.addRun(imageRun);
-                    console.log('[DEBUG]   Added image run');
                   }
                 }
               } else {
                 const run = this.parseRunFromObject(child);
                 if (run) {
-                  const text = run.getText();
-                  console.log(`[DEBUG]   Adding run with text: "${text}"`);
                   paragraph.addRun(run);
                 }
               }
-            } else {
-              console.log(`[DEBUG]   WARNING: Run index ${elementIndex} out of bounds`);
             }
           } else if (elementType === "w:hyperlink") {
             const hyperlinks = pElement["w:hyperlink"];
             const hyperlinkArray = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
-            console.log(`[DEBUG]   Hyperlink array length: ${hyperlinkArray.length}`);
             if (elementIndex < hyperlinkArray.length) {
               const hyperlink = this.parseHyperlinkFromObject(hyperlinkArray[elementIndex], relationshipManager);
               if (hyperlink) {
-                const text = hyperlink.getText();
-                console.log(`[DEBUG]   Adding hyperlink with text: "${text}"`);
                 paragraph.addHyperlink(hyperlink);
               }
-            } else {
-              console.log(`[DEBUG]   WARNING: Hyperlink index ${elementIndex} out of bounds`);
             }
           } else if (elementType === "w:fldSimple") {
             const fields = pElement["w:fldSimple"];
             const fieldArray = Array.isArray(fields) ? fields : (fields ? [fields] : []);
-            console.log(`[DEBUG]   Field array length: ${fieldArray.length}`);
             if (elementIndex < fieldArray.length) {
               const field = this.parseSimpleFieldFromObject(fieldArray[elementIndex]);
               if (field) {
-                console.log('[DEBUG]   Adding field');
                 paragraph.addField(field);
               }
-            } else {
-              console.log(`[DEBUG]   WARNING: Field index ${elementIndex} out of bounds`);
             }
           }
         }
-        console.log('[DEBUG] Finished processing ordered children');
       } else {
-        console.log('[DEBUG] Using fallback path (no ordered children)');
         // Fallback to sequential processing if no order metadata
         // (This will still have the wrong order, but at least it processes the elements)
 
@@ -647,6 +571,20 @@ export class DocumentParser {
             paragraph.addField(field);
           }
         }
+      }
+
+      // Diagnostic logging for paragraph
+      const runs = paragraph.getRuns();
+      const runData = runs.map(run => ({
+        text: run.getText(),
+        rtl: run.getFormatting().rtl,
+      }));
+      const bidi = paragraph.getFormatting().bidi;
+
+      logParagraphContent('parsing', -1, runData, bidi);
+
+      if (bidi) {
+        logTextDirection(`Paragraph has BiDi enabled`);
       }
 
       return paragraph;
@@ -1090,21 +1028,126 @@ export class DocumentParser {
 
   private parseRunFromObject(runObj: any): Run | null {
     try {
-      // Extract text content from w:t element
-      // XMLParser.parseToObject() returns: { "w:t": { "#text": "actual text", "@_xml:space": "preserve" } }
-      // So we need to access the #text property for the actual text content
-      const textElement = runObj["w:t"];
-      let text =
-        (typeof textElement === 'object' && textElement !== null)
-          ? (textElement["#text"] || "")
-          : (textElement || "");
+      // Extract all run content elements (text, tabs, breaks, etc.)
+      // Per ECMA-376 §17.3.3 EG_RunInnerContent, runs can contain multiple content types
+      const content: RunContent[] = [];
 
-      // Unescape XML entities (&lt; → <, &amp; → &, etc.)
-      text = XMLBuilder.unescapeXml(text);
+      // Use _orderedChildren to preserve element order (critical for TOC entries)
+      // TOC entries have structure: text → tab → text (heading, tab, page number)
+      if (runObj["_orderedChildren"]) {
 
-      const run = new Run(text, { cleanXmlFromText: false });
+        // Process elements in their original order
+        for (const child of runObj["_orderedChildren"]) {
+          const elementType = child.type;
+          const elementIndex = child.index;
 
+          switch (elementType) {
+            case 'w:t': {
+              // Get the text element (could be array or single)
+              const textElements = Array.isArray(runObj["w:t"]) ? runObj["w:t"] : [runObj["w:t"]];
+              const te = textElements[elementIndex];
+
+              if (te !== undefined && te !== null) {
+                let text = (typeof te === 'object' && te !== null)
+                  ? (te["#text"] || "")
+                  : (te || "");
+
+                // Unescape XML entities (&lt; → <, &amp; → &, etc.)
+                text = XMLBuilder.unescapeXml(text);
+
+                if (text) {
+                  content.push({ type: 'text', value: text });
+                }
+              }
+              break;
+            }
+
+            case 'w:tab':
+              content.push({ type: 'tab' });
+              break;
+
+            case 'w:br': {
+              const brElement = runObj["w:br"];
+              const breakType = brElement?.['@_w:type'] as BreakType | undefined;
+              content.push({ type: 'break', breakType });
+              break;
+            }
+
+            case 'w:cr':
+              content.push({ type: 'carriageReturn' });
+              break;
+
+            case 'w:softHyphen':
+              content.push({ type: 'softHyphen' });
+              break;
+
+            case 'w:noBreakHyphen':
+              content.push({ type: 'noBreakHyphen' });
+              break;
+
+            // Ignore formatting elements (w:rPr) - handled separately
+            case 'w:rPr':
+              break;
+          }
+        }
+      } else {
+        // Fallback: No _orderedChildren (older parser or simple run with single text)
+        // Extract text elements (can be array if multiple <w:t> in one run)
+        const textElement = runObj["w:t"];
+        if (textElement !== undefined && textElement !== null) {
+          const textElements = Array.isArray(textElement) ? textElement : [textElement];
+
+          for (const te of textElements) {
+            let text = (typeof te === 'object' && te !== null)
+              ? (te["#text"] || "")
+              : (te || "");
+
+            // Unescape XML entities
+            text = XMLBuilder.unescapeXml(text);
+
+            if (text) {
+              content.push({ type: 'text', value: text });
+            }
+          }
+        }
+
+        // Extract other elements (order doesn't matter in simple case)
+        if (runObj["w:tab"] !== undefined) {
+          content.push({ type: 'tab' });
+        }
+
+        if (runObj["w:br"] !== undefined) {
+          const brElement = runObj["w:br"];
+          const breakType = brElement?.['@_w:type'] as BreakType | undefined;
+          content.push({ type: 'break', breakType });
+        }
+
+        if (runObj["w:cr"] !== undefined) {
+          content.push({ type: 'carriageReturn' });
+        }
+
+        if (runObj["w:softHyphen"] !== undefined) {
+          content.push({ type: 'softHyphen' });
+        }
+
+        if (runObj["w:noBreakHyphen"] !== undefined) {
+          content.push({ type: 'noBreakHyphen' });
+        }
+      }
+
+      // Create run from content elements
+      const run = Run.createFromContent(content, { cleanXmlFromText: false });
+
+      // Parse and apply run properties (formatting)
       this.parseRunPropertiesFromObject(runObj["w:rPr"], run);
+
+      // Diagnostic logging
+      const text = run.getText();
+      const formatting = run.getFormatting();
+      if (formatting.rtl) {
+        logTextDirection(`Run with RTL: "${text}"`);
+      }
+      logParsing(`Parsed run: "${text}" (${content.length} content element(s))`, { rtl: formatting.rtl || false });
 
       return run;
     } catch (error) {
@@ -1126,24 +1169,20 @@ export class DocumentParser {
       const runs = hyperlinkObj["w:r"];
       const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
 
-      // Extract text from all runs
-      const text = runChildren
-        .map((runObj: any) => {
-          const textElement = runObj["w:t"];
-          let runText =
-            (typeof textElement === 'object' && textElement !== null)
-              ? (textElement["#text"] || "")
-              : (textElement || "");
-          return XMLBuilder.unescapeXml(runText);
-        })
-        .join('');
-
-      // Parse formatting from first run if present
+      // Parse the first run properly to preserve tabs and other content elements
+      // TOC hyperlinks typically have ONE run with: text → tab → text structure
+      let parsedRun: Run | null = null;
+      let text = '';
       let formatting: RunFormatting = {};
-      if (runChildren.length > 0 && runChildren[0]["w:rPr"]) {
-        const tempRun = new Run('');
-        this.parseRunPropertiesFromObject(runChildren[0]["w:rPr"], tempRun);
-        formatting = tempRun.getFormatting();
+
+      if (runChildren.length > 0) {
+        // Parse the first run using parseRunFromObject to preserve tabs, breaks, etc.
+        parsedRun = this.parseRunFromObject(runChildren[0]);
+
+        if (parsedRun) {
+          text = parsedRun.getText();
+          formatting = parsedRun.getFormatting();
+        }
       }
 
       // Resolve URL from relationship if external hyperlink
@@ -1155,16 +1194,33 @@ export class DocumentParser {
         }
       }
 
-      // Create hyperlink with all properties including relationshipId
-      // Use constructor directly to preserve relationship ID through save/load cycles
+      // Create hyperlink with basic properties
+      // NOTE: Do NOT use anchor (bookmark ID) as display text - it should only be used for navigation
+      let displayText = text || url || '[Link]';
+
+      // Warn if hyperlink has no display text (possible TOC corruption or malformed hyperlink)
+      if (!text && anchor) {
+        console.warn(
+          `[DocumentParser] Hyperlink to anchor "${anchor}" has no display text. ` +
+          `Using placeholder "[Link]" to prevent bookmark ID from appearing as visible text. ` +
+          `This may indicate a corrupted TOC or malformed hyperlink in the source document.`
+        );
+      }
+
       const hyperlink = new Hyperlink({
         url,
         anchor,
-        text: text || url || anchor || 'Link',
+        text: displayText,
         formatting,
         tooltip,
         relationshipId,
       });
+
+      // If we successfully parsed a run with tabs/breaks, use it instead of the default run
+      // This preserves TOC structure (text → tab → text)
+      if (parsedRun && parsedRun.getContent().length > 1) {
+        hyperlink.setRun(parsedRun);
+      }
 
       return hyperlink;
     } catch (error) {
@@ -1279,16 +1335,30 @@ export class DocumentParser {
     // Parse special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
     if (rPrObj["w:specVanish"]) run.setSpecVanish(true);
 
-    // Parse RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
-    if (rPrObj["w:rtl"]) run.setRTL(true);
+    // Boolean properties - check w:val attribute
+    // Per ECMA-376: <w:b/> or <w:b w:val="1"/> or <w:b w:val="true"/> means true
+    // <w:b w:val="0"/> or <w:b w:val="false"/> means false (omit from document)
+    const checkBooleanProp = (prop: any): boolean => {
+      if (!prop) return false;
+      const val = prop["@_w:val"];
+      // If no w:val attribute, self-closing tag means true
+      if (val === undefined) return true;
+      // Check for explicit true/false values (string or number)
+      // Note: XMLParser converts "1" to number 1, "0" to number 0
+      return val === "1" || val === 1 || val === "true" || val === true;
+    };
 
-    if (rPrObj["w:b"]) run.setBold(true);
-    if (rPrObj["w:bCs"]) run.setComplexScriptBold(true);
-    if (rPrObj["w:i"]) run.setItalic(true);
-    if (rPrObj["w:iCs"]) run.setComplexScriptItalic(true);
-    if (rPrObj["w:strike"]) run.setStrike(true);
-    if (rPrObj["w:smallCaps"]) run.setSmallCaps(true);
-    if (rPrObj["w:caps"]) run.setAllCaps(true);
+    // Parse RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
+    // FIX: Use checkBooleanProp to correctly handle w:val="0" (LTR) vs w:val="1" (RTL)
+    if (checkBooleanProp(rPrObj["w:rtl"])) run.setRTL(true);
+
+    if (checkBooleanProp(rPrObj["w:b"])) run.setBold(true);
+    if (checkBooleanProp(rPrObj["w:bCs"])) run.setComplexScriptBold(true);
+    if (checkBooleanProp(rPrObj["w:i"])) run.setItalic(true);
+    if (checkBooleanProp(rPrObj["w:iCs"])) run.setComplexScriptItalic(true);
+    if (checkBooleanProp(rPrObj["w:strike"])) run.setStrike(true);
+    if (checkBooleanProp(rPrObj["w:smallCaps"])) run.setSmallCaps(true);
+    if (checkBooleanProp(rPrObj["w:caps"])) run.setAllCaps(true);
 
     if (rPrObj["w:u"]) {
       // XMLParser adds @_ prefix to attributes
@@ -2153,13 +2223,286 @@ export class DocumentParser {
   }
 
   private async parseSDTFromObject(
-    _sdtObj: any,
-    _relationshipManager: RelationshipManager,
-    _zipHandler: ZipHandler,
-    _imageManager: ImageManager
+    sdtObj: any,
+    relationshipManager: RelationshipManager,
+    zipHandler: ZipHandler,
+    imageManager: ImageManager
   ): Promise<StructuredDocumentTag | null> {
-    // TODO: Implement SDT parsing from object
-    return null;
+    try {
+      if (!sdtObj) return null;
+
+      const properties: any = {};
+
+      // Parse SDT properties (sdtPr)
+      const sdtPr = sdtObj['w:sdtPr'];
+      if (sdtPr) {
+        // Parse ID
+        const idElement = sdtPr['w:id'];
+        if (idElement && idElement['@_w:val']) {
+          properties.id = parseInt(idElement['@_w:val'], 10);
+        }
+
+        // Parse tag
+        const tagElement = sdtPr['w:tag'];
+        if (tagElement && tagElement['@_w:val']) {
+          properties.tag = tagElement['@_w:val'];
+        }
+
+        // Parse lock
+        const lockElement = sdtPr['w:lock'];
+        if (lockElement && lockElement['@_w:val']) {
+          properties.lock = lockElement['@_w:val'];
+        }
+
+        // Parse alias
+        const aliasElement = sdtPr['w:alias'];
+        if (aliasElement && aliasElement['@_w:val']) {
+          properties.alias = aliasElement['@_w:val'];
+        }
+
+        // Parse control type from various elements
+        if (sdtPr['w:richText']) {
+          properties.controlType = 'richText';
+        } else if (sdtPr['w:text']) {
+          properties.controlType = 'plainText';
+          const textElement = sdtPr['w:text'];
+          properties.plainText = {
+            multiLine: textElement?.['@_w:multiLine'] === '1' || textElement?.['@_w:multiLine'] === 'true'
+          };
+        } else if (sdtPr['w:comboBox']) {
+          properties.controlType = 'comboBox';
+          const comboBoxElement = sdtPr['w:comboBox'];
+          properties.comboBox = this.parseListItems(comboBoxElement);
+        } else if (sdtPr['w:dropDownList']) {
+          properties.controlType = 'dropDownList';
+          const dropDownElement = sdtPr['w:dropDownList'];
+          properties.dropDownList = this.parseListItems(dropDownElement);
+        } else if (sdtPr['w:date']) {
+          properties.controlType = 'datePicker';
+          const dateElement = sdtPr['w:date'];
+          properties.datePicker = {
+            dateFormat: dateElement?.['w:dateFormat']?.['@_w:val'],
+            fullDate: dateElement?.['w:fullDate']?.['@_w:val'] ? new Date(dateElement['w:fullDate']['@_w:val']) : undefined,
+            lid: dateElement?.['w:lid']?.['@_w:val'],
+            calendar: dateElement?.['w:calendar']?.['@_w:val']
+          };
+        } else if (sdtPr['w14:checkbox']) {
+          properties.controlType = 'checkbox';
+          const checkboxElement = sdtPr['w14:checkbox'];
+          properties.checkbox = {
+            checked: checkboxElement?.['w14:checked']?.['@_w14:val'] === '1' || checkboxElement?.['w14:checked']?.['@_w14:val'] === 'true',
+            checkedState: checkboxElement?.['w14:checkedState']?.['@_w14:val'],
+            uncheckedState: checkboxElement?.['w14:uncheckedState']?.['@_w14:val']
+          };
+        } else if (sdtPr['w:picture']) {
+          properties.controlType = 'picture';
+        } else if (sdtPr['w:docPartObj']) {
+          properties.controlType = 'buildingBlock';
+          const docPartObj = sdtPr['w:docPartObj'];
+          properties.buildingBlock = {
+            gallery: docPartObj?.['w:docPartGallery']?.['@_w:val'],
+            category: docPartObj?.['w:docPartCategory']?.['@_w:val']
+          };
+        } else if (sdtPr['w:group']) {
+          properties.controlType = 'group';
+        }
+      }
+
+      // Parse SDT content (sdtContent)
+      const content: any[] = [];
+      const sdtContent = sdtObj['w:sdtContent'];
+      if (sdtContent) {
+        // Check for ordered children (preserves element order)
+        const orderedChildren = sdtContent['_orderedChildren'] as Array<{type: string, index: number}> | undefined;
+
+        if (orderedChildren && orderedChildren.length > 0) {
+          // Process in original order
+          for (const childInfo of orderedChildren) {
+            const elementType = childInfo.type;
+            const elementIndex = childInfo.index;
+
+            if (elementType === 'w:p') {
+              const paragraphs = sdtContent['w:p'];
+              const paraArray = Array.isArray(paragraphs) ? paragraphs : (paragraphs ? [paragraphs] : []);
+              if (elementIndex < paraArray.length) {
+                // Reconstruct XML for paragraph parsing
+                const paraXml = this.objectToXml({ 'w:p': paraArray[elementIndex] });
+                const para = await this.parseParagraphWithOrder(paraXml, relationshipManager, zipHandler, imageManager);
+                if (para) content.push(para);
+              }
+            } else if (elementType === 'w:tbl') {
+              const tables = sdtContent['w:tbl'];
+              const tableArray = Array.isArray(tables) ? tables : (tables ? [tables] : []);
+              if (elementIndex < tableArray.length) {
+                const tableObj = tableArray[elementIndex];
+                const table = await this.parseTableFromObject(tableObj, relationshipManager, zipHandler, imageManager);
+                if (table) content.push(table);
+              }
+            } else if (elementType === 'w:sdt') {
+              const sdts = sdtContent['w:sdt'];
+              const sdtArray = Array.isArray(sdts) ? sdts : (sdts ? [sdts] : []);
+              if (elementIndex < sdtArray.length) {
+                const nestedSdt = await this.parseSDTFromObject(sdtArray[elementIndex], relationshipManager, zipHandler, imageManager);
+                if (nestedSdt) content.push(nestedSdt);
+              }
+            }
+          }
+        } else {
+          // Fallback: process sequentially
+          // Parse paragraphs
+          const paragraphs = sdtContent['w:p'];
+          const paraArray = Array.isArray(paragraphs) ? paragraphs : (paragraphs ? [paragraphs] : []);
+          for (const paraObj of paraArray) {
+            const paraXml = this.objectToXml({ 'w:p': paraObj });
+            const para = await this.parseParagraphWithOrder(paraXml, relationshipManager, zipHandler, imageManager);
+            if (para) content.push(para);
+          }
+
+          // Parse tables
+          const tables = sdtContent['w:tbl'];
+          const tableArray = Array.isArray(tables) ? tables : (tables ? [tables] : []);
+          for (const tableObj of tableArray) {
+            const table = await this.parseTableFromObject(tableObj, relationshipManager, zipHandler, imageManager);
+            if (table) content.push(table);
+          }
+
+          // Parse nested SDTs
+          const nestedSdts = sdtContent['w:sdt'];
+          const sdtArray = Array.isArray(nestedSdts) ? nestedSdts : (nestedSdts ? [nestedSdts] : []);
+          for (const nestedSdtObj of sdtArray) {
+            const nestedSdt = await this.parseSDTFromObject(nestedSdtObj, relationshipManager, zipHandler, imageManager);
+            if (nestedSdt) content.push(nestedSdt);
+          }
+        }
+      }
+
+      return new StructuredDocumentTag(properties, content);
+    } catch (error) {
+      console.warn('[DocumentParser] Failed to parse SDT:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Helper to parse list items for combo box / dropdown
+   */
+  private parseListItems(element: any): any {
+    const items: any[] = [];
+    const listItems = element?.['w:listItem'];
+    const itemArray = Array.isArray(listItems) ? listItems : (listItems ? [listItems] : []);
+
+    for (const item of itemArray) {
+      if (item['@_w:displayText'] && item['@_w:value']) {
+        items.push({
+          displayText: item['@_w:displayText'],
+          value: item['@_w:value']
+        });
+      }
+    }
+
+    return {
+      items,
+      lastValue: element?.['@_w:lastValue']
+    };
+  }
+
+  /**
+   * Helper to convert object back to XML string
+   */
+  private objectToXml(obj: any): string {
+    // XML reconstruction that preserves element order using _orderedChildren
+    // FIX (v1.3.1): Use _orderedChildren to maintain document order of elements
+    // This fixes TOC tab preservation - tabs must be in correct position
+    const buildXml = (o: any, name?: string): string => {
+      if (typeof o === 'string') return o;
+      if (typeof o !== 'object') return String(o);
+
+      const keys = Object.keys(o);
+
+      // FIX: If a name is provided, we're building a specific element (possibly self-closing)
+      // Don't return empty string for empty objects with a name - they should become self-closing tags
+      if (keys.length === 0 && !name) return '';
+
+      const tagName = name || keys[0]!; // keys[0] is guaranteed to exist due to length check (or name is provided)
+      const element = name ? o : o[tagName];
+
+      let xml = `<${tagName}`;
+
+      // Add attributes
+      if (element && typeof element === 'object') {
+        for (const key of Object.keys(element)) {
+          if (key.startsWith('@_')) {
+            const attrName = key.substring(2);
+            xml += ` ${attrName}="${element[key]}"`;
+          }
+        }
+      }
+
+      // Check for children
+      const hasChildren = element && typeof element === 'object' &&
+        Object.keys(element).some(k => !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren');
+
+      if (!hasChildren && (!element || !element['#text'])) {
+        xml += '/>';
+      } else {
+        xml += '>';
+
+        // Add text content
+        if (element && element['#text']) {
+          xml += element['#text'];
+        }
+
+        // Add child elements using _orderedChildren if available
+        if (element && typeof element === 'object') {
+          const orderedChildren = element['_orderedChildren'] as Array<{type: string, index: number}> | undefined;
+
+          if (orderedChildren && orderedChildren.length > 0) {
+            // Use _orderedChildren to preserve element order
+            for (const childInfo of orderedChildren) {
+              const childType = childInfo.type;
+              const childIndex = childInfo.index;
+
+              if (element[childType] !== undefined) {
+                const children = element[childType];
+
+                if (Array.isArray(children)) {
+                  if (childIndex < children.length) {
+                    const childXml = buildXml(children[childIndex], childType);
+                    xml += childXml;
+                  }
+                } else {
+                  // Single child element
+                  if (childIndex === 0) {
+                    const childXml = buildXml(children, childType);
+                    xml += childXml;
+                  }
+                }
+              }
+            }
+          } else {
+            // Fallback: iterate through keys if no _orderedChildren
+            for (const key of Object.keys(element)) {
+              if (!key.startsWith('@_') && key !== '#text' && key !== '_orderedChildren') {
+                const children = element[key];
+                if (Array.isArray(children)) {
+                  for (const child of children) {
+                    xml += buildXml(child, key);
+                  }
+                } else {
+                  xml += buildXml(children, key);
+                }
+              }
+            }
+          }
+        }
+
+        xml += `</${tagName}>`;
+      }
+
+      return xml;
+    };
+
+    return buildXml(obj);
   }
 
   /**

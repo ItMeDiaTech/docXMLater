@@ -182,6 +182,24 @@ export class NumberingLevel {
   }
 
   /**
+   * Sets the font size in half-points
+   * @param halfPoints Font size in half-points (e.g., 24 = 12pt)
+   */
+  setFontSize(halfPoints: number): this {
+    this.properties.fontSize = halfPoints;
+    return this;
+  }
+
+  /**
+   * Sets the level text (bullet character or number template)
+   * @param text The text template (e.g., '•' for bullets, '%1.' for numbered)
+   */
+  setText(text: string): this {
+    this.properties.text = text;
+    return this;
+  }
+
+  /**
    * Generates the WordprocessingML XML for this level
    */
   toXML(): XMLElement {

@@ -448,4 +448,157 @@ export class XMLBuilder {
 
     return element;
   }
+
+  /**
+   * Helper method to build attributes object, filtering out undefined/null values
+   * This simplifies the common pattern of conditionally adding attributes
+   *
+   * @param mapping - Map of attribute names to values
+   * @returns Filtered attributes object with only defined values
+   *
+   * @example
+   * ```typescript
+   * const attrs = XMLBuilder.buildAttributes({
+   *   'w:before': spacing?.before,
+   *   'w:after': spacing?.after,
+   *   'w:line': spacing?.line
+   * });
+   * // Returns only attributes with defined values
+   * ```
+   */
+  static buildAttributes(mapping: Record<string, any>): Record<string, string | number> {
+    const attrs: Record<string, string | number> = {};
+    for (const [key, value] of Object.entries(mapping)) {
+      if (value !== undefined && value !== null) {
+        attrs[key] = value;
+      }
+    }
+    return attrs;
+  }
+
+  /**
+   * Creates a border element for WordprocessingML
+   * Used for table borders, cell borders, and paragraph borders
+   *
+   * @param side - Border side (e.g., 'top', 'left', 'bottom', 'right', 'insideH', 'insideV')
+   * @param border - Border definition
+   * @returns XML element for border
+   *
+   * @example
+   * ```typescript
+   * const border = XMLBuilder.createBorder('top', {
+   *   style: 'single',
+   *   size: 4,
+   *   color: 'FF0000',
+   *   space: 0
+   * });
+   * ```
+   */
+  static createBorder(
+    side: string,
+    border: {
+      style?: string;
+      size?: number;
+      color?: string;
+      space?: number;
+    }
+  ): XMLElement {
+    const attrs = XMLBuilder.buildAttributes({
+      'w:val': border.style || 'single',
+      'w:sz': border.size,
+      'w:color': border.color,
+      'w:space': border.space
+    });
+
+    return XMLBuilder.wSelf(side, attrs);
+  }
+
+  /**
+   * Creates a shading element for WordprocessingML
+   * Used for paragraph shading, table shading, and cell shading
+   *
+   * @param shading - Shading definition
+   * @returns XML element for shading, or null if no shading properties
+   *
+   * @example
+   * ```typescript
+   * const shading = XMLBuilder.createShading({
+   *   fill: 'FFFF00',
+   *   val: 'clear',
+   *   color: '000000'
+   * });
+   * ```
+   */
+  static createShading(shading: {
+    fill?: string;
+    val?: string;
+    color?: string;
+  }): XMLElement | null {
+    const attrs = XMLBuilder.buildAttributes({
+      'w:val': shading.val || 'clear',
+      'w:fill': shading.fill,
+      'w:color': shading.color
+    });
+
+    if (Object.keys(attrs).length > 0) {
+      return XMLBuilder.wSelf('shd', attrs);
+    }
+    return null;
+  }
+
+  /**
+   * Creates a margins element (tcMar, pgMar, etc.)
+   * Used for cell margins, page margins, etc.
+   *
+   * @param type - Margin type element name (e.g., 'tcMar', 'pgMar')
+   * @param margins - Margin values in twips
+   * @returns XML element for margins, or null if no margins defined
+   *
+   * @example
+   * ```typescript
+   * const margins = XMLBuilder.createMargins('tcMar', {
+   *   top: 100,
+   *   bottom: 100,
+   *   left: 100,
+   *   right: 100
+   * });
+   * ```
+   */
+  static createMargins(
+    type: string,
+    margins: {
+      top?: number;
+      bottom?: number;
+      left?: number;
+      right?: number;
+      start?: number;
+      end?: number;
+    }
+  ): XMLElement | null {
+    const children: XMLElement[] = [];
+
+    if (margins.top !== undefined) {
+      children.push(XMLBuilder.wSelf('top', { 'w:w': margins.top, 'w:type': 'dxa' }));
+    }
+    if (margins.bottom !== undefined) {
+      children.push(XMLBuilder.wSelf('bottom', { 'w:w': margins.bottom, 'w:type': 'dxa' }));
+    }
+    if (margins.left !== undefined) {
+      children.push(XMLBuilder.wSelf('left', { 'w:w': margins.left, 'w:type': 'dxa' }));
+    }
+    if (margins.right !== undefined) {
+      children.push(XMLBuilder.wSelf('right', { 'w:w': margins.right, 'w:type': 'dxa' }));
+    }
+    if (margins.start !== undefined) {
+      children.push(XMLBuilder.wSelf('start', { 'w:w': margins.start, 'w:type': 'dxa' }));
+    }
+    if (margins.end !== undefined) {
+      children.push(XMLBuilder.wSelf('end', { 'w:w': margins.end, 'w:type': 'dxa' }));
+    }
+
+    if (children.length > 0) {
+      return XMLBuilder.w(type, undefined, children);
+    }
+    return null;
+  }
 }

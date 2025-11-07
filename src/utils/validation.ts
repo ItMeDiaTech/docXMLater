@@ -160,6 +160,42 @@ export function validateTwips(value: number, fieldName: string = 'value'): void 
 }
 
 /**
+ * Normalizes a color to uppercase 6-character hex format
+ * Accepts 3-character or 6-character hex colors with or without '#' prefix
+ * Follows Microsoft Word convention of uppercase hex colors
+ *
+ * @param color - Color to normalize (e.g., '#F00', 'FF0000', '#FF0000', 'f00')
+ * @returns Normalized color (e.g., 'FF0000')
+ * @throws Error if color format is invalid
+ *
+ * @example
+ * ```typescript
+ * normalizeColor('#F00')      // Returns: 'FF0000'
+ * normalizeColor('FF0000')    // Returns: 'FF0000'
+ * normalizeColor('#ff0000')   // Returns: 'FF0000'
+ * normalizeColor('f00')       // Returns: 'FF0000'
+ * ```
+ */
+export function normalizeColor(color: string): string {
+  const hex = color.replace(/^#/, '');
+
+  // Validate hex format
+  if (!/^[0-9A-Fa-f]{3}$|^[0-9A-Fa-f]{6}$/.test(hex)) {
+    throw new Error(
+      `Invalid color format: "${color}". Expected 3 or 6-character hex ` +
+      `(e.g., "FF0000", "#FF0000", "F00", or "#F00")`
+    );
+  }
+
+  // Expand 3-character to 6-character
+  if (hex.length === 3) {
+    return (hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2)).toUpperCase();
+  }
+
+  return hex.toUpperCase();
+}
+
+/**
  * Validates a hexadecimal color value
  * Must be 6 characters (RRGGBB format)
  * @param color - The color hex string to validate (without #)

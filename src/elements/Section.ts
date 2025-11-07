@@ -102,6 +102,23 @@ export type VerticalAlignment = 'top' | 'center' | 'bottom' | 'both';
 export type TextDirection = 'ltr' | 'rtl' | 'tbRl' | 'btLr';
 
 /**
+ * Document grid type for East Asian typography
+ */
+export type DocumentGridType = 'default' | 'lines' | 'linesAndChars' | 'snapToChars';
+
+/**
+ * Document grid properties
+ */
+export interface DocumentGrid {
+  /** Grid type */
+  type?: DocumentGridType;
+  /** Lines per page */
+  linePitch?: number;
+  /** Characters per line */
+  charSpace?: number;
+}
+
+/**
  * Section properties
  */
 export interface SectionProperties {
@@ -135,6 +152,12 @@ export interface SectionProperties {
   paperSource?: PaperSource;
   /** Text direction (LTR/RTL support) */
   textDirection?: TextDirection;
+  /** Right-to-left section layout */
+  bidi?: boolean;
+  /** Gutter on right side (for RTL) */
+  rtlGutter?: boolean;
+  /** Document grid for snapping text to grid */
+  docGrid?: DocumentGrid;
 }
 
 /**
@@ -532,6 +555,33 @@ export class Section {
       children.push(
         XMLBuilder.wSelf('textDirection', { 'w:val': this.properties.textDirection })
       );
+    }
+
+    // Bidirectional section (RTL)
+    if (this.properties.bidi) {
+      children.push(XMLBuilder.wSelf('bidi'));
+    }
+
+    // RTL gutter (gutter on right side)
+    if (this.properties.rtlGutter) {
+      children.push(XMLBuilder.wSelf('rtlGutter'));
+    }
+
+    // Document grid
+    if (this.properties.docGrid) {
+      const attrs: Record<string, string> = {};
+      if (this.properties.docGrid.type) {
+        attrs['w:type'] = this.properties.docGrid.type;
+      }
+      if (this.properties.docGrid.linePitch !== undefined) {
+        attrs['w:linePitch'] = this.properties.docGrid.linePitch.toString();
+      }
+      if (this.properties.docGrid.charSpace !== undefined) {
+        attrs['w:charSpace'] = this.properties.docGrid.charSpace.toString();
+      }
+      if (Object.keys(attrs).length > 0) {
+        children.push(XMLBuilder.wSelf('docGrid', attrs));
+      }
     }
 
     return XMLBuilder.w('sectPr', undefined, children);

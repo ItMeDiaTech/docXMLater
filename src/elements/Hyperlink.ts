@@ -106,9 +106,10 @@ export class Hyperlink {
       );
     }
 
-    // Improved text fallback: url → anchor → provided text → 'Link'
-    // This provides better UX when text is empty
-    this.text = properties.text || this.url || this.anchor || 'Link';
+    // Text fallback: properties.text → url → 'Link'
+    // NOTE: Do NOT use anchor (bookmark ID) as display text - it should only be used for navigation
+    // Using bookmark IDs as visible text causes TOC corruption (Issue: TOC shows "HEADING=II.MNKE7E8NA385_" instead of proper headings)
+    this.text = properties.text || this.url || 'Link';
 
     // Validate text for XML patterns
     const validation = validateRunText(this.text, {
@@ -165,6 +166,17 @@ export class Hyperlink {
 
     this.text = text;
     this.run.setText(text); // Run.setText also validates
+    return this;
+  }
+
+  /**
+   * Sets the internal run directly (for advanced use cases like TOC parsing)
+   * Used by DocumentParser to preserve run content (tabs, breaks, etc.)
+   * @param run - The run to use for this hyperlink
+   */
+  setRun(run: Run): this {
+    this.run = run;
+    this.text = run.getText();
     return this;
   }
 
