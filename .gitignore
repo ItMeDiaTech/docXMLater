@@ -115,3 +115,5 @@ config/rag_settings.json
 /SKILL.md
 /OPENXML_STRUCTURE_GUIDE.md
 /jest.config.js
+/testing
+/tests
