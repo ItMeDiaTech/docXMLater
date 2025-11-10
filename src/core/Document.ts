@@ -4530,18 +4530,121 @@ export class Document {
   }
 
   /**
+   * Validates a paragraph before insertion
+   * @param paragraph - The paragraph to validate
+   * @throws Error if paragraph is invalid
+   */
+  private validateParagraph(paragraph: Paragraph): void {
+    // Type validation
+    if (!(paragraph instanceof Paragraph)) {
+      throw new Error('insertParagraphAt: parameter must be a Paragraph instance');
+    }
+
+    // Check for duplicate paragraph IDs
+    const paraId = paragraph.getFormatting().paraId;
+    if (paraId) {
+      const existingIds = this.bodyElements
+        .filter((el): el is Paragraph => el instanceof Paragraph)
+        .map(p => p.getFormatting().paraId)
+        .filter(id => id === paraId);
+
+      if (existingIds.length > 0) {
+        throw new Error(`Duplicate paragraph ID detected: ${paraId}. Each paragraph must have a unique ID.`);
+      }
+    }
+
+    // Warn about missing styles
+    const style = paragraph.getFormatting().style;
+    if (style && !this.stylesManager.hasStyle(style)) {
+      console.warn(`Style "${style}" not found in document. Paragraph will fall back to Normal style.`);
+    }
+
+    // Warn about missing numbering
+    const numbering = paragraph.getFormatting().numbering;
+    if (numbering && !this.numberingManager.hasInstance(numbering.numId)) {
+      console.warn(`Numbering ID ${numbering.numId} not found in document. List formatting will not display.`);
+    }
+  }
+
+  /**
+   * Validates a table before insertion
+   * @param table - The table to validate
+   * @throws Error if table is invalid
+   */
+  private validateTable(table: Table): void {
+    // Type validation
+    if (!(table instanceof Table)) {
+      throw new Error('insertTableAt: parameter must be a Table instance');
+    }
+
+    // Content validation - table must have rows
+    const rows = table.getRows();
+    if (rows.length === 0) {
+      throw new Error('insertTableAt: table must have at least one row');
+    }
+
+    // Check first row has cells (rows.length > 0 already checked above)
+    const firstRow = rows[0];
+    if (firstRow && firstRow.getCells().length === 0) {
+      throw new Error('insertTableAt: table rows must have at least one cell');
+    }
+
+    // Warn about missing table styles
+    const tableStyle = table.getFormatting().style;
+    if (tableStyle && !this.stylesManager.hasStyle(tableStyle)) {
+      console.warn(`Table style "${tableStyle}" not found in document. Table will use default formatting.`);
+    }
+  }
+
+  /**
+   * Validates a TOC element before insertion
+   * @param toc - The TOC to validate
+   * @throws Error if TOC is invalid
+   */
+  private validateToc(toc: TableOfContentsElement): void {
+    // Type validation
+    if (!(toc instanceof TableOfContentsElement)) {
+      throw new Error('insertTocAt: parameter must be a TableOfContentsElement instance');
+    }
+
+    // Check if document has heading styles for TOC to reference
+    const hasHeadings = ['Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading5', 'Heading6', 'Heading7', 'Heading8', 'Heading9']
+      .some(style => this.stylesManager.hasStyle(style));
+
+    if (!hasHeadings) {
+      console.warn('No heading styles found in document. Table of Contents may not display entries correctly.');
+    }
+  }
+
+  /**
+   * Normalizes and validates insertion index
+   * @param index - The requested index
+   * @returns Normalized index within valid bounds
+   */
+  private normalizeIndex(index: number): number {
+    if (index < 0) {
+      return 0;
+    } else if (index > this.bodyElements.length) {
+      return this.bodyElements.length;
+    }
+    return index;
+  }
+
+  /**
    * Inserts a paragraph at a specific position
    * @param index - The position to insert at (0-based)
    * @param paragraph - The paragraph to insert
    * @returns This document for chaining
+   * @throws Error if paragraph is invalid or has duplicate IDs
    */
   insertParagraphAt(index: number, paragraph: Paragraph): this {
-    if (index < 0) {
-      index = 0;
-    } else if (index > this.bodyElements.length) {
-      index = this.bodyElements.length;
-    }
+    // Validate the paragraph
+    this.validateParagraph(paragraph);
 
+    // Normalize index
+    index = this.normalizeIndex(index);
+
+    // Insert the paragraph
     this.bodyElements.splice(index, 0, paragraph);
     return this;
   }
@@ -4551,6 +4654,7 @@ export class Document {
    * @param index - The position to insert at (0-based)
    * @param table - The table to insert
    * @returns This document for chaining
+   * @throws Error if table is invalid or malformed
    * @example
    * ```typescript
    * const table = new Table(2, 3);
@@ -4558,12 +4662,13 @@ export class Document {
    * ```
    */
   insertTableAt(index: number, table: Table): this {
-    if (index < 0) {
-      index = 0;
-    } else if (index > this.bodyElements.length) {
-      index = this.bodyElements.length;
-    }
+    // Validate the table
+    this.validateTable(table);
 
+    // Normalize index
+    index = this.normalizeIndex(index);
+
+    // Insert the table
     this.bodyElements.splice(index, 0, table);
     return this;
   }
@@ -4573,6 +4678,7 @@ export class Document {
    * @param index - The position to insert at (0-based)
    * @param toc - The TableOfContentsElement to insert
    * @returns This document for chaining
+   * @throws Error if TOC is invalid
    * @example
    * ```typescript
    * const toc = TableOfContentsElement.createStandard();
@@ -4580,12 +4686,13 @@ export class Document {
    * ```
    */
   insertTocAt(index: number, toc: TableOfContentsElement): this {
-    if (index < 0) {
-      index = 0;
-    } else if (index > this.bodyElements.length) {
-      index = this.bodyElements.length;
-    }
+    // Validate the TOC
+    this.validateToc(toc);
 
+    // Normalize index
+    index = this.normalizeIndex(index);
+
+    // Insert the TOC
     this.bodyElements.splice(index, 0, toc);
     return this;
   }
@@ -4595,6 +4702,7 @@ export class Document {
    * @param index - The position to replace at (0-based)
    * @param paragraph - The new paragraph
    * @returns True if replaced, false if index invalid
+   * @throws Error if replacement paragraph is invalid or has duplicate IDs
    * @example
    * ```typescript
    * const newPara = new Paragraph();
@@ -4606,6 +4714,10 @@ export class Document {
     if (index >= 0 && index < this.bodyElements.length) {
       const element = this.bodyElements[index];
       if (element instanceof Paragraph) {
+        // Validate the replacement paragraph
+        this.validateParagraph(paragraph);
+
+        // Replace the paragraph
         this.bodyElements[index] = paragraph;
         return true;
       }
@@ -4618,6 +4730,7 @@ export class Document {
    * @param index - The position to replace at (0-based)
    * @param table - The new table
    * @returns True if replaced, false if index invalid or not a table
+   * @throws Error if replacement table is invalid or malformed
    * @example
    * ```typescript
    * const newTable = new Table(3, 4);
@@ -4628,6 +4741,10 @@ export class Document {
     if (index >= 0 && index < this.bodyElements.length) {
       const element = this.bodyElements[index];
       if (element instanceof Table) {
+        // Validate the replacement table
+        this.validateTable(table);
+
+        // Replace the table
         this.bodyElements[index] = table;
         return true;
       }
