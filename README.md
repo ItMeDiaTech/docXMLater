@@ -648,7 +648,7 @@ High-level helper methods for common document formatting tasks:
 
 | Method                                   | Description                                                                                 |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `applyCustomFormattingToExistingStyles()`| Modify Heading1, Heading2, Normal styles with Verdana font, specific spacing, single line spacing, wrap Heading2 in tables, right-align "Top of Document" hyperlinks, set all hyperlinks to blue, and hide TOC page numbers |
+| `applyCustomFormattingToExistingStyles()`| Modify Heading1, Heading2, Heading3, Normal, and List Paragraph styles with Verdana font, specific spacing, single line spacing, wrap Heading2 in tables, right-align "Top of Document" hyperlinks, set all hyperlinks to blue, and hide TOC page numbers |
 | `wrapParagraphInTable(para, options?)`   | Wrap a paragraph in a 1x1 table with optional shading, margins, and width settings         |
 | `isParagraphInTable(para)`               | Check if a paragraph is inside a table; returns `{inTable: boolean, cell?: TableCell}`      |
 | `updateAllHyperlinkColors(color)`        | Set all hyperlinks in the document to a specific color (e.g., '0000FF' for blue)           |
@@ -664,7 +664,7 @@ const doc = await Document.load('document.docx');
 // Apply comprehensive formatting to standard styles
 const results = doc.applyCustomFormattingToExistingStyles();
 console.log(`Modified styles:`, results);
-// Output: { heading1: true, heading2: true, normal: true }
+// Output: { heading1: true, heading2: true, heading3: true, normal: true, listParagraph: true }
 
 // Wrap a specific paragraph in a table
 const para = doc.getParagraphs()[0];
@@ -696,9 +696,12 @@ await doc.save('formatted.docx');
 
 This helper function applies a comprehensive set of formatting rules:
 - **Heading1**: 18pt black bold Verdana, left aligned, 0pt before/12pt after, single line spacing
-- **Heading2**: 14pt black bold Verdana, left aligned, 6pt before/after, single line spacing, wrapped in gray tables (100% width)
+- **Heading2**: 14pt black bold Verdana, left aligned, 6pt before/after, single line spacing, wrapped in gray tables (100% width, 0.08" margins)
+- **Heading3**: 12pt black bold Verdana, left aligned, 3pt before/after, single line spacing (no table wrapping)
 - **Normal**: 12pt Verdana, left aligned, 3pt before/after, single line spacing
+- **List Paragraph**: 12pt Verdana, left aligned, 0pt before/3pt after, single line spacing, 0.25" bullet indent/0.50" text indent, contextual spacing enabled
 - **All Styles**: Removes italic and underline formatting
+- **Heading2 Tables**: Existing tables are updated (cell shaded gray, margins set to 0.08" left/right); new tables created for paragraphs not in tables
 - **Hyperlinks**: "Top of the Document" links are right-aligned with 0pt spacing; all hyperlinks set to blue (#0000FF)
 - **Empty Paragraphs**: Empty Heading2 paragraphs are skipped (not wrapped in tables)
 - **TOC Elements**: All Table of Contents have page numbers hidden (showPageNumbers=false, hideInWebLayout=true with \n and \z switches)
