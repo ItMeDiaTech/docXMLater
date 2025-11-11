@@ -385,6 +385,31 @@ export class Document {
         this.numberingManager.addInstance(instance);
       }
     }
+
+    // Load parsed headers and footers into HeaderFooterManager
+    // This preserves existing headers/footers from the document
+    const { headers, footers } = await this.parser.parseHeadersAndFooters(
+      this.zipHandler,
+      result.section,
+      this.relationshipManager,
+      this.imageManager
+    );
+
+    // Register parsed headers with manager
+    for (const { header, relationshipId, filename } of headers) {
+      // Manually register without creating new relationships
+      // (relationships already exist from loaded document)
+      this.headerFooterManager.registerHeader(header, relationshipId);
+      header.setHeaderId(relationshipId);
+    }
+
+    // Register parsed footers with manager
+    for (const { footer, relationshipId, filename } of footers) {
+      // Manually register without creating new relationships
+      // (relationships already exist from loaded document)
+      this.headerFooterManager.registerFooter(footer, relationshipId);
+      footer.setFooterId(relationshipId);
+    }
   }
 
   /**
@@ -2749,6 +2774,142 @@ export class Document {
    */
   getHeaderFooterManager(): HeaderFooterManager {
     return this.headerFooterManager;
+  }
+
+  /**
+   * Removes a specific header from the document
+   * Removes the header from HeaderFooterManager, RelationshipManager, and section references
+   * Also removes the header XML file from the ZIP archive
+   * @param type Header type to remove (default, first, even)
+   * @returns This document for chaining
+   */
+  removeHeader(type: 'default' | 'first' | 'even'): this {
+    const sectionProps = this.section.getProperties();
+
+    // Get the relationship ID from section properties
+    const rId = sectionProps.headers?.[type];
+    if (!rId) {
+      return this; // No header of this type exists
+    }
+
+    // Get the header filename from relationship
+    const rel = this.relationshipManager.getRelationship(rId);
+    if (rel) {
+      const headerPath = `word/${rel.getTarget()}`;
+
+      // Remove the header XML file from ZIP
+      if (this.zipHandler.hasFile(headerPath)) {
+        this.zipHandler.removeFile(headerPath);
+      }
+
+      // Remove the relationship
+      this.relationshipManager.removeRelationship(rId);
+    }
+
+    // Remove from section references
+    if (sectionProps.headers) {
+      delete sectionProps.headers[type];
+
+      // If no more headers, remove the headers object
+      if (Object.keys(sectionProps.headers).length === 0) {
+        delete sectionProps.headers;
+      }
+    }
+
+    // Note: We can't directly remove from HeaderFooterManager without access to the Header object
+    // The manager will be rebuilt on next save() call
+
+    return this;
+  }
+
+  /**
+   * Removes a specific footer from the document
+   * Removes the footer from HeaderFooterManager, RelationshipManager, and section references
+   * Also removes the footer XML file from the ZIP archive
+   * @param type Footer type to remove (default, first, even)
+   * @returns This document for chaining
+   */
+  removeFooter(type: 'default' | 'first' | 'even'): this {
+    const sectionProps = this.section.getProperties();
+
+    // Get the relationship ID from section properties
+    const rId = sectionProps.footers?.[type];
+    if (!rId) {
+      return this; // No footer of this type exists
+    }
+
+    // Get the footer filename from relationship
+    const rel = this.relationshipManager.getRelationship(rId);
+    if (rel) {
+      const footerPath = `word/${rel.getTarget()}`;
+
+      // Remove the footer XML file from ZIP
+      if (this.zipHandler.hasFile(footerPath)) {
+        this.zipHandler.removeFile(footerPath);
+      }
+
+      // Remove the relationship
+      this.relationshipManager.removeRelationship(rId);
+    }
+
+    // Remove from section references
+    if (sectionProps.footers) {
+      delete sectionProps.footers[type];
+
+      // If no more footers, remove the footers object
+      if (Object.keys(sectionProps.footers).length === 0) {
+        delete sectionProps.footers;
+      }
+    }
+
+    // Note: We can't directly remove from HeaderFooterManager without access to the Footer object
+    // The manager will be rebuilt on next save() call
+
+    return this;
+  }
+
+  /**
+   * Removes all headers from the document
+   * Removes all header relationships, section references, and header XML files from the ZIP archive
+   * @returns This document for chaining
+   */
+  clearHeaders(): this {
+    const sectionProps = this.section.getProperties();
+
+    // Remove each header type
+    if (sectionProps.headers) {
+      const types = Object.keys(sectionProps.headers) as Array<'default' | 'first' | 'even'>;
+      for (const type of types) {
+        this.removeHeader(type);
+      }
+    }
+
+    // Note: Don't call headerFooterManager.clear() as that would clear footers too
+    // The manager will be rebuilt correctly during save based on section properties
+
+    return this;
+  }
+
+  /**
+   * Removes all footers from the document
+   * Removes all footer relationships, section references, and footer XML files from the ZIP archive
+   * @returns This document for chaining
+   */
+  clearFooters(): this {
+    const sectionProps = this.section.getProperties();
+
+    // Remove each footer type
+    if (sectionProps.footers) {
+      const types = Object.keys(sectionProps.footers) as Array<'default' | 'first' | 'even'>;
+      for (const type of types) {
+        this.removeFooter(type);
+      }
+    }
+
+    // Note: Don't call headerFooterManager.clear() as that would clear headers too
+    // The manager will be rebuilt correctly during save based on section properties
+
+    return this;
   }
 
   /**
