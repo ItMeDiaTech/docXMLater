@@ -2359,7 +2359,7 @@ export class Document {
   }
 
   /**
-   * Modifies the existing Heading1, Heading2, and Normal style definitions
+   * Modifies the existing Heading1, Heading2, Heading3, Normal, and List Paragraph style definitions
    * instead of creating new custom styles. This approach preserves the original
    * style names while updating their formatting.
    *
@@ -2369,11 +2369,16 @@ export class Document {
    *
    * Formatting applied:
    * - Heading1: 18pt black bold Verdana, left aligned, 0pt before / 12pt after, single line spacing, no italic/underline
-   * - Heading2: 14pt black bold Verdana, left aligned, 6pt before/after, single line spacing, wrapped in gray tables, no italic/underline
+   * - Heading2: 14pt black bold Verdana, left aligned, 6pt before/after, single line spacing, wrapped in gray tables (0.08" margins), no italic/underline
+   * - Heading3: 12pt black bold Verdana, left aligned, 3pt before/after, single line spacing, no table wrapping, no italic/underline
    * - Normal: 12pt Verdana, left aligned, 3pt before/after, single line spacing, no italic/underline
+   * - List Paragraph: 12pt Verdana, left aligned, 0pt before / 3pt after, single line spacing, 0.25" bullet indent / 0.50" text indent, contextual spacing enabled, no italic/underline
    *
    * Additional processing:
    * - Empty Heading2 paragraphs are skipped (not wrapped in tables)
+   * - Heading2 paragraphs already in tables have their cell shaded gray (BFBFBF) and margins updated (0 top/bottom, 0.08" left/right)
+   * - Heading2 paragraphs not in tables are wrapped in new 1x1 gray tables with same margins
+   * - Table width is set to 100% of page width (autofit)
    * - Hyperlinks with "Top of the Document" or "Top of Document" text are right-aligned with 0pt spacing before/after
    * - All hyperlinks are set to blue (#0000FF)
    * - All TOC elements have page numbers hidden (showPageNumbers=false, hideInWebLayout=true)
@@ -2383,14 +2388,18 @@ export class Document {
   public applyCustomFormattingToExistingStyles(): {
     heading1: boolean;
     heading2: boolean;
+    heading3: boolean;
     normal: boolean;
+    listParagraph: boolean;
   } {
-    const results = { heading1: false, heading2: false, normal: false };
+    const results = { heading1: false, heading2: false, heading3: false, normal: false, listParagraph: false };
 
     // Get existing styles from StylesManager
     const heading1 = this.stylesManager.getStyle('Heading1');
     const heading2 = this.stylesManager.getStyle('Heading2');
+    const heading3 = this.stylesManager.getStyle('Heading3');
     const normal = this.stylesManager.getStyle('Normal');
+    const listParagraph = this.stylesManager.getStyle('ListParagraph');
 
     // Modify Heading1 definition
     if (heading1) {
@@ -2422,6 +2431,21 @@ export class Document {
       results.heading2 = true;
     }
 
+    // Modify Heading3 definition
+    if (heading3) {
+      heading3.setRunFormatting({
+        font: 'Verdana',
+        size: 12,
+        bold: true,
+        color: '000000'
+      });
+      heading3.setParagraphFormatting({
+        alignment: 'left',
+        spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' }  // 3pt before, 3pt after, single line spacing
+      });
+      results.heading3 = true;
+    }
+
     // Modify Normal definition
     if (normal) {
       normal.setRunFormatting({
@@ -2434,6 +2458,22 @@ export class Document {
         spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' }  // 3pt before, 3pt after, single line spacing
       });
       results.normal = true;
+    }
+
+    // Modify List Paragraph definition
+    if (listParagraph) {
+      listParagraph.setRunFormatting({
+        font: 'Verdana',
+        size: 12,
+        color: '000000'
+      });
+      listParagraph.setParagraphFormatting({
+        alignment: 'left',
+        spacing: { before: 0, after: 60, line: 240, lineRule: 'auto' },  // 0pt before, 3pt after, single line spacing
+        indentation: { left: 360, hanging: 360 },  // 0.25" left indent, 0.25" hanging (bullet at 0, text at 0.50")
+        contextualSpacing: true  // Remove spacing between consecutive list items
+      });
+      results.listParagraph = true;
     }
 
     // Clear direct formatting from affected paragraphs and wrap Heading2 in tables
@@ -2502,7 +2542,7 @@ export class Document {
         if (inTable && cell) {
           // Paragraph is already in a table - apply cell formatting
           cell.setShading({ fill: 'BFBFBF' });
-          cell.setMargins({ top: 0, bottom: 0, left: 101, right: 101 });
+          cell.setMargins({ top: 0, bottom: 0, left: 115, right: 115 });  // 0.08" = 115 twips
 
           // Set table width to 100%
           const table = this.getAllTables().find(t => {
@@ -2523,10 +2563,48 @@ export class Document {
             shading: 'BFBFBF',
             marginTop: 0,
             marginBottom: 0,
-            marginLeft: 101,
-            marginRight: 101,
+            marginLeft: 115,
+            marginRight: 115,  // 0.08" = 115 twips
             tableWidthPercent: 5000
           });
+        }
+
+        processedParagraphs.add(para);
+      }
+
+      // Process Heading3 paragraphs
+      else if (styleId === 'Heading3' && heading3) {
+        para.clearDirectFormattingConflicts(heading3);
+
+        // Explicitly clear italic and underline from all runs
+        for (const run of para.getRuns()) {
+          run.setItalic(false);
+          run.setUnderline(false);
+        }
+
+        // Clear italic and underline from paragraph mark properties
+        if (para.formatting.paragraphMarkRunProperties) {
+          delete para.formatting.paragraphMarkRunProperties.italic;
+          delete para.formatting.paragraphMarkRunProperties.underline;
+        }
+
+        processedParagraphs.add(para);
+      }
+
+      // Process List Paragraph paragraphs
+      else if (styleId === 'ListParagraph' && listParagraph) {
+        para.clearDirectFormattingConflicts(listParagraph);
+
+        // Explicitly clear italic and underline from all runs
+        for (const run of para.getRuns()) {
+          run.setItalic(false);
+          run.setUnderline(false);
+        }
+
+        // Clear italic and underline from paragraph mark properties
+        if (para.formatting.paragraphMarkRunProperties) {
+          delete para.formatting.paragraphMarkRunProperties.italic;
+          delete para.formatting.paragraphMarkRunProperties.underline;
         }
 
         processedParagraphs.add(para);
