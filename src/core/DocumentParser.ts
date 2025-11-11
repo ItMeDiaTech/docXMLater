@@ -4056,4 +4056,184 @@ export class DocumentParser {
 
     return namespaces;
   }
+
+  /**
+   * Parses headers and footers from a loaded document
+   * Extracts header/footer XML files and creates Header/Footer objects
+   * @param zipHandler - ZIP handler containing the document
+   * @param section - Parsed section with header/footer references
+   * @param relationshipManager - Relationship manager to lookup targets
+   * @param imageManager - Image manager for parsing images in headers/footers
+   * @returns Object with parsed headers and footers
+   */
+  async parseHeadersAndFooters(
+    zipHandler: ZipHandler,
+    section: Section | null,
+    relationshipManager: RelationshipManager,
+    imageManager: ImageManager
+  ): Promise<{
+    headers: Array<{ header: import('../elements/Header').Header; relationshipId: string; filename: string }>;
+    footers: Array<{ footer: import('../elements/Footer').Footer; relationshipId: string; filename: string }>;
+  }> {
+    const headers: Array<{ header: import('../elements/Header').Header; relationshipId: string; filename: string }> = [];
+    const footers: Array<{ footer: import('../elements/Footer').Footer; relationshipId: string; filename: string }> = [];
+
+    if (!section) {
+      return { headers, footers };
+    }
+
+    const sectionProps = section.getProperties();
+
+    // Parse headers
+    if (sectionProps.headers) {
+      for (const [type, rId] of Object.entries(sectionProps.headers)) {
+        if (!rId) continue;
+
+        // Get relationship to find header filename
+        const rel = relationshipManager.getRelationship(rId);
+        if (!rel) continue;
+
+        const headerPath = `word/${rel.getTarget()}`;
+        const headerXml = zipHandler.getFileAsString(headerPath);
+        if (!headerXml) continue;
+
+        // Create Header object
+        const header = await this.parseHeader(headerXml, type as 'default' | 'first' | 'even', zipHandler, relationshipManager, imageManager);
+        if (header) {
+          headers.push({
+            header,
+            relationshipId: rId,
+            filename: rel.getTarget(),
+          });
+        }
+      }
+    }
+
+    // Parse footers
+    if (sectionProps.footers) {
+      for (const [type, rId] of Object.entries(sectionProps.footers)) {
+        if (!rId) continue;
+
+        // Get relationship to find footer filename
+        const rel = relationshipManager.getRelationship(rId);
+        if (!rel) continue;
+
+        const footerPath = `word/${rel.getTarget()}`;
+        const footerXml = zipHandler.getFileAsString(footerPath);
+        if (!footerXml) continue;
+
+        // Create Footer object
+        const footer = await this.parseFooter(footerXml, type as 'default' | 'first' | 'even', zipHandler, relationshipManager, imageManager);
+        if (footer) {
+          footers.push({
+            footer,
+            relationshipId: rId,
+            filename: rel.getTarget(),
+          });
+        }
+      }
+    }
+
+    return { headers, footers };
+  }
+
+  /**
+   * Parses a single header XML file
+   * @param headerXml - Header XML content
+   * @param type - Header type (default, first, even)
+   * @param zipHandler - ZIP handler for accessing resources
+   * @param relationshipManager - Relationship manager for resolving links
+   * @param imageManager - Image manager for registering images
+   * @returns Parsed Header object or null
+   */
+  private async parseHeader(
+    headerXml: string,
+    type: 'default' | 'first' | 'even',
+    zipHandler: ZipHandler,
+    relationshipManager: RelationshipManager,
+    imageManager: ImageManager
+  ): Promise<import('../elements/Header').Header | null> {
+    try {
+      const { Header } = require('../elements/Header');
+      const header = new Header({ type });
+
+      // Extract w:hdr content
+      const hdrContent = XMLParser.extractBetweenTags(headerXml, '<w:hdr', '</w:hdr>');
+      if (!hdrContent) {
+        return header; // Empty header
+      }
+
+      // Parse paragraphs and tables within header
+      const elements = await this.parseBodyElements(`<w:body>${hdrContent}</w:body>`, relationshipManager, zipHandler, imageManager);
+
+      for (const element of elements) {
+        if (element instanceof Paragraph) {
+          header.addParagraph(element);
+        } else if (element instanceof Table) {
+          header.addTable(element);
+        }
+      }
+
+      return header;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.parseErrors.push({ element: 'header', error: err });
+
+      if (this.strictParsing) {
+        throw new Error(`Failed to parse header: ${err.message}`);
+      }
+
+      return null;
+    }
+  }
+
+  /**
+   * Parses a single footer XML file
+   * @param footerXml - Footer XML content
+   * @param type - Footer type (default, first, even)
+   * @param zipHandler - ZIP handler for accessing resources
+   * @param relationshipManager - Relationship manager for resolving links
+   * @param imageManager - Image manager for registering images
+   * @returns Parsed Footer object or null
+   */
+  private async parseFooter(
+    footerXml: string,
+    type: 'default' | 'first' | 'even',
+    zipHandler: ZipHandler,
+    relationshipManager: RelationshipManager,
+    imageManager: ImageManager
+  ): Promise<import('../elements/Footer').Footer | null> {
+    try {
+      const { Footer } = require('../elements/Footer');
+      const footer = new Footer({ type });
+
+      // Extract w:ftr content
+      const ftrContent = XMLParser.extractBetweenTags(footerXml, '<w:ftr', '</w:ftr>');
+      if (!ftrContent) {
+        return footer; // Empty footer
+      }
+
+      // Parse paragraphs and tables within footer
+      const elements = await this.parseBodyElements(`<w:body>${ftrContent}</w:body>`, relationshipManager, zipHandler, imageManager);
+
+      for (const element of elements) {
+        if (element instanceof Paragraph) {
+          footer.addParagraph(element);
+        } else if (element instanceof Table) {
+          footer.addTable(element);
+        }
+      }
+
+      return footer;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.parseErrors.push({ element: 'footer', error: err });
+
+      if (this.strictParsing) {
+        throw new Error(`Failed to parse footer: ${err.message}`);
+      }
+
+      return null;
+    }
+  }
 }

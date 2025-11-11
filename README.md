@@ -9,24 +9,35 @@ A comprehensive, production-ready TypeScript/JavaScript library for creating, re
 
 Built for professional documentation work, docXMLater provides a complete solution for programmatic DOCX manipulation with an intuitive API and helper functions for all aspects of document creation and modification.
 
-## Latest Updates - v1.3.0
+## Latest Updates - v1.4.3
 
-**Enhanced Parsing & Helper Functions:**
+**Critical Fix: Header/Footer Parsing & Enhanced Management:**
 
-### What's New in v1.3.0
+### What's New in v1.4.3
+
+- **Header/Footer Parsing Fix:** Documents with headers/footers now load and save correctly
+  - Fixed [Content_Types].xml corruption when loading documents with headers/footers
+  - Headers and footers are now properly parsed when loading existing documents
+  - All header/footer XML files are correctly declared in [Content_Types].xml
+- **New Header/Footer Management Methods:**
+  - `removeHeader(type)` - Remove specific header (default/first/even)
+  - `removeFooter(type)` - Remove specific footer (default/first/even)
+  - `clearHeaders()` - Remove all headers while preserving footers
+  - `clearFooters()` - Remove all footers while preserving headers
+- **Round-Trip Support:** Full load-modify-save cycle for documents with headers/footers
+- **MS Word Compliance:** Follows ECMA-376 specifications for header/footer handling
+
+### Previous Updates - v1.3.0
 
 - **TOC Parsing:** Parse Table of Contents from existing documents with full SDT support
-- **TOC Modification:** Modify TOC field instructions (add/remove switches: \h, \u, \z, \n, \o, \t)
-- **Header/Footer Removal:** New `removeAllHeadersFooters()` helper function
+- **TOC Modification:** Modify TOC field instructions (add/remove switches)
 - **Complete Feature Set:** All 102 major features implemented
 - **Table Styles:** Full support with 12 conditional formatting types
-- **Content Controls:** 9 control types (rich text, plain text, combo box, dropdown, date picker, checkbox, picture, building block, group)
+- **Content Controls:** 9 control types supported
 - **Field Types:** 11 field types (PAGE, NUMPAGES, DATE, TIME, FILENAME, AUTHOR, TITLE, REF, HYPERLINK, SEQ, TC/XE)
-- **Drawing Elements:** Shapes and textboxes with full positioning
-- **Document Properties:** Core, extended, and custom properties
 - **Production Ready:** Full ECMA-376 compliance
 
-**Test Results:** 1,119/1,150 tests passing (97.3% pass rate - 1,119 core features validated)
+**Test Results:** 1,122/1,150 tests passing (97.6% pass rate - 1,122 core features validated)
 
 ## Quick Start
 
@@ -564,14 +575,18 @@ doc.insertTocAt(0, toc);
 
 ### Headers & Footers
 
-| Method                       | Description        | Example                          |
-| ---------------------------- | ------------------ | -------------------------------- |
-| `setHeader(header)`          | Set default header | `doc.setHeader(myHeader)`        |
-| `setFooter(footer)`          | Set default footer | `doc.setFooter(myFooter)`        |
-| `setFirstPageHeader(header)` | First page header  | `doc.setFirstPageHeader(header)` |
-| `setFirstPageFooter(footer)` | First page footer  | `doc.setFirstPageFooter(footer)` |
-| `setEvenPageHeader(header)`  | Even page header   | `doc.setEvenPageHeader(header)`  |
-| `setEvenPageFooter(footer)`  | Even page footer   | `doc.setEvenPageFooter(footer)`  |
+| Method                       | Description              | Example                          |
+| ---------------------------- | ------------------------ | -------------------------------- |
+| `setHeader(header)`          | Set default header       | `doc.setHeader(myHeader)`        |
+| `setFooter(footer)`          | Set default footer       | `doc.setFooter(myFooter)`        |
+| `setFirstPageHeader(header)` | First page header        | `doc.setFirstPageHeader(header)` |
+| `setFirstPageFooter(footer)` | First page footer        | `doc.setFirstPageFooter(footer)` |
+| `setEvenPageHeader(header)`  | Even page header         | `doc.setEvenPageHeader(header)`  |
+| `setEvenPageFooter(footer)`  | Even page footer         | `doc.setEvenPageFooter(footer)`  |
+| `removeHeader(type)`         | Remove specific header   | `doc.removeHeader('default')`    |
+| `removeFooter(type)`         | Remove specific footer   | `doc.removeFooter('first')`      |
+| `clearHeaders()`             | Remove all headers       | `doc.clearHeaders()`             |
+| `clearFooters()`             | Remove all footers       | `doc.clearFooters()`             |
 
 ### Page Setup
 
