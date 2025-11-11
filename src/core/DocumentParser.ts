@@ -4047,11 +4047,11 @@ export class DocumentParser {
         }
       }
 
-      // Extract default namespace (without prefix)
-      const defaultNsMatch = attributes.match(/xmlns="([^"]+)"/);
-      if (defaultNsMatch && defaultNsMatch[1]) {
-        namespaces["xmlns"] = defaultNsMatch[1];
-      }
+      // Note: We do NOT extract default namespace (xmlns="...") because:
+      // - Word documents should only use prefixed namespaces (xmlns:w, xmlns:r, etc.)
+      // - Default namespace on <w:document> causes document corruption
+      // - All Word XML elements use prefixes (w:p, w:r, w:t, etc.)
+      // - Including a default namespace causes Word/LibreOffice to reject the document
     }
 
     return namespaces;
