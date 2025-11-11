@@ -118,6 +118,16 @@ export { DocumentParser, ParseError } from './core/DocumentParser';
 export { DocumentGenerator } from './core/DocumentGenerator';
 export { DocumentValidator, SizeEstimate, MemoryOptions } from './core/DocumentValidator';
 
+// Style configuration types
+export {
+  StyleRunFormatting,
+  StyleParagraphFormatting,
+  Heading2TableOptions,
+  StyleConfig,
+  Heading2Config,
+  ApplyCustomFormattingOptions,
+} from './types/styleConfig';
+
 // Formatting classes
 export { Style, StyleType, StyleProperties } from './formatting/Style';
 export { StylesManager, ValidationResult } from './formatting/StylesManager';
