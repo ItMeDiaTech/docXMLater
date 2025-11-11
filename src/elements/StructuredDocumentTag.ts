@@ -352,6 +352,14 @@ export class StructuredDocumentTag {
   }
 
   /**
+   * Alias for getBuildingBlockProperties() for backward compatibility
+   * @returns Building block properties or undefined
+   */
+  getBuildingBlock(): BuildingBlockProperties | undefined {
+    return this.getBuildingBlockProperties();
+  }
+
+  /**
    * Set building block properties
    * @param properties - Building block properties
    */
@@ -359,6 +367,47 @@ export class StructuredDocumentTag {
     this.properties.controlType = 'buildingBlock';
     this.properties.buildingBlock = properties;
     return this;
+  }
+
+  /**
+   * Get list items from combo box or dropdown list
+   * @returns List items or undefined if not a list control
+   */
+  getListItems(): ListItem[] | undefined {
+    if (this.properties.comboBox) {
+      return this.properties.comboBox.items;
+    }
+    if (this.properties.dropDownList) {
+      return this.properties.dropDownList.items;
+    }
+    return undefined;
+  }
+
+  /**
+   * Get date format from date picker
+   * @returns Date format string or undefined
+   */
+  getDateFormat(): string | undefined {
+    return this.properties.datePicker?.dateFormat;
+  }
+
+  /**
+   * Get checked state from checkbox
+   * @returns True if checkbox is checked, false otherwise
+   */
+  isChecked(): boolean {
+    return this.properties.checkbox?.checked ?? false;
+  }
+
+  /**
+   * Get temporary state
+   * Note: The 'temporary' property is not yet implemented in SDTProperties
+   * This method returns false for now for forward compatibility
+   * @returns True if SDT is temporary (placeholder), false otherwise
+   */
+  isTemporary(): boolean {
+    // TODO: Add 'temporary' property to SDTProperties interface
+    return false;
   }
 
   /**
