@@ -37,6 +37,12 @@ import { DocumentParser } from "./DocumentParser";
 import { DocumentGenerator } from "./DocumentGenerator";
 import { DocumentValidator } from "./DocumentValidator";
 import { ILogger, defaultLogger } from "../utils/logger";
+import {
+  ApplyCustomFormattingOptions,
+  StyleConfig,
+  Heading2Config,
+  Heading2TableOptions,
+} from "../types/styleConfig";
 
 /**
  * Document properties (core and extended)
@@ -2358,34 +2364,135 @@ export class Document {
     return counts;
   }
 
+  // Default style configurations for applyCustomFormattingToExistingStyles()
+  private static readonly DEFAULT_HEADING1_CONFIG: StyleConfig = {
+    run: {
+      font: 'Verdana',
+      size: 18,
+      bold: true,
+      color: '000000',
+    },
+    paragraph: {
+      alignment: 'left',
+      spacing: { before: 0, after: 240, line: 240, lineRule: 'auto' },
+    },
+  };
+
+  private static readonly DEFAULT_HEADING2_CONFIG: Heading2Config = {
+    run: {
+      font: 'Verdana',
+      size: 14,
+      bold: true,
+      color: '000000',
+    },
+    paragraph: {
+      alignment: 'left',
+      spacing: { before: 120, after: 120, line: 240, lineRule: 'auto' },
+    },
+    tableOptions: {
+      shading: 'BFBFBF',
+      marginTop: 0,
+      marginBottom: 0,
+      marginLeft: 115,
+      marginRight: 115,
+      tableWidthPercent: 5000,
+    },
+  };
+
+  private static readonly DEFAULT_HEADING3_CONFIG: StyleConfig = {
+    run: {
+      font: 'Verdana',
+      size: 12,
+      bold: true,
+      color: '000000',
+    },
+    paragraph: {
+      alignment: 'left',
+      spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' },
+    },
+  };
+
+  private static readonly DEFAULT_NORMAL_CONFIG: StyleConfig = {
+    run: {
+      font: 'Verdana',
+      size: 12,
+      color: '000000',
+    },
+    paragraph: {
+      alignment: 'left',
+      spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' },
+    },
+  };
+
+  private static readonly DEFAULT_LIST_PARAGRAPH_CONFIG: StyleConfig = {
+    run: {
+      font: 'Verdana',
+      size: 12,
+      color: '000000',
+    },
+    paragraph: {
+      alignment: 'left',
+      spacing: { before: 0, after: 60, line: 240, lineRule: 'auto' },
+      indentation: { left: 360, hanging: 360 },
+      contextualSpacing: true,
+    },
+  };
+
   /**
    * Modifies the existing Heading1, Heading2, Heading3, Normal, and List Paragraph style definitions
-   * instead of creating new custom styles. This approach preserves the original
-   * style names while updating their formatting.
+   * with custom formatting. This approach preserves the original style names while updating their formatting.
+   *
+   * **Key Feature**: Only properties explicitly provided in options will override current style values.
+   * The method reads the ACTUAL current values from the style objects, not hardcoded defaults.
+   * This allows you to change just one property (like font) while keeping all other existing values.
    *
    * Per ECMA-376 §17.7.2, direct formatting in document.xml ALWAYS overrides
    * style definitions in styles.xml. This method clears conflicting direct
    * formatting from paragraphs to allow style modifications to take effect.
    *
-   * Formatting applied:
+   * Fallback defaults (when no options provided OR style doesn't exist):
    * - Heading1: 18pt black bold Verdana, left aligned, 0pt before / 12pt after, single line spacing, no italic/underline
    * - Heading2: 14pt black bold Verdana, left aligned, 6pt before/after, single line spacing, wrapped in gray tables (0.08" margins), no italic/underline
    * - Heading3: 12pt black bold Verdana, left aligned, 3pt before/after, single line spacing, no table wrapping, no italic/underline
    * - Normal: 12pt Verdana, left aligned, 3pt before/after, single line spacing, no italic/underline
    * - List Paragraph: 12pt Verdana, left aligned, 0pt before / 3pt after, single line spacing, 0.25" bullet indent / 0.50" text indent, contextual spacing enabled, no italic/underline
    *
-   * Additional processing:
+   * Heading2 table wrapping behavior:
    * - Empty Heading2 paragraphs are skipped (not wrapped in tables)
-   * - Heading2 paragraphs already in tables have their cell shaded gray (BFBFBF) and margins updated (0 top/bottom, 0.08" left/right)
-   * - Heading2 paragraphs not in tables are wrapped in new 1x1 gray tables with same margins
-   * - Table width is set to 100% of page width (autofit)
-   * - Hyperlinks with "Top of the Document" or "Top of Document" text are right-aligned with 0pt spacing before/after
-   * - All hyperlinks are set to blue (#0000FF)
-   * - All TOC elements have page numbers hidden (showPageNumbers=false, hideInWebLayout=true)
+   * - Heading2 paragraphs already in tables have their cell formatted (shading, margins, width)
+   * - Heading2 paragraphs not in tables are wrapped in new 1x1 tables
+   * - Table appearance is configurable via options.heading2.tableOptions
    *
+   * @param options - Optional custom formatting configuration for each style. Properties merge with current values.
    * @returns Object indicating which styles were successfully modified
+   *
+   * @example
+   * // Use default formatting (applies Verdana defaults)
+   * doc.applyCustomFormattingToExistingStyles();
+   *
+   * @example
+   * // Just change font, keep all other existing style values
+   * doc.applyCustomFormattingToExistingStyles({
+   *   heading1: {
+   *     run: { font: 'Arial' } // Only overrides font, keeps existing size/bold/color/etc.
+   *   }
+   * });
+   *
+   * @example
+   * // Comprehensive custom formatting
+   * doc.applyCustomFormattingToExistingStyles({
+   *   heading1: {
+   *     run: { font: 'Arial', size: 16, bold: true, color: '000000' },
+   *     paragraph: { spacing: { before: 0, after: 200, line: 240, lineRule: 'auto' } }
+   *   },
+   *   heading2: {
+   *     run: { font: 'Arial', size: 14, bold: true },
+   *     paragraph: { spacing: { before: 100, after: 100 } },
+   *     tableOptions: { shading: '808080', marginLeft: 150, marginRight: 150 }
+   *   }
+   * });
    */
-  public applyCustomFormattingToExistingStyles(): {
+  public applyCustomFormattingToExistingStyles(options?: ApplyCustomFormattingOptions): {
     heading1: boolean;
     heading2: boolean;
     heading3: boolean;
@@ -2401,78 +2508,95 @@ export class Document {
     const normal = this.stylesManager.getStyle('Normal');
     const listParagraph = this.stylesManager.getStyle('ListParagraph');
 
+    // Merge provided options with ACTUAL current style values (not hardcoded defaults)
+    // This allows users to only specify properties they want to change
+    const h1Config = {
+      run: {
+        ...(heading1?.getRunFormatting() || Document.DEFAULT_HEADING1_CONFIG.run),
+        ...options?.heading1?.run
+      },
+      paragraph: {
+        ...(heading1?.getParagraphFormatting() || Document.DEFAULT_HEADING1_CONFIG.paragraph),
+        ...options?.heading1?.paragraph
+      },
+    };
+    const h2Config = {
+      run: {
+        ...(heading2?.getRunFormatting() || Document.DEFAULT_HEADING2_CONFIG.run),
+        ...options?.heading2?.run
+      },
+      paragraph: {
+        ...(heading2?.getParagraphFormatting() || Document.DEFAULT_HEADING2_CONFIG.paragraph),
+        ...options?.heading2?.paragraph
+      },
+      tableOptions: {
+        ...Document.DEFAULT_HEADING2_CONFIG.tableOptions,
+        ...options?.heading2?.tableOptions
+      },
+    };
+    const h3Config = {
+      run: {
+        ...(heading3?.getRunFormatting() || Document.DEFAULT_HEADING3_CONFIG.run),
+        ...options?.heading3?.run
+      },
+      paragraph: {
+        ...(heading3?.getParagraphFormatting() || Document.DEFAULT_HEADING3_CONFIG.paragraph),
+        ...options?.heading3?.paragraph
+      },
+    };
+    const normalConfig = {
+      run: {
+        ...(normal?.getRunFormatting() || Document.DEFAULT_NORMAL_CONFIG.run),
+        ...options?.normal?.run
+      },
+      paragraph: {
+        ...(normal?.getParagraphFormatting() || Document.DEFAULT_NORMAL_CONFIG.paragraph),
+        ...options?.normal?.paragraph
+      },
+    };
+    const listParaConfig = {
+      run: {
+        ...(listParagraph?.getRunFormatting() || Document.DEFAULT_LIST_PARAGRAPH_CONFIG.run),
+        ...options?.listParagraph?.run
+      },
+      paragraph: {
+        ...(listParagraph?.getParagraphFormatting() || Document.DEFAULT_LIST_PARAGRAPH_CONFIG.paragraph),
+        ...options?.listParagraph?.paragraph
+      },
+    };
+
     // Modify Heading1 definition
-    if (heading1) {
-      heading1.setRunFormatting({
-        font: 'Verdana',
-        size: 18,
-        bold: true,
-        color: '000000'
-      });
-      heading1.setParagraphFormatting({
-        alignment: 'left',
-        spacing: { before: 0, after: 240, line: 240, lineRule: 'auto' }  // 0pt before, 12pt after, single line spacing
-      });
+    if (heading1 && h1Config.run && h1Config.paragraph) {
+      if (h1Config.run) heading1.setRunFormatting(h1Config.run);
+      if (h1Config.paragraph) heading1.setParagraphFormatting(h1Config.paragraph);
       results.heading1 = true;
     }
 
     // Modify Heading2 definition
-    if (heading2) {
-      heading2.setRunFormatting({
-        font: 'Verdana',
-        size: 14,
-        bold: true,
-        color: '000000'
-      });
-      heading2.setParagraphFormatting({
-        alignment: 'left',
-        spacing: { before: 120, after: 120, line: 240, lineRule: 'auto' }  // 6pt before, 6pt after, single line spacing
-      });
+    if (heading2 && h2Config.run && h2Config.paragraph) {
+      if (h2Config.run) heading2.setRunFormatting(h2Config.run);
+      if (h2Config.paragraph) heading2.setParagraphFormatting(h2Config.paragraph);
       results.heading2 = true;
     }
 
     // Modify Heading3 definition
-    if (heading3) {
-      heading3.setRunFormatting({
-        font: 'Verdana',
-        size: 12,
-        bold: true,
-        color: '000000'
-      });
-      heading3.setParagraphFormatting({
-        alignment: 'left',
-        spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' }  // 3pt before, 3pt after, single line spacing
-      });
+    if (heading3 && h3Config.run && h3Config.paragraph) {
+      if (h3Config.run) heading3.setRunFormatting(h3Config.run);
+      if (h3Config.paragraph) heading3.setParagraphFormatting(h3Config.paragraph);
       results.heading3 = true;
     }
 
     // Modify Normal definition
-    if (normal) {
-      normal.setRunFormatting({
-        font: 'Verdana',
-        size: 12,
-        color: '000000'
-      });
-      normal.setParagraphFormatting({
-        alignment: 'left',
-        spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' }  // 3pt before, 3pt after, single line spacing
-      });
+    if (normal && normalConfig.run && normalConfig.paragraph) {
+      if (normalConfig.run) normal.setRunFormatting(normalConfig.run);
+      if (normalConfig.paragraph) normal.setParagraphFormatting(normalConfig.paragraph);
       results.normal = true;
     }
 
     // Modify List Paragraph definition
-    if (listParagraph) {
-      listParagraph.setRunFormatting({
-        font: 'Verdana',
-        size: 12,
-        color: '000000'
-      });
-      listParagraph.setParagraphFormatting({
-        alignment: 'left',
-        spacing: { before: 0, after: 60, line: 240, lineRule: 'auto' },  // 0pt before, 3pt after, single line spacing
-        indentation: { left: 360, hanging: 360 },  // 0.25" left indent, 0.25" hanging (bullet at 0, text at 0.50")
-        contextualSpacing: true  // Remove spacing between consecutive list items
-      });
+    if (listParagraph && listParaConfig.run && listParaConfig.paragraph) {
+      if (listParaConfig.run) listParagraph.setRunFormatting(listParaConfig.run);
+      if (listParaConfig.paragraph) listParagraph.setParagraphFormatting(listParaConfig.paragraph);
       results.listParagraph = true;
     }
 
@@ -2540,32 +2664,44 @@ export class Document {
         const { inTable, cell } = this.isParagraphInTable(para);
 
         if (inTable && cell) {
-          // Paragraph is already in a table - apply cell formatting
-          cell.setShading({ fill: 'BFBFBF' });
-          cell.setMargins({ top: 0, bottom: 0, left: 115, right: 115 });  // 0.08" = 115 twips
+          // Paragraph is already in a table - apply cell formatting using config
+          if (h2Config.tableOptions?.shading) {
+            cell.setShading({ fill: h2Config.tableOptions.shading });
+          }
+          if (h2Config.tableOptions?.marginTop !== undefined || h2Config.tableOptions?.marginBottom !== undefined ||
+              h2Config.tableOptions?.marginLeft !== undefined || h2Config.tableOptions?.marginRight !== undefined) {
+            cell.setMargins({
+              top: h2Config.tableOptions.marginTop ?? 0,
+              bottom: h2Config.tableOptions.marginBottom ?? 0,
+              left: h2Config.tableOptions.marginLeft ?? 115,
+              right: h2Config.tableOptions.marginRight ?? 115,
+            });
+          }
 
-          // Set table width to 100%
-          const table = this.getAllTables().find(t => {
-            for (const row of t.getRows()) {
-              for (const c of row.getCells()) {
-                if (c === cell) return true;
+          // Set table width using config
+          if (h2Config.tableOptions?.tableWidthPercent) {
+            const table = this.getAllTables().find(t => {
+              for (const row of t.getRows()) {
+                for (const c of row.getCells()) {
+                  if (c === cell) return true;
+                }
               }
+              return false;
+            });
+            if (table) {
+              table.setWidth(h2Config.tableOptions.tableWidthPercent);
+              table.setWidthType('pct');
             }
-            return false;
-          });
-          if (table) {
-            table.setWidth(5000);
-            table.setWidthType('pct');
           }
         } else {
-          // Paragraph is not in a table - wrap it
+          // Paragraph is not in a table - wrap it using config
           this.wrapParagraphInTable(para, {
-            shading: 'BFBFBF',
-            marginTop: 0,
-            marginBottom: 0,
-            marginLeft: 115,
-            marginRight: 115,  // 0.08" = 115 twips
-            tableWidthPercent: 5000
+            shading: h2Config.tableOptions?.shading ?? 'BFBFBF',
+            marginTop: h2Config.tableOptions?.marginTop ?? 0,
+            marginBottom: h2Config.tableOptions?.marginBottom ?? 0,
+            marginLeft: h2Config.tableOptions?.marginLeft ?? 115,
+            marginRight: h2Config.tableOptions?.marginRight ?? 115,
+            tableWidthPercent: h2Config.tableOptions?.tableWidthPercent ?? 5000,
           });
         }
 
@@ -2630,32 +2766,445 @@ export class Document {
       }
     }
 
-    // Handle hyperlinks: right-align "Top of Document" hyperlinks and set all to blue
-    const hyperlinks = this.getHyperlinks();
+    return results;
+  }
 
-    for (const { hyperlink, paragraph } of hyperlinks) {
-      const text = hyperlink.getText().trim();
+  /**
+   * Helper function to apply formatting from Style objects
+   *
+   * This is a convenience wrapper that accepts Style objects, extracts their properties,
+   * and converts them to configuration format before calling applyCustomFormattingToExistingStyles().
+   *
+   * Style objects are matched by their styleId property:
+   * - 'Heading1' → applies to Heading1 style
+   * - 'Heading2' → applies to Heading2 style (with optional table options)
+   * - 'Heading3' → applies to Heading3 style
+   * - 'Normal' → applies to Normal style
+   * - 'ListParagraph' → applies to List Paragraph style
+   *
+   * Other styleIds are ignored.
+   *
+   * @param styles - Variable number of Style objects to apply
+   * @returns Object indicating which styles were successfully modified
+   *
+   * @example
+   * // Create Style objects with your desired formatting
+   * const h1 = new Style({
+   *   styleId: 'Heading1',
+   *   name: 'Heading 1',
+   *   type: 'paragraph',
+   *   runFormatting: { font: 'Arial', size: 16, bold: true },
+   *   paragraphFormatting: { spacing: { before: 0, after: 200 } }
+   * });
+   *
+   * const h2 = Style.createHeadingStyle(2);
+   * h2.setRunFormatting({ font: 'Arial', size: 14, bold: true });
+   * h2.setHeading2TableOptions({ shading: '808080', marginLeft: 150, marginRight: 150 });
+   *
+   * // Apply to document
+   * doc.applyStylesFromObjects(h1, h2);
+   *
+   * @example
+   * // Just modify one style
+   * const myNormal = new Style({
+   *   styleId: 'Normal',
+   *   name: 'Normal',
+   *   type: 'paragraph',
+   *   runFormatting: { font: 'Times New Roman', size: 12 }
+   * });
+   * doc.applyStylesFromObjects(myNormal);
+   */
+  public applyStylesFromObjects(...styles: Style[]): {
+    heading1: boolean;
+    heading2: boolean;
+    heading3: boolean;
+    normal: boolean;
+    listParagraph: boolean;
+  } {
+    // Convert Style objects to ApplyCustomFormattingOptions
+    const options: ApplyCustomFormattingOptions = {};
 
-      // Right-align hyperlinks with specific text and set spacing to 0pt
-      if (text === 'Top of the Document' || text === 'Top of Document') {
-        paragraph.setAlignment('right');
-        paragraph.setSpaceBefore(0);
-        paragraph.setSpaceAfter(0);
+    for (const style of styles) {
+      const styleId = style.getStyleId();
+
+      switch (styleId) {
+        case 'Heading1':
+          options.heading1 = {
+            run: style.getRunFormatting() as any,
+            paragraph: style.getParagraphFormatting() as any,
+          };
+          break;
+
+        case 'Heading2':
+          options.heading2 = {
+            run: style.getRunFormatting() as any,
+            paragraph: style.getParagraphFormatting() as any,
+            tableOptions: style.getHeading2TableOptions(),
+          };
+          break;
+
+        case 'Heading3':
+          options.heading3 = {
+            run: style.getRunFormatting() as any,
+            paragraph: style.getParagraphFormatting() as any,
+          };
+          break;
+
+        case 'Normal':
+          options.normal = {
+            run: style.getRunFormatting() as any,
+            paragraph: style.getParagraphFormatting() as any,
+          };
+          break;
+
+        case 'ListParagraph':
+          options.listParagraph = {
+            run: style.getRunFormatting() as any,
+            paragraph: style.getParagraphFormatting() as any,
+          };
+          break;
+
+        default:
+          // Ignore styles with other styleIds
+          break;
       }
     }
 
-    // Set all hyperlinks to blue (#0000FF)
-    this.updateAllHyperlinkColors('0000FF');
+    // Call existing method with converted options
+    return this.applyCustomFormattingToExistingStyles(options);
+  }
 
-    // Hide page numbers in all TOC elements
-    const tocElements = this.getTableOfContentsElements();
-    for (const tocElement of tocElements) {
-      const toc = tocElement.getTableOfContents();
-      toc.setShowPageNumbers(false);
-      toc.setHideInWebLayout(true);
+  /**
+   * Parses a TOC field instruction to extract which heading levels to include
+   *
+   * Handles field codes like:
+   * - "TOC \o "1-3"" → [1, 2, 3]
+   * - "TOC \t "Heading 2,2,"" → [2]
+   * - "TOC \o "1-2" \t "Heading 3,3,"" → [1, 2, 3]
+   *
+   * @param instrText The TOC field instruction text
+   * @returns Array of heading levels (1-9) to include
+   */
+  private parseTOCFieldInstruction(instrText: string): number[] {
+    const levels = new Set<number>();
+
+    // Parse \o "X-Y" switch (outline levels)
+    const outlineMatch = instrText.match(/\\o\s+"(\d+)-(\d+)"/);
+    if (outlineMatch && outlineMatch[1] && outlineMatch[2]) {
+      const start = parseInt(outlineMatch[1], 10);
+      const end = parseInt(outlineMatch[2], 10);
+      for (let i = start; i <= end; i++) {
+        if (i >= 1 && i <= 9) {
+          levels.add(i);
+        }
+      }
     }
 
-    return results;
+    // Parse \t "StyleName,Level," switches (custom styles)
+    const styleMatches = instrText.matchAll(/\\t\s+"([^"]+)",(\d+),"/g);
+    for (const match of styleMatches) {
+      const styleName = match[1];
+      const levelStr = match[2];
+
+      if (!styleName || !levelStr) continue;
+
+      const level = parseInt(levelStr, 10);
+
+      // Extract level from Heading style names (e.g., "Heading 2" → 2)
+      const headingMatch = styleName.match(/Heading\s*(\d+)/i);
+      if (headingMatch && headingMatch[1]) {
+        const headingLevel = parseInt(headingMatch[1], 10);
+        if (headingLevel >= 1 && headingLevel <= 9) {
+          levels.add(headingLevel);
+        }
+      } else if (level >= 1 && level <= 9) {
+        // Use the level number from the \t switch
+        levels.add(level);
+      }
+    }
+
+    // If no levels found, default to 1-3
+    if (levels.size === 0) {
+      return [1, 2, 3];
+    }
+
+    return Array.from(levels).sort((a, b) => a - b);
+  }
+
+  /**
+   * Finds all headings in the document that match the specified levels
+   *
+   * @param levels Array of heading levels to include (e.g., [1, 2, 3])
+   * @returns Array of heading information objects
+   */
+  private findHeadingsForTOC(levels: number[]): Array<{ level: number; text: string; bookmark: string }> {
+    const headings: Array<{ level: number; text: string; bookmark: string }> = [];
+    const levelSet = new Set(levels);
+
+    // Iterate through body elements
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        const para = element;
+        const formatting = para.getFormatting();
+
+        // Check if paragraph has a heading style
+        if (formatting.style) {
+          const styleMatch = formatting.style.match(/Heading(\d+)/i);
+          if (styleMatch && styleMatch[1]) {
+            const headingLevel = parseInt(styleMatch[1], 10);
+
+            // Check if this level should be included in TOC
+            if (levelSet.has(headingLevel)) {
+              const text = para.getText().trim();
+
+              if (text) {
+                // Create or get bookmark for this heading
+                const bookmark = this.bookmarkManager.createHeadingBookmark(text);
+
+                headings.push({
+                  level: headingLevel,
+                  text: text,
+                  bookmark: bookmark.getName()
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return headings;
+  }
+
+  /**
+   * Generates TOC XML structure with populated entries
+   *
+   * Creates a complete SDT-wrapped TOC with:
+   * - Complex field structure (begin/instruction/separate/entries/end)
+   * - Pre-populated hyperlink entries for each heading
+   * - Proper formatting (Verdana, blue, underlined)
+   *
+   * @param headings Array of heading information
+   * @param originalInstrText Original TOC field instruction to preserve switches
+   * @returns Complete TOC XML string
+   */
+  private generateTOCXML(
+    headings: Array<{ level: number; text: string; bookmark: string }>,
+    originalInstrText: string
+  ): string {
+    const sdtId = Math.floor(Math.random() * 2000000000) - 1000000000;
+
+    let tocXml = '<w:sdt>';
+
+    // SDT properties
+    tocXml += '<w:sdtPr>';
+    tocXml += `<w:id w:val="${sdtId}"/>`;
+    tocXml += '<w:docPartObj>';
+    tocXml += '<w:docPartGallery w:val="Table of Contents"/>';
+    tocXml += '<w:docPartUnique w:val="1"/>';
+    tocXml += '</w:docPartObj>';
+    tocXml += '</w:sdtPr>';
+
+    // SDT content
+    tocXml += '<w:sdtContent>';
+
+    // First paragraph: field begin + instruction + separator + first entry (if any)
+    tocXml += '<w:p>';
+    tocXml += '<w:pPr>';
+    tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+    tocXml += '</w:pPr>';
+
+    // Field begin
+    tocXml += '<w:r><w:fldChar w:fldCharType="begin"/></w:r>';
+
+    // Field instruction (preserve original switches)
+    tocXml += '<w:r>';
+    tocXml += `<w:instrText xml:space="preserve">${this.escapeXml(originalInstrText)}</w:instrText>`;
+    tocXml += '</w:r>';
+
+    // Field separator
+    tocXml += '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+
+    // First entry (if any)
+    if (headings.length > 0 && headings[0]) {
+      tocXml += this.buildTOCEntryXML(headings[0]);
+    }
+
+    tocXml += '</w:p>';
+
+    // Remaining entries (each in its own paragraph)
+    for (let i = 1; i < headings.length; i++) {
+      const heading = headings[i];
+      if (!heading) continue;
+
+      tocXml += '<w:p>';
+      tocXml += '<w:pPr>';
+      tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+
+      // Add indentation based on heading level (level 2 = 720 twips, level 3 = 1440, etc.)
+      const indent = (heading.level - 1) * 720;
+      if (indent > 0) {
+        tocXml += `<w:ind w:left="${indent}"/>`;
+      }
+
+      tocXml += '</w:pPr>';
+      tocXml += this.buildTOCEntryXML(heading);
+      tocXml += '</w:p>';
+    }
+
+    // Final paragraph with field end
+    tocXml += '<w:p>';
+    tocXml += '<w:pPr>';
+    tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+    tocXml += '</w:pPr>';
+    tocXml += '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    tocXml += '</w:p>';
+
+    tocXml += '</w:sdtContent>';
+    tocXml += '</w:sdt>';
+
+    return tocXml;
+  }
+
+  /**
+   * Builds XML for a single TOC entry with hyperlink
+   *
+   * @param heading Heading information
+   * @returns XML string for the TOC entry
+   */
+  private buildTOCEntryXML(heading: { level: number; text: string; bookmark: string }): string {
+    const escapedText = this.escapeXml(heading.text);
+
+    let xml = '';
+    xml += `<w:hyperlink w:anchor="${this.escapeXml(heading.bookmark)}">`;
+    xml += '<w:r>';
+    xml += '<w:rPr>';
+    xml += '<w:rFonts w:ascii="Verdana" w:hAnsi="Verdana" w:cs="Verdana" w:eastAsia="Verdana"/>';
+    xml += '<w:color w:val="0000FF"/>';
+    xml += '<w:sz w:val="24"/>';
+    xml += '<w:szCs w:val="24"/>';
+    xml += '<w:u w:val="single"/>';
+    xml += '</w:rPr>';
+    xml += `<w:t xml:space="preserve">${escapedText}</w:t>`;
+    xml += '</w:r>';
+    xml += '</w:hyperlink>';
+
+    return xml;
+  }
+
+  /**
+   * Escapes XML special characters
+   *
+   * @param text Text to escape
+   * @returns Escaped text
+   */
+  private escapeXml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  /**
+   * Replaces all Table of Contents in a saved document file with pre-populated entries
+   *
+   * This helper function works with saved DOCX files:
+   * 1. Loads the document file
+   * 2. Finds all TOC elements in document.xml
+   * 3. For each TOC, parses its field instruction to determine which heading levels to include
+   * 4. Scans the document for all headings matching those levels
+   * 5. Generates pre-populated TOC entries with working hyperlinks
+   * 6. Replaces the TOC in the XML and saves the file
+   *
+   * The generated TOC maintains the complex field structure, so users can still
+   * right-click "Update Field" in Word to refresh it.
+   *
+   * @param filePath Path to the DOCX file to process
+   * @returns Promise resolving to the number of TOC elements that were replaced
+   *
+   * @example
+   * // Save document first
+   * await doc.save('output.docx');
+   *
+   * // Then replace TOCs with populated entries
+   * const count = await doc.replaceTableOfContents('output.docx');
+   * console.log(`Replaced ${count} TOC element(s) with populated entries`);
+   */
+  public async replaceTableOfContents(filePath: string): Promise<number> {
+    // Load the saved document
+    const handler = new ZipHandler();
+    await handler.load(filePath);
+
+    // Get document.xml
+    const docXml = handler.getFileAsString('word/document.xml');
+    if (!docXml) {
+      throw new Error('word/document.xml not found in document');
+    }
+
+    // Find all TOC SDTs in the XML
+    const tocRegex = /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
+    const tocMatches = Array.from(docXml.matchAll(tocRegex));
+
+    if (tocMatches.length === 0) {
+      return 0; // No TOCs found
+    }
+
+    let replacedCount = 0;
+    let modifiedXml = docXml;
+
+    // Process each TOC
+    for (const match of tocMatches) {
+      try {
+        const tocXml = match[0];
+
+        // Extract field instruction from TOC XML
+        const instrMatch = tocXml.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
+        if (!instrMatch || !instrMatch[1]) {
+          continue; // No instruction found, skip
+        }
+
+        let fieldInstruction = instrMatch[1];
+        // Decode XML entities
+        fieldInstruction = fieldInstruction
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'")
+          .replace(/&amp;/g, '&');
+
+        // Parse the field instruction to determine levels
+        const levels = this.parseTOCFieldInstruction(fieldInstruction);
+
+        // Find all headings in the document matching these levels
+        const headings = this.findHeadingsForTOC(levels);
+
+        if (headings.length === 0) {
+          continue; // No headings found, skip this TOC
+        }
+
+        // Generate new TOC XML with populated entries
+        const newTocXml = this.generateTOCXML(headings, fieldInstruction);
+
+        // Replace this TOC in the document XML
+        modifiedXml = modifiedXml.replace(tocXml, newTocXml);
+
+        replacedCount++;
+      } catch (error) {
+        // Skip this TOC if there's an error
+        console.error(`Error replacing TOC: ${error}`);
+        continue;
+      }
+    }
+
+    // Update document.xml in the archive
+    if (replacedCount > 0) {
+      handler.updateFile('word/document.xml', modifiedXml);
+      await handler.save(filePath);
+    }
+
+    return replacedCount;
   }
 
   /**

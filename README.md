@@ -648,7 +648,9 @@ High-level helper methods for common document formatting tasks:
 
 | Method                                   | Description                                                                                 |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `applyCustomFormattingToExistingStyles()`| Modify Heading1, Heading2, Heading3, Normal, and List Paragraph styles with Verdana font, specific spacing, single line spacing, wrap Heading2 in tables, right-align "Top of Document" hyperlinks, set all hyperlinks to blue, and hide TOC page numbers |
+| `applyCustomFormattingToExistingStyles(options?)`| Modify Heading1, Heading2, Heading3, Normal, and List Paragraph styles with custom or default formatting (Verdana font, specific spacing, single line spacing). Heading2 paragraphs are wrapped in tables. Accepts optional configuration for full customization. |
+| `applyStylesFromObjects(...styles)`      | Helper function that accepts Style objects and applies their formatting. Converts Style objects to configuration format and calls applyCustomFormattingToExistingStyles(). |
+| `hideTableOfContentsPageNumbers()`       | Hide page numbers in all TOC elements in the document; returns count of TOCs modified      |
 | `wrapParagraphInTable(para, options?)`   | Wrap a paragraph in a 1x1 table with optional shading, margins, and width settings         |
 | `isParagraphInTable(para)`               | Check if a paragraph is inside a table; returns `{inTable: boolean, cell?: TableCell}`      |
 | `updateAllHyperlinkColors(color)`        | Set all hyperlinks in the document to a specific color (e.g., '0000FF' for blue)           |
@@ -661,10 +663,47 @@ import { Document } from 'docxmlater';
 
 const doc = await Document.load('document.docx');
 
-// Apply comprehensive formatting to standard styles
+// Apply default formatting to standard styles (Verdana, current spacing)
 const results = doc.applyCustomFormattingToExistingStyles();
 console.log(`Modified styles:`, results);
 // Output: { heading1: true, heading2: true, heading3: true, normal: true, listParagraph: true }
+
+// Or apply custom formatting with config objects
+doc.applyCustomFormattingToExistingStyles({
+  heading1: {
+    run: { font: 'Arial', size: 16, bold: true, color: '000000' },
+    paragraph: { spacing: { before: 0, after: 200, line: 240, lineRule: 'auto' } }
+  },
+  heading2: {
+    run: { font: 'Arial', size: 14, bold: true },
+    paragraph: { spacing: { before: 100, after: 100 } },
+    tableOptions: { shading: '808080', marginLeft: 150, marginRight: 150 }
+  }
+});
+
+// Alternative: Use Style objects instead of config
+import { Style } from 'docxmlater';
+
+const h1 = new Style({
+  styleId: 'Heading1',
+  name: 'Heading 1',
+  type: 'paragraph',
+  runFormatting: { font: 'Arial', size: 16, bold: true },
+  paragraphFormatting: { spacing: { before: 0, after: 200 } }
+});
+
+const h2 = Style.createHeadingStyle(2);
+h2.setRunFormatting({ font: 'Arial', size: 14, bold: true });
+h2.setHeading2TableOptions({ shading: '808080', marginLeft: 150, marginRight: 150 });
+
+doc.applyStylesFromObjects(h1, h2);
+
+// Hide page numbers in all TOC elements
+const tocCount = doc.hideTableOfContentsPageNumbers();
+console.log(`Hid page numbers in ${tocCount} TOCs`);
+
+// Set all hyperlinks to blue
+doc.updateAllHyperlinkColors('0000FF');
 
 // Wrap a specific paragraph in a table
 const para = doc.getParagraphs()[0];
@@ -682,9 +721,6 @@ if (inTable && cell) {
   cell.setShading({ fill: 'FFFF00' }); // Change to yellow
 }
 
-// Set all hyperlinks to blue
-doc.updateAllHyperlinkColors('0000FF');
-
 // Remove all headers and footers
 const removedCount = doc.removeAllHeadersFooters();
 console.log(`Removed ${removedCount} headers and footers`);
@@ -692,21 +728,33 @@ console.log(`Removed ${removedCount} headers and footers`);
 await doc.save('formatted.docx');
 ```
 
-**Note on `applyCustomFormattingToExistingStyles()`:**
+**Note on `applyCustomFormattingToExistingStyles(options?)`:**
 
-This helper function applies a comprehensive set of formatting rules:
+This helper function modifies existing style definitions with custom or default formatting. All parameters are optional.
+
+**Default formatting (when no options provided):**
 - **Heading1**: 18pt black bold Verdana, left aligned, 0pt before/12pt after, single line spacing
 - **Heading2**: 14pt black bold Verdana, left aligned, 6pt before/after, single line spacing, wrapped in gray tables (100% width, 0.08" margins)
 - **Heading3**: 12pt black bold Verdana, left aligned, 3pt before/after, single line spacing (no table wrapping)
 - **Normal**: 12pt Verdana, left aligned, 3pt before/after, single line spacing
 - **List Paragraph**: 12pt Verdana, left aligned, 0pt before/3pt after, single line spacing, 0.25" bullet indent/0.50" text indent, contextual spacing enabled
-- **All Styles**: Removes italic and underline formatting
-- **Heading2 Tables**: Existing tables are updated (cell shaded gray, margins set to 0.08" left/right); new tables created for paragraphs not in tables
-- **Hyperlinks**: "Top of the Document" links are right-aligned with 0pt spacing; all hyperlinks set to blue (#0000FF)
-- **Empty Paragraphs**: Empty Heading2 paragraphs are skipped (not wrapped in tables)
-- **TOC Elements**: All Table of Contents have page numbers hidden (showPageNumbers=false, hideInWebLayout=true with \n and \z switches)
 
-Per ECMA-376 §17.7.2, direct formatting in document.xml overrides style definitions. This method automatically clears conflicting direct formatting to ensure style changes take effect.
+**Customization:**
+- Pass custom `ApplyCustomFormattingOptions` to override any style's run formatting (font, size, bold, italic, underline, color) or paragraph formatting (alignment, spacing, indentation, contextual spacing)
+- Heading2 table options are configurable: shading, margins, and table width
+- All styles have italic and underline formatting cleared to ensure style consistency
+
+**Heading2 table wrapping behavior:**
+- Empty Heading2 paragraphs are skipped (not wrapped in tables)
+- Heading2 paragraphs already in tables have their cell formatted with provided or default options
+- Heading2 paragraphs not in tables are wrapped in new 1x1 tables
+- Table appearance is fully customizable via `options.heading2.tableOptions`
+
+**Note:** Per ECMA-376 §17.7.2, direct formatting in document.xml overrides style definitions. This method automatically clears conflicting direct formatting to ensure style changes take effect.
+
+**Related helpers:**
+- Use `hideTableOfContentsPageNumbers()` to hide page numbers in TOCs
+- Use `updateAllHyperlinkColors(color)` to change hyperlink colors
 
 ### Low-Level Document Parts
 

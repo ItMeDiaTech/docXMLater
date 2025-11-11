@@ -6,6 +6,7 @@
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { ParagraphFormatting } from '../elements/Paragraph';
 import { RunFormatting } from '../elements/Run';
+import { Heading2TableOptions } from '../types/styleConfig';
 
 /**
  * Style type
@@ -228,6 +229,14 @@ export interface StyleProperties {
   autoRedefine?: boolean;
   /** Aliases - alternative names (comma-separated) */
   aliases?: string;
+
+  // Document Helper Metadata
+  /**
+   * Table options for Heading2 wrapping
+   * Used by Document.applyCustomFormattingToExistingStyles() to configure
+   * how Heading2 paragraphs are wrapped in tables
+   */
+  heading2TableOptions?: Heading2TableOptions;
 }
 
 /**
@@ -314,6 +323,41 @@ export class Style {
   setRunFormatting(formatting: RunFormatting): this {
     this.properties.runFormatting = { ...formatting };
     return this;
+  }
+
+  /**
+   * Gets the current run formatting
+   * @returns Run formatting or undefined if not set
+   */
+  getRunFormatting(): RunFormatting | undefined {
+    return this.properties.runFormatting;
+  }
+
+  /**
+   * Gets the current paragraph formatting
+   * @returns Paragraph formatting or undefined if not set
+   */
+  getParagraphFormatting(): ParagraphFormatting | undefined {
+    return this.properties.paragraphFormatting;
+  }
+
+  /**
+   * Sets Heading2 table wrapping options
+   * Used by Document.applyCustomFormattingToExistingStyles() when styleId is 'Heading2'
+   * @param options - Table options for wrapping Heading2 paragraphs
+   * @returns This style for chaining
+   */
+  setHeading2TableOptions(options: Heading2TableOptions): this {
+    this.properties.heading2TableOptions = options;
+    return this;
+  }
+
+  /**
+   * Gets the current Heading2 table options
+   * @returns Heading2 table options or undefined if not set
+   */
+  getHeading2TableOptions(): Heading2TableOptions | undefined {
+    return this.properties.heading2TableOptions;
   }
 
   /**

@@ -269,6 +269,16 @@ export class TableOfContents {
   }
 
   /**
+   * Gets the TOC field instruction string
+   * Public accessor for the field instruction
+   *
+   * @returns The complete TOC field instruction (e.g., "TOC \o "1-3" \h \z")
+   */
+  public getFieldInstruction(): string {
+    return this.buildFieldInstruction();
+  }
+
+  /**
    * Generates XML for the TOC field wrapped in an SDT (Structured Document Tag)
    *
    * A TOC in Word is represented as:
