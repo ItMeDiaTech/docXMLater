@@ -193,6 +193,15 @@ export class Run {
    * @param formatting - Formatting options
    */
   constructor(text: string, formatting: RunFormatting = {}) {
+    // Warn about undefined/null text to help catch data quality issues
+    if (text === undefined || text === null) {
+      console.warn(
+        `DocXML Text Validation Warning [Run constructor]:\n` +
+        `  - Received ${text === undefined ? 'undefined' : 'null'} text value\n` +
+        `  - Converting to empty string for Word compatibility`
+      );
+    }
+
     // Default to auto-cleaning XML patterns unless explicitly disabled
     const shouldClean = formatting.cleanXmlFromText !== false;
 
@@ -200,14 +209,18 @@ export class Run {
     const validation = validateRunText(text, {
       context: 'Run constructor',
       autoClean: shouldClean,
-      warnToConsole: false,  // Silent by default - team expects dirty data
+      warnToConsole: true,  // Enable warnings to help catch data quality issues
     });
 
     // Use cleaned text if available and cleaning was requested
     const cleanedText = validation.cleanedText || text;
 
-    // Initialize content as array with single text element
-    this.content = cleanedText ? [{ type: 'text', value: cleanedText }] : [];
+    // Convert undefined/null to empty string for consistent XML generation
+    const normalizedText = cleanedText ?? '';
+
+    // Initialize content as array with single text element (even if empty)
+    // This ensures we always generate <w:t> element for Word compatibility
+    this.content = [{ type: 'text', value: normalizedText }];
 
     // Remove cleanXmlFromText from formatting as it's not a display property
     const { cleanXmlFromText, ...displayFormatting } = formatting;
@@ -231,6 +244,15 @@ export class Run {
    * @param text - New text content
    */
   setText(text: string): void {
+    // Warn about undefined/null text to help catch data quality issues
+    if (text === undefined || text === null) {
+      console.warn(
+        `DocXML Text Validation Warning [Run.setText]:\n` +
+        `  - Received ${text === undefined ? 'undefined' : 'null'} text value\n` +
+        `  - Converting to empty string for Word compatibility`
+      );
+    }
+
     // Respect original cleanXmlFromText setting (Issue #9 fix)
     // This ensures consistent behavior with constructor
     const shouldClean = this.formatting.cleanXmlFromText !== false;
@@ -239,14 +261,18 @@ export class Run {
     const validation = validateRunText(text, {
       context: 'Run.setText',
       autoClean: shouldClean,
-      warnToConsole: false,  // Silent by default
+      warnToConsole: true,  // Enable warnings to help catch data quality issues
     });
 
     // Use cleaned text if available and cleaning was requested
     const cleanedText = validation.cleanedText || text;
 
-    // Replace all content with single text element
-    this.content = cleanedText ? [{ type: 'text', value: cleanedText }] : [];
+    // Convert undefined/null to empty string for consistent XML generation
+    const normalizedText = cleanedText ?? '';
+
+    // Replace all content with single text element (even if empty)
+    // This ensures we always generate <w:t> element for Word compatibility
+    this.content = [{ type: 'text', value: normalizedText }];
   }
 
   /**
@@ -653,11 +679,11 @@ export class Run {
     for (const contentElement of this.content) {
       switch (contentElement.type) {
         case 'text':
-          if (contentElement.value !== undefined && contentElement.value !== null) {
-            runChildren.push(XMLBuilder.w('t', {
-              'xml:space': 'preserve',
-            }, [contentElement.value]));
-          }
+          // Always generate <w:t> element, even for empty strings
+          // This ensures proper Word compatibility and round-trip preservation
+          runChildren.push(XMLBuilder.w('t', {
+            'xml:space': 'preserve',
+          }, [contentElement.value || '']));
           break;
 
         case 'tab':
