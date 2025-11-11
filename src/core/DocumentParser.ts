@@ -4043,7 +4043,7 @@ export class DocumentParser {
 
       while ((match = nsPattern.exec(attributes)) !== null) {
         if (match[1] && match[2]) {
-          namespaces[match[1]] = match[2];
+          namespaces[`xmlns:${match[1]}`] = match[2];
         }
       }
 
