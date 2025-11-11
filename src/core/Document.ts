@@ -2982,6 +2982,85 @@ export class Document {
   }
 
   /**
+   * Adds or retrieves a "_top" bookmark at the beginning of the document
+   *
+   * This is a convenience method that ensures a "_top" bookmark exists at the start of the document body.
+   * The bookmark is placed in an empty paragraph at position 0, with the structure:
+   * ```xml
+   * <w:bookmarkStart w:id="0" w:name="_top"/>
+   * <w:bookmarkEnd w:id="0"/>
+   * ```
+   *
+   * This method is idempotent - calling it multiple times will not create duplicate bookmarks.
+   * If the "_top" bookmark already exists, the existing bookmark is returned.
+   *
+   * @returns Object containing:
+   *  - `bookmark`: The Bookmark instance for "_top"
+   *  - `anchor`: The anchor name ("_top") for creating hyperlinks
+   *  - `hyperlink`: Convenience function to create a hyperlink to this bookmark
+   *
+   * @example
+   * ```typescript
+   * // Add or retrieve the _top bookmark
+   * const { bookmark, anchor, hyperlink } = doc.addTopBookmark();
+   *
+   * // Create a hyperlink to the top of the document
+   * const link = hyperlink('Back to top');
+   * paragraph.addHyperlink(link);
+   *
+   * // Or create it manually
+   * const link2 = Hyperlink.createInternal(anchor, 'Go to top');
+   * ```
+   */
+  addTopBookmark(): {
+    bookmark: Bookmark;
+    anchor: string;
+    hyperlink: (text: string, formatting?: RunFormatting) => Hyperlink;
+  } {
+    const BOOKMARK_NAME = "_top";
+
+    // Check if _top bookmark already exists
+    let bookmark = this.getBookmark(BOOKMARK_NAME);
+
+    if (!bookmark) {
+      // Create new _top bookmark
+      // Note: We use skipNormalization to preserve the exact name "_top"
+      // and explicitly set id to 0 as per the XML structure requirement
+      bookmark = new Bookmark({
+        id: 0,
+        name: BOOKMARK_NAME,
+        skipNormalization: true
+      });
+
+      // Register the bookmark with the manager
+      this.bookmarkManager.register(bookmark);
+
+      // Add bookmark to the first existing paragraph if document has content
+      // This avoids creating a visible newline at the top of the document
+      const paragraphs = this.getParagraphs();
+
+      if (paragraphs.length > 0 && paragraphs[0]) {
+        // Add bookmark to first existing paragraph
+        paragraphs[0].addBookmark(bookmark);
+      } else {
+        // Fallback: Create empty paragraph if document is empty
+        const topParagraph = new Paragraph();
+        topParagraph.addBookmark(bookmark);
+        this.bodyElements.unshift(topParagraph);
+      }
+    }
+
+    // Return the bookmark information and a convenience function
+    return {
+      bookmark,
+      anchor: BOOKMARK_NAME,
+      hyperlink: (text: string, formatting?: RunFormatting) => {
+        return Hyperlink.createInternal(BOOKMARK_NAME, text, formatting);
+      }
+    };
+  }
+
+  /**
    * Gets the RevisionManager
    * @returns RevisionManager instance
    */

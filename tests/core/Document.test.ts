@@ -5,6 +5,7 @@
 import { Document, DocumentProperties } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Table } from '../../src/elements/Table';
+import { Hyperlink } from '../../src/elements/Hyperlink';
 import { DOCX_PATHS } from '../../src/zip/types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -728,6 +729,204 @@ describe('Document', () => {
       expect(formatting.keepNext).toBe(true);
       expect(formatting.keepLines).toBe(true);
       expect(formatting.pageBreakBefore).toBe(false);
+    });
+  });
+
+  describe('Bookmark Helpers', () => {
+    describe('addTopBookmark()', () => {
+      test('should create _top bookmark when it does not exist', () => {
+        const doc = Document.create();
+
+        // Verify no _top bookmark exists yet
+        expect(doc.hasBookmark('_top')).toBe(false);
+
+        const result = doc.addTopBookmark();
+
+        // Verify bookmark was created
+        expect(result.bookmark).toBeDefined();
+        expect(result.bookmark.getName()).toBe('_top');
+        expect(result.bookmark.getId()).toBe(0);
+        expect(result.anchor).toBe('_top');
+        expect(result.hyperlink).toBeInstanceOf(Function);
+
+        // Verify bookmark is registered
+        expect(doc.hasBookmark('_top')).toBe(true);
+      });
+
+      test('should return existing _top bookmark when already present', () => {
+        const doc = Document.create();
+
+        // Add _top bookmark first time
+        const result1 = doc.addTopBookmark();
+        const bookmark1 = result1.bookmark;
+
+        // Add _top bookmark second time
+        const result2 = doc.addTopBookmark();
+        const bookmark2 = result2.bookmark;
+
+        // Should return the same bookmark instance
+        expect(bookmark2).toBe(bookmark1);
+        expect(bookmark2.getName()).toBe('_top');
+        expect(bookmark2.getId()).toBe(0);
+      });
+
+      test('should place bookmark at the beginning of document', () => {
+        const doc = Document.create();
+
+        // Add some content first
+        doc.createParagraph().addText('Paragraph 1');
+        doc.createParagraph().addText('Paragraph 2');
+
+        expect(doc.getParagraphCount()).toBe(2);
+
+        // Add _top bookmark
+        doc.addTopBookmark();
+
+        // Should still have 2 paragraphs (bookmark added to first paragraph, no new paragraph created)
+        expect(doc.getParagraphCount()).toBe(2);
+
+        const bodyElements = doc.getBodyElements();
+        const firstPara = bodyElements[0] as Paragraph;
+
+        // First paragraph should still have its text (bookmark is added to it)
+        expect(firstPara.getText()).toBe('Paragraph 1');
+      });
+
+      test('should create working hyperlinks to _top bookmark', () => {
+        const doc = Document.create();
+
+        const { hyperlink, anchor } = doc.addTopBookmark();
+
+        // Create hyperlink using convenience function
+        const link1 = hyperlink('Back to top');
+        expect(link1.getAnchor()).toBe('_top');
+        expect(link1.getText()).toBe('Back to top');
+        expect(link1.isInternal()).toBe(true);
+
+        // Create hyperlink manually using anchor
+        const link2 = Hyperlink.createInternal(anchor, 'Go to top');
+        expect(link2.getAnchor()).toBe('_top');
+        expect(link2.getText()).toBe('Go to top');
+      });
+
+      test('should be idempotent - safe to call multiple times on empty document', () => {
+        const doc = Document.create();
+
+        // Call multiple times on empty document
+        doc.addTopBookmark();
+        doc.addTopBookmark();
+        doc.addTopBookmark();
+
+        // Should only have one _top bookmark
+        const bookmarks = doc.getBookmarkManager().getAllBookmarks();
+        const topBookmarks = bookmarks.filter(b => b.getName() === '_top');
+        expect(topBookmarks.length).toBe(1);
+
+        // Should only have one paragraph (the fallback empty paragraph with bookmark)
+        expect(doc.getParagraphCount()).toBe(1);
+      });
+
+      test('should be idempotent - safe to call multiple times on document with content', () => {
+        const doc = Document.create();
+
+        // Add content first
+        doc.createParagraph().addText('Paragraph 1');
+        doc.createParagraph().addText('Paragraph 2');
+
+        expect(doc.getParagraphCount()).toBe(2);
+
+        // Call addTopBookmark multiple times
+        doc.addTopBookmark();
+        doc.addTopBookmark();
+        doc.addTopBookmark();
+
+        // Should only have one _top bookmark
+        const bookmarks = doc.getBookmarkManager().getAllBookmarks();
+        const topBookmarks = bookmarks.filter(b => b.getName() === '_top');
+        expect(topBookmarks.length).toBe(1);
+
+        // Should still have only 2 paragraphs (no extra paragraphs created)
+        expect(doc.getParagraphCount()).toBe(2);
+      });
+
+      test('should preserve _top bookmark through save/load cycle', async () => {
+        const doc = Document.create();
+
+        // Add _top bookmark
+        doc.addTopBookmark();
+
+        // Add some content
+        doc.createParagraph().addText('Content paragraph');
+
+        // Save to buffer
+        const buffer = await doc.toBuffer();
+
+        // Load from buffer
+        const loadedDoc = await Document.loadFromBuffer(buffer);
+
+        // Note: Bookmark parsing is not yet implemented, but we can verify document structure
+        // Verify document structure is preserved
+        const bodyElements = loadedDoc.getBodyElements();
+        expect(bodyElements.length).toBe(2); // Empty para with bookmark + content para
+
+        // Verify the XML contains the bookmark
+        const xml = loadedDoc.getZipHandler().getFileAsString(DOCX_PATHS.DOCUMENT);
+        expect(xml).toBeDefined();
+        if (xml) {
+          expect(xml).toContain('<w:bookmarkStart w:id="0" w:name="_top"');
+          expect(xml).toContain('<w:bookmarkEnd w:id="0"');
+        }
+      });
+
+      test('should generate correct XML structure', async () => {
+        const doc = Document.create();
+
+        doc.addTopBookmark();
+
+        const buffer = await doc.toBuffer();
+        const xml = doc.getZipHandler().getFileAsString(DOCX_PATHS.DOCUMENT);
+
+        // Verify XML is present
+        expect(xml).toBeDefined();
+
+        if (xml) {
+          // Verify XML contains bookmark start and end with correct attributes
+          expect(xml).toContain('<w:bookmarkStart w:id="0" w:name="_top"');
+          expect(xml).toContain('<w:bookmarkEnd w:id="0"');
+
+          // Bookmark should be at the beginning of the body
+          const bodyStart = xml.indexOf('<w:body>');
+          const bookmarkStart = xml.indexOf('<w:bookmarkStart w:id="0" w:name="_top"');
+          expect(bookmarkStart).toBeGreaterThan(bodyStart);
+        }
+      });
+
+      test('should work with hyperlinks in other paragraphs', async () => {
+        const doc = Document.create();
+
+        const { hyperlink } = doc.addTopBookmark();
+
+        // Add content paragraphs
+        doc.createParagraph().addText('Section 1');
+        doc.createParagraph().addText('Section 2');
+
+        // Add hyperlink to _top in last paragraph
+        const lastPara = doc.createParagraph();
+        const link = hyperlink('Back to top');
+        lastPara.addHyperlink(link);
+
+        // Save and load
+        const buffer = await doc.toBuffer();
+        const loadedDoc = await Document.loadFromBuffer(buffer);
+
+        // Verify structure
+        const bodyElements = loadedDoc.getBodyElements();
+        expect(bodyElements.length).toBe(4); // bookmark para + 3 content paras
+
+        // Verify hyperlink works
+        const lastLoadedPara = bodyElements[3] as Paragraph;
+        expect(lastLoadedPara.getText()).toContain('Back to top');
+      });
     });
   });
 });
