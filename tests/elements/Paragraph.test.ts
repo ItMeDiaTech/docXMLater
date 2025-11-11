@@ -164,7 +164,8 @@ describe('Run', () => {
       builder.element(xml.name, xml.attributes, xml.children);
       const xmlStr = builder.build();
 
-      expect(xmlStr).toContain('<w:b/>');
+      // Accept both <w:b/> and <w:b w:val="1"/> (both are valid per ECMA-376)
+      expect(xmlStr).toMatch(/<w:b(\s+w:val="1")?\/?>/);
       expect(xmlStr).toContain('Bold');
     });
 
@@ -414,8 +415,10 @@ describe('Paragraph', () => {
       expect(xmlStr).toContain('Normal');
       expect(xmlStr).toContain('Bold');
       expect(xmlStr).toContain('Italic');
-      expect(xmlStr).toContain('<w:b/>');
-      expect(xmlStr).toContain('<w:i/>');
+      // Accept both <w:b/> and <w:b w:val="1"/> (both are valid per ECMA-376)
+      expect(xmlStr).toMatch(/<w:b(\s+w:val="1")?\/?>/);
+      expect(xmlStr).toMatch(/<w:i(\s+w:val="1")?\/?>/);
+
     });
   });
 
