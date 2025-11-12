@@ -3213,14 +3213,23 @@ export class Document {
     }
 
     // Parse \t "StyleName,Level," switches (custom styles)
-    const styleMatches = instrText.matchAll(/\\t\s+"([^"]+)",(\d+),"/g);
+    // Microsoft Word format: \t "Heading 2,2," (everything inside quotes)
+    const styleMatches = instrText.matchAll(/\\t\s+"([^"]+)"/g);
     for (const match of styleMatches) {
-      const styleName = match[1];
-      const levelStr = match[2];
+      const content = match[1]; // e.g., "Heading 2,2,"
+      if (!content) continue;
+
+      // Split by comma: ["Heading 2", "2", ""]
+      const parts = content.split(',').map(p => p.trim()).filter(p => p);
+      if (parts.length < 2) continue;
+
+      const styleName = parts[0];  // "Heading 2"
+      const levelStr = parts[1];   // "2"
 
       if (!styleName || !levelStr) continue;
 
       const level = parseInt(levelStr, 10);
+      if (isNaN(level)) continue;
 
       // Extract level from Heading style names (e.g., "Heading 2" → 2)
       const headingMatch = styleName.match(/Heading\s*(\d+)/i);
@@ -3230,7 +3239,7 @@ export class Document {
           levels.add(headingLevel);
         }
       } else if (level >= 1 && level <= 9) {
-        // Use the level number from the \t switch
+        // For custom styles, use the level number from the \t switch
         levels.add(level);
       }
     }
@@ -3249,6 +3258,149 @@ export class Document {
    * @param levels Array of heading levels to include (e.g., [1, 2, 3])
    * @returns Array of heading information objects
    */
+  /**
+   * Find headings for TOC by parsing XML directly (searches body AND tables)
+   * This is more reliable than using bodyElements as it searches inside table cells too
+   */
+  private findHeadingsForTOCFromXML(docXml: string, levels: number[]): Array<{ level: number; text: string; bookmark: string }> {
+    const headings: Array<{ level: number; text: string; bookmark: string }> = [];
+    const levelSet = new Set(levels);
+
+    try {
+      // Parse document.xml to object structure
+      const parsed = XMLParser.parseToObject(docXml, { trimValues: false });
+      const document = parsed['w:document'];
+      if (!document) {
+        return headings;
+      }
+
+      const body = (document as any)['w:body'];
+      if (!body) {
+        return headings;
+      }
+
+      // Helper function to extract heading info from a parsed paragraph object
+      const extractHeading = (para: any): void => {
+        const pPr = para['w:pPr'];
+        if (!pPr || !pPr['w:pStyle']) {
+          return;
+        }
+
+        const styleVal = pPr['w:pStyle']['@_w:val'];
+        if (!styleVal) {
+          return;
+        }
+
+        // Check if style matches "HeadingN" format (exact match, case-insensitive)
+        const headingMatch = styleVal.match(/^Heading(\d+)$/i);
+        if (!headingMatch || !headingMatch[1]) {
+          return;
+        }
+
+        const headingLevel = parseInt(headingMatch[1], 10);
+
+        // Check if this level should be included in TOC
+        if (!levelSet.has(headingLevel)) {
+          return;
+        }
+
+        // Extract bookmark (look for bookmarks with "_heading" in name)
+        let bookmark = '';
+        const bookmarkStart = para['w:bookmarkStart'];
+        if (bookmarkStart) {
+          const bookmarkArray = Array.isArray(bookmarkStart) ? bookmarkStart : [bookmarkStart];
+          for (const bm of bookmarkArray) {
+            const bmName = bm['@_w:name'];
+            if (bmName && bmName.toLowerCase().includes('_heading')) {
+              bookmark = bmName;
+              break;
+            }
+          }
+        }
+
+        // Extract text from runs
+        let text = '';
+        const runs = para['w:r'];
+        if (runs) {
+          const runArray = Array.isArray(runs) ? runs : [runs];
+          for (const run of runArray) {
+            const textElement = run['w:t'];
+            if (textElement) {
+              if (typeof textElement === 'string') {
+                text += textElement;
+              } else if (textElement['#text']) {
+                text += textElement['#text'];
+              }
+            }
+          }
+        }
+
+        // Only add if we have text
+        text = text.trim();
+        if (!text) {
+          return;
+        }
+
+        // Generate bookmark if not found
+        if (!bookmark) {
+          bookmark = `_Toc${Date.now()}_${headings.length}`;
+        }
+
+        headings.push({
+          level: headingLevel,
+          text: text,
+          bookmark: bookmark
+        });
+      };
+
+      // Search in direct paragraphs
+      const paragraphs = body['w:p'];
+      if (paragraphs) {
+        const paraArray = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
+        for (const para of paraArray) {
+          extractHeading(para);
+        }
+      }
+
+      // Search in tables (this is critical - many documents have headings in tables)
+      const tables = body['w:tbl'];
+      if (tables) {
+        const tableArray = Array.isArray(tables) ? tables : [tables];
+        for (const table of tableArray) {
+          const rows = table['w:tr'];
+          if (!rows) continue;
+
+          const rowArray = Array.isArray(rows) ? rows : [rows];
+          for (const row of rowArray) {
+            const cells = row['w:tc'];
+            if (!cells) continue;
+
+            const cellArray = Array.isArray(cells) ? cells : [cells];
+            for (const cell of cellArray) {
+              const cellParas = cell['w:p'];
+              if (!cellParas) continue;
+
+              const cellParaArray = Array.isArray(cellParas) ? cellParas : [cellParas];
+              for (const para of cellParaArray) {
+                extractHeading(para);
+              }
+            }
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('Error parsing document.xml for headings:', error);
+    }
+
+    return headings;
+  }
+
+  /**
+   * Legacy method - searches only bodyElements (doesn't search inside tables)
+   * Kept for compatibility but not recommended
+   * @deprecated Use findHeadingsForTOCFromXML instead
+   */
   private findHeadingsForTOC(levels: number[]): Array<{ level: number; text: string; bookmark: string }> {
     const headings: Array<{ level: number; text: string; bookmark: string }> = [];
     const levelSet = new Set(levels);
@@ -3259,9 +3411,9 @@ export class Document {
         const para = element;
         const formatting = para.getFormatting();
 
-        // Check if paragraph has a heading style
+        // Check if paragraph has a heading style (handle both "Heading1" and "Heading 1")
         if (formatting.style) {
-          const styleMatch = formatting.style.match(/Heading(\d+)/i);
+          const styleMatch = formatting.style.match(/Heading\s*(\d+)/i);
           if (styleMatch && styleMatch[1]) {
             const headingLevel = parseInt(styleMatch[1], 10);
 
@@ -3320,10 +3472,25 @@ export class Document {
     // SDT content
     tocXml += '<w:sdtContent>';
 
+    // Calculate minimum level for relative indentation
+    // If TOC shows only Header 2s, minLevel=2, so Header 2 gets 0" indent
+    const minLevel = headings.length > 0
+      ? Math.min(...headings.map(h => h.level))
+      : 1;
+
     // First paragraph: field begin + instruction + separator + first entry (if any)
     tocXml += '<w:p>';
     tocXml += '<w:pPr>';
     tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+
+    // Add indentation for first entry relative to minimum level (0.25" per level)
+    if (headings.length > 0 && headings[0]) {
+      const firstIndent = (headings[0].level - minLevel) * 360;  // 360 twips = 0.25 inches
+      if (firstIndent > 0) {
+        tocXml += `<w:ind w:left="${firstIndent}"/>`;
+      }
+    }
+
     tocXml += '</w:pPr>';
 
     // Field begin
@@ -3353,8 +3520,8 @@ export class Document {
       tocXml += '<w:pPr>';
       tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
 
-      // Add indentation based on heading level (level 2 = 720 twips, level 3 = 1440, etc.)
-      const indent = (heading.level - 1) * 720;
+      // Add indentation relative to minimum level (0.25" per level above minimum)
+      const indent = (heading.level - minLevel) * 360;
       if (indent > 0) {
         tocXml += `<w:ind w:left="${indent}"/>`;
       }
@@ -3478,19 +3645,19 @@ export class Document {
         }
 
         let fieldInstruction = instrMatch[1];
-        // Decode XML entities
+        // Decode XML entities (decode &amp; first to handle double-encoding)
         fieldInstruction = fieldInstruction
+          .replace(/&amp;/g, '&')
           .replace(/&lt;/g, '<')
           .replace(/&gt;/g, '>')
           .replace(/&quot;/g, '"')
-          .replace(/&apos;/g, "'")
-          .replace(/&amp;/g, '&');
+          .replace(/&apos;/g, "'");
 
         // Parse the field instruction to determine levels
         const levels = this.parseTOCFieldInstruction(fieldInstruction);
 
-        // Find all headings in the document matching these levels
-        const headings = this.findHeadingsForTOC(levels);
+        // Find all headings in the document matching these levels (using XML parsing to search tables too)
+        const headings = this.findHeadingsForTOCFromXML(docXml, levels);
 
         if (headings.length === 0) {
           continue; // No headings found, skip this TOC

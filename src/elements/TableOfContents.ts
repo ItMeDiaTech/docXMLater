@@ -16,7 +16,7 @@ export interface TOCProperties {
   /** Heading levels to include (1-9, default: 1-3) */
   levels?: number;
   /** Specific styles to include (overrides levels if provided) */
-  includeStyles?: string[];
+  includeStyles?: Array<{ styleName: string; level: number }>;
   /** Whether to show page numbers (default: true) */
   showPageNumbers?: boolean;
   /** Whether to right-align page numbers (default: true) */
@@ -43,6 +43,8 @@ export interface TOCProperties {
   spaceBetweenEntries?: number;
   /** Hyperlink color in hex format without # (default: 0000FF) */
   hyperlinkColor?: string;
+  /** Original field instruction from loaded document (internal use) */
+  originalFieldInstruction?: string;
 }
 
 /**
@@ -51,7 +53,7 @@ export interface TOCProperties {
 export class TableOfContents {
   private title: string;
   private levels: number;
-  private includeStyles?: string[];
+  private includeStyles?: Array<{ styleName: string; level: number }>;
   private showPageNumbers: boolean;
   private useHyperlinks: boolean;
   private tabLeader: 'dot' | 'hyphen' | 'underscore' | 'none';
@@ -63,6 +65,7 @@ export class TableOfContents {
   private customIndents?: number[];
   private spaceBetweenEntries: number;
   private hyperlinkColor: string;
+  private originalFieldInstruction?: string; // Preserve original instruction from loaded documents
 
   /**
    * Creates a new Table of Contents
@@ -83,6 +86,7 @@ export class TableOfContents {
     this.customIndents = properties.customIndents;
     this.spaceBetweenEntries = properties.spaceBetweenEntries || 0;
     this.hyperlinkColor = properties.hyperlinkColor || '0000FF';
+    this.originalFieldInstruction = properties.originalFieldInstruction;
   }
 
   /**
@@ -193,7 +197,7 @@ export class TableOfContents {
   /**
    * Gets specific included styles
    */
-  getIncludeStyles(): string[] | undefined {
+  getIncludeStyles(): Array<{ styleName: string; level: number }> | undefined {
     return this.includeStyles;
   }
 
@@ -225,8 +229,10 @@ export class TableOfContents {
     // Add specific styles switch OR heading levels switch
     if (this.includeStyles && this.includeStyles.length > 0) {
       // Use \t switch to specify exact styles
-      const stylesString = this.includeStyles.map(s => `"${s}",1`).join(' ');
-      instruction += ` \\t ${stylesString}`;
+      // Format: \t "StyleName,Level," for each style
+      for (const style of this.includeStyles) {
+        instruction += ` \\t "${style.styleName},${style.level},"`;
+      }
     } else {
       // Use \o switch for heading levels
       instruction += ` \\o "1-${this.levels}"`;
@@ -344,13 +350,16 @@ export class TableOfContents {
     });
 
     // FIELD INSTRUCTION (required)
+    // Use original field instruction if available (from loaded documents)
+    // Otherwise, build instruction from properties
+    const fieldInstruction = this.originalFieldInstruction || this.buildFieldInstruction();
     tocParagraph.children!.push({
       name: 'w:r',
       children: [
         {
           name: 'w:instrText',
           attributes: { 'xml:space': 'preserve' },
-          children: [this.buildFieldInstruction()],
+          children: [fieldInstruction],
         },
       ],
     });
@@ -492,11 +501,19 @@ export class TableOfContents {
 
   /**
    * Sets specific styles to include in TOC (overrides levels)
-   * @param styles - Array of style names (e.g., ['Heading1', 'Heading3'])
+   * @param styles - Array of style names (e.g., ['Heading1', 'Heading3']) or objects with styleName and level
    * @returns This TOC for chaining
    */
-  setIncludeStyles(styles: string[]): this {
-    this.includeStyles = styles;
+  setIncludeStyles(styles: string[] | Array<{ styleName: string; level: number }>): this {
+    // Convert string[] to object format for backward compatibility
+    if (styles.length > 0 && typeof styles[0] === 'string') {
+      this.includeStyles = (styles as string[]).map((styleName, index) => ({
+        styleName,
+        level: index + 1 // Default: assign sequential levels
+      }));
+    } else {
+      this.includeStyles = styles as Array<{ styleName: string; level: number }>;
+    }
     return this;
   }
 
@@ -582,9 +599,14 @@ export class TableOfContents {
    * @returns New TableOfContents instance
    */
   static createWithStyles(styles: string[], options?: Partial<TOCProperties>): TableOfContents {
+    // Convert string[] to object format
+    const stylesWithLevels = styles.map((styleName, index) => ({
+      styleName,
+      level: index + 1 // Default: assign sequential levels
+    }));
     return new TableOfContents({
       ...options,
-      includeStyles: styles,
+      includeStyles: stylesWithLevels,
     });
   }
 
@@ -595,9 +617,14 @@ export class TableOfContents {
    * @returns New TableOfContents instance
    */
   static createFlat(title?: string, styles?: string[]): TableOfContents {
+    // Convert string[] to object format if provided
+    const stylesWithLevels = styles?.map((styleName, index) => ({
+      styleName,
+      level: index + 1 // Default: assign sequential levels
+    }));
     return new TableOfContents({
       title: title || 'Contents',
-      includeStyles: styles,
+      includeStyles: stylesWithLevels,
       noIndent: true,
       spaceBetweenEntries: 100, // Small spacing for flat TOC
     });
