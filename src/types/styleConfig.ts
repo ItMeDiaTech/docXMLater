@@ -24,6 +24,15 @@ export interface StyleRunFormatting {
 
   /** Text color as hex without # (e.g., '000000', 'FF0000') */
   color?: string;
+
+  /** If true, preserve existing bold formatting (don't apply bold property) */
+  preserveBold?: boolean;
+
+  /** If true, preserve existing italic formatting (don't apply italic property) */
+  preserveItalic?: boolean;
+
+  /** If true, preserve existing underline formatting (don't apply underline property) */
+  preserveUnderline?: boolean;
 }
 
 /**
