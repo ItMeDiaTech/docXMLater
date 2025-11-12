@@ -1714,6 +1714,8 @@ export class Document {
 
       // Set table width to autofit to window (always applied to all tables)
       table.setLayout('auto');
+      table.setWidthType('pct');
+      table.setWidth(5000);
 
       // Handle 1x1 (single-cell) tables separately
       const is1x1Table = rowCount === 1 && columnCount === 1;
@@ -2912,6 +2914,33 @@ export class Document {
       results.listParagraph = true;
     }
 
+    // Extract preserve flags from configurations
+    const h1Preserve = {
+      bold: h1Config.run?.preserveBold ?? false,
+      italic: h1Config.run?.preserveItalic ?? false,
+      underline: h1Config.run?.preserveUnderline ?? false,
+    };
+    const h2Preserve = {
+      bold: h2Config.run?.preserveBold ?? false,
+      italic: h2Config.run?.preserveItalic ?? false,
+      underline: h2Config.run?.preserveUnderline ?? false,
+    };
+    const h3Preserve = {
+      bold: h3Config.run?.preserveBold ?? false,
+      italic: h3Config.run?.preserveItalic ?? false,
+      underline: h3Config.run?.preserveUnderline ?? false,
+    };
+    const normalPreserve = {
+      bold: normalConfig.run?.preserveBold ?? false,
+      italic: normalConfig.run?.preserveItalic ?? false,
+      underline: normalConfig.run?.preserveUnderline ?? false,
+    };
+    const listParaPreserve = {
+      bold: listParaConfig.run?.preserveBold ?? false,
+      italic: listParaConfig.run?.preserveItalic ?? false,
+      underline: listParaConfig.run?.preserveUnderline ?? false,
+    };
+
     // Clear direct formatting from affected paragraphs and wrap Heading2 in tables
     // Use a Set to track processed paragraphs and prevent duplicate wrapping
     const processedParagraphs = new Set<Paragraph>();
@@ -2931,16 +2960,31 @@ export class Document {
       if (styleId === 'Heading1' && heading1) {
         para.clearDirectFormattingConflicts(heading1);
 
-        // Explicitly clear italic and underline from all runs
+        // Apply formatting to all runs, respecting preserve flags
         for (const run of para.getRuns()) {
-          run.setItalic(false);
-          run.setUnderline(false);
+          if (!h1Preserve.bold) {
+            run.setBold(h1Config.run?.bold ?? false);
+          }
+          if (!h1Preserve.italic) {
+            run.setItalic(h1Config.run?.italic ?? false);
+          }
+          if (!h1Preserve.underline) {
+            run.setUnderline(h1Config.run?.underline ? 'single' : false);
+          }
         }
 
-        // Clear italic and underline from paragraph mark properties
+        // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
-          delete para.formatting.paragraphMarkRunProperties.italic;
-          delete para.formatting.paragraphMarkRunProperties.underline;
+          const markProps = para.formatting.paragraphMarkRunProperties;
+          if (!h1Preserve.bold && h1Config.run?.bold === false && markProps.bold) {
+            delete markProps.bold;
+          }
+          if (!h1Preserve.italic && h1Config.run?.italic === false && markProps.italic) {
+            delete markProps.italic;
+          }
+          if (!h1Preserve.underline && h1Config.run?.underline === false && markProps.underline) {
+            delete markProps.underline;
+          }
         }
 
         processedParagraphs.add(para);
@@ -2960,16 +3004,31 @@ export class Document {
         // Clear direct formatting first
         para.clearDirectFormattingConflicts(heading2);
 
-        // Explicitly clear italic and underline from all runs
+        // Apply formatting to all runs, respecting preserve flags
         for (const run of para.getRuns()) {
-          run.setItalic(false);
-          run.setUnderline(false);
+          if (!h2Preserve.bold) {
+            run.setBold(h2Config.run?.bold ?? false);
+          }
+          if (!h2Preserve.italic) {
+            run.setItalic(h2Config.run?.italic ?? false);
+          }
+          if (!h2Preserve.underline) {
+            run.setUnderline(h2Config.run?.underline ? 'single' : false);
+          }
         }
 
-        // Clear italic and underline from paragraph mark properties
+        // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
-          delete para.formatting.paragraphMarkRunProperties.italic;
-          delete para.formatting.paragraphMarkRunProperties.underline;
+          const markProps = para.formatting.paragraphMarkRunProperties;
+          if (!h2Preserve.bold && h2Config.run?.bold === false && markProps.bold) {
+            delete markProps.bold;
+          }
+          if (!h2Preserve.italic && h2Config.run?.italic === false && markProps.italic) {
+            delete markProps.italic;
+          }
+          if (!h2Preserve.underline && h2Config.run?.underline === false && markProps.underline) {
+            delete markProps.underline;
+          }
         }
 
         // Check if paragraph is in a table
@@ -3024,16 +3083,31 @@ export class Document {
       else if (styleId === 'Heading3' && heading3) {
         para.clearDirectFormattingConflicts(heading3);
 
-        // Explicitly clear italic and underline from all runs
+        // Apply formatting to all runs, respecting preserve flags
         for (const run of para.getRuns()) {
-          run.setItalic(false);
-          run.setUnderline(false);
+          if (!h3Preserve.bold) {
+            run.setBold(h3Config.run?.bold ?? false);
+          }
+          if (!h3Preserve.italic) {
+            run.setItalic(h3Config.run?.italic ?? false);
+          }
+          if (!h3Preserve.underline) {
+            run.setUnderline(h3Config.run?.underline ? 'single' : false);
+          }
         }
 
-        // Clear italic and underline from paragraph mark properties
+        // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
-          delete para.formatting.paragraphMarkRunProperties.italic;
-          delete para.formatting.paragraphMarkRunProperties.underline;
+          const markProps = para.formatting.paragraphMarkRunProperties;
+          if (!h3Preserve.bold && h3Config.run?.bold === false && markProps.bold) {
+            delete markProps.bold;
+          }
+          if (!h3Preserve.italic && h3Config.run?.italic === false && markProps.italic) {
+            delete markProps.italic;
+          }
+          if (!h3Preserve.underline && h3Config.run?.underline === false && markProps.underline) {
+            delete markProps.underline;
+          }
         }
 
         processedParagraphs.add(para);
@@ -3043,16 +3117,31 @@ export class Document {
       else if (styleId === 'ListParagraph' && listParagraph) {
         para.clearDirectFormattingConflicts(listParagraph);
 
-        // Explicitly clear italic and underline from all runs
+        // Apply formatting to all runs, respecting preserve flags
         for (const run of para.getRuns()) {
-          run.setItalic(false);
-          run.setUnderline(false);
+          if (!listParaPreserve.bold) {
+            run.setBold(listParaConfig.run?.bold ?? false);
+          }
+          if (!listParaPreserve.italic) {
+            run.setItalic(listParaConfig.run?.italic ?? false);
+          }
+          if (!listParaPreserve.underline) {
+            run.setUnderline(listParaConfig.run?.underline ? 'single' : false);
+          }
         }
 
-        // Clear italic and underline from paragraph mark properties
+        // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
-          delete para.formatting.paragraphMarkRunProperties.italic;
-          delete para.formatting.paragraphMarkRunProperties.underline;
+          const markProps = para.formatting.paragraphMarkRunProperties;
+          if (!listParaPreserve.bold && listParaConfig.run?.bold === false && markProps.bold) {
+            delete markProps.bold;
+          }
+          if (!listParaPreserve.italic && listParaConfig.run?.italic === false && markProps.italic) {
+            delete markProps.italic;
+          }
+          if (!listParaPreserve.underline && listParaConfig.run?.underline === false && markProps.underline) {
+            delete markProps.underline;
+          }
         }
 
         processedParagraphs.add(para);
@@ -3062,16 +3151,31 @@ export class Document {
       else if ((styleId === 'Normal' || styleId === undefined) && normal) {
         para.clearDirectFormattingConflicts(normal);
 
-        // Explicitly clear italic and underline from all runs
+        // Apply formatting to all runs, respecting preserve flags
         for (const run of para.getRuns()) {
-          run.setItalic(false);
-          run.setUnderline(false);
+          if (!normalPreserve.bold) {
+            run.setBold(normalConfig.run?.bold ?? false);
+          }
+          if (!normalPreserve.italic) {
+            run.setItalic(normalConfig.run?.italic ?? false);
+          }
+          if (!normalPreserve.underline) {
+            run.setUnderline(normalConfig.run?.underline ? 'single' : false);
+          }
         }
 
-        // Clear italic and underline from paragraph mark properties
+        // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
-          delete para.formatting.paragraphMarkRunProperties.italic;
-          delete para.formatting.paragraphMarkRunProperties.underline;
+          const markProps = para.formatting.paragraphMarkRunProperties;
+          if (!normalPreserve.bold && normalConfig.run?.bold === false && markProps.bold) {
+            delete markProps.bold;
+          }
+          if (!normalPreserve.italic && normalConfig.run?.italic === false && markProps.italic) {
+            delete markProps.italic;
+          }
+          if (!normalPreserve.underline && normalConfig.run?.underline === false && markProps.underline) {
+            delete markProps.underline;
+          }
         }
 
         processedParagraphs.add(para);

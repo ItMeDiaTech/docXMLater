@@ -119,3 +119,4 @@ config/rag_settings.json
 /jest.config.js
 /testing
 /tests
+/tests/output
