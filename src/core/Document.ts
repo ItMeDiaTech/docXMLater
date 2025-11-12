@@ -1575,8 +1575,8 @@ export class Document {
    * Applies comprehensive formatting to all tables in the document
    *
    * This helper function provides a one-call solution for standardizing table formatting:
-   * - Apply black borders to all cells (all tables, including 1x1)
-   * - Autofit tables to window width
+   * - Apply black borders to all cells (always applied to all tables)
+   * - Set table width to autofit to window (always applied to all tables)
    * - Format first row as header (shading, bold, centered, custom font/spacing)
    * - Apply consistent cell margins to all cells
    * - Recolor and format cells with existing shading
@@ -1587,21 +1587,27 @@ export class Document {
    * - Other rows: Cells with existing color (NOT white) receive the same color + formatting
    * - Cells with no color or white color remain unchanged
    *
-   * @param shadingColorOrOptions Hex color for shading (default: 'E9E9E9'), or full options object for advanced customization
+   * @param colorOrOptions Hex color for multi-cell tables, or options object
+   * @param multiCellColor Optional second color for multi-cell tables (when first param is 1x1 color)
    * @returns Statistics about tables processed
    *
    * @example
-   * // Use default gray color (E9E9E9)
+   * // Use default gray color (E9E9E9) for multi-cell tables, skip 1x1 tables
    * const result = doc.applyStandardTableFormatting();
    *
    * @example
-   * // Custom color
+   * // Custom color for multi-cell tables only
    * const result = doc.applyStandardTableFormatting('D9D9D9');
+   *
+   * @example
+   * // Two colors: first for 1x1 tables, second for multi-cell tables
+   * const result = doc.applyStandardTableFormatting('BFBFBF', 'E9E9E9');
    *
    * @example
    * // Advanced: Full customization
    * const result = doc.applyStandardTableFormatting({
-   *   headerRowShading: '4472C4',  // Blue color for header and colored cells
+   *   singleCellShading: 'BFBFBF',  // Gray for 1x1 tables
+   *   headerRowShading: '4472C4',   // Blue for multi-cell table headers
    *   headerRowFormatting: {
    *     bold: true,
    *     alignment: 'center',
@@ -1612,43 +1618,62 @@ export class Document {
    * console.log(`Processed ${result.tablesProcessed} tables`);
    * console.log(`Formatted ${result.headerRowsFormatted} header rows`);
    * console.log(`Recolored ${result.cellsRecolored} cells`);
+   * console.log(`Shaded ${result.singleCellTablesShaded} single-cell tables`);
    */
-  public applyStandardTableFormatting(shadingColorOrOptions?: string | {
-    /** Autofit tables to window width (default: true) */
-    autofitToWindow?: boolean;
-    /** Header row background color (default: 'E9E9E9') */
-    headerRowShading?: string;
-    /** Header row text formatting */
-    headerRowFormatting?: {
-      bold?: boolean;
-      alignment?: 'left' | 'center' | 'right' | 'justify';
-      font?: string;
-      size?: number;
-      color?: string;
-      spacingBefore?: number;
-      spacingAfter?: number;
-    };
-    /** Cell margins for all cells in twips */
-    cellMargins?: {
-      top?: number;
-      bottom?: number;
-      left?: number;
-      right?: number;
-    };
-    /** Skip 1x1 tables (default: true) */
-    skipSingleCellTables?: boolean;
-  }): {
+  public applyStandardTableFormatting(
+    colorOrOptions?: string | {
+      /** Autofit tables to window width (DEPRECATED: now always enabled) */
+      autofitToWindow?: boolean;
+      /** Single-cell (1x1) table shading color */
+      singleCellShading?: string;
+      /** Header row background color for multi-cell tables (default: 'E9E9E9') */
+      headerRowShading?: string;
+      /** Header row text formatting */
+      headerRowFormatting?: {
+        bold?: boolean;
+        alignment?: 'left' | 'center' | 'right' | 'justify';
+        font?: string;
+        size?: number;
+        color?: string;
+        spacingBefore?: number;
+        spacingAfter?: number;
+      };
+      /** Cell margins for all cells in twips */
+      cellMargins?: {
+        top?: number;
+        bottom?: number;
+        left?: number;
+        right?: number;
+      };
+      /** Skip 1x1 tables (DEPRECATED: use singleCellShading instead) */
+      skipSingleCellTables?: boolean;
+    },
+    multiCellColor?: string
+  ): {
     tablesProcessed: number;
     headerRowsFormatted: number;
     cellsRecolored: number;
+    singleCellTablesShaded: number;
   } {
-    // Handle simple string parameter (just a color)
-    const options = typeof shadingColorOrOptions === 'string'
-      ? { headerRowShading: shadingColorOrOptions }
-      : shadingColorOrOptions;
+    // Handle different parameter combinations
+    let options: any;
+    if (typeof colorOrOptions === 'string') {
+      if (multiCellColor) {
+        // Two colors provided: applyStandardTableFormatting('BFBFBF', 'E9E9E9')
+        options = {
+          singleCellShading: colorOrOptions,
+          headerRowShading: multiCellColor,
+        };
+      } else {
+        // One color provided: backwards compatible - for multi-cell only
+        options = { headerRowShading: colorOrOptions };
+      }
+    } else {
+      options = colorOrOptions;
+    }
 
     // Default values
-    const autofitToWindow = options?.autofitToWindow !== false;
+    const singleCellShading = options?.singleCellShading?.toUpperCase();
     const headerRowShading = (options?.headerRowShading || 'E9E9E9').toUpperCase();
     const headerRowFormatting = {
       bold: options?.headerRowFormatting?.bold !== false,
@@ -1665,12 +1690,13 @@ export class Document {
       left: options?.cellMargins?.left ?? 115,  // 0.08 inches
       right: options?.cellMargins?.right ?? 115, // 0.08 inches
     };
-    const skipSingleCellTables = options?.skipSingleCellTables !== false;
+    const skipSingleCellTables = options?.skipSingleCellTables !== false && !singleCellShading;
 
     // Statistics
     let tablesProcessed = 0;
     let headerRowsFormatted = 0;
     let cellsRecolored = 0;
+    let singleCellTablesShaded = 0;
 
     // Get all tables
     const tables = this.getAllTables();
@@ -1679,26 +1705,33 @@ export class Document {
       const rowCount = table.getRowCount();
       const columnCount = table.getColumnCount();
 
-      // Autofit to window
-      if (autofitToWindow) {
-        table.setLayout('auto');
-      }
-
-      // Apply borders to all cells (regardless of table size)
+      // Apply borders to all cells (always applied to all tables)
       table.setAllBorders({
         style: 'single',
         size: 4,
         color: '000000',
       });
 
-      // Skip shading/formatting for 1x1 tables if requested
+      // Set table width to autofit to window (always applied to all tables)
+      table.setLayout('auto');
+
+      // Handle 1x1 (single-cell) tables separately
       const is1x1Table = rowCount === 1 && columnCount === 1;
-      if (skipSingleCellTables && is1x1Table) {
+      if (is1x1Table) {
+        if (singleCellShading) {
+          // Apply single-cell shading color
+          const singleCell = table.getRow(0)?.getCell(0);
+          if (singleCell) {
+            singleCell.setShading({ fill: singleCellShading });
+            singleCellTablesShaded++;
+          }
+        }
+        // Skip further processing for 1x1 tables
         tablesProcessed++;
         continue;
       }
 
-      // Format first row (header)
+      // Format first row (header) for multi-cell tables
       const firstRow = table.getRow(0);
       if (firstRow) {
         for (const cell of firstRow.getCells()) {
@@ -1743,7 +1776,10 @@ export class Document {
           const currentShading = cell.getFormatting().shading;
           const currentColor = currentShading?.fill?.toUpperCase();
 
-          if (currentColor && currentColor !== 'FFFFFF') {
+          // Check if color is a valid 6-character hex code (not 'auto' or other special values)
+          const isValidHexColor = /^[0-9A-F]{6}$/i.test(currentColor || '');
+
+          if (currentColor && currentColor !== 'FFFFFF' && isValidHexColor) {
             // Apply the color passed to the method
             cell.setShading({ fill: headerRowShading });
             cellsRecolored++;
@@ -1777,6 +1813,7 @@ export class Document {
       tablesProcessed,
       headerRowsFormatted,
       cellsRecolored,
+      singleCellTablesShaded,
     };
   }
 
