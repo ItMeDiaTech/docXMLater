@@ -2445,7 +2445,10 @@ export class DocumentParser {
       }
 
       // Parse field switches from instruction
-      const tocOptions: any = { title };
+      const tocOptions: any = {
+        title,
+        originalFieldInstruction: fieldInstruction.trim() // Preserve original instruction
+      };
 
       // Check for \h (hyperlinks)
       if (fieldInstruction.includes('\\h')) {
