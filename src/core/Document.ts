@@ -1575,18 +1575,19 @@ export class Document {
    * Applies comprehensive formatting to all tables in the document
    *
    * This helper function provides a one-call solution for standardizing table formatting:
+   * - Apply black borders to all cells (all tables, including 1x1)
    * - Autofit tables to window width
    * - Format first row as header (shading, bold, centered, custom font/spacing)
    * - Apply consistent cell margins to all cells
-   * - Conditionally recolor cells based on existing shading
-   * - Optionally skip single-cell (1x1) tables
+   * - Recolor and format cells with existing shading
+   * - Optionally skip shading/formatting for single-cell (1x1) tables
    *
-   * Conditional shading logic:
-   * - Cells with shading that is NOT white (#FFFFFF) AND NOT the header row color
-   *   will be replaced with the same color used for the header row
-   * - Formatted cells receive bold, centered, Verdana 12pt text with 3pt spacing
+   * Shading and formatting logic (for tables > 1x1):
+   * - Row 0: Apply the specified color + full formatting (bold, Verdana 12pt, centered, 3pt spacing)
+   * - Other rows: Cells with existing color (NOT white) receive the same color + formatting
+   * - Cells with no color or white color remain unchanged
    *
-   * @param shadingColorOrOptions Hex color for header/conditional shading (default: 'E9E9E9'), or full options object for advanced customization
+   * @param shadingColorOrOptions Hex color for shading (default: 'E9E9E9'), or full options object for advanced customization
    * @returns Statistics about tables processed
    *
    * @example
@@ -1594,16 +1595,18 @@ export class Document {
    * const result = doc.applyStandardTableFormatting();
    *
    * @example
-   * // Custom color - both header and conditional cells use same color
+   * // Custom color
    * const result = doc.applyStandardTableFormatting('D9D9D9');
    *
    * @example
    * // Advanced: Full customization
    * const result = doc.applyStandardTableFormatting({
-   *   headerRowShading: '4472C4',  // Blue header
-   *   conditionalShading: {
-   *     replacementColor: 'FFD700',  // Different color for data cells
-   *     applyFormatting: true
+   *   headerRowShading: '4472C4',  // Blue color for header and colored cells
+   *   headerRowFormatting: {
+   *     bold: true,
+   *     alignment: 'center',
+   *     font: 'Arial',
+   *     size: 14
    *   }
    * });
    * console.log(`Processed ${result.tablesProcessed} tables`);
@@ -1631,13 +1634,6 @@ export class Document {
       bottom?: number;
       left?: number;
       right?: number;
-    };
-    /** Conditional shading for data cells */
-    conditionalShading?: {
-      /** Color to apply to cells that don't match white or header color */
-      replacementColor: string;
-      /** Whether to apply bold/centered/Verdana formatting (default: true) */
-      applyFormatting?: boolean;
     };
     /** Skip 1x1 tables (default: true) */
     skipSingleCellTables?: boolean;
@@ -1671,9 +1667,6 @@ export class Document {
     };
     const skipSingleCellTables = options?.skipSingleCellTables !== false;
 
-    // Use header color for conditional shading by default (unless explicitly overridden)
-    const conditionalReplacementColor = options?.conditionalShading?.replacementColor || headerRowShading;
-
     // Statistics
     let tablesProcessed = 0;
     let headerRowsFormatted = 0;
@@ -1686,14 +1679,23 @@ export class Document {
       const rowCount = table.getRowCount();
       const columnCount = table.getColumnCount();
 
-      // Skip 1x1 tables if requested
-      if (skipSingleCellTables && rowCount === 1 && columnCount === 1) {
-        continue;
-      }
-
       // Autofit to window
       if (autofitToWindow) {
         table.setLayout('auto');
+      }
+
+      // Apply borders to all cells (regardless of table size)
+      table.setAllBorders({
+        style: 'single',
+        size: 4,
+        color: '000000',
+      });
+
+      // Skip shading/formatting for 1x1 tables if requested
+      const is1x1Table = rowCount === 1 && columnCount === 1;
+      if (skipSingleCellTables && is1x1Table) {
+        tablesProcessed++;
+        continue;
       }
 
       // Format first row (header)
@@ -1731,32 +1733,25 @@ export class Document {
           // Always apply margins
           cell.setMargins(cellMargins);
 
-          // Conditional shading: if cell has color AND it's not white AND not header color
-          // Note: Conditional shading is ALWAYS applied when a color is provided (defaults to header color)
+          // Apply shading and formatting to cells with existing color (not white)
           const currentShading = cell.getFormatting().shading;
           const currentColor = currentShading?.fill?.toUpperCase();
 
-          if (
-            currentColor &&
-            currentColor !== 'FFFFFF' &&
-            currentColor !== headerRowShading
-          ) {
-            // Set to conditional replacement color (defaults to header color)
-            cell.setShading({ fill: conditionalReplacementColor });
+          if (currentColor && currentColor !== 'FFFFFF') {
+            // Apply the color passed to the method
+            cell.setShading({ fill: headerRowShading });
             cellsRecolored++;
 
-            // Apply formatting if enabled (default: true)
-            const applyFormatting = options?.conditionalShading?.applyFormatting !== false;
-            if (applyFormatting) {
-              for (const para of cell.getParagraphs()) {
-                para.setAlignment('center');
-                para.setSpaceBefore(60); // 3pt
-                para.setSpaceAfter(60); // 3pt
+            // Always apply formatting when shading is applied
+            for (const para of cell.getParagraphs()) {
+              para.setAlignment('center');
+              para.setSpaceBefore(60); // 3pt
+              para.setSpaceAfter(60); // 3pt
 
-                for (const run of para.getRuns()) {
-                  run.setBold(true);
-                  run.setFont('Verdana', 12);
-                }
+              for (const run of para.getRuns()) {
+                run.setBold(true);
+                run.setFont('Verdana', 12);
+                run.setColor('000000');
               }
             }
           }
