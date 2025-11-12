@@ -3066,7 +3066,7 @@ export class Document {
           }
         } else {
           // Paragraph is not in a table - wrap it using config
-          this.wrapParagraphInTable(para, {
+          const table = this.wrapParagraphInTable(para, {
             shading: h2Config.tableOptions?.shading ?? 'BFBFBF',
             marginTop: h2Config.tableOptions?.marginTop ?? 0,
             marginBottom: h2Config.tableOptions?.marginBottom ?? 0,
@@ -3074,6 +3074,22 @@ export class Document {
             marginRight: h2Config.tableOptions?.marginRight ?? 115,
             tableWidthPercent: h2Config.tableOptions?.tableWidthPercent ?? 5000,
           });
+
+          // Add blank paragraph after table for spacing (only if not already present)
+          const tableIndex = this.bodyElements.indexOf(table);
+          if (tableIndex !== -1) {
+            // Check if the next element exists and is a blank paragraph
+            const nextElement = this.bodyElements[tableIndex + 1];
+            const isNextElementBlankParagraph =
+              nextElement instanceof Paragraph &&
+              nextElement.getText().trim() === '';
+
+            // Only add blank paragraph if next element is not already a blank paragraph
+            if (!isNextElementBlankParagraph) {
+              const blankPara = Paragraph.create();
+              this.bodyElements.splice(tableIndex + 1, 0, blankPara);
+            }
+          }
         }
 
         processedParagraphs.add(para);
@@ -3115,7 +3131,31 @@ export class Document {
 
       // Process List Paragraph paragraphs
       else if (styleId === 'ListParagraph' && listParagraph) {
+        // Save formatting that should be preserved BEFORE clearing
+        const preservedFormatting = para.getRuns().map(run => {
+          const fmt = run.getFormatting();
+          return {
+            run: run,
+            bold: listParaPreserve.bold ? fmt.bold : undefined,
+            italic: listParaPreserve.italic ? fmt.italic : undefined,
+            underline: listParaPreserve.underline ? fmt.underline : undefined
+          };
+        });
+
         para.clearDirectFormattingConflicts(listParagraph);
+
+        // Restore preserved formatting AFTER clearing
+        for (const saved of preservedFormatting) {
+          if (saved.bold !== undefined) {
+            saved.run.setBold(saved.bold);
+          }
+          if (saved.italic !== undefined) {
+            saved.run.setItalic(saved.italic);
+          }
+          if (saved.underline !== undefined) {
+            saved.run.setUnderline(saved.underline);
+          }
+        }
 
         // Apply formatting to all runs, respecting preserve flags
         for (const run of para.getRuns()) {
@@ -3149,7 +3189,31 @@ export class Document {
 
       // Process Normal paragraphs (including undefined style which defaults to Normal)
       else if ((styleId === 'Normal' || styleId === undefined) && normal) {
+        // Save formatting that should be preserved BEFORE clearing
+        const preservedFormatting = para.getRuns().map(run => {
+          const fmt = run.getFormatting();
+          return {
+            run: run,
+            bold: normalPreserve.bold ? fmt.bold : undefined,
+            italic: normalPreserve.italic ? fmt.italic : undefined,
+            underline: normalPreserve.underline ? fmt.underline : undefined
+          };
+        });
+
         para.clearDirectFormattingConflicts(normal);
+
+        // Restore preserved formatting AFTER clearing
+        for (const saved of preservedFormatting) {
+          if (saved.bold !== undefined) {
+            saved.run.setBold(saved.bold);
+          }
+          if (saved.italic !== undefined) {
+            saved.run.setItalic(saved.italic);
+          }
+          if (saved.underline !== undefined) {
+            saved.run.setUnderline(saved.underline);
+          }
+        }
 
         // Apply formatting to all runs, respecting preserve flags
         for (const run of para.getRuns()) {
