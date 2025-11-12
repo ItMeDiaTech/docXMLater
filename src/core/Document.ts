@@ -3087,6 +3087,8 @@ export class Document {
             // Only add blank paragraph if next element is not already a blank paragraph
             if (!isNextElementBlankParagraph) {
               const blankPara = Paragraph.create();
+              // Add explicit spacing to ensure visibility in Word (120 twips = 6pt)
+              blankPara.setSpaceAfter(120);
               this.bodyElements.splice(tableIndex + 1, 0, blankPara);
             }
           }
