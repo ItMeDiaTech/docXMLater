@@ -650,6 +650,7 @@ High-level helper methods for common document formatting tasks:
 | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `applyCustomFormattingToExistingStyles(options?)`| Modify Heading1, Heading2, Heading3, Normal, and List Paragraph styles with custom or default formatting (Verdana font, specific spacing, single line spacing). Heading2 paragraphs are wrapped in tables. Accepts optional configuration for full customization. |
 | `applyStylesFromObjects(...styles)`      | Helper function that accepts Style objects and applies their formatting. Converts Style objects to configuration format and calls applyCustomFormattingToExistingStyles(). |
+| `applyStandardTableFormatting(options?)` | Comprehensive table formatting helper: autofit to window, format header row (shading, bold, centered), apply cell margins, conditionally recolor cells based on existing shading. One-call solution for standardizing all tables in document. |
 | `hideTableOfContentsPageNumbers()`       | Hide page numbers in all TOC elements in the document; returns count of TOCs modified      |
 | `wrapParagraphInTable(para, options?)`   | Wrap a paragraph in a 1x1 table with optional shading, margins, and width settings         |
 | `isParagraphInTable(para)`               | Check if a paragraph is inside a table; returns `{inTable: boolean, cell?: TableCell}`      |
@@ -751,6 +752,120 @@ This helper function modifies existing style definitions with custom or default 
 - Table appearance is fully customizable via `options.heading2.tableOptions`
 
 **Note:** Per ECMA-376 §17.7.2, direct formatting in document.xml overrides style definitions. This method automatically clears conflicting direct formatting to ensure style changes take effect.
+
+---
+
+**Note on `applyStandardTableFormatting(options?)`:**
+
+This comprehensive helper function standardizes table formatting across an entire document in a single call. Perfect for ensuring consistent table appearance.
+
+**Default behavior (when no parameter provided):**
+- **All tables**: Autofit to window width
+- **First row (header)**: Gray background (#E9E9E9), bold, centered, Verdana 12pt, black text, 3pt spacing
+- **All cells**: 0pt top/bottom margin, 0.08" (115 twips) left/right margin
+- **Single-cell tables**: Skipped by default
+- **Conditional shading**: All colored cells (except white) become the same gray as header (#E9E9E9)
+
+**Key Features:**
+- **Autofit to window**: Tables automatically resize to fit content
+- **Header row formatting**: Comprehensive first-row styling with custom options
+- **Cell margins**: Consistent internal padding for all cells
+- **Conditional recoloring**: Cells with colors (excluding white and header color) can be automatically recolored
+- **Smart skipping**: Optionally skip 1x1 tables to avoid formatting placeholder tables
+
+**Usage Examples:**
+
+```typescript
+import { Document } from 'docxmlater';
+
+const doc = await Document.load('document.docx');
+
+// Example 1: Use default gray color (E9E9E9) - simplest approach
+const result = doc.applyStandardTableFormatting();
+console.log(`Processed ${result.tablesProcessed} tables`);
+console.log(`Formatted ${result.headerRowsFormatted} header rows`);
+console.log(`Recolored ${result.cellsRecolored} cells`);
+
+// Example 2: Custom color - both header AND conditional cells use same color
+doc.applyStandardTableFormatting('D9D9D9');  // Light gray
+
+// Example 3: Different colors for header vs data cells (advanced)
+doc.applyStandardTableFormatting({
+  headerRowShading: '4472C4',  // Blue header
+  conditionalShading: {
+    replacementColor: 'FFD700',  // Gold for other colored cells
+    applyFormatting: true  // Apply bold/centered/Verdana formatting
+  }
+});
+
+// Example 4: Full customization
+doc.applyStandardTableFormatting({
+  autofitToWindow: true,
+  headerRowShading: 'CCCCCC',
+  headerRowFormatting: {
+    bold: true,
+    alignment: 'left',  // Left-aligned instead of centered
+    font: 'Arial',
+    size: 11,
+    color: '000000',
+    spacingBefore: 40,
+    spacingAfter: 40
+  },
+  cellMargins: {
+    top: 0,
+    bottom: 0,
+    left: 100,  // Custom left margin
+    right: 100  // Custom right margin
+  },
+  conditionalShading: {
+    replacementColor: 'F0F0F0',
+    applyFormatting: false  // Just recolor, don't format
+  },
+  skipSingleCellTables: true  // Skip 1x1 tables
+});
+
+await doc.save('formatted-tables.docx');
+```
+
+**Conditional Shading Logic:**
+
+By default, colored cells are automatically recolored to match the header row color:
+
+1. **Cells are evaluated**: Only data rows (not header row) are checked
+2. **Exclusion criteria**: Cells with white (#FFFFFF) or header row color are skipped
+3. **Matching cells**: All other colored cells are recolored to the same color as the header
+4. **Automatic formatting**: Matching cells also receive:
+   - Bold text
+   - Centered alignment
+   - Verdana 12pt font
+   - 3pt spacing before/after
+
+**Example scenario:**
+```typescript
+// Document has tables with various cell colors:
+// - White cells (#FFFFFF)
+// - Yellow highlights (#FFFF00)
+// - Green highlights (#00FF00)
+
+// Simple: Use same color for header AND highlighted cells
+doc.applyStandardTableFormatting('E9E9E9');  // Gray
+
+// Result:
+// - White cells: Stay white
+// - Header row: Gray (E9E9E9)
+// - Yellow highlights: Become gray (E9E9E9) with bold/centered formatting
+// - Green highlights: Become gray (E9E9E9) with bold/centered formatting
+```
+
+**Return value:**
+```typescript
+{
+  tablesProcessed: number;      // Number of tables modified
+  headerRowsFormatted: number;  // Number of header rows formatted
+  cellsRecolored: number;       // Number of cells recolored by conditional shading
+}
+```
+
 
 **Related helpers:**
 - Use `hideTableOfContentsPageNumbers()` to hide page numbers in TOCs

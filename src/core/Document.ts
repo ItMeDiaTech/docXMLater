@@ -1572,6 +1572,208 @@ export class Document {
   }
 
   /**
+   * Applies comprehensive formatting to all tables in the document
+   *
+   * This helper function provides a one-call solution for standardizing table formatting:
+   * - Autofit tables to window width
+   * - Format first row as header (shading, bold, centered, custom font/spacing)
+   * - Apply consistent cell margins to all cells
+   * - Conditionally recolor cells based on existing shading
+   * - Optionally skip single-cell (1x1) tables
+   *
+   * Conditional shading logic:
+   * - Cells with shading that is NOT white (#FFFFFF) AND NOT the header row color
+   *   will be replaced with the same color used for the header row
+   * - Formatted cells receive bold, centered, Verdana 12pt text with 3pt spacing
+   *
+   * @param shadingColorOrOptions Hex color for header/conditional shading (default: 'E9E9E9'), or full options object for advanced customization
+   * @returns Statistics about tables processed
+   *
+   * @example
+   * // Use default gray color (E9E9E9)
+   * const result = doc.applyStandardTableFormatting();
+   *
+   * @example
+   * // Custom color - both header and conditional cells use same color
+   * const result = doc.applyStandardTableFormatting('D9D9D9');
+   *
+   * @example
+   * // Advanced: Full customization
+   * const result = doc.applyStandardTableFormatting({
+   *   headerRowShading: '4472C4',  // Blue header
+   *   conditionalShading: {
+   *     replacementColor: 'FFD700',  // Different color for data cells
+   *     applyFormatting: true
+   *   }
+   * });
+   * console.log(`Processed ${result.tablesProcessed} tables`);
+   * console.log(`Formatted ${result.headerRowsFormatted} header rows`);
+   * console.log(`Recolored ${result.cellsRecolored} cells`);
+   */
+  public applyStandardTableFormatting(shadingColorOrOptions?: string | {
+    /** Autofit tables to window width (default: true) */
+    autofitToWindow?: boolean;
+    /** Header row background color (default: 'E9E9E9') */
+    headerRowShading?: string;
+    /** Header row text formatting */
+    headerRowFormatting?: {
+      bold?: boolean;
+      alignment?: 'left' | 'center' | 'right' | 'justify';
+      font?: string;
+      size?: number;
+      color?: string;
+      spacingBefore?: number;
+      spacingAfter?: number;
+    };
+    /** Cell margins for all cells in twips */
+    cellMargins?: {
+      top?: number;
+      bottom?: number;
+      left?: number;
+      right?: number;
+    };
+    /** Conditional shading for data cells */
+    conditionalShading?: {
+      /** Color to apply to cells that don't match white or header color */
+      replacementColor: string;
+      /** Whether to apply bold/centered/Verdana formatting (default: true) */
+      applyFormatting?: boolean;
+    };
+    /** Skip 1x1 tables (default: true) */
+    skipSingleCellTables?: boolean;
+  }): {
+    tablesProcessed: number;
+    headerRowsFormatted: number;
+    cellsRecolored: number;
+  } {
+    // Handle simple string parameter (just a color)
+    const options = typeof shadingColorOrOptions === 'string'
+      ? { headerRowShading: shadingColorOrOptions }
+      : shadingColorOrOptions;
+
+    // Default values
+    const autofitToWindow = options?.autofitToWindow !== false;
+    const headerRowShading = (options?.headerRowShading || 'E9E9E9').toUpperCase();
+    const headerRowFormatting = {
+      bold: options?.headerRowFormatting?.bold !== false,
+      alignment: options?.headerRowFormatting?.alignment || ('center' as const),
+      font: options?.headerRowFormatting?.font || 'Verdana',
+      size: options?.headerRowFormatting?.size || 12,
+      color: options?.headerRowFormatting?.color || '000000',
+      spacingBefore: options?.headerRowFormatting?.spacingBefore ?? 60,
+      spacingAfter: options?.headerRowFormatting?.spacingAfter ?? 60,
+    };
+    const cellMargins = {
+      top: options?.cellMargins?.top ?? 0,
+      bottom: options?.cellMargins?.bottom ?? 0,
+      left: options?.cellMargins?.left ?? 115,  // 0.08 inches
+      right: options?.cellMargins?.right ?? 115, // 0.08 inches
+    };
+    const skipSingleCellTables = options?.skipSingleCellTables !== false;
+
+    // Use header color for conditional shading by default (unless explicitly overridden)
+    const conditionalReplacementColor = options?.conditionalShading?.replacementColor || headerRowShading;
+
+    // Statistics
+    let tablesProcessed = 0;
+    let headerRowsFormatted = 0;
+    let cellsRecolored = 0;
+
+    // Get all tables
+    const tables = this.getAllTables();
+
+    for (const table of tables) {
+      const rowCount = table.getRowCount();
+      const columnCount = table.getColumnCount();
+
+      // Skip 1x1 tables if requested
+      if (skipSingleCellTables && rowCount === 1 && columnCount === 1) {
+        continue;
+      }
+
+      // Autofit to window
+      if (autofitToWindow) {
+        table.setLayout('auto');
+      }
+
+      // Format first row (header)
+      const firstRow = table.getRow(0);
+      if (firstRow) {
+        for (const cell of firstRow.getCells()) {
+          // Set header shading
+          cell.setShading({ fill: headerRowShading });
+
+          // Set margins
+          cell.setMargins(cellMargins);
+
+          // Format paragraphs and runs in header
+          for (const para of cell.getParagraphs()) {
+            para.setAlignment(headerRowFormatting.alignment);
+            para.setSpaceBefore(headerRowFormatting.spacingBefore);
+            para.setSpaceAfter(headerRowFormatting.spacingAfter);
+
+            for (const run of para.getRuns()) {
+              if (headerRowFormatting.bold) run.setBold(true);
+              run.setFont(headerRowFormatting.font, headerRowFormatting.size);
+              run.setColor(headerRowFormatting.color);
+            }
+          }
+        }
+        headerRowsFormatted++;
+      }
+
+      // Format remaining rows (data rows)
+      for (let i = 1; i < rowCount; i++) {
+        const row = table.getRow(i);
+        if (!row) continue;
+
+        for (const cell of row.getCells()) {
+          // Always apply margins
+          cell.setMargins(cellMargins);
+
+          // Conditional shading: if cell has color AND it's not white AND not header color
+          // Note: Conditional shading is ALWAYS applied when a color is provided (defaults to header color)
+          const currentShading = cell.getFormatting().shading;
+          const currentColor = currentShading?.fill?.toUpperCase();
+
+          if (
+            currentColor &&
+            currentColor !== 'FFFFFF' &&
+            currentColor !== headerRowShading
+          ) {
+            // Set to conditional replacement color (defaults to header color)
+            cell.setShading({ fill: conditionalReplacementColor });
+            cellsRecolored++;
+
+            // Apply formatting if enabled (default: true)
+            const applyFormatting = options?.conditionalShading?.applyFormatting !== false;
+            if (applyFormatting) {
+              for (const para of cell.getParagraphs()) {
+                para.setAlignment('center');
+                para.setSpaceBefore(60); // 3pt
+                para.setSpaceAfter(60); // 3pt
+
+                for (const run of para.getRuns()) {
+                  run.setBold(true);
+                  run.setFont('Verdana', 12);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      tablesProcessed++;
+    }
+
+    return {
+      tablesProcessed,
+      headerRowsFormatted,
+      cellsRecolored,
+    };
+  }
+
+  /**
    * Centers all images greater than specified pixel size
    *
    * Actually centers the paragraph containing the image, since images
@@ -2088,6 +2290,72 @@ export class Document {
 
         // Hanging indent: 0.25" (360 twips) for all levels
         numLevel.setHangingIndent(360);
+      }
+
+      // Apply paragraph formatting to all paragraphs using this list
+      this.applyFormattingToListParagraphs(instance.getNumId());
+      count++;
+    }
+
+    return count;
+  }
+
+  /**
+   * Applies standard formatting to all numbered lists in the document
+   *
+   * Standardizes numbered lists with (preserves existing numbering format):
+   * - Indentation: 0.5" increments (720 twips per level)
+   * - Hanging indent: 0.25" (360 twips)
+   * - Number font: Verdana 12pt
+   * - Paragraph text: Verdana 12pt
+   * - Spacing: 0pt before, 3pt after (60 twips)
+   * - Contextual spacing enabled (no spacing between same-type paragraphs)
+   *
+   * Note: This preserves the existing numbering format (decimal, roman, etc.)
+   * and only standardizes the visual formatting. To change numbering formats,
+   * use normalizeNumberedLists() instead.
+   *
+   * @returns Number of numbered lists updated
+   * @example
+   * ```typescript
+   * const doc = await Document.load('document.docx');
+   * const count = doc.applyStandardNumberedListFormatting();
+   * console.log(`Standardized ${count} numbered lists`);
+   * await doc.save('document-formatted.docx');
+   * ```
+   */
+  applyStandardNumberedListFormatting(): number {
+    const instances = this.numberingManager.getAllInstances();
+    let count = 0;
+
+    for (const instance of instances) {
+      const abstractNumId = instance.getAbstractNumId();
+      const abstractNum = this.numberingManager.getAbstractNumbering(abstractNumId);
+
+      if (!abstractNum) continue;
+
+      // Only process numbered lists (skip bullet lists)
+      const level0 = abstractNum.getLevel(0);
+      if (!level0 || level0.getFormat() === 'bullet') continue;
+
+      // Update all 9 levels (0-8) with standard formatting
+      for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
+        const numLevel = abstractNum.getLevel(levelIndex);
+        if (!numLevel) continue;
+
+        // Set number font to Verdana 12pt
+        numLevel.setFont('Verdana');
+        numLevel.setFontSize(24); // 12pt = 24 half-points
+
+        // Indentation: 0.5" per level (720 twips)
+        // Level 0 = 720, Level 1 = 1440, Level 2 = 2160, etc.
+        numLevel.setLeftIndent(720 * (levelIndex + 1));
+
+        // Hanging indent: 0.25" (360 twips) for all levels
+        numLevel.setHangingIndent(360);
+
+        // Set alignment to left
+        numLevel.setAlignment('left');
       }
 
       // Apply paragraph formatting to all paragraphs using this list
