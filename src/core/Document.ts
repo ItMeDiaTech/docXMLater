@@ -1708,8 +1708,14 @@ export class Document {
           // Set margins
           cell.setMargins(cellMargins);
 
-          // Format paragraphs and runs in header
+          // Format paragraphs and runs in header (skip list paragraphs)
           for (const para of cell.getParagraphs()) {
+            // Skip paragraphs that are part of numbered or bulleted lists
+            const numPr = para.getFormatting().numbering;
+            if (numPr && (numPr.level !== undefined || numPr.numId !== undefined)) {
+              continue; // Preserve list formatting
+            }
+
             para.setAlignment(headerRowFormatting.alignment);
             para.setSpaceBefore(headerRowFormatting.spacingBefore);
             para.setSpaceAfter(headerRowFormatting.spacingAfter);
@@ -1742,8 +1748,14 @@ export class Document {
             cell.setShading({ fill: headerRowShading });
             cellsRecolored++;
 
-            // Always apply formatting when shading is applied
+            // Always apply formatting when shading is applied (but skip list paragraphs)
             for (const para of cell.getParagraphs()) {
+              // Skip paragraphs that are part of numbered or bulleted lists
+              const numPr = para.getFormatting().numbering;
+              if (numPr && (numPr.level !== undefined || numPr.numId !== undefined)) {
+                continue; // Preserve list formatting
+              }
+
               para.setAlignment('center');
               para.setSpaceBefore(60); // 3pt
               para.setSpaceAfter(60); // 3pt
