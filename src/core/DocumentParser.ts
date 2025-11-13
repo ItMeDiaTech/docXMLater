@@ -588,6 +588,9 @@ export class DocumentParser {
         logTextDirection(`Paragraph has BiDi enabled`);
       }
 
+      // Merge consecutive hyperlinks with the same URL (handles Google Docs fragmentation)
+      this.mergeConsecutiveHyperlinks(paragraph);
+
       return paragraph;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -723,6 +726,9 @@ export class DocumentParser {
           }
         }
       }
+
+      // Merge consecutive hyperlinks with the same URL (handles Google Docs fragmentation)
+      this.mergeConsecutiveHyperlinks(paragraph);
 
       return paragraph;
     } catch (error) {
@@ -1170,21 +1176,30 @@ export class DocumentParser {
       const runs = hyperlinkObj["w:r"];
       const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
 
-      // Parse the first run properly to preserve tabs and other content elements
-      // TOC hyperlinks typically have ONE run with: text → tab → text structure
-      let parsedRun: Run | null = null;
+      // Parse ALL runs to handle multi-run hyperlinks (e.g., varied formatting within one hyperlink)
+      // Google Docs often splits hyperlinks by formatting changes, creating multiple runs
+      const parsedRuns: Run[] = [];
       let text = '';
       let formatting: RunFormatting = {};
 
       if (runChildren.length > 0) {
-        // Parse the first run using parseRunFromObject to preserve tabs, breaks, etc.
-        parsedRun = this.parseRunFromObject(runChildren[0]);
+        // Parse all runs, not just the first one
+        for (const runChild of runChildren) {
+          const parsedRun = this.parseRunFromObject(runChild);
+          if (parsedRun) {
+            parsedRuns.push(parsedRun);
+            text += parsedRun.getText();
+          }
+        }
 
-        if (parsedRun) {
-          text = parsedRun.getText();
-          formatting = parsedRun.getFormatting();
+        // Use the first run's formatting as the base formatting
+        if (parsedRuns.length > 0 && parsedRuns[0]) {
+          formatting = parsedRuns[0].getFormatting();
         }
       }
+
+      // For TOC hyperlinks with tabs/breaks, use the first parsed run
+      const parsedRun = parsedRuns.length > 0 ? parsedRuns[0] : null;
 
       // Resolve URL from relationship if external hyperlink
       let url: string | undefined;
@@ -1227,6 +1242,98 @@ export class DocumentParser {
     } catch (error) {
       console.warn('[DocumentParser] Failed to parse hyperlink:', error);
       return null;
+    }
+  }
+
+  /**
+   * Merges consecutive hyperlinks with the same URL into a single hyperlink
+   * This handles Google Docs-style hyperlinks that are split by formatting changes
+   * @param paragraph - Paragraph containing hyperlinks to merge
+   * @private
+   */
+  private mergeConsecutiveHyperlinks(paragraph: Paragraph): void {
+    const content = paragraph.getContent();
+    if (!content || content.length < 2) return;
+
+    const mergedContent: any[] = [];
+    let i = 0;
+
+    while (i < content.length) {
+      const currentItem = content[i];
+
+      // Check if current item is a hyperlink
+      if ((currentItem as any).constructor.name === 'Hyperlink') {
+        const currentHyperlink = currentItem as any;
+        const currentUrl = currentHyperlink.getUrl();
+        const currentAnchor = currentHyperlink.getAnchor();
+
+        // Look ahead for consecutive hyperlinks with the same URL
+        const consecutiveHyperlinks: any[] = [currentHyperlink];
+        let j = i + 1;
+
+        while (j < content.length) {
+          const nextItem = content[j];
+
+          // Stop if not a hyperlink
+          if ((nextItem as any).constructor.name !== 'Hyperlink') break;
+
+          const nextHyperlink = nextItem as any;
+          const nextUrl = nextHyperlink.getUrl();
+          const nextAnchor = nextHyperlink.getAnchor();
+
+          // Stop if different URL/anchor
+          if (nextUrl !== currentUrl || nextAnchor !== currentAnchor) break;
+
+          consecutiveHyperlinks.push(nextHyperlink);
+          j++;
+        }
+
+        // If we found multiple consecutive hyperlinks with same URL, merge them
+        if (consecutiveHyperlinks.length > 1) {
+          // Concatenate all text from the consecutive hyperlinks
+          const mergedText = consecutiveHyperlinks
+            .map(h => h.getText())
+            .join('');
+
+          // Use the first hyperlink's properties
+          const mergedHyperlink = new (currentHyperlink.constructor as any)({
+            url: currentUrl,
+            anchor: currentAnchor,
+            text: mergedText,
+            formatting: currentHyperlink.getFormatting(),
+            tooltip: currentHyperlink.getTooltip(),
+            relationshipId: currentHyperlink.getRelationshipId(),
+          });
+
+          mergedContent.push(mergedHyperlink);
+          i = j; // Skip all merged hyperlinks
+        } else {
+          // No merge needed, keep the hyperlink
+          mergedContent.push(currentHyperlink);
+          i++;
+        }
+      } else {
+        // Not a hyperlink, keep as-is
+        mergedContent.push(currentItem);
+        i++;
+      }
+    }
+
+    // Update paragraph content if we merged anything
+    if (mergedContent.length !== content.length) {
+      // Clear current content
+      paragraph.clearContent();
+
+      // Add merged content back
+      for (const item of mergedContent) {
+        if ((item as any).constructor.name === 'Hyperlink') {
+          paragraph.addHyperlink(item);
+        } else if ((item as any).constructor.name === 'Run') {
+          paragraph.addRun(item);
+        } else if ((item as any).constructor.name === 'Field') {
+          paragraph.addField(item);
+        }
+      }
     }
   }
 

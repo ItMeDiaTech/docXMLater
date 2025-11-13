@@ -3078,14 +3078,35 @@ export class Document {
           // Add blank paragraph after table for spacing (only if not already present)
           const tableIndex = this.bodyElements.indexOf(table);
           if (tableIndex !== -1) {
-            // Check if the next element exists and is a blank paragraph
+            // Check if the next element has any content (text, hyperlinks, images, etc.)
             const nextElement = this.bodyElements[tableIndex + 1];
-            const isNextElementBlankParagraph =
-              nextElement instanceof Paragraph &&
-              nextElement.getText().trim() === '';
 
-            // Only add blank paragraph if next element is not already a blank paragraph
-            if (!isNextElementBlankParagraph) {
+            // Check if next element is truly blank (no content at all)
+            const isNextElementBlank = (() => {
+              if (!(nextElement instanceof Paragraph)) return false;
+
+              const content = nextElement.getContent();
+              if (!content || content.length === 0) return true;
+
+              // Check if all content items are empty
+              for (const item of content) {
+                // Hyperlinks count as content
+                if ((item as any).constructor.name === 'Hyperlink') {
+                  return false;
+                }
+                // Images count as content (check for Image class when implemented)
+                // Runs with text count as content
+                if ((item as any).getText) {
+                  const text = (item as any).getText().trim();
+                  if (text !== '') return false;
+                }
+              }
+
+              return true; // All content is empty
+            })();
+
+            // Only add blank paragraph if next element is truly blank or doesn't exist
+            if (!isNextElementBlank) {
               const blankPara = Paragraph.create();
               // Add explicit spacing to ensure visibility in Word (120 twips = 6pt)
               blankPara.setSpaceAfter(120);
