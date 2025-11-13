@@ -125,3 +125,9 @@ config/rag_settings.json
 /testing
 /tests
 /tests/output
+
+# Analysis files
+DOCXMLATER_ANALYSIS_INDEX.md
+DOCXMLATER_ANALYSIS_SUMMARY.txt
+DOCXMLATER_FIXES_NEEDED.md
+hyperlink_defragmentation_fix.ts

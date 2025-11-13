@@ -5,6 +5,45 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2025-11-14
+
+### Added
+- **Hyperlink Defragmentation API**: New methods to fix fragmented hyperlinks from Google Docs
+  - `Document.defragmentHyperlinks(options)` - Merges fragmented hyperlinks with same URL across paragraphs
+  - `Hyperlink.resetToStandardFormatting()` - Resets hyperlink to standard style (Calibri, blue, underline)
+  - Enhanced `DocumentParser.mergeConsecutiveHyperlinks()` to handle non-consecutive fragments
+
+### Improved
+- **Hyperlink Merging Algorithm**: Now groups ALL hyperlinks by URL, not just consecutive ones
+  - Handles hyperlinks separated by runs or other content
+  - Optional formatting reset to fix corrupted fonts (e.g., Caveat from Google Docs)
+  - Processes hyperlinks in both main content and tables
+
+### Fixed
+- **Hyperlink Fragmentation**: Fixed issue where hyperlinks with same URL were split into multiple fragments
+- **Corrupted Hyperlink Fonts**: Added ability to reset hyperlinks to standard formatting
+- **Non-Consecutive Hyperlink Merging**: Now properly merges hyperlinks even when separated by other content
+
+### API Additions
+```typescript
+// Defragment hyperlinks in document
+doc.defragmentHyperlinks({
+  resetFormatting?: boolean,      // Reset to standard style
+  cleanupRelationships?: boolean  // Clean orphaned relationships
+});
+
+// Reset individual hyperlink formatting
+hyperlink.resetToStandardFormatting();
+```
+
+### Technical Changes
+- Enhanced `DocumentParser.mergeConsecutiveHyperlinks()` with URL grouping and optional formatting reset
+- Added `getStandardHyperlinkFormatting()` helper in DocumentParser
+- Added `resetToStandardFormatting()` method to Hyperlink class
+- Added `defragmentHyperlinks()` public method to Document class
+
+---
+
 ## [1.14.0] - 2025-11-13
 
 ### Added

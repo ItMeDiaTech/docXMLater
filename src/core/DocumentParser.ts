@@ -1246,81 +1246,119 @@ export class DocumentParser {
   }
 
   /**
-   * Merges consecutive hyperlinks with the same URL into a single hyperlink
+   * Merges hyperlinks with the same URL into a single hyperlink (handles fragmentation)
    * This handles Google Docs-style hyperlinks that are split by formatting changes
+   * Now enhanced to merge non-consecutive hyperlinks with the same URL
    * @param paragraph - Paragraph containing hyperlinks to merge
+   * @param resetFormatting - Whether to reset hyperlinks to standard formatting
    * @private
    */
-  private mergeConsecutiveHyperlinks(paragraph: Paragraph): void {
+  private mergeConsecutiveHyperlinks(paragraph: Paragraph, resetFormatting: boolean = false): void {
     const content = paragraph.getContent();
     if (!content || content.length < 2) return;
 
-    const mergedContent: any[] = [];
-    let i = 0;
+    // First pass: Group all hyperlinks by URL/anchor
+    const hyperlinkGroups = new Map<string, any[]>();
+    const nonHyperlinkItems: { item: any; index: number }[] = [];
+    const hyperlinkIndices = new Map<any, number>();
 
-    while (i < content.length) {
-      const currentItem = content[i];
+    for (let i = 0; i < content.length; i++) {
+      const item = content[i];
 
-      // Check if current item is a hyperlink
-      if ((currentItem as any).constructor.name === 'Hyperlink') {
-        const currentHyperlink = currentItem as any;
-        const currentUrl = currentHyperlink.getUrl();
-        const currentAnchor = currentHyperlink.getAnchor();
+      if ((item as any).constructor.name === 'Hyperlink') {
+        const hyperlink = item as any;
+        const url = hyperlink.getUrl() || '';
+        const anchor = hyperlink.getAnchor() || '';
+        const key = `${url}|${anchor}`; // Unique key for URL+anchor combination
 
-        // Look ahead for consecutive hyperlinks with the same URL
-        const consecutiveHyperlinks: any[] = [currentHyperlink];
-        let j = i + 1;
-
-        while (j < content.length) {
-          const nextItem = content[j];
-
-          // Stop if not a hyperlink
-          if ((nextItem as any).constructor.name !== 'Hyperlink') break;
-
-          const nextHyperlink = nextItem as any;
-          const nextUrl = nextHyperlink.getUrl();
-          const nextAnchor = nextHyperlink.getAnchor();
-
-          // Stop if different URL/anchor
-          if (nextUrl !== currentUrl || nextAnchor !== currentAnchor) break;
-
-          consecutiveHyperlinks.push(nextHyperlink);
-          j++;
+        if (!hyperlinkGroups.has(key)) {
+          hyperlinkGroups.set(key, []);
         }
-
-        // If we found multiple consecutive hyperlinks with same URL, merge them
-        if (consecutiveHyperlinks.length > 1) {
-          // Concatenate all text from the consecutive hyperlinks
-          const mergedText = consecutiveHyperlinks
-            .map(h => h.getText())
-            .join('');
-
-          // Use the first hyperlink's properties
-          const mergedHyperlink = new (currentHyperlink.constructor as any)({
-            url: currentUrl,
-            anchor: currentAnchor,
-            text: mergedText,
-            formatting: currentHyperlink.getFormatting(),
-            tooltip: currentHyperlink.getTooltip(),
-            relationshipId: currentHyperlink.getRelationshipId(),
-          });
-
-          mergedContent.push(mergedHyperlink);
-          i = j; // Skip all merged hyperlinks
-        } else {
-          // No merge needed, keep the hyperlink
-          mergedContent.push(currentHyperlink);
-          i++;
-        }
+        hyperlinkGroups.get(key)!.push(hyperlink);
+        hyperlinkIndices.set(hyperlink, i);
       } else {
-        // Not a hyperlink, keep as-is
-        mergedContent.push(currentItem);
-        i++;
+        nonHyperlinkItems.push({ item, index: i });
       }
     }
 
-    // Update paragraph content if we merged anything
-    if (mergedContent.length !== content.length) {
+    // Check if any merging is needed
+    let needsMerge = false;
+    for (const group of hyperlinkGroups.values()) {
+      if (group.length > 1) {
+        needsMerge = true;
+        break;
+      }
+    }
+
+    if (!needsMerge && !resetFormatting) {
+      return; // Nothing to do
+    }
+
+    // Second pass: Build merged content preserving original order
+    const mergedContent: any[] = [];
+    const processedIndices = new Set<number>();
+
+    for (let i = 0; i < content.length; i++) {
+      if (processedIndices.has(i)) {
+        continue; // Skip already processed items
+      }
+
+      const item = content[i];
+
+      if ((item as any).constructor.name === 'Hyperlink') {
+        const hyperlink = item as any;
+        const url = hyperlink.getUrl() || '';
+        const anchor = hyperlink.getAnchor() || '';
+        const key = `${url}|${anchor}`;
+        const group = hyperlinkGroups.get(key)!;
+
+        if (group.length > 1 && group[0] === hyperlink) {
+          // This is the first hyperlink in a group that needs merging
+          // Collect all text from the group
+          const mergedText = group.map(h => h.getText()).join('');
+
+          // Create merged hyperlink using first hyperlink's properties
+          const mergedHyperlink = new (hyperlink.constructor as any)({
+            url: hyperlink.getUrl(),
+            anchor: hyperlink.getAnchor(),
+            text: mergedText,
+            formatting: resetFormatting ? this.getStandardHyperlinkFormatting() : hyperlink.getFormatting(),
+            tooltip: hyperlink.getTooltip(),
+            relationshipId: hyperlink.getRelationshipId(),
+          });
+
+          // Mark all group members as processed
+          for (const h of group) {
+            processedIndices.add(hyperlinkIndices.get(h)!);
+          }
+
+          mergedContent.push(mergedHyperlink);
+        } else if (group.length === 1) {
+          // Single hyperlink, possibly reset formatting
+          if (resetFormatting) {
+            const resetHyperlink = new (hyperlink.constructor as any)({
+              url: hyperlink.getUrl(),
+              anchor: hyperlink.getAnchor(),
+              text: hyperlink.getText(),
+              formatting: this.getStandardHyperlinkFormatting(),
+              tooltip: hyperlink.getTooltip(),
+              relationshipId: hyperlink.getRelationshipId(),
+            });
+            mergedContent.push(resetHyperlink);
+          } else {
+            mergedContent.push(hyperlink);
+          }
+          processedIndices.add(i);
+        }
+      } else {
+        // Not a hyperlink, keep as-is
+        mergedContent.push(item);
+        processedIndices.add(i);
+      }
+    }
+
+    // Update paragraph content if we changed anything
+    if (needsMerge || resetFormatting) {
       // Clear current content
       paragraph.clearContent();
 
@@ -1335,6 +1373,18 @@ export class DocumentParser {
         }
       }
     }
+  }
+
+  /**
+   * Get standard hyperlink formatting (Calibri, blue, underline)
+   * @private
+   */
+  private getStandardHyperlinkFormatting(): any {
+    return {
+      font: 'Calibri',
+      color: '0563C1', // Standard hyperlink blue
+      underline: 'single'
+    };
   }
 
   /**

@@ -138,6 +138,42 @@ The processor inserts an empty paragraph when:
 - Type-safe operations
 - Simpler for basic edits
 
+### Hyperlink Defragmentation (v1.15.0+)
+
+Fix fragmented hyperlinks from Google Docs exports:
+
+```typescript
+import { Document } from 'docxmlater';
+
+// Load document with fragmented hyperlinks
+const doc = await Document.load('google-docs-export.docx');
+
+// Basic defragmentation - merges hyperlinks with same URL
+const mergedCount = doc.defragmentHyperlinks();
+console.log(`Merged ${mergedCount} fragmented hyperlinks`);
+
+// With formatting reset - fixes corrupted fonts (e.g., Caveat)
+const fixedCount = doc.defragmentHyperlinks({
+  resetFormatting: true
+});
+
+// Reset individual hyperlink formatting
+const hyperlinks = doc.getHyperlinks();
+for (const { hyperlink } of hyperlinks) {
+  if (hyperlink.getFormatting().font === 'Caveat') {
+    hyperlink.resetToStandardFormatting(); // Calibri, blue, underline
+  }
+}
+
+await doc.save('fixed.docx');
+```
+
+**Features:**
+- Merges non-consecutive hyperlinks with same URL
+- Fixes corrupted fonts from Google Docs (Caveat → Calibri)
+- Processes hyperlinks in tables and main content
+- Optional formatting reset to standard style
+
 ## Examples
 
 ### Example 1: Processing Multiple Files
