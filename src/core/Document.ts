@@ -4870,10 +4870,190 @@ export class Document {
     total: number;
     insertions: number;
     deletions: number;
+    propertyChanges: number;
+    moves: number;
+    tableCellChanges: number;
     authors: string[];
     nextId: number;
   } {
     return this.revisionManager.getStats();
+  }
+
+  /**
+   * Creates and registers a run properties change revision
+   * @param author - Author who made the change
+   * @param content - Content with changed formatting
+   * @param previousProperties - Previous run properties
+   * @param date - Optional date (defaults to now)
+   * @returns The created and registered revision
+   */
+  createRunPropertiesChange(
+    author: string,
+    content: Run | Run[],
+    previousProperties: Record<string, any>,
+    date?: Date
+  ): Revision {
+    const revision = Revision.createRunPropertiesChange(author, content, previousProperties, date);
+    return this.revisionManager.register(revision);
+  }
+
+  /**
+   * Creates and registers a paragraph properties change revision
+   * @param author - Author who made the change
+   * @param content - Paragraph content
+   * @param previousProperties - Previous paragraph properties
+   * @param date - Optional date (defaults to now)
+   * @returns The created and registered revision
+   */
+  createParagraphPropertiesChange(
+    author: string,
+    content: Run | Run[],
+    previousProperties: Record<string, any>,
+    date?: Date
+  ): Revision {
+    const revision = Revision.createParagraphPropertiesChange(author, content, previousProperties, date);
+    return this.revisionManager.register(revision);
+  }
+
+  /**
+   * Creates and registers a table properties change revision
+   * @param author - Author who made the change
+   * @param content - Table content
+   * @param previousProperties - Previous table properties
+   * @param date - Optional date (defaults to now)
+   * @returns The created and registered revision
+   */
+  createTablePropertiesChange(
+    author: string,
+    content: Run | Run[],
+    previousProperties: Record<string, any>,
+    date?: Date
+  ): Revision {
+    const revision = Revision.createTablePropertiesChange(author, content, previousProperties, date);
+    return this.revisionManager.register(revision);
+  }
+
+  /**
+   * Creates and registers a moveFrom revision (source of moved content)
+   * @param author - Author who moved the content
+   * @param content - Content that was moved
+   * @param moveId - Unique move operation ID (links moveFrom and moveTo)
+   * @param date - Optional date (defaults to now)
+   * @returns The created and registered revision
+   */
+  createMoveFrom(
+    author: string,
+    content: Run | Run[],
+    moveId: string,
+    date?: Date
+  ): Revision {
+    const revision = Revision.createMoveFrom(author, content, moveId, date);
+    return this.revisionManager.register(revision);
+  }
+
+  /**
+   * Creates and registers a moveTo revision (destination of moved content)
+   * @param author - Author who moved the content
+   * @param content - Content that was moved
+   * @param moveId - Unique move operation ID (links moveFrom and moveTo)
+   * @param date - Optional date (defaults to now)
+   * @returns The created and registered revision
+   */
+  createMoveTo(
+    author: string,
+    content: Run | Run[],
+    moveId: string,
+    date?: Date
+  ): Revision {
+    const revision = Revision.createMoveTo(author, content, moveId, date);
+    return this.revisionManager.register(revision);
+  }
+
+  /**
+   * Creates a pair of moveFrom and moveTo revisions for moving content
+   * @param author - Author who moved the content
+   * @param content - Content that was moved
+   * @param date - Optional date (defaults to now)
+   * @returns Object with both moveFrom and moveTo revisions
+   */
+  trackMove(
+    author: string,
+    content: Run | Run[],
+    date?: Date
+  ): { moveFrom: Revision; moveTo: Revision; moveId: string } {
+    // Generate unique move ID
+    const moveId = `move${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const moveFrom = this.createMoveFrom(author, content, moveId, date);
+    const moveTo = this.createMoveTo(author, content, moveId, date);
+
+    return { moveFrom, moveTo, moveId };
+  }
+
+  /**
+   * Creates and registers a table cell insertion revision
+   * @param author - Author who inserted the cell
+   * @param content - Cell content
+   * @param date - Optional date (defaults to now)
+   * @returns The created and registered revision
+   */
+  createTableCellInsert(
+    author: string,
+    content: Run | Run[],
+    date?: Date
+  ): Revision {
+    const revision = Revision.createTableCellInsert(author, content, date);
+    return this.revisionManager.register(revision);
+  }
+
+  /**
+   * Creates and registers a table cell deletion revision
+   * @param author - Author who deleted the cell
+   * @param content - Cell content
+   * @param date - Optional date (defaults to now)
+   * @returns The created and registered revision
+   */
+  createTableCellDelete(
+    author: string,
+    content: Run | Run[],
+    date?: Date
+  ): Revision {
+    const revision = Revision.createTableCellDelete(author, content, date);
+    return this.revisionManager.register(revision);
+  }
+
+  /**
+   * Creates and registers a table cell merge revision
+   * @param author - Author who merged cells
+   * @param content - Merged cell content
+   * @param date - Optional date (defaults to now)
+   * @returns The created and registered revision
+   */
+  createTableCellMerge(
+    author: string,
+    content: Run | Run[],
+    date?: Date
+  ): Revision {
+    const revision = Revision.createTableCellMerge(author, content, date);
+    return this.revisionManager.register(revision);
+  }
+
+  /**
+   * Creates and registers a numbering change revision
+   * @param author - Author who changed the numbering
+   * @param content - Content with changed numbering
+   * @param previousProperties - Previous numbering properties
+   * @param date - Optional date (defaults to now)
+   * @returns The created and registered revision
+   */
+  createNumberingChange(
+    author: string,
+    content: Run | Run[],
+    previousProperties: Record<string, any>,
+    date?: Date
+  ): Revision {
+    const revision = Revision.createNumberingChange(author, content, previousProperties, date);
+    return this.revisionManager.register(revision);
   }
 
   /**
