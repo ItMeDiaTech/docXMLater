@@ -214,6 +214,7 @@ export { BookmarkManager } from './elements/BookmarkManager';
 export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent } from './elements/StructuredDocumentTag';
 export { Revision, RevisionType, RevisionProperties } from './elements/Revision';
 export { RevisionManager } from './elements/RevisionManager';
+export { RangeMarker, RangeMarkerType, RangeMarkerProperties } from './elements/RangeMarker';
 export { Comment, CommentProperties } from './elements/Comment';
 export { CommentManager } from './elements/CommentManager';
 export { Footnote, FootnoteType, FootnoteProperties } from './elements/Footnote';
