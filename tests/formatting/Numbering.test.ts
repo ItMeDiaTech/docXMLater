@@ -40,9 +40,9 @@ describe('NumberingLevel', () => {
       const props = level.getProperties();
       expect(props.alignment).toBe('left');
       expect(props.start).toBe(1);
-      expect(props.leftIndent).toBe(720); // 720 * (0 + 1)
+      expect(props.leftIndent).toBe(720); // 720 + (0 * 360)
       expect(props.hangingIndent).toBe(360);
-      expect(props.font).toBe('Symbol'); // For bullet format
+      expect(props.font).toBe('Calibri'); // Changed from Symbol to Calibri
       expect(props.fontSize).toBe(22);
       expect(props.isLegalNumberingStyle).toBe(false);
       expect(props.suffix).toBe('tab');
@@ -56,7 +56,7 @@ describe('NumberingLevel', () => {
       });
 
       const props = level.getProperties();
-      expect(props.leftIndent).toBe(2160); // 720 * (2 + 1)
+      expect(props.leftIndent).toBe(1440); // 720 + (2 * 360)
     });
 
     it('should use custom properties when provided', () => {
@@ -306,7 +306,7 @@ describe('NumberingLevel', () => {
       const props = level.getProperties();
       expect(props.format).toBe('bullet');
       expect(props.text).toBe('◦');
-      expect(props.font).toBe('Symbol');
+      expect(props.font).toBe('Calibri');
     });
 
     it('should use default bullet', () => {
@@ -498,11 +498,13 @@ describe('AbstractNumbering', () => {
       const levels = abstractNum.getLevels();
       expect(levels).toHaveLength(9);
 
-      // Check the pattern: decimal, lower letter, lower roman, repeating
+      // Check the pattern: decimal, lowerLetter, lowerRoman, upperLetter, upperRoman, repeating
       expect(levels[0]!.getFormat()).toBe('decimal');
       expect(levels[1]!.getFormat()).toBe('lowerLetter');
       expect(levels[2]!.getFormat()).toBe('lowerRoman');
-      expect(levels[3]!.getFormat()).toBe('decimal');
+      expect(levels[3]!.getFormat()).toBe('upperLetter');
+      expect(levels[4]!.getFormat()).toBe('upperRoman');
+      expect(levels[5]!.getFormat()).toBe('decimal'); // Cycle repeats
     });
 
     it('should create outline list', () => {

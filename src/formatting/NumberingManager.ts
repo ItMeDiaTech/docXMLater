@@ -331,7 +331,7 @@ export class NumberingManager {
     }
 
     return {
-      leftIndent: 720 * (level + 1),
+      leftIndent: 720 + (level * 360),
       hangingIndent: 360,
     };
   }

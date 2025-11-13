@@ -143,13 +143,14 @@ describe('Special Characters in Runs', () => {
       para.addRun(new Run('\n'));
       para.addRun(new Run('Italic\tText', { italic: true }));
 
-      doc.createParagraph(para);
+      doc.addParagraph(para);
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
       const loadedPara = loadedDoc.getParagraphs()[0];
-      const text = loadedPara.getText();
+      expect(loadedPara).toBeDefined();
+      const text = loadedPara!.getText();
 
       expect(text).toContain('Bold\tText');
       expect(text).toContain('Italic\tText');
@@ -244,7 +245,7 @@ describe('Special Characters in Runs', () => {
       para.addRun(new Run('\n'));
       para.addRun(new Run('\t\n'));
 
-      doc.createParagraph(para);
+      doc.addParagraph(para);
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
@@ -289,9 +290,12 @@ describe('Special Characters in Runs', () => {
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
       const paragraphs = loadedDoc.getParagraphs();
-      expect(paragraphs[0].getText()).toStartWith('\t');
-      expect(paragraphs[1].getText()).toEndWith('\n');
-      expect(paragraphs[2].getText()).toBe('\t\n\t\n');
+      expect(paragraphs[0]).toBeDefined();
+      expect(paragraphs[1]).toBeDefined();
+      expect(paragraphs[2]).toBeDefined();
+      expect(paragraphs[0]!.getText().startsWith('\t')).toBe(true);
+      expect(paragraphs[1]!.getText().endsWith('\n')).toBe(true);
+      expect(paragraphs[2]!.getText()).toBe('\t\n\t\n');
     });
 
     it('should round-trip complex documents without loss', async () => {
@@ -305,19 +309,23 @@ describe('Special Characters in Runs', () => {
       para.addText('plus symbols: α β γ 😀 ', { underline: true });
       para.addText('non\u2011breaking\u2011hyphens');
 
-      doc.createParagraph(para);
+      doc.addParagraph(para);
 
       // First round-trip
       const buffer1 = await doc.toBuffer();
       const doc2 = await Document.loadFromBuffer(buffer1);
 
       // Second round-trip
-      const buffer2 = await doc2.saveToBuffer();
+      const buffer2 = await doc2.toBuffer();
       const doc3 = await Document.loadFromBuffer(buffer2);
 
       // Text should be identical after multiple round-trips
-      const originalText = doc.getParagraphs()[0].getText();
-      const finalText = doc3.getParagraphs()[0].getText();
+      const originalPara = doc.getParagraphs()[0];
+      const finalPara = doc3.getParagraphs()[0];
+      expect(originalPara).toBeDefined();
+      expect(finalPara).toBeDefined();
+      const originalText = originalPara!.getText();
+      const finalText = finalPara!.getText();
 
       expect(finalText).toBe(originalText);
     });

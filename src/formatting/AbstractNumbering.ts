@@ -254,9 +254,26 @@ export class AbstractNumbering {
 
   /**
    * Creates a bullet list abstract numbering with specified levels
+   *
+   * Uses Calibri font for better UI compatibility. For advanced bullet symbol selection,
+   * use NumberingLevel.getBulletSymbolWithFont() to get recommended symbol/font pairs.
+   *
    * @param abstractNumId The abstract numbering ID
    * @param levels Number of levels (default: 9)
    * @param bullets Array of bullet characters (default: ['•', '○', '▪'])
+   *
+   * @example
+   * // Standard bullet list
+   * const bulletList = AbstractNumbering.createBulletList(1);
+   *
+   * @example
+   * // Custom bullets using helper method
+   * const bullets = [];
+   * for (let i = 0; i < 9; i++) {
+   *   const { symbol } = NumberingLevel.getBulletSymbolWithFont(i, 'square');
+   *   bullets.push(symbol);
+   * }
+   * const squareList = AbstractNumbering.createBulletList(2, 9, bullets);
    */
   static createBulletList(
     abstractNumId: number,
@@ -286,7 +303,7 @@ export class AbstractNumbering {
   static createNumberedList(
     abstractNumId: number,
     levels: number = 9,
-    formats: Array<'decimal' | 'lowerLetter' | 'lowerRoman'> = ['decimal', 'lowerLetter', 'lowerRoman']
+    formats: Array<'decimal' | 'lowerLetter' | 'lowerRoman' | 'upperLetter' | 'upperRoman'> = ['decimal', 'lowerLetter', 'lowerRoman', 'upperLetter', 'upperRoman']
   ): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
       abstractNumId,
@@ -305,6 +322,12 @@ export class AbstractNumbering {
           break;
         case 'lowerRoman':
           level = NumberingLevel.createLowerRomanLevel(i, template);
+          break;
+        case 'upperLetter':
+          level = NumberingLevel.createUpperLetterLevel(i, template);
+          break;
+        case 'upperRoman':
+          level = NumberingLevel.createUpperRomanLevel(i, template);
           break;
         case 'decimal':
         default:

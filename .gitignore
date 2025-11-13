@@ -90,6 +90,11 @@ diagnose-*.ts
 extract-*.ts
 verify-*.ts
 modify-*.ts
+test-indentation.ts
+indentation-test.docx
+pre-processor.ts
+simple-example.ts
+.md
 
 # Extracted XML files
 *.xml
