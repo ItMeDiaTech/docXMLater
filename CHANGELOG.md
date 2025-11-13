@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.18.0] - 2025-11-13
 
 ### Added
+<<<<<<< HEAD
 - **Table Linebreak Fix API**: New method to ensure proper spacing after 1×1 tables
   - `Document.ensureTableLinebreaks(options)` - Scans document and adds blank paragraphs after 1×1 tables
   - Support for custom spacing, preserved marking, and selective filtering
@@ -20,6 +21,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added standalone utility: `fix-table-linebreaks.ts`
 - Added comprehensive example: `examples/fix-table-linebreaks.ts`
 - Added 11 unit tests covering all use cases
+=======
+- **Comprehensive Tracked Changes Support**: Full implementation of all OpenXML revision types
+  - `Revision` class enhancements: Support for all revision types (insert, delete, formatting, numbering, section properties, table properties, table row, table cell)
+  - `RevisionManager` improvements: Enhanced tracking and management of revisions across document elements
+  - New example: `examples/10-track-changes/advanced-track-changes.ts` (546 lines) demonstrating comprehensive tracked changes usage
+  - Document-level tracked changes API: `Document.enableTrackChanges()`, `Document.disableTrackChanges()`, `Document.isTrackChangesEnabled()`
+  - Paragraph-level tracked changes: `Paragraph.trackInsertion()`, `Paragraph.trackDeletion()`, `Paragraph.trackFormatting()`
+  - Full round-trip support for reading and writing tracked changes
+
+### Fixed
+- **Automatic Indentation Conflict Resolution**: Fixed issues with numbered paragraph indentation
+  - Automatically resolves conflicts between paragraph indentation and numbering indentation
+  - Prevents double-indentation issues that occur when both paragraph and numbering define indentation
+  - Implements smart merging: numbering indentation takes priority, paragraph indentation adjusts relatively
+  - Comprehensive analysis document: `LIST-INDENTATION-ANALYSIS.md` (356 lines) documenting the implementation
+  - New test suite: `tests/elements/ParagraphNumberingIndent.test.ts` (246 tests) ensuring correct behavior
+
+### Technical Improvements
+- Enhanced `Document.ts` with 180+ lines of tracked changes functionality
+- Enhanced `Paragraph.ts` with 61 lines of indentation conflict resolution logic
+- Expanded `Revision.ts` with 395+ lines supporting all revision types
+- Improved `RevisionManager.ts` with 111+ lines of revision management features
+- Added comprehensive formatting module documentation: `src/formatting/CLAUDE.md` (52 lines)
+
+### Tests
+- All 1180 tests passing (53 test suites)
+- New test coverage for tracked changes functionality
+- New test coverage for paragraph numbering indentation
+- Test output files cleaned up and removed from git tracking
+
+### Documentation
+- Added comprehensive list indentation analysis document
+- Updated formatting module CLAUDE.md with detailed specifications
+- Added advanced tracked changes example with real-world scenarios
+
+---
+
+## [1.17.0] - 2025-11-13
+
+Internal release with infrastructure improvements.
+>>>>>>> 8a4d6ba4a7be0931930bbefc505e9187fc016bac
 
 ---
 

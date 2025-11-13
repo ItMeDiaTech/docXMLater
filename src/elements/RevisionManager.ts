@@ -4,7 +4,7 @@
  * Tracks all revisions, assigns unique IDs, and provides statistics.
  */
 
-import { Revision } from './Revision';
+import { Revision, RevisionType } from './Revision';
 
 /**
  * Manages document revisions (track changes)
@@ -42,7 +42,7 @@ export class RevisionManager {
    * @param type - Revision type to filter by
    * @returns Array of revisions of the specified type
    */
-  getRevisionsByType(type: 'insert' | 'delete'): Revision[] {
+  getRevisionsByType(type: RevisionType): Revision[] {
     return this.revisions.filter(rev => rev.getType() === type);
   }
 
@@ -151,6 +151,107 @@ export class RevisionManager {
   }
 
   /**
+   * Gets all run properties changes (formatting changes)
+   * @returns Array of run property change revisions
+   */
+  getAllRunPropertiesChanges(): Revision[] {
+    return this.getRevisionsByType('runPropertiesChange');
+  }
+
+  /**
+   * Gets all paragraph properties changes
+   * @returns Array of paragraph property change revisions
+   */
+  getAllParagraphPropertiesChanges(): Revision[] {
+    return this.getRevisionsByType('paragraphPropertiesChange');
+  }
+
+  /**
+   * Gets all table properties changes
+   * @returns Array of table property change revisions
+   */
+  getAllTablePropertiesChanges(): Revision[] {
+    return this.getRevisionsByType('tablePropertiesChange');
+  }
+
+  /**
+   * Gets all move operations (both moveFrom and moveTo)
+   * @returns Array of move-related revisions
+   */
+  getAllMoves(): Revision[] {
+    return this.revisions.filter(rev =>
+      rev.getType() === 'moveFrom' || rev.getType() === 'moveTo'
+    );
+  }
+
+  /**
+   * Gets all moveFrom revisions (source of moves)
+   * @returns Array of moveFrom revisions
+   */
+  getAllMoveFrom(): Revision[] {
+    return this.getRevisionsByType('moveFrom');
+  }
+
+  /**
+   * Gets all moveTo revisions (destination of moves)
+   * @returns Array of moveTo revisions
+   */
+  getAllMoveTo(): Revision[] {
+    return this.getRevisionsByType('moveTo');
+  }
+
+  /**
+   * Gets all table cell changes (insert, delete, merge)
+   * @returns Array of table cell change revisions
+   */
+  getAllTableCellChanges(): Revision[] {
+    return this.revisions.filter(rev =>
+      rev.getType() === 'tableCellInsert' ||
+      rev.getType() === 'tableCellDelete' ||
+      rev.getType() === 'tableCellMerge'
+    );
+  }
+
+  /**
+   * Gets all numbering changes
+   * @returns Array of numbering change revisions
+   */
+  getAllNumberingChanges(): Revision[] {
+    return this.getRevisionsByType('numberingChange');
+  }
+
+  /**
+   * Gets all property change revisions (run, paragraph, table, etc.)
+   * @returns Array of all property change revisions
+   */
+  getAllPropertyChanges(): Revision[] {
+    return this.revisions.filter(rev =>
+      rev.getType() === 'runPropertiesChange' ||
+      rev.getType() === 'paragraphPropertiesChange' ||
+      rev.getType() === 'tablePropertiesChange' ||
+      rev.getType() === 'tableRowPropertiesChange' ||
+      rev.getType() === 'tableCellPropertiesChange' ||
+      rev.getType() === 'sectionPropertiesChange' ||
+      rev.getType() === 'numberingChange'
+    );
+  }
+
+  /**
+   * Gets move pair by move ID
+   * @param moveId - Move operation ID
+   * @returns Object with moveFrom and moveTo revisions (if found)
+   */
+  getMovePair(moveId: string): { moveFrom?: Revision; moveTo?: Revision } {
+    const moveFrom = this.revisions.find(
+      rev => rev.getType() === 'moveFrom' && rev.getMoveId() === moveId
+    );
+    const moveTo = this.revisions.find(
+      rev => rev.getType() === 'moveTo' && rev.getMoveId() === moveId
+    );
+    return { moveFrom, moveTo };
+  }
+
+  /**
    * Gets statistics about revisions
    * @returns Object with revision statistics
    */
@@ -158,6 +259,9 @@ export class RevisionManager {
     total: number;
     insertions: number;
     deletions: number;
+    propertyChanges: number;
+    moves: number;
+    tableCellChanges: number;
     authors: string[];
     nextId: number;
   } {
@@ -165,6 +269,9 @@ export class RevisionManager {
       total: this.revisions.length,
       insertions: this.getInsertionCount(),
       deletions: this.getDeletionCount(),
+      propertyChanges: this.getAllPropertyChanges().length,
+      moves: this.getAllMoves().length,
+      tableCellChanges: this.getAllTableCellChanges().length,
       authors: this.getAuthors(),
       nextId: this.nextId,
     };
@@ -200,6 +307,23 @@ export class RevisionManager {
       const revDate = rev.getDate();
       return revDate >= startDate && revDate <= endDate;
     });
+  }
+
+  /**
+   * Gets the next available revision ID
+   * Returns the current nextId value and increments it
+   * @returns Next available revision ID
+   */
+  getNextId(): number {
+    return this.nextId++;
+  }
+
+  /**
+   * Peeks at the next revision ID without incrementing
+   * @returns Next available revision ID (without consuming it)
+   */
+  peekNextId(): number {
+    return this.nextId;
   }
 
   /**
