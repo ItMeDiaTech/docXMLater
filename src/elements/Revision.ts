@@ -19,6 +19,7 @@ export type RevisionType =
   | 'runPropertiesChange' // w:rPrChange - Run formatting change (bold, italic, font, etc.)
   | 'paragraphPropertiesChange' // w:pPrChange - Paragraph formatting change
   | 'tablePropertiesChange'     // w:tblPrChange - Table formatting change
+  | 'tableExceptionPropertiesChange' // w:tblPrExChange - Table exception properties change
   | 'tableRowPropertiesChange'  // w:trPrChange - Table row properties change
   | 'tableCellPropertiesChange' // w:tcPrChange - Table cell properties change
   | 'sectionPropertiesChange'   // w:sectPrChange - Section properties change
@@ -69,6 +70,7 @@ export class Revision {
   private newProperties?: Record<string, any>;
   private moveId?: string;
   private moveLocation?: string;
+  private isFieldInstruction: boolean = false;
 
   /**
    * Creates a new Revision
@@ -182,6 +184,22 @@ export class Revision {
   }
 
   /**
+   * Marks this revision as a field instruction deletion
+   * When true, uses w:delInstrText instead of w:delText
+   */
+  setAsFieldInstruction(): this {
+    this.isFieldInstruction = true;
+    return this;
+  }
+
+  /**
+   * Checks if this is a field instruction deletion
+   */
+  isFieldInstructionDeletion(): boolean {
+    return this.isFieldInstruction;
+  }
+
+  /**
    * Formats a date to ISO 8601 format for XML
    */
   private formatDate(date: Date): string {
@@ -203,6 +221,8 @@ export class Revision {
         return 'w:pPrChange';
       case 'tablePropertiesChange':
         return 'w:tblPrChange';
+      case 'tableExceptionPropertiesChange':
+        return 'w:tblPrExChange';
       case 'tableRowPropertiesChange':
         return 'w:trPrChange';
       case 'tableCellPropertiesChange':
@@ -280,6 +300,7 @@ export class Revision {
       'runPropertiesChange',
       'paragraphPropertiesChange',
       'tablePropertiesChange',
+      'tableExceptionPropertiesChange',
       'tableRowPropertiesChange',
       'tableCellPropertiesChange',
       'sectionPropertiesChange',
@@ -303,6 +324,9 @@ export class Revision {
         break;
       case 'tablePropertiesChange':
         propElementName = 'w:tblPr';
+        break;
+      case 'tableExceptionPropertiesChange':
+        propElementName = 'w:tblPrEx';
         break;
       case 'tableRowPropertiesChange':
         propElementName = 'w:trPr';
@@ -344,20 +368,24 @@ export class Revision {
   }
 
   /**
-   * Creates XML for a deleted run (uses w:delText instead of w:t)
+   * Creates XML for a deleted run (uses w:delText or w:delInstrText instead of w:t)
    */
   private createDeletedRunXml(run: Run): XMLElement {
     // Get the regular run XML
     const runXml = run.toXML();
 
-    // We need to replace w:t elements with w:delText
+    // Determine which element to use for deleted text
+    // w:delInstrText for field instructions, w:delText for regular text
+    const deletedTextElement = this.isFieldInstruction ? 'w:delInstrText' : 'w:delText';
+
+    // We need to replace w:t elements with w:delText or w:delInstrText
     if (runXml.children) {
       const modifiedChildren = runXml.children.map(child => {
         if (typeof child === 'object' && child.name === 'w:t') {
-          // Replace w:t with w:delText
+          // Replace w:t with appropriate deleted text element
           return {
             ...child,
-            name: 'w:delText',
+            name: deletedTextElement,
           };
         }
         return child;
@@ -410,6 +438,29 @@ export class Revision {
       content,
       date,
     });
+  }
+
+  /**
+   * Creates a field instruction deletion revision
+   * Uses w:delInstrText instead of w:delText for field codes
+   * @param author - Author who made the deletion
+   * @param content - Deleted field instruction content (Run or array of Runs)
+   * @param date - Optional date (defaults to now)
+   * @returns New Revision instance
+   */
+  static createFieldInstructionDeletion(
+    author: string,
+    content: Run | Run[],
+    date?: Date
+  ): Revision {
+    const revision = new Revision({
+      author,
+      type: 'delete',
+      content,
+      date,
+    });
+    revision.setAsFieldInstruction();
+    return revision;
   }
 
   /**
@@ -499,6 +550,30 @@ export class Revision {
     return new Revision({
       author,
       type: 'tablePropertiesChange',
+      content,
+      previousProperties,
+      date,
+    });
+  }
+
+  /**
+   * Creates a table exception properties change revision
+   * Tracks changes to table properties that override style defaults
+   * @param author - Author who made the change
+   * @param content - Table content
+   * @param previousProperties - Previous table exception properties
+   * @param date - Optional date (defaults to now)
+   * @returns New Revision instance
+   */
+  static createTableExceptionPropertiesChange(
+    author: string,
+    content: Run | Run[],
+    previousProperties: Record<string, any>,
+    date?: Date
+  ): Revision {
+    return new Revision({
+      author,
+      type: 'tableExceptionPropertiesChange',
       content,
       previousProperties,
       date,

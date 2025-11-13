@@ -4889,6 +4889,59 @@ export class Document {
   }
 
   /**
+   * Adds a tracked field instruction deletion to a paragraph
+   * Uses w:delInstrText instead of w:delText for field codes
+   * @param paragraph - The paragraph to add the deletion to
+   * @param author - Author who made the deletion
+   * @param fieldInstruction - Deleted field instruction text (e.g., 'PAGE', 'DATE')
+   * @param date - Optional date (defaults to now)
+   * @returns The created revision
+   * @example
+   * // Track deletion of a PAGE field
+   * const para = doc.createParagraph();
+   * doc.trackFieldInstructionDeletion(para, 'Alice', 'PAGE \\* MERGEFORMAT');
+   */
+  trackFieldInstructionDeletion(
+    paragraph: Paragraph,
+    author: string,
+    fieldInstruction: string,
+    date?: Date
+  ): Revision {
+    const run = new Run(fieldInstruction);
+    const revision = Revision.createFieldInstructionDeletion(author, run, date);
+    this.revisionManager.register(revision);
+    paragraph.addRevision(revision);
+    return revision;
+  }
+
+  /**
+   * Marks a paragraph mark as deleted (tracked change)
+   *
+   * When a paragraph mark is deleted, it indicates that the paragraph
+   * was joined with the next paragraph. This creates a deletion marker
+   * in the paragraph properties (w:pPr/w:rPr/w:del) per ECMA-376 Part 1 §17.13.5.14.
+   *
+   * @param paragraph - Paragraph whose mark is deleted
+   * @param author - Author who deleted the paragraph mark
+   * @param date - Optional date (defaults to now)
+   * @returns The paragraph for chaining
+   * @example
+   * // Mark paragraph mark as deleted when joining paragraphs
+   * const para = doc.createParagraph('First paragraph');
+   * doc.trackParagraphMarkDeletion(para, 'Alice');
+   * // In Word, this shows the ¶ symbol as deleted
+   */
+  trackParagraphMarkDeletion(
+    paragraph: Paragraph,
+    author: string,
+    date?: Date
+  ): Paragraph {
+    const revisionId = this.revisionManager.getNextId();
+    paragraph.markParagraphMarkAsDeleted(revisionId, author, date);
+    return paragraph;
+  }
+
+  /**
    * Checks if track changes is enabled (has any revisions)
    * @returns True if there are revisions
    */

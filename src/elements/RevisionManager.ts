@@ -310,6 +310,23 @@ export class RevisionManager {
   }
 
   /**
+   * Gets the next available revision ID
+   * Returns the current nextId value and increments it
+   * @returns Next available revision ID
+   */
+  getNextId(): number {
+    return this.nextId++;
+  }
+
+  /**
+   * Peeks at the next revision ID without incrementing
+   * @returns Next available revision ID (without consuming it)
+   */
+  peekNextId(): number {
+    return this.nextId;
+  }
+
+  /**
    * Creates a new RevisionManager
    * @returns New RevisionManager instance
    */
