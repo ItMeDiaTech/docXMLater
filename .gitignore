@@ -91,8 +91,6 @@ diagnose-*.ts
 extract-*.ts
 verify-*.ts
 modify-*.ts
-test-indentation.ts
-indentation-test.docx
 pre-processor.ts
 simple-example.ts
 .md
@@ -106,8 +104,11 @@ simple-example.ts
 *_Extract/
 *_extracted/
 
-# Generated example outputs
+# Generated example outputs and document files
 *.docx
+*.doc
+*.pdf
+*.rtf
 
 # Allow test fixtures
 !tests/**/*.docx
@@ -132,3 +133,7 @@ DOCXMLATER_ANALYSIS_INDEX.md
 DOCXMLATER_ANALYSIS_SUMMARY.txt
 DOCXMLATER_FIXES_NEEDED.md
 hyperlink_defragmentation_fix.ts
+/LIST-INDENTATION-ANALYSIS.md
+/RESEARCH_TRACKED_CHANGES_IMPROVEMENTS.md
+/docs/archive
+/docs/analysis

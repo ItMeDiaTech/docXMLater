@@ -1694,20 +1694,20 @@ export class Paragraph {
         if (prev.alignment) {
           prevPPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': prev.alignment }));
         }
-        if (prev.indentLeft !== undefined || prev.indentRight !== undefined || prev.indentFirstLine !== undefined || prev.indentHanging !== undefined) {
+        if (prev.indentation) {
           const indAttrs: Record<string, string> = {};
-          if (prev.indentLeft !== undefined) indAttrs['w:left'] = prev.indentLeft.toString();
-          if (prev.indentRight !== undefined) indAttrs['w:right'] = prev.indentRight.toString();
-          if (prev.indentFirstLine !== undefined) indAttrs['w:firstLine'] = prev.indentFirstLine.toString();
-          if (prev.indentHanging !== undefined) indAttrs['w:hanging'] = prev.indentHanging.toString();
+          if (prev.indentation.left !== undefined) indAttrs['w:left'] = prev.indentation.left.toString();
+          if (prev.indentation.right !== undefined) indAttrs['w:right'] = prev.indentation.right.toString();
+          if (prev.indentation.firstLine !== undefined) indAttrs['w:firstLine'] = prev.indentation.firstLine.toString();
+          if (prev.indentation.hanging !== undefined) indAttrs['w:hanging'] = prev.indentation.hanging.toString();
           prevPPrChildren.push(XMLBuilder.wSelf('ind', indAttrs));
         }
-        if (prev.spaceBefore !== undefined || prev.spaceAfter !== undefined || prev.lineSpacing !== undefined || prev.lineSpacingRule) {
+        if (prev.spacing) {
           const spacingAttrs: Record<string, string> = {};
-          if (prev.spaceBefore !== undefined) spacingAttrs['w:before'] = prev.spaceBefore.toString();
-          if (prev.spaceAfter !== undefined) spacingAttrs['w:after'] = prev.spaceAfter.toString();
-          if (prev.lineSpacing !== undefined) spacingAttrs['w:line'] = prev.lineSpacing.toString();
-          if (prev.lineSpacingRule) spacingAttrs['w:lineRule'] = prev.lineSpacingRule;
+          if (prev.spacing.before !== undefined) spacingAttrs['w:before'] = prev.spacing.before.toString();
+          if (prev.spacing.after !== undefined) spacingAttrs['w:after'] = prev.spacing.after.toString();
+          if (prev.spacing.line !== undefined) spacingAttrs['w:line'] = prev.spacing.line.toString();
+          if (prev.spacing.lineRule) spacingAttrs['w:lineRule'] = prev.spacing.lineRule;
           if (Object.keys(spacingAttrs).length > 0) {
             prevPPrChildren.push(XMLBuilder.wSelf('spacing', spacingAttrs));
           }
