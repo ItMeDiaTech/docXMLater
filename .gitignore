@@ -29,6 +29,7 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Environment
 .env
