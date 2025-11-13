@@ -8,6 +8,7 @@ import { Field } from './Field';
 import { Hyperlink } from './Hyperlink';
 import { Bookmark } from './Bookmark';
 import { Revision } from './Revision';
+import { RangeMarker } from './RangeMarker';
 import { Comment } from './Comment';
 import { Shape } from './Shape';
 import { TextBox } from './TextBox';
@@ -226,9 +227,9 @@ export interface ParagraphFormatting {
 }
 
 /**
- * Paragraph content (runs, fields, hyperlinks, or revisions)
+ * Paragraph content (runs, fields, hyperlinks, revisions, range markers, shapes, text boxes)
  */
-type ParagraphContent = Run | Field | Hyperlink | Revision | Shape | TextBox;
+type ParagraphContent = Run | Field | Hyperlink | Revision | RangeMarker | Shape | TextBox;
 
 /**
  * Represents a paragraph in a document
@@ -369,6 +370,17 @@ export class Paragraph {
    */
   addRevision(revision: Revision): this {
     this.content.push(revision);
+    return this;
+  }
+
+  /**
+   * Adds a range marker to the paragraph
+   * Range markers mark the boundaries of moved, inserted, or deleted content
+   * @param rangeMarker - Range marker to add
+   * @returns This paragraph for chaining
+   */
+  addRangeMarker(rangeMarker: RangeMarker): this {
+    this.content.push(rangeMarker);
     return this;
   }
 
@@ -1550,6 +1562,9 @@ export class Paragraph {
         paragraphChildren.push(item.toXML());
       } else if (item instanceof Revision) {
         // Revisions (track changes) are their own element
+        paragraphChildren.push(item.toXML());
+      } else if (item instanceof RangeMarker) {
+        // Range markers are their own element (mark boundaries of moves, etc.)
         paragraphChildren.push(item.toXML());
       } else if (item instanceof Shape) {
         // Shapes are wrapped in a run

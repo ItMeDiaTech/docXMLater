@@ -22,6 +22,7 @@ import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { BookmarkManager } from "../elements/BookmarkManager";
 import { Revision, RevisionType } from "../elements/Revision";
 import { RevisionManager } from "../elements/RevisionManager";
+import { RangeMarker } from "../elements/RangeMarker";
 import { Comment } from "../elements/Comment";
 import { CommentManager } from "../elements/CommentManager";
 import { FootnoteManager } from "../elements/FootnoteManager";
@@ -160,6 +161,32 @@ export class Document {
   private generator: DocumentGenerator;
   private validator: DocumentValidator;
   private logger: ILogger;
+
+  // Track changes settings
+  private trackChangesEnabled: boolean = false;
+  private trackFormatting: boolean = true;
+  private revisionViewSettings: {
+    showInsertionsAndDeletions: boolean;
+    showFormatting: boolean;
+    showInkAnnotations: boolean;
+  } = {
+    showInsertionsAndDeletions: true,
+    showFormatting: true,
+    showInkAnnotations: true,
+  };
+  private rsidRoot?: string;
+  private rsids: Set<string> = new Set();
+  private documentProtection?: {
+    edit: 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+    enforcement: boolean;
+    cryptProviderType?: string;
+    cryptAlgorithmClass?: string;
+    cryptAlgorithmType?: string;
+    cryptAlgorithmSid?: number;
+    cryptSpinCount?: number;
+    hash?: string;
+    salt?: string;
+  };
 
   /**
    * Private constructor - use Document.create() or Document.load()
@@ -322,7 +349,14 @@ export class Document {
     // word/settings.xml (REQUIRED for DOCX compliance)
     this.zipHandler.addFile(
       "word/settings.xml",
-      this.generator.generateSettings()
+      this.generator.generateSettings({
+        trackChangesEnabled: this.trackChangesEnabled,
+        trackFormatting: this.trackFormatting,
+        revisionView: this.revisionViewSettings,
+        rsidRoot: this.rsidRoot,
+        rsids: this.getRsids(),
+        documentProtection: this.documentProtection,
+      })
     );
 
     // word/theme/theme1.xml (REQUIRED for DOCX compliance)
@@ -4880,6 +4914,196 @@ export class Document {
   }
 
   /**
+   * Enables track changes for this document
+   * When enabled, the w:trackRevisions flag is added to settings.xml
+   * @param options - Optional track changes settings
+   */
+  enableTrackChanges(options?: {
+    trackFormatting?: boolean;
+    showInsertionsAndDeletions?: boolean;
+    showFormatting?: boolean;
+    showInkAnnotations?: boolean;
+  }): this {
+    this.trackChangesEnabled = true;
+
+    if (options) {
+      if (options.trackFormatting !== undefined) {
+        this.trackFormatting = options.trackFormatting;
+      }
+      if (options.showInsertionsAndDeletions !== undefined) {
+        this.revisionViewSettings.showInsertionsAndDeletions = options.showInsertionsAndDeletions;
+      }
+      if (options.showFormatting !== undefined) {
+        this.revisionViewSettings.showFormatting = options.showFormatting;
+      }
+      if (options.showInkAnnotations !== undefined) {
+        this.revisionViewSettings.showInkAnnotations = options.showInkAnnotations;
+      }
+    }
+
+    return this;
+  }
+
+  /**
+   * Disables track changes for this document
+   */
+  disableTrackChanges(): this {
+    this.trackChangesEnabled = false;
+    return this;
+  }
+
+  /**
+   * Checks if track changes is enabled
+   * @returns True if track changes is enabled
+   */
+  isTrackChangesEnabled(): boolean {
+    return this.trackChangesEnabled;
+  }
+
+  /**
+   * Gets the track formatting setting
+   * @returns True if formatting changes are tracked
+   */
+  isTrackFormattingEnabled(): boolean {
+    return this.trackFormatting;
+  }
+
+  /**
+   * Gets the revision view settings
+   * @returns Revision view settings
+   */
+  getRevisionViewSettings(): {
+    showInsertionsAndDeletions: boolean;
+    showFormatting: boolean;
+    showInkAnnotations: boolean;
+  } {
+    return { ...this.revisionViewSettings };
+  }
+
+  /**
+   * Sets the RSID root for this document
+   * RSID (Revision Save ID) identifies the first editing session
+   * @param rsidRoot - 8-character hexadecimal RSID value
+   */
+  setRsidRoot(rsidRoot: string): this {
+    // Validate RSID format (8 hex characters)
+    if (!/^[0-9A-Fa-f]{8}$/.test(rsidRoot)) {
+      throw new Error('RSID must be an 8-character hexadecimal value');
+    }
+    this.rsidRoot = rsidRoot.toUpperCase();
+    this.rsids.add(this.rsidRoot);
+    return this;
+  }
+
+  /**
+   * Adds an RSID to the document
+   * Each editing session gets a unique RSID
+   * @param rsid - 8-character hexadecimal RSID value
+   */
+  addRsid(rsid: string): this {
+    // Validate RSID format
+    if (!/^[0-9A-Fa-f]{8}$/.test(rsid)) {
+      throw new Error('RSID must be an 8-character hexadecimal value');
+    }
+    this.rsids.add(rsid.toUpperCase());
+    return this;
+  }
+
+  /**
+   * Generates a new random RSID and adds it to the document
+   * @returns The generated RSID
+   */
+  generateRsid(): string {
+    const rsid = Math.floor(Math.random() * 0xFFFFFFFF).toString(16).toUpperCase().padStart(8, '0');
+    this.rsids.add(rsid);
+    return rsid;
+  }
+
+  /**
+   * Gets the RSID root value
+   * @returns RSID root or undefined if not set
+   */
+  getRsidRoot(): string | undefined {
+    return this.rsidRoot;
+  }
+
+  /**
+   * Gets all RSIDs in the document
+   * @returns Array of RSID values
+   */
+  getRsids(): string[] {
+    return Array.from(this.rsids);
+  }
+
+  /**
+   * Protects the document with specified edit restrictions
+   * @param protection - Document protection settings
+   */
+  protectDocument(protection: {
+    edit: 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+    enforcement?: boolean;
+    password?: string;
+    cryptProviderType?: string;
+    cryptAlgorithmClass?: string;
+    cryptAlgorithmType?: string;
+    cryptAlgorithmSid?: number;
+    cryptSpinCount?: number;
+  }): this {
+    this.documentProtection = {
+      edit: protection.edit,
+      enforcement: protection.enforcement ?? true,
+      cryptProviderType: protection.cryptProviderType,
+      cryptAlgorithmClass: protection.cryptAlgorithmClass,
+      cryptAlgorithmType: protection.cryptAlgorithmType,
+      cryptAlgorithmSid: protection.cryptAlgorithmSid,
+      cryptSpinCount: protection.cryptSpinCount,
+    };
+
+    // If password provided, generate hash and salt
+    if (protection.password) {
+      // For now, use a simple hash. In production, use proper cryptographic functions
+      const crypto = require('crypto');
+      const salt = crypto.randomBytes(16).toString('base64');
+      const hash = crypto.pbkdf2Sync(
+        protection.password,
+        salt,
+        protection.cryptSpinCount || 100000,
+        32,
+        'sha512'
+      ).toString('base64');
+
+      this.documentProtection.hash = hash;
+      this.documentProtection.salt = salt;
+    }
+
+    return this;
+  }
+
+  /**
+   * Removes document protection
+   */
+  unprotectDocument(): this {
+    this.documentProtection = undefined;
+    return this;
+  }
+
+  /**
+   * Checks if document is protected
+   * @returns True if document has protection enabled
+   */
+  isProtected(): boolean {
+    return this.documentProtection !== undefined;
+  }
+
+  /**
+   * Gets document protection settings
+   * @returns Document protection settings or undefined
+   */
+  getProtection(): typeof this.documentProtection {
+    return this.documentProtection;
+  }
+
+  /**
    * Creates and registers a run properties change revision
    * @param author - Author who made the change
    * @param content - Content with changed formatting
@@ -4974,20 +5198,59 @@ export class Document {
    * @param author - Author who moved the content
    * @param content - Content that was moved
    * @param date - Optional date (defaults to now)
-   * @returns Object with both moveFrom and moveTo revisions
+   * @returns Object with both moveFrom and moveTo revisions and range markers
    */
   trackMove(
     author: string,
     content: Run | Run[],
     date?: Date
-  ): { moveFrom: Revision; moveTo: Revision; moveId: string } {
-    // Generate unique move ID
+  ): {
+    moveFrom: Revision;
+    moveTo: Revision;
+    moveId: string;
+    moveFromRangeStart: RangeMarker;
+    moveFromRangeEnd: RangeMarker;
+    moveToRangeStart: RangeMarker;
+    moveToRangeEnd: RangeMarker;
+  } {
+    // Generate unique move ID and name
     const moveId = `move${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const moveName = `move${Date.now()}`;
 
+    // Get unique IDs for range markers (use revision manager's next ID)
+    const rangeIdStart = this.revisionManager.getStats().nextId;
+
+    // Create range markers for moveFrom
+    const moveFromRangeStart = RangeMarker.createMoveFromStart(
+      rangeIdStart,
+      moveName,
+      author,
+      date
+    );
+    const moveFromRangeEnd = RangeMarker.createMoveFromEnd(rangeIdStart);
+
+    // Create range markers for moveTo
+    const moveToRangeStart = RangeMarker.createMoveToStart(
+      rangeIdStart,
+      moveName,
+      author,
+      date
+    );
+    const moveToRangeEnd = RangeMarker.createMoveToEnd(rangeIdStart);
+
+    // Create the actual move revisions
     const moveFrom = this.createMoveFrom(author, content, moveId, date);
     const moveTo = this.createMoveTo(author, content, moveId, date);
 
-    return { moveFrom, moveTo, moveId };
+    return {
+      moveFrom,
+      moveTo,
+      moveId,
+      moveFromRangeStart,
+      moveFromRangeEnd,
+      moveToRangeStart,
+      moveToRangeEnd,
+    };
   }
 
   /**
