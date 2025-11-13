@@ -3,6 +3,7 @@
     /* Language and Environment */
     "target": "ES2022",
     "lib": ["ES2022"],
+    "types": ["node"],
 
     /* Modules */
     "module": "commonjs",
