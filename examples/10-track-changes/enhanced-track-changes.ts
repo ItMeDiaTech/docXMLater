@@ -324,10 +324,98 @@ async function example4_DocumentProtection() {
 }
 
 /**
- * Example 5: Complete workflow
+ * Example 5: Paragraph mark deletion
  */
-async function example5_CompleteWorkflow() {
-  console.log('Example 5: Complete track changes workflow...');
+async function example5_ParagraphMarkDeletion() {
+  console.log('Example 5: Paragraph mark deletion tracking...');
+
+  const doc = Document.create({
+    properties: {
+      title: 'Paragraph Mark Deletion Example',
+      creator: 'DocXML Examples',
+    },
+  });
+
+  doc.enableTrackChanges();
+
+  doc.createParagraph('Paragraph Mark Deletion Tracking')
+    .setStyle('Title')
+    .setAlignment('center')
+    .setSpaceAfter(480);
+
+  doc.createParagraph(
+    'When you delete a paragraph mark (¶) to join two paragraphs, ' +
+    'Word tracks this as a paragraph mark deletion. ' +
+    'The deletion appears in the paragraph properties (w:pPr/w:rPr/w:del).'
+  )
+    .setAlignment('justify')
+    .setSpaceAfter(240);
+
+  // Example 1: Simple paragraph mark deletion
+  doc.createParagraph('Simple Deletion:')
+    .setStyle('Heading2')
+    .setSpaceAfter(120);
+
+  const para1 = doc.createParagraph('First paragraph');
+  doc.trackParagraphMarkDeletion(para1, 'Alice', new Date());
+  para1.addText(' (paragraph mark deleted - joined with next)');
+  para1.setSpaceAfter(240);
+
+  doc.createParagraph('This paragraph was originally separate but was joined.')
+    .setSpaceAfter(240);
+
+  // Example 2: Multiple deletions
+  doc.createParagraph('Multiple Deletions:')
+    .setStyle('Heading2')
+    .setSpaceAfter(120);
+
+  const para2 = doc.createParagraph('Paragraph A');
+  doc.trackParagraphMarkDeletion(para2, 'Bob', new Date());
+
+  const para3 = doc.createParagraph('Paragraph B');
+  doc.trackParagraphMarkDeletion(para3, 'Carol', new Date());
+
+  doc.createParagraph('Paragraph C (final)')
+    .setSpaceAfter(240);
+
+  doc.createParagraph(
+    'Note: In Microsoft Word, open this document and show Track Changes. ' +
+    'The ¶ (paragraph mark) symbols will appear as deleted, ' +
+    'indicating where paragraphs were joined together.'
+  )
+    .setAlignment('justify')
+    .setSpaceAfter(240);
+
+  // Show deletion info
+  doc.createParagraph('Deletion Details:')
+    .setStyle('Heading2')
+    .setSpaceAfter(120);
+
+  doc.createParagraph()
+    .addText(`Paragraph 1 mark deleted: ${para1.isParagraphMarkDeleted()}`, { font: 'Courier New', size: 10 })
+    .setSpaceBefore(60);
+
+  doc.createParagraph()
+    .addText(`Paragraph 2 mark deleted: ${para2.isParagraphMarkDeleted()}`, { font: 'Courier New', size: 10 })
+    .setSpaceBefore(40);
+
+  doc.createParagraph()
+    .addText(`Paragraph 3 mark deleted: ${para3.isParagraphMarkDeleted()}`, { font: 'Courier New', size: 10 })
+    .setSpaceBefore(40);
+
+  // Save document
+  const outputPath = path.join(outputDir, 'enhanced-example5-paragraph-marks.docx');
+  await doc.save(outputPath);
+
+  console.log(`✓ Saved to ${outputPath}`);
+  console.log('  Note: Paragraph marks tracked as deletions!');
+}
+
+/**
+ * Example 6: Complete workflow
+ */
+async function example6_CompleteWorkflow() {
+  console.log('Example 6: Complete track changes workflow...');
 
   const doc = Document.create({
     properties: {
@@ -430,7 +518,8 @@ async function main() {
     await example2_MoveWithRangeMarkers();
     await example3_RsidTracking();
     await example4_DocumentProtection();
-    await example5_CompleteWorkflow();
+    await example5_ParagraphMarkDeletion();
+    await example6_CompleteWorkflow();
 
     console.log('\n✓ All examples completed successfully!');
     console.log(`\nOutput files saved to: ${outputDir}`);
@@ -439,6 +528,7 @@ async function main() {
     console.log('  ✓ Range markers for move operations');
     console.log('  ✓ RSID (Revision Save ID) tracking');
     console.log('  ✓ Document protection with passwords');
+    console.log('  ✓ Paragraph mark deletion tracking');
     console.log('  ✓ Revision view settings');
     console.log('\nOpen documents in Microsoft Word to see track changes working!');
   } catch (error) {
@@ -457,5 +547,6 @@ export {
   example2_MoveWithRangeMarkers,
   example3_RsidTracking,
   example4_DocumentProtection,
-  example5_CompleteWorkflow,
+  example5_ParagraphMarkDeletion,
+  example6_CompleteWorkflow,
 };

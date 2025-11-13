@@ -224,6 +224,15 @@ export interface ParagraphFormatting {
   pPrChange?: ParagraphPropertiesChange;
   /** Run properties for the paragraph mark (¶ symbol formatting) */
   paragraphMarkRunProperties?: RunFormatting;
+  /** Paragraph mark deletion tracking (for deleted ¶ symbols) */
+  paragraphMarkDeletion?: {
+    /** Unique revision ID */
+    id: number;
+    /** Author who deleted the paragraph mark */
+    author: string;
+    /** Date when the paragraph mark was deleted */
+    date: Date;
+  };
 }
 
 /**
@@ -1236,6 +1245,49 @@ export class Paragraph {
   }
 
   /**
+   * Marks the paragraph mark as deleted (tracked change)
+   *
+   * When a paragraph mark is deleted, it indicates that the paragraph
+   * was joined with the next paragraph. Word shows this as a deletion
+   * of the ¶ symbol.
+   *
+   * @param id - Unique revision ID
+   * @param author - Author who deleted the paragraph mark
+   * @param date - Date when the deletion occurred (defaults to now)
+   * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * paragraph.markParagraphMarkAsDeleted(1, 'Alice', new Date());
+   * ```
+   */
+  markParagraphMarkAsDeleted(id: number, author: string, date?: Date): this {
+    this.formatting.paragraphMarkDeletion = {
+      id,
+      author,
+      date: date || new Date(),
+    };
+    return this;
+  }
+
+  /**
+   * Clears the paragraph mark deletion marker
+   * @returns This paragraph for chaining
+   */
+  clearParagraphMarkDeletion(): this {
+    delete this.formatting.paragraphMarkDeletion;
+    return this;
+  }
+
+  /**
+   * Checks if the paragraph mark is marked as deleted
+   * @returns True if the paragraph mark is deleted
+   */
+  isParagraphMarkDeleted(): boolean {
+    return !!this.formatting.paragraphMarkDeletion;
+  }
+
+  /**
    * Converts the paragraph to WordprocessingML XML element
    *
    * **ECMA-376 Compliance:** Properties are generated in the order specified by
@@ -1283,10 +1335,36 @@ export class Paragraph {
 
     // 1.5. Paragraph mark run properties per ECMA-376 Part 1 §17.3.1.29
     // Controls formatting of the paragraph mark (¶ symbol) itself
-    if (this.formatting.paragraphMarkRunProperties) {
-      const rPr = Run.generateRunPropertiesXML(this.formatting.paragraphMarkRunProperties);
-      if (rPr) {
-        pPrChildren.push(rPr);
+    if (this.formatting.paragraphMarkRunProperties || this.formatting.paragraphMarkDeletion) {
+      const rPrChildren: XMLElement[] = [];
+
+      // Add run properties for the paragraph mark if they exist
+      if (this.formatting.paragraphMarkRunProperties) {
+        const rPr = Run.generateRunPropertiesXML(this.formatting.paragraphMarkRunProperties);
+        if (rPr && rPr.children) {
+          // Filter to only XMLElement types (children can be XMLElement or string)
+          for (const child of rPr.children) {
+            if (typeof child !== 'string') {
+              rPrChildren.push(child);
+            }
+          }
+        }
+      }
+
+      // Add deletion marker if the paragraph mark is deleted (w:del)
+      // Per ECMA-376 Part 1 §17.13.5.14 - tracks deletion of paragraph mark
+      if (this.formatting.paragraphMarkDeletion) {
+        const del = this.formatting.paragraphMarkDeletion;
+        rPrChildren.push(XMLBuilder.wSelf('del', {
+          'w:id': del.id.toString(),
+          'w:author': del.author,
+          'w:date': del.date.toISOString(),
+        }));
+      }
+
+      // Add w:rPr element if there are any run properties
+      if (rPrChildren.length > 0) {
+        pPrChildren.push(XMLBuilder.w('rPr', undefined, rPrChildren));
       }
     }
 
