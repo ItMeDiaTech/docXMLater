@@ -562,6 +562,58 @@ level.setLeftIndent(indent.left);
 level.setHangingIndent(indent.hanging);
 ```
 
+### Issue: Paragraph Indentation Conflicts with Numbering
+
+**Problem:** Setting paragraph indentation on list items causes inconsistent spacing
+**Root Cause:** Per ECMA-376 §17.3.1.12, paragraph-level indentation overrides numbering-level indentation
+**Solution:** The framework automatically clears conflicting indentation when numbering is applied
+
+**Behavior (as of v1.18.0):**
+```typescript
+const para = doc.createParagraph('Item');
+para.setLeftIndent(1440);        // Set 1" indent
+para.setNumbering(listId, 0);    // Applies numbering, CLEARS left indent
+// Result: Indent is controlled by numbering level (720 twips = 0.5")
+```
+
+**Warnings:**
+Setting indentation methods on numbered paragraphs will trigger warnings:
+```typescript
+const para = doc.createParagraph('Item');
+para.setNumbering(listId, 0);
+para.setLeftIndent(1440);  // Warning: "Setting left indentation on numbered paragraph has no effect"
+```
+
+**What's Preserved:**
+- Right indentation is preserved (doesn't conflict with numbering)
+- Spacing before/after is preserved
+
+**What's Cleared:**
+- Left indentation
+- First line indentation
+- Hanging indentation
+
+**Changing List Levels:**
+To change indentation of list items, change the numbering level instead:
+```typescript
+// WRONG: Setting indent directly
+para.setNumbering(listId, 0);
+para.setLeftIndent(1080);  // This will have no effect
+
+// CORRECT: Change the numbering level
+para.setNumbering(listId, 1);  // Level 1 = 1080 twips (0.75")
+para.setNumbering(listId, 2);  // Level 2 = 1440 twips (1.0")
+```
+
+**Standard Indentation Formula:**
+- Level 0: 720 twips (0.5 inch)
+- Level 1: 1080 twips (0.75 inch)
+- Level 2: 1440 twips (1.0 inch)
+- Formula: `leftIndent = 720 + (level * 360)`
+
+**For More Details:**
+See `LIST-INDENTATION-ANALYSIS.md` for comprehensive technical analysis.
+
 ## See Also
 
 - `src/core/CLAUDE.md` - Core document classes
