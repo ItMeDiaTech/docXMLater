@@ -1,0 +1,134 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output
+dist/
+build/
+*.js
+*.d.ts
+*.map
+
+# Keep config files
+!jest.config.js
+
+# Testing
+coverage/
+.nyc_output/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Claude AI files and development notes (not for public repo)
+CLAUDE.md
+**/CLAUDE.md
+.claude/
+Claude.cli
+
+# Development documentation (personal/internal use only)
+docs/dev/
+IMPLEMENTATION_SUMMARY.md
+QUICKSTART.md
+PROJECT_STATUS.md
+CODE_REVIEW_IMPROVEMENTS.md
+LOGGING_IMPLEMENTATION.md
+AUDIT_REPORT.md
+CORRECTED_AUDIT.md
+FRAMEWORK_STANDARDIZATION*.md
+REFACTORING_LOCATIONS.md
+API_METHODS_INVENTORY.md
+CLEAN_SUMMARY.md
+docxmlater-functions-and-structure.md
+
+# Personal status files
+*_STATUS.md
+*_PROGRESS.md
+TODO.md
+NOTES.md
+plan.md
+*_Report.md
+
+# Analysis and summary files
+*_SUMMARY.md
+*_ANALYSIS.md
+*_RESULTS.md
+*_SUGGESTIONS.md
+*_FIXES.md
+*_IMPLEMENTATION.md
+COMPLETION_*.md
+HELPER_FUNCTIONS_*.md
+ISSUE_FIXES_*.md
+OPENXML_COMPLIANCE_*.md
+RAG_CLI_*.md
+STYLE_VERIFICATION_*.md
+TEXT_DIRECTION_*.md
+
+# Test scripts (temporary development scripts)
+test-*.ts
+check-*.ts
+diagnose-*.ts
+extract-*.ts
+verify-*.ts
+modify-*.ts
+test-indentation.ts
+indentation-test.docx
+pre-processor.ts
+simple-example.ts
+.md
+
+# Extracted XML files
+*.xml
+!src/**/*.xml
+!tests/**/*.xml
+
+# Extraction directories
+*_Extract/
+*_extracted/
+
+# Generated example outputs
+*.docx
+
+# Allow test fixtures
+!tests/**/*.docx
+!ErrorDoc.docx
+!Working.docx
+!Test_Code.docx
+
+# RAG-CLI data
+data/vectors/
+data/cache/*.db
+config/rag_settings.json
+
+/SKILL.md
+/OPENXML_STRUCTURE_GUIDE.md
+/jest.config.js
+/testing
+/tests
+/tests/output
+
+# Analysis files
+DOCXMLATER_ANALYSIS_INDEX.md
+DOCXMLATER_ANALYSIS_SUMMARY.txt
+DOCXMLATER_FIXES_NEEDED.md
+hyperlink_defragmentation_fix.ts
