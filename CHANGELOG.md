@@ -5,6 +5,26 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2025-11-13
+
+### Added
+- **Blank Line Preservation for 1x1 Tables**: New `ensureBlankLinesAfter1x1Tables()` method to preserve blank lines after single-cell tables
+  - Automatically detects 1x1 tables with specific properties (10pt height, no borders)
+  - Ensures exactly one blank paragraph follows each qualifying table
+  - Prevents excessive blank line accumulation on repeated saves
+  - Maintains document formatting consistency
+
+### Documentation
+- Added comprehensive Documentation Hub implementation comparison
+- Updated project documentation and analysis files
+
+### Technical Improvements
+- Enhanced table processing logic for better formatting preservation
+- Improved blank paragraph detection and management
+- Added safety checks to prevent blank line duplication
+
+---
+
 ## [1.18.0] - 2025-11-13
 
 ### Added
