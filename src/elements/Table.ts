@@ -5,6 +5,7 @@
 import { TableRow, RowFormatting } from './TableRow';
 import { TableCell, CellFormatting } from './TableCell';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { deepClone } from '../utils/deepClone';
 
 /**
  * Table alignment
@@ -1204,7 +1205,7 @@ export class Table {
    */
   clone(): Table {
     // Clone formatting
-    const clonedFormatting: TableFormatting = JSON.parse(JSON.stringify(this.formatting));
+    const clonedFormatting: TableFormatting = deepClone(this.formatting);
 
     // Create new table with same structure
     const clonedTable = new Table(0, 0, clonedFormatting);
@@ -1217,7 +1218,7 @@ export class Table {
 
       for (const cell of cells) {
         const cellFormatting = cell.getFormatting();
-        const clonedCell = new TableCell(JSON.parse(JSON.stringify(cellFormatting)));
+        const clonedCell = new TableCell(deepClone(cellFormatting));
 
         // Clone paragraphs in cell
         for (const para of cell.getParagraphs()) {

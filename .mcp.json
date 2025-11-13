@@ -3,12 +3,12 @@
     "rag-cli": {
       "command": "python",
       "args": [
-        "C:\\Users\\DiaTech\\Pictures\\DiaTech\\Programs\\DocHub\\development\\RAG-CLI\\src\\plugin\\mcp\\unified_server.py"
+        "${DOCUMENTATION_HUB_ROOT}/RAG-CLI/src/plugin/mcp/unified_server.py"
       ],
       "env": {
-        "PYTHONPATH": "C:\\Users\\DiaTech\\Pictures\\DiaTech\\Programs\\DocHub\\development\\RAG-CLI",
-        "RAG_INDEX_PATH": "C:\\Users\\DiaTech\\Pictures\\DiaTech\\Programs\\DocHub\\development\\RAG-CLI\\data\\vectors",
-        "RAG_DOCUMENTS_PATH": "C:\\Users\\DiaTech\\Pictures\\DiaTech\\Programs\\DocHub\\development\\RAG-CLI\\data\\documents"
+        "PYTHONPATH": "${DOCUMENTATION_HUB_ROOT}/RAG-CLI",
+        "RAG_INDEX_PATH": "${DOCUMENTATION_HUB_ROOT}/RAG-CLI/data/vectors",
+        "RAG_DOCUMENTS_PATH": "${DOCUMENTATION_HUB_ROOT}/RAG-CLI/data/documents"
       }
     }
   }

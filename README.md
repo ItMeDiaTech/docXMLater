@@ -240,6 +240,42 @@ Run the processor and verify only the 1x1 table with Header 2 gets a line break.
 - `typescript` - TypeScript compiler
 - `ts-node` - TypeScript execution
 
+## Documentation_Hub Integration
+
+This project includes MCP (Model Context Protocol) integration for use with the Documentation_Hub RAG-CLI system.
+
+### Setup
+
+1. Set the `DOCUMENTATION_HUB_ROOT` environment variable to point to your Documentation_Hub installation:
+
+   **Windows:**
+   ```cmd
+   set DOCUMENTATION_HUB_ROOT=C:\Users\YourName\Programs\DocHub\development
+   ```
+
+   **Linux/macOS:**
+   ```bash
+   export DOCUMENTATION_HUB_ROOT=/path/to/Documentation_Hub/development
+   ```
+
+2. The `.mcp.json` configuration will automatically use this path to locate the RAG-CLI server.
+
+3. Ensure Python and the RAG-CLI dependencies are installed in your Documentation_Hub installation.
+
+### Configuration
+
+The MCP server configuration is stored in `.mcp.json` and uses the following paths relative to `DOCUMENTATION_HUB_ROOT`:
+- Server: `RAG-CLI/src/plugin/mcp/unified_server.py`
+- Vector Index: `RAG-CLI/data/vectors`
+- Documents: `RAG-CLI/data/documents`
+
+To enable/disable the RAG integration, modify `config/rag_settings.json`:
+```json
+{
+  "enabled": true
+}
+```
+
 ## License
 
 MIT
