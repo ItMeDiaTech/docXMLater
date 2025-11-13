@@ -5,6 +5,24 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0] - 2025-11-13
+
+### Added
+- **Table Linebreak Fix API**: New method to ensure proper spacing after 1×1 tables
+  - `Document.ensureTableLinebreaks(options)` - Scans document and adds blank paragraphs after 1×1 tables
+  - Support for custom spacing, preserved marking, and selective filtering
+  - Analysis tool for comparing before/after states
+  - Standalone utility for batch processing
+
+### Files
+- Added `src/core/Document.ensureTableLinebreaks()` method (108 lines)
+- Added analysis tool: `analyze-table-linebreaks.ts`
+- Added standalone utility: `fix-table-linebreaks.ts`
+- Added comprehensive example: `examples/fix-table-linebreaks.ts`
+- Added 11 unit tests covering all use cases
+
+---
+
 ## [1.16.0] - 2025-11-13
 
 ### Documentation
