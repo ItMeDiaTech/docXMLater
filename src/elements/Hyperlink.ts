@@ -51,6 +51,7 @@
 import { XMLElement } from '../xml/XMLBuilder';
 import { Run, RunFormatting } from './Run';
 import { validateRunText } from '../utils/validation';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Hyperlink properties
@@ -99,7 +100,7 @@ export class Hyperlink {
 
     // VALIDATION: Warn about hybrid links (url + anchor)
     if (this.url && this.anchor) {
-      console.warn(
+      defaultLogger.warn(
         `DocXML Warning: Hyperlink has both URL ("${this.url}") and anchor ("${this.anchor}"). ` +
         `This is ambiguous per ECMA-376 spec. URL will take precedence. ` +
         `Use Hyperlink.createExternal() or Hyperlink.createInternal() to avoid ambiguity.`
@@ -302,7 +303,7 @@ export class Hyperlink {
 
     // If converting from external to internal, clear URL and relationship
     if (anchor && this.url) {
-      console.warn(
+      defaultLogger.warn(
         `DocXML Warning: Setting anchor "${anchor}" on hyperlink that has URL "${this.url}". ` +
         `Clearing URL to make this an internal link. Use separate hyperlinks for external and internal links.`
       );
@@ -475,31 +476,53 @@ export class Hyperlink {
 
     // Check accessibility (HTTP HEAD request)
     if (checkAccessibility && fixedUrl && fixedUrl.match(/^https?:\/\//i)) {
-      try {
-        // Use fetch with AbortController for timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+      // Check if fetch is available (Node.js 18+ or browser)
+      if (typeof fetch === 'undefined') {
+        issues.push(
+          'Network validation unavailable: fetch API not supported in this environment'
+        );
+      } else {
+        try {
+          // Use fetch with AbortController for timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        const response = await fetch(fixedUrl, {
-          method: 'HEAD',
-          signal: controller.signal,
-          redirect: 'follow',
-        });
+          const response = await fetch(fixedUrl, {
+            method: 'HEAD',
+            signal: controller.signal,
+            redirect: 'follow',
+          });
 
-        clearTimeout(timeoutId);
+          clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          issues.push(
-            `HTTP ${response.status}: ${response.statusText || 'Error'}`
-          );
-        }
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          issues.push(`Timeout after ${timeout}ms`);
-        } else if (error.message?.includes('fetch')) {
-          issues.push(`Unreachable: ${error.message}`);
-        } else {
-          issues.push(`Network error: ${error.message || 'Unknown error'}`);
+          if (!response.ok) {
+            issues.push(
+              `HTTP ${response.status}: ${response.statusText || 'Error'}`
+            );
+          }
+        } catch (error: unknown) {
+          // Type guard for error objects with name and message properties
+          const isErrorWithName = (err: unknown): err is { name: string } => {
+            return typeof err === 'object' && err !== null && 'name' in err;
+          };
+          const isErrorWithMessage = (
+            err: unknown
+          ): err is { message: string } => {
+            return typeof err === 'object' && err !== null && 'message' in err;
+          };
+
+          if (isErrorWithName(error) && error.name === 'AbortError') {
+            issues.push(`Timeout after ${timeout}ms`);
+          } else if (
+            isErrorWithMessage(error) &&
+            error.message?.includes('fetch')
+          ) {
+            issues.push(`Unreachable: ${error.message}`);
+          } else if (isErrorWithMessage(error)) {
+            issues.push(`Network error: ${error.message}`);
+          } else {
+            issues.push('Network error: Unknown error');
+          }
         }
       }
     }

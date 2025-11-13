@@ -6,6 +6,7 @@
  */
 
 import { Image } from './Image';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Image file entry
@@ -265,7 +266,7 @@ export class ImageManager {
             }
           } catch (error) {
             // Log error but continue loading other images
-            console.warn(
+            defaultLogger.warn(
               `Failed to load image data: ${error instanceof Error ? error.message : error}`
             );
             loaded++; // Still count as processed
