@@ -5,6 +5,118 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0] - 2025-11-13
+
+### Added
+- **Comprehensive Track Changes Implementation**: Full Microsoft Word track changes compatibility (100% ECMA-376 compliance)
+  - Settings.xml track changes integration (w:trackRevisions, w:trackFormatting, w:revisionView)
+  - Range markers for move operations (w:moveFromRangeStart/End, w:moveToRangeStart/End)
+  - Paragraph mark deletion tracking (w:pPr/w:rPr/w:del)
+  - Field instruction deletion tracking (w:delInstrText vs w:delText)
+  - Table grid change tracking (w:tblGridChange)
+  - Custom XML revision markers (8 range marker types)
+  - RSID (Revision Save ID) support with 8-character hexadecimal format
+  - Document protection with PBKDF2+SHA-512 password encryption
+  - Revision view settings (show/hide insertions, deletions, formatting)
+  - Support for all 26 ECMA-376 revision elements
+
+### API Additions
+
+**Document Class - Track Changes:**
+- `enableTrackChanges(options?)` - Enable track changes with view settings
+- `disableTrackChanges()` - Disable track changes
+- `isTrackChangesEnabled()` - Check track changes status
+- `isTrackFormattingEnabled()` - Check formatting tracking status
+- `getRevisionViewSettings()` - Get revision view settings
+- `createInsertion(author, content, date?)` - Create insertion revision
+- `createDeletion(author, content, date?)` - Create deletion revision
+- `createMoveFrom(author, content, moveId, date?)` - Create move source
+- `createMoveTo(author, content, moveId, date?)` - Create move destination
+- `trackMove(author, content, date?)` - Track move with range markers
+- `trackParagraphMarkDeletion(para, author, date?)` - Track deleted paragraph mark
+- `trackFieldInstructionDeletion(para, author, fieldCode, date?)` - Track deleted field instruction
+- `createTableCellInsert(author, content, date?)` - Track table cell insertion
+- `createTableCellDelete(author, content, date?)` - Track table cell deletion
+- `createTableCellMerge(author, content, date?)` - Track table cell merge
+- `getRevisionStats()` - Get revision statistics (count, authors, types)
+- `isTrackingChanges()` - Check if document has any revisions
+
+**Document Class - RSID Support:**
+- `setRsidRoot(rsid)` - Set RSID root (first editing session)
+- `addRsid(rsid)` - Add RSID to list
+- `generateRsid()` - Generate random 8-character RSID
+- `getRsidRoot()` - Get RSID root
+- `getRsids()` - Get all RSIDs
+
+**Document Class - Protection:**
+- `protectDocument(protection)` - Protect with password (PBKDF2+SHA-512)
+- `unprotectDocument()` - Remove document protection
+- `isProtected()` - Check protection status
+- `getProtection()` - Get protection settings
+
+**Paragraph Class - Track Changes:**
+- `addRevision(revision)` - Add tracked change to paragraph
+- `addRangeMarker(marker)` - Add range marker (for moves)
+- `markParagraphMarkAsDeleted(id, author, date?)` - Mark paragraph mark as deleted
+- `clearParagraphMarkDeletion()` - Clear paragraph mark deletion
+- `isParagraphMarkDeleted()` - Check if paragraph mark is deleted
+
+**New Classes:**
+- `RangeMarker` - Range markers for move operations (12 factory methods)
+- `TableGridChange` - Track table grid column changes
+
+**RevisionManager Enhancements:**
+- `getNextId()` - Get and increment revision ID
+- `peekNextId()` - Peek at next revision ID without incrementing
+
+### Enhanced
+
+**Revision Class:**
+- Added `isFieldInstruction` property for field instruction deletions
+- Added `setAsFieldInstruction()` method
+- Added `isFieldInstructionDeletion()` method
+- Added `createFieldInstructionDeletion()` static factory method
+- Added `createTableExceptionPropertiesChange()` static factory method
+- Added `tableExceptionPropertiesChange` revision type
+- Updated `createDeletedRunXml()` to use w:delInstrText for field codes
+
+**ParagraphFormatting Interface:**
+- Added `paragraphMarkDeletion` property for tracking deleted paragraph marks
+
+**DocumentGenerator:**
+- Enhanced `generateSettings()` to include track changes settings
+- Added XML generation for w:trackRevisions, w:trackFormatting, w:revisionView
+- Added XML generation for w:rsids, w:documentProtection
+
+### Examples
+- Added `enhanced-track-changes.ts` with 6 comprehensive examples:
+  1. Track changes with settings.xml integration
+  2. Move operations with range markers
+  3. RSID tracking demonstration
+  4. Password-protected documents
+  5. Paragraph mark deletion tracking
+  6. Complete workflow combining all features
+
+### Technical Details
+- Full ECMA-376 Part 1 §17.13 (Track Changes) compliance
+- Supports all 26 OpenXML revision elements
+- Cryptographic document protection (PBKDF2 with SHA-512, configurable spin count)
+- Proper id/name linking for range markers per ECMA-376 specification
+- XML generation follows Microsoft Word conventions
+
+### Files Modified/Created
+- Created: `src/elements/RangeMarker.ts` (400+ lines)
+- Created: `src/elements/TableGridChange.ts` (140 lines)
+- Created: `examples/10-track-changes/enhanced-track-changes.ts` (550+ lines)
+- Modified: `src/core/Document.ts` (+500 lines)
+- Modified: `src/core/DocumentGenerator.ts` (+110 lines)
+- Modified: `src/elements/Paragraph.ts` (+60 lines)
+- Modified: `src/elements/Revision.ts` (+100 lines)
+- Modified: `src/elements/RevisionManager.ts` (+20 lines)
+- Total: ~1,880+ lines of new code
+
+---
+
 ## [1.16.0] - 2025-11-13
 
 ### Documentation

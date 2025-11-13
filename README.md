@@ -36,7 +36,16 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - Shapes and text boxes
 
 ### Advanced Features
-- Track changes (revisions for insertions, deletions, formatting)
+- **Track Changes (Full Microsoft Word Compatibility):**
+  - Insertions, deletions, and formatting changes
+  - Move operations with range markers
+  - Paragraph mark deletion tracking
+  - Field instruction deletions
+  - Table changes (cells, rows, properties, grid)
+  - RSID (Revision Save ID) tracking
+  - Document protection with password encryption
+  - Revision view settings
+  - 100% ECMA-376 OpenXML compliance (26/26 revision elements)
 - Comments and annotations
 - Table of contents generation with customizable heading levels
 - Fields: merge fields, date/time, page numbers, TOC fields
@@ -214,6 +223,76 @@ await doc.save('styled.docx');
 doc.dispose();
 ```
 
+### Track Changes
+
+```typescript
+import { Document } from 'docxmlater';
+
+const doc = Document.create();
+
+// Enable track changes for the document
+doc.enableTrackChanges({
+  trackFormatting: true,
+  showInsertionsAndDeletions: true,
+  showFormatting: true
+});
+
+const para = doc.createParagraph();
+para.addText('Original text ');
+
+// Track an insertion
+const insertedRun = para.addRun();
+insertedRun.setText('inserted content');
+const insertion = doc.createInsertion('Alice', insertedRun);
+para.addRevision(insertion);
+
+para.addText(' more text');
+
+// Track a deletion
+const deletedRun = para.addRun();
+deletedRun.setText(' deleted content');
+const deletion = doc.createDeletion('Bob', deletedRun);
+para.addRevision(deletion);
+
+// Track move operations with range markers
+const moveSourcePara = doc.createParagraph('Text to move ');
+const moveDestPara = doc.createParagraph('Destination: ');
+
+const movedRun = moveSourcePara.addRun();
+movedRun.setText('moved text');
+
+const move = doc.trackMove('Carol', movedRun);
+
+// Add range markers at source
+moveSourcePara.addRangeMarker(move.moveFromRangeStart);
+moveSourcePara.addRevision(move.moveFrom);
+moveSourcePara.addRangeMarker(move.moveFromRangeEnd);
+
+// Add range markers at destination
+moveDestPara.addRangeMarker(move.moveToRangeStart);
+moveDestPara.addRevision(move.moveTo);
+moveDestPara.addRangeMarker(move.moveToRangeEnd);
+
+// Track paragraph mark deletion (joining paragraphs)
+const paraToJoin = doc.createParagraph('First paragraph');
+doc.trackParagraphMarkDeletion(paraToJoin, 'Dave');
+
+// Protect document with password (forces track changes)
+doc.protectDocument({
+  edit: 'trackedChanges',
+  enforcement: true,
+  password: 'secret123',
+  cryptSpinCount: 100000
+});
+
+// Set RSID root for document history
+doc.setRsidRoot('00A12B3C');
+doc.addRsid('00D45E6F');
+
+await doc.save('tracked-changes.docx');
+doc.dispose();
+```
+
 ## API Overview
 
 ### Document Class
@@ -243,6 +322,29 @@ doc.dispose();
 - `getCharacterCount(includeSpaces?)` - Count characters
 - `estimateSize()` - Estimate file size
 
+**Track Changes:**
+- `enableTrackChanges(options?)` - Enable track changes
+- `disableTrackChanges()` - Disable track changes
+- `isTrackChangesEnabled()` - Check if enabled
+- `createInsertion(author, content, date?)` - Create insertion revision
+- `createDeletion(author, content, date?)` - Create deletion revision
+- `createMoveFrom(author, content, moveId, date?)` - Create move source
+- `createMoveTo(author, content, moveId, date?)` - Create move destination
+- `trackMove(author, content, date?)` - Track move with range markers
+- `trackParagraphMarkDeletion(para, author, date?)` - Track deleted paragraph mark
+- `trackFieldInstructionDeletion(para, author, fieldCode, date?)` - Track deleted field
+- `createTableCellInsert(author, content, date?)` - Track cell insertion
+- `createTableCellDelete(author, content, date?)` - Track cell deletion
+- `createTableCellMerge(author, content, date?)` - Track cell merge
+- `getRevisionStats()` - Get revision statistics
+- `protectDocument(protection)` - Password-protect with encryption
+- `unprotectDocument()` - Remove protection
+- `isProtected()` - Check protection status
+- `setRsidRoot(rsid)` - Set RSID root
+- `addRsid(rsid)` - Add RSID
+- `generateRsid()` - Generate random RSID
+- `getRsids()` - Get all RSIDs
+
 **Saving:**
 - `save(filepath)` - Save to file
 - `toBuffer()` - Save to Buffer
@@ -271,6 +373,13 @@ doc.dispose();
 
 **Numbering:**
 - `setNumbering(numId, level)` - Apply list numbering
+
+**Track Changes:**
+- `addRevision(revision)` - Add tracked change
+- `addRangeMarker(marker)` - Add range marker (for moves)
+- `markParagraphMarkAsDeleted(id, author, date?)` - Mark paragraph mark as deleted
+- `clearParagraphMarkDeletion()` - Clear paragraph mark deletion
+- `isParagraphMarkDeleted()` - Check if paragraph mark is deleted
 
 ### Run Class
 
@@ -397,7 +506,19 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 1.16.0**
+**Current Version: 1.18.0**
+
+**Version 1.18.0** - Track Changes Enhancement
+- Comprehensive track changes implementation (100% ECMA-376 compliance)
+- Settings.xml track changes integration
+- Range markers for move operations
+- Paragraph mark deletion tracking
+- Field instruction deletion tracking
+- Table grid change tracking
+- RSID (Revision Save ID) support
+- Document protection with PBKDF2+SHA-512 encryption
+- Revision view settings
+- 26/26 OpenXML revision elements supported
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
