@@ -11,6 +11,7 @@ module.exports = {
       tsconfig: {
         target: 'ES2022',
         lib: ['ES2022'],
+        types: ['node', 'jest'],
       },
     }],
   },
