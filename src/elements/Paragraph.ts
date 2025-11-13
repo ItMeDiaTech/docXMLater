@@ -613,6 +613,15 @@ export class Paragraph {
   }
 
   /**
+   * Clears all content from the paragraph
+   * Removes all runs, hyperlinks, fields, and other content items
+   */
+  clearContent(): this {
+    this.content = [];
+    return this;
+  }
+
+  /**
    * Gets the text content of all runs and hyperlinks combined
    * @returns Combined text content from all text-bearing elements
    */
