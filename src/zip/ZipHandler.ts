@@ -12,6 +12,7 @@ import {
   SaveOptions,
   AddFileOptions,
 } from './types';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Main class for handling ZIP archives (DOCX files)
@@ -53,7 +54,7 @@ export class ZipHandler {
         `- Processing on a machine with more memory`
       );
     } else if (sizeMB > WARNING_SIZE_MB) {
-      console.warn(
+      defaultLogger.warn(
         `DocXML Warning: Large document detected (${sizeMB.toFixed(1)}MB). ` +
         `Loading may use significant memory. Consider optimizing document size.`
       );
@@ -91,7 +92,7 @@ export class ZipHandler {
         `- Processing on a machine with more memory`
       );
     } else if (sizeMB > WARNING_SIZE_MB) {
-      console.warn(
+      defaultLogger.warn(
         `DocXML Warning: Large document detected (${sizeMB.toFixed(1)}MB). ` +
         `Loading may use significant memory. Consider optimizing document size.`
       );

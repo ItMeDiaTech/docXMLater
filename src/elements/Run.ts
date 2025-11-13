@@ -6,6 +6,8 @@
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { validateRunText, normalizeColor } from '../utils/validation';
 import { logSerialization, logTextDirection } from '../utils/diagnostics';
+import { defaultLogger } from '../utils/logger';
+import { deepClone } from '../utils/deepClone';
 
 /**
  * Run content element types
@@ -195,7 +197,7 @@ export class Run {
   constructor(text: string, formatting: RunFormatting = {}) {
     // Warn about undefined/null text to help catch data quality issues
     if (text === undefined || text === null) {
-      console.warn(
+      defaultLogger.warn(
         `DocXML Text Validation Warning [Run constructor]:\n` +
         `  - Received ${text === undefined ? 'undefined' : 'null'} text value\n` +
         `  - Converting to empty string for Word compatibility`
@@ -349,7 +351,7 @@ export class Run {
   setText(text: string): void {
     // Warn about undefined/null text to help catch data quality issues
     if (text === undefined || text === null) {
-      console.warn(
+      defaultLogger.warn(
         `DocXML Text Validation Warning [Run.setText]:\n` +
         `  - Received ${text === undefined ? 'undefined' : 'null'} text value\n` +
         `  - Converting to empty string for Word compatibility`
@@ -1163,8 +1165,8 @@ export class Run {
    */
   clone(): Run {
     // Deep copy content and formatting to avoid shared references
-    const clonedContent: RunContent[] = JSON.parse(JSON.stringify(this.content));
-    const clonedFormatting: RunFormatting = JSON.parse(JSON.stringify(this.formatting));
+    const clonedContent: RunContent[] = deepClone(this.content);
+    const clonedFormatting: RunFormatting = deepClone(this.formatting);
     return Run.createFromContent(clonedContent, clonedFormatting);
   }
 
