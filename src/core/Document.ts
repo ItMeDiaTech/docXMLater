@@ -6398,6 +6398,79 @@ export class Document {
   }
 
   /**
+   * Defragments and optimizes hyperlinks in the document
+   * This merges fragmented hyperlinks with the same URL (common in Google Docs exports)
+   * and optionally resets their formatting to standard style
+   *
+   * @param options - Defragmentation options
+   * @returns Number of hyperlinks merged
+   *
+   * @example
+   * ```typescript
+   * // Basic defragmentation
+   * const merged = doc.defragmentHyperlinks();
+   * console.log(`Merged ${merged} fragmented hyperlinks`);
+   *
+   * // With formatting reset (fixes corrupted fonts like Caveat)
+   * const fixed = doc.defragmentHyperlinks({ resetFormatting: true });
+   * console.log(`Fixed ${fixed} hyperlinks with standard formatting`);
+   * ```
+   */
+  defragmentHyperlinks(options?: {
+    resetFormatting?: boolean;
+    cleanupRelationships?: boolean;
+  }): number {
+    const { resetFormatting = false, cleanupRelationships = false } = options || {};
+    let mergedCount = 0;
+
+    // Get the DocumentParser instance to use its merging method
+    const parser = new DocumentParser();
+
+    // Process all paragraphs in the document
+    for (const paragraph of this.getParagraphs()) {
+      const originalContent = paragraph.getContent();
+
+      // Call the enhanced mergeConsecutiveHyperlinks method
+      (parser as any).mergeConsecutiveHyperlinks(paragraph, resetFormatting);
+
+      const newContent = paragraph.getContent();
+
+      // Count merges by comparing content length
+      if (originalContent.length > newContent.length) {
+        mergedCount += originalContent.length - newContent.length;
+      }
+    }
+
+    // Also process paragraphs in tables
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
+          for (const para of cellParagraphs) {
+            const originalContent = para.getContent();
+
+            (parser as any).mergeConsecutiveHyperlinks(para, resetFormatting);
+
+            const newContent = para.getContent();
+
+            if (originalContent.length > newContent.length) {
+              mergedCount += originalContent.length - newContent.length;
+            }
+          }
+        }
+      }
+    }
+
+    // Optionally clean up orphaned relationships
+    if (cleanupRelationships && mergedCount > 0) {
+      // TODO: Implement relationship cleanup when RelationshipManager supports it
+      console.log('Note: Relationship cleanup not yet implemented');
+    }
+
+    return mergedCount;
+  }
+
+  /**
    * Gets all bookmarks in the document
    * @returns Array of bookmarks with their containing paragraph
    */

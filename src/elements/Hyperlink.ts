@@ -514,6 +514,26 @@ export class Hyperlink {
   }
 
   /**
+   * Resets hyperlink formatting to standard style (Calibri, blue, underline)
+   * This is useful for fixing corrupted hyperlinks from Google Docs or other sources
+   * @returns this for method chaining
+   */
+  resetToStandardFormatting(): this {
+    const standardFormatting: RunFormatting = {
+      font: 'Calibri',
+      color: '0563C1', // Standard hyperlink blue
+      underline: 'single',
+      // Clear any other formatting that might be causing issues
+      bold: false,
+      italic: false,
+      strike: false,
+    };
+
+    this.setFormatting(standardFormatting);
+    return this;
+  }
+
+  /**
    * Checks if this is an external link
    */
   isExternal(): boolean {
