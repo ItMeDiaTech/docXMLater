@@ -179,6 +179,7 @@ export {
   CellVerticalAlignment,
   CellFormatting,
 } from './elements/TableCell';
+export { TableGridChange, GridColumn, TableGridChangeProperties } from './elements/TableGridChange';
 export { Image, ImageFormat, ImageProperties } from './elements/Image';
 export { ImageManager } from './elements/ImageManager';
 export { ImageRun } from './elements/ImageRun';
