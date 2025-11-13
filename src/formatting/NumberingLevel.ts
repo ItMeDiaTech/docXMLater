@@ -86,9 +86,9 @@ export class NumberingLevel {
       text: properties.text,
       alignment: properties.alignment || 'left',
       start: properties.start !== undefined ? properties.start : 1,
-      leftIndent: properties.leftIndent !== undefined ? properties.leftIndent : 720 * (properties.level + 1),
+      leftIndent: properties.leftIndent !== undefined ? properties.leftIndent : 720 + (properties.level * 360),
       hangingIndent: properties.hangingIndent !== undefined ? properties.hangingIndent : 360,
-      font: properties.font || (properties.format === 'bullet' ? 'Symbol' : 'Calibri'),
+      font: properties.font || 'Calibri',
       fontSize: properties.fontSize || 22, // 11pt default
       isLegalNumberingStyle: properties.isLegalNumberingStyle !== undefined ? properties.isLegalNumberingStyle : false,
       suffix: properties.suffix || 'tab',
@@ -273,6 +273,129 @@ export class NumberingLevel {
   }
 
   /**
+   * Gets the recommended bullet symbol and font for a given level
+   * @param level The level index (0-8)
+   * @param style Optional bullet style ('standard', 'circle', 'square', 'arrow', 'check')
+   * @returns Object with symbol and font properties
+   */
+  static getBulletSymbolWithFont(level: number, style: 'standard' | 'circle' | 'square' | 'arrow' | 'check' = 'standard'): { symbol: string; font: string } {
+    const bulletSets = {
+      standard: [
+        { symbol: '•', font: 'Calibri' },      // Level 0: Filled circle
+        { symbol: '○', font: 'Calibri' },      // Level 1: Empty circle
+        { symbol: '▪', font: 'Calibri' },      // Level 2: Small filled square
+        { symbol: '•', font: 'Calibri' },      // Level 3: Filled circle
+        { symbol: '○', font: 'Calibri' },      // Level 4: Empty circle
+        { symbol: '▪', font: 'Calibri' },      // Level 5: Small filled square
+        { symbol: '•', font: 'Calibri' },      // Level 6: Filled circle
+        { symbol: '○', font: 'Calibri' },      // Level 7: Empty circle
+        { symbol: '▪', font: 'Calibri' },      // Level 8: Small filled square
+      ],
+      circle: [
+        { symbol: '●', font: 'Calibri' },      // Level 0: Filled circle (bold)
+        { symbol: '○', font: 'Calibri' },      // Level 1: Empty circle
+        { symbol: '◉', font: 'Calibri' },      // Level 2: Fisheye
+        { symbol: '◯', font: 'Calibri' },      // Level 3: Large circle
+        { symbol: '⦿', font: 'Calibri' },      // Level 4: Circled bullet
+        { symbol: '○', font: 'Calibri' },      // Level 5: Empty circle
+        { symbol: '●', font: 'Calibri' },      // Level 6: Filled circle
+        { symbol: '○', font: 'Calibri' },      // Level 7: Empty circle
+        { symbol: '◉', font: 'Calibri' },      // Level 8: Fisheye
+      ],
+      square: [
+        { symbol: '■', font: 'Calibri' },      // Level 0: Filled square
+        { symbol: '□', font: 'Calibri' },      // Level 1: Empty square
+        { symbol: '▪', font: 'Calibri' },      // Level 2: Small filled square
+        { symbol: '▫', font: 'Calibri' },      // Level 3: Small empty square
+        { symbol: '◼', font: 'Calibri' },      // Level 4: Medium filled square
+        { symbol: '◻', font: 'Calibri' },      // Level 5: Medium empty square
+        { symbol: '■', font: 'Calibri' },      // Level 6: Filled square
+        { symbol: '□', font: 'Calibri' },      // Level 7: Empty square
+        { symbol: '▪', font: 'Calibri' },      // Level 8: Small filled square
+      ],
+      arrow: [
+        { symbol: '➢', font: 'Calibri' },      // Level 0: Right arrow
+        { symbol: '➣', font: 'Calibri' },      // Level 1: Right arrow filled
+        { symbol: '➤', font: 'Calibri' },      // Level 2: Right arrow bold
+        { symbol: '➔', font: 'Calibri' },      // Level 3: Right arrow simple
+        { symbol: '➜', font: 'Calibri' },      // Level 4: Right arrow outline
+        { symbol: '➢', font: 'Calibri' },      // Level 5: Right arrow
+        { symbol: '➣', font: 'Calibri' },      // Level 6: Right arrow filled
+        { symbol: '➤', font: 'Calibri' },      // Level 7: Right arrow bold
+        { symbol: '➔', font: 'Calibri' },      // Level 8: Right arrow simple
+      ],
+      check: [
+        { symbol: '✓', font: 'Calibri' },      // Level 0: Check mark
+        { symbol: '✔', font: 'Calibri' },      // Level 1: Heavy check mark
+        { symbol: '☑', font: 'Calibri' },      // Level 2: Checked box
+        { symbol: '✓', font: 'Calibri' },      // Level 3: Check mark
+        { symbol: '✔', font: 'Calibri' },      // Level 4: Heavy check mark
+        { symbol: '☑', font: 'Calibri' },      // Level 5: Checked box
+        { symbol: '✓', font: 'Calibri' },      // Level 6: Check mark
+        { symbol: '✔', font: 'Calibri' },      // Level 7: Heavy check mark
+        { symbol: '☑', font: 'Calibri' },      // Level 8: Checked box
+      ],
+    };
+
+    const selectedSet = bulletSets[style];
+    const levelIndex = level % selectedSet.length;
+    const result = selectedSet[levelIndex];
+
+    // Fallback to standard bullet if somehow undefined
+    return result || { symbol: '•', font: 'Calibri' };
+  }
+
+  /**
+   * Calculates the standard indentation values for a given level
+   * @param level The level index (0-8)
+   * @returns Object with leftIndent and hangingIndent in twips
+   * @example
+   * const indent = NumberingLevel.calculateStandardIndentation(0);
+   * // Returns: { leftIndent: 720, hangingIndent: 360 } (0.5" left, 0.25" hanging)
+   *
+   * const indent2 = NumberingLevel.calculateStandardIndentation(2);
+   * // Returns: { leftIndent: 1440, hangingIndent: 360 } (1.0" left, 0.25" hanging)
+   */
+  static calculateStandardIndentation(level: number): { leftIndent: number; hangingIndent: number } {
+    if (level < 0 || level > 8) {
+      throw new Error(`Invalid level ${level}. Level must be between 0 and 8.`);
+    }
+
+    return {
+      leftIndent: 720 + (level * 360),
+      hangingIndent: 360,
+    };
+  }
+
+  /**
+   * Gets the standard number format for a given level
+   * @param level The level index (0-8)
+   * @returns The recommended number format for this level
+   * @example
+   * NumberingLevel.getStandardNumberFormat(0); // 'decimal' (1., 2., 3.)
+   * NumberingLevel.getStandardNumberFormat(1); // 'lowerLetter' (a., b., c.)
+   * NumberingLevel.getStandardNumberFormat(2); // 'lowerRoman' (i., ii., iii.)
+   * NumberingLevel.getStandardNumberFormat(3); // 'upperLetter' (A., B., C.)
+   * NumberingLevel.getStandardNumberFormat(4); // 'upperRoman' (I., II., III.)
+   */
+  static getStandardNumberFormat(level: number): NumberFormat {
+    if (level < 0 || level > 8) {
+      throw new Error(`Invalid level ${level}. Level must be between 0 and 8.`);
+    }
+
+    const formats: NumberFormat[] = [
+      'decimal',      // Level 0: 1., 2., 3.
+      'lowerLetter',  // Level 1: a., b., c.
+      'lowerRoman',   // Level 2: i., ii., iii.
+      'upperLetter',  // Level 3: A., B., C.
+      'upperRoman',   // Level 4: I., II., III.
+    ];
+
+    const result = formats[level % formats.length];
+    return result || 'decimal'; // Fallback to decimal (should never happen)
+  }
+
+  /**
    * Creates a bullet list level
    * @param level The level index (0-8)
    * @param bullet The bullet character (default: '•')
@@ -283,8 +406,8 @@ export class NumberingLevel {
       format: 'bullet',
       text: bullet,
       alignment: 'left',
-      font: 'Symbol',
-      leftIndent: 720 * (level + 1),
+      font: 'Calibri',
+      leftIndent: 720 + (level * 360),
       hangingIndent: 360,
     });
   }
@@ -300,7 +423,7 @@ export class NumberingLevel {
       format: 'decimal',
       text: template,
       alignment: 'left',
-      leftIndent: 720 * (level + 1),
+      leftIndent: 720 + (level * 360),
       hangingIndent: 360,
     });
   }
@@ -316,7 +439,7 @@ export class NumberingLevel {
       format: 'lowerRoman',
       text: template,
       alignment: 'left',
-      leftIndent: 720 * (level + 1),
+      leftIndent: 720 + (level * 360),
       hangingIndent: 360,
     });
   }
@@ -332,7 +455,7 @@ export class NumberingLevel {
       format: 'upperRoman',
       text: template,
       alignment: 'left',
-      leftIndent: 720 * (level + 1),
+      leftIndent: 720 + (level * 360),
       hangingIndent: 360,
     });
   }
@@ -348,7 +471,7 @@ export class NumberingLevel {
       format: 'lowerLetter',
       text: template,
       alignment: 'left',
-      leftIndent: 720 * (level + 1),
+      leftIndent: 720 + (level * 360),
       hangingIndent: 360,
     });
   }
@@ -364,7 +487,7 @@ export class NumberingLevel {
       format: 'upperLetter',
       text: template,
       alignment: 'left',
-      leftIndent: 720 * (level + 1),
+      leftIndent: 720 + (level * 360),
       hangingIndent: 360,
     });
   }
@@ -417,7 +540,7 @@ export class NumberingLevel {
     const suffix = suffixMatch && suffixMatch[1] ? suffixMatch[1] as 'tab' | 'space' | 'nothing' : 'tab';
 
     // Extract indentation from <w:pPr><w:ind>
-    let leftIndent = 720 * (level + 1); // default
+    let leftIndent = 720 + (level * 360); // default
     let hangingIndent = 360; // default
     const indMatch = xml.match(/<w:ind[^>]*\/>/);
     if (indMatch) {
@@ -430,7 +553,7 @@ export class NumberingLevel {
     }
 
     // Extract font and size from <w:rPr>
-    let font = format === 'bullet' ? 'Symbol' : 'Calibri';
+    let font = 'Calibri';
     let fontSize = 22;
 
     const rFontsMatch = xml.match(/<w:rFonts[^>]*\/>/);

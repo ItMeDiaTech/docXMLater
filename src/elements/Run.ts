@@ -218,9 +218,8 @@ export class Run {
     // Convert undefined/null to empty string for consistent XML generation
     const normalizedText = cleanedText ?? '';
 
-    // Initialize content as array with single text element (even if empty)
-    // This ensures we always generate <w:t> element for Word compatibility
-    this.content = [{ type: 'text', value: normalizedText }];
+    // Parse text to extract special characters into separate content elements
+    this.content = this.parseTextWithSpecialCharacters(normalizedText);
 
     // Remove cleanXmlFromText from formatting as it's not a display property
     const { cleanXmlFromText, ...displayFormatting } = formatting;
@@ -228,13 +227,117 @@ export class Run {
   }
 
   /**
-   * Gets the text content (concatenates all text elements)
-   * Backward-compatible method that extracts text from all content elements
+   * Parses text containing special characters and converts them to content elements
+   * @param text Text that may contain tabs, newlines, non-breaking hyphens, etc.
+   * @returns Array of content elements
+   * @private
+   */
+  private parseTextWithSpecialCharacters(text: string): RunContent[] {
+    if (!text) {
+      return [{ type: 'text', value: '' }];
+    }
+
+    const content: RunContent[] = [];
+    let currentText = '';
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+
+      switch (char) {
+        case '\t':
+          // Add accumulated text before tab
+          if (currentText) {
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
+          }
+          // Add tab element
+          content.push({ type: 'tab' });
+          break;
+
+        case '\n':
+          // Add accumulated text before newline
+          if (currentText) {
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
+          }
+          // Add break element
+          content.push({ type: 'break' });
+          break;
+
+        case '\u2011': // Non-breaking hyphen
+          // Add accumulated text before non-breaking hyphen
+          if (currentText) {
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
+          }
+          // Add non-breaking hyphen element
+          content.push({ type: 'noBreakHyphen' });
+          break;
+
+        case '\r': // Carriage return
+          // Add accumulated text before carriage return
+          if (currentText) {
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
+          }
+          // Add carriage return element
+          content.push({ type: 'carriageReturn' });
+          break;
+
+        case '\u00AD': // Soft hyphen
+          // Add accumulated text before soft hyphen
+          if (currentText) {
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
+          }
+          // Add soft hyphen element
+          content.push({ type: 'softHyphen' });
+          break;
+
+        default:
+          // Accumulate regular text
+          currentText += char;
+          break;
+      }
+    }
+
+    // Add any remaining text
+    if (currentText) {
+      content.push({ type: 'text', value: currentText });
+    }
+
+    // If no content was added (empty string), add empty text element
+    if (content.length === 0) {
+      content.push({ type: 'text', value: '' });
+    }
+
+    return content;
+  }
+
+  /**
+   * Gets the text content (concatenates all content elements)
+   * Converts special characters back to their string representation
    */
   getText(): string {
     return this.content
-      .filter(c => c.type === 'text')
-      .map(c => c.value || '')
+      .map(c => {
+        switch (c.type) {
+          case 'text':
+            return c.value || '';
+          case 'tab':
+            return '\t';
+          case 'break':
+            return '\n';
+          case 'carriageReturn':
+            return '\r';
+          case 'softHyphen':
+            return '\u00AD';
+          case 'noBreakHyphen':
+            return '\u2011';
+          default:
+            return '';
+        }
+      })
       .join('');
   }
 
@@ -270,9 +373,8 @@ export class Run {
     // Convert undefined/null to empty string for consistent XML generation
     const normalizedText = cleanedText ?? '';
 
-    // Replace all content with single text element (even if empty)
-    // This ensures we always generate <w:t> element for Word compatibility
-    this.content = [{ type: 'text', value: normalizedText }];
+    // Parse text to extract special characters into separate content elements
+    this.content = this.parseTextWithSpecialCharacters(normalizedText);
   }
 
   /**
