@@ -249,3 +249,11 @@ export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandl
 
 // Constants
 export { LIMITS } from './constants/limits';
+
+// Formatting types
+export {
+  FormatOptions,
+  StyleApplyOptions,
+  EmphasisType,
+  ListPrefix,
+} from './types/formatting';
