@@ -239,6 +239,8 @@ export class Paragraph {
   private bookmarksEnd: Bookmark[] = [];
   private commentsStart: Comment[] = [];
   private commentsEnd: Comment[] = [];
+  /** Internal flag to mark paragraph as preserved from removal operations */
+  private _isPreserved: boolean = false;
 
   /**
    * Creates a new Paragraph
@@ -887,6 +889,26 @@ export class Paragraph {
   setPageBreakBefore(pageBreakBefore: boolean = true): this {
     this.formatting.pageBreakBefore = pageBreakBefore;
     return this;
+  }
+
+  /**
+   * Marks this paragraph as preserved to prevent automatic removal by document processing operations
+   * (e.g., removing extra blank paragraphs). Useful for spacing paragraphs that should remain
+   * even if they appear to be "extra" blank lines.
+   * @param preserved - Whether to preserve this paragraph
+   * @returns This paragraph for chaining
+   */
+  setPreserved(preserved: boolean = true): this {
+    this._isPreserved = preserved;
+    return this;
+  }
+
+  /**
+   * Checks if this paragraph is marked as preserved from automatic removal
+   * @returns True if paragraph should be preserved from removal operations
+   */
+  isPreserved(): boolean {
+    return this._isPreserved;
   }
 
   /**
