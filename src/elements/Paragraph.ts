@@ -1563,15 +1563,82 @@ export class Paragraph {
     }
 
     // 19. Paragraph property change tracking per ECMA-376 Part 1 §17.3.1.27
+    /**
+     * Per OOXML spec, w:pPrChange contains:
+     * - Attributes: w:id (required), w:author (required), w:date (optional)
+     * - Child element: w:pPr containing the PREVIOUS paragraph properties before the change
+     *
+     * Structure:
+     * <w:pPrChange w:id="1" w:author="Author" w:date="2024-01-01T12:00:00Z">
+     *   <w:pPr>
+     *     <!-- Previous paragraph properties -->
+     *   </w:pPr>
+     * </w:pPrChange>
+     */
     if (this.formatting.pPrChange) {
       const change = this.formatting.pPrChange;
       const attrs: Record<string, string> = {};
       if (change.author) attrs['w:author'] = change.author;
       if (change.date) attrs['w:date'] = change.date;
       if (change.id) attrs['w:id'] = change.id;
-      // Note: Full implementation would serialize previousProperties as child <w:pPr>
-      // For now, we store the metadata attributes only
-      pPrChildren.push(XMLBuilder.wSelf('pPrChange', attrs));
+
+      // Build child w:pPr element with previous properties
+      const prevPPrChildren: XMLElement[] = [];
+      if (change.previousProperties) {
+        const prev = change.previousProperties;
+
+        // Serialize previous properties in ECMA-376 order
+        // Only include properties that were explicitly set
+        if (prev.style) {
+          prevPPrChildren.push(XMLBuilder.wSelf('pStyle', { 'w:val': prev.style }));
+        }
+        if (prev.keepNext !== undefined) {
+          prevPPrChildren.push(XMLBuilder.wSelf('keepNext', prev.keepNext ? { 'w:val': '1' } : { 'w:val': '0' }));
+        }
+        if (prev.keepLines !== undefined) {
+          prevPPrChildren.push(XMLBuilder.wSelf('keepLines', prev.keepLines ? { 'w:val': '1' } : { 'w:val': '0' }));
+        }
+        if (prev.pageBreakBefore !== undefined) {
+          prevPPrChildren.push(XMLBuilder.wSelf('pageBreakBefore', prev.pageBreakBefore ? { 'w:val': '1' } : { 'w:val': '0' }));
+        }
+        if (prev.alignment) {
+          prevPPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': prev.alignment }));
+        }
+        if (prev.indentLeft !== undefined || prev.indentRight !== undefined || prev.indentFirstLine !== undefined || prev.indentHanging !== undefined) {
+          const indAttrs: Record<string, string> = {};
+          if (prev.indentLeft !== undefined) indAttrs['w:left'] = prev.indentLeft.toString();
+          if (prev.indentRight !== undefined) indAttrs['w:right'] = prev.indentRight.toString();
+          if (prev.indentFirstLine !== undefined) indAttrs['w:firstLine'] = prev.indentFirstLine.toString();
+          if (prev.indentHanging !== undefined) indAttrs['w:hanging'] = prev.indentHanging.toString();
+          prevPPrChildren.push(XMLBuilder.wSelf('ind', indAttrs));
+        }
+        if (prev.spaceBefore !== undefined || prev.spaceAfter !== undefined || prev.lineSpacing !== undefined || prev.lineSpacingRule) {
+          const spacingAttrs: Record<string, string> = {};
+          if (prev.spaceBefore !== undefined) spacingAttrs['w:before'] = prev.spaceBefore.toString();
+          if (prev.spaceAfter !== undefined) spacingAttrs['w:after'] = prev.spaceAfter.toString();
+          if (prev.lineSpacing !== undefined) spacingAttrs['w:line'] = prev.lineSpacing.toString();
+          if (prev.lineSpacingRule) spacingAttrs['w:lineRule'] = prev.lineSpacingRule;
+          if (Object.keys(spacingAttrs).length > 0) {
+            prevPPrChildren.push(XMLBuilder.wSelf('spacing', spacingAttrs));
+          }
+        }
+      }
+
+      // Create w:pPrChange element with child w:pPr
+      const pPrChangeChildren: XMLElement[] = [];
+      if (prevPPrChildren.length > 0) {
+        pPrChangeChildren.push({
+          name: 'w:pPr',
+          attributes: {},
+          children: prevPPrChildren,
+        });
+      }
+
+      pPrChildren.push({
+        name: 'w:pPrChange',
+        attributes: attrs,
+        children: pPrChangeChildren,
+      });
     }
 
     // 20. Section properties per ECMA-376 Part 1 §17.3.1.30

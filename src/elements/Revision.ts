@@ -183,6 +183,9 @@ export class Revision {
 
   /**
    * Formats a date to ISO 8601 format for XML
+   * Per ECMA-376, revision dates must be in ISO 8601 format (e.g., "2024-01-01T12:00:00Z")
+   * @param date - Date to format
+   * @returns ISO 8601 formatted date string
    */
   private formatDate(date: Date): string {
     return date.toISOString();
@@ -190,6 +193,25 @@ export class Revision {
 
   /**
    * Gets the XML element name for this revision type
+   * Maps internal revision types to OOXML WordprocessingML element names per ECMA-376
+   *
+   * Mappings:
+   * - insert → w:ins (inserted content)
+   * - delete → w:del (deleted content)
+   * - runPropertiesChange → w:rPrChange (run formatting change)
+   * - paragraphPropertiesChange → w:pPrChange (paragraph formatting change)
+   * - tablePropertiesChange → w:tblPrChange (table formatting change)
+   * - tableRowPropertiesChange → w:trPrChange (table row properties change)
+   * - tableCellPropertiesChange → w:tcPrChange (table cell properties change)
+   * - sectionPropertiesChange → w:sectPrChange (section properties change)
+   * - moveFrom → w:moveFrom (source location of moved content)
+   * - moveTo → w:moveTo (destination location of moved content)
+   * - tableCellInsert → w:cellIns (inserted table cell)
+   * - tableCellDelete → w:cellDel (deleted table cell)
+   * - tableCellMerge → w:cellMerge (merged table cells)
+   * - numberingChange → w:numberingChange (list numbering changed)
+   *
+   * @returns OOXML element name (e.g., "w:ins", "w:del")
    */
   private getElementName(): string {
     switch (this.type) {
@@ -227,8 +249,58 @@ export class Revision {
   }
 
   /**
-   * Generates XML for this revision
-   * @returns XMLElement representing the revision
+   * Generates XML for this revision per OOXML WordprocessingML specification (ECMA-376)
+   *
+   * **XML Structure:**
+   *
+   * Content revisions (w:ins, w:del, w:moveFrom, w:moveTo):
+   * ```xml
+   * <w:ins w:id="0" w:author="Author Name" w:date="2024-01-01T12:00:00Z">
+   *   <w:r>
+   *     <w:t>Inserted text</w:t>
+   *   </w:r>
+   * </w:ins>
+   * ```
+   *
+   * Deletion revisions use w:delText instead of w:t:
+   * ```xml
+   * <w:del w:id="1" w:author="Author Name" w:date="2024-01-01T12:00:00Z">
+   *   <w:r>
+   *     <w:delText>Deleted text</w:delText>
+   *   </w:r>
+   * </w:del>
+   * ```
+   *
+   * Property change revisions (w:rPrChange, w:pPrChange, etc.):
+   * ```xml
+   * <w:rPrChange w:id="2" w:author="Author Name" w:date="2024-01-01T12:00:00Z">
+   *   <w:rPr>
+   *     <w:b/>  <!-- Previous bold setting -->
+   *     <w:sz w:val="24"/>  <!-- Previous font size -->
+   *   </w:rPr>
+   * </w:rPrChange>
+   * ```
+   *
+   * **Required Attributes (per ECMA-376):**
+   * - w:id: Unique revision identifier (ST_DecimalNumber) - REQUIRED
+   * - w:author: Author who made the change (ST_String) - REQUIRED
+   * - w:date: When the change was made (ST_DateTime, ISO 8601) - OPTIONAL
+   *
+   * **Move Operations:**
+   * For moveFrom/moveTo, an additional w:moveId attribute links the source and destination:
+   * ```xml
+   * <w:moveFrom w:id="3" w:author="Author" w:date="..." w:moveId="move-1">...</w:moveFrom>
+   * <w:moveTo w:id="4" w:author="Author" w:date="..." w:moveId="move-1">...</w:moveTo>
+   * ```
+   *
+   * **Content vs Property Changes:**
+   * - Content revisions (insert/delete/move): Contain w:r elements with text runs
+   * - Property revisions (rPrChange/pPrChange): Contain previous property elements (w:rPr, w:pPr)
+   *
+   * @returns XMLElement representing the revision in OOXML format
+   * @see ECMA-376 Part 1 §17.13.5 (Revision Identifiers for Paragraph Content)
+   * @see ECMA-376 Part 1 §17.13.5.15 (Inserted Paragraph)
+   * @see ECMA-376 Part 1 §17.13.5.14 (Deleted Paragraph)
    */
   toXML(): XMLElement {
     const attributes: Record<string, string> = {
@@ -274,6 +346,29 @@ export class Revision {
 
   /**
    * Checks if this is a property change revision type
+   *
+   * Property change revisions track formatting changes, not content changes.
+   * They contain previous property elements (w:rPr, w:pPr, etc.) instead of text runs.
+   *
+   * **Property Change Types:**
+   * - runPropertiesChange: Run formatting (bold, italic, font, color, etc.)
+   * - paragraphPropertiesChange: Paragraph formatting (alignment, spacing, indentation, etc.)
+   * - tablePropertiesChange: Table formatting
+   * - tableRowPropertiesChange: Table row properties
+   * - tableCellPropertiesChange: Table cell properties
+   * - sectionPropertiesChange: Section properties (page size, margins, etc.)
+   * - numberingChange: List numbering properties
+   *
+   * **Content Change Types (NOT property changes):**
+   * - insert: Added text
+   * - delete: Removed text
+   * - moveFrom: Moved text source
+   * - moveTo: Moved text destination
+   * - tableCellInsert: Added table cell
+   * - tableCellDelete: Removed table cell
+   * - tableCellMerge: Merged table cells
+   *
+   * @returns true if this revision tracks a property/formatting change, false otherwise
    */
   private isPropertyChangeType(): boolean {
     return [
@@ -288,7 +383,41 @@ export class Revision {
   }
 
   /**
-   * Creates XML element for previous properties
+   * Creates XML element for previous properties in property change revisions
+   *
+   * **Purpose:**
+   * Property change revisions (w:rPrChange, w:pPrChange, etc.) must contain a child element
+   * with the PREVIOUS state of the properties before the change. This allows Word to show
+   * what changed and enables accepting/rejecting the change.
+   *
+   * **Structure:**
+   * ```xml
+   * <w:rPrChange w:id="0" w:author="Author" w:date="...">
+   *   <w:rPr>
+   *     <!-- Previous run properties -->
+   *     <w:b/>  <!-- Was bold -->
+   *     <w:sz w:val="24"/>  <!-- Was 12pt (24 half-points) -->
+   *   </w:rPr>
+   * </w:rPrChange>
+   * ```
+   *
+   * **Property Element Mapping:**
+   * - runPropertiesChange → w:rPr (run properties)
+   * - paragraphPropertiesChange → w:pPr (paragraph properties)
+   * - tablePropertiesChange → w:tblPr (table properties)
+   * - tableRowPropertiesChange → w:trPr (table row properties)
+   * - tableCellPropertiesChange → w:tcPr (table cell properties)
+   * - sectionPropertiesChange → w:sectPr (section properties)
+   * - numberingChange → w:numPr (numbering properties)
+   *
+   * **Implementation:**
+   * This method converts the previousProperties object into OOXML elements.
+   * - Boolean properties (e.g., bold) → <w:b/>
+   * - Value properties (e.g., font size) → <w:sz w:val="24"/>
+   *
+   * @returns XMLElement containing previous properties (w:rPr, w:pPr, etc.)
+   * @see ECMA-376 Part 1 §17.13.5.31 (Run Properties Change)
+   * @see ECMA-376 Part 1 §17.13.5.29 (Paragraph Properties Change)
    */
   private createPropertiesElement(): XMLElement {
     // The property element name depends on the revision type
@@ -345,6 +474,39 @@ export class Revision {
 
   /**
    * Creates XML for a deleted run (uses w:delText instead of w:t)
+   *
+   * **OOXML Requirement:**
+   * Per ECMA-376, deleted text must use w:delText element instead of w:t element.
+   * This is required for proper rendering in Microsoft Word's Track Changes mode.
+   *
+   * **Transformation:**
+   * ```xml
+   * <!-- Normal run (NOT in deletion) -->
+   * <w:r>
+   *   <w:rPr><w:b/></w:rPr>
+   *   <w:t>Text</w:t>
+   * </w:r>
+   *
+   * <!-- Deleted run (inside w:del) -->
+   * <w:r>
+   *   <w:rPr><w:b/></w:rPr>
+   *   <w:delText>Text</w:delText>
+   * </w:r>
+   * ```
+   *
+   * **Why This Matters:**
+   * - w:delText tells Word to render with strikethrough in Track Changes mode
+   * - w:t would render as normal text even inside w:del element
+   * - Word will reject documents with w:t inside deletions as malformed
+   *
+   * **Implementation:**
+   * This method gets the run's normal XML and replaces all w:t elements with w:delText
+   * while preserving all other properties (formatting, spacing attributes, etc.)
+   *
+   * @param run - Run containing deleted text
+   * @returns XMLElement with w:delText instead of w:t
+   * @see ECMA-376 Part 1 §17.13.5.14 (Deleted Run Content)
+   * @see ECMA-376 Part 1 §22.1.2.27 (w:delText element)
    */
   private createDeletedRunXml(run: Run): XMLElement {
     // Get the regular run XML
