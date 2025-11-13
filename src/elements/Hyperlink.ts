@@ -151,9 +151,15 @@ export class Hyperlink {
 
   /**
    * Gets the display text
+   *
+   * This method delegates to the internal run to ensure the returned text
+   * is always accurate and matches what will be in the generated XML,
+   * per ECMA-376 Part 1 §17.16.22.
+   *
+   * @returns The display text including any special characters (tabs, breaks, etc.)
    */
   getText(): string {
-    return this.text;
+    return this.run.getText();
   }
 
   /**
@@ -244,7 +250,7 @@ export class Hyperlink {
     // Validate that clearing URL doesn't create empty hyperlink
     if (!url && !this.anchor) {
       throw new Error(
-        `Cannot set URL to undefined: Hyperlink "${this.text}" has no anchor. ` +
+        `Cannot set URL to undefined: Hyperlink "${this.run.getText()}" has no anchor. ` +
         `Clearing the URL would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
         `Either provide a new URL or delete the hyperlink entirely.`
       );
@@ -267,7 +273,8 @@ export class Hyperlink {
 
     // Update text ONLY if it was auto-generated from the old URL
     // This preserves user-provided text (even if it's "Link")
-    if (this.text === oldUrl) {
+    // Use run.getText() to ensure we check the actual current text, not stale cache
+    if (this.run.getText() === oldUrl) {
       this.text = url || this.anchor || 'Link';
       this.run.setText(this.text);
     }
@@ -290,7 +297,7 @@ export class Hyperlink {
     // Validate that clearing anchor doesn't create empty hyperlink
     if (!anchor && !this.url) {
       throw new Error(
-        `Cannot set anchor to undefined: Hyperlink "${this.text}" has no URL. ` +
+        `Cannot set anchor to undefined: Hyperlink "${this.run.getText()}" has no URL. ` +
         `Clearing the anchor would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
         `Either provide a new anchor or delete the hyperlink entirely.`
       );
@@ -318,7 +325,8 @@ export class Hyperlink {
     }
 
     // Update text ONLY if it was auto-generated from the old anchor
-    if (this.text === oldAnchor) {
+    // Use run.getText() to ensure we check the actual current text, not stale cache
+    if (this.run.getText() === oldAnchor) {
       this.text = anchor || this.url || 'Link';
       this.run.setText(this.text);
     }
@@ -339,8 +347,10 @@ export class Hyperlink {
   setFormatting(formatting: RunFormatting): this {
     // Update stored formatting
     this.formatting = { ...this.formatting, ...formatting };
-    // Create new run with updated formatting
-    this.run = new Run(this.text, this.formatting);
+    // Create new run with updated formatting, preserving current text
+    const currentText = this.run.getText();
+    this.run = new Run(currentText, this.formatting);
+    this.text = currentText; // Keep cache in sync
     return this;
   }
 
