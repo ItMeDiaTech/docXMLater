@@ -115,6 +115,8 @@ export interface SDTProperties {
   lock?: SDTLockType;
   /** Alias (display name) */
   alias?: string;
+  /** Temporary placeholder (removed when content is edited) */
+  temporary?: boolean;
   /** Content control type */
   controlType?: ContentControlType;
   /** Plain text properties */
@@ -401,13 +403,21 @@ export class StructuredDocumentTag {
 
   /**
    * Get temporary state
-   * Note: The 'temporary' property is not yet implemented in SDTProperties
-   * This method returns false for now for forward compatibility
+   * Temporary SDTs are placeholders removed when content is edited
    * @returns True if SDT is temporary (placeholder), false otherwise
    */
   isTemporary(): boolean {
-    // TODO: Add 'temporary' property to SDTProperties interface
-    return false;
+    return this.properties.temporary === true;
+  }
+
+  /**
+   * Set whether SDT is temporary
+   * @param temporary - Whether SDT is temporary
+   * @returns This instance for chaining
+   */
+  setTemporary(temporary: boolean): this {
+    this.properties.temporary = temporary;
+    return this;
   }
 
   /**

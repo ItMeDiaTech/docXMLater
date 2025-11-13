@@ -4,6 +4,7 @@
 
 import { REQUIRED_DOCX_FILES } from '../zip/types';
 import { MissingRequiredFileError } from '../zip/errors';
+import { defaultLogger } from './logger';
 
 /**
  * Validates that all required DOCX files are present
@@ -533,8 +534,8 @@ export function validateRunText(
   // Log warnings to console in development if requested
   if (warnToConsole && result.warnings.length > 0 && typeof console !== 'undefined') {
     const contextStr = context ? ` [${context}]` : '';
-    console.warn(`DocXML Text Validation Warning${contextStr}:`);
-    result.warnings.forEach(warning => console.warn(`  - ${warning}`));
+    defaultLogger.warn(`DocXML Text Validation Warning${contextStr}:`);
+    result.warnings.forEach(warning => defaultLogger.warn(`  - ${warning}`));
   }
 
   return result;
