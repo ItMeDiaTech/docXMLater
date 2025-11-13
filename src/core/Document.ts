@@ -3574,6 +3574,115 @@ export class Document {
   }
 
   /**
+   * Ensures all 1x1 tables have a blank paragraph (linebreak) after them
+   *
+   * This method scans the document for all 1×1 tables and adds a blank paragraph
+   * after each one if it doesn't already exist. This ensures proper spacing between
+   * tables and subsequent content in Word.
+   *
+   * The blank paragraphs are marked as "preserved" to prevent them from being
+   * removed by cleanup operations like removeExtraBlankParagraphs().
+   *
+   * @param options Configuration options
+   * @returns Statistics about added linebreaks
+   *
+   * @example
+   * ```typescript
+   * const doc = await Document.load('input.docx');
+   * const result = doc.ensureTableLinebreaks();
+   * console.log(`Added ${result.added} linebreaks after tables`);
+   * await doc.save('output.docx');
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Add linebreaks with custom spacing
+   * doc.ensureTableLinebreaks({ spacingAfter: 240 }); // 12pt spacing
+   * ```
+   */
+  public ensureTableLinebreaks(options?: {
+    /** Spacing after the blank paragraph in twips (default: 120 = 6pt) */
+    spacingAfter?: number;
+    /** Whether to mark added paragraphs as preserved (default: true) */
+    markAsPreserved?: boolean;
+    /** Only process tables matching this filter function */
+    filter?: (table: Table, index: number) => boolean;
+  }): {
+    /** Number of linebreaks added */
+    added: number;
+    /** Number of tables that already had linebreaks */
+    skipped: number;
+    /** Total 1×1 tables processed */
+    total: number;
+  } {
+    const spacingAfter = options?.spacingAfter ?? 120;
+    const markAsPreserved = options?.markAsPreserved ?? true;
+    const filter = options?.filter;
+
+    let added = 0;
+    let skipped = 0;
+    let total = 0;
+
+    // Iterate through body elements (in reverse to avoid index issues when inserting)
+    for (let i = this.bodyElements.length - 1; i >= 0; i--) {
+      const element = this.bodyElements[i];
+
+      // Check if it's a table
+      if (!(element instanceof Table)) {
+        continue;
+      }
+
+      const table = element as Table;
+      const rows = table.getRowCount();
+      const cols = table.getColumnCount();
+
+      // Only process 1×1 tables
+      if (rows !== 1 || cols !== 1) {
+        continue;
+      }
+
+      // Apply filter if provided
+      if (filter && !filter(table, i)) {
+        continue;
+      }
+
+      total++;
+
+      // Check if next element exists and is a blank paragraph
+      const nextElement = this.bodyElements[i + 1];
+      let hasLinebreak = false;
+
+      if (nextElement instanceof Paragraph) {
+        // Check if the paragraph is blank
+        if (this.isParagraphBlank(nextElement)) {
+          hasLinebreak = true;
+        }
+      }
+
+      // Add linebreak if missing
+      if (!hasLinebreak) {
+        const blankPara = Paragraph.create();
+
+        // Add spacing to ensure visibility in Word
+        blankPara.setSpaceAfter(spacingAfter);
+
+        // Mark as preserved so it won't be removed by cleanup operations
+        if (markAsPreserved) {
+          blankPara.setPreserved(true);
+        }
+
+        // Insert after table
+        this.bodyElements.splice(i + 1, 0, blankPara);
+        added++;
+      } else {
+        skipped++;
+      }
+    }
+
+    return { added, skipped, total };
+  }
+
+  /**
    * Checks if a paragraph is blank (no meaningful content)
    * @private
    */
