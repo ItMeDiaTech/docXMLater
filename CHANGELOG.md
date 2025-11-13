@@ -5,6 +5,39 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2025-11-13
+
+### Documentation
+- **Comprehensive Documentation Update**: Added complete documentation suite
+  - New README.md with full feature matrix, API overview, and code examples
+  - Updated CLAUDE.md to reflect all 5 phases complete (2073+ tests, 65 source files)
+  - Added documentation consistency analysis (docs/analysis/)
+
+### Added
+- **Documentation Analysis Tools**:
+  - `docs/analysis/DOCUMENTATION_CONSISTENCY_ANALYSIS.md` - 12-section analysis comparing implementation vs documentation
+  - `docs/analysis/DOCUMENTATION_UPDATES_NEEDED.md` - Quick reference checklist for updates
+
+### Changed
+- **Phase Status Updates**: Marked Phase 4 (Rich Content) and Phase 5 (Polish) as Complete
+  - Phase 4: Images, headers, footers, hyperlinks, bookmarks, shapes
+  - Phase 5: Track changes, comments, TOC, fields, footnotes, content controls
+- **Metrics Updates**:
+  - Test count: 253 → 2073+ tests (59 test files)
+  - Source files: 48 → 65 TypeScript files
+  - Lines of code: ~10,000 → ~40,000+ lines
+
+### Documentation Improvements
+- Added comprehensive feature list covering all 31 element classes
+- Added API overview with Document, Paragraph, Run, Table, TableCell classes
+- Added code examples for common use cases
+- Added TypeScript type examples
+- Clarified RAG-CLI integration as development-only
+- Added migration notes and performance considerations
+- Added architecture overview and design principles
+
+---
+
 ## [1.15.0] - 2025-11-14
 
 ### Added
