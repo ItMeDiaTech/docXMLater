@@ -3608,6 +3608,130 @@ export class Document {
   }
 
   /**
+   * Ensures that all 1x1 tables have a blank line after them with optional preserve flag.
+   * This is useful for maintaining spacing after single-cell tables (e.g., Header 2 tables).
+   *
+   * The method:
+   * 1. Finds all 1x1 tables in the document
+   * 2. Checks if there's a blank paragraph immediately after each table
+   * 3. If no blank paragraph exists, adds one with spacing and preserve flag
+   * 4. If a blank paragraph exists, optionally marks it as preserved
+   *
+   * @param options Configuration options
+   * @param options.spacingAfter Spacing after the blank paragraph in twips (default: 120 twips = 6pt)
+   * @param options.markAsPreserved Whether to mark blank paragraphs as preserved (default: true)
+   * @param options.filter Optional filter function to select which tables to process
+   * @returns Statistics about the operation
+   *
+   * @example
+   * // Add blank lines after all 1x1 tables with default settings
+   * const result = doc.ensureBlankLinesAfter1x1Tables();
+   * console.log(`Added ${result.blankLinesAdded} blank lines`);
+   * console.log(`Marked ${result.existingLinesMarked} existing blank lines as preserved`);
+   *
+   * @example
+   * // Custom spacing and preserve flag
+   * doc.ensureBlankLinesAfter1x1Tables({
+   *   spacingAfter: 240,  // 12pt spacing
+   *   markAsPreserved: true
+   * });
+   *
+   * @example
+   * // Only process tables with Header 2 paragraphs
+   * doc.ensureBlankLinesAfter1x1Tables({
+   *   filter: (table, index) => {
+   *     const cell = table.getCell(0, 0);
+   *     if (!cell) return false;
+   *     return cell.getParagraphs().some(p => {
+   *       const style = p.getStyle();
+   *       return style === 'Heading2' || style === 'Heading 2';
+   *     });
+   *   }
+   * });
+   */
+  public ensureBlankLinesAfter1x1Tables(options?: {
+    spacingAfter?: number;
+    markAsPreserved?: boolean;
+    filter?: (table: Table, index: number) => boolean;
+  }): {
+    tablesProcessed: number;
+    blankLinesAdded: number;
+    existingLinesMarked: number;
+  } {
+    const spacingAfter = options?.spacingAfter ?? 120;
+    const markAsPreserved = options?.markAsPreserved ?? true;
+    const filter = options?.filter;
+
+    let tablesProcessed = 0;
+    let blankLinesAdded = 0;
+    let existingLinesMarked = 0;
+
+    const tables = this.getAllTables();
+
+    for (let i = 0; i < tables.length; i++) {
+      const table = tables[i];
+      if (!table) continue;
+
+      const rowCount = table.getRowCount();
+      const colCount = table.getColumnCount();
+
+      // Check if it's a 1x1 table
+      if (rowCount !== 1 || colCount !== 1) {
+        continue;
+      }
+
+      // Apply filter if provided
+      if (filter && !filter(table, i)) {
+        continue;
+      }
+
+      tablesProcessed++;
+
+      // Find table index in body elements
+      const tableIndex = this.bodyElements.indexOf(table);
+      if (tableIndex === -1) continue;
+
+      // Check next element
+      const nextElement = this.bodyElements[tableIndex + 1];
+
+      if (nextElement instanceof Paragraph) {
+        // Next element is a paragraph - check if it's blank
+        if (this.isParagraphBlank(nextElement)) {
+          // Blank paragraph exists - mark as preserved if requested
+          if (markAsPreserved && !nextElement.isPreserved()) {
+            nextElement.setPreserved(true);
+            existingLinesMarked++;
+          }
+        } else {
+          // Next paragraph has content - add blank paragraph between table and content
+          const blankPara = Paragraph.create();
+          blankPara.setSpaceAfter(spacingAfter);
+          if (markAsPreserved) {
+            blankPara.setPreserved(true);
+          }
+          this.bodyElements.splice(tableIndex + 1, 0, blankPara);
+          blankLinesAdded++;
+        }
+      } else {
+        // No paragraph after table (or it's another table/element) - add blank paragraph
+        const blankPara = Paragraph.create();
+        blankPara.setSpaceAfter(spacingAfter);
+        if (markAsPreserved) {
+          blankPara.setPreserved(true);
+        }
+        this.bodyElements.splice(tableIndex + 1, 0, blankPara);
+        blankLinesAdded++;
+      }
+    }
+
+    return {
+      tablesProcessed,
+      blankLinesAdded,
+      existingLinesMarked,
+    };
+  }
+
+  /**
    * Checks if a paragraph is blank (no meaningful content)
    * @private
    */

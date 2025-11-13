@@ -137,3 +137,7 @@ hyperlink_defragmentation_fix.ts
 /RESEARCH_TRACKED_CHANGES_IMPROVEMENTS.md
 /docs/archive
 /docs/analysisDocumentation_Hub/
+/docs/analysis
+/docXMLater.code-workspace
+/.npmignore
+/.gitignore
