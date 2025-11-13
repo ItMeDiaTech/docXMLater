@@ -10,6 +10,7 @@ import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
 import { ImageManager } from '../elements/ImageManager';
 import { DocumentProperties } from './Document';
 import { LIMITS } from '../constants/limits';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Memory validation options
@@ -197,7 +198,7 @@ export class DocumentValidator {
     );
 
     if (paragraphs.length === 0) {
-      console.warn(
+      defaultLogger.warn(
         '\nDocXML Save Warning:\n' +
           'Document has no paragraphs. You are saving an empty document.\n'
       );
@@ -223,7 +224,7 @@ export class DocumentValidator {
       const emptyPercentage = (emptyRuns / totalRuns) * 100;
 
       if (emptyPercentage > 90 && emptyRuns > 10) {
-        console.warn(
+        defaultLogger.warn(
           '\nDocXML Save Warning:\n' +
             `You are about to save a document where ${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(1)}%) are empty.\n` +
             'This may result in a document with no visible text content.\n' +
@@ -274,7 +275,7 @@ export class DocumentValidator {
 
     // Warn if only heap exceeded (might be temporary fragmentation)
     if (heapExceeded && !rssExceeded && this.useAbsoluteLimit) {
-      console.warn(
+      defaultLogger.warn(
         `DocXML Memory Warning: Heap usage high (${heapPercent.toFixed(1)}%) ` +
         `but RSS (${rssMB.toFixed(0)}MB) is below limit. ` +
         `This might be temporary heap fragmentation.`

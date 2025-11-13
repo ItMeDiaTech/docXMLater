@@ -9,6 +9,7 @@ import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { AbstractNumbering } from './AbstractNumbering';
 import { NumberingInstance } from './NumberingInstance';
 import { NumberingLevel } from './NumberingLevel';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Manages numbering definitions and instances for a document
@@ -371,21 +372,21 @@ export class NumberingManager {
     // Get the numbering instance
     const instance = this.getInstance(numId);
     if (!instance) {
-      console.warn(`Numbering instance ${numId} does not exist`);
+      defaultLogger.warn(`Numbering instance ${numId} does not exist`);
       return false;
     }
 
     // Get the abstract numbering
     const abstractNum = this.getAbstractNumbering(instance.getAbstractNumId());
     if (!abstractNum) {
-      console.warn(`Abstract numbering for instance ${numId} does not exist`);
+      defaultLogger.warn(`Abstract numbering for instance ${numId} does not exist`);
       return false;
     }
 
     // Get the level from the abstract numbering
     const numLevel = abstractNum.getLevel(level);
     if (!numLevel) {
-      console.warn(`Level ${level} does not exist in abstract numbering`);
+      defaultLogger.warn(`Level ${level} does not exist in abstract numbering`);
       return false;
     }
 
@@ -415,14 +416,14 @@ export class NumberingManager {
     // Get the numbering instance
     const instance = this.getInstance(numId);
     if (!instance) {
-      console.warn(`Numbering instance ${numId} does not exist`);
+      defaultLogger.warn(`Numbering instance ${numId} does not exist`);
       return false;
     }
 
     // Get the abstract numbering
     const abstractNum = this.getAbstractNumbering(instance.getAbstractNumId());
     if (!abstractNum) {
-      console.warn(`Abstract numbering for instance ${numId} does not exist`);
+      defaultLogger.warn(`Abstract numbering for instance ${numId} does not exist`);
       return false;
     }
 

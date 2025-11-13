@@ -13,6 +13,7 @@ import { Shape } from './Shape';
 import { TextBox } from './TextBox';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { logSerialization, logParagraphContent, logTextDirection } from '../utils/diagnostics';
+import { deepClone } from '../utils/deepClone';
 
 /**
  * Paragraph alignment options
@@ -239,6 +240,8 @@ export class Paragraph {
   private bookmarksEnd: Bookmark[] = [];
   private commentsStart: Comment[] = [];
   private commentsEnd: Comment[] = [];
+  /** Internal flag to mark paragraph as preserved from removal operations */
+  private _isPreserved: boolean = false;
 
   /**
    * Creates a new Paragraph
@@ -887,6 +890,26 @@ export class Paragraph {
   setPageBreakBefore(pageBreakBefore: boolean = true): this {
     this.formatting.pageBreakBefore = pageBreakBefore;
     return this;
+  }
+
+  /**
+   * Marks this paragraph as preserved to prevent automatic removal by document processing operations
+   * (e.g., removing extra blank paragraphs). Useful for spacing paragraphs that should remain
+   * even if they appear to be "extra" blank lines.
+   * @param preserved - Whether to preserve this paragraph
+   * @returns This paragraph for chaining
+   */
+  setPreserved(preserved: boolean = true): this {
+    this._isPreserved = preserved;
+    return this;
+  }
+
+  /**
+   * Checks if this paragraph is marked as preserved from automatic removal
+   * @returns True if paragraph should be preserved from removal operations
+   */
+  isPreserved(): boolean {
+    return this._isPreserved;
   }
 
   /**
@@ -1601,7 +1624,7 @@ export class Paragraph {
    */
   clone(): Paragraph {
     // Clone the formatting
-    const clonedFormatting: ParagraphFormatting = JSON.parse(JSON.stringify(this.formatting));
+    const clonedFormatting: ParagraphFormatting = deepClone(this.formatting);
 
     // Create new paragraph with cloned formatting
     const clonedParagraph = new Paragraph(clonedFormatting);
@@ -1611,7 +1634,7 @@ export class Paragraph {
       if (item instanceof Run) {
         // Clone the run with its text and formatting
         const runFormatting = item.getFormatting();
-        const clonedRun = new Run(item.getText(), JSON.parse(JSON.stringify(runFormatting)));
+        const clonedRun = new Run(item.getText(), deepClone(runFormatting));
         clonedParagraph.addRun(clonedRun);
       } else {
         // For other content types, add them as-is (shallow copy for now)

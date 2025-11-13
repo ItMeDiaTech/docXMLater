@@ -151,10 +151,9 @@ export class Document {
   private bookmarkManager: BookmarkManager;
   private revisionManager: RevisionManager;
   private commentManager: CommentManager;
-  // @ts-ignore - Reserved for future implementation
-  private _footnoteManager: FootnoteManager;
-  // @ts-ignore - Reserved for future implementation
-  private _endnoteManager: EndnoteManager;
+  // Reserved for future implementation - placeholder properties
+  private _footnoteManager?: any;
+  private _endnoteManager?: any;
 
   // Helper classes for parsing, generation, and validation
   private parser: DocumentParser;
@@ -2879,6 +2878,9 @@ export class Document {
       },
     };
 
+    // Extract preserve blank lines option (defaults to true)
+    const preserveBlankLines = options?.preserveBlankLinesAfterHeader2Tables ?? true;
+
     // Modify Heading1 definition
     if (heading1 && h1Config.run && h1Config.paragraph) {
       if (h1Config.run) heading1.setRunFormatting(h1Config.run);
@@ -3110,6 +3112,10 @@ export class Document {
               const blankPara = Paragraph.create();
               // Add explicit spacing to ensure visibility in Word (120 twips = 6pt)
               blankPara.setSpaceAfter(120);
+              // Mark as preserved if option is enabled (defaults to true)
+              if (preserveBlankLines) {
+                blankPara.setPreserved(true);
+              }
               this.bodyElements.splice(tableIndex + 1, 0, blankPara);
             }
           }
@@ -3378,6 +3384,247 @@ export class Document {
   }
 
   /**
+   * Removes extra blank paragraphs from the document while preserving marked paragraphs
+   *
+   * This method removes consecutive blank paragraphs, keeping only one blank line for spacing.
+   * Paragraphs marked as "preserved" (via setPreserved(true)) will NOT be removed.
+   *
+   * A paragraph is considered blank if it:
+   * - Has no text content (or only whitespace)
+   * - Has no images, hyperlinks, or other non-text content
+   * - Has no bookmarks or comments
+   *
+   * @param options Configuration options for removal
+   * @returns Statistics about removed paragraphs
+   *
+   * @example
+   * // Remove all extra blank paragraphs (except preserved ones)
+   * const result = doc.removeExtraBlankParagraphs();
+   * console.log(`Removed ${result.removed} blank paragraphs, preserved ${result.preserved}`);
+   *
+   * @example
+   * // Keep one blank line between sections
+   * const result = doc.removeExtraBlankParagraphs({ keepOne: true });
+   *
+   * @example
+   * // Preserve Header 2 blank lines before removal
+   * const result = doc.removeExtraBlankParagraphs({
+   *   preserveHeader2BlankLines: true
+   * });
+   */
+  public removeExtraBlankParagraphs(options?: {
+    /** Whether to keep one blank paragraph between content blocks (default: true) */
+    keepOne?: boolean;
+    /**
+     * Whether to mark blank lines after Header 2 tables as preserved before removing extra paragraphs.
+     * When true, scans for 1x1 tables containing Header 2 paragraphs and marks any blank
+     * paragraphs immediately after them as preserved (so they won't be removed).
+     * @default false
+     */
+    preserveHeader2BlankLines?: boolean;
+  }): {
+    removed: number;
+    preserved: number;
+    total: number;
+  } {
+    const keepOne = options?.keepOne ?? true;
+    const preserveHeader2BlankLines = options?.preserveHeader2BlankLines ?? false;
+    let removed = 0;
+    let preserved = 0;
+
+    // Step 1: If requested, mark blank lines after Header 2 tables as preserved
+    if (preserveHeader2BlankLines) {
+      this.markHeader2BlankLinesAsPreserved();
+    }
+
+    // Track consecutive blank paragraphs
+    const toRemove: Paragraph[] = [];
+    let consecutiveBlanks: Paragraph[] = [];
+
+    for (let i = 0; i < this.bodyElements.length; i++) {
+      const element = this.bodyElements[i];
+
+      // Only process paragraphs
+      if (!(element instanceof Paragraph)) {
+        // Not a paragraph - process any accumulated blanks
+        if (consecutiveBlanks.length > 0) {
+          this.processConsecutiveBlanks(consecutiveBlanks, keepOne, toRemove);
+          consecutiveBlanks = [];
+        }
+        continue;
+      }
+
+      const para = element;
+
+      // Check if paragraph is blank
+      const isBlank = this.isParagraphBlank(para);
+
+      if (isBlank) {
+        consecutiveBlanks.push(para);
+      } else {
+        // Non-blank paragraph - process any accumulated blanks
+        if (consecutiveBlanks.length > 0) {
+          this.processConsecutiveBlanks(consecutiveBlanks, keepOne, toRemove);
+          consecutiveBlanks = [];
+        }
+      }
+    }
+
+    // Process any remaining consecutive blanks at the end
+    if (consecutiveBlanks.length > 0) {
+      this.processConsecutiveBlanks(consecutiveBlanks, keepOne, toRemove);
+    }
+
+    // Count preserved paragraphs
+    for (const para of toRemove) {
+      if (para.isPreserved()) {
+        preserved++;
+      }
+    }
+
+    // Remove paragraphs that aren't preserved
+    for (const para of toRemove) {
+      if (!para.isPreserved()) {
+        const index = this.bodyElements.indexOf(para);
+        if (index !== -1) {
+          this.bodyElements.splice(index, 1);
+          removed++;
+        }
+      }
+    }
+
+    return {
+      removed,
+      preserved,
+      total: toRemove.length
+    };
+  }
+
+  /**
+   * Helper method to process consecutive blank paragraphs
+   * @private
+   */
+  private processConsecutiveBlanks(
+    blanks: Paragraph[],
+    keepOne: boolean,
+    toRemove: Paragraph[]
+  ): void {
+    if (blanks.length === 0) return;
+
+    if (keepOne && blanks.length > 1) {
+      // Keep the first one, remove the rest
+      for (let i = 1; i < blanks.length; i++) {
+        const blank = blanks[i];
+        if (blank) {
+          toRemove.push(blank);
+        }
+      }
+    } else if (!keepOne) {
+      // Remove all
+      toRemove.push(...blanks);
+    }
+    // If keepOne is true and there's only 1 blank, don't remove it
+  }
+
+  /**
+   * Marks blank lines after 1x1 Header 2 tables as preserved
+   * @private
+   */
+  private markHeader2BlankLinesAsPreserved(): void {
+    const tables = this.getAllTables();
+
+    for (const table of tables) {
+      const rowCount = table.getRowCount();
+      const colCount = table.getColumnCount();
+
+      // Check if it's a 1x1 table
+      if (rowCount !== 1 || colCount !== 1) {
+        continue;
+      }
+
+      // Get the cell and check if it contains a Header 2 paragraph
+      const cell = table.getCell(0, 0);
+      if (!cell) continue;
+
+      const cellParas = cell.getParagraphs();
+      let hasHeader2 = false;
+
+      for (const para of cellParas) {
+        const style = para.getStyle();
+        if (style === 'Heading2' || style === 'Heading 2' ||
+            style === 'CustomHeader2' || style === 'Header2') {
+          hasHeader2 = true;
+          break;
+        }
+      }
+
+      if (!hasHeader2) continue;
+
+      // Found a 1x1 table with Header 2 - mark next paragraph as preserved if it's blank
+      const tableIndex = this.bodyElements.indexOf(table);
+      if (tableIndex === -1) continue;
+
+      const nextElement = this.bodyElements[tableIndex + 1];
+      if (nextElement instanceof Paragraph) {
+        if (this.isParagraphBlank(nextElement)) {
+          nextElement.setPreserved(true);
+        }
+      }
+    }
+  }
+
+  /**
+   * Checks if a paragraph is blank (no meaningful content)
+   * @private
+   */
+  private isParagraphBlank(para: Paragraph): boolean {
+    const content = para.getContent();
+
+    // No content at all
+    if (!content || content.length === 0) {
+      return true;
+    }
+
+    // Check all content items
+    for (const item of content) {
+      // Hyperlinks count as content
+      if ((item as any).constructor.name === 'Hyperlink') {
+        return false;
+      }
+
+      // Images/shapes count as content
+      if ((item as any).constructor.name === 'Shape') {
+        return false;
+      }
+
+      // TextBox count as content
+      if ((item as any).constructor.name === 'TextBox') {
+        return false;
+      }
+
+      // Fields count as content
+      if ((item as any).constructor.name === 'Field') {
+        return false;
+      }
+
+      // Check runs for non-whitespace text
+      if ((item as any).getText) {
+        const text = (item as any).getText().trim();
+        if (text !== '') {
+          return false;
+        }
+      }
+    }
+
+    // Check for bookmarks
+    if (para.getBookmarksStart().length > 0 || para.getBookmarksEnd().length > 0) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * Parses a TOC field instruction to extract which heading levels to include
    *
    * Handles field codes like:
@@ -3581,7 +3828,7 @@ export class Document {
       }
 
     } catch (error) {
-      console.error('Error parsing document.xml for headings:', error);
+      defaultLogger.error('Error parsing document.xml for headings:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
     }
 
     return headings;
@@ -3863,7 +4110,7 @@ export class Document {
         replacedCount++;
       } catch (error) {
         // Skip this TOC if there's an error
-        console.error(`Error replacing TOC: ${error}`);
+        defaultLogger.error(`Error replacing TOC: ${error}`);
         continue;
       }
     }
@@ -6093,13 +6340,13 @@ export class Document {
     // Warn about missing styles
     const style = paragraph.getFormatting().style;
     if (style && !this.stylesManager.hasStyle(style)) {
-      console.warn(`Style "${style}" not found in document. Paragraph will fall back to Normal style.`);
+      defaultLogger.warn(`Style "${style}" not found in document. Paragraph will fall back to Normal style.`);
     }
 
     // Warn about missing numbering
     const numbering = paragraph.getFormatting().numbering;
     if (numbering && !this.numberingManager.hasInstance(numbering.numId)) {
-      console.warn(`Numbering ID ${numbering.numId} not found in document. List formatting will not display.`);
+      defaultLogger.warn(`Numbering ID ${numbering.numId} not found in document. List formatting will not display.`);
     }
   }
 
@@ -6129,7 +6376,7 @@ export class Document {
     // Warn about missing table styles
     const tableStyle = table.getFormatting().style;
     if (tableStyle && !this.stylesManager.hasStyle(tableStyle)) {
-      console.warn(`Table style "${tableStyle}" not found in document. Table will use default formatting.`);
+      defaultLogger.warn(`Table style "${tableStyle}" not found in document. Table will use default formatting.`);
     }
   }
 
@@ -6149,7 +6396,7 @@ export class Document {
       .some(style => this.stylesManager.hasStyle(style));
 
     if (!hasHeadings) {
-      console.warn('No heading styles found in document. Table of Contents may not display entries correctly.');
+      defaultLogger.warn('No heading styles found in document. Table of Contents may not display entries correctly.');
     }
   }
 
@@ -6463,8 +6710,23 @@ export class Document {
 
     // Optionally clean up orphaned relationships
     if (cleanupRelationships && mergedCount > 0) {
-      // TODO: Implement relationship cleanup when RelationshipManager supports it
-      console.log('Note: Relationship cleanup not yet implemented');
+      // Collect all referenced hyperlink relationship IDs
+      const referencedIds = new Set<string>();
+
+      // Collect IDs from all hyperlinks in the document
+      const allHyperlinks = this.getHyperlinks();
+      for (const { hyperlink } of allHyperlinks) {
+        const relId = hyperlink.getRelationshipId();
+        if (relId) {
+          referencedIds.add(relId);
+        }
+      }
+
+      // Remove orphaned hyperlink relationships
+      const removedCount = this.relationshipManager.removeOrphanedHyperlinks(referencedIds);
+      if (removedCount > 0) {
+        defaultLogger.info(`Cleaned up ${removedCount} orphaned hyperlink relationship(s)`);
+      }
     }
 
     return mergedCount;
