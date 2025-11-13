@@ -587,14 +587,103 @@ ${properties}
   /**
    * Generates word/settings.xml
    * Required for DOCX compliance - defines document settings
+   * @param trackChangesSettings - Optional track changes settings
    */
-  generateSettings(): string {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  generateSettings(trackChangesSettings?: {
+    trackChangesEnabled?: boolean;
+    trackFormatting?: boolean;
+    revisionView?: {
+      showInsertionsAndDeletions: boolean;
+      showFormatting: boolean;
+      showInkAnnotations: boolean;
+    };
+    rsidRoot?: string;
+    rsids?: string[];
+    documentProtection?: {
+      edit: 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+      enforcement: boolean;
+      cryptProviderType?: string;
+      cryptAlgorithmClass?: string;
+      cryptAlgorithmType?: string;
+      cryptAlgorithmSid?: number;
+      cryptSpinCount?: number;
+      hash?: string;
+      salt?: string;
+    };
+  }): string {
+    let xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <w:zoom w:percent="100"/>
+  <w:zoom w:percent="100"/>`;
+
+    // Track changes settings
+    if (trackChangesSettings?.trackChangesEnabled) {
+      xml += '\n  <w:trackRevisions/>';
+    }
+
+    if (trackChangesSettings?.trackFormatting !== undefined) {
+      if (trackChangesSettings.trackFormatting) {
+        xml += '\n  <w:trackFormatting/>';
+      } else {
+        xml += '\n  <w:doNotTrackFormatting/>';
+      }
+    }
+
+    // Revision view settings
+    if (trackChangesSettings?.revisionView) {
+      const view = trackChangesSettings.revisionView;
+      xml += `\n  <w:revisionView w:insDel="${view.showInsertionsAndDeletions ? '1' : '0'}" w:formatting="${view.showFormatting ? '1' : '0'}"`;
+      if (view.showInkAnnotations !== undefined) {
+        xml += ` w:inkAnnotations="${view.showInkAnnotations ? '1' : '0'}"`;
+      }
+      xml += '/>';
+    }
+
+    // Document protection
+    if (trackChangesSettings?.documentProtection) {
+      const prot = trackChangesSettings.documentProtection;
+      xml += `\n  <w:documentProtection w:edit="${prot.edit}" w:enforcement="${prot.enforcement ? '1' : '0'}"`;
+      if (prot.cryptProviderType) {
+        xml += ` w:cryptProviderType="${prot.cryptProviderType}"`;
+      }
+      if (prot.cryptAlgorithmClass) {
+        xml += ` w:cryptAlgorithmClass="${prot.cryptAlgorithmClass}"`;
+      }
+      if (prot.cryptAlgorithmType) {
+        xml += ` w:cryptAlgorithmType="${prot.cryptAlgorithmType}"`;
+      }
+      if (prot.cryptAlgorithmSid) {
+        xml += ` w:cryptAlgorithmSid="${prot.cryptAlgorithmSid}"`;
+      }
+      if (prot.cryptSpinCount) {
+        xml += ` w:cryptSpinCount="${prot.cryptSpinCount}"`;
+      }
+      if (prot.hash) {
+        xml += ` w:hash="${prot.hash}"`;
+      }
+      if (prot.salt) {
+        xml += ` w:salt="${prot.salt}"`;
+      }
+      xml += '/>';
+    }
+
+    xml += `
   <w:defaultTabStop w:val="720"/>
-  <w:characterSpacingControl w:val="doNotCompress"/>
+  <w:characterSpacingControl w:val="doNotCompress"/>`;
+
+    // RSIDs (Revision Save IDs)
+    if (trackChangesSettings?.rsids && trackChangesSettings.rsids.length > 0) {
+      xml += '\n  <w:rsids>';
+      if (trackChangesSettings.rsidRoot) {
+        xml += `\n    <w:rsidRoot w:val="${trackChangesSettings.rsidRoot}"/>`;
+      }
+      for (const rsid of trackChangesSettings.rsids) {
+        xml += `\n    <w:rsid w:val="${rsid}"/>`;
+      }
+      xml += '\n  </w:rsids>';
+    }
+
+    xml += `
   <w:compat>
     <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
     <w:compatSetting w:name="overrideTableStyleFontSizeAndJustification" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
@@ -605,6 +694,8 @@ ${properties}
   <w:themeFontLang w:val="en-US"/>
   <w:clrSchemeMapping w:bg1="light1" w:t1="dark1" w:bg2="light2" w:t2="dark2" w:accent1="accent1" w:accent2="accent2" w:accent3="accent3" w:accent4="accent4" w:accent5="accent5" w:accent6="accent6" w:hyperlink="hyperlink" w:followedHyperlink="followedHyperlink"/>
 </w:settings>`;
+
+    return xml;
   }
 
   /**

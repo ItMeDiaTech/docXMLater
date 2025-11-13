@@ -19,6 +19,7 @@ export type RevisionType =
   | 'runPropertiesChange' // w:rPrChange - Run formatting change (bold, italic, font, etc.)
   | 'paragraphPropertiesChange' // w:pPrChange - Paragraph formatting change
   | 'tablePropertiesChange'     // w:tblPrChange - Table formatting change
+  | 'tableExceptionPropertiesChange' // w:tblPrExChange - Table exception properties change
   | 'tableRowPropertiesChange'  // w:trPrChange - Table row properties change
   | 'tableCellPropertiesChange' // w:tcPrChange - Table cell properties change
   | 'sectionPropertiesChange'   // w:sectPrChange - Section properties change
@@ -69,6 +70,7 @@ export class Revision {
   private newProperties?: Record<string, any>;
   private moveId?: string;
   private moveLocation?: string;
+  private isFieldInstruction: boolean = false;
 
   /**
    * Creates a new Revision
@@ -182,6 +184,22 @@ export class Revision {
   }
 
   /**
+   * Marks this revision as a field instruction deletion
+   * When true, uses w:delInstrText instead of w:delText
+   */
+  setAsFieldInstruction(): this {
+    this.isFieldInstruction = true;
+    return this;
+  }
+
+  /**
+   * Checks if this is a field instruction deletion
+   */
+  isFieldInstructionDeletion(): boolean {
+    return this.isFieldInstruction;
+  }
+
+  /**
    * Formats a date to ISO 8601 format for XML
    * Per ECMA-376, revision dates must be in ISO 8601 format (e.g., "2024-01-01T12:00:00Z")
    * @param date - Date to format
@@ -225,6 +243,8 @@ export class Revision {
         return 'w:pPrChange';
       case 'tablePropertiesChange':
         return 'w:tblPrChange';
+      case 'tableExceptionPropertiesChange':
+        return 'w:tblPrExChange';
       case 'tableRowPropertiesChange':
         return 'w:trPrChange';
       case 'tableCellPropertiesChange':
@@ -375,6 +395,7 @@ export class Revision {
       'runPropertiesChange',
       'paragraphPropertiesChange',
       'tablePropertiesChange',
+      'tableExceptionPropertiesChange',
       'tableRowPropertiesChange',
       'tableCellPropertiesChange',
       'sectionPropertiesChange',
@@ -433,6 +454,9 @@ export class Revision {
       case 'tablePropertiesChange':
         propElementName = 'w:tblPr';
         break;
+      case 'tableExceptionPropertiesChange':
+        propElementName = 'w:tblPrEx';
+        break;
       case 'tableRowPropertiesChange':
         propElementName = 'w:trPr';
         break;
@@ -473,10 +497,11 @@ export class Revision {
   }
 
   /**
-   * Creates XML for a deleted run (uses w:delText instead of w:t)
+   * Creates XML for a deleted run (uses w:delText or w:delInstrText instead of w:t)
    *
    * **OOXML Requirement:**
    * Per ECMA-376, deleted text must use w:delText element instead of w:t element.
+   * For deleted field instructions, w:delInstrText must be used instead.
    * This is required for proper rendering in Microsoft Word's Track Changes mode.
    *
    * **Transformation:**
@@ -492,34 +517,46 @@ export class Revision {
    *   <w:rPr><w:b/></w:rPr>
    *   <w:delText>Text</w:delText>
    * </w:r>
+   *
+   * <!-- Deleted field instruction (inside w:del) -->
+   * <w:r>
+   *   <w:delInstrText>MERGEFIELD Name</w:delInstrText>
+   * </w:r>
    * ```
    *
    * **Why This Matters:**
    * - w:delText tells Word to render with strikethrough in Track Changes mode
+   * - w:delInstrText is specifically for deleted field codes
    * - w:t would render as normal text even inside w:del element
    * - Word will reject documents with w:t inside deletions as malformed
    *
    * **Implementation:**
    * This method gets the run's normal XML and replaces all w:t elements with w:delText
-   * while preserving all other properties (formatting, spacing attributes, etc.)
+   * or w:delInstrText (for field instructions) while preserving all other properties
+   * (formatting, spacing attributes, etc.)
    *
    * @param run - Run containing deleted text
-   * @returns XMLElement with w:delText instead of w:t
+   * @returns XMLElement with w:delText or w:delInstrText instead of w:t
    * @see ECMA-376 Part 1 §17.13.5.14 (Deleted Run Content)
    * @see ECMA-376 Part 1 §22.1.2.27 (w:delText element)
+   * @see ECMA-376 Part 1 §22.1.2.26 (w:delInstrText element)
    */
   private createDeletedRunXml(run: Run): XMLElement {
     // Get the regular run XML
     const runXml = run.toXML();
 
-    // We need to replace w:t elements with w:delText
+    // Determine which element to use for deleted text
+    // w:delInstrText for field instructions, w:delText for regular text
+    const deletedTextElement = this.isFieldInstruction ? 'w:delInstrText' : 'w:delText';
+
+    // We need to replace w:t elements with w:delText or w:delInstrText
     if (runXml.children) {
       const modifiedChildren = runXml.children.map(child => {
         if (typeof child === 'object' && child.name === 'w:t') {
-          // Replace w:t with w:delText
+          // Replace w:t with appropriate deleted text element
           return {
             ...child,
-            name: 'w:delText',
+            name: deletedTextElement,
           };
         }
         return child;
@@ -572,6 +609,29 @@ export class Revision {
       content,
       date,
     });
+  }
+
+  /**
+   * Creates a field instruction deletion revision
+   * Uses w:delInstrText instead of w:delText for field codes
+   * @param author - Author who made the deletion
+   * @param content - Deleted field instruction content (Run or array of Runs)
+   * @param date - Optional date (defaults to now)
+   * @returns New Revision instance
+   */
+  static createFieldInstructionDeletion(
+    author: string,
+    content: Run | Run[],
+    date?: Date
+  ): Revision {
+    const revision = new Revision({
+      author,
+      type: 'delete',
+      content,
+      date,
+    });
+    revision.setAsFieldInstruction();
+    return revision;
   }
 
   /**
@@ -661,6 +721,30 @@ export class Revision {
     return new Revision({
       author,
       type: 'tablePropertiesChange',
+      content,
+      previousProperties,
+      date,
+    });
+  }
+
+  /**
+   * Creates a table exception properties change revision
+   * Tracks changes to table properties that override style defaults
+   * @param author - Author who made the change
+   * @param content - Table content
+   * @param previousProperties - Previous table exception properties
+   * @param date - Optional date (defaults to now)
+   * @returns New Revision instance
+   */
+  static createTableExceptionPropertiesChange(
+    author: string,
+    content: Run | Run[],
+    previousProperties: Record<string, any>,
+    date?: Date
+  ): Revision {
+    return new Revision({
+      author,
+      type: 'tableExceptionPropertiesChange',
       content,
       previousProperties,
       date,
