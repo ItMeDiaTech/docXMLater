@@ -44,6 +44,10 @@ import {
   Heading2Config,
   Heading2TableOptions,
 } from "../types/styleConfig";
+import {
+  FormatOptions,
+  StyleApplyOptions,
+} from "../types/formatting";
 
 /**
  * Document properties (core and extended)
@@ -3729,6 +3733,395 @@ export class Document {
       blankLinesAdded,
       existingLinesMarked,
     };
+  }
+
+  /**
+   * Cleans direct formatting from paragraphs that have a style applied.
+   * Preserves the style reference while removing formatting overrides.
+   *
+   * @param options Optional list of style names to clean (default: all styles)
+   * @returns Number of paragraphs cleaned
+   * @example
+   * ```typescript
+   * // Clean all styled paragraphs
+   * const count = doc.cleanFormatting();
+   *
+   * // Clean specific styles only
+   * const count = doc.cleanFormatting(['Heading1', 'Heading2', 'Normal']);
+   * ```
+   */
+  public cleanFormatting(styleNames?: string[]): number {
+    let cleaned = 0;
+
+    for (const para of this.bodyElements) {
+      if (!(para instanceof Paragraph)) continue;
+      if (para.isPreserved()) continue;
+
+      const currentStyle = para.getStyle();
+      if (!currentStyle) continue;
+
+      // If style filter provided, only clean matching styles
+      if (styleNames && !styleNames.includes(currentStyle)) continue;
+
+      para.clearDirectFormatting();
+      cleaned++;
+    }
+
+    return cleaned;
+  }
+
+  /**
+   * Applies Heading 1 style to paragraphs with H1-like style names
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   * @example
+   * ```typescript
+   * // Simple usage
+   * doc.applyH1();
+   *
+   * // With custom formatting
+   * doc.applyH1({
+   *   format: { font: 'Arial', size: 18, emphasis: ['bold'] }
+   * });
+   *
+   * // Preserve specific properties
+   * doc.applyH1({
+   *   keepProperties: ['bold', 'color'],
+   *   format: { font: 'Verdana' }
+   * });
+   * ```
+   */
+  public applyH1(options?: StyleApplyOptions): number {
+    return this.applyStyleToMatching('Heading1', options, (style) =>
+      /^(heading\s*1|header\s*1|h1)$/i.test(style)
+    );
+  }
+
+  /**
+   * Applies Heading 2 style to paragraphs with H2-like style names
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   * @example
+   * ```typescript
+   * doc.applyH2({
+   *   format: { font: 'Verdana', size: 14, color: '000000' }
+   * });
+   * ```
+   */
+  public applyH2(options?: StyleApplyOptions): number {
+    return this.applyStyleToMatching('Heading2', options, (style) =>
+      /^(heading\s*2|header\s*2|h2)$/i.test(style)
+    );
+  }
+
+  /**
+   * Applies Heading 3 style to paragraphs with H3-like style names
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   * @example
+   * ```typescript
+   * doc.applyH3({
+   *   format: { font: 'Verdana', size: 12, emphasis: ['bold'] }
+   * });
+   * ```
+   */
+  public applyH3(options?: StyleApplyOptions): number {
+    return this.applyStyleToMatching('Heading3', options, (style) =>
+      /^(heading\s*3|header\s*3|h3)$/i.test(style)
+    );
+  }
+
+  /**
+   * Applies Normal style to paragraphs without recognized styles
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   */
+  public applyNormal(options?: StyleApplyOptions): number {
+    const targets = options?.paragraphs || this.getAllParagraphs().filter(p => {
+      const style = p.getStyle();
+      return !style || !/^(heading|header|h\d|list|toc|tod|caution|table)/i.test(style);
+    });
+
+    let count = 0;
+    for (const para of targets) {
+      if (para.isPreserved()) continue;
+      para.setStyle('Normal');
+
+      if (options?.keepProperties && options.keepProperties.length > 0) {
+        this.clearFormattingExcept(para, options.keepProperties);
+      } else {
+        para.clearDirectFormatting();
+      }
+
+      if (options?.format) {
+        this.applyFormatOptions(para, options.format);
+      }
+
+      count++;
+    }
+    return count;
+  }
+
+  /**
+   * Applies list style to numbered lists
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   */
+  public applyNumList(options?: StyleApplyOptions): number {
+    return this.applyStyleToMatching('ListParagraph', options, (style) =>
+      /^(list\s*number|numbered\s*list|list\s*paragraph)$/i.test(style)
+    );
+  }
+
+  /**
+   * Applies list style to bullet lists
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   */
+  public applyBulletList(options?: StyleApplyOptions): number {
+    return this.applyStyleToMatching('ListParagraph', options, (style) =>
+      /^(list\s*bullet|bullet\s*list|list\s*paragraph)$/i.test(style)
+    );
+  }
+
+  /**
+   * Applies Table of Contents style
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   */
+  public applyTOC(options?: StyleApplyOptions): number {
+    return this.applyStyleToMatching('TOC', options, (style) =>
+      /^(toc|table\s*of\s*contents|toc\s*heading)$/i.test(style)
+    );
+  }
+
+  /**
+   * Applies Top of Document style
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   */
+  public applyTOD(options?: StyleApplyOptions): number {
+    return this.applyStyleToMatching('TopOfDocument', options, (style) =>
+      /^(tod|top\s*of\s*document|document\s*top)$/i.test(style)
+    );
+  }
+
+  /**
+   * Applies Caution style
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   */
+  public applyCaution(options?: StyleApplyOptions): number {
+    return this.applyStyleToMatching('Caution', options, (style) =>
+      /^(caution|warning|important|alert)$/i.test(style)
+    );
+  }
+
+  /**
+   * Applies header style to table cell paragraphs (typically first row)
+   * @param options Optional style application options
+   * @returns Number of paragraphs updated
+   */
+  public applyCellHeader(options?: StyleApplyOptions): number {
+    let count = 0;
+    const tables = this.getAllTables();
+
+    for (const table of tables) {
+      const firstRow = table.getRow(0);
+      if (!firstRow) continue;
+
+      for (const cell of firstRow.getCells()) {
+        for (const para of cell.getParagraphs()) {
+          if (para.isPreserved()) continue;
+          para.setStyle('TableHeader');
+
+          if (options?.keepProperties && options.keepProperties.length > 0) {
+            this.clearFormattingExcept(para, options.keepProperties);
+          } else {
+            para.clearDirectFormatting();
+          }
+
+          if (options?.format) {
+            this.applyFormatOptions(para, options.format);
+          }
+
+          count++;
+        }
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Applies hyperlink style to hyperlinks
+   * @returns Number of hyperlinks updated
+   */
+  public applyHyperlink(): number {
+    let count = 0;
+    const hyperlinks = this.getHyperlinks();
+
+    for (const { hyperlink } of hyperlinks) {
+      hyperlink.resetToStandardFormatting();
+      count++;
+    }
+
+    return count;
+  }
+
+  /**
+   * Helper method to apply formatting options to a paragraph
+   * @private
+   */
+  private applyFormatOptions(para: Paragraph, options: FormatOptions): void {
+    // Text formatting
+    if (options.font || options.size || options.color || options.emphasis) {
+      for (const run of para.getRuns()) {
+        if (options.font) run.setFont(options.font);
+        if (options.size) run.setSize(options.size);
+        if (options.color) run.setColor(options.color);
+        if (options.emphasis) {
+          options.emphasis.forEach(emp => {
+            if (emp === 'bold') run.setBold(true);
+            if (emp === 'italic') run.setItalic(true);
+            if (emp === 'underline') run.setUnderline('single');
+          });
+        }
+      }
+    }
+
+    // Alignment
+    if (options.alignment) {
+      para.setAlignment(options.alignment);
+    }
+
+    // Spacing (convert points to twips: 1pt = 20 twips)
+    if (options.spaceAbove !== undefined) {
+      para.setSpaceBefore(options.spaceAbove * 20);
+    }
+    if (options.spaceBelow !== undefined) {
+      para.setSpaceAfter(options.spaceBelow * 20);
+    }
+    if (options.lineSpacing !== undefined) {
+      para.setLineSpacing(options.lineSpacing * 20);
+    }
+
+    // Indentation (convert inches to twips: 1in = 1440 twips)
+    if (options.indentLeft !== undefined) {
+      para.setLeftIndent(options.indentLeft * 1440);
+    }
+    if (options.indentRight !== undefined) {
+      para.setRightIndent(options.indentRight * 1440);
+    }
+    if (options.indentFirst !== undefined) {
+      para.setFirstLineIndent(options.indentFirst * 1440);
+    }
+    if (options.indentHanging !== undefined) {
+      // Set hanging indent directly through formatting
+      if (!para.formatting.indentation) {
+        para.formatting.indentation = {};
+      }
+      para.formatting.indentation.hanging = options.indentHanging * 1440;
+    }
+
+    // Advanced options (only set if true)
+    if (options.keepWithNext) {
+      para.setKeepNext(true);
+    }
+    if (options.keepLines) {
+      para.setKeepLines(true);
+    }
+  }
+
+  /**
+   * Helper method to selectively clear formatting while preserving specific properties
+   * @private
+   */
+  private clearFormattingExcept(para: Paragraph, keepProperties: string[]): void {
+    // Save properties to keep
+    const savedProps: any = {};
+    const formatting = para.formatting;
+
+    for (const prop of keepProperties) {
+      if ((formatting as any)[prop] !== undefined) {
+        savedProps[prop] = (formatting as any)[prop];
+      }
+    }
+
+    // Clear all formatting
+    para.clearDirectFormatting();
+
+    // Restore saved properties
+    for (const prop of keepProperties) {
+      if (savedProps[prop] !== undefined) {
+        (para.formatting as any)[prop] = savedProps[prop];
+      }
+    }
+
+    // Handle run-level properties
+    for (const run of para.getRuns()) {
+      const runFormatting = run.getFormatting();
+      const runSavedProps: any = {};
+      for (const prop of keepProperties) {
+        if ((runFormatting as any)[prop] !== undefined) {
+          runSavedProps[prop] = (runFormatting as any)[prop];
+        }
+      }
+
+      run.clearFormatting();
+
+      // Restore saved properties using appropriate setters
+      if (runSavedProps.bold !== undefined) run.setBold(runSavedProps.bold);
+      if (runSavedProps.italic !== undefined) run.setItalic(runSavedProps.italic);
+      if (runSavedProps.underline !== undefined) run.setUnderline(runSavedProps.underline);
+      if (runSavedProps.color !== undefined) run.setColor(runSavedProps.color);
+      if (runSavedProps.font !== undefined) run.setFont(runSavedProps.font);
+      if (runSavedProps.size !== undefined) run.setSize(runSavedProps.size);
+      if (runSavedProps.highlight !== undefined) run.setHighlight(runSavedProps.highlight);
+      if (runSavedProps.strike !== undefined) run.setStrike(runSavedProps.strike);
+      if (runSavedProps.subscript !== undefined) run.setSubscript(runSavedProps.subscript);
+      if (runSavedProps.superscript !== undefined) run.setSuperscript(runSavedProps.superscript);
+    }
+  }
+
+  /**
+   * Helper method to apply style to matching paragraphs
+   * @private
+   */
+  private applyStyleToMatching(
+    targetStyle: string,
+    options: StyleApplyOptions | undefined,
+    matcher: (style: string) => boolean
+  ): number {
+    const targets = options?.paragraphs || this.getAllParagraphs().filter(p => {
+      const style = p.getStyle();
+      return style && matcher(style);
+    });
+
+    let count = 0;
+    for (const para of targets) {
+      if (para.isPreserved()) continue;
+
+      // Apply style
+      para.setStyle(targetStyle);
+
+      // Handle formatting
+      if (options?.keepProperties && options.keepProperties.length > 0) {
+        // Clear formatting except specified properties
+        this.clearFormattingExcept(para, options.keepProperties);
+      } else {
+        // Clear all formatting
+        para.clearDirectFormatting();
+      }
+
+      // Apply custom formatting if provided
+      if (options?.format) {
+        this.applyFormatOptions(para, options.format);
+      }
+
+      count++;
+    }
+    return count;
   }
 
   /**

@@ -1264,4 +1264,21 @@ export class Run {
 
     return this;
   }
+
+  /**
+   * Clears all formatting from this run
+   *
+   * Removes all direct formatting properties, leaving only the text content.
+   * This is useful for applying clean styles without formatting overrides.
+   *
+   * @returns This run for chaining
+   * @example
+   * ```typescript
+   * run.clearFormatting();
+   * ```
+   */
+  clearFormatting(): this {
+    this.formatting = {};
+    return this;
+  }
 }

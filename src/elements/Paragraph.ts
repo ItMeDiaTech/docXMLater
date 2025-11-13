@@ -2327,4 +2327,38 @@ export class Paragraph {
     return this;
   }
 
+  /**
+   * Clears all direct formatting from this paragraph and its runs
+   *
+   * Removes all direct formatting properties from the paragraph and all its runs,
+   * leaving only the style reference and text content. This is useful for ensuring
+   * paragraphs match their defined style without formatting overrides.
+   *
+   * @returns This paragraph for chaining
+   * @example
+   * ```typescript
+   * paragraph.clearDirectFormatting();
+   * ```
+   */
+  clearDirectFormatting(): this {
+    // Clear paragraph-level formatting (keep only style, numbering, and preserved flag)
+    const style = this.formatting.style;
+    const numbering = this.formatting.numbering;
+
+    this.formatting = {};
+
+    // Restore essential properties
+    if (style) this.formatting.style = style;
+    if (numbering) this.formatting.numbering = numbering;
+
+    // Clear run-level formatting
+    for (const item of this.content) {
+      if (item instanceof Run) {
+        item.clearFormatting();
+      }
+    }
+
+    return this;
+  }
+
 }
