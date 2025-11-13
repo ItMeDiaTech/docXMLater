@@ -7,6 +7,7 @@ import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { ParagraphFormatting } from '../elements/Paragraph';
 import { RunFormatting } from '../elements/Run';
 import { Heading2TableOptions } from '../types/styleConfig';
+import { deepClone } from '../utils/deepClone';
 
 /**
  * Style type
@@ -1396,7 +1397,7 @@ export class Style {
    */
   clone(): Style {
     // Deep copy all properties
-    const clonedProps: StyleProperties = JSON.parse(JSON.stringify(this.properties));
+    const clonedProps: StyleProperties = deepClone(this.properties);
     return new Style(clonedProps);
   }
 

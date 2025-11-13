@@ -13,6 +13,7 @@ import { Shape } from './Shape';
 import { TextBox } from './TextBox';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { logSerialization, logParagraphContent, logTextDirection } from '../utils/diagnostics';
+import { deepClone } from '../utils/deepClone';
 
 /**
  * Paragraph alignment options
@@ -1623,7 +1624,7 @@ export class Paragraph {
    */
   clone(): Paragraph {
     // Clone the formatting
-    const clonedFormatting: ParagraphFormatting = JSON.parse(JSON.stringify(this.formatting));
+    const clonedFormatting: ParagraphFormatting = deepClone(this.formatting);
 
     // Create new paragraph with cloned formatting
     const clonedParagraph = new Paragraph(clonedFormatting);
@@ -1633,7 +1634,7 @@ export class Paragraph {
       if (item instanceof Run) {
         // Clone the run with its text and formatting
         const runFormatting = item.getFormatting();
-        const clonedRun = new Run(item.getText(), JSON.parse(JSON.stringify(runFormatting)));
+        const clonedRun = new Run(item.getText(), deepClone(runFormatting));
         clonedParagraph.addRun(clonedRun);
       } else {
         // For other content types, add them as-is (shallow copy for now)

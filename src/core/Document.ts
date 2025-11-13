@@ -151,10 +151,9 @@ export class Document {
   private bookmarkManager: BookmarkManager;
   private revisionManager: RevisionManager;
   private commentManager: CommentManager;
-  // @ts-ignore - Reserved for future implementation
-  private _footnoteManager: FootnoteManager;
-  // @ts-ignore - Reserved for future implementation
-  private _endnoteManager: EndnoteManager;
+  // Reserved for future implementation - placeholder properties
+  private _footnoteManager?: any;
+  private _endnoteManager?: any;
 
   // Helper classes for parsing, generation, and validation
   private parser: DocumentParser;
@@ -3829,7 +3828,7 @@ export class Document {
       }
 
     } catch (error) {
-      console.error('Error parsing document.xml for headings:', error);
+      defaultLogger.error('Error parsing document.xml for headings:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
     }
 
     return headings;
@@ -4111,7 +4110,7 @@ export class Document {
         replacedCount++;
       } catch (error) {
         // Skip this TOC if there's an error
-        console.error(`Error replacing TOC: ${error}`);
+        defaultLogger.error(`Error replacing TOC: ${error}`);
         continue;
       }
     }
@@ -6341,13 +6340,13 @@ export class Document {
     // Warn about missing styles
     const style = paragraph.getFormatting().style;
     if (style && !this.stylesManager.hasStyle(style)) {
-      console.warn(`Style "${style}" not found in document. Paragraph will fall back to Normal style.`);
+      defaultLogger.warn(`Style "${style}" not found in document. Paragraph will fall back to Normal style.`);
     }
 
     // Warn about missing numbering
     const numbering = paragraph.getFormatting().numbering;
     if (numbering && !this.numberingManager.hasInstance(numbering.numId)) {
-      console.warn(`Numbering ID ${numbering.numId} not found in document. List formatting will not display.`);
+      defaultLogger.warn(`Numbering ID ${numbering.numId} not found in document. List formatting will not display.`);
     }
   }
 
@@ -6377,7 +6376,7 @@ export class Document {
     // Warn about missing table styles
     const tableStyle = table.getFormatting().style;
     if (tableStyle && !this.stylesManager.hasStyle(tableStyle)) {
-      console.warn(`Table style "${tableStyle}" not found in document. Table will use default formatting.`);
+      defaultLogger.warn(`Table style "${tableStyle}" not found in document. Table will use default formatting.`);
     }
   }
 
@@ -6397,7 +6396,7 @@ export class Document {
       .some(style => this.stylesManager.hasStyle(style));
 
     if (!hasHeadings) {
-      console.warn('No heading styles found in document. Table of Contents may not display entries correctly.');
+      defaultLogger.warn('No heading styles found in document. Table of Contents may not display entries correctly.');
     }
   }
 
@@ -6711,8 +6710,23 @@ export class Document {
 
     // Optionally clean up orphaned relationships
     if (cleanupRelationships && mergedCount > 0) {
-      // TODO: Implement relationship cleanup when RelationshipManager supports it
-      console.log('Note: Relationship cleanup not yet implemented');
+      // Collect all referenced hyperlink relationship IDs
+      const referencedIds = new Set<string>();
+
+      // Collect IDs from all hyperlinks in the document
+      const allHyperlinks = this.getHyperlinks();
+      for (const { hyperlink } of allHyperlinks) {
+        const relId = hyperlink.getRelationshipId();
+        if (relId) {
+          referencedIds.add(relId);
+        }
+      }
+
+      // Remove orphaned hyperlink relationships
+      const removedCount = this.relationshipManager.removeOrphanedHyperlinks(referencedIds);
+      if (removedCount > 0) {
+        defaultLogger.info(`Cleaned up ${removedCount} orphaned hyperlink relationship(s)`);
+      }
     }
 
     return mergedCount;

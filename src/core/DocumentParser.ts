@@ -31,6 +31,7 @@ import { Style, StyleProperties, StyleType } from "../formatting/Style";
 import { AbstractNumbering } from "../formatting/AbstractNumbering";
 import { NumberingInstance } from "../formatting/NumberingInstance";
 import { logParsing, logParagraphContent, logTextDirection } from "../utils/diagnostics";
+import { defaultLogger } from "../utils/logger";
 
 /**
  * Parse error tracking
@@ -421,7 +422,7 @@ export class DocumentParser {
         });
 
         // Always warn to console, even in non-strict mode
-        console.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
+        defaultLogger.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
       } else if (emptyPercentage > 50 && emptyRuns > 5) {
         const warning = new Error(
           `Document has ${emptyRuns} out of ${totalRuns} runs (${emptyPercentage.toFixed(
@@ -433,7 +434,7 @@ export class DocumentParser {
           element: "document-validation",
           error: warning,
         });
-        console.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
+        defaultLogger.warn(`\nDocXML Load Warning:\n${warning.message}\n`);
       }
     }
   }
@@ -1216,7 +1217,7 @@ export class DocumentParser {
 
       // Warn if hyperlink has no display text (possible TOC corruption or malformed hyperlink)
       if (!text && anchor) {
-        console.warn(
+        defaultLogger.warn(
           `[DocumentParser] Hyperlink to anchor "${anchor}" has no display text. ` +
           `Using placeholder "[Link]" to prevent bookmark ID from appearing as visible text. ` +
           `This may indicate a corrupted TOC or malformed hyperlink in the source document.`
@@ -1240,7 +1241,7 @@ export class DocumentParser {
 
       return hyperlink;
     } catch (error) {
-      console.warn('[DocumentParser] Failed to parse hyperlink:', error);
+      defaultLogger.warn('[DocumentParser] Failed to parse hyperlink:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
       return null;
     }
   }
@@ -1265,17 +1266,16 @@ export class DocumentParser {
     for (let i = 0; i < content.length; i++) {
       const item = content[i];
 
-      if ((item as any).constructor.name === 'Hyperlink') {
-        const hyperlink = item as any;
-        const url = hyperlink.getUrl() || '';
-        const anchor = hyperlink.getAnchor() || '';
+      if (item instanceof Hyperlink) {
+        const url = item.getUrl() || '';
+        const anchor = item.getAnchor() || '';
         const key = `${url}|${anchor}`; // Unique key for URL+anchor combination
 
         if (!hyperlinkGroups.has(key)) {
           hyperlinkGroups.set(key, []);
         }
-        hyperlinkGroups.get(key)!.push(hyperlink);
-        hyperlinkIndices.set(hyperlink, i);
+        hyperlinkGroups.get(key)!.push(item);
+        hyperlinkIndices.set(item, i);
       } else {
         nonHyperlinkItems.push({ item, index: i });
       }
@@ -1305,26 +1305,25 @@ export class DocumentParser {
 
       const item = content[i];
 
-      if ((item as any).constructor.name === 'Hyperlink') {
-        const hyperlink = item as any;
-        const url = hyperlink.getUrl() || '';
-        const anchor = hyperlink.getAnchor() || '';
+      if (item instanceof Hyperlink) {
+        const url = item.getUrl() || '';
+        const anchor = item.getAnchor() || '';
         const key = `${url}|${anchor}`;
         const group = hyperlinkGroups.get(key)!;
 
-        if (group.length > 1 && group[0] === hyperlink) {
+        if (group.length > 1 && group[0] === item) {
           // This is the first hyperlink in a group that needs merging
           // Collect all text from the group
           const mergedText = group.map(h => h.getText()).join('');
 
           // Create merged hyperlink using first hyperlink's properties
-          const mergedHyperlink = new (hyperlink.constructor as any)({
-            url: hyperlink.getUrl(),
-            anchor: hyperlink.getAnchor(),
+          const mergedHyperlink = new Hyperlink({
+            url: item.getUrl(),
+            anchor: item.getAnchor(),
             text: mergedText,
-            formatting: resetFormatting ? this.getStandardHyperlinkFormatting() : hyperlink.getFormatting(),
-            tooltip: hyperlink.getTooltip(),
-            relationshipId: hyperlink.getRelationshipId(),
+            formatting: resetFormatting ? this.getStandardHyperlinkFormatting() : item.getFormatting(),
+            tooltip: item.getTooltip(),
+            relationshipId: item.getRelationshipId(),
           });
 
           // Mark all group members as processed
@@ -1336,17 +1335,17 @@ export class DocumentParser {
         } else if (group.length === 1) {
           // Single hyperlink, possibly reset formatting
           if (resetFormatting) {
-            const resetHyperlink = new (hyperlink.constructor as any)({
-              url: hyperlink.getUrl(),
-              anchor: hyperlink.getAnchor(),
-              text: hyperlink.getText(),
+            const resetHyperlink = new Hyperlink({
+              url: item.getUrl(),
+              anchor: item.getAnchor(),
+              text: item.getText(),
               formatting: this.getStandardHyperlinkFormatting(),
-              tooltip: hyperlink.getTooltip(),
-              relationshipId: hyperlink.getRelationshipId(),
+              tooltip: item.getTooltip(),
+              relationshipId: item.getRelationshipId(),
             });
             mergedContent.push(resetHyperlink);
           } else {
-            mergedContent.push(hyperlink);
+            mergedContent.push(item);
           }
           processedIndices.add(i);
         }
@@ -1364,11 +1363,11 @@ export class DocumentParser {
 
       // Add merged content back
       for (const item of mergedContent) {
-        if ((item as any).constructor.name === 'Hyperlink') {
+        if (item instanceof Hyperlink) {
           paragraph.addHyperlink(item);
-        } else if ((item as any).constructor.name === 'Run') {
+        } else if (item instanceof Run) {
           paragraph.addRun(item);
-        } else if ((item as any).constructor.name === 'Field') {
+        } else if (item instanceof Field) {
           paragraph.addField(item);
         }
       }
@@ -1422,7 +1421,7 @@ export class DocumentParser {
 
       return field;
     } catch (error) {
-      console.warn('[DocumentParser] Failed to parse field:', error);
+      defaultLogger.warn('[DocumentParser] Failed to parse field:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
       return null;
     }
   }
@@ -1721,13 +1720,13 @@ export class DocumentParser {
       // Get the image from the relationship
       const relationship = relationshipManager.getRelationship(relationshipId);
       if (!relationship) {
-        console.warn(`[DocumentParser] Image relationship not found: ${relationshipId}`);
+        defaultLogger.warn(`[DocumentParser] Image relationship not found: ${relationshipId}`);
         return null;
       }
 
       const imageTarget = relationship.getTarget();
       if (!imageTarget) {
-        console.warn(`[DocumentParser] Image relationship has no target: ${relationshipId}`);
+        defaultLogger.warn(`[DocumentParser] Image relationship has no target: ${relationshipId}`);
         return null;
       }
 
@@ -1735,7 +1734,7 @@ export class DocumentParser {
       const imagePath = `word/${imageTarget}`;
       const imageData = zipHandler.getFileAsBuffer(imagePath);
       if (!imageData) {
-        console.warn(`[DocumentParser] Image file not found: ${imagePath}`);
+        defaultLogger.warn(`[DocumentParser] Image file not found: ${imagePath}`);
         return null;
       }
 
@@ -1765,7 +1764,7 @@ export class DocumentParser {
       // Create and return ImageRun
       return new ImageRun(image);
     } catch (error) {
-      console.warn('[DocumentParser] Failed to parse drawing:', error);
+      defaultLogger.warn('[DocumentParser] Failed to parse drawing:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
       return null;
     }
   }
@@ -1945,7 +1944,7 @@ export class DocumentParser {
 
       return table;
     } catch (error) {
-      console.warn('[DocumentParser] Failed to parse table:', error);
+      defaultLogger.warn('[DocumentParser] Failed to parse table:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
       return null;
     }
   }
@@ -2072,7 +2071,7 @@ export class DocumentParser {
 
       return row;
     } catch (error) {
-      console.warn('[DocumentParser] Failed to parse table row:', error);
+      defaultLogger.warn('[DocumentParser] Failed to parse table row:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
       return null;
     }
   }
@@ -2375,7 +2374,7 @@ export class DocumentParser {
 
       return cell;
     } catch (error) {
-      console.warn('[DocumentParser] Failed to parse table cell:', error);
+      defaultLogger.warn('[DocumentParser] Failed to parse table cell:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
       return null;
     }
   }
@@ -2545,7 +2544,7 @@ export class DocumentParser {
 
       return new StructuredDocumentTag(properties, content);
     } catch (error) {
-      console.warn('[DocumentParser] Failed to parse SDT:', error);
+      defaultLogger.warn('[DocumentParser] Failed to parse SDT:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
       return null;
     }
   }
@@ -2597,7 +2596,7 @@ export class DocumentParser {
       }
 
       if (!fieldInstruction) {
-        console.warn('[DocumentParser] No TOC field instruction found in SDT content');
+        defaultLogger.warn('[DocumentParser] No TOC field instruction found in SDT content');
         return null;
       }
 
@@ -2655,7 +2654,7 @@ export class DocumentParser {
 
       return new TableOfContents(tocOptions);
     } catch (error) {
-      console.warn('[DocumentParser] Failed to parse TOC from SDT content:', error);
+      defaultLogger.warn('[DocumentParser] Failed to parse TOC from SDT content:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
       return null;
     }
   }

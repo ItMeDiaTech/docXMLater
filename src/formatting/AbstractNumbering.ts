@@ -8,6 +8,7 @@
 
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { NumberingLevel } from './NumberingLevel';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Properties for creating an abstract numbering definition
@@ -455,7 +456,7 @@ export class AbstractNumbering {
           abstractNum.addLevel(level);
         } catch (error) {
           // Skip malformed levels but continue parsing
-          console.warn(`Failed to parse level: ${error}`);
+          defaultLogger.warn(`Failed to parse level: ${error}`);
         }
       }
     }
