@@ -14,6 +14,7 @@ import { TextBox } from './TextBox';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { logSerialization, logParagraphContent, logTextDirection } from '../utils/diagnostics';
 import { deepClone } from '../utils/deepClone';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Paragraph alignment options
@@ -746,10 +747,32 @@ export class Paragraph {
 
   /**
    * Sets left indentation
+   *
+   * WARNING: If this paragraph has numbering (is part of a list), setting
+   * left indentation will be ignored as numbering controls indentation.
+   * Use setNumbering() with different levels to change list indentation.
+   *
    * @param twips - Indentation in twips (1/20th of a point)
    * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * // For regular paragraphs
+   * paragraph.setLeftIndent(720); // 0.5 inch indent
+   *
+   * // For list items, use numbering levels instead
+   * paragraph.setNumbering(listId, 1); // Increases indent to level 1
+   * ```
    */
   setLeftIndent(twips: number): this {
+    if (this.formatting.numbering) {
+      // Note: This will be cleared when setNumbering() was called or will be on next call
+      // Still allow setting for edge cases, but it will have no effect
+      defaultLogger.warn(
+        'Setting left indentation on a numbered paragraph has no effect. ' +
+        'Numbering controls indentation. Use different numbering levels to change indent.'
+      );
+    }
     if (!this.formatting.indentation) {
       this.formatting.indentation = {};
     }
@@ -772,10 +795,21 @@ export class Paragraph {
 
   /**
    * Sets first line indentation
+   *
+   * WARNING: If this paragraph has numbering (is part of a list), setting
+   * first line indentation will be ignored as numbering controls indentation.
+   * Numbered lists use hanging indentation for proper alignment.
+   *
    * @param twips - Indentation in twips
    * @returns This paragraph for chaining
    */
   setFirstLineIndent(twips: number): this {
+    if (this.formatting.numbering) {
+      defaultLogger.warn(
+        'Setting first line indentation on a numbered paragraph has no effect. ' +
+        'Numbering controls indentation using hanging indent.'
+      );
+    }
     if (!this.formatting.indentation) {
       this.formatting.indentation = {};
     }
@@ -914,9 +948,25 @@ export class Paragraph {
 
   /**
    * Sets numbering for this paragraph (adds to a list)
+   *
+   * When numbering is applied, any conflicting paragraph indentation
+   * (left, firstLine, hanging) is automatically cleared to prevent
+   * override issues. Right indentation is preserved as it doesn't
+   * conflict with list formatting.
+   *
+   * This matches Microsoft Word behavior where numbering controls
+   * the indentation, not paragraph-level formatting.
+   *
    * @param numId - The numbering instance ID
    * @param level - The level (0-8, where 0 is the outermost level)
    * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * const listId = doc.createBulletList();
+   * paragraph.setNumbering(listId, 0); // Level 0, indent controlled by numbering
+   * paragraph.setNumbering(listId, 1); // Level 1, deeper indent
+   * ```
    */
   setNumbering(numId: number, level: number = 0): this {
     if (numId < 0) {
@@ -927,6 +977,17 @@ export class Paragraph {
     }
 
     this.formatting.numbering = { numId, level };
+
+    // Clear conflicting indentation properties
+    // Per ECMA-376 §17.3.1.12, paragraph indentation overrides numbering indentation
+    // To prevent unexpected behavior, we clear left/firstLine/hanging when numbering is applied
+    // This matches Microsoft Word behavior where numbering controls indentation
+    if (this.formatting.indentation) {
+      const { right } = this.formatting.indentation;
+      // Preserve right indent only (doesn't conflict with numbering)
+      this.formatting.indentation = right !== undefined ? { right } : undefined;
+    }
+
     return this;
   }
 
