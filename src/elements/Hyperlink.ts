@@ -80,6 +80,7 @@ export class Hyperlink {
   private run: Run;
   private tooltip?: string;
   private relationshipId?: string;
+  private formatting: RunFormatting;
 
 
   /**
@@ -112,9 +113,10 @@ export class Hyperlink {
     this.text = properties.text || this.url || 'Link';
 
     // Validate text for XML patterns
+    // Default to auto-cleaning XML patterns unless explicitly disabled (matches Run behavior)
     const validation = validateRunText(this.text, {
       context: 'Hyperlink text',
-      autoClean: properties.formatting?.cleanXmlFromText || false,
+      autoClean: properties.formatting?.cleanXmlFromText !== false,
       warnToConsole: true,
     });
 
@@ -124,13 +126,13 @@ export class Hyperlink {
     }
 
     // Create run with default hyperlink styling (blue, underlined)
-    const formatting: RunFormatting = {
+    this.formatting = {
       color: '0563C1', // Word's default hyperlink blue
       underline: 'single',
       ...properties.formatting,
     };
 
-    this.run = new Run(this.text, formatting);
+    this.run = new Run(this.text, this.formatting);
   }
 
   /**
@@ -158,14 +160,19 @@ export class Hyperlink {
    * Sets the display text
    */
   setText(text: string): this {
-    // Validate text for XML patterns (warning only, Run handles cleaning)
-    validateRunText(text, {
+    // Validate text for XML patterns
+    // Default to auto-cleaning unless explicitly disabled (matches Run behavior)
+    const validation = validateRunText(text, {
       context: 'Hyperlink.setText',
+      autoClean: this.formatting.cleanXmlFromText !== false,
       warnToConsole: true,
     });
 
-    this.text = text;
-    this.run.setText(text); // Run.setText also validates
+    // Use cleaned text if available
+    const cleanedText = validation.cleanedText || text;
+
+    this.text = cleanedText;
+    this.run.setText(cleanedText); // Run.setText also validates
     return this;
   }
 
@@ -330,8 +337,10 @@ export class Hyperlink {
    * Sets run formatting
    */
   setFormatting(formatting: RunFormatting): this {
-    const currentFormatting = this.run.getFormatting();
-    this.run = new Run(this.text, { ...currentFormatting, ...formatting });
+    // Update stored formatting
+    this.formatting = { ...this.formatting, ...formatting };
+    // Create new run with updated formatting
+    this.run = new Run(this.text, this.formatting);
     return this;
   }
 
@@ -339,7 +348,7 @@ export class Hyperlink {
    * Gets run formatting
    */
   getFormatting(): RunFormatting {
-    return this.run.getFormatting();
+    return this.formatting;
   }
 
   /**
