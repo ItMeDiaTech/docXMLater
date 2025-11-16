@@ -30,14 +30,11 @@ import { TableOfContentsElement } from "../elements/TableOfContentsElement";
 import { NumberingManager } from "../formatting/NumberingManager";
 import { Style, StyleProperties } from "../formatting/Style";
 import { StylesManager } from "../formatting/StylesManager";
-import {
-  FormatOptions,
-  StyleApplyOptions,
-} from "../types/formatting";
+import { FormatOptions, StyleApplyOptions } from "../types/formatting";
 import {
   ApplyCustomFormattingOptions,
   Heading2Config,
-  StyleConfig
+  StyleConfig,
 } from "../types/styleConfig";
 import { ILogger, defaultLogger } from "../utils/logger";
 import { XMLParser } from "../xml/XMLParser";
@@ -180,7 +177,7 @@ export class Document {
   private rsidRoot?: string;
   private rsids: Set<string> = new Set();
   private documentProtection?: {
-    edit: 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+    edit: "readOnly" | "comments" | "trackedChanges" | "forms";
     enforcement: boolean;
     cryptProviderType?: string;
     cryptAlgorithmClass?: string;
@@ -1657,33 +1654,35 @@ export class Document {
    * console.log(`Shaded ${result.singleCellTablesShaded} single-cell tables`);
    */
   public applyStandardTableFormatting(
-    colorOrOptions?: string | {
-      /** Autofit tables to window width (DEPRECATED: now always enabled) */
-      autofitToWindow?: boolean;
-      /** Single-cell (1x1) table shading color */
-      singleCellShading?: string;
-      /** Header row background color for multi-cell tables (default: 'E9E9E9') */
-      headerRowShading?: string;
-      /** Header row text formatting */
-      headerRowFormatting?: {
-        bold?: boolean;
-        alignment?: 'left' | 'center' | 'right' | 'justify';
-        font?: string;
-        size?: number;
-        color?: string;
-        spacingBefore?: number;
-        spacingAfter?: number;
-      };
-      /** Cell margins for all cells in twips */
-      cellMargins?: {
-        top?: number;
-        bottom?: number;
-        left?: number;
-        right?: number;
-      };
-      /** Skip 1x1 tables (DEPRECATED: use singleCellShading instead) */
-      skipSingleCellTables?: boolean;
-    },
+    colorOrOptions?:
+      | string
+      | {
+          /** Autofit tables to window width (DEPRECATED: now always enabled) */
+          autofitToWindow?: boolean;
+          /** Single-cell (1x1) table shading color */
+          singleCellShading?: string;
+          /** Header row background color for multi-cell tables (default: 'E9E9E9') */
+          headerRowShading?: string;
+          /** Header row text formatting */
+          headerRowFormatting?: {
+            bold?: boolean;
+            alignment?: "left" | "center" | "right" | "justify";
+            font?: string;
+            size?: number;
+            color?: string;
+            spacingBefore?: number;
+            spacingAfter?: number;
+          };
+          /** Cell margins for all cells in twips */
+          cellMargins?: {
+            top?: number;
+            bottom?: number;
+            left?: number;
+            right?: number;
+          };
+          /** Skip 1x1 tables (DEPRECATED: use singleCellShading instead) */
+          skipSingleCellTables?: boolean;
+        },
     multiCellColor?: string
   ): {
     tablesProcessed: number;
@@ -1693,7 +1692,7 @@ export class Document {
   } {
     // Handle different parameter combinations
     let options: any;
-    if (typeof colorOrOptions === 'string') {
+    if (typeof colorOrOptions === "string") {
       if (multiCellColor) {
         // Two colors provided: applyStandardTableFormatting('BFBFBF', 'E9E9E9')
         options = {
@@ -1710,23 +1709,26 @@ export class Document {
 
     // Default values
     const singleCellShading = options?.singleCellShading?.toUpperCase();
-    const headerRowShading = (options?.headerRowShading || 'E9E9E9').toUpperCase();
+    const headerRowShading = (
+      options?.headerRowShading || "E9E9E9"
+    ).toUpperCase();
     const headerRowFormatting = {
       bold: options?.headerRowFormatting?.bold !== false,
-      alignment: options?.headerRowFormatting?.alignment || ('center' as const),
-      font: options?.headerRowFormatting?.font || 'Verdana',
+      alignment: options?.headerRowFormatting?.alignment || ("center" as const),
+      font: options?.headerRowFormatting?.font || "Verdana",
       size: options?.headerRowFormatting?.size || 12,
-      color: options?.headerRowFormatting?.color || '000000',
+      color: options?.headerRowFormatting?.color || "000000",
       spacingBefore: options?.headerRowFormatting?.spacingBefore ?? 60,
       spacingAfter: options?.headerRowFormatting?.spacingAfter ?? 60,
     };
     const cellMargins = {
       top: options?.cellMargins?.top ?? 0,
       bottom: options?.cellMargins?.bottom ?? 0,
-      left: options?.cellMargins?.left ?? 115,  // 0.08 inches
+      left: options?.cellMargins?.left ?? 115, // 0.08 inches
       right: options?.cellMargins?.right ?? 115, // 0.08 inches
     };
-    const skipSingleCellTables = options?.skipSingleCellTables !== false && !singleCellShading;
+    const skipSingleCellTables =
+      options?.skipSingleCellTables !== false && !singleCellShading;
 
     // Statistics
     let tablesProcessed = 0;
@@ -1743,14 +1745,14 @@ export class Document {
 
       // Apply borders to all cells (always applied to all tables)
       table.setAllBorders({
-        style: 'single',
+        style: "single",
         size: 4,
-        color: '000000',
+        color: "000000",
       });
 
       // Set table width to autofit to window (always applied to all tables)
-      table.setLayout('auto');
-      table.setWidthType('pct');
+      table.setLayout("auto");
+      table.setWidthType("pct");
       table.setWidth(5000);
 
       // Handle 1x1 (single-cell) tables separately
@@ -1783,7 +1785,10 @@ export class Document {
           for (const para of cell.getParagraphs()) {
             // Skip paragraphs that are part of numbered or bulleted lists
             const numPr = para.getFormatting().numbering;
-            if (numPr && (numPr.level !== undefined || numPr.numId !== undefined)) {
+            if (
+              numPr &&
+              (numPr.level !== undefined || numPr.numId !== undefined)
+            ) {
               continue; // Preserve list formatting
             }
 
@@ -1815,9 +1820,9 @@ export class Document {
           const currentColor = currentShading?.fill?.toUpperCase();
 
           // Check if color is a valid 6-character hex code (not 'auto' or other special values)
-          const isValidHexColor = /^[0-9A-F]{6}$/i.test(currentColor || '');
+          const isValidHexColor = /^[0-9A-F]{6}$/i.test(currentColor || "");
 
-          if (currentColor && currentColor !== 'FFFFFF' && isValidHexColor) {
+          if (currentColor && currentColor !== "FFFFFF" && isValidHexColor) {
             // Apply the color passed to the method
             cell.setShading({ fill: headerRowShading });
             cellsRecolored++;
@@ -1826,18 +1831,21 @@ export class Document {
             for (const para of cell.getParagraphs()) {
               // Skip paragraphs that are part of numbered or bulleted lists
               const numPr = para.getFormatting().numbering;
-              if (numPr && (numPr.level !== undefined || numPr.numId !== undefined)) {
+              if (
+                numPr &&
+                (numPr.level !== undefined || numPr.numId !== undefined)
+              ) {
                 continue; // Preserve list formatting
               }
 
-              para.setAlignment('center');
+              para.setAlignment("center");
               para.setSpaceBefore(60); // 3pt
               para.setSpaceAfter(60); // 3pt
 
               for (const run of para.getRuns()) {
                 run.setBold(true);
-                run.setFont('Verdana', 12);
-                run.setColor('000000');
+                run.setFont("Verdana", 12);
+                run.setColor("000000");
               }
             }
           }
@@ -2343,13 +2351,14 @@ export class Document {
 
     for (const instance of instances) {
       const abstractNumId = instance.getAbstractNumId();
-      const abstractNum = this.numberingManager.getAbstractNumbering(abstractNumId);
+      const abstractNum =
+        this.numberingManager.getAbstractNumbering(abstractNumId);
 
       if (!abstractNum) continue;
 
       // Only process bullet lists (skip numbered lists)
       const level0 = abstractNum.getLevel(0);
-      if (!level0 || level0.getFormat() !== 'bullet') continue;
+      if (!level0 || level0.getFormat() !== "bullet") continue;
 
       // Update all 9 levels (0-8) with standard formatting
       for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
@@ -2357,11 +2366,11 @@ export class Document {
         if (!numLevel) continue;
 
         // Alternate bullets: even levels = solid (•), odd levels = open (○)
-        const bullet = levelIndex % 2 === 0 ? '•' : '○';
+        const bullet = levelIndex % 2 === 0 ? "•" : "○";
         numLevel.setText(bullet);
 
         // Set bullet font to Arial (Unicode bullets require a regular font, not Symbol)
-        numLevel.setFont('Arial');
+        numLevel.setFont("Arial");
 
         // Set bullet size to 12pt (24 half-points)
         numLevel.setFontSize(24);
@@ -2412,13 +2421,14 @@ export class Document {
 
     for (const instance of instances) {
       const abstractNumId = instance.getAbstractNumId();
-      const abstractNum = this.numberingManager.getAbstractNumbering(abstractNumId);
+      const abstractNum =
+        this.numberingManager.getAbstractNumbering(abstractNumId);
 
       if (!abstractNum) continue;
 
       // Only process numbered lists (skip bullet lists)
       const level0 = abstractNum.getLevel(0);
-      if (!level0 || level0.getFormat() === 'bullet') continue;
+      if (!level0 || level0.getFormat() === "bullet") continue;
 
       // Update all 9 levels (0-8) with standard formatting
       for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
@@ -2426,7 +2436,7 @@ export class Document {
         if (!numLevel) continue;
 
         // Set number font to Verdana 12pt
-        numLevel.setFont('Verdana');
+        numLevel.setFont("Verdana");
         numLevel.setFontSize(24); // 12pt = 24 half-points
 
         // Indentation: 0.5" per level (720 twips)
@@ -2437,7 +2447,7 @@ export class Document {
         numLevel.setHangingIndent(360);
 
         // Set alignment to left
-        numLevel.setAlignment('left');
+        numLevel.setAlignment("left");
       }
 
       // Apply paragraph formatting to all paragraphs using this list
@@ -2463,12 +2473,12 @@ export class Document {
         // Apply font to all runs in the paragraph
         const runs = para.getRuns();
         for (const run of runs) {
-          run.setFont('Verdana', 12);
+          run.setFont("Verdana", 12);
         }
 
         // Apply paragraph spacing
-        para.setSpaceBefore(0);        // 0pt before
-        para.setSpaceAfter(60);        // 3pt after (60 twips)
+        para.setSpaceBefore(0); // 0pt before
+        para.setSpaceAfter(60); // 3pt after (60 twips)
         para.setContextualSpacing(true); // No spacing between same-type paragraphs
 
         // Clear paragraph-level indentation so numbering definition indentation takes effect
@@ -2484,7 +2494,10 @@ export class Document {
    * @returns Object with inTable boolean and cell reference if found
    * @private
    */
-  private isParagraphInTable(para: Paragraph): { inTable: boolean; cell?: TableCell } {
+  private isParagraphInTable(para: Paragraph): {
+    inTable: boolean;
+    cell?: TableCell;
+  } {
     const allTables = this.getAllTables();
 
     for (const table of allTables) {
@@ -2524,7 +2537,7 @@ export class Document {
     // Find the paragraph index in bodyElements
     const paraIndex = this.bodyElements.indexOf(para);
     if (paraIndex === -1) {
-      throw new Error('Paragraph not found in document body elements');
+      throw new Error("Paragraph not found in document body elements");
     }
 
     // Create 1x1 table
@@ -2532,7 +2545,7 @@ export class Document {
     const cell = table.getCell(0, 0);
 
     if (!cell) {
-      throw new Error('Failed to get cell from newly created table');
+      throw new Error("Failed to get cell from newly created table");
     }
 
     // Move paragraph to cell
@@ -2547,20 +2560,24 @@ export class Document {
       cell.setShading({ fill: options.shading });
     }
 
-    if (options.marginTop !== undefined || options.marginBottom !== undefined ||
-        options.marginLeft !== undefined || options.marginRight !== undefined) {
+    if (
+      options.marginTop !== undefined ||
+      options.marginBottom !== undefined ||
+      options.marginLeft !== undefined ||
+      options.marginRight !== undefined
+    ) {
       cell.setMargins({
         top: options.marginTop ?? 100,
         bottom: options.marginBottom ?? 100,
         left: options.marginLeft ?? 100,
-        right: options.marginRight ?? 100
+        right: options.marginRight ?? 100,
       });
     }
 
     // Set table width (percentage of page width)
     if (options.tableWidthPercent !== undefined) {
       table.setWidth(options.tableWidthPercent);
-      table.setWidthType('pct');
+      table.setWidthType("pct");
     }
 
     // Insert table where paragraph was
@@ -2588,62 +2605,62 @@ export class Document {
 
     // Create custom styles
     const header1Style = Style.create({
-      styleId: 'CustomHeader1',
-      name: 'Custom Header 1',
-      type: 'paragraph',
-      basedOn: 'Normal',
+      styleId: "CustomHeader1",
+      name: "Custom Header 1",
+      type: "paragraph",
+      basedOn: "Normal",
       runFormatting: {
-        font: 'Verdana',
+        font: "Verdana",
         size: 18,
         bold: true,
-        color: '000000'
+        color: "000000",
       },
       paragraphFormatting: {
-        alignment: 'left',
+        alignment: "left",
         spacing: {
-          before: 0,      // 0pt before
-          after: 240      // 12pt after (240 twips)
-        }
-      }
+          before: 0, // 0pt before
+          after: 240, // 12pt after (240 twips)
+        },
+      },
     });
 
     const header2Style = Style.create({
-      styleId: 'CustomHeader2',
-      name: 'Custom Header 2',
-      type: 'paragraph',
-      basedOn: 'Normal',
+      styleId: "CustomHeader2",
+      name: "Custom Header 2",
+      type: "paragraph",
+      basedOn: "Normal",
       runFormatting: {
-        font: 'Verdana',
+        font: "Verdana",
         size: 14,
         bold: true,
-        color: '000000'
+        color: "000000",
       },
       paragraphFormatting: {
-        alignment: 'left',
+        alignment: "left",
         spacing: {
-          before: 120,    // 6pt before (120 twips)
-          after: 120      // 6pt after (120 twips)
-        }
-      }
+          before: 120, // 6pt before (120 twips)
+          after: 120, // 6pt after (120 twips)
+        },
+      },
     });
 
     const normalStyle = Style.create({
-      styleId: 'CustomNormal',
-      name: 'Custom Normal',
-      type: 'paragraph',
-      basedOn: 'Normal',
+      styleId: "CustomNormal",
+      name: "Custom Normal",
+      type: "paragraph",
+      basedOn: "Normal",
       runFormatting: {
-        font: 'Verdana',
+        font: "Verdana",
         size: 12,
-        color: '000000'
+        color: "000000",
       },
       paragraphFormatting: {
-        alignment: 'left',
+        alignment: "left",
         spacing: {
-          before: 60,     // 3pt before (60 twips)
-          after: 60       // 3pt after (60 twips)
-        }
-      }
+          before: 60, // 3pt before (60 twips)
+          after: 60, // 3pt after (60 twips)
+        },
+      },
     });
 
     // Add styles to document
@@ -2660,24 +2677,24 @@ export class Document {
       const currentStyle = para.getStyle();
 
       // Match Heading1 / Heading 1
-      if (currentStyle === 'Heading1' || currentStyle === 'Heading 1') {
-        para.setStyle('CustomHeader1');
+      if (currentStyle === "Heading1" || currentStyle === "Heading 1") {
+        para.setStyle("CustomHeader1");
         counts.heading1++;
       }
       // Match Heading2 / Heading 2
-      else if (currentStyle === 'Heading2' || currentStyle === 'Heading 2') {
-        para.setStyle('CustomHeader2');
+      else if (currentStyle === "Heading2" || currentStyle === "Heading 2") {
+        para.setStyle("CustomHeader2");
 
         // Check if paragraph is in a table
         const { inTable, cell } = this.isParagraphInTable(para);
 
         if (inTable && cell) {
           // Paragraph is already in a table - apply cell formatting
-          cell.setShading({ fill: 'BFBFBF' });
+          cell.setShading({ fill: "BFBFBF" });
           cell.setMargins({ top: 0, bottom: 0, left: 101, right: 101 });
 
           // Set table width to 100%
-          const table = this.getAllTables().find(t => {
+          const table = this.getAllTables().find((t) => {
             for (const row of t.getRows()) {
               for (const c of row.getCells()) {
                 if (c === cell) return true;
@@ -2687,17 +2704,17 @@ export class Document {
           });
           if (table) {
             table.setWidth(5000); // 100% width
-            table.setWidthType('pct');
+            table.setWidthType("pct");
           }
         } else {
           // Paragraph is not in a table - wrap it
           this.wrapParagraphInTable(para, {
-            shading: 'BFBFBF',
+            shading: "BFBFBF",
             marginTop: 0,
             marginBottom: 0,
             marginLeft: 101,
             marginRight: 101,
-            tableWidthPercent: 5000 // 100% in Word's percentage units
+            tableWidthPercent: 5000, // 100% in Word's percentage units
           });
         }
 
@@ -2705,8 +2722,8 @@ export class Document {
       }
       // Match Normal (explicit "Normal" style or undefined/no style set)
       // In Word, paragraphs without an explicit pStyle default to "Normal"
-      else if (currentStyle === 'Normal' || currentStyle === undefined) {
-        para.setStyle('CustomNormal');
+      else if (currentStyle === "Normal" || currentStyle === undefined) {
+        para.setStyle("CustomNormal");
         counts.normal++;
       }
     }
@@ -2717,30 +2734,30 @@ export class Document {
   // Default style configurations for applyCustomFormattingToExistingStyles()
   private static readonly DEFAULT_HEADING1_CONFIG: StyleConfig = {
     run: {
-      font: 'Verdana',
+      font: "Verdana",
       size: 18,
       bold: true,
-      color: '000000',
+      color: "000000",
     },
     paragraph: {
-      alignment: 'left',
-      spacing: { before: 0, after: 240, line: 240, lineRule: 'auto' },
+      alignment: "left",
+      spacing: { before: 0, after: 240, line: 240, lineRule: "auto" },
     },
   };
 
   private static readonly DEFAULT_HEADING2_CONFIG: Heading2Config = {
     run: {
-      font: 'Verdana',
+      font: "Verdana",
       size: 14,
       bold: true,
-      color: '000000',
+      color: "000000",
     },
     paragraph: {
-      alignment: 'left',
-      spacing: { before: 120, after: 120, line: 240, lineRule: 'auto' },
+      alignment: "left",
+      spacing: { before: 120, after: 120, line: 240, lineRule: "auto" },
     },
     tableOptions: {
-      shading: 'BFBFBF',
+      shading: "BFBFBF",
       marginTop: 0,
       marginBottom: 0,
       marginLeft: 115,
@@ -2751,38 +2768,38 @@ export class Document {
 
   private static readonly DEFAULT_HEADING3_CONFIG: StyleConfig = {
     run: {
-      font: 'Verdana',
+      font: "Verdana",
       size: 12,
       bold: true,
-      color: '000000',
+      color: "000000",
     },
     paragraph: {
-      alignment: 'left',
-      spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' },
+      alignment: "left",
+      spacing: { before: 60, after: 60, line: 240, lineRule: "auto" },
     },
   };
 
   private static readonly DEFAULT_NORMAL_CONFIG: StyleConfig = {
     run: {
-      font: 'Verdana',
+      font: "Verdana",
       size: 12,
-      color: '000000',
+      color: "000000",
     },
     paragraph: {
-      alignment: 'left',
-      spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' },
+      alignment: "left",
+      spacing: { before: 60, after: 60, line: 240, lineRule: "auto" },
     },
   };
 
   private static readonly DEFAULT_LIST_PARAGRAPH_CONFIG: StyleConfig = {
     run: {
-      font: 'Verdana',
+      font: "Verdana",
       size: 12,
-      color: '000000',
+      color: "000000",
     },
     paragraph: {
-      alignment: 'left',
-      spacing: { before: 0, after: 60, line: 240, lineRule: 'auto' },
+      alignment: "left",
+      spacing: { before: 0, after: 60, line: 240, lineRule: "auto" },
       indentation: { left: 360, hanging: 360 },
       contextualSpacing: true,
     },
@@ -2842,114 +2859,138 @@ export class Document {
    *   }
    * });
    */
-  public applyCustomFormattingToExistingStyles(options?: ApplyCustomFormattingOptions): {
+  public applyCustomFormattingToExistingStyles(
+    options?: ApplyCustomFormattingOptions
+  ): {
     heading1: boolean;
     heading2: boolean;
     heading3: boolean;
     normal: boolean;
     listParagraph: boolean;
   } {
-    const results = { heading1: false, heading2: false, heading3: false, normal: false, listParagraph: false };
+    const results = {
+      heading1: false,
+      heading2: false,
+      heading3: false,
+      normal: false,
+      listParagraph: false,
+    };
 
     // Get existing styles from StylesManager
-    const heading1 = this.stylesManager.getStyle('Heading1');
-    const heading2 = this.stylesManager.getStyle('Heading2');
-    const heading3 = this.stylesManager.getStyle('Heading3');
-    const normal = this.stylesManager.getStyle('Normal');
-    const listParagraph = this.stylesManager.getStyle('ListParagraph');
+    const heading1 = this.stylesManager.getStyle("Heading1");
+    const heading2 = this.stylesManager.getStyle("Heading2");
+    const heading3 = this.stylesManager.getStyle("Heading3");
+    const normal = this.stylesManager.getStyle("Normal");
+    const listParagraph = this.stylesManager.getStyle("ListParagraph");
 
     // Merge provided options with ACTUAL current style values (not hardcoded defaults)
     // This allows users to only specify properties they want to change
     const h1Config = {
       run: {
-        ...(heading1?.getRunFormatting() || Document.DEFAULT_HEADING1_CONFIG.run),
-        ...options?.heading1?.run
+        ...(heading1?.getRunFormatting() ||
+          Document.DEFAULT_HEADING1_CONFIG.run),
+        ...options?.heading1?.run,
       },
       paragraph: {
-        ...(heading1?.getParagraphFormatting() || Document.DEFAULT_HEADING1_CONFIG.paragraph),
-        ...options?.heading1?.paragraph
+        ...(heading1?.getParagraphFormatting() ||
+          Document.DEFAULT_HEADING1_CONFIG.paragraph),
+        ...options?.heading1?.paragraph,
       },
     };
     const h2Config = {
       run: {
-        ...(heading2?.getRunFormatting() || Document.DEFAULT_HEADING2_CONFIG.run),
-        ...options?.heading2?.run
+        ...(heading2?.getRunFormatting() ||
+          Document.DEFAULT_HEADING2_CONFIG.run),
+        ...options?.heading2?.run,
       },
       paragraph: {
-        ...(heading2?.getParagraphFormatting() || Document.DEFAULT_HEADING2_CONFIG.paragraph),
-        ...options?.heading2?.paragraph
+        ...(heading2?.getParagraphFormatting() ||
+          Document.DEFAULT_HEADING2_CONFIG.paragraph),
+        ...options?.heading2?.paragraph,
       },
       tableOptions: {
         ...Document.DEFAULT_HEADING2_CONFIG.tableOptions,
-        ...options?.heading2?.tableOptions
+        ...options?.heading2?.tableOptions,
       },
     };
     const h3Config = {
       run: {
-        ...(heading3?.getRunFormatting() || Document.DEFAULT_HEADING3_CONFIG.run),
-        ...options?.heading3?.run
+        ...(heading3?.getRunFormatting() ||
+          Document.DEFAULT_HEADING3_CONFIG.run),
+        ...options?.heading3?.run,
       },
       paragraph: {
-        ...(heading3?.getParagraphFormatting() || Document.DEFAULT_HEADING3_CONFIG.paragraph),
-        ...options?.heading3?.paragraph
+        ...(heading3?.getParagraphFormatting() ||
+          Document.DEFAULT_HEADING3_CONFIG.paragraph),
+        ...options?.heading3?.paragraph,
       },
     };
     const normalConfig = {
       run: {
         ...(normal?.getRunFormatting() || Document.DEFAULT_NORMAL_CONFIG.run),
-        ...options?.normal?.run
+        ...options?.normal?.run,
       },
       paragraph: {
-        ...(normal?.getParagraphFormatting() || Document.DEFAULT_NORMAL_CONFIG.paragraph),
-        ...options?.normal?.paragraph
+        ...(normal?.getParagraphFormatting() ||
+          Document.DEFAULT_NORMAL_CONFIG.paragraph),
+        ...options?.normal?.paragraph,
       },
     };
     const listParaConfig = {
       run: {
-        ...(listParagraph?.getRunFormatting() || Document.DEFAULT_LIST_PARAGRAPH_CONFIG.run),
-        ...options?.listParagraph?.run
+        ...(listParagraph?.getRunFormatting() ||
+          Document.DEFAULT_LIST_PARAGRAPH_CONFIG.run),
+        ...options?.listParagraph?.run,
       },
       paragraph: {
-        ...(listParagraph?.getParagraphFormatting() || Document.DEFAULT_LIST_PARAGRAPH_CONFIG.paragraph),
-        ...options?.listParagraph?.paragraph
+        ...(listParagraph?.getParagraphFormatting() ||
+          Document.DEFAULT_LIST_PARAGRAPH_CONFIG.paragraph),
+        ...options?.listParagraph?.paragraph,
       },
     };
 
     // Extract preserve blank lines option (defaults to true)
-    const preserveBlankLines = options?.preserveBlankLinesAfterHeader2Tables ?? true;
+    const preserveBlankLines =
+      options?.preserveBlankLinesAfterHeader2Tables ?? true;
 
     // Modify Heading1 definition
     if (heading1 && h1Config.run && h1Config.paragraph) {
       if (h1Config.run) heading1.setRunFormatting(h1Config.run);
-      if (h1Config.paragraph) heading1.setParagraphFormatting(h1Config.paragraph);
+      if (h1Config.paragraph)
+        heading1.setParagraphFormatting(h1Config.paragraph);
       results.heading1 = true;
     }
 
     // Modify Heading2 definition
     if (heading2 && h2Config.run && h2Config.paragraph) {
       if (h2Config.run) heading2.setRunFormatting(h2Config.run);
-      if (h2Config.paragraph) heading2.setParagraphFormatting(h2Config.paragraph);
+      if (h2Config.paragraph)
+        heading2.setParagraphFormatting(h2Config.paragraph);
       results.heading2 = true;
     }
 
     // Modify Heading3 definition
     if (heading3 && h3Config.run && h3Config.paragraph) {
       if (h3Config.run) heading3.setRunFormatting(h3Config.run);
-      if (h3Config.paragraph) heading3.setParagraphFormatting(h3Config.paragraph);
+      if (h3Config.paragraph)
+        heading3.setParagraphFormatting(h3Config.paragraph);
       results.heading3 = true;
     }
 
     // Modify Normal definition
     if (normal && normalConfig.run && normalConfig.paragraph) {
       if (normalConfig.run) normal.setRunFormatting(normalConfig.run);
-      if (normalConfig.paragraph) normal.setParagraphFormatting(normalConfig.paragraph);
+      if (normalConfig.paragraph)
+        normal.setParagraphFormatting(normalConfig.paragraph);
       results.normal = true;
     }
 
     // Modify List Paragraph definition
     if (listParagraph && listParaConfig.run && listParaConfig.paragraph) {
-      if (listParaConfig.run) listParagraph.setRunFormatting(listParaConfig.run);
-      if (listParaConfig.paragraph) listParagraph.setParagraphFormatting(listParaConfig.paragraph);
+      if (listParaConfig.run)
+        listParagraph.setRunFormatting(listParaConfig.run);
+      if (listParaConfig.paragraph)
+        listParagraph.setParagraphFormatting(listParaConfig.paragraph);
       results.listParagraph = true;
     }
 
@@ -2996,7 +3037,7 @@ export class Document {
       const styleId = para.getStyle();
 
       // Process Heading1 paragraphs
-      if (styleId === 'Heading1' && heading1) {
+      if (styleId === "Heading1" && heading1) {
         para.clearDirectFormattingConflicts(heading1);
 
         // Apply formatting to all runs, respecting preserve flags
@@ -3008,20 +3049,32 @@ export class Document {
             run.setItalic(h1Config.run?.italic ?? false);
           }
           if (!h1Preserve.underline) {
-            run.setUnderline(h1Config.run?.underline ? 'single' : false);
+            run.setUnderline(h1Config.run?.underline ? "single" : false);
           }
         }
 
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (!h1Preserve.bold && h1Config.run?.bold === false && markProps.bold) {
+          if (
+            !h1Preserve.bold &&
+            h1Config.run?.bold === false &&
+            markProps.bold
+          ) {
             delete markProps.bold;
           }
-          if (!h1Preserve.italic && h1Config.run?.italic === false && markProps.italic) {
+          if (
+            !h1Preserve.italic &&
+            h1Config.run?.italic === false &&
+            markProps.italic
+          ) {
             delete markProps.italic;
           }
-          if (!h1Preserve.underline && h1Config.run?.underline === false && markProps.underline) {
+          if (
+            !h1Preserve.underline &&
+            h1Config.run?.underline === false &&
+            markProps.underline
+          ) {
             delete markProps.underline;
           }
         }
@@ -3030,9 +3083,11 @@ export class Document {
       }
 
       // Process Heading2 paragraphs
-      else if (styleId === 'Heading2' && heading2) {
+      else if (styleId === "Heading2" && heading2) {
         // Check if paragraph has actual text content (skip empty paragraphs)
-        const hasContent = para.getRuns().some(run => run.getText().trim().length > 0);
+        const hasContent = para
+          .getRuns()
+          .some((run) => run.getText().trim().length > 0);
 
         if (!hasContent) {
           // Skip empty Heading2 paragraphs - don't wrap them in tables
@@ -3052,20 +3107,32 @@ export class Document {
             run.setItalic(h2Config.run?.italic ?? false);
           }
           if (!h2Preserve.underline) {
-            run.setUnderline(h2Config.run?.underline ? 'single' : false);
+            run.setUnderline(h2Config.run?.underline ? "single" : false);
           }
         }
 
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (!h2Preserve.bold && h2Config.run?.bold === false && markProps.bold) {
+          if (
+            !h2Preserve.bold &&
+            h2Config.run?.bold === false &&
+            markProps.bold
+          ) {
             delete markProps.bold;
           }
-          if (!h2Preserve.italic && h2Config.run?.italic === false && markProps.italic) {
+          if (
+            !h2Preserve.italic &&
+            h2Config.run?.italic === false &&
+            markProps.italic
+          ) {
             delete markProps.italic;
           }
-          if (!h2Preserve.underline && h2Config.run?.underline === false && markProps.underline) {
+          if (
+            !h2Preserve.underline &&
+            h2Config.run?.underline === false &&
+            markProps.underline
+          ) {
             delete markProps.underline;
           }
         }
@@ -3078,8 +3145,12 @@ export class Document {
           if (h2Config.tableOptions?.shading) {
             cell.setShading({ fill: h2Config.tableOptions.shading });
           }
-          if (h2Config.tableOptions?.marginTop !== undefined || h2Config.tableOptions?.marginBottom !== undefined ||
-              h2Config.tableOptions?.marginLeft !== undefined || h2Config.tableOptions?.marginRight !== undefined) {
+          if (
+            h2Config.tableOptions?.marginTop !== undefined ||
+            h2Config.tableOptions?.marginBottom !== undefined ||
+            h2Config.tableOptions?.marginLeft !== undefined ||
+            h2Config.tableOptions?.marginRight !== undefined
+          ) {
             cell.setMargins({
               top: h2Config.tableOptions.marginTop ?? 0,
               bottom: h2Config.tableOptions.marginBottom ?? 0,
@@ -3090,7 +3161,7 @@ export class Document {
 
           // Set table width using config
           if (h2Config.tableOptions?.tableWidthPercent) {
-            const table = this.getAllTables().find(t => {
+            const table = this.getAllTables().find((t) => {
               for (const row of t.getRows()) {
                 for (const c of row.getCells()) {
                   if (c === cell) return true;
@@ -3100,13 +3171,13 @@ export class Document {
             });
             if (table) {
               table.setWidth(h2Config.tableOptions.tableWidthPercent);
-              table.setWidthType('pct');
+              table.setWidthType("pct");
             }
           }
         } else {
           // Paragraph is not in a table - wrap it using config
           const table = this.wrapParagraphInTable(para, {
-            shading: h2Config.tableOptions?.shading ?? 'BFBFBF',
+            shading: h2Config.tableOptions?.shading ?? "BFBFBF",
             marginTop: h2Config.tableOptions?.marginTop ?? 0,
             marginBottom: h2Config.tableOptions?.marginBottom ?? 0,
             marginLeft: h2Config.tableOptions?.marginLeft ?? 115,
@@ -3130,14 +3201,14 @@ export class Document {
               // Check if all content items are empty
               for (const item of content) {
                 // Hyperlinks count as content
-                if ((item as any).constructor.name === 'Hyperlink') {
+                if ((item as any).constructor.name === "Hyperlink") {
                   return false;
                 }
                 // Images count as content (check for Image class when implemented)
                 // Runs with text count as content
                 if ((item as any).getText) {
                   const text = (item as any).getText().trim();
-                  if (text !== '') return false;
+                  if (text !== "") return false;
                 }
               }
 
@@ -3162,7 +3233,7 @@ export class Document {
       }
 
       // Process Heading3 paragraphs
-      else if (styleId === 'Heading3' && heading3) {
+      else if (styleId === "Heading3" && heading3) {
         para.clearDirectFormattingConflicts(heading3);
 
         // Apply formatting to all runs, respecting preserve flags
@@ -3174,20 +3245,32 @@ export class Document {
             run.setItalic(h3Config.run?.italic ?? false);
           }
           if (!h3Preserve.underline) {
-            run.setUnderline(h3Config.run?.underline ? 'single' : false);
+            run.setUnderline(h3Config.run?.underline ? "single" : false);
           }
         }
 
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (!h3Preserve.bold && h3Config.run?.bold === false && markProps.bold) {
+          if (
+            !h3Preserve.bold &&
+            h3Config.run?.bold === false &&
+            markProps.bold
+          ) {
             delete markProps.bold;
           }
-          if (!h3Preserve.italic && h3Config.run?.italic === false && markProps.italic) {
+          if (
+            !h3Preserve.italic &&
+            h3Config.run?.italic === false &&
+            markProps.italic
+          ) {
             delete markProps.italic;
           }
-          if (!h3Preserve.underline && h3Config.run?.underline === false && markProps.underline) {
+          if (
+            !h3Preserve.underline &&
+            h3Config.run?.underline === false &&
+            markProps.underline
+          ) {
             delete markProps.underline;
           }
         }
@@ -3196,15 +3279,15 @@ export class Document {
       }
 
       // Process List Paragraph paragraphs
-      else if (styleId === 'ListParagraph' && listParagraph) {
+      else if (styleId === "ListParagraph" && listParagraph) {
         // Save formatting that should be preserved BEFORE clearing
-        const preservedFormatting = para.getRuns().map(run => {
+        const preservedFormatting = para.getRuns().map((run) => {
           const fmt = run.getFormatting();
           return {
             run: run,
             bold: listParaPreserve.bold ? fmt.bold : undefined,
             italic: listParaPreserve.italic ? fmt.italic : undefined,
-            underline: listParaPreserve.underline ? fmt.underline : undefined
+            underline: listParaPreserve.underline ? fmt.underline : undefined,
           };
         });
 
@@ -3232,20 +3315,32 @@ export class Document {
             run.setItalic(listParaConfig.run?.italic ?? false);
           }
           if (!listParaPreserve.underline) {
-            run.setUnderline(listParaConfig.run?.underline ? 'single' : false);
+            run.setUnderline(listParaConfig.run?.underline ? "single" : false);
           }
         }
 
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (!listParaPreserve.bold && listParaConfig.run?.bold === false && markProps.bold) {
+          if (
+            !listParaPreserve.bold &&
+            listParaConfig.run?.bold === false &&
+            markProps.bold
+          ) {
             delete markProps.bold;
           }
-          if (!listParaPreserve.italic && listParaConfig.run?.italic === false && markProps.italic) {
+          if (
+            !listParaPreserve.italic &&
+            listParaConfig.run?.italic === false &&
+            markProps.italic
+          ) {
             delete markProps.italic;
           }
-          if (!listParaPreserve.underline && listParaConfig.run?.underline === false && markProps.underline) {
+          if (
+            !listParaPreserve.underline &&
+            listParaConfig.run?.underline === false &&
+            markProps.underline
+          ) {
             delete markProps.underline;
           }
         }
@@ -3254,15 +3349,15 @@ export class Document {
       }
 
       // Process Normal paragraphs (including undefined style which defaults to Normal)
-      else if ((styleId === 'Normal' || styleId === undefined) && normal) {
+      else if ((styleId === "Normal" || styleId === undefined) && normal) {
         // Save formatting that should be preserved BEFORE clearing
-        const preservedFormatting = para.getRuns().map(run => {
+        const preservedFormatting = para.getRuns().map((run) => {
           const fmt = run.getFormatting();
           return {
             run: run,
             bold: normalPreserve.bold ? fmt.bold : undefined,
             italic: normalPreserve.italic ? fmt.italic : undefined,
-            underline: normalPreserve.underline ? fmt.underline : undefined
+            underline: normalPreserve.underline ? fmt.underline : undefined,
           };
         });
 
@@ -3290,20 +3385,32 @@ export class Document {
             run.setItalic(normalConfig.run?.italic ?? false);
           }
           if (!normalPreserve.underline) {
-            run.setUnderline(normalConfig.run?.underline ? 'single' : false);
+            run.setUnderline(normalConfig.run?.underline ? "single" : false);
           }
         }
 
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (!normalPreserve.bold && normalConfig.run?.bold === false && markProps.bold) {
+          if (
+            !normalPreserve.bold &&
+            normalConfig.run?.bold === false &&
+            markProps.bold
+          ) {
             delete markProps.bold;
           }
-          if (!normalPreserve.italic && normalConfig.run?.italic === false && markProps.italic) {
+          if (
+            !normalPreserve.italic &&
+            normalConfig.run?.italic === false &&
+            markProps.italic
+          ) {
             delete markProps.italic;
           }
-          if (!normalPreserve.underline && normalConfig.run?.underline === false && markProps.underline) {
+          if (
+            !normalPreserve.underline &&
+            normalConfig.run?.underline === false &&
+            markProps.underline
+          ) {
             delete markProps.underline;
           }
         }
@@ -3374,14 +3481,14 @@ export class Document {
       const styleId = style.getStyleId();
 
       switch (styleId) {
-        case 'Heading1':
+        case "Heading1":
           options.heading1 = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
           };
           break;
 
-        case 'Heading2':
+        case "Heading2":
           options.heading2 = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
@@ -3389,21 +3496,21 @@ export class Document {
           };
           break;
 
-        case 'Heading3':
+        case "Heading3":
           options.heading3 = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
           };
           break;
 
-        case 'Normal':
+        case "Normal":
           options.normal = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
           };
           break;
 
-        case 'ListParagraph':
+        case "ListParagraph":
           options.listParagraph = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
@@ -3465,7 +3572,8 @@ export class Document {
     total: number;
   } {
     const keepOne = options?.keepOne ?? true;
-    const preserveHeader2BlankLines = options?.preserveHeader2BlankLines ?? false;
+    const preserveHeader2BlankLines =
+      options?.preserveHeader2BlankLines ?? false;
     let removed = 0;
     let preserved = 0;
 
@@ -3533,7 +3641,7 @@ export class Document {
     return {
       removed,
       preserved,
-      total: toRemove.length
+      total: toRemove.length,
     };
   }
 
@@ -3588,8 +3696,12 @@ export class Document {
 
       for (const para of cellParas) {
         const style = para.getStyle();
-        if (style === 'Heading2' || style === 'Heading 2' ||
-            style === 'CustomHeader2' || style === 'Header2') {
+        if (
+          style === "Heading2" ||
+          style === "Heading 2" ||
+          style === "CustomHeader2" ||
+          style === "Header2"
+        ) {
           hasHeader2 = true;
           break;
         }
@@ -3708,6 +3820,7 @@ export class Document {
         } else {
           // Next paragraph has content - add blank paragraph between table and content
           const blankPara = Paragraph.create();
+          blankPara.setStyle("Normal");
           blankPara.setSpaceAfter(spacingAfter);
           if (markAsPreserved) {
             blankPara.setPreserved(true);
@@ -3718,6 +3831,7 @@ export class Document {
       } else {
         // No paragraph after table (or it's another table/element) - add blank paragraph
         const blankPara = Paragraph.create();
+        blankPara.setStyle("Normal");
         blankPara.setSpaceAfter(spacingAfter);
         if (markAsPreserved) {
           blankPara.setPreserved(true);
@@ -3732,6 +3846,331 @@ export class Document {
       blankLinesAdded,
       existingLinesMarked,
     };
+  }
+  /**
+   * Ensures that all tables (excluding 1x1 tables) have a blank line after them with optional preserve flag.
+   * This is useful for maintaining spacing after multi-cell tables.
+   *
+   * The method:
+   * 1. Finds all tables with more than one cell (not 1x1) in the document
+   * 2. Checks if there's a blank paragraph immediately after each table
+   * 3. If no blank paragraph exists, adds one with Normal style, spacing and preserve flag
+   * 4. If a blank paragraph exists, optionally marks it as preserved
+   *
+   * @param options Configuration options
+   * @param options.spacingAfter Spacing after the blank paragraph in twips (default: 120 twips = 6pt)
+   * @param options.markAsPreserved Whether to mark blank paragraphs as preserved (default: true)
+   * @param options.filter Optional filter function to select which tables to process
+   * @returns Statistics about the operation
+   *
+   * @example
+   * // Add blank lines after all multi-cell tables with default settings
+   * const result = doc.ensureBlankLinesAfterOtherTables();
+   * console.log(`Added ${result.blankLinesAdded} blank lines`);
+   * console.log(`Marked ${result.existingLinesMarked} existing blank lines as preserved`);
+   *
+   * @example
+   * // Custom spacing and preserve flag
+   * doc.ensureBlankLinesAfterOtherTables({
+   *   spacingAfter: 240,  // 12pt spacing
+   *   markAsPreserved: true
+   * });
+   *
+   * @example
+   * // Only process tables with more than 2 rows
+   * doc.ensureBlankLinesAfterOtherTables({
+   *   filter: (table, index) => table.getRowCount() > 2
+   * });
+   */
+  public ensureBlankLinesAfterOtherTables(options?: {
+    spacingAfter?: number;
+    markAsPreserved?: boolean;
+    filter?: (table: Table, index: number) => boolean;
+  }): {
+    tablesProcessed: number;
+    blankLinesAdded: number;
+    existingLinesMarked: number;
+  } {
+    const spacingAfter = options?.spacingAfter ?? 120;
+    const markAsPreserved = options?.markAsPreserved ?? true;
+    const filter = options?.filter;
+
+    let tablesProcessed = 0;
+    let blankLinesAdded = 0;
+    let existingLinesMarked = 0;
+
+    const tables = this.getAllTables();
+
+    for (let i = 0; i < tables.length; i++) {
+      const table = tables[i];
+      if (!table) continue;
+
+      const rowCount = table.getRowCount();
+      const colCount = table.getColumnCount();
+
+      // Skip 1x1 tables (handled by ensureBlankLinesAfter1x1Tables)
+      if (rowCount === 1 && colCount === 1) {
+        continue;
+      }
+
+      // Apply filter if provided
+      if (filter && !filter(table, i)) {
+        continue;
+      }
+
+      tablesProcessed++;
+
+      // Find table index in body elements
+      const tableIndex = this.bodyElements.indexOf(table);
+      if (tableIndex === -1) continue;
+
+      // Check next element
+      const nextElement = this.bodyElements[tableIndex + 1];
+
+      if (nextElement instanceof Paragraph) {
+        // Next element is a paragraph - check if it's blank
+        if (this.isParagraphBlank(nextElement)) {
+          // Blank paragraph exists - mark as preserved if requested
+          if (markAsPreserved && !nextElement.isPreserved()) {
+            nextElement.setPreserved(true);
+            existingLinesMarked++;
+          }
+        } else {
+          // Next paragraph has content - add blank paragraph between table and content
+          const blankPara = Paragraph.create();
+          blankPara.setStyle("Normal");
+          blankPara.setSpaceAfter(spacingAfter);
+          if (markAsPreserved) {
+            blankPara.setPreserved(true);
+          }
+          this.bodyElements.splice(tableIndex + 1, 0, blankPara);
+          blankLinesAdded++;
+        }
+      } else {
+        // No paragraph after table (or it's another table/element) - add blank paragraph
+        const blankPara = Paragraph.create();
+        blankPara.setStyle("Normal");
+        blankPara.setSpaceAfter(spacingAfter);
+        if (markAsPreserved) {
+          blankPara.setPreserved(true);
+        }
+        this.bodyElements.splice(tableIndex + 1, 0, blankPara);
+        blankLinesAdded++;
+      }
+    }
+
+    return {
+      tablesProcessed,
+      blankLinesAdded,
+      existingLinesMarked,
+    };
+  }
+
+  /**
+   * Standardizes all bullet list symbols to be bold, 12pt, and black (#000000)
+   *
+   * This helper ensures consistent bullet formatting across all bullet lists in the document.
+   * It modifies the numbering definitions (not individual paragraphs), preserving the actual
+   * bullet symbols (•, ○, ▪, etc.) while standardizing their visual formatting.
+   *
+   * **Important**: This only affects the bullet symbol formatting, not the text content after it.
+   * The actual bullet characters are preserved as they were originally defined.
+   *
+   * @param options Formatting options
+   * @returns Statistics about lists updated
+   *
+   * @example
+   * // Standardize all bullet symbols with defaults (Arial 12pt bold black)
+   * const result = doc.standardizeBulletSymbols();
+   * console.log(`Updated ${result.listsUpdated} bullet lists (${result.levelsModified} levels)`);
+   *
+   * @example
+   * // Custom formatting for bullet symbols
+   * const result = doc.standardizeBulletSymbols({
+   *   bold: true,
+   *   fontSize: 28,  // 14pt
+   *   color: 'FF0000',  // Red
+   *   font: 'Calibri'
+   * });
+   */
+  public standardizeBulletSymbols(options?: {
+    bold?: boolean;
+    fontSize?: number;
+    color?: string;
+    font?: string;
+  }): {
+    listsUpdated: number;
+    levelsModified: number;
+  } {
+    const {
+      bold = true,
+      fontSize = 24, // 12pt
+      color = "000000",
+      font = "Arial",
+    } = options || {};
+
+    let listsUpdated = 0;
+    let levelsModified = 0;
+
+    const instances = this.numberingManager.getAllInstances();
+
+    for (const instance of instances) {
+      const abstractNumId = instance.getAbstractNumId();
+      const abstractNum =
+        this.numberingManager.getAbstractNumbering(abstractNumId);
+
+      if (!abstractNum) continue;
+
+      // Only process bullet lists (skip numbered lists)
+      const level0 = abstractNum.getLevel(0);
+      if (!level0 || level0.getFormat() !== "bullet") continue;
+
+      // Update all 9 levels (0-8)
+      for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
+        const numLevel = abstractNum.getLevel(levelIndex);
+        if (!numLevel) continue;
+
+        numLevel.setFont(font);
+        numLevel.setFontSize(fontSize);
+        numLevel.setBold(bold);
+        numLevel.setColor(color);
+
+        levelsModified++;
+      }
+
+      listsUpdated++;
+    }
+
+    return { listsUpdated, levelsModified };
+  }
+
+  /**
+   * Standardizes numbered list prefixes (1., a., i., etc.) to Verdana 12pt bold black
+   *
+   * This only affects the prefix/number formatting, not the text content after it.
+   * It modifies the numbering definitions in the document while preserving the
+   * numbering format type (decimal, roman, letter, etc.).
+   *
+   * **Important**: This updates the visual formatting of prefixes like "1.", "a.", "i."
+   * but does not change the numbering type itself.
+   *
+   * @param options Formatting options
+   * @returns Statistics about lists updated
+   *
+   * @example
+   * // Standardize all numbered list prefixes with defaults (Verdana 12pt bold black)
+   * const result = doc.standardizeNumberedListPrefixes();
+   * console.log(`Updated ${result.listsUpdated} numbered lists (${result.levelsModified} levels)`);
+   *
+   * @example
+   * // Custom formatting for numbered list prefixes
+   * const result = doc.standardizeNumberedListPrefixes({
+   *   bold: true,
+   *   fontSize: 24,
+   *   color: '000000',
+   *   font: 'Verdana'
+   * });
+   */
+  public standardizeNumberedListPrefixes(options?: {
+    bold?: boolean;
+    fontSize?: number;
+    color?: string;
+    font?: string;
+  }): {
+    listsUpdated: number;
+    levelsModified: number;
+  } {
+    const {
+      bold = true,
+      fontSize = 24, // 12pt
+      color = "000000",
+      font = "Verdana",
+    } = options || {};
+
+    let listsUpdated = 0;
+    let levelsModified = 0;
+
+    const instances = this.numberingManager.getAllInstances();
+
+    for (const instance of instances) {
+      const abstractNumId = instance.getAbstractNumId();
+      const abstractNum =
+        this.numberingManager.getAbstractNumbering(abstractNumId);
+
+      if (!abstractNum) continue;
+
+      // Only process numbered lists (skip bullet lists)
+      const level0 = abstractNum.getLevel(0);
+      if (!level0 || level0.getFormat() === "bullet") continue;
+
+      // Update all 9 levels (0-8)
+      for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
+        const numLevel = abstractNum.getLevel(levelIndex);
+        if (!numLevel) continue;
+
+        numLevel.setFont(font);
+        numLevel.setFontSize(fontSize);
+        numLevel.setBold(bold);
+        numLevel.setColor(color);
+
+        levelsModified++;
+      }
+
+      listsUpdated++;
+    }
+
+    return { listsUpdated, levelsModified };
+  }
+
+  /**
+   * Standardizes all hyperlinks in the document to Verdana 12pt blue (#0000FF) underline
+   *
+   * This applies consistent formatting to all hyperlinks throughout the document,
+   * including those in tables. The method preserves the hyperlink URLs and text
+   * while updating only the visual formatting.
+   *
+   * @param options Formatting options
+   * @returns Number of hyperlinks updated
+   *
+   * @example
+   * // Use default formatting (Verdana 12pt blue underline)
+   * const count = doc.standardizeAllHyperlinks();
+   * console.log(`Standardized ${count} hyperlinks`);
+   *
+   * @example
+   * // Custom hyperlink formatting
+   * const count = doc.standardizeAllHyperlinks({
+   *   font: 'Arial',
+   *   size: 11,
+   *   color: 'FF0000',  // Red
+   *   underline: true
+   * });
+   */
+  public standardizeAllHyperlinks(options?: {
+    font?: string;
+    size?: number;
+    color?: string;
+    underline?: boolean;
+  }): number {
+    const {
+      font = "Verdana",
+      size = 12,
+      color = "0000FF",
+      underline = true,
+    } = options || {};
+
+    const hyperlinks = this.getHyperlinks();
+
+    for (const { hyperlink } of hyperlinks) {
+      hyperlink.setFormatting({
+        font: font,
+        size: size,
+        color: color,
+        underline: underline ? "single" : false,
+      });
+    }
+
+    return hyperlinks.length;
   }
 
   /**
@@ -3791,7 +4230,7 @@ export class Document {
    * ```
    */
   public applyH1(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching('Heading1', options, (style) =>
+    return this.applyStyleToMatching("Heading1", options, (style) =>
       /^(heading\s*1|header\s*1|h1)$/i.test(style)
     );
   }
@@ -3808,7 +4247,7 @@ export class Document {
    * ```
    */
   public applyH2(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching('Heading2', options, (style) =>
+    return this.applyStyleToMatching("Heading2", options, (style) =>
       /^(heading\s*2|header\s*2|h2)$/i.test(style)
     );
   }
@@ -3825,7 +4264,7 @@ export class Document {
    * ```
    */
   public applyH3(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching('Heading3', options, (style) =>
+    return this.applyStyleToMatching("Heading3", options, (style) =>
       /^(heading\s*3|header\s*3|h3)$/i.test(style)
     );
   }
@@ -3836,15 +4275,20 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyNormal(options?: StyleApplyOptions): number {
-    const targets = options?.paragraphs || this.getAllParagraphs().filter(p => {
-      const style = p.getStyle();
-      return !style || !/^(heading|header|h\d|list|toc|tod|caution|table)/i.test(style);
-    });
+    const targets =
+      options?.paragraphs ||
+      this.getAllParagraphs().filter((p) => {
+        const style = p.getStyle();
+        return (
+          !style ||
+          !/^(heading|header|h\d|list|toc|tod|caution|table)/i.test(style)
+        );
+      });
 
     let count = 0;
     for (const para of targets) {
       if (para.isPreserved()) continue;
-      para.setStyle('Normal');
+      para.setStyle("Normal");
 
       if (options?.keepProperties && options.keepProperties.length > 0) {
         this.clearFormattingExcept(para, options.keepProperties);
@@ -3867,7 +4311,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyNumList(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching('ListParagraph', options, (style) =>
+    return this.applyStyleToMatching("ListParagraph", options, (style) =>
       /^(list\s*number|numbered\s*list|list\s*paragraph)$/i.test(style)
     );
   }
@@ -3878,7 +4322,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyBulletList(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching('ListParagraph', options, (style) =>
+    return this.applyStyleToMatching("ListParagraph", options, (style) =>
       /^(list\s*bullet|bullet\s*list|list\s*paragraph)$/i.test(style)
     );
   }
@@ -3889,7 +4333,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyTOC(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching('TOC', options, (style) =>
+    return this.applyStyleToMatching("TOC", options, (style) =>
       /^(toc|table\s*of\s*contents|toc\s*heading)$/i.test(style)
     );
   }
@@ -3900,7 +4344,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyTOD(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching('TopOfDocument', options, (style) =>
+    return this.applyStyleToMatching("TopOfDocument", options, (style) =>
       /^(tod|top\s*of\s*document|document\s*top)$/i.test(style)
     );
   }
@@ -3911,7 +4355,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyCaution(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching('Caution', options, (style) =>
+    return this.applyStyleToMatching("Caution", options, (style) =>
       /^(caution|warning|important|alert)$/i.test(style)
     );
   }
@@ -3932,7 +4376,7 @@ export class Document {
       for (const cell of firstRow.getCells()) {
         for (const para of cell.getParagraphs()) {
           if (para.isPreserved()) continue;
-          para.setStyle('TableHeader');
+          para.setStyle("TableHeader");
 
           if (options?.keepProperties && options.keepProperties.length > 0) {
             this.clearFormattingExcept(para, options.keepProperties);
@@ -3980,10 +4424,10 @@ export class Document {
         if (options.size) run.setSize(options.size);
         if (options.color) run.setColor(options.color);
         if (options.emphasis) {
-          options.emphasis.forEach(emp => {
-            if (emp === 'bold') run.setBold(true);
-            if (emp === 'italic') run.setItalic(true);
-            if (emp === 'underline') run.setUnderline('single');
+          options.emphasis.forEach((emp) => {
+            if (emp === "bold") run.setBold(true);
+            if (emp === "italic") run.setItalic(true);
+            if (emp === "underline") run.setUnderline("single");
           });
         }
       }
@@ -4036,7 +4480,10 @@ export class Document {
    * Helper method to selectively clear formatting while preserving specific properties
    * @private
    */
-  private clearFormattingExcept(para: Paragraph, keepProperties: string[]): void {
+  private clearFormattingExcept(
+    para: Paragraph,
+    keepProperties: string[]
+  ): void {
     // Save properties to keep
     const savedProps: any = {};
     const formatting = para.formatting;
@@ -4071,15 +4518,21 @@ export class Document {
 
       // Restore saved properties using appropriate setters
       if (runSavedProps.bold !== undefined) run.setBold(runSavedProps.bold);
-      if (runSavedProps.italic !== undefined) run.setItalic(runSavedProps.italic);
-      if (runSavedProps.underline !== undefined) run.setUnderline(runSavedProps.underline);
+      if (runSavedProps.italic !== undefined)
+        run.setItalic(runSavedProps.italic);
+      if (runSavedProps.underline !== undefined)
+        run.setUnderline(runSavedProps.underline);
       if (runSavedProps.color !== undefined) run.setColor(runSavedProps.color);
       if (runSavedProps.font !== undefined) run.setFont(runSavedProps.font);
       if (runSavedProps.size !== undefined) run.setSize(runSavedProps.size);
-      if (runSavedProps.highlight !== undefined) run.setHighlight(runSavedProps.highlight);
-      if (runSavedProps.strike !== undefined) run.setStrike(runSavedProps.strike);
-      if (runSavedProps.subscript !== undefined) run.setSubscript(runSavedProps.subscript);
-      if (runSavedProps.superscript !== undefined) run.setSuperscript(runSavedProps.superscript);
+      if (runSavedProps.highlight !== undefined)
+        run.setHighlight(runSavedProps.highlight);
+      if (runSavedProps.strike !== undefined)
+        run.setStrike(runSavedProps.strike);
+      if (runSavedProps.subscript !== undefined)
+        run.setSubscript(runSavedProps.subscript);
+      if (runSavedProps.superscript !== undefined)
+        run.setSuperscript(runSavedProps.superscript);
     }
   }
 
@@ -4092,10 +4545,12 @@ export class Document {
     options: StyleApplyOptions | undefined,
     matcher: (style: string) => boolean
   ): number {
-    const targets = options?.paragraphs || this.getAllParagraphs().filter(p => {
-      const style = p.getStyle();
-      return style && matcher(style);
-    });
+    const targets =
+      options?.paragraphs ||
+      this.getAllParagraphs().filter((p) => {
+        const style = p.getStyle();
+        return style && matcher(style);
+      });
 
     let count = 0;
     for (const para of targets) {
@@ -4138,36 +4593,39 @@ export class Document {
     // Check all content items
     for (const item of content) {
       // Hyperlinks count as content
-      if ((item as any).constructor.name === 'Hyperlink') {
+      if ((item as any).constructor.name === "Hyperlink") {
         return false;
       }
 
       // Images/shapes count as content
-      if ((item as any).constructor.name === 'Shape') {
+      if ((item as any).constructor.name === "Shape") {
         return false;
       }
 
       // TextBox count as content
-      if ((item as any).constructor.name === 'TextBox') {
+      if ((item as any).constructor.name === "TextBox") {
         return false;
       }
 
       // Fields count as content
-      if ((item as any).constructor.name === 'Field') {
+      if ((item as any).constructor.name === "Field") {
         return false;
       }
 
       // Check runs for non-whitespace text
       if ((item as any).getText) {
         const text = (item as any).getText().trim();
-        if (text !== '') {
+        if (text !== "") {
           return false;
         }
       }
     }
 
     // Check for bookmarks
-    if (para.getBookmarksStart().length > 0 || para.getBookmarksEnd().length > 0) {
+    if (
+      para.getBookmarksStart().length > 0 ||
+      para.getBookmarksEnd().length > 0
+    ) {
       return false;
     }
 
@@ -4208,11 +4666,14 @@ export class Document {
       if (!content) continue;
 
       // Split by comma: ["Heading 2", "2", ""]
-      const parts = content.split(',').map(p => p.trim()).filter(p => p);
+      const parts = content
+        .split(",")
+        .map((p) => p.trim())
+        .filter((p) => p);
       if (parts.length < 2) continue;
 
-      const styleName = parts[0];  // "Heading 2"
-      const levelStr = parts[1];   // "2"
+      const styleName = parts[0]; // "Heading 2"
+      const levelStr = parts[1]; // "2"
 
       if (!styleName || !levelStr) continue;
 
@@ -4250,31 +4711,35 @@ export class Document {
    * Find headings for TOC by parsing XML directly (searches body AND tables)
    * This is more reliable than using bodyElements as it searches inside table cells too
    */
-  private findHeadingsForTOCFromXML(docXml: string, levels: number[]): Array<{ level: number; text: string; bookmark: string }> {
-    const headings: Array<{ level: number; text: string; bookmark: string }> = [];
+  private findHeadingsForTOCFromXML(
+    docXml: string,
+    levels: number[]
+  ): Array<{ level: number; text: string; bookmark: string }> {
+    const headings: Array<{ level: number; text: string; bookmark: string }> =
+      [];
     const levelSet = new Set(levels);
 
     try {
       // Parse document.xml to object structure
       const parsed = XMLParser.parseToObject(docXml, { trimValues: false });
-      const document = parsed['w:document'];
+      const document = parsed["w:document"];
       if (!document) {
         return headings;
       }
 
-      const body = (document as any)['w:body'];
+      const body = (document as any)["w:body"];
       if (!body) {
         return headings;
       }
 
       // Helper function to extract heading info from a parsed paragraph object
       const extractHeading = (para: any): void => {
-        const pPr = para['w:pPr'];
-        if (!pPr || !pPr['w:pStyle']) {
+        const pPr = para["w:pPr"];
+        if (!pPr || !pPr["w:pStyle"]) {
           return;
         }
 
-        const styleVal = pPr['w:pStyle']['@_w:val'];
+        const styleVal = pPr["w:pStyle"]["@_w:val"];
         if (!styleVal) {
           return;
         }
@@ -4293,13 +4758,15 @@ export class Document {
         }
 
         // Extract bookmark (look for bookmarks with "_heading" in name)
-        let bookmark = '';
-        const bookmarkStart = para['w:bookmarkStart'];
+        let bookmark = "";
+        const bookmarkStart = para["w:bookmarkStart"];
         if (bookmarkStart) {
-          const bookmarkArray = Array.isArray(bookmarkStart) ? bookmarkStart : [bookmarkStart];
+          const bookmarkArray = Array.isArray(bookmarkStart)
+            ? bookmarkStart
+            : [bookmarkStart];
           for (const bm of bookmarkArray) {
-            const bmName = bm['@_w:name'];
-            if (bmName && bmName.toLowerCase().includes('_heading')) {
+            const bmName = bm["@_w:name"];
+            if (bmName && bmName.toLowerCase().includes("_heading")) {
               bookmark = bmName;
               break;
             }
@@ -4307,17 +4774,17 @@ export class Document {
         }
 
         // Extract text from runs
-        let text = '';
-        const runs = para['w:r'];
+        let text = "";
+        const runs = para["w:r"];
         if (runs) {
           const runArray = Array.isArray(runs) ? runs : [runs];
           for (const run of runArray) {
-            const textElement = run['w:t'];
+            const textElement = run["w:t"];
             if (textElement) {
-              if (typeof textElement === 'string') {
+              if (typeof textElement === "string") {
                 text += textElement;
-              } else if (textElement['#text']) {
-                text += textElement['#text'];
+              } else if (textElement["#text"]) {
+                text += textElement["#text"];
               }
             }
           }
@@ -4337,12 +4804,12 @@ export class Document {
         headings.push({
           level: headingLevel,
           text: text,
-          bookmark: bookmark
+          bookmark: bookmark,
         });
       };
 
       // Search in direct paragraphs
-      const paragraphs = body['w:p'];
+      const paragraphs = body["w:p"];
       if (paragraphs) {
         const paraArray = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
         for (const para of paraArray) {
@@ -4351,24 +4818,26 @@ export class Document {
       }
 
       // Search in tables (this is critical - many documents have headings in tables)
-      const tables = body['w:tbl'];
+      const tables = body["w:tbl"];
       if (tables) {
         const tableArray = Array.isArray(tables) ? tables : [tables];
         for (const table of tableArray) {
-          const rows = table['w:tr'];
+          const rows = table["w:tr"];
           if (!rows) continue;
 
           const rowArray = Array.isArray(rows) ? rows : [rows];
           for (const row of rowArray) {
-            const cells = row['w:tc'];
+            const cells = row["w:tc"];
             if (!cells) continue;
 
             const cellArray = Array.isArray(cells) ? cells : [cells];
             for (const cell of cellArray) {
-              const cellParas = cell['w:p'];
+              const cellParas = cell["w:p"];
               if (!cellParas) continue;
 
-              const cellParaArray = Array.isArray(cellParas) ? cellParas : [cellParas];
+              const cellParaArray = Array.isArray(cellParas)
+                ? cellParas
+                : [cellParas];
               for (const para of cellParaArray) {
                 extractHeading(para);
               }
@@ -4376,9 +4845,13 @@ export class Document {
           }
         }
       }
-
     } catch (error) {
-      defaultLogger.error('Error parsing document.xml for headings:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
+      defaultLogger.error(
+        "Error parsing document.xml for headings:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
     }
 
     return headings;
@@ -4389,8 +4862,11 @@ export class Document {
    * Kept for compatibility but not recommended
    * @deprecated Use findHeadingsForTOCFromXML instead
    */
-  private findHeadingsForTOC(levels: number[]): Array<{ level: number; text: string; bookmark: string }> {
-    const headings: Array<{ level: number; text: string; bookmark: string }> = [];
+  private findHeadingsForTOC(
+    levels: number[]
+  ): Array<{ level: number; text: string; bookmark: string }> {
+    const headings: Array<{ level: number; text: string; bookmark: string }> =
+      [];
     const levelSet = new Set(levels);
 
     // Iterate through body elements
@@ -4411,12 +4887,13 @@ export class Document {
 
               if (text) {
                 // Create or get bookmark for this heading
-                const bookmark = this.bookmarkManager.createHeadingBookmark(text);
+                const bookmark =
+                  this.bookmarkManager.createHeadingBookmark(text);
 
                 headings.push({
                   level: headingLevel,
                   text: text,
-                  bookmark: bookmark.getName()
+                  bookmark: bookmark.getName(),
                 });
               }
             }
@@ -4446,48 +4923,50 @@ export class Document {
   ): string {
     const sdtId = Math.floor(Math.random() * 2000000000) - 1000000000;
 
-    let tocXml = '<w:sdt>';
+    let tocXml = "<w:sdt>";
 
     // SDT properties
-    tocXml += '<w:sdtPr>';
+    tocXml += "<w:sdtPr>";
     tocXml += `<w:id w:val="${sdtId}"/>`;
-    tocXml += '<w:docPartObj>';
+    tocXml += "<w:docPartObj>";
     tocXml += '<w:docPartGallery w:val="Table of Contents"/>';
     tocXml += '<w:docPartUnique w:val="1"/>';
-    tocXml += '</w:docPartObj>';
-    tocXml += '</w:sdtPr>';
+    tocXml += "</w:docPartObj>";
+    tocXml += "</w:sdtPr>";
 
     // SDT content
-    tocXml += '<w:sdtContent>';
+    tocXml += "<w:sdtContent>";
 
     // Calculate minimum level for relative indentation
     // If TOC shows only Header 2s, minLevel=2, so Header 2 gets 0" indent
-    const minLevel = headings.length > 0
-      ? Math.min(...headings.map(h => h.level))
-      : 1;
+    const minLevel =
+      headings.length > 0 ? Math.min(...headings.map((h) => h.level)) : 1;
 
     // First paragraph: field begin + instruction + separator + first entry (if any)
-    tocXml += '<w:p>';
-    tocXml += '<w:pPr>';
-    tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+    tocXml += "<w:p>";
+    tocXml += "<w:pPr>";
+    tocXml +=
+      '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
 
     // Add indentation for first entry relative to minimum level (0.25" per level)
     if (headings.length > 0 && headings[0]) {
-      const firstIndent = (headings[0].level - minLevel) * 360;  // 360 twips = 0.25 inches
+      const firstIndent = (headings[0].level - minLevel) * 360; // 360 twips = 0.25 inches
       if (firstIndent > 0) {
         tocXml += `<w:ind w:left="${firstIndent}"/>`;
       }
     }
 
-    tocXml += '</w:pPr>';
+    tocXml += "</w:pPr>";
 
     // Field begin
     tocXml += '<w:r><w:fldChar w:fldCharType="begin"/></w:r>';
 
     // Field instruction (preserve original switches)
-    tocXml += '<w:r>';
-    tocXml += `<w:instrText xml:space="preserve">${this.escapeXml(originalInstrText)}</w:instrText>`;
-    tocXml += '</w:r>';
+    tocXml += "<w:r>";
+    tocXml += `<w:instrText xml:space="preserve">${this.escapeXml(
+      originalInstrText
+    )}</w:instrText>`;
+    tocXml += "</w:r>";
 
     // Field separator
     tocXml += '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
@@ -4497,16 +4976,17 @@ export class Document {
       tocXml += this.buildTOCEntryXML(headings[0]);
     }
 
-    tocXml += '</w:p>';
+    tocXml += "</w:p>";
 
     // Remaining entries (each in its own paragraph)
     for (let i = 1; i < headings.length; i++) {
       const heading = headings[i];
       if (!heading) continue;
 
-      tocXml += '<w:p>';
-      tocXml += '<w:pPr>';
-      tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+      tocXml += "<w:p>";
+      tocXml += "<w:pPr>";
+      tocXml +=
+        '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
 
       // Add indentation relative to minimum level (0.25" per level above minimum)
       const indent = (heading.level - minLevel) * 360;
@@ -4514,21 +4994,22 @@ export class Document {
         tocXml += `<w:ind w:left="${indent}"/>`;
       }
 
-      tocXml += '</w:pPr>';
+      tocXml += "</w:pPr>";
       tocXml += this.buildTOCEntryXML(heading);
-      tocXml += '</w:p>';
+      tocXml += "</w:p>";
     }
 
     // Final paragraph with field end
-    tocXml += '<w:p>';
-    tocXml += '<w:pPr>';
-    tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
-    tocXml += '</w:pPr>';
+    tocXml += "<w:p>";
+    tocXml += "<w:pPr>";
+    tocXml +=
+      '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+    tocXml += "</w:pPr>";
     tocXml += '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
-    tocXml += '</w:p>';
+    tocXml += "</w:p>";
 
-    tocXml += '</w:sdtContent>';
-    tocXml += '</w:sdt>';
+    tocXml += "</w:sdtContent>";
+    tocXml += "</w:sdt>";
 
     return tocXml;
   }
@@ -4539,22 +5020,27 @@ export class Document {
    * @param heading Heading information
    * @returns XML string for the TOC entry
    */
-  private buildTOCEntryXML(heading: { level: number; text: string; bookmark: string }): string {
+  private buildTOCEntryXML(heading: {
+    level: number;
+    text: string;
+    bookmark: string;
+  }): string {
     const escapedText = this.escapeXml(heading.text);
 
-    let xml = '';
+    let xml = "";
     xml += `<w:hyperlink w:anchor="${this.escapeXml(heading.bookmark)}">`;
-    xml += '<w:r>';
-    xml += '<w:rPr>';
-    xml += '<w:rFonts w:ascii="Verdana" w:hAnsi="Verdana" w:cs="Verdana" w:eastAsia="Verdana"/>';
+    xml += "<w:r>";
+    xml += "<w:rPr>";
+    xml +=
+      '<w:rFonts w:ascii="Verdana" w:hAnsi="Verdana" w:cs="Verdana" w:eastAsia="Verdana"/>';
     xml += '<w:color w:val="0000FF"/>';
     xml += '<w:sz w:val="24"/>';
     xml += '<w:szCs w:val="24"/>';
     xml += '<w:u w:val="single"/>';
-    xml += '</w:rPr>';
+    xml += "</w:rPr>";
     xml += `<w:t xml:space="preserve">${escapedText}</w:t>`;
-    xml += '</w:r>';
-    xml += '</w:hyperlink>';
+    xml += "</w:r>";
+    xml += "</w:hyperlink>";
 
     return xml;
   }
@@ -4567,11 +5053,11 @@ export class Document {
    */
   private escapeXml(text: string): string {
     return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
   }
 
   /**
@@ -4605,13 +5091,14 @@ export class Document {
     await handler.load(filePath);
 
     // Get document.xml
-    const docXml = handler.getFileAsString('word/document.xml');
+    const docXml = handler.getFileAsString("word/document.xml");
     if (!docXml) {
-      throw new Error('word/document.xml not found in document');
+      throw new Error("word/document.xml not found in document");
     }
 
     // Find all TOC SDTs in the XML
-    const tocRegex = /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
+    const tocRegex =
+      /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
     const tocMatches = Array.from(docXml.matchAll(tocRegex));
 
     if (tocMatches.length === 0) {
@@ -4627,7 +5114,9 @@ export class Document {
         const tocXml = match[0];
 
         // Extract field instruction from TOC XML
-        const instrMatch = tocXml.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
+        const instrMatch = tocXml.match(
+          /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/
+        );
         if (!instrMatch || !instrMatch[1]) {
           continue; // No instruction found, skip
         }
@@ -4635,9 +5124,9 @@ export class Document {
         let fieldInstruction = instrMatch[1];
         // Decode XML entities (decode &amp; first to handle double-encoding)
         fieldInstruction = fieldInstruction
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
           .replace(/&quot;/g, '"')
           .replace(/&apos;/g, "'");
 
@@ -4667,7 +5156,7 @@ export class Document {
 
     // Update document.xml in the archive
     if (replacedCount > 0) {
-      handler.updateFile('word/document.xml', modifiedXml);
+      handler.updateFile("word/document.xml", modifiedXml);
       await handler.save(filePath);
     }
 
@@ -4877,7 +5366,7 @@ export class Document {
    * @param type Header type to remove (default, first, even)
    * @returns This document for chaining
    */
-  removeHeader(type: 'default' | 'first' | 'even'): this {
+  removeHeader(type: "default" | "first" | "even"): this {
     const sectionProps = this.section.getProperties();
 
     // Get the relationship ID from section properties
@@ -4923,7 +5412,7 @@ export class Document {
    * @param type Footer type to remove (default, first, even)
    * @returns This document for chaining
    */
-  removeFooter(type: 'default' | 'first' | 'even'): this {
+  removeFooter(type: "default" | "first" | "even"): this {
     const sectionProps = this.section.getProperties();
 
     // Get the relationship ID from section properties
@@ -4972,7 +5461,9 @@ export class Document {
 
     // Remove each header type
     if (sectionProps.headers) {
-      const types = Object.keys(sectionProps.headers) as Array<'default' | 'first' | 'even'>;
+      const types = Object.keys(sectionProps.headers) as Array<
+        "default" | "first" | "even"
+      >;
       for (const type of types) {
         this.removeHeader(type);
       }
@@ -4994,7 +5485,9 @@ export class Document {
 
     // Remove each footer type
     if (sectionProps.footers) {
-      const types = Object.keys(sectionProps.footers) as Array<'default' | 'first' | 'even'>;
+      const types = Object.keys(sectionProps.footers) as Array<
+        "default" | "first" | "even"
+      >;
       for (const type of types) {
         this.removeFooter(type);
       }
@@ -5284,7 +5777,7 @@ export class Document {
       bookmark = new Bookmark({
         id: 0,
         name: BOOKMARK_NAME,
-        skipNormalization: true
+        skipNormalization: true,
       });
 
       // Register the bookmark with the manager
@@ -5311,7 +5804,7 @@ export class Document {
       anchor: BOOKMARK_NAME,
       hyperlink: (text: string, formatting?: RunFormatting) => {
         return Hyperlink.createInternal(BOOKMARK_NAME, text, formatting);
-      }
+      },
     };
   }
 
@@ -5500,13 +5993,15 @@ export class Document {
         this.trackFormatting = options.trackFormatting;
       }
       if (options.showInsertionsAndDeletions !== undefined) {
-        this.revisionViewSettings.showInsertionsAndDeletions = options.showInsertionsAndDeletions;
+        this.revisionViewSettings.showInsertionsAndDeletions =
+          options.showInsertionsAndDeletions;
       }
       if (options.showFormatting !== undefined) {
         this.revisionViewSettings.showFormatting = options.showFormatting;
       }
       if (options.showInkAnnotations !== undefined) {
-        this.revisionViewSettings.showInkAnnotations = options.showInkAnnotations;
+        this.revisionViewSettings.showInkAnnotations =
+          options.showInkAnnotations;
       }
     }
 
@@ -5557,7 +6052,7 @@ export class Document {
   setRsidRoot(rsidRoot: string): this {
     // Validate RSID format (8 hex characters)
     if (!/^[0-9A-Fa-f]{8}$/.test(rsidRoot)) {
-      throw new Error('RSID must be an 8-character hexadecimal value');
+      throw new Error("RSID must be an 8-character hexadecimal value");
     }
     this.rsidRoot = rsidRoot.toUpperCase();
     this.rsids.add(this.rsidRoot);
@@ -5572,7 +6067,7 @@ export class Document {
   addRsid(rsid: string): this {
     // Validate RSID format
     if (!/^[0-9A-Fa-f]{8}$/.test(rsid)) {
-      throw new Error('RSID must be an 8-character hexadecimal value');
+      throw new Error("RSID must be an 8-character hexadecimal value");
     }
     this.rsids.add(rsid.toUpperCase());
     return this;
@@ -5583,7 +6078,10 @@ export class Document {
    * @returns The generated RSID
    */
   generateRsid(): string {
-    const rsid = Math.floor(Math.random() * 0xFFFFFFFF).toString(16).toUpperCase().padStart(8, '0');
+    const rsid = Math.floor(Math.random() * 0xffffffff)
+      .toString(16)
+      .toUpperCase()
+      .padStart(8, "0");
     this.rsids.add(rsid);
     return rsid;
   }
@@ -5609,7 +6107,7 @@ export class Document {
    * @param protection - Document protection settings
    */
   protectDocument(protection: {
-    edit: 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+    edit: "readOnly" | "comments" | "trackedChanges" | "forms";
     enforcement?: boolean;
     password?: string;
     cryptProviderType?: string;
@@ -5631,15 +6129,17 @@ export class Document {
     // If password provided, generate hash and salt
     if (protection.password) {
       // For now, use a simple hash. In production, use proper cryptographic functions
-      const crypto = require('crypto');
-      const salt = crypto.randomBytes(16).toString('base64');
-      const hash = crypto.pbkdf2Sync(
-        protection.password,
-        salt,
-        protection.cryptSpinCount || 100000,
-        32,
-        'sha512'
-      ).toString('base64');
+      const crypto = require("crypto");
+      const salt = crypto.randomBytes(16).toString("base64");
+      const hash = crypto
+        .pbkdf2Sync(
+          protection.password,
+          salt,
+          protection.cryptSpinCount || 100000,
+          32,
+          "sha512"
+        )
+        .toString("base64");
 
       this.documentProtection.hash = hash;
       this.documentProtection.salt = salt;
@@ -5686,7 +6186,12 @@ export class Document {
     previousProperties: Record<string, any>,
     date?: Date
   ): Revision {
-    const revision = Revision.createRunPropertiesChange(author, content, previousProperties, date);
+    const revision = Revision.createRunPropertiesChange(
+      author,
+      content,
+      previousProperties,
+      date
+    );
     return this.revisionManager.register(revision);
   }
 
@@ -5704,7 +6209,12 @@ export class Document {
     previousProperties: Record<string, any>,
     date?: Date
   ): Revision {
-    const revision = Revision.createParagraphPropertiesChange(author, content, previousProperties, date);
+    const revision = Revision.createParagraphPropertiesChange(
+      author,
+      content,
+      previousProperties,
+      date
+    );
     return this.revisionManager.register(revision);
   }
 
@@ -5722,7 +6232,12 @@ export class Document {
     previousProperties: Record<string, any>,
     date?: Date
   ): Revision {
-    const revision = Revision.createTablePropertiesChange(author, content, previousProperties, date);
+    const revision = Revision.createTablePropertiesChange(
+      author,
+      content,
+      previousProperties,
+      date
+    );
     return this.revisionManager.register(revision);
   }
 
@@ -5783,7 +6298,9 @@ export class Document {
     moveToRangeEnd: RangeMarker;
   } {
     // Generate unique move ID and name
-    const moveId = `move${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const moveId = `move${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
     const moveName = `move${Date.now()}`;
 
     // Get unique IDs for range markers (use revision manager's next ID)
@@ -5884,7 +6401,12 @@ export class Document {
     previousProperties: Record<string, any>,
     date?: Date
   ): Revision {
-    const revision = Revision.createNumberingChange(author, content, previousProperties, date);
+    const revision = Revision.createNumberingChange(
+      author,
+      content,
+      previousProperties,
+      date
+    );
     return this.revisionManager.register(revision);
   }
 
@@ -6279,7 +6801,7 @@ export class Document {
       // ZipWriter stores all content as Buffer internally, but DocumentPart expects string for text
       let content: string | Buffer = file.content;
       if (!file.isBinary && Buffer.isBuffer(file.content)) {
-        content = file.content.toString('utf-8');
+        content = file.content.toString("utf-8");
       }
 
       return {
@@ -7128,7 +7650,7 @@ export class Document {
       caseSensitive = false,
       wholeWord = false,
       trackChanges = false,
-      author = 'Unknown',
+      author = "Unknown",
     } = options || {};
 
     let count = 0;
@@ -7136,17 +7658,17 @@ export class Document {
 
     // Convert pattern to RegExp if it's a string
     let regex: RegExp;
-    if (typeof pattern === 'string') {
+    if (typeof pattern === "string") {
       // Escape special regex characters
-      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const boundaryPattern = wholeWord ? `\\b${escaped}\\b` : escaped;
-      const flags = caseSensitive ? 'g' : 'gi';
+      const flags = caseSensitive ? "g" : "gi";
       regex = new RegExp(boundaryPattern, flags);
     } else {
       // Use provided RegExp, ensure global flag
-      const flags = pattern.flags.includes('g')
+      const flags = pattern.flags.includes("g")
         ? pattern.flags
-        : pattern.flags + 'g';
+        : pattern.flags + "g";
       regex = new RegExp(pattern.source, flags);
     }
 
@@ -7333,7 +7855,9 @@ export class Document {
   private validateParagraph(paragraph: Paragraph): void {
     // Type validation
     if (!(paragraph instanceof Paragraph)) {
-      throw new Error('insertParagraphAt: parameter must be a Paragraph instance');
+      throw new Error(
+        "insertParagraphAt: parameter must be a Paragraph instance"
+      );
     }
 
     // Check for duplicate paragraph IDs
@@ -7341,24 +7865,30 @@ export class Document {
     if (paraId) {
       const existingIds = this.bodyElements
         .filter((el): el is Paragraph => el instanceof Paragraph)
-        .map(p => p.getFormatting().paraId)
-        .filter(id => id === paraId);
+        .map((p) => p.getFormatting().paraId)
+        .filter((id) => id === paraId);
 
       if (existingIds.length > 0) {
-        throw new Error(`Duplicate paragraph ID detected: ${paraId}. Each paragraph must have a unique ID.`);
+        throw new Error(
+          `Duplicate paragraph ID detected: ${paraId}. Each paragraph must have a unique ID.`
+        );
       }
     }
 
     // Warn about missing styles
     const style = paragraph.getFormatting().style;
     if (style && !this.stylesManager.hasStyle(style)) {
-      defaultLogger.warn(`Style "${style}" not found in document. Paragraph will fall back to Normal style.`);
+      defaultLogger.warn(
+        `Style "${style}" not found in document. Paragraph will fall back to Normal style.`
+      );
     }
 
     // Warn about missing numbering
     const numbering = paragraph.getFormatting().numbering;
     if (numbering && !this.numberingManager.hasInstance(numbering.numId)) {
-      defaultLogger.warn(`Numbering ID ${numbering.numId} not found in document. List formatting will not display.`);
+      defaultLogger.warn(
+        `Numbering ID ${numbering.numId} not found in document. List formatting will not display.`
+      );
     }
   }
 
@@ -7370,25 +7900,27 @@ export class Document {
   private validateTable(table: Table): void {
     // Type validation
     if (!(table instanceof Table)) {
-      throw new Error('insertTableAt: parameter must be a Table instance');
+      throw new Error("insertTableAt: parameter must be a Table instance");
     }
 
     // Content validation - table must have rows
     const rows = table.getRows();
     if (rows.length === 0) {
-      throw new Error('insertTableAt: table must have at least one row');
+      throw new Error("insertTableAt: table must have at least one row");
     }
 
     // Check first row has cells (rows.length > 0 already checked above)
     const firstRow = rows[0];
     if (firstRow && firstRow.getCells().length === 0) {
-      throw new Error('insertTableAt: table rows must have at least one cell');
+      throw new Error("insertTableAt: table rows must have at least one cell");
     }
 
     // Warn about missing table styles
     const tableStyle = table.getFormatting().style;
     if (tableStyle && !this.stylesManager.hasStyle(tableStyle)) {
-      defaultLogger.warn(`Table style "${tableStyle}" not found in document. Table will use default formatting.`);
+      defaultLogger.warn(
+        `Table style "${tableStyle}" not found in document. Table will use default formatting.`
+      );
     }
   }
 
@@ -7400,15 +7932,28 @@ export class Document {
   private validateToc(toc: TableOfContentsElement): void {
     // Type validation
     if (!(toc instanceof TableOfContentsElement)) {
-      throw new Error('insertTocAt: parameter must be a TableOfContentsElement instance');
+      throw new Error(
+        "insertTocAt: parameter must be a TableOfContentsElement instance"
+      );
     }
 
     // Check if document has heading styles for TOC to reference
-    const hasHeadings = ['Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading5', 'Heading6', 'Heading7', 'Heading8', 'Heading9']
-      .some(style => this.stylesManager.hasStyle(style));
+    const hasHeadings = [
+      "Heading1",
+      "Heading2",
+      "Heading3",
+      "Heading4",
+      "Heading5",
+      "Heading6",
+      "Heading7",
+      "Heading8",
+      "Heading9",
+    ].some((style) => this.stylesManager.hasStyle(style));
 
     if (!hasHeadings) {
-      defaultLogger.warn('No heading styles found in document. Table of Contents may not display entries correctly.');
+      defaultLogger.warn(
+        "No heading styles found in document. Table of Contents may not display entries correctly."
+      );
     }
   }
 
@@ -7679,7 +8224,8 @@ export class Document {
     resetFormatting?: boolean;
     cleanupRelationships?: boolean;
   }): number {
-    const { resetFormatting = false, cleanupRelationships = false } = options || {};
+    const { resetFormatting = false, cleanupRelationships = false } =
+      options || {};
     let mergedCount = 0;
 
     // Get the DocumentParser instance to use its merging method
@@ -7704,7 +8250,8 @@ export class Document {
     for (const table of this.getTables()) {
       for (const row of table.getRows()) {
         for (const cell of row.getCells()) {
-          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
+          const cellParagraphs =
+            cell instanceof TableCell ? cell.getParagraphs() : [];
           for (const para of cellParagraphs) {
             const originalContent = para.getContent();
 
@@ -7735,9 +8282,12 @@ export class Document {
       }
 
       // Remove orphaned hyperlink relationships
-      const removedCount = this.relationshipManager.removeOrphanedHyperlinks(referencedIds);
+      const removedCount =
+        this.relationshipManager.removeOrphanedHyperlinks(referencedIds);
       if (removedCount > 0) {
-        defaultLogger.info(`Cleaned up ${removedCount} orphaned hyperlink relationship(s)`);
+        defaultLogger.info(
+          `Cleaned up ${removedCount} orphaned hyperlink relationship(s)`
+        );
       }
     }
 
@@ -7860,23 +8410,23 @@ export class Document {
    */
   removeFormattingFromAll(
     type:
-      | 'bold'
-      | 'italic'
-      | 'underline'
-      | 'strike'
-      | 'dstrike'
-      | 'highlight'
-      | 'color'
-      | 'font'
-      | 'size'
-      | 'subscript'
-      | 'superscript'
-      | 'smallCaps'
-      | 'allCaps'
-      | 'outline'
-      | 'shadow'
-      | 'emboss'
-      | 'imprint'
+      | "bold"
+      | "italic"
+      | "underline"
+      | "strike"
+      | "dstrike"
+      | "highlight"
+      | "color"
+      | "font"
+      | "size"
+      | "subscript"
+      | "superscript"
+      | "smallCaps"
+      | "allCaps"
+      | "outline"
+      | "shadow"
+      | "emboss"
+      | "imprint"
   ): number {
     let modifiedCount = 0;
 
@@ -7995,12 +8545,14 @@ export class Document {
    * console.log(`Removed: ${stats.removed}, Normalized: ${stats.normalized}`);
    * ```
    */
-  normalizeSpacing(rules: {
-    removeDuplicateEmptyParagraphs?: boolean;
-    standardParagraphSpacing?: { before?: number; after?: number };
-    standardLineSpacing?: number;
-    removeTrailingSpaces?: boolean;
-  } = {}): { removed: number; normalized: number } {
+  normalizeSpacing(
+    rules: {
+      removeDuplicateEmptyParagraphs?: boolean;
+      standardParagraphSpacing?: { before?: number; after?: number };
+      standardLineSpacing?: number;
+      removeTrailingSpaces?: boolean;
+    } = {}
+  ): { removed: number; normalized: number } {
     const {
       removeDuplicateEmptyParagraphs = true,
       standardParagraphSpacing,
@@ -8018,7 +8570,7 @@ export class Document {
 
       this.bodyElements.forEach((element, index) => {
         if (element instanceof Paragraph) {
-          const isEmpty = element.getText().trim() === '';
+          const isEmpty = element.getText().trim() === "";
           if (isEmpty && lastWasEmpty) {
             toRemove.push(index);
           }
@@ -8049,7 +8601,7 @@ export class Document {
       }
 
       if (standardLineSpacing !== undefined) {
-        para.setLineSpacing(standardLineSpacing, 'auto');
+        para.setLineSpacing(standardLineSpacing, "auto");
         normalized++;
       }
 
@@ -8089,7 +8641,7 @@ export class Document {
             }
 
             if (standardLineSpacing !== undefined) {
-              para.setLineSpacing(standardLineSpacing, 'auto');
+              para.setLineSpacing(standardLineSpacing, "auto");
               normalized++;
             }
 
