@@ -3,35 +3,35 @@
  * Extracts content from ZIP archives and converts XML to structured data
  */
 
-import { ZipHandler } from "../zip/ZipHandler";
-import { DOCX_PATHS } from "../zip/types";
-import { Paragraph, ParagraphFormatting } from "../elements/Paragraph";
-import { Run, RunFormatting, RunContent, BreakType } from "../elements/Run";
-import { Field } from "../elements/Field";
+import { ComplexField, Field } from "../elements/Field";
 import { Hyperlink } from "../elements/Hyperlink";
-import { Table } from "../elements/Table";
-import { TableRow } from "../elements/TableRow";
-import { TableCell } from "../elements/TableCell";
-import { TableOfContentsElement } from "../elements/TableOfContentsElement";
-import { TableOfContents } from "../elements/TableOfContents";
-import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { ImageManager } from "../elements/ImageManager";
 import { ImageRun } from "../elements/ImageRun";
+import { Paragraph, ParagraphFormatting } from "../elements/Paragraph";
+import { BreakType, Run, RunContent, RunFormatting } from "../elements/Run";
 import {
+  PageNumberFormat,
   Section,
   SectionProperties,
   SectionType,
-  PageNumberFormat,
 } from "../elements/Section";
-import { XMLBuilder } from "../xml/XMLBuilder";
-import { XMLParser } from "../xml/XMLParser";
-import { RelationshipManager } from "./RelationshipManager";
-import { DocumentProperties } from "./Document";
-import { Style, StyleProperties, StyleType } from "../formatting/Style";
+import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
+import { Table } from "../elements/Table";
+import { TableCell } from "../elements/TableCell";
+import { TableOfContents } from "../elements/TableOfContents";
+import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { TableRow } from "../elements/TableRow";
 import { AbstractNumbering } from "../formatting/AbstractNumbering";
 import { NumberingInstance } from "../formatting/NumberingInstance";
-import { logParsing, logParagraphContent, logTextDirection } from "../utils/diagnostics";
+import { Style, StyleProperties, StyleType } from "../formatting/Style";
+import { logParagraphContent, logParsing, logTextDirection } from "../utils/diagnostics";
 import { defaultLogger } from "../utils/logger";
+import { XMLBuilder } from "../xml/XMLBuilder";
+import { XMLParser } from "../xml/XMLParser";
+import { ZipHandler } from "../zip/ZipHandler";
+import { DOCX_PATHS } from "../zip/types";
+import { DocumentProperties } from "./Document";
+import { RelationshipManager } from "./RelationshipManager";
 
 /**
  * Parse error tracking
@@ -575,6 +575,9 @@ export class DocumentParser {
         }
       }
 
+      // NEW: Assemble complex fields from run tokens
+      this.assembleComplexFields(paragraph);
+
       // Diagnostic logging for paragraph
       const runs = paragraph.getRuns();
       const runData = runs.map(run => ({
@@ -1034,11 +1037,216 @@ export class DocumentParser {
     }
   }
 
+  /**
+   * NEW: Assemble complex fields from run tokens
+   * Groups begin→instr→sep→result→end sequences into ComplexField objects
+   * 
+   * @param paragraph The paragraph containing runs to process
+   */
+  private assembleComplexFields(paragraph: Paragraph): void {
+    const content = paragraph.getContent();
+    const groupedContent: any[] = [];
+    let fieldRuns: Run[] = [];
+    let fieldState: 'begin' | 'instruction' | 'separate' | 'result' | 'end' | null = null;
+
+    for (let i = 0; i < content.length; i++) {
+      const item = content[i];
+
+      if (item instanceof Run) {
+        const runContent = item.getContent();
+        const hasFieldContent = runContent.some((c: any) => 
+          c.type === 'fieldChar' || c.type === 'instructionText'
+        );
+
+        if (hasFieldContent) {
+          // This run is part of a field
+          fieldRuns.push(item);
+          const fieldChar = runContent.find((c: any) => c.type === 'fieldChar');
+
+          if (fieldChar) {
+            switch (fieldChar.fieldCharType) {
+              case 'begin':
+                fieldState = 'begin';
+                break;
+              case 'separate':
+                fieldState = 'separate';
+                break;
+              case 'end':
+                fieldState = 'end';
+                
+                // Complete field assembly
+                if (fieldState === 'end' && fieldRuns.length > 0) {
+                  const complexField = this.createComplexFieldFromRuns(fieldRuns);
+                  if (complexField) {
+                    groupedContent.push(complexField);
+                  } else {
+                    // If assembly failed, add individual runs
+                    fieldRuns.forEach(run => groupedContent.push(run));
+                  }
+                  fieldRuns = [];
+                  fieldState = null;
+                }
+                break;
+            }
+          } else {
+            // Instruction text run
+            if (fieldState === 'begin' || fieldState === 'instruction') {
+              fieldState = 'instruction';
+            }
+          }
+        } else {
+          // Regular run - add it as-is
+          if (fieldRuns.length > 0) {
+            // Incomplete field - add as individual runs
+            fieldRuns.forEach(run => groupedContent.push(run));
+            fieldRuns = [];
+          }
+          groupedContent.push(item);
+        }
+      } else {
+        // Non-run content (hyperlinks, images, etc.)
+        if (fieldRuns.length > 0) {
+          // Incomplete field - add as individual runs
+          fieldRuns.forEach(run => groupedContent.push(run));
+          fieldRuns = [];
+        }
+        groupedContent.push(item);
+      }
+    }
+
+    // Handle any remaining incomplete field
+    if (fieldRuns.length > 0) {
+      fieldRuns.forEach(run => groupedContent.push(run));
+    }
+
+    // Replace paragraph content with grouped content
+    // Note: This requires Paragraph to have a replaceContent method
+    // If not available, we'll need to clear and re-add elements
+    if ('replaceContent' in paragraph) {
+      (paragraph as any).replaceContent(groupedContent);
+    } else {
+      // Fallback: Clear and re-add (may be less efficient)
+      paragraph.clearContent();
+      for (const item of groupedContent) {
+        if (item instanceof Run) {
+          paragraph.addRun(item);
+        } else if (item instanceof ComplexField) {
+          paragraph.addField(item); // Assuming Paragraph can add ComplexField
+        } else if (item instanceof Hyperlink) {
+          paragraph.addHyperlink(item);
+        } else {
+          // Handle other types as needed
+          paragraph.addRun(item as Run);
+        }
+      }
+    }
+
+    defaultLogger.debug(`Assembled ${groupedContent.length - content.length} complex fields in paragraph`);
+  }
+
+  /**
+   * NEW: Create ComplexField from sequence of field runs
+   * Extracts instruction from instrText runs and result from text runs
+   * 
+   * @param fieldRuns Array of runs containing field tokens
+   * @returns ComplexField or null if invalid sequence
+   */
+  private createComplexFieldFromRuns(fieldRuns: Run[]): ComplexField | null {
+    if (fieldRuns.length < 2) {
+      defaultLogger.warn('Insufficient runs for ComplexField (minimum 2: begin and instr)');
+      return null;
+    }
+
+    let instruction = '';
+    let resultText = '';
+    let instructionFormatting: RunFormatting | undefined;
+    let resultFormatting: RunFormatting | undefined;
+    let hasBegin = false;
+    let hasEnd = false;
+    let hasSeparate = false;
+
+    for (const run of fieldRuns) {
+      const runContent = run.getContent();
+
+      // Check for fieldChar tokens
+      const fieldCharToken = runContent.find((c: any) => c.type === 'fieldChar');
+      if (fieldCharToken) {
+        switch (fieldCharToken.fieldCharType) {
+          case 'begin':
+            hasBegin = true;
+            // Capture formatting from begin run
+            instructionFormatting = run.getFormatting();
+            break;
+          case 'separate':
+            hasSeparate = true;
+            break;
+          case 'end':
+            hasEnd = true;
+            break;
+        }
+      }
+
+      // Check for instruction text
+      const instrText = runContent.find((c: any) => c.type === 'instructionText');
+      if (instrText) {
+        instruction += instrText.value || '';
+      }
+
+      // Check for result text (between separate and end)
+      const textContent = runContent.find((c: any) => c.type === 'text');
+      if (textContent && hasSeparate) {
+        resultText += textContent.value || '';
+        resultFormatting = run.getFormatting();
+      }
+    }
+
+    // Validate field structure
+    if (!hasBegin || !hasEnd || !instruction.trim()) {
+      defaultLogger.warn('Invalid ComplexField structure: missing begin/end or instruction');
+      return null;
+    }
+
+    // Trim and clean instruction
+    instruction = instruction.trim();
+
+    defaultLogger.debug(`Created ComplexField: ${instruction.substring(0, 50)}... (result: "${resultText}")`);
+
+    const properties: any = {
+      instruction,
+      result: resultText,
+      instructionFormatting,
+      resultFormatting,
+      multiParagraph: false, // Default - can be set later if needed
+    };
+
+    return new ComplexField(properties);
+  }
+
   private parseRunFromObject(runObj: any): Run | null {
     try {
       // Extract all run content elements (text, tabs, breaks, etc.)
       // Per ECMA-376 §17.3.3 EG_RunInnerContent, runs can contain multiple content types
       const content: RunContent[] = [];
+
+      const toArray = <T,>(value: T | T[] | undefined | null): T[] =>
+        Array.isArray(value) ? value : value !== undefined && value !== null ? [value] : [];
+
+      const extractTextValue = (node: any): string => {
+        if (node === undefined || node === null) {
+          return '';
+        }
+        if (typeof node === 'object') {
+          return XMLBuilder.unescapeXml(node['#text'] || '');
+        }
+        return XMLBuilder.unescapeXml(String(node));
+      };
+
+      const parseBooleanAttr = (value: any): boolean | undefined => {
+        if (value === undefined || value === null) {
+          return undefined;
+        }
+        return value === '1' || value === 1 || value === true || value === 'true';
+      };
 
       // Use _orderedChildren to preserve element order (critical for TOC entries)
       // TOC entries have structure: text → tab → text (heading, tab, page number)
@@ -1051,20 +1259,39 @@ export class DocumentParser {
 
           switch (elementType) {
             case 'w:t': {
-              // Get the text element (could be array or single)
-              const textElements = Array.isArray(runObj["w:t"]) ? runObj["w:t"] : [runObj["w:t"]];
+              const textElements = toArray(runObj["w:t"]);
               const te = textElements[elementIndex];
-
               if (te !== undefined && te !== null) {
-                let text = (typeof te === 'object' && te !== null)
-                  ? (te["#text"] || "")
-                  : (te || "");
-
-                // Unescape XML entities (&lt; → <, &amp; → &, etc.)
-                text = XMLBuilder.unescapeXml(text);
-
+                const text = extractTextValue(te);
                 if (text) {
                   content.push({ type: 'text', value: text });
+                }
+              }
+              break;
+            }
+
+            case 'w:instrText': {
+              const instrElements = toArray(runObj['w:instrText']);
+              const instr = instrElements[elementIndex];
+              if (instr !== undefined && instr !== null) {
+                const text = extractTextValue(instr);
+                content.push({ type: 'instructionText', value: text });
+              }
+              break;
+            }
+
+            case 'w:fldChar': {
+              const fldChars = toArray(runObj['w:fldChar']);
+              const fldChar = fldChars[elementIndex];
+              if (fldChar && typeof fldChar === 'object') {
+                const charType = (fldChar['@_w:fldCharType'] || fldChar['@_fldCharType']) as 'begin' | 'separate' | 'end' | undefined;
+                if (charType) {
+                  content.push({
+                    type: 'fieldChar',
+                    fieldCharType: charType,
+                    fieldCharDirty: parseBooleanAttr(fldChar['@_w:dirty']),
+                    fieldCharLocked: parseBooleanAttr(fldChar['@_w:fldLock'] ?? fldChar['@_w:lock']),
+                  });
                 }
               }
               break;
@@ -1075,7 +1302,8 @@ export class DocumentParser {
               break;
 
             case 'w:br': {
-              const brElement = runObj["w:br"];
+              const brElements = toArray(runObj['w:br']);
+              const brElement = brElements[elementIndex] || brElements[0];
               const breakType = brElement?.['@_w:type'] as BreakType | undefined;
               content.push({ type: 'break', breakType });
               break;
@@ -1103,18 +1331,39 @@ export class DocumentParser {
         // Extract text elements (can be array if multiple <w:t> in one run)
         const textElement = runObj["w:t"];
         if (textElement !== undefined && textElement !== null) {
-          const textElements = Array.isArray(textElement) ? textElement : [textElement];
+          const textElements = toArray(textElement);
 
           for (const te of textElements) {
-            let text = (typeof te === 'object' && te !== null)
-              ? (te["#text"] || "")
-              : (te || "");
-
-            // Unescape XML entities
-            text = XMLBuilder.unescapeXml(text);
-
+            const text = extractTextValue(te);
             if (text) {
               content.push({ type: 'text', value: text });
+            }
+          }
+        }
+
+        const instrTextElement = runObj['w:instrText'];
+        if (instrTextElement !== undefined && instrTextElement !== null) {
+          const instrElements = toArray(instrTextElement);
+          for (const instr of instrElements) {
+            const text = extractTextValue(instr);
+            content.push({ type: 'instructionText', value: text });
+          }
+        }
+
+        const fldCharElement = runObj['w:fldChar'];
+        if (fldCharElement !== undefined && fldCharElement !== null) {
+          const fldChars = toArray(fldCharElement);
+          for (const fldChar of fldChars) {
+            if (fldChar && typeof fldChar === 'object') {
+              const charType = (fldChar['@_w:fldCharType'] || fldChar['@_fldCharType']) as 'begin' | 'separate' | 'end' | undefined;
+              if (charType) {
+                content.push({
+                  type: 'fieldChar',
+                  fieldCharType: charType,
+                  fieldCharDirty: parseBooleanAttr(fldChar['@_w:dirty']),
+                  fieldCharLocked: parseBooleanAttr(fldChar['@_w:fldLock'] ?? fldChar['@_w:lock']),
+                });
+              }
             }
           }
         }

@@ -811,10 +811,8 @@ export class XMLParser {
       }
     }
 
-    // Add the ordered children metadata if there are multiple types of children
-    // This preserves the original document order
-    const uniqueTypes = Object.keys(nameCounts);
-    if (uniqueTypes.length > 1 && orderedChildren.length > 0) {
+    // Always add ordered-children metadata when we have tracked order information
+    if (orderedChildren.length > 0) {
       result["_orderedChildren"] = orderedChildren;
     }
 
