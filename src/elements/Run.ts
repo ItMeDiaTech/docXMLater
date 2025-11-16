@@ -3,11 +3,11 @@
  * A run is the smallest unit of text formatting in a Word document
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { validateRunText, normalizeColor } from '../utils/validation';
+import { deepClone } from '../utils/deepClone';
 import { logSerialization, logTextDirection } from '../utils/diagnostics';
 import { defaultLogger } from '../utils/logger';
-import { deepClone } from '../utils/deepClone';
+import { normalizeColor, validateRunText } from '../utils/validation';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
  * Run content element types
@@ -19,7 +19,9 @@ export type RunContentType =
   | 'break'           // <w:br/> - Line/page/column break
   | 'carriageReturn'  // <w:cr/> - Carriage return
   | 'softHyphen'      // <w:softHyphen/> - Optional hyphen
-  | 'noBreakHyphen';  // <w:noBreakHyphen/> - Non-breaking hyphen
+  | 'noBreakHyphen'   // <w:noBreakHyphen/> - Non-breaking hyphen
+  | 'instructionText' // <w:instrText> - Field instruction text
+  | 'fieldChar';      // <w:fldChar/> - Field character markers
 
 /**
  * Break type for <w:br> elements
@@ -34,10 +36,16 @@ export type BreakType = 'page' | 'column' | 'textWrapping';
 export interface RunContent {
   /** Type of content element */
   type: RunContentType;
-  /** Text value (only for 'text' type) */
+  /** Text value (for 'text' and 'instructionText' types) */
   value?: string;
   /** Break type (only for 'break' type) */
   breakType?: BreakType;
+  /** Field character subtype (only for 'fieldChar' type) */
+  fieldCharType?: 'begin' | 'separate' | 'end';
+  /** Whether the field char is marked dirty */
+  fieldCharDirty?: boolean;
+  /** Whether the field char is locked */
+  fieldCharLocked?: boolean;
 }
 
 /**
@@ -332,12 +340,16 @@ export class Run {
             return '\n';
           case 'carriageReturn':
             return '\r';
-          case 'softHyphen':
-            return '\u00AD';
-          case 'noBreakHyphen':
-            return '\u2011';
-          default:
-            return '';
+        case 'softHyphen':
+          return '\u00AD';
+        case 'noBreakHyphen':
+          return '\u2011';
+        case 'instructionText':
+          return '';
+        case 'fieldChar':
+          return '';
+        default:
+          return '';
         }
       })
       .join('');
@@ -815,6 +827,31 @@ export class Run {
         case 'noBreakHyphen':
           runChildren.push(XMLBuilder.wSelf('noBreakHyphen'));
           break;
+
+        case 'instructionText':
+          runChildren.push(
+            XMLBuilder.w('instrText', { 'xml:space': 'preserve' }, [contentElement.value || ''])
+          );
+          break;
+
+        case 'fieldChar': {
+          if (!contentElement.fieldCharType) {
+            break;
+          }
+          const attrs: Record<string, string> = {
+            'w:fldCharType': contentElement.fieldCharType,
+          };
+          if (contentElement.fieldCharDirty !== undefined) {
+            attrs['w:dirty'] = contentElement.fieldCharDirty ? '1' : '0';
+          }
+          if (contentElement.fieldCharLocked !== undefined) {
+            attrs['w:fldLock'] = contentElement.fieldCharLocked ? '1' : '0';
+          }
+          runChildren.push(
+            XMLBuilder.wSelf('fldChar', Object.keys(attrs).length > 0 ? attrs : undefined)
+          );
+          break;
+        }
       }
     }
 

@@ -3,24 +3,29 @@
  * Contains one or more runs of formatted text
  */
 
-import { Run, RunFormatting } from './Run';
-import { Field } from './Field';
-import { Hyperlink } from './Hyperlink';
+import { deepClone } from '../utils/deepClone';
+import { logParagraphContent, logTextDirection } from '../utils/diagnostics';
+import { defaultLogger } from '../utils/logger';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { Bookmark } from './Bookmark';
-import { Revision } from './Revision';
+import type { Comment } from './Comment';
+import { ComplexField, Field } from './Field';
+import { Hyperlink } from './Hyperlink';
 import { RangeMarker } from './RangeMarker';
-import { Comment } from './Comment';
+import { Revision } from './Revision';
+import { Run, RunFormatting } from './Run';
 import { Shape } from './Shape';
 import { TextBox } from './TextBox';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { logSerialization, logParagraphContent, logTextDirection } from '../utils/diagnostics';
-import { deepClone } from '../utils/deepClone';
-import { defaultLogger } from '../utils/logger';
 
 /**
  * Paragraph alignment options
  */
 export type ParagraphAlignment = 'left' | 'center' | 'right' | 'justify' | 'both';
+
+/**
+ * Type to indicate ComplexField support in paragraph content
+ */
+export type FieldLike = Field | ComplexField;
 
 /**
  * Border style types for paragraph borders
@@ -239,7 +244,7 @@ export interface ParagraphFormatting {
 /**
  * Paragraph content (runs, fields, hyperlinks, revisions, range markers, shapes, text boxes)
  */
-type ParagraphContent = Run | Field | Hyperlink | Revision | RangeMarker | Shape | TextBox;
+type ParagraphContent = Run | FieldLike | Hyperlink | Revision | RangeMarker | Shape | TextBox;
 
 /**
  * Represents a paragraph in a document
@@ -354,11 +359,21 @@ export class Paragraph {
   }
 
   /**
-   * Adds a field to the paragraph
-   * @param field - Field to add
+   * Adds a field to the paragraph (supports both Field and ComplexField)
+   * @param field - Field or ComplexField to add
    * @returns This paragraph for chaining
    */
-  addField(field: Field): this {
+  addField(field: FieldLike): this {
+    this.content.push(field);
+    return this;
+  }
+
+  /**
+   * Adds a complex field to the paragraph
+   * @param field - ComplexField to add
+   * @returns This paragraph for chaining
+   */
+  addComplexField(field: ComplexField): this {
     this.content.push(field);
     return this;
   }
@@ -1757,12 +1772,21 @@ export class Paragraph {
       paragraphChildren.push(comment.toRangeStartXML());
     }
 
-    // Add content (runs, fields, hyperlinks, revisions, shapes, textboxes)
+    // Add content (runs, fields, hyperlinks, revisions, range markers, shapes, text boxes)
     for (let i = 0; i < this.content.length; i++) {
       const item = this.content[i];
       if (item instanceof Field) {
-        // Fields need to be wrapped in a run
+        // Simple Field - wrap in run
         paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
+      } else if (item instanceof ComplexField) {
+        // ComplexField returns array of runs - spread them directly into paragraphChildren
+        const fieldXml = item.toXML();
+        if (Array.isArray(fieldXml)) {
+          paragraphChildren.push(...fieldXml);
+        } else {
+          // Fallback if toXML() doesn't return array
+          paragraphChildren.push(XMLBuilder.w('r', undefined, [fieldXml]));
+        }
       } else if (item instanceof Hyperlink) {
         // Hyperlinks are their own element
         paragraphChildren.push(item.toXML());
