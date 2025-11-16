@@ -3,51 +3,50 @@
  * Provides a simple interface for creating DOCX files without managing ZIP and XML manually
  */
 
-import { ZipHandler } from "../zip/ZipHandler";
-import { DOCX_PATHS } from "../zip/types";
-import { Paragraph } from "../elements/Paragraph";
-import { Table, TableBorder } from "../elements/Table";
-import { TableCell } from "../elements/TableCell";
-import { Section } from "../elements/Section";
+import { Bookmark } from "../elements/Bookmark";
+import { BookmarkManager } from "../elements/BookmarkManager";
+import { Comment } from "../elements/Comment";
+import { CommentManager } from "../elements/CommentManager";
+import { EndnoteManager } from "../elements/EndnoteManager";
+import { Footer } from "../elements/Footer";
+import { FootnoteManager } from "../elements/FootnoteManager";
+import { Header } from "../elements/Header";
+import { HeaderFooterManager } from "../elements/HeaderFooterManager";
+import { Hyperlink } from "../elements/Hyperlink";
 import { Image } from "../elements/Image";
 import { ImageManager } from "../elements/ImageManager";
 import { ImageRun } from "../elements/ImageRun";
-import { Header } from "../elements/Header";
-import { Footer } from "../elements/Footer";
-import { HeaderFooterManager } from "../elements/HeaderFooterManager";
-import { TableOfContents } from "../elements/TableOfContents";
-import { TableOfContentsElement } from "../elements/TableOfContentsElement";
-import { Bookmark } from "../elements/Bookmark";
-import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
-import { BookmarkManager } from "../elements/BookmarkManager";
+import { Paragraph } from "../elements/Paragraph";
+import { RangeMarker } from "../elements/RangeMarker";
 import { Revision, RevisionType } from "../elements/Revision";
 import { RevisionManager } from "../elements/RevisionManager";
-import { RangeMarker } from "../elements/RangeMarker";
-import { Comment } from "../elements/Comment";
-import { CommentManager } from "../elements/CommentManager";
-import { FootnoteManager } from "../elements/FootnoteManager";
-import { EndnoteManager } from "../elements/EndnoteManager";
 import { Run, RunFormatting } from "../elements/Run";
-import { Hyperlink } from "../elements/Hyperlink";
-import { XMLParser } from "../xml/XMLParser";
-import { StylesManager } from "../formatting/StylesManager";
-import { Style, StyleProperties } from "../formatting/Style";
+import { Section } from "../elements/Section";
+import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
+import { Table, TableBorder } from "../elements/Table";
+import { TableCell } from "../elements/TableCell";
+import { TableOfContents } from "../elements/TableOfContents";
+import { TableOfContentsElement } from "../elements/TableOfContentsElement";
 import { NumberingManager } from "../formatting/NumberingManager";
-import { RelationshipManager } from "./RelationshipManager";
-import { DocumentParser } from "./DocumentParser";
-import { DocumentGenerator } from "./DocumentGenerator";
-import { DocumentValidator } from "./DocumentValidator";
-import { ILogger, defaultLogger } from "../utils/logger";
-import {
-  ApplyCustomFormattingOptions,
-  StyleConfig,
-  Heading2Config,
-  Heading2TableOptions,
-} from "../types/styleConfig";
+import { Style, StyleProperties } from "../formatting/Style";
+import { StylesManager } from "../formatting/StylesManager";
 import {
   FormatOptions,
   StyleApplyOptions,
 } from "../types/formatting";
+import {
+  ApplyCustomFormattingOptions,
+  Heading2Config,
+  StyleConfig
+} from "../types/styleConfig";
+import { ILogger, defaultLogger } from "../utils/logger";
+import { XMLParser } from "../xml/XMLParser";
+import { ZipHandler } from "../zip/ZipHandler";
+import { DOCX_PATHS } from "../zip/types";
+import { DocumentGenerator } from "./DocumentGenerator";
+import { DocumentParser } from "./DocumentParser";
+import { DocumentValidator } from "./DocumentValidator";
+import { RelationshipManager } from "./RelationshipManager";
 
 /**
  * Document properties (core and extended)
@@ -2971,12 +2970,12 @@ export class Document {
       underline: h3Config.run?.preserveUnderline ?? false,
     };
     const normalPreserve = {
-      bold: normalConfig.run?.preserveBold ?? false,
+      bold: normalConfig.run?.preserveBold ?? true,
       italic: normalConfig.run?.preserveItalic ?? false,
       underline: normalConfig.run?.preserveUnderline ?? false,
     };
     const listParaPreserve = {
-      bold: listParaConfig.run?.preserveBold ?? false,
+      bold: listParaConfig.run?.preserveBold ?? true,
       italic: listParaConfig.run?.preserveItalic ?? false,
       underline: listParaConfig.run?.preserveUnderline ?? false,
     };
