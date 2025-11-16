@@ -24,7 +24,11 @@ import { TableRow } from "../elements/TableRow";
 import { AbstractNumbering } from "../formatting/AbstractNumbering";
 import { NumberingInstance } from "../formatting/NumberingInstance";
 import { Style, StyleProperties, StyleType } from "../formatting/Style";
-import { logParagraphContent, logParsing, logTextDirection } from "../utils/diagnostics";
+import {
+  logParagraphContent,
+  logParsing,
+  logTextDirection,
+} from "../utils/diagnostics";
 import { defaultLogger } from "../utils/logger";
 import { XMLBuilder } from "../xml/XMLBuilder";
 import { XMLParser } from "../xml/XMLParser";
@@ -213,7 +217,9 @@ export class DocumentParser {
           if (elementXml) {
             // Parse XML to object, then extract the table content
             // IMPORTANT: trimValues: false preserves whitespace from xml:space="preserve" attributes
-            const parsed = XMLParser.parseToObject(elementXml, { trimValues: false });
+            const parsed = XMLParser.parseToObject(elementXml, {
+              trimValues: false,
+            });
             const table = await this.parseTableFromObject(
               parsed["w:tbl"],
               relationshipManager,
@@ -234,7 +240,9 @@ export class DocumentParser {
           if (elementXml) {
             // Parse XML to object, then extract the SDT content
             // IMPORTANT: trimValues: false preserves whitespace from xml:space="preserve" attributes
-            const parsed = XMLParser.parseToObject(elementXml, { trimValues: false });
+            const parsed = XMLParser.parseToObject(elementXml, {
+              trimValues: false,
+            });
             const sdt = await this.parseSDTFromObject(
               parsed["w:sdt"],
               relationshipManager,
@@ -471,7 +479,9 @@ export class DocumentParser {
       }
 
       // Check if we have ordered children metadata from the enhanced parser
-      const orderedChildren = pElement["_orderedChildren"] as Array<{type: string, index: number}> | undefined;
+      const orderedChildren = pElement["_orderedChildren"] as
+        | Array<{ type: string; index: number }>
+        | undefined;
 
       if (orderedChildren && orderedChildren.length > 0) {
         // Use the preserved order from the parser
@@ -481,7 +491,7 @@ export class DocumentParser {
 
           if (elementType === "w:r") {
             const runs = pElement["w:r"];
-            const runArray = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+            const runArray = Array.isArray(runs) ? runs : runs ? [runs] : [];
             if (elementIndex < runArray.length) {
               const child = runArray[elementIndex];
               if (child["w:drawing"]) {
@@ -505,18 +515,31 @@ export class DocumentParser {
             }
           } else if (elementType === "w:hyperlink") {
             const hyperlinks = pElement["w:hyperlink"];
-            const hyperlinkArray = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
+            const hyperlinkArray = Array.isArray(hyperlinks)
+              ? hyperlinks
+              : hyperlinks
+              ? [hyperlinks]
+              : [];
             if (elementIndex < hyperlinkArray.length) {
-              const hyperlink = this.parseHyperlinkFromObject(hyperlinkArray[elementIndex], relationshipManager);
+              const hyperlink = this.parseHyperlinkFromObject(
+                hyperlinkArray[elementIndex],
+                relationshipManager
+              );
               if (hyperlink) {
                 paragraph.addHyperlink(hyperlink);
               }
             }
           } else if (elementType === "w:fldSimple") {
             const fields = pElement["w:fldSimple"];
-            const fieldArray = Array.isArray(fields) ? fields : (fields ? [fields] : []);
+            const fieldArray = Array.isArray(fields)
+              ? fields
+              : fields
+              ? [fields]
+              : [];
             if (elementIndex < fieldArray.length) {
-              const field = this.parseSimpleFieldFromObject(fieldArray[elementIndex]);
+              const field = this.parseSimpleFieldFromObject(
+                fieldArray[elementIndex]
+              );
               if (field) {
                 paragraph.addField(field);
               }
@@ -529,7 +552,7 @@ export class DocumentParser {
 
         // Handle runs (w:r)
         const runs = pElement["w:r"];
-        const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+        const runChildren = Array.isArray(runs) ? runs : runs ? [runs] : [];
 
         for (const child of runChildren) {
           if (child["w:drawing"]) {
@@ -554,10 +577,17 @@ export class DocumentParser {
 
         // Handle hyperlinks (w:hyperlink)
         const hyperlinks = pElement["w:hyperlink"];
-        const hyperlinkChildren = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
+        const hyperlinkChildren = Array.isArray(hyperlinks)
+          ? hyperlinks
+          : hyperlinks
+          ? [hyperlinks]
+          : [];
 
         for (const hyperlinkObj of hyperlinkChildren) {
-          const hyperlink = this.parseHyperlinkFromObject(hyperlinkObj, relationshipManager);
+          const hyperlink = this.parseHyperlinkFromObject(
+            hyperlinkObj,
+            relationshipManager
+          );
           if (hyperlink) {
             paragraph.addHyperlink(hyperlink);
           }
@@ -565,7 +595,11 @@ export class DocumentParser {
 
         // Handle simple fields (w:fldSimple)
         const fields = pElement["w:fldSimple"];
-        const fieldChildren = Array.isArray(fields) ? fields : (fields ? [fields] : []);
+        const fieldChildren = Array.isArray(fields)
+          ? fields
+          : fields
+          ? [fields]
+          : [];
 
         for (const fieldObj of fieldChildren) {
           const field = this.parseSimpleFieldFromObject(fieldObj);
@@ -580,13 +614,13 @@ export class DocumentParser {
 
       // Diagnostic logging for paragraph
       const runs = paragraph.getRuns();
-      const runData = runs.map(run => ({
+      const runData = runs.map((run) => ({
         text: run.getText(),
         rtl: run.getFormatting().rtl,
       }));
       const bidi = paragraph.getFormatting().bidi;
 
-      logParagraphContent('parsing', -1, runData, bidi);
+      logParagraphContent("parsing", -1, runData, bidi);
 
       if (bidi) {
         logTextDirection(`Paragraph has BiDi enabled`);
@@ -627,7 +661,9 @@ export class DocumentParser {
       this.parseParagraphPropertiesFromObject(paraObj["w:pPr"], paragraph);
 
       // Check if we have ordered children metadata from the enhanced parser
-      const orderedChildren = paraObj["_orderedChildren"] as Array<{type: string, index: number}> | undefined;
+      const orderedChildren = paraObj["_orderedChildren"] as
+        | Array<{ type: string; index: number }>
+        | undefined;
 
       if (orderedChildren && orderedChildren.length > 0) {
         // Use the preserved order from the parser
@@ -637,7 +673,7 @@ export class DocumentParser {
 
           if (elementType === "w:r") {
             const runs = paraObj["w:r"];
-            const runArray = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+            const runArray = Array.isArray(runs) ? runs : runs ? [runs] : [];
             if (elementIndex < runArray.length) {
               const child = runArray[elementIndex];
               if (child["w:drawing"]) {
@@ -661,18 +697,31 @@ export class DocumentParser {
             }
           } else if (elementType === "w:hyperlink") {
             const hyperlinks = paraObj["w:hyperlink"];
-            const hyperlinkArray = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
+            const hyperlinkArray = Array.isArray(hyperlinks)
+              ? hyperlinks
+              : hyperlinks
+              ? [hyperlinks]
+              : [];
             if (elementIndex < hyperlinkArray.length) {
-              const hyperlink = this.parseHyperlinkFromObject(hyperlinkArray[elementIndex], relationshipManager);
+              const hyperlink = this.parseHyperlinkFromObject(
+                hyperlinkArray[elementIndex],
+                relationshipManager
+              );
               if (hyperlink) {
                 paragraph.addHyperlink(hyperlink);
               }
             }
           } else if (elementType === "w:fldSimple") {
             const fields = paraObj["w:fldSimple"];
-            const fieldArray = Array.isArray(fields) ? fields : (fields ? [fields] : []);
+            const fieldArray = Array.isArray(fields)
+              ? fields
+              : fields
+              ? [fields]
+              : [];
             if (elementIndex < fieldArray.length) {
-              const field = this.parseSimpleFieldFromObject(fieldArray[elementIndex]);
+              const field = this.parseSimpleFieldFromObject(
+                fieldArray[elementIndex]
+              );
               if (field) {
                 paragraph.addField(field);
               }
@@ -683,7 +732,7 @@ export class DocumentParser {
         // Fallback to sequential processing if no order metadata
         // Handle runs (w:r)
         const runs = paraObj["w:r"];
-        const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+        const runChildren = Array.isArray(runs) ? runs : runs ? [runs] : [];
 
         for (const child of runChildren) {
           if (child["w:drawing"]) {
@@ -710,10 +759,17 @@ export class DocumentParser {
 
         // Handle hyperlinks (w:hyperlink)
         const hyperlinks = paraObj["w:hyperlink"];
-        const hyperlinkChildren = Array.isArray(hyperlinks) ? hyperlinks : (hyperlinks ? [hyperlinks] : []);
+        const hyperlinkChildren = Array.isArray(hyperlinks)
+          ? hyperlinks
+          : hyperlinks
+          ? [hyperlinks]
+          : [];
 
         for (const hyperlinkObj of hyperlinkChildren) {
-          const hyperlink = this.parseHyperlinkFromObject(hyperlinkObj, relationshipManager);
+          const hyperlink = this.parseHyperlinkFromObject(
+            hyperlinkObj,
+            relationshipManager
+          );
           if (hyperlink) {
             paragraph.addHyperlink(hyperlink);
           }
@@ -721,7 +777,11 @@ export class DocumentParser {
 
         // Handle simple fields (w:fldSimple)
         const fields = paraObj["w:fldSimple"];
-        const fieldChildren = Array.isArray(fields) ? fields : (fields ? [fields] : []);
+        const fieldChildren = Array.isArray(fields)
+          ? fields
+          : fields
+          ? [fields]
+          : [];
 
         for (const fieldObj of fieldChildren) {
           const field = this.parseSimpleFieldFromObject(fieldObj);
@@ -778,7 +838,8 @@ export class DocumentParser {
     // Indentation
     if (pPrObj["w:ind"]) {
       const ind = pPrObj["w:ind"];
-      if (ind["@_w:left"]) paragraph.setLeftIndent(parseInt(ind["@_w:left"], 10));
+      if (ind["@_w:left"])
+        paragraph.setLeftIndent(parseInt(ind["@_w:left"], 10));
       if (ind["@_w:right"])
         paragraph.setRightIndent(parseInt(ind["@_w:right"], 10));
       if (ind["@_w:firstLine"])
@@ -832,9 +893,11 @@ export class DocumentParser {
         if (!borderObj) return undefined;
         const border: any = {};
         if (borderObj["@_w:val"]) border.style = borderObj["@_w:val"];
-        if (borderObj["@_w:sz"]) border.size = parseInt(borderObj["@_w:sz"], 10);
+        if (borderObj["@_w:sz"])
+          border.size = parseInt(borderObj["@_w:sz"], 10);
         if (borderObj["@_w:color"]) border.color = borderObj["@_w:color"];
-        if (borderObj["@_w:space"]) border.space = parseInt(borderObj["@_w:space"], 10);
+        if (borderObj["@_w:space"])
+          border.space = parseInt(borderObj["@_w:space"], 10);
         return Object.keys(border).length > 0 ? border : undefined;
       };
 
@@ -872,7 +935,9 @@ export class DocumentParser {
       // Handle both single tab and array of tabs
       const tabElements = Array.isArray(tabsObj["w:tab"])
         ? tabsObj["w:tab"]
-        : tabsObj["w:tab"] ? [tabsObj["w:tab"]] : [];
+        : tabsObj["w:tab"]
+        ? [tabsObj["w:tab"]]
+        : [];
 
       for (const tabObj of tabElements) {
         const tab: any = {};
@@ -894,7 +959,12 @@ export class DocumentParser {
     if (pPrObj["w:widowControl"] !== undefined) {
       const widowControlVal = pPrObj["w:widowControl"]?.["@_w:val"];
       // Parse w:val attribute - can be "0"/"1" or "false"/"true"
-      if (widowControlVal === "0" || widowControlVal === "false" || widowControlVal === false || widowControlVal === 0) {
+      if (
+        widowControlVal === "0" ||
+        widowControlVal === "false" ||
+        widowControlVal === false ||
+        widowControlVal === 0
+      ) {
         paragraph.setWidowControl(false);
       } else {
         // If w:val is "1", "true", true, 1, or undefined (element present without val), default to true
@@ -903,7 +973,10 @@ export class DocumentParser {
     }
 
     // Outline level per ECMA-376 Part 1 §17.3.1.19
-    if (pPrObj["w:outlineLvl"] !== undefined && pPrObj["w:outlineLvl"]["@_w:val"] !== undefined) {
+    if (
+      pPrObj["w:outlineLvl"] !== undefined &&
+      pPrObj["w:outlineLvl"]["@_w:val"] !== undefined
+    ) {
       const level = parseInt(pPrObj["w:outlineLvl"]["@_w:val"], 10);
       if (!isNaN(level) && level >= 0 && level <= 9) {
         paragraph.setOutlineLevel(level);
@@ -918,7 +991,12 @@ export class DocumentParser {
     // Bidirectional layout per ECMA-376 Part 1 §17.3.1.6
     if (pPrObj["w:bidi"] !== undefined) {
       const bidiVal = pPrObj["w:bidi"]?.["@_w:val"];
-      if (bidiVal === "0" || bidiVal === "false" || bidiVal === false || bidiVal === 0) {
+      if (
+        bidiVal === "0" ||
+        bidiVal === "false" ||
+        bidiVal === false ||
+        bidiVal === 0
+      ) {
         paragraph.setBidi(false);
       } else {
         // Default is true when element present without val attribute or val="1"
@@ -944,7 +1022,12 @@ export class DocumentParser {
     // Auto-adjust right indent per ECMA-376 Part 1 §17.3.1.1
     if (pPrObj["w:adjustRightInd"] !== undefined) {
       const adjustRightIndVal = pPrObj["w:adjustRightInd"]?.["@_w:val"];
-      if (adjustRightIndVal === "0" || adjustRightIndVal === "false" || adjustRightIndVal === false || adjustRightIndVal === 0) {
+      if (
+        adjustRightIndVal === "0" ||
+        adjustRightIndVal === "false" ||
+        adjustRightIndVal === false ||
+        adjustRightIndVal === 0
+      ) {
         paragraph.setAdjustRightInd(false);
       } else {
         // Default is true when element present without val attribute or val="1"
@@ -965,14 +1048,21 @@ export class DocumentParser {
       if (framePr["@_w:yAlign"]) frameProps.yAlign = framePr["@_w:yAlign"];
       if (framePr["@_w:hAnchor"]) frameProps.hAnchor = framePr["@_w:hAnchor"];
       if (framePr["@_w:vAnchor"]) frameProps.vAnchor = framePr["@_w:vAnchor"];
-      if (framePr["@_w:hSpace"]) frameProps.hSpace = parseInt(framePr["@_w:hSpace"], 10);
-      if (framePr["@_w:vSpace"]) frameProps.vSpace = parseInt(framePr["@_w:vSpace"], 10);
+      if (framePr["@_w:hSpace"])
+        frameProps.hSpace = parseInt(framePr["@_w:hSpace"], 10);
+      if (framePr["@_w:vSpace"])
+        frameProps.vSpace = parseInt(framePr["@_w:vSpace"], 10);
       if (framePr["@_w:wrap"]) frameProps.wrap = framePr["@_w:wrap"];
       if (framePr["@_w:dropCap"]) frameProps.dropCap = framePr["@_w:dropCap"];
-      if (framePr["@_w:lines"]) frameProps.lines = parseInt(framePr["@_w:lines"], 10);
+      if (framePr["@_w:lines"])
+        frameProps.lines = parseInt(framePr["@_w:lines"], 10);
       if (framePr["@_w:anchorLock"] !== undefined) {
         const anchorLockVal = framePr["@_w:anchorLock"];
-        frameProps.anchorLock = (anchorLockVal === "1" || anchorLockVal === "true" || anchorLockVal === true || anchorLockVal === 1);
+        frameProps.anchorLock =
+          anchorLockVal === "1" ||
+          anchorLockVal === "true" ||
+          anchorLockVal === true ||
+          anchorLockVal === 1;
       }
       if (Object.keys(frameProps).length > 0) {
         paragraph.setFrameProperties(frameProps);
@@ -1011,7 +1101,7 @@ export class DocumentParser {
       if (cnfStyleVal !== undefined) {
         // Ensure it's a string and pad to 12 characters (standard bitmask length)
         // XML parser may convert to number, removing leading zeros
-        const bitmask = String(cnfStyleVal).padStart(12, '0');
+        const bitmask = String(cnfStyleVal).padStart(12, "0");
         paragraph.setConditionalFormatting(bitmask);
       }
     }
@@ -1020,7 +1110,8 @@ export class DocumentParser {
     if (pPrObj["w:pPrChange"]) {
       const changeObj = pPrObj["w:pPrChange"];
       const change: any = {};
-      if (changeObj["@_w:author"]) change.author = String(changeObj["@_w:author"]);
+      if (changeObj["@_w:author"])
+        change.author = String(changeObj["@_w:author"]);
       if (changeObj["@_w:date"]) change.date = String(changeObj["@_w:date"]);
       if (changeObj["@_w:id"]) change.id = String(changeObj["@_w:id"]);
       // Note: Full implementation would parse child <w:pPr> for previousProperties
@@ -1040,48 +1131,55 @@ export class DocumentParser {
   /**
    * NEW: Assemble complex fields from run tokens
    * Groups begin→instr→sep→result→end sequences into ComplexField objects
-   * 
+   *
    * @param paragraph The paragraph containing runs to process
    */
   private assembleComplexFields(paragraph: Paragraph): void {
     const content = paragraph.getContent();
     const groupedContent: any[] = [];
     let fieldRuns: Run[] = [];
-    let fieldState: 'begin' | 'instruction' | 'separate' | 'result' | 'end' | null = null;
+    let fieldState:
+      | "begin"
+      | "instruction"
+      | "separate"
+      | "result"
+      | "end"
+      | null = null;
 
     for (let i = 0; i < content.length; i++) {
       const item = content[i];
 
       if (item instanceof Run) {
         const runContent = item.getContent();
-        const hasFieldContent = runContent.some((c: any) => 
-          c.type === 'fieldChar' || c.type === 'instructionText'
+        const hasFieldContent = runContent.some(
+          (c: any) => c.type === "fieldChar" || c.type === "instructionText"
         );
 
         if (hasFieldContent) {
           // This run is part of a field
           fieldRuns.push(item);
-          const fieldChar = runContent.find((c: any) => c.type === 'fieldChar');
+          const fieldChar = runContent.find((c: any) => c.type === "fieldChar");
 
           if (fieldChar) {
             switch (fieldChar.fieldCharType) {
-              case 'begin':
-                fieldState = 'begin';
+              case "begin":
+                fieldState = "begin";
                 break;
-              case 'separate':
-                fieldState = 'separate';
+              case "separate":
+                fieldState = "separate";
                 break;
-              case 'end':
-                fieldState = 'end';
-                
+              case "end":
+                fieldState = "end";
+
                 // Complete field assembly
-                if (fieldState === 'end' && fieldRuns.length > 0) {
-                  const complexField = this.createComplexFieldFromRuns(fieldRuns);
+                if (fieldState === "end" && fieldRuns.length > 0) {
+                  const complexField =
+                    this.createComplexFieldFromRuns(fieldRuns);
                   if (complexField) {
                     groupedContent.push(complexField);
                   } else {
                     // If assembly failed, add individual runs
-                    fieldRuns.forEach(run => groupedContent.push(run));
+                    fieldRuns.forEach((run) => groupedContent.push(run));
                   }
                   fieldRuns = [];
                   fieldState = null;
@@ -1090,15 +1188,15 @@ export class DocumentParser {
             }
           } else {
             // Instruction text run
-            if (fieldState === 'begin' || fieldState === 'instruction') {
-              fieldState = 'instruction';
+            if (fieldState === "begin" || fieldState === "instruction") {
+              fieldState = "instruction";
             }
           }
         } else {
           // Regular run - add it as-is
           if (fieldRuns.length > 0) {
             // Incomplete field - add as individual runs
-            fieldRuns.forEach(run => groupedContent.push(run));
+            fieldRuns.forEach((run) => groupedContent.push(run));
             fieldRuns = [];
           }
           groupedContent.push(item);
@@ -1107,7 +1205,7 @@ export class DocumentParser {
         // Non-run content (hyperlinks, images, etc.)
         if (fieldRuns.length > 0) {
           // Incomplete field - add as individual runs
-          fieldRuns.forEach(run => groupedContent.push(run));
+          fieldRuns.forEach((run) => groupedContent.push(run));
           fieldRuns = [];
         }
         groupedContent.push(item);
@@ -1116,13 +1214,13 @@ export class DocumentParser {
 
     // Handle any remaining incomplete field
     if (fieldRuns.length > 0) {
-      fieldRuns.forEach(run => groupedContent.push(run));
+      fieldRuns.forEach((run) => groupedContent.push(run));
     }
 
     // Replace paragraph content with grouped content
     // Note: This requires Paragraph to have a replaceContent method
     // If not available, we'll need to clear and re-add elements
-    if ('replaceContent' in paragraph) {
+    if ("replaceContent" in paragraph) {
       (paragraph as any).replaceContent(groupedContent);
     } else {
       // Fallback: Clear and re-add (may be less efficient)
@@ -1141,24 +1239,30 @@ export class DocumentParser {
       }
     }
 
-    defaultLogger.debug(`Assembled ${groupedContent.length - content.length} complex fields in paragraph`);
+    defaultLogger.debug(
+      `Assembled ${
+        groupedContent.length - content.length
+      } complex fields in paragraph`
+    );
   }
 
   /**
    * NEW: Create ComplexField from sequence of field runs
    * Extracts instruction from instrText runs and result from text runs
-   * 
+   *
    * @param fieldRuns Array of runs containing field tokens
    * @returns ComplexField or null if invalid sequence
    */
   private createComplexFieldFromRuns(fieldRuns: Run[]): ComplexField | null {
     if (fieldRuns.length < 2) {
-      defaultLogger.warn('Insufficient runs for ComplexField (minimum 2: begin and instr)');
+      defaultLogger.warn(
+        "Insufficient runs for ComplexField (minimum 2: begin and instr)"
+      );
       return null;
     }
 
-    let instruction = '';
-    let resultText = '';
+    let instruction = "";
+    let resultText = "";
     let instructionFormatting: RunFormatting | undefined;
     let resultFormatting: RunFormatting | undefined;
     let hasBegin = false;
@@ -1169,47 +1273,58 @@ export class DocumentParser {
       const runContent = run.getContent();
 
       // Check for fieldChar tokens
-      const fieldCharToken = runContent.find((c: any) => c.type === 'fieldChar');
+      const fieldCharToken = runContent.find(
+        (c: any) => c.type === "fieldChar"
+      );
       if (fieldCharToken) {
         switch (fieldCharToken.fieldCharType) {
-          case 'begin':
+          case "begin":
             hasBegin = true;
             // Capture formatting from begin run
             instructionFormatting = run.getFormatting();
             break;
-          case 'separate':
+          case "separate":
             hasSeparate = true;
             break;
-          case 'end':
+          case "end":
             hasEnd = true;
             break;
         }
       }
 
       // Check for instruction text
-      const instrText = runContent.find((c: any) => c.type === 'instructionText');
+      const instrText = runContent.find(
+        (c: any) => c.type === "instructionText"
+      );
       if (instrText) {
-        instruction += instrText.value || '';
+        instruction += instrText.value || "";
       }
 
       // Check for result text (between separate and end)
-      const textContent = runContent.find((c: any) => c.type === 'text');
+      const textContent = runContent.find((c: any) => c.type === "text");
       if (textContent && hasSeparate) {
-        resultText += textContent.value || '';
+        resultText += textContent.value || "";
         resultFormatting = run.getFormatting();
       }
     }
 
     // Validate field structure
     if (!hasBegin || !hasEnd || !instruction.trim()) {
-      defaultLogger.warn('Invalid ComplexField structure: missing begin/end or instruction');
+      defaultLogger.warn(
+        "Invalid ComplexField structure: missing begin/end or instruction"
+      );
       return null;
     }
 
     // Trim and clean instruction
     instruction = instruction.trim();
 
-    defaultLogger.debug(`Created ComplexField: ${instruction.substring(0, 50)}... (result: "${resultText}")`);
+    defaultLogger.debug(
+      `Created ComplexField: ${instruction.substring(
+        0,
+        50
+      )}... (result: "${resultText}")`
+    );
 
     const properties: any = {
       instruction,
@@ -1228,15 +1343,19 @@ export class DocumentParser {
       // Per ECMA-376 §17.3.3 EG_RunInnerContent, runs can contain multiple content types
       const content: RunContent[] = [];
 
-      const toArray = <T,>(value: T | T[] | undefined | null): T[] =>
-        Array.isArray(value) ? value : value !== undefined && value !== null ? [value] : [];
+      const toArray = <T>(value: T | T[] | undefined | null): T[] =>
+        Array.isArray(value)
+          ? value
+          : value !== undefined && value !== null
+          ? [value]
+          : [];
 
       const extractTextValue = (node: any): string => {
         if (node === undefined || node === null) {
-          return '';
+          return "";
         }
-        if (typeof node === 'object') {
-          return XMLBuilder.unescapeXml(node['#text'] || '');
+        if (typeof node === "object") {
+          return XMLBuilder.unescapeXml(node["#text"] || "");
         }
         return XMLBuilder.unescapeXml(String(node));
       };
@@ -1245,84 +1364,94 @@ export class DocumentParser {
         if (value === undefined || value === null) {
           return undefined;
         }
-        return value === '1' || value === 1 || value === true || value === 'true';
+        return (
+          value === "1" || value === 1 || value === true || value === "true"
+        );
       };
 
       // Use _orderedChildren to preserve element order (critical for TOC entries)
       // TOC entries have structure: text → tab → text (heading, tab, page number)
       if (runObj["_orderedChildren"]) {
-
         // Process elements in their original order
         for (const child of runObj["_orderedChildren"]) {
           const elementType = child.type;
           const elementIndex = child.index;
 
           switch (elementType) {
-            case 'w:t': {
+            case "w:t": {
               const textElements = toArray(runObj["w:t"]);
               const te = textElements[elementIndex];
               if (te !== undefined && te !== null) {
                 const text = extractTextValue(te);
                 if (text) {
-                  content.push({ type: 'text', value: text });
+                  content.push({ type: "text", value: text });
                 }
               }
               break;
             }
 
-            case 'w:instrText': {
-              const instrElements = toArray(runObj['w:instrText']);
+            case "w:instrText": {
+              const instrElements = toArray(runObj["w:instrText"]);
               const instr = instrElements[elementIndex];
               if (instr !== undefined && instr !== null) {
                 const text = extractTextValue(instr);
-                content.push({ type: 'instructionText', value: text });
+                content.push({ type: "instructionText", value: text });
               }
               break;
             }
 
-            case 'w:fldChar': {
-              const fldChars = toArray(runObj['w:fldChar']);
+            case "w:fldChar": {
+              const fldChars = toArray(runObj["w:fldChar"]);
               const fldChar = fldChars[elementIndex];
-              if (fldChar && typeof fldChar === 'object') {
-                const charType = (fldChar['@_w:fldCharType'] || fldChar['@_fldCharType']) as 'begin' | 'separate' | 'end' | undefined;
+              if (fldChar && typeof fldChar === "object") {
+                const charType = (fldChar["@_w:fldCharType"] ||
+                  fldChar["@_fldCharType"]) as
+                  | "begin"
+                  | "separate"
+                  | "end"
+                  | undefined;
                 if (charType) {
                   content.push({
-                    type: 'fieldChar',
+                    type: "fieldChar",
                     fieldCharType: charType,
-                    fieldCharDirty: parseBooleanAttr(fldChar['@_w:dirty']),
-                    fieldCharLocked: parseBooleanAttr(fldChar['@_w:fldLock'] ?? fldChar['@_w:lock']),
+                    fieldCharDirty: parseBooleanAttr(fldChar["@_w:dirty"]),
+                    fieldCharLocked: parseBooleanAttr(
+                      fldChar["@_w:fldLock"] ?? fldChar["@_w:lock"]
+                    ),
                   });
                 }
               }
               break;
             }
 
-            case 'w:tab':
-              content.push({ type: 'tab' });
+            case "w:tab":
+              content.push({ type: "tab" });
               break;
 
-            case 'w:br': {
-              const brElements = toArray(runObj['w:br']);
+            case "w:br": {
+              const brElements = toArray(runObj["w:br"]);
               const brElement = brElements[elementIndex] || brElements[0];
-              const breakType = brElement?.['@_w:type'] as BreakType | undefined;
-              content.push({ type: 'break', breakType });
+              const breakType = brElement?.["@_w:type"] as
+                | BreakType
+                | undefined;
+              content.push({ type: "break", breakType });
               break;
             }
 
-            case 'w:cr':
-              content.push({ type: 'carriageReturn' });
+            case "w:cr":
+              content.push({ type: "carriageReturn" });
               break;
 
-            case 'w:softHyphen':
-              content.push({ type: 'softHyphen' });
+            case "w:softHyphen":
+              content.push({ type: "softHyphen" });
               break;
 
-            case 'w:noBreakHyphen':
-              content.push({ type: 'noBreakHyphen' });
+            case "w:noBreakHyphen":
+              content.push({ type: "noBreakHyphen" });
               break;
 
             // Ignore formatting elements (w:rPr) - handled separately
-            case 'w:rPr':
+            case "w:rPr":
               break;
           }
         }
@@ -1336,32 +1465,39 @@ export class DocumentParser {
           for (const te of textElements) {
             const text = extractTextValue(te);
             if (text) {
-              content.push({ type: 'text', value: text });
+              content.push({ type: "text", value: text });
             }
           }
         }
 
-        const instrTextElement = runObj['w:instrText'];
+        const instrTextElement = runObj["w:instrText"];
         if (instrTextElement !== undefined && instrTextElement !== null) {
           const instrElements = toArray(instrTextElement);
           for (const instr of instrElements) {
             const text = extractTextValue(instr);
-            content.push({ type: 'instructionText', value: text });
+            content.push({ type: "instructionText", value: text });
           }
         }
 
-        const fldCharElement = runObj['w:fldChar'];
+        const fldCharElement = runObj["w:fldChar"];
         if (fldCharElement !== undefined && fldCharElement !== null) {
           const fldChars = toArray(fldCharElement);
           for (const fldChar of fldChars) {
-            if (fldChar && typeof fldChar === 'object') {
-              const charType = (fldChar['@_w:fldCharType'] || fldChar['@_fldCharType']) as 'begin' | 'separate' | 'end' | undefined;
+            if (fldChar && typeof fldChar === "object") {
+              const charType = (fldChar["@_w:fldCharType"] ||
+                fldChar["@_fldCharType"]) as
+                | "begin"
+                | "separate"
+                | "end"
+                | undefined;
               if (charType) {
                 content.push({
-                  type: 'fieldChar',
+                  type: "fieldChar",
                   fieldCharType: charType,
-                  fieldCharDirty: parseBooleanAttr(fldChar['@_w:dirty']),
-                  fieldCharLocked: parseBooleanAttr(fldChar['@_w:fldLock'] ?? fldChar['@_w:lock']),
+                  fieldCharDirty: parseBooleanAttr(fldChar["@_w:dirty"]),
+                  fieldCharLocked: parseBooleanAttr(
+                    fldChar["@_w:fldLock"] ?? fldChar["@_w:lock"]
+                  ),
                 });
               }
             }
@@ -1370,25 +1506,25 @@ export class DocumentParser {
 
         // Extract other elements (order doesn't matter in simple case)
         if (runObj["w:tab"] !== undefined) {
-          content.push({ type: 'tab' });
+          content.push({ type: "tab" });
         }
 
         if (runObj["w:br"] !== undefined) {
           const brElement = runObj["w:br"];
-          const breakType = brElement?.['@_w:type'] as BreakType | undefined;
-          content.push({ type: 'break', breakType });
+          const breakType = brElement?.["@_w:type"] as BreakType | undefined;
+          content.push({ type: "break", breakType });
         }
 
         if (runObj["w:cr"] !== undefined) {
-          content.push({ type: 'carriageReturn' });
+          content.push({ type: "carriageReturn" });
         }
 
         if (runObj["w:softHyphen"] !== undefined) {
-          content.push({ type: 'softHyphen' });
+          content.push({ type: "softHyphen" });
         }
 
         if (runObj["w:noBreakHyphen"] !== undefined) {
-          content.push({ type: 'noBreakHyphen' });
+          content.push({ type: "noBreakHyphen" });
         }
       }
 
@@ -1404,7 +1540,10 @@ export class DocumentParser {
       if (formatting.rtl) {
         logTextDirection(`Run with RTL: "${text}"`);
       }
-      logParsing(`Parsed run: "${text}" (${content.length} content element(s))`, { rtl: formatting.rtl || false });
+      logParsing(
+        `Parsed run: "${text}" (${content.length} content element(s))`,
+        { rtl: formatting.rtl || false }
+      );
 
       return run;
     } catch (error) {
@@ -1424,12 +1563,12 @@ export class DocumentParser {
 
       // Parse runs inside the hyperlink
       const runs = hyperlinkObj["w:r"];
-      const runChildren = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+      const runChildren = Array.isArray(runs) ? runs : runs ? [runs] : [];
 
       // Parse ALL runs to handle multi-run hyperlinks (e.g., varied formatting within one hyperlink)
       // Google Docs often splits hyperlinks by formatting changes, creating multiple runs
       const parsedRuns: Run[] = [];
-      let text = '';
+      let text = "";
       let formatting: RunFormatting = {};
 
       if (runChildren.length > 0) {
@@ -1454,7 +1593,8 @@ export class DocumentParser {
       // Resolve URL from relationship if external hyperlink
       let url: string | undefined;
       if (relationshipId) {
-        const relationship = relationshipManager.getRelationship(relationshipId);
+        const relationship =
+          relationshipManager.getRelationship(relationshipId);
         if (relationship) {
           url = relationship.getTarget();
         }
@@ -1462,14 +1602,14 @@ export class DocumentParser {
 
       // Create hyperlink with basic properties
       // NOTE: Do NOT use anchor (bookmark ID) as display text - it should only be used for navigation
-      let displayText = text || url || '[Link]';
+      let displayText = text || url || "[Link]";
 
       // Warn if hyperlink has no display text (possible TOC corruption or malformed hyperlink)
       if (!text && anchor) {
         defaultLogger.warn(
           `[DocumentParser] Hyperlink to anchor "${anchor}" has no display text. ` +
-          `Using placeholder "[Link]" to prevent bookmark ID from appearing as visible text. ` +
-          `This may indicate a corrupted TOC or malformed hyperlink in the source document.`
+            `Using placeholder "[Link]" to prevent bookmark ID from appearing as visible text. ` +
+            `This may indicate a corrupted TOC or malformed hyperlink in the source document.`
         );
       }
 
@@ -1490,7 +1630,12 @@ export class DocumentParser {
 
       return hyperlink;
     } catch (error) {
-      defaultLogger.warn('[DocumentParser] Failed to parse hyperlink:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse hyperlink:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
       return null;
     }
   }
@@ -1503,7 +1648,10 @@ export class DocumentParser {
    * @param resetFormatting - Whether to reset hyperlinks to standard formatting
    * @private
    */
-  private mergeConsecutiveHyperlinks(paragraph: Paragraph, resetFormatting: boolean = false): void {
+  private mergeConsecutiveHyperlinks(
+    paragraph: Paragraph,
+    resetFormatting: boolean = false
+  ): void {
     const content = paragraph.getContent();
     if (!content || content.length < 2) return;
 
@@ -1516,8 +1664,8 @@ export class DocumentParser {
       const item = content[i];
 
       if (item instanceof Hyperlink) {
-        const url = item.getUrl() || '';
-        const anchor = item.getAnchor() || '';
+        const url = item.getUrl() || "";
+        const anchor = item.getAnchor() || "";
         const key = `${url}|${anchor}`; // Unique key for URL+anchor combination
 
         if (!hyperlinkGroups.has(key)) {
@@ -1555,22 +1703,24 @@ export class DocumentParser {
       const item = content[i];
 
       if (item instanceof Hyperlink) {
-        const url = item.getUrl() || '';
-        const anchor = item.getAnchor() || '';
+        const url = item.getUrl() || "";
+        const anchor = item.getAnchor() || "";
         const key = `${url}|${anchor}`;
         const group = hyperlinkGroups.get(key)!;
 
         if (group.length > 1 && group[0] === item) {
           // This is the first hyperlink in a group that needs merging
           // Collect all text from the group
-          const mergedText = group.map(h => h.getText()).join('');
+          const mergedText = group.map((h) => h.getText()).join("");
 
           // Create merged hyperlink using first hyperlink's properties
           const mergedHyperlink = new Hyperlink({
             url: item.getUrl(),
             anchor: item.getAnchor(),
             text: mergedText,
-            formatting: resetFormatting ? this.getStandardHyperlinkFormatting() : item.getFormatting(),
+            formatting: resetFormatting
+              ? this.getStandardHyperlinkFormatting()
+              : item.getFormatting(),
             tooltip: item.getTooltip(),
             relationshipId: item.getRelationshipId(),
           });
@@ -1629,9 +1779,9 @@ export class DocumentParser {
    */
   private getStandardHyperlinkFormatting(): any {
     return {
-      font: 'Calibri',
-      color: '0563C1', // Standard hyperlink blue
-      underline: 'single'
+      font: "Verdana",
+      color: "0000FF", // Standard hyperlink blue
+      underline: "single",
     };
   }
 
@@ -1651,7 +1801,8 @@ export class DocumentParser {
 
       // Extract field type from instruction (first word)
       const typeMatch = instruction.trim().match(/^(\w+)/);
-      const type = (typeMatch?.[1] || 'PAGE') as import('../elements/Field').FieldType;
+      const type = (typeMatch?.[1] ||
+        "PAGE") as import("../elements/Field").FieldType;
 
       // Parse run formatting from w:rPr if present
       let formatting: RunFormatting | undefined;
@@ -1670,7 +1821,12 @@ export class DocumentParser {
 
       return field;
     } catch (error) {
-      defaultLogger.warn('[DocumentParser] Failed to parse field:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse field:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
       return null;
     }
   }
@@ -1806,11 +1962,13 @@ export class DocumentParser {
     if (rPrObj["w:eastAsianLayout"]) {
       const layoutObj = rPrObj["w:eastAsianLayout"];
       const layout: any = {};
-      if (layoutObj["@_w:id"] !== undefined) layout.id = Number(layoutObj["@_w:id"]);
+      if (layoutObj["@_w:id"] !== undefined)
+        layout.id = Number(layoutObj["@_w:id"]);
       if (layoutObj["@_w:vert"]) layout.vert = true;
       if (layoutObj["@_w:vertCompress"]) layout.vertCompress = true;
       if (layoutObj["@_w:combine"]) layout.combine = true;
-      if (layoutObj["@_w:combineBrackets"]) layout.combineBrackets = layoutObj["@_w:combineBrackets"];
+      if (layoutObj["@_w:combineBrackets"])
+        layout.combineBrackets = layoutObj["@_w:combineBrackets"];
 
       if (Object.keys(layout).length > 0) {
         run.setEastAsianLayout(layout);
@@ -1923,7 +2081,10 @@ export class DocumentParser {
           locked: toBool(anchorObj["@_locked"]),
           layoutInCell: toBool(anchorObj["@_layoutInCell"]),
           allowOverlap: toBool(anchorObj["@_allowOverlap"]),
-          relativeHeight: parseInt(anchorObj["@_relativeHeight"] || "251658240", 10),
+          relativeHeight: parseInt(
+            anchorObj["@_relativeHeight"] || "251658240",
+            10
+          ),
         };
       }
 
@@ -1969,13 +2130,17 @@ export class DocumentParser {
       // Get the image from the relationship
       const relationship = relationshipManager.getRelationship(relationshipId);
       if (!relationship) {
-        defaultLogger.warn(`[DocumentParser] Image relationship not found: ${relationshipId}`);
+        defaultLogger.warn(
+          `[DocumentParser] Image relationship not found: ${relationshipId}`
+        );
         return null;
       }
 
       const imageTarget = relationship.getTarget();
       if (!imageTarget) {
-        defaultLogger.warn(`[DocumentParser] Image relationship has no target: ${relationshipId}`);
+        defaultLogger.warn(
+          `[DocumentParser] Image relationship has no target: ${relationshipId}`
+        );
         return null;
       }
 
@@ -1983,15 +2148,17 @@ export class DocumentParser {
       const imagePath = `word/${imageTarget}`;
       const imageData = zipHandler.getFileAsBuffer(imagePath);
       if (!imageData) {
-        defaultLogger.warn(`[DocumentParser] Image file not found: ${imagePath}`);
+        defaultLogger.warn(
+          `[DocumentParser] Image file not found: ${imagePath}`
+        );
         return null;
       }
 
       // Detect image extension from path
-      const extension = imagePath.split('.').pop()?.toLowerCase() || 'png';
+      const extension = imagePath.split(".").pop()?.toLowerCase() || "png";
 
       // Create image from buffer with all properties
-      const { Image: ImageClass } = await import('../elements/Image');
+      const { Image: ImageClass } = await import("../elements/Image");
       const image = await ImageClass.create({
         source: imageData,
         width,
@@ -2013,7 +2180,12 @@ export class DocumentParser {
       // Create and return ImageRun
       return new ImageRun(image);
     } catch (error) {
-      defaultLogger.warn('[DocumentParser] Failed to parse drawing:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse drawing:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
       return null;
     }
   }
@@ -2030,25 +2202,34 @@ export class DocumentParser {
     const wrapTopBottom = anchorObj["wp:wrapTopAndBottom"];
     const wrapNone = anchorObj["wp:wrapNone"];
 
-    const wrapObj = wrapSquare || wrapTight || wrapThrough || wrapTopBottom || wrapNone;
+    const wrapObj =
+      wrapSquare || wrapTight || wrapThrough || wrapTopBottom || wrapNone;
     if (!wrapObj) {
       return undefined;
     }
 
     // Determine wrap type
-    let type: any = 'square';
-    if (wrapTight) type = 'tight';
-    else if (wrapThrough) type = 'through';
-    else if (wrapTopBottom) type = 'topAndBottom';
-    else if (wrapNone) type = 'none';
+    let type: any = "square";
+    if (wrapTight) type = "tight";
+    else if (wrapThrough) type = "through";
+    else if (wrapTopBottom) type = "topAndBottom";
+    else if (wrapNone) type = "none";
 
     return {
       type,
-      side: wrapObj["@_wrapText"] || 'bothSides',
-      distanceTop: anchorObj["@_distT"] ? parseInt(anchorObj["@_distT"], 10) : undefined,
-      distanceBottom: anchorObj["@_distB"] ? parseInt(anchorObj["@_distB"], 10) : undefined,
-      distanceLeft: anchorObj["@_distL"] ? parseInt(anchorObj["@_distL"], 10) : undefined,
-      distanceRight: anchorObj["@_distR"] ? parseInt(anchorObj["@_distR"], 10) : undefined,
+      side: wrapObj["@_wrapText"] || "bothSides",
+      distanceTop: anchorObj["@_distT"]
+        ? parseInt(anchorObj["@_distT"], 10)
+        : undefined,
+      distanceBottom: anchorObj["@_distB"]
+        ? parseInt(anchorObj["@_distB"], 10)
+        : undefined,
+      distanceLeft: anchorObj["@_distL"]
+        ? parseInt(anchorObj["@_distL"], 10)
+        : undefined,
+      distanceRight: anchorObj["@_distR"]
+        ? parseInt(anchorObj["@_distR"], 10)
+        : undefined,
     };
   }
 
@@ -2066,36 +2247,48 @@ export class DocumentParser {
 
     // Parse horizontal position
     const horizontal: any = {
-      anchor: posH["@_relativeFrom"] || 'page',
+      anchor: posH["@_relativeFrom"] || "page",
     };
 
     if (posH["wp:posOffset"]) {
       const offsetText = Array.isArray(posH["wp:posOffset"])
         ? posH["wp:posOffset"][0]
         : posH["wp:posOffset"];
-      horizontal.offset = parseInt(typeof offsetText === 'string' ? offsetText : offsetText?.["#text"] || "0", 10);
+      horizontal.offset = parseInt(
+        typeof offsetText === "string"
+          ? offsetText
+          : offsetText?.["#text"] || "0",
+        10
+      );
     } else if (posH["wp:align"]) {
       const alignText = Array.isArray(posH["wp:align"])
         ? posH["wp:align"][0]
         : posH["wp:align"];
-      horizontal.alignment = typeof alignText === 'string' ? alignText : alignText?.["#text"];
+      horizontal.alignment =
+        typeof alignText === "string" ? alignText : alignText?.["#text"];
     }
 
     // Parse vertical position
     const vertical: any = {
-      anchor: posV["@_relativeFrom"] || 'page',
+      anchor: posV["@_relativeFrom"] || "page",
     };
 
     if (posV["wp:posOffset"]) {
       const offsetText = Array.isArray(posV["wp:posOffset"])
         ? posV["wp:posOffset"][0]
         : posV["wp:posOffset"];
-      vertical.offset = parseInt(typeof offsetText === 'string' ? offsetText : offsetText?.["#text"] || "0", 10);
+      vertical.offset = parseInt(
+        typeof offsetText === "string"
+          ? offsetText
+          : offsetText?.["#text"] || "0",
+        10
+      );
     } else if (posV["wp:align"]) {
       const alignText = Array.isArray(posV["wp:align"])
         ? posV["wp:align"][0]
         : posV["wp:align"];
-      vertical.alignment = typeof alignText === 'string' ? alignText : alignText?.["#text"];
+      vertical.alignment =
+        typeof alignText === "string" ? alignText : alignText?.["#text"];
     }
 
     return { horizontal, vertical };
@@ -2177,7 +2370,7 @@ export class DocumentParser {
 
       // Parse table rows (w:tr)
       const rows = tableObj["w:tr"];
-      const rowChildren = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+      const rowChildren = Array.isArray(rows) ? rows : rows ? [rows] : [];
 
       for (const rowObj of rowChildren) {
         const row = await this.parseTableRowFromObject(
@@ -2193,7 +2386,12 @@ export class DocumentParser {
 
       return table;
     } catch (error) {
-      defaultLogger.warn('[DocumentParser] Failed to parse table:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse table:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
       return null;
     }
   }
@@ -2211,14 +2409,22 @@ export class DocumentParser {
 
       if (tblpPr["@_w:tblpX"]) position.x = parseInt(tblpPr["@_w:tblpX"], 10);
       if (tblpPr["@_w:tblpY"]) position.y = parseInt(tblpPr["@_w:tblpY"], 10);
-      if (tblpPr["@_w:tblpXSpec"]) position.horizontalAnchor = tblpPr["@_w:tblpXSpec"];
-      if (tblpPr["@_w:tblpYSpec"]) position.verticalAnchor = tblpPr["@_w:tblpYSpec"];
-      if (tblpPr["@_w:tblpXAlign"]) position.horizontalAlignment = tblpPr["@_w:tblpXAlign"];
-      if (tblpPr["@_w:tblpYAlign"]) position.verticalAlignment = tblpPr["@_w:tblpYAlign"];
-      if (tblpPr["@_w:leftFromText"]) position.leftFromText = parseInt(tblpPr["@_w:leftFromText"], 10);
-      if (tblpPr["@_w:rightFromText"]) position.rightFromText = parseInt(tblpPr["@_w:rightFromText"], 10);
-      if (tblpPr["@_w:topFromText"]) position.topFromText = parseInt(tblpPr["@_w:topFromText"], 10);
-      if (tblpPr["@_w:bottomFromText"]) position.bottomFromText = parseInt(tblpPr["@_w:bottomFromText"], 10);
+      if (tblpPr["@_w:tblpXSpec"])
+        position.horizontalAnchor = tblpPr["@_w:tblpXSpec"];
+      if (tblpPr["@_w:tblpYSpec"])
+        position.verticalAnchor = tblpPr["@_w:tblpYSpec"];
+      if (tblpPr["@_w:tblpXAlign"])
+        position.horizontalAlignment = tblpPr["@_w:tblpXAlign"];
+      if (tblpPr["@_w:tblpYAlign"])
+        position.verticalAlignment = tblpPr["@_w:tblpYAlign"];
+      if (tblpPr["@_w:leftFromText"])
+        position.leftFromText = parseInt(tblpPr["@_w:leftFromText"], 10);
+      if (tblpPr["@_w:rightFromText"])
+        position.rightFromText = parseInt(tblpPr["@_w:rightFromText"], 10);
+      if (tblpPr["@_w:topFromText"])
+        position.topFromText = parseInt(tblpPr["@_w:topFromText"], 10);
+      if (tblpPr["@_w:bottomFromText"])
+        position.bottomFromText = parseInt(tblpPr["@_w:bottomFromText"], 10);
 
       if (Object.keys(position).length > 0) {
         table.setPosition(position);
@@ -2260,7 +2466,10 @@ export class DocumentParser {
 
     // Parse cell spacing
     if (tblPrObj["w:tblCellSpacing"]) {
-      const spacing = parseInt(tblPrObj["w:tblCellSpacing"]["@_w:w"] || "0", 10);
+      const spacing = parseInt(
+        tblPrObj["w:tblCellSpacing"]["@_w:w"] || "0",
+        10
+      );
       const spacingType = tblPrObj["w:tblCellSpacing"]["@_w:type"] || "dxa";
       if (spacing > 0) {
         table.setCellSpacing(spacing);
@@ -2272,7 +2481,7 @@ export class DocumentParser {
     if (tblPrObj["w:jc"]) {
       const alignment = tblPrObj["w:jc"]["@_w:val"];
       if (alignment) {
-        table.setAlignment(alignment as 'left' | 'center' | 'right');
+        table.setAlignment(alignment as "left" | "center" | "right");
       }
     }
   }
@@ -2304,7 +2513,7 @@ export class DocumentParser {
 
       // Parse table cells (w:tc)
       const cells = rowObj["w:tc"];
-      const cellChildren = Array.isArray(cells) ? cells : (cells ? [cells] : []);
+      const cellChildren = Array.isArray(cells) ? cells : cells ? [cells] : [];
 
       for (const cellObj of cellChildren) {
         const cell = await this.parseTableCellFromObject(
@@ -2320,7 +2529,12 @@ export class DocumentParser {
 
       return row;
     } catch (error) {
-      defaultLogger.warn('[DocumentParser] Failed to parse table row:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse table row:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
       return null;
     }
   }
@@ -2425,7 +2639,9 @@ export class DocumentParser {
 
     // Parse table borders exception (w:tblBorders)
     if (tblPrExObj["w:tblBorders"]) {
-      exceptions.borders = this.parseTableBordersFromObject(tblPrExObj["w:tblBorders"]);
+      exceptions.borders = this.parseTableBordersFromObject(
+        tblPrExObj["w:tblBorders"]
+      );
     }
 
     // Parse shading exception (w:shd)
@@ -2448,7 +2664,14 @@ export class DocumentParser {
     if (!bordersObj) return undefined;
 
     const borders: any = {};
-    const borderNames = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'];
+    const borderNames = [
+      "top",
+      "bottom",
+      "left",
+      "right",
+      "insideH",
+      "insideV",
+    ];
 
     for (const name of borderNames) {
       const borderKey = `w:${name}`;
@@ -2457,9 +2680,12 @@ export class DocumentParser {
         borders[name] = {};
 
         if (borderObj["@_w:val"]) borders[name].style = borderObj["@_w:val"];
-        if (borderObj["@_w:sz"]) borders[name].size = parseInt(borderObj["@_w:sz"], 10);
-        if (borderObj["@_w:space"]) borders[name].space = parseInt(borderObj["@_w:space"], 10);
-        if (borderObj["@_w:color"]) borders[name].color = borderObj["@_w:color"];
+        if (borderObj["@_w:sz"])
+          borders[name].size = parseInt(borderObj["@_w:sz"], 10);
+        if (borderObj["@_w:space"])
+          borders[name].space = parseInt(borderObj["@_w:space"], 10);
+        if (borderObj["@_w:color"])
+          borders[name].color = borderObj["@_w:color"];
       }
     }
 
@@ -2505,15 +2731,21 @@ export class DocumentParser {
             if (!borderObj) return undefined;
             return {
               style: borderObj["@_w:val"] || "single",
-              size: borderObj["@_w:sz"] ? parseInt(borderObj["@_w:sz"], 10) : undefined,
+              size: borderObj["@_w:sz"]
+                ? parseInt(borderObj["@_w:sz"], 10)
+                : undefined,
               color: borderObj["@_w:color"] || undefined,
             };
           };
 
-          if (bordersObj["w:top"]) borders.top = parseBorder(bordersObj["w:top"]);
-          if (bordersObj["w:bottom"]) borders.bottom = parseBorder(bordersObj["w:bottom"]);
-          if (bordersObj["w:left"]) borders.left = parseBorder(bordersObj["w:left"]);
-          if (bordersObj["w:right"]) borders.right = parseBorder(bordersObj["w:right"]);
+          if (bordersObj["w:top"])
+            borders.top = parseBorder(bordersObj["w:top"]);
+          if (bordersObj["w:bottom"])
+            borders.bottom = parseBorder(bordersObj["w:bottom"]);
+          if (bordersObj["w:left"])
+            borders.left = parseBorder(bordersObj["w:left"]);
+          if (bordersObj["w:right"])
+            borders.right = parseBorder(bordersObj["w:right"]);
 
           if (Object.keys(borders).length > 0) {
             cell.setBorders(borders);
@@ -2557,7 +2789,10 @@ export class DocumentParser {
         // Parse vertical alignment (w:vAlign)
         if (tcPr["w:vAlign"]) {
           const valign = tcPr["w:vAlign"]["@_w:val"];
-          if (valign && (valign === "top" || valign === "center" || valign === "bottom")) {
+          if (
+            valign &&
+            (valign === "top" || valign === "center" || valign === "bottom")
+          ) {
             cell.setVerticalAlignment(valign);
           }
         }
@@ -2607,7 +2842,11 @@ export class DocumentParser {
 
       // Parse paragraphs in cell (w:p)
       const paragraphs = cellObj["w:p"];
-      const paraChildren = Array.isArray(paragraphs) ? paragraphs : (paragraphs ? [paragraphs] : []);
+      const paraChildren = Array.isArray(paragraphs)
+        ? paragraphs
+        : paragraphs
+        ? [paragraphs]
+        : [];
 
       for (const paraObj of paraChildren) {
         const paragraph = await this.parseParagraphFromObject(
@@ -2623,7 +2862,12 @@ export class DocumentParser {
 
       return cell;
     } catch (error) {
-      defaultLogger.warn('[DocumentParser] Failed to parse table cell:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse table cell:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
       return null;
     }
   }
@@ -2640,86 +2884,95 @@ export class DocumentParser {
       const properties: any = {};
 
       // Parse SDT properties (sdtPr)
-      const sdtPr = sdtObj['w:sdtPr'];
+      const sdtPr = sdtObj["w:sdtPr"];
       if (sdtPr) {
         // Parse ID
-        const idElement = sdtPr['w:id'];
-        if (idElement && idElement['@_w:val']) {
-          properties.id = parseInt(idElement['@_w:val'], 10);
+        const idElement = sdtPr["w:id"];
+        if (idElement && idElement["@_w:val"]) {
+          properties.id = parseInt(idElement["@_w:val"], 10);
         }
 
         // Parse tag
-        const tagElement = sdtPr['w:tag'];
-        if (tagElement && tagElement['@_w:val']) {
-          properties.tag = tagElement['@_w:val'];
+        const tagElement = sdtPr["w:tag"];
+        if (tagElement && tagElement["@_w:val"]) {
+          properties.tag = tagElement["@_w:val"];
         }
 
         // Parse lock
-        const lockElement = sdtPr['w:lock'];
-        if (lockElement && lockElement['@_w:val']) {
-          properties.lock = lockElement['@_w:val'];
+        const lockElement = sdtPr["w:lock"];
+        if (lockElement && lockElement["@_w:val"]) {
+          properties.lock = lockElement["@_w:val"];
         }
 
         // Parse alias
-        const aliasElement = sdtPr['w:alias'];
-        if (aliasElement && aliasElement['@_w:val']) {
-          properties.alias = aliasElement['@_w:val'];
+        const aliasElement = sdtPr["w:alias"];
+        if (aliasElement && aliasElement["@_w:val"]) {
+          properties.alias = aliasElement["@_w:val"];
         }
 
         // Parse control type from various elements
-        if (sdtPr['w:richText']) {
-          properties.controlType = 'richText';
-        } else if (sdtPr['w:text']) {
-          properties.controlType = 'plainText';
-          const textElement = sdtPr['w:text'];
+        if (sdtPr["w:richText"]) {
+          properties.controlType = "richText";
+        } else if (sdtPr["w:text"]) {
+          properties.controlType = "plainText";
+          const textElement = sdtPr["w:text"];
           properties.plainText = {
-            multiLine: textElement?.['@_w:multiLine'] === '1' || textElement?.['@_w:multiLine'] === 'true'
+            multiLine:
+              textElement?.["@_w:multiLine"] === "1" ||
+              textElement?.["@_w:multiLine"] === "true",
           };
-        } else if (sdtPr['w:comboBox']) {
-          properties.controlType = 'comboBox';
-          const comboBoxElement = sdtPr['w:comboBox'];
+        } else if (sdtPr["w:comboBox"]) {
+          properties.controlType = "comboBox";
+          const comboBoxElement = sdtPr["w:comboBox"];
           properties.comboBox = this.parseListItems(comboBoxElement);
-        } else if (sdtPr['w:dropDownList']) {
-          properties.controlType = 'dropDownList';
-          const dropDownElement = sdtPr['w:dropDownList'];
+        } else if (sdtPr["w:dropDownList"]) {
+          properties.controlType = "dropDownList";
+          const dropDownElement = sdtPr["w:dropDownList"];
           properties.dropDownList = this.parseListItems(dropDownElement);
-        } else if (sdtPr['w:date']) {
-          properties.controlType = 'datePicker';
-          const dateElement = sdtPr['w:date'];
+        } else if (sdtPr["w:date"]) {
+          properties.controlType = "datePicker";
+          const dateElement = sdtPr["w:date"];
           properties.datePicker = {
-            dateFormat: dateElement?.['w:dateFormat']?.['@_w:val'],
-            fullDate: dateElement?.['w:fullDate']?.['@_w:val'] ? new Date(dateElement['w:fullDate']['@_w:val']) : undefined,
-            lid: dateElement?.['w:lid']?.['@_w:val'],
-            calendar: dateElement?.['w:calendar']?.['@_w:val']
+            dateFormat: dateElement?.["w:dateFormat"]?.["@_w:val"],
+            fullDate: dateElement?.["w:fullDate"]?.["@_w:val"]
+              ? new Date(dateElement["w:fullDate"]["@_w:val"])
+              : undefined,
+            lid: dateElement?.["w:lid"]?.["@_w:val"],
+            calendar: dateElement?.["w:calendar"]?.["@_w:val"],
           };
-        } else if (sdtPr['w14:checkbox']) {
-          properties.controlType = 'checkbox';
-          const checkboxElement = sdtPr['w14:checkbox'];
+        } else if (sdtPr["w14:checkbox"]) {
+          properties.controlType = "checkbox";
+          const checkboxElement = sdtPr["w14:checkbox"];
           properties.checkbox = {
-            checked: checkboxElement?.['w14:checked']?.['@_w14:val'] === '1' || checkboxElement?.['w14:checked']?.['@_w14:val'] === 'true',
-            checkedState: checkboxElement?.['w14:checkedState']?.['@_w14:val'],
-            uncheckedState: checkboxElement?.['w14:uncheckedState']?.['@_w14:val']
+            checked:
+              checkboxElement?.["w14:checked"]?.["@_w14:val"] === "1" ||
+              checkboxElement?.["w14:checked"]?.["@_w14:val"] === "true",
+            checkedState: checkboxElement?.["w14:checkedState"]?.["@_w14:val"],
+            uncheckedState:
+              checkboxElement?.["w14:uncheckedState"]?.["@_w14:val"],
           };
-        } else if (sdtPr['w:picture']) {
-          properties.controlType = 'picture';
-        } else if (sdtPr['w:docPartObj']) {
-          properties.controlType = 'buildingBlock';
-          const docPartObj = sdtPr['w:docPartObj'];
+        } else if (sdtPr["w:picture"]) {
+          properties.controlType = "picture";
+        } else if (sdtPr["w:docPartObj"]) {
+          properties.controlType = "buildingBlock";
+          const docPartObj = sdtPr["w:docPartObj"];
           properties.buildingBlock = {
-            gallery: docPartObj?.['w:docPartGallery']?.['@_w:val'],
-            category: docPartObj?.['w:docPartCategory']?.['@_w:val']
+            gallery: docPartObj?.["w:docPartGallery"]?.["@_w:val"],
+            category: docPartObj?.["w:docPartCategory"]?.["@_w:val"],
           };
-        } else if (sdtPr['w:group']) {
-          properties.controlType = 'group';
+        } else if (sdtPr["w:group"]) {
+          properties.controlType = "group";
         }
       }
 
       // Parse SDT content (sdtContent)
       const content: any[] = [];
-      const sdtContent = sdtObj['w:sdtContent'];
+      const sdtContent = sdtObj["w:sdtContent"];
       if (sdtContent) {
         // Check for ordered children (preserves element order)
-        const orderedChildren = sdtContent['_orderedChildren'] as Array<{type: string, index: number}> | undefined;
+        const orderedChildren = sdtContent["_orderedChildren"] as
+          | Array<{ type: string; index: number }>
+          | undefined;
 
         if (orderedChildren && orderedChildren.length > 0) {
           // Process in original order
@@ -2727,28 +2980,53 @@ export class DocumentParser {
             const elementType = childInfo.type;
             const elementIndex = childInfo.index;
 
-            if (elementType === 'w:p') {
-              const paragraphs = sdtContent['w:p'];
-              const paraArray = Array.isArray(paragraphs) ? paragraphs : (paragraphs ? [paragraphs] : []);
+            if (elementType === "w:p") {
+              const paragraphs = sdtContent["w:p"];
+              const paraArray = Array.isArray(paragraphs)
+                ? paragraphs
+                : paragraphs
+                ? [paragraphs]
+                : [];
               if (elementIndex < paraArray.length) {
                 // Reconstruct XML for paragraph parsing
-                const paraXml = this.objectToXml({ 'w:p': paraArray[elementIndex] });
-                const para = await this.parseParagraphWithOrder(paraXml, relationshipManager, zipHandler, imageManager);
+                const paraXml = this.objectToXml({
+                  "w:p": paraArray[elementIndex],
+                });
+                const para = await this.parseParagraphWithOrder(
+                  paraXml,
+                  relationshipManager,
+                  zipHandler,
+                  imageManager
+                );
                 if (para) content.push(para);
               }
-            } else if (elementType === 'w:tbl') {
-              const tables = sdtContent['w:tbl'];
-              const tableArray = Array.isArray(tables) ? tables : (tables ? [tables] : []);
+            } else if (elementType === "w:tbl") {
+              const tables = sdtContent["w:tbl"];
+              const tableArray = Array.isArray(tables)
+                ? tables
+                : tables
+                ? [tables]
+                : [];
               if (elementIndex < tableArray.length) {
                 const tableObj = tableArray[elementIndex];
-                const table = await this.parseTableFromObject(tableObj, relationshipManager, zipHandler, imageManager);
+                const table = await this.parseTableFromObject(
+                  tableObj,
+                  relationshipManager,
+                  zipHandler,
+                  imageManager
+                );
                 if (table) content.push(table);
               }
-            } else if (elementType === 'w:sdt') {
-              const sdts = sdtContent['w:sdt'];
-              const sdtArray = Array.isArray(sdts) ? sdts : (sdts ? [sdts] : []);
+            } else if (elementType === "w:sdt") {
+              const sdts = sdtContent["w:sdt"];
+              const sdtArray = Array.isArray(sdts) ? sdts : sdts ? [sdts] : [];
               if (elementIndex < sdtArray.length) {
-                const nestedSdt = await this.parseSDTFromObject(sdtArray[elementIndex], relationshipManager, zipHandler, imageManager);
+                const nestedSdt = await this.parseSDTFromObject(
+                  sdtArray[elementIndex],
+                  relationshipManager,
+                  zipHandler,
+                  imageManager
+                );
                 if (nestedSdt) content.push(nestedSdt);
               }
             }
@@ -2756,36 +3034,67 @@ export class DocumentParser {
         } else {
           // Fallback: process sequentially
           // Parse paragraphs
-          const paragraphs = sdtContent['w:p'];
-          const paraArray = Array.isArray(paragraphs) ? paragraphs : (paragraphs ? [paragraphs] : []);
+          const paragraphs = sdtContent["w:p"];
+          const paraArray = Array.isArray(paragraphs)
+            ? paragraphs
+            : paragraphs
+            ? [paragraphs]
+            : [];
           for (const paraObj of paraArray) {
-            const paraXml = this.objectToXml({ 'w:p': paraObj });
-            const para = await this.parseParagraphWithOrder(paraXml, relationshipManager, zipHandler, imageManager);
+            const paraXml = this.objectToXml({ "w:p": paraObj });
+            const para = await this.parseParagraphWithOrder(
+              paraXml,
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
             if (para) content.push(para);
           }
 
           // Parse tables
-          const tables = sdtContent['w:tbl'];
-          const tableArray = Array.isArray(tables) ? tables : (tables ? [tables] : []);
+          const tables = sdtContent["w:tbl"];
+          const tableArray = Array.isArray(tables)
+            ? tables
+            : tables
+            ? [tables]
+            : [];
           for (const tableObj of tableArray) {
-            const table = await this.parseTableFromObject(tableObj, relationshipManager, zipHandler, imageManager);
+            const table = await this.parseTableFromObject(
+              tableObj,
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
             if (table) content.push(table);
           }
 
           // Parse nested SDTs
-          const nestedSdts = sdtContent['w:sdt'];
-          const sdtArray = Array.isArray(nestedSdts) ? nestedSdts : (nestedSdts ? [nestedSdts] : []);
+          const nestedSdts = sdtContent["w:sdt"];
+          const sdtArray = Array.isArray(nestedSdts)
+            ? nestedSdts
+            : nestedSdts
+            ? [nestedSdts]
+            : [];
           for (const nestedSdtObj of sdtArray) {
-            const nestedSdt = await this.parseSDTFromObject(nestedSdtObj, relationshipManager, zipHandler, imageManager);
+            const nestedSdt = await this.parseSDTFromObject(
+              nestedSdtObj,
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
             if (nestedSdt) content.push(nestedSdt);
           }
         }
       }
 
       // Check if this is a Table of Contents SDT
-      if (properties.buildingBlock?.gallery === 'Table of Contents') {
+      if (properties.buildingBlock?.gallery === "Table of Contents") {
         // This is a TOC - create TableOfContentsElement instead
-        const toc = this.parseTOCFromSDTContent(content, properties, sdtContent);
+        const toc = this.parseTOCFromSDTContent(
+          content,
+          properties,
+          sdtContent
+        );
         if (toc) {
           return new TableOfContentsElement(toc);
         }
@@ -2793,7 +3102,12 @@ export class DocumentParser {
 
       return new StructuredDocumentTag(properties, content);
     } catch (error) {
-      defaultLogger.warn('[DocumentParser] Failed to parse SDT:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse SDT:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
       return null;
     }
   }
@@ -2801,7 +3115,11 @@ export class DocumentParser {
   /**
    * Helper to parse TOC from SDT content
    */
-  private parseTOCFromSDTContent(content: any[], properties: any, sdtContent: any): TableOfContents | null {
+  private parseTOCFromSDTContent(
+    content: any[],
+    properties: any,
+    sdtContent: any
+  ): TableOfContents | null {
     try {
       let title: string | undefined;
       let fieldInstruction: string | undefined;
@@ -2810,31 +3128,35 @@ export class DocumentParser {
       for (const element of content) {
         if (element instanceof Paragraph) {
           const style = element.getStyle();
-          if (style === 'TOCHeading') {
+          if (style === "TOCHeading") {
             // Extract title text
             const runs = element.getRuns();
-            title = runs.map(r => r.getText()).join('');
+            title = runs.map((r) => r.getText()).join("");
           }
         }
       }
 
       // Extract field instruction from raw XML
-      const paragraphs = sdtContent['w:p'];
-      const paraArray = Array.isArray(paragraphs) ? paragraphs : (paragraphs ? [paragraphs] : []);
+      const paragraphs = sdtContent["w:p"];
+      const paraArray = Array.isArray(paragraphs)
+        ? paragraphs
+        : paragraphs
+        ? [paragraphs]
+        : [];
 
       for (const paraObj of paraArray) {
         // Look for w:instrText in runs
-        const runs = paraObj['w:r'];
-        const runArray = Array.isArray(runs) ? runs : (runs ? [runs] : []);
+        const runs = paraObj["w:r"];
+        const runArray = Array.isArray(runs) ? runs : runs ? [runs] : [];
 
         for (const runObj of runArray) {
-          const instrText = runObj['w:instrText'];
+          const instrText = runObj["w:instrText"];
           if (instrText) {
             // Extract text content
-            if (typeof instrText === 'string') {
+            if (typeof instrText === "string") {
               fieldInstruction = instrText.trim();
-            } else if (instrText['#text']) {
-              fieldInstruction = instrText['#text'].trim();
+            } else if (instrText["#text"]) {
+              fieldInstruction = instrText["#text"].trim();
             }
 
             if (fieldInstruction) break;
@@ -2845,28 +3167,30 @@ export class DocumentParser {
       }
 
       if (!fieldInstruction) {
-        defaultLogger.warn('[DocumentParser] No TOC field instruction found in SDT content');
+        defaultLogger.warn(
+          "[DocumentParser] No TOC field instruction found in SDT content"
+        );
         return null;
       }
 
       // Parse field switches from instruction
       const tocOptions: any = {
         title,
-        originalFieldInstruction: fieldInstruction.trim() // Preserve original instruction
+        originalFieldInstruction: fieldInstruction.trim(), // Preserve original instruction
       };
 
       // Check for \h (hyperlinks)
-      if (fieldInstruction.includes('\\h')) {
+      if (fieldInstruction.includes("\\h")) {
         tocOptions.useHyperlinks = true;
       }
 
       // Check for \n (omit page numbers)
-      if (fieldInstruction.includes('\\n')) {
+      if (fieldInstruction.includes("\\n")) {
         tocOptions.showPageNumbers = false;
       }
 
       // Check for \z (hide in web layout)
-      if (fieldInstruction.includes('\\z')) {
+      if (fieldInstruction.includes("\\z")) {
         tocOptions.hideInWebLayout = true;
       }
 
@@ -2884,14 +3208,14 @@ export class DocumentParser {
         const styles: Array<{ styleName: string; level: number }> = [];
 
         // Parse "StyleName,Level,StyleName2,Level2,..."
-        const parts = stylesStr.split(',').filter(p => p.trim());
+        const parts = stylesStr.split(",").filter((p) => p.trim());
         for (let i = 0; i < parts.length; i += 2) {
           const styleName = parts[i];
           const levelStr = parts[i + 1];
           if (styleName && levelStr) {
             styles.push({
               styleName: styleName.trim(),
-              level: parseInt(levelStr.trim(), 10)
+              level: parseInt(levelStr.trim(), 10),
             });
           }
         }
@@ -2903,7 +3227,12 @@ export class DocumentParser {
 
       return new TableOfContents(tocOptions);
     } catch (error) {
-      defaultLogger.warn('[DocumentParser] Failed to parse TOC from SDT content:', error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) });
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse TOC from SDT content:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
       return null;
     }
   }
@@ -2913,21 +3242,25 @@ export class DocumentParser {
    */
   private parseListItems(element: any): any {
     const items: any[] = [];
-    const listItems = element?.['w:listItem'];
-    const itemArray = Array.isArray(listItems) ? listItems : (listItems ? [listItems] : []);
+    const listItems = element?.["w:listItem"];
+    const itemArray = Array.isArray(listItems)
+      ? listItems
+      : listItems
+      ? [listItems]
+      : [];
 
     for (const item of itemArray) {
-      if (item['@_w:displayText'] && item['@_w:value']) {
+      if (item["@_w:displayText"] && item["@_w:value"]) {
         items.push({
-          displayText: item['@_w:displayText'],
-          value: item['@_w:value']
+          displayText: item["@_w:displayText"],
+          value: item["@_w:value"],
         });
       }
     }
 
     return {
       items,
-      lastValue: element?.['@_w:lastValue']
+      lastValue: element?.["@_w:lastValue"],
     };
   }
 
@@ -2939,14 +3272,14 @@ export class DocumentParser {
     // FIX (v1.3.1): Use _orderedChildren to maintain document order of elements
     // This fixes TOC tab preservation - tabs must be in correct position
     const buildXml = (o: any, name?: string): string => {
-      if (typeof o === 'string') return o;
-      if (typeof o !== 'object') return String(o);
+      if (typeof o === "string") return o;
+      if (typeof o !== "object") return String(o);
 
       const keys = Object.keys(o);
 
       // FIX: If a name is provided, we're building a specific element (possibly self-closing)
       // Don't return empty string for empty objects with a name - they should become self-closing tags
-      if (keys.length === 0 && !name) return '';
+      if (keys.length === 0 && !name) return "";
 
       const tagName = name || keys[0]!; // keys[0] is guaranteed to exist due to length check (or name is provided)
       const element = name ? o : o[tagName];
@@ -2954,9 +3287,9 @@ export class DocumentParser {
       let xml = `<${tagName}`;
 
       // Add attributes
-      if (element && typeof element === 'object') {
+      if (element && typeof element === "object") {
         for (const key of Object.keys(element)) {
-          if (key.startsWith('@_')) {
+          if (key.startsWith("@_")) {
             const attrName = key.substring(2);
             xml += ` ${attrName}="${element[key]}"`;
           }
@@ -2964,22 +3297,29 @@ export class DocumentParser {
       }
 
       // Check for children
-      const hasChildren = element && typeof element === 'object' &&
-        Object.keys(element).some(k => !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren');
+      const hasChildren =
+        element &&
+        typeof element === "object" &&
+        Object.keys(element).some(
+          (k) =>
+            !k.startsWith("@_") && k !== "#text" && k !== "_orderedChildren"
+        );
 
-      if (!hasChildren && (!element || !element['#text'])) {
-        xml += '/>';
+      if (!hasChildren && (!element || !element["#text"])) {
+        xml += "/>";
       } else {
-        xml += '>';
+        xml += ">";
 
         // Add text content
-        if (element && element['#text']) {
-          xml += element['#text'];
+        if (element && element["#text"]) {
+          xml += element["#text"];
         }
 
         // Add child elements using _orderedChildren if available
-        if (element && typeof element === 'object') {
-          const orderedChildren = element['_orderedChildren'] as Array<{type: string, index: number}> | undefined;
+        if (element && typeof element === "object") {
+          const orderedChildren = element["_orderedChildren"] as
+            | Array<{ type: string; index: number }>
+            | undefined;
 
           if (orderedChildren && orderedChildren.length > 0) {
             // Use _orderedChildren to preserve element order
@@ -3007,7 +3347,11 @@ export class DocumentParser {
           } else {
             // Fallback: iterate through keys if no _orderedChildren
             for (const key of Object.keys(element)) {
-              if (!key.startsWith('@_') && key !== '#text' && key !== '_orderedChildren') {
+              if (
+                !key.startsWith("@_") &&
+                key !== "#text" &&
+                key !== "_orderedChildren"
+              ) {
                 const children = element[key];
                 if (Array.isArray(children)) {
                   for (const child of children) {
@@ -3395,7 +3739,8 @@ export class DocumentParser {
           }
 
           // Helper to handle boolean conversion (XMLParser may return string or number)
-          const toBool = (val: any) => val === "1" || val === 1 || val === "true" || val === true;
+          const toBool = (val: any) =>
+            val === "1" || val === 1 || val === "true" || val === true;
 
           if (num) {
             sectionProps.columns = {
@@ -3487,7 +3832,11 @@ export class DocumentParser {
         if (vAlign) {
           const val = XMLParser.extractAttribute(vAlign, "w:val");
           if (val) {
-            sectionProps.verticalAlignment = val as 'top' | 'center' | 'bottom' | 'both';
+            sectionProps.verticalAlignment = val as
+              | "top"
+              | "center"
+              | "bottom"
+              | "both";
           }
         }
       }
@@ -3510,13 +3859,16 @@ export class DocumentParser {
       }
 
       // Parse text direction
-      const textDirElements = XMLParser.extractElements(sectPr, "w:textDirection");
+      const textDirElements = XMLParser.extractElements(
+        sectPr,
+        "w:textDirection"
+      );
       if (textDirElements.length > 0) {
         const textDir = textDirElements[0];
         if (textDir) {
           const val = XMLParser.extractAttribute(textDir, "w:val");
           if (val) {
-            sectionProps.textDirection = val as 'ltr' | 'rtl' | 'tbRl' | 'btLr';
+            sectionProps.textDirection = val as "ltr" | "rtl" | "tbRl" | "btLr";
           }
         }
       }
@@ -3610,22 +3962,31 @@ export class DocumentParser {
 
     // Parse metadata properties (Phase 5.3)
     // qFormat - Quick style gallery
-    const qFormat = styleXml.includes("<w:qFormat/>") || styleXml.includes("<w:qFormat ");
+    const qFormat =
+      styleXml.includes("<w:qFormat/>") || styleXml.includes("<w:qFormat ");
 
     // semiHidden - Hide from recommended list
-    const semiHidden = styleXml.includes("<w:semiHidden/>") || styleXml.includes("<w:semiHidden ");
+    const semiHidden =
+      styleXml.includes("<w:semiHidden/>") ||
+      styleXml.includes("<w:semiHidden ");
 
     // unhideWhenUsed - Auto-show when applied
-    const unhideWhenUsed = styleXml.includes("<w:unhideWhenUsed/>") || styleXml.includes("<w:unhideWhenUsed ");
+    const unhideWhenUsed =
+      styleXml.includes("<w:unhideWhenUsed/>") ||
+      styleXml.includes("<w:unhideWhenUsed ");
 
     // locked - Prevent modification
-    const locked = styleXml.includes("<w:locked/>") || styleXml.includes("<w:locked ");
+    const locked =
+      styleXml.includes("<w:locked/>") || styleXml.includes("<w:locked ");
 
     // personal - User-specific style
-    const personal = styleXml.includes("<w:personal/>") || styleXml.includes("<w:personal ");
+    const personal =
+      styleXml.includes("<w:personal/>") || styleXml.includes("<w:personal ");
 
     // autoRedefine - Update style from formatting
-    const autoRedefine = styleXml.includes("<w:autoRedefine/>") || styleXml.includes("<w:autoRedefine ");
+    const autoRedefine =
+      styleXml.includes("<w:autoRedefine/>") ||
+      styleXml.includes("<w:autoRedefine ");
 
     // uiPriority - Sort order
     let uiPriority: number | undefined;
@@ -3633,7 +3994,10 @@ export class DocumentParser {
       const uiPriorityStart = styleXml.indexOf("<w:uiPriority");
       const uiPriorityEnd = styleXml.indexOf("/>", uiPriorityStart);
       if (uiPriorityEnd !== -1) {
-        const uiPriorityTag = styleXml.substring(uiPriorityStart, uiPriorityEnd + 2);
+        const uiPriorityTag = styleXml.substring(
+          uiPriorityStart,
+          uiPriorityEnd + 2
+        );
         const valStr = XMLParser.extractAttribute(uiPriorityTag, "w:val");
         if (valStr) {
           uiPriority = parseInt(valStr, 10);
@@ -3664,8 +4028,10 @@ export class DocumentParser {
     }
 
     // Parse table style properties (Phase 5.1)
-    let tableStyle: import('../formatting/Style').TableStyleProperties | undefined;
-    if (typeAttr === 'table') {
+    let tableStyle:
+      | import("../formatting/Style").TableStyleProperties
+      | undefined;
+    if (typeAttr === "table") {
       tableStyle = this.parseTableStyleProperties(styleXml);
     }
 
@@ -3962,19 +4328,31 @@ export class DocumentParser {
    * @param styleXml - XML string of a table style element
    * @returns TableStyleProperties object
    */
-  private parseTableStyleProperties(styleXml: string): import('../formatting/Style').TableStyleProperties {
-    const tableStyle: import('../formatting/Style').TableStyleProperties = {};
+  private parseTableStyleProperties(
+    styleXml: string
+  ): import("../formatting/Style").TableStyleProperties {
+    const tableStyle: import("../formatting/Style").TableStyleProperties = {};
 
     // Parse tblPr (table properties)
-    const tblPrXml = XMLParser.extractBetweenTags(styleXml, "<w:tblPr>", "</w:tblPr>");
+    const tblPrXml = XMLParser.extractBetweenTags(
+      styleXml,
+      "<w:tblPr>",
+      "</w:tblPr>"
+    );
     if (tblPrXml) {
       tableStyle.table = this.parseTableFormattingFromXml(tblPrXml);
 
       // Row band size
       if (tblPrXml.includes("<w:tblStyleRowBandSize")) {
-        const tag = XMLParser.extractSelfClosingTag(tblPrXml, "w:tblStyleRowBandSize");
+        const tag = XMLParser.extractSelfClosingTag(
+          tblPrXml,
+          "w:tblStyleRowBandSize"
+        );
         if (tag) {
-          const val = XMLParser.extractAttribute(`<w:tblStyleRowBandSize${tag}`, "w:val");
+          const val = XMLParser.extractAttribute(
+            `<w:tblStyleRowBandSize${tag}`,
+            "w:val"
+          );
           if (val) {
             tableStyle.rowBandSize = parseInt(val, 10);
           }
@@ -3983,9 +4361,15 @@ export class DocumentParser {
 
       // Column band size
       if (tblPrXml.includes("<w:tblStyleColBandSize")) {
-        const tag = XMLParser.extractSelfClosingTag(tblPrXml, "w:tblStyleColBandSize");
+        const tag = XMLParser.extractSelfClosingTag(
+          tblPrXml,
+          "w:tblStyleColBandSize"
+        );
         if (tag) {
-          const val = XMLParser.extractAttribute(`<w:tblStyleColBandSize${tag}`, "w:val");
+          const val = XMLParser.extractAttribute(
+            `<w:tblStyleColBandSize${tag}`,
+            "w:val"
+          );
           if (val) {
             tableStyle.colBandSize = parseInt(val, 10);
           }
@@ -3994,19 +4378,28 @@ export class DocumentParser {
     }
 
     // Parse tcPr (cell properties)
-    const tcPrXml = XMLParser.extractBetweenTags(styleXml, "<w:tcPr>", "</w:tcPr>");
+    const tcPrXml = XMLParser.extractBetweenTags(
+      styleXml,
+      "<w:tcPr>",
+      "</w:tcPr>"
+    );
     if (tcPrXml) {
       tableStyle.cell = this.parseTableCellFormattingFromXml(tcPrXml);
     }
 
     // Parse trPr (row properties)
-    const trPrXml = XMLParser.extractBetweenTags(styleXml, "<w:trPr>", "</w:trPr>");
+    const trPrXml = XMLParser.extractBetweenTags(
+      styleXml,
+      "<w:trPr>",
+      "</w:trPr>"
+    );
     if (trPrXml) {
       tableStyle.row = this.parseTableRowFormattingFromXml(trPrXml);
     }
 
     // Parse tblStylePr (conditional formatting)
-    tableStyle.conditionalFormatting = this.parseConditionalFormattingFromXml(styleXml);
+    tableStyle.conditionalFormatting =
+      this.parseConditionalFormattingFromXml(styleXml);
 
     return tableStyle;
   }
@@ -4014,8 +4407,10 @@ export class DocumentParser {
   /**
    * Parses table formatting from tblPr XML (Phase 5.1)
    */
-  private parseTableFormattingFromXml(tblPrXml: string): import('../formatting/Style').TableStyleFormatting {
-    const formatting: import('../formatting/Style').TableStyleFormatting = {};
+  private parseTableFormattingFromXml(
+    tblPrXml: string
+  ): import("../formatting/Style").TableStyleFormatting {
+    const formatting: import("../formatting/Style").TableStyleFormatting = {};
 
     // Parse indent
     if (tblPrXml.includes("<w:tblInd")) {
@@ -4033,7 +4428,7 @@ export class DocumentParser {
       const tag = XMLParser.extractSelfClosingTag(tblPrXml, "w:jc");
       if (tag) {
         const val = XMLParser.extractAttribute(`<w:jc${tag}`, "w:val");
-        if (val === 'left' || val === 'center' || val === 'right') {
+        if (val === "left" || val === "center" || val === "right") {
           formatting.alignment = val;
         }
       }
@@ -4051,7 +4446,11 @@ export class DocumentParser {
     }
 
     // Parse borders
-    const bordersXml = XMLParser.extractBetweenTags(tblPrXml, "<w:tblBorders>", "</w:tblBorders>");
+    const bordersXml = XMLParser.extractBetweenTags(
+      tblPrXml,
+      "<w:tblBorders>",
+      "</w:tblBorders>"
+    );
     if (bordersXml) {
       formatting.borders = this.parseBordersFromXml(bordersXml, false);
     }
@@ -4062,7 +4461,11 @@ export class DocumentParser {
     }
 
     // Parse cell margins
-    const marginXml = XMLParser.extractBetweenTags(tblPrXml, "<w:tblCellMar>", "</w:tblCellMar>");
+    const marginXml = XMLParser.extractBetweenTags(
+      tblPrXml,
+      "<w:tblCellMar>",
+      "</w:tblCellMar>"
+    );
     if (marginXml) {
       formatting.cellMargins = this.parseCellMarginsFromXml(marginXml);
     }
@@ -4073,13 +4476,23 @@ export class DocumentParser {
   /**
    * Parses table cell formatting from tcPr XML (Phase 5.1)
    */
-  private parseTableCellFormattingFromXml(tcPrXml: string): import('../formatting/Style').TableCellStyleFormatting {
-    const formatting: import('../formatting/Style').TableCellStyleFormatting = {};
+  private parseTableCellFormattingFromXml(
+    tcPrXml: string
+  ): import("../formatting/Style").TableCellStyleFormatting {
+    const formatting: import("../formatting/Style").TableCellStyleFormatting =
+      {};
 
     // Parse borders
-    const bordersXml = XMLParser.extractBetweenTags(tcPrXml, "<w:tcBorders>", "</w:tcBorders>");
+    const bordersXml = XMLParser.extractBetweenTags(
+      tcPrXml,
+      "<w:tcBorders>",
+      "</w:tcBorders>"
+    );
     if (bordersXml) {
-      formatting.borders = this.parseBordersFromXml(bordersXml, true) as import('../formatting/Style').CellBorders;
+      formatting.borders = this.parseBordersFromXml(
+        bordersXml,
+        true
+      ) as import("../formatting/Style").CellBorders;
     }
 
     // Parse shading
@@ -4088,7 +4501,11 @@ export class DocumentParser {
     }
 
     // Parse margins
-    const marginXml = XMLParser.extractBetweenTags(tcPrXml, "<w:tcMar>", "</w:tcMar>");
+    const marginXml = XMLParser.extractBetweenTags(
+      tcPrXml,
+      "<w:tcMar>",
+      "</w:tcMar>"
+    );
     if (marginXml) {
       formatting.margins = this.parseCellMarginsFromXml(marginXml);
     }
@@ -4098,7 +4515,7 @@ export class DocumentParser {
       const tag = XMLParser.extractSelfClosingTag(tcPrXml, "w:vAlign");
       if (tag) {
         const val = XMLParser.extractAttribute(`<w:vAlign${tag}`, "w:val");
-        if (val === 'top' || val === 'center' || val === 'bottom') {
+        if (val === "top" || val === "center" || val === "bottom") {
           formatting.verticalAlignment = val;
         }
       }
@@ -4110,31 +4527,43 @@ export class DocumentParser {
   /**
    * Parses table row formatting from trPr XML (Phase 5.1)
    */
-  private parseTableRowFormattingFromXml(trPrXml: string): import('../formatting/Style').TableRowStyleFormatting {
-    const formatting: import('../formatting/Style').TableRowStyleFormatting = {};
+  private parseTableRowFormattingFromXml(
+    trPrXml: string
+  ): import("../formatting/Style").TableRowStyleFormatting {
+    const formatting: import("../formatting/Style").TableRowStyleFormatting =
+      {};
 
     // Parse height
     if (trPrXml.includes("<w:trHeight")) {
       const tag = XMLParser.extractSelfClosingTag(trPrXml, "w:trHeight");
       if (tag) {
         const val = XMLParser.extractAttribute(`<w:trHeight${tag}`, "w:val");
-        const hRule = XMLParser.extractAttribute(`<w:trHeight${tag}`, "w:hRule");
+        const hRule = XMLParser.extractAttribute(
+          `<w:trHeight${tag}`,
+          "w:hRule"
+        );
         if (val) {
           formatting.height = parseInt(val, 10);
         }
-        if (hRule === 'auto' || hRule === 'exact' || hRule === 'atLeast') {
+        if (hRule === "auto" || hRule === "exact" || hRule === "atLeast") {
           formatting.heightRule = hRule;
         }
       }
     }
 
     // Parse cantSplit
-    if (trPrXml.includes("<w:cantSplit/>") || trPrXml.includes("<w:cantSplit ")) {
+    if (
+      trPrXml.includes("<w:cantSplit/>") ||
+      trPrXml.includes("<w:cantSplit ")
+    ) {
       formatting.cantSplit = true;
     }
 
     // Parse tblHeader (isHeader)
-    if (trPrXml.includes("<w:tblHeader/>") || trPrXml.includes("<w:tblHeader ")) {
+    if (
+      trPrXml.includes("<w:tblHeader/>") ||
+      trPrXml.includes("<w:tblHeader ")
+    ) {
       formatting.isHeader = true;
     }
 
@@ -4144,8 +4573,11 @@ export class DocumentParser {
   /**
    * Parses conditional formatting from style XML (Phase 5.1)
    */
-  private parseConditionalFormattingFromXml(styleXml: string): import('../formatting/Style').ConditionalTableFormatting[] | undefined {
-    const conditionalFormatting: import('../formatting/Style').ConditionalTableFormatting[] = [];
+  private parseConditionalFormattingFromXml(
+    styleXml: string
+  ): import("../formatting/Style").ConditionalTableFormatting[] | undefined {
+    const conditionalFormatting: import("../formatting/Style").ConditionalTableFormatting[] =
+      [];
 
     // Find all tblStylePr elements
     let searchFrom = 0;
@@ -4161,38 +4593,63 @@ export class DocumentParser {
       // Extract type attribute
       const typeAttr = XMLParser.extractAttribute(tblStylePrXml, "w:type");
       if (typeAttr) {
-        const conditional: import('../formatting/Style').ConditionalTableFormatting = {
-          type: typeAttr as import('../formatting/Style').ConditionalFormattingType,
-        };
+        const conditional: import("../formatting/Style").ConditionalTableFormatting =
+          {
+            type: typeAttr as import("../formatting/Style").ConditionalFormattingType,
+          };
 
         // Parse pPr
-        const pPrXml = XMLParser.extractBetweenTags(tblStylePrXml, "<w:pPr>", "</w:pPr>");
+        const pPrXml = XMLParser.extractBetweenTags(
+          tblStylePrXml,
+          "<w:pPr>",
+          "</w:pPr>"
+        );
         if (pPrXml) {
-          conditional.paragraphFormatting = this.parseParagraphFormattingFromXml(pPrXml);
+          conditional.paragraphFormatting =
+            this.parseParagraphFormattingFromXml(pPrXml);
         }
 
         // Parse rPr
-        const rPrXml = XMLParser.extractBetweenTags(tblStylePrXml, "<w:rPr>", "</w:rPr>");
+        const rPrXml = XMLParser.extractBetweenTags(
+          tblStylePrXml,
+          "<w:rPr>",
+          "</w:rPr>"
+        );
         if (rPrXml) {
           conditional.runFormatting = this.parseRunFormattingFromXml(rPrXml);
         }
 
         // Parse tblPr
-        const tblPrXml = XMLParser.extractBetweenTags(tblStylePrXml, "<w:tblPr>", "</w:tblPr>");
+        const tblPrXml = XMLParser.extractBetweenTags(
+          tblStylePrXml,
+          "<w:tblPr>",
+          "</w:tblPr>"
+        );
         if (tblPrXml) {
-          conditional.tableFormatting = this.parseTableFormattingFromXml(tblPrXml);
+          conditional.tableFormatting =
+            this.parseTableFormattingFromXml(tblPrXml);
         }
 
         // Parse tcPr
-        const tcPrXml = XMLParser.extractBetweenTags(tblStylePrXml, "<w:tcPr>", "</w:tcPr>");
+        const tcPrXml = XMLParser.extractBetweenTags(
+          tblStylePrXml,
+          "<w:tcPr>",
+          "</w:tcPr>"
+        );
         if (tcPrXml) {
-          conditional.cellFormatting = this.parseTableCellFormattingFromXml(tcPrXml);
+          conditional.cellFormatting =
+            this.parseTableCellFormattingFromXml(tcPrXml);
         }
 
         // Parse trPr
-        const trPrXml = XMLParser.extractBetweenTags(tblStylePrXml, "<w:trPr>", "</w:trPr>");
+        const trPrXml = XMLParser.extractBetweenTags(
+          tblStylePrXml,
+          "<w:trPr>",
+          "</w:trPr>"
+        );
         if (trPrXml) {
-          conditional.rowFormatting = this.parseTableRowFormattingFromXml(trPrXml);
+          conditional.rowFormatting =
+            this.parseTableRowFormattingFromXml(trPrXml);
         }
 
         conditionalFormatting.push(conditional);
@@ -4209,20 +4666,38 @@ export class DocumentParser {
    * @param bordersXml - XML content from tblBorders or tcBorders
    * @param includeDiagonals - Whether to include diagonal borders (for cells)
    */
-  private parseBordersFromXml(bordersXml: string, includeDiagonals: boolean): import('../formatting/Style').TableBorders | import('../formatting/Style').CellBorders {
+  private parseBordersFromXml(
+    bordersXml: string,
+    includeDiagonals: boolean
+  ):
+    | import("../formatting/Style").TableBorders
+    | import("../formatting/Style").CellBorders {
     const borders: any = {};
 
-    const borderTypes = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'];
+    const borderTypes = [
+      "top",
+      "bottom",
+      "left",
+      "right",
+      "insideH",
+      "insideV",
+    ];
     for (const type of borderTypes) {
       if (bordersXml.includes(`<w:${type}`)) {
         const tag = XMLParser.extractSelfClosingTag(bordersXml, `w:${type}`);
         if (tag) {
           const style = XMLParser.extractAttribute(`<w:${type}${tag}`, "w:val");
           const size = XMLParser.extractAttribute(`<w:${type}${tag}`, "w:sz");
-          const space = XMLParser.extractAttribute(`<w:${type}${tag}`, "w:space");
-          const color = XMLParser.extractAttribute(`<w:${type}${tag}`, "w:color");
+          const space = XMLParser.extractAttribute(
+            `<w:${type}${tag}`,
+            "w:space"
+          );
+          const color = XMLParser.extractAttribute(
+            `<w:${type}${tag}`,
+            "w:color"
+          );
 
-          const border: import('../formatting/Style').BorderProperties = {};
+          const border: import("../formatting/Style").BorderProperties = {};
           if (style) border.style = style as any;
           if (size) border.size = parseInt(size, 10);
           if (space) border.space = parseInt(space, 10);
@@ -4237,17 +4712,26 @@ export class DocumentParser {
 
     // Add diagonal borders for cells
     if (includeDiagonals) {
-      const diagonalTypes = ['tl2br', 'tr2bl'];
+      const diagonalTypes = ["tl2br", "tr2bl"];
       for (const type of diagonalTypes) {
         if (bordersXml.includes(`<w:${type}`)) {
           const tag = XMLParser.extractSelfClosingTag(bordersXml, `w:${type}`);
           if (tag) {
-            const style = XMLParser.extractAttribute(`<w:${type}${tag}`, "w:val");
+            const style = XMLParser.extractAttribute(
+              `<w:${type}${tag}`,
+              "w:val"
+            );
             const size = XMLParser.extractAttribute(`<w:${type}${tag}`, "w:sz");
-            const space = XMLParser.extractAttribute(`<w:${type}${tag}`, "w:space");
-            const color = XMLParser.extractAttribute(`<w:${type}${tag}`, "w:color");
+            const space = XMLParser.extractAttribute(
+              `<w:${type}${tag}`,
+              "w:space"
+            );
+            const color = XMLParser.extractAttribute(
+              `<w:${type}${tag}`,
+              "w:color"
+            );
 
-            const border: import('../formatting/Style').BorderProperties = {};
+            const border: import("../formatting/Style").BorderProperties = {};
             if (style) border.style = style as any;
             if (size) border.size = parseInt(size, 10);
             if (space) border.space = parseInt(space, 10);
@@ -4267,11 +4751,13 @@ export class DocumentParser {
   /**
    * Parses shading from XML (Phase 5.1)
    */
-  private parseShadingFromXml(xml: string): import('../formatting/Style').ShadingProperties | undefined {
+  private parseShadingFromXml(
+    xml: string
+  ): import("../formatting/Style").ShadingProperties | undefined {
     const tag = XMLParser.extractSelfClosingTag(xml, "w:shd");
     if (!tag) return undefined;
 
-    const shading: import('../formatting/Style').ShadingProperties = {};
+    const shading: import("../formatting/Style").ShadingProperties = {};
     const val = XMLParser.extractAttribute(`<w:shd${tag}`, "w:val");
     const color = XMLParser.extractAttribute(`<w:shd${tag}`, "w:color");
     const fill = XMLParser.extractAttribute(`<w:shd${tag}`, "w:fill");
@@ -4286,17 +4772,20 @@ export class DocumentParser {
   /**
    * Parses cell margins from XML (Phase 5.1)
    */
-  private parseCellMarginsFromXml(marginXml: string): import('../formatting/Style').CellMargins | undefined {
-    const margins: import('../formatting/Style').CellMargins = {};
+  private parseCellMarginsFromXml(
+    marginXml: string
+  ): import("../formatting/Style").CellMargins | undefined {
+    const margins: import("../formatting/Style").CellMargins = {};
 
-    const marginTypes = ['top', 'bottom', 'left', 'right'];
+    const marginTypes = ["top", "bottom", "left", "right"];
     for (const type of marginTypes) {
       if (marginXml.includes(`<w:${type}`)) {
         const tag = XMLParser.extractSelfClosingTag(marginXml, `w:${type}`);
         if (tag) {
           const w = XMLParser.extractAttribute(`<w:${type}${tag}`, "w:w");
           if (w) {
-            margins[type as keyof import('../formatting/Style').CellMargins] = parseInt(w, 10);
+            margins[type as keyof import("../formatting/Style").CellMargins] =
+              parseInt(w, 10);
           }
         }
       }
@@ -4480,11 +4969,27 @@ export class DocumentParser {
     relationshipManager: RelationshipManager,
     imageManager: ImageManager
   ): Promise<{
-    headers: Array<{ header: import('../elements/Header').Header; relationshipId: string; filename: string }>;
-    footers: Array<{ footer: import('../elements/Footer').Footer; relationshipId: string; filename: string }>;
+    headers: Array<{
+      header: import("../elements/Header").Header;
+      relationshipId: string;
+      filename: string;
+    }>;
+    footers: Array<{
+      footer: import("../elements/Footer").Footer;
+      relationshipId: string;
+      filename: string;
+    }>;
   }> {
-    const headers: Array<{ header: import('../elements/Header').Header; relationshipId: string; filename: string }> = [];
-    const footers: Array<{ footer: import('../elements/Footer').Footer; relationshipId: string; filename: string }> = [];
+    const headers: Array<{
+      header: import("../elements/Header").Header;
+      relationshipId: string;
+      filename: string;
+    }> = [];
+    const footers: Array<{
+      footer: import("../elements/Footer").Footer;
+      relationshipId: string;
+      filename: string;
+    }> = [];
 
     if (!section) {
       return { headers, footers };
@@ -4506,7 +5011,13 @@ export class DocumentParser {
         if (!headerXml) continue;
 
         // Create Header object
-        const header = await this.parseHeader(headerXml, type as 'default' | 'first' | 'even', zipHandler, relationshipManager, imageManager);
+        const header = await this.parseHeader(
+          headerXml,
+          type as "default" | "first" | "even",
+          zipHandler,
+          relationshipManager,
+          imageManager
+        );
         if (header) {
           headers.push({
             header,
@@ -4531,7 +5042,13 @@ export class DocumentParser {
         if (!footerXml) continue;
 
         // Create Footer object
-        const footer = await this.parseFooter(footerXml, type as 'default' | 'first' | 'even', zipHandler, relationshipManager, imageManager);
+        const footer = await this.parseFooter(
+          footerXml,
+          type as "default" | "first" | "even",
+          zipHandler,
+          relationshipManager,
+          imageManager
+        );
         if (footer) {
           footers.push({
             footer,
@@ -4556,23 +5073,32 @@ export class DocumentParser {
    */
   private async parseHeader(
     headerXml: string,
-    type: 'default' | 'first' | 'even',
+    type: "default" | "first" | "even",
     zipHandler: ZipHandler,
     relationshipManager: RelationshipManager,
     imageManager: ImageManager
-  ): Promise<import('../elements/Header').Header | null> {
+  ): Promise<import("../elements/Header").Header | null> {
     try {
-      const { Header } = require('../elements/Header');
+      const { Header } = require("../elements/Header");
       const header = new Header({ type });
 
       // Extract w:hdr content
-      const hdrContent = XMLParser.extractBetweenTags(headerXml, '<w:hdr', '</w:hdr>');
+      const hdrContent = XMLParser.extractBetweenTags(
+        headerXml,
+        "<w:hdr",
+        "</w:hdr>"
+      );
       if (!hdrContent) {
         return header; // Empty header
       }
 
       // Parse paragraphs and tables within header
-      const elements = await this.parseBodyElements(`<w:body>${hdrContent}</w:body>`, relationshipManager, zipHandler, imageManager);
+      const elements = await this.parseBodyElements(
+        `<w:body>${hdrContent}</w:body>`,
+        relationshipManager,
+        zipHandler,
+        imageManager
+      );
 
       for (const element of elements) {
         if (element instanceof Paragraph) {
@@ -4585,7 +5111,7 @@ export class DocumentParser {
       return header;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'header', error: err });
+      this.parseErrors.push({ element: "header", error: err });
 
       if (this.strictParsing) {
         throw new Error(`Failed to parse header: ${err.message}`);
@@ -4606,23 +5132,32 @@ export class DocumentParser {
    */
   private async parseFooter(
     footerXml: string,
-    type: 'default' | 'first' | 'even',
+    type: "default" | "first" | "even",
     zipHandler: ZipHandler,
     relationshipManager: RelationshipManager,
     imageManager: ImageManager
-  ): Promise<import('../elements/Footer').Footer | null> {
+  ): Promise<import("../elements/Footer").Footer | null> {
     try {
-      const { Footer } = require('../elements/Footer');
+      const { Footer } = require("../elements/Footer");
       const footer = new Footer({ type });
 
       // Extract w:ftr content
-      const ftrContent = XMLParser.extractBetweenTags(footerXml, '<w:ftr', '</w:ftr>');
+      const ftrContent = XMLParser.extractBetweenTags(
+        footerXml,
+        "<w:ftr",
+        "</w:ftr>"
+      );
       if (!ftrContent) {
         return footer; // Empty footer
       }
 
       // Parse paragraphs and tables within footer
-      const elements = await this.parseBodyElements(`<w:body>${ftrContent}</w:body>`, relationshipManager, zipHandler, imageManager);
+      const elements = await this.parseBodyElements(
+        `<w:body>${ftrContent}</w:body>`,
+        relationshipManager,
+        zipHandler,
+        imageManager
+      );
 
       for (const element of elements) {
         if (element instanceof Paragraph) {
@@ -4635,7 +5170,7 @@ export class DocumentParser {
       return footer;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      this.parseErrors.push({ element: 'footer', error: err });
+      this.parseErrors.push({ element: "footer", error: err });
 
       if (this.strictParsing) {
         throw new Error(`Failed to parse footer: ${err.message}`);

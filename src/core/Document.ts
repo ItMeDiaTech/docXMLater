@@ -3735,6 +3735,7 @@ export class Document {
    * @param options Configuration options
    * @param options.spacingAfter Spacing after the blank paragraph in twips (default: 120 twips = 6pt)
    * @param options.markAsPreserved Whether to mark blank paragraphs as preserved (default: true)
+   * @param options.style Style to apply to blank paragraphs (default: 'Normal')
    * @param options.filter Optional filter function to select which tables to process
    * @returns Statistics about the operation
    *
@@ -3749,6 +3750,13 @@ export class Document {
    * doc.ensureBlankLinesAfter1x1Tables({
    *   spacingAfter: 240,  // 12pt spacing
    *   markAsPreserved: true
+   * });
+   *
+   * @example
+   * // Custom style for blank paragraphs
+   * doc.ensureBlankLinesAfter1x1Tables({
+   *   style: 'BodyText',  // Use BodyText instead of Normal
+   *   spacingAfter: 120
    * });
    *
    * @example
@@ -3767,6 +3775,7 @@ export class Document {
   public ensureBlankLinesAfter1x1Tables(options?: {
     spacingAfter?: number;
     markAsPreserved?: boolean;
+    style?: string;
     filter?: (table: Table, index: number) => boolean;
   }): {
     tablesProcessed: number;
@@ -3775,6 +3784,7 @@ export class Document {
   } {
     const spacingAfter = options?.spacingAfter ?? 120;
     const markAsPreserved = options?.markAsPreserved ?? true;
+    const style = options?.style ?? "Normal";
     const filter = options?.filter;
 
     let tablesProcessed = 0;
@@ -3820,7 +3830,7 @@ export class Document {
         } else {
           // Next paragraph has content - add blank paragraph between table and content
           const blankPara = Paragraph.create();
-          blankPara.setStyle("Normal");
+          blankPara.setStyle(style);
           blankPara.setSpaceAfter(spacingAfter);
           if (markAsPreserved) {
             blankPara.setPreserved(true);
@@ -3831,7 +3841,7 @@ export class Document {
       } else {
         // No paragraph after table (or it's another table/element) - add blank paragraph
         const blankPara = Paragraph.create();
-        blankPara.setStyle("Normal");
+        blankPara.setStyle(style);
         blankPara.setSpaceAfter(spacingAfter);
         if (markAsPreserved) {
           blankPara.setPreserved(true);
@@ -3854,12 +3864,13 @@ export class Document {
    * The method:
    * 1. Finds all tables with more than one cell (not 1x1) in the document
    * 2. Checks if there's a blank paragraph immediately after each table
-   * 3. If no blank paragraph exists, adds one with Normal style, spacing and preserve flag
+   * 3. If no blank paragraph exists, adds one with spacing and preserve flag
    * 4. If a blank paragraph exists, optionally marks it as preserved
    *
    * @param options Configuration options
    * @param options.spacingAfter Spacing after the blank paragraph in twips (default: 120 twips = 6pt)
    * @param options.markAsPreserved Whether to mark blank paragraphs as preserved (default: true)
+   * @param options.style Style to apply to blank paragraphs (default: 'Normal')
    * @param options.filter Optional filter function to select which tables to process
    * @returns Statistics about the operation
    *
@@ -3877,6 +3888,13 @@ export class Document {
    * });
    *
    * @example
+   * // Custom style for blank paragraphs
+   * doc.ensureBlankLinesAfterOtherTables({
+   *   style: 'BodyText',  // Use BodyText instead of Normal
+   *   spacingAfter: 120
+   * });
+   *
+   * @example
    * // Only process tables with more than 2 rows
    * doc.ensureBlankLinesAfterOtherTables({
    *   filter: (table, index) => table.getRowCount() > 2
@@ -3885,6 +3903,7 @@ export class Document {
   public ensureBlankLinesAfterOtherTables(options?: {
     spacingAfter?: number;
     markAsPreserved?: boolean;
+    style?: string;
     filter?: (table: Table, index: number) => boolean;
   }): {
     tablesProcessed: number;
@@ -3893,6 +3912,7 @@ export class Document {
   } {
     const spacingAfter = options?.spacingAfter ?? 120;
     const markAsPreserved = options?.markAsPreserved ?? true;
+    const style = options?.style ?? "Normal";
     const filter = options?.filter;
 
     let tablesProcessed = 0;
@@ -3938,7 +3958,7 @@ export class Document {
         } else {
           // Next paragraph has content - add blank paragraph between table and content
           const blankPara = Paragraph.create();
-          blankPara.setStyle("Normal");
+          blankPara.setStyle(style);
           blankPara.setSpaceAfter(spacingAfter);
           if (markAsPreserved) {
             blankPara.setPreserved(true);
@@ -3949,7 +3969,7 @@ export class Document {
       } else {
         // No paragraph after table (or it's another table/element) - add blank paragraph
         const blankPara = Paragraph.create();
-        blankPara.setStyle("Normal");
+        blankPara.setStyle(style);
         blankPara.setSpaceAfter(spacingAfter);
         if (markAsPreserved) {
           blankPara.setPreserved(true);

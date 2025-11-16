@@ -48,10 +48,10 @@
  * @see {@link https://www.ecma-international.org/publications-and-standards/standards/ecma-376/ | ECMA-376 Part 1 §17.16.22}
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
-import { Run, RunFormatting } from './Run';
-import { validateRunText } from '../utils/validation';
-import { defaultLogger } from '../utils/logger';
+import { XMLElement } from "../xml/XMLBuilder";
+import { Run, RunFormatting } from "./Run";
+import { validateRunText } from "../utils/validation";
+import { defaultLogger } from "../utils/logger";
 
 /**
  * Hyperlink properties
@@ -83,7 +83,6 @@ export class Hyperlink {
   private relationshipId?: string;
   private formatting: RunFormatting;
 
-
   /**
    * Creates a new hyperlink
    *
@@ -93,7 +92,6 @@ export class Hyperlink {
    * @param properties Hyperlink properties
    */
   constructor(properties: HyperlinkProperties) {
-
     this.url = properties.url;
     this.anchor = properties.anchor;
     this.tooltip = properties.tooltip;
@@ -103,20 +101,20 @@ export class Hyperlink {
     if (this.url && this.anchor) {
       defaultLogger.warn(
         `DocXML Warning: Hyperlink has both URL ("${this.url}") and anchor ("${this.anchor}"). ` +
-        `This is ambiguous per ECMA-376 spec. URL will take precedence. ` +
-        `Use Hyperlink.createExternal() or Hyperlink.createInternal() to avoid ambiguity.`
+          `This is ambiguous per ECMA-376 spec. URL will take precedence. ` +
+          `Use Hyperlink.createExternal() or Hyperlink.createInternal() to avoid ambiguity.`
       );
     }
 
     // Text fallback: properties.text → url → 'Link'
     // NOTE: Do NOT use anchor (bookmark ID) as display text - it should only be used for navigation
     // Using bookmark IDs as visible text causes TOC corruption (Issue: TOC shows "HEADING=II.MNKE7E8NA385_" instead of proper headings)
-    this.text = properties.text || this.url || 'Link';
+    this.text = properties.text || this.url || "Link";
 
     // Validate text for XML patterns
     // Default to auto-cleaning XML patterns unless explicitly disabled (matches Run behavior)
     const validation = validateRunText(this.text, {
-      context: 'Hyperlink text',
+      context: "Hyperlink text",
       autoClean: properties.formatting?.cleanXmlFromText !== false,
       warnToConsole: true,
     });
@@ -128,8 +126,8 @@ export class Hyperlink {
 
     // Create run with default hyperlink styling (blue, underlined)
     this.formatting = {
-      color: '0563C1', // Word's default hyperlink blue
-      underline: 'single',
+      color: "0563C1", // Word's default hyperlink blue
+      underline: "single",
       ...properties.formatting,
     };
 
@@ -170,7 +168,7 @@ export class Hyperlink {
     // Validate text for XML patterns
     // Default to auto-cleaning unless explicitly disabled (matches Run behavior)
     const validation = validateRunText(text, {
-      context: 'Hyperlink.setText',
+      context: "Hyperlink.setText",
       autoClean: this.formatting.cleanXmlFromText !== false,
       warnToConsole: true,
     });
@@ -247,13 +245,12 @@ export class Hyperlink {
    * ```
    */
   setUrl(url: string | undefined): this {
-
     // Validate that clearing URL doesn't create empty hyperlink
     if (!url && !this.anchor) {
       throw new Error(
         `Cannot set URL to undefined: Hyperlink "${this.run.getText()}" has no anchor. ` +
-        `Clearing the URL would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
-        `Either provide a new URL or delete the hyperlink entirely.`
+          `Clearing the URL would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
+          `Either provide a new URL or delete the hyperlink entirely.`
       );
     }
 
@@ -276,7 +273,7 @@ export class Hyperlink {
     // This preserves user-provided text (even if it's "Link")
     // Use run.getText() to ensure we check the actual current text, not stale cache
     if (this.run.getText() === oldUrl) {
-      this.text = url || this.anchor || 'Link';
+      this.text = url || this.anchor || "Link";
       this.run.setText(this.text);
     }
 
@@ -299,8 +296,8 @@ export class Hyperlink {
     if (!anchor && !this.url) {
       throw new Error(
         `Cannot set anchor to undefined: Hyperlink "${this.run.getText()}" has no URL. ` +
-        `Clearing the anchor would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
-        `Either provide a new anchor or delete the hyperlink entirely.`
+          `Clearing the anchor would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
+          `Either provide a new anchor or delete the hyperlink entirely.`
       );
     }
 
@@ -319,7 +316,7 @@ export class Hyperlink {
     if (anchor && this.url) {
       defaultLogger.warn(
         `DocXML Warning: Setting anchor "${anchor}" on hyperlink that has URL "${this.url}". ` +
-        `Clearing URL to make this an internal link. Use separate hyperlinks for external and internal links.`
+          `Clearing URL to make this an internal link. Use separate hyperlinks for external and internal links.`
       );
       this.url = undefined;
       this.relationshipId = undefined;
@@ -328,7 +325,7 @@ export class Hyperlink {
     // Update text ONLY if it was auto-generated from the old anchor
     // Use run.getText() to ensure we check the actual current text, not stale cache
     if (this.run.getText() === oldAnchor) {
-      this.text = anchor || this.url || 'Link';
+      this.text = anchor || this.url || "Link";
       this.run.setText(this.text);
     }
 
@@ -445,7 +442,7 @@ export class Hyperlink {
 
     // External link validation
     if (!this.url) {
-      issues.push('No URL or anchor specified');
+      issues.push("No URL or anchor specified");
       return { valid: false, issues, fixed, originalUrl };
     }
 
@@ -453,8 +450,8 @@ export class Hyperlink {
     if (fixCommonIssues && fixedUrl) {
       // Fix 1: Add missing protocol
       if (!fixedUrl.match(/^[a-z]+:\/\//i)) {
-        fixedUrl = 'https://' + fixedUrl;
-        fixed.push('Added missing protocol (https://)');
+        fixedUrl = "https://" + fixedUrl;
+        fixed.push("Added missing protocol (https://)");
       }
 
       // Fix 2: Fix double slashes (except after protocol)
@@ -462,29 +459,29 @@ export class Hyperlink {
       if (protocolMatch && protocolMatch[1]) {
         const protocol = protocolMatch[1];
         const rest = fixedUrl.substring(protocol.length);
-        const fixedRest = rest.replace(/\/\//g, '/');
+        const fixedRest = rest.replace(/\/\//g, "/");
         if (rest !== fixedRest) {
           fixedUrl = protocol + fixedRest;
-          fixed.push('Fixed double slashes');
+          fixed.push("Fixed double slashes");
         }
       }
 
       // Fix 3: Encode spaces
-      if (fixedUrl.includes(' ')) {
-        fixedUrl = fixedUrl.replace(/ /g, '%20');
-        fixed.push('Encoded spaces as %20');
+      if (fixedUrl.includes(" ")) {
+        fixedUrl = fixedUrl.replace(/ /g, "%20");
+        fixed.push("Encoded spaces as %20");
       }
 
       // Fix 4: Remove trailing slashes for non-root URLs
       if (fixedUrl.match(/^https?:\/\/[^/]+\/.+\/$/)) {
-        fixedUrl = fixedUrl.replace(/\/$/, '');
-        fixed.push('Removed trailing slash');
+        fixedUrl = fixedUrl.replace(/\/$/, "");
+        fixed.push("Removed trailing slash");
       }
 
       // Fix 5: Fix common typos
-      fixedUrl = fixedUrl.replace(/^http:\/\//i, 'https://'); // Prefer HTTPS
-      if (fixedUrl !== this.url && fixedUrl.startsWith('https://')) {
-        fixed.push('Upgraded HTTP to HTTPS');
+      fixedUrl = fixedUrl.replace(/^http:\/\//i, "https://"); // Prefer HTTPS
+      if (fixedUrl !== this.url && fixedUrl.startsWith("https://")) {
+        fixed.push("Upgraded HTTP to HTTPS");
       }
 
       // Update URL if fixes were applied
@@ -496,9 +493,9 @@ export class Hyperlink {
     // Check accessibility (HTTP HEAD request)
     if (checkAccessibility && fixedUrl && fixedUrl.match(/^https?:\/\//i)) {
       // Check if fetch is available (Node.js 18+ or browser)
-      if (typeof fetch === 'undefined') {
+      if (typeof fetch === "undefined") {
         issues.push(
-          'Network validation unavailable: fetch API not supported in this environment'
+          "Network validation unavailable: fetch API not supported in this environment"
         );
       } else {
         try {
@@ -507,40 +504,40 @@ export class Hyperlink {
           const timeoutId = setTimeout(() => controller.abort(), timeout);
 
           const response = await fetch(fixedUrl, {
-            method: 'HEAD',
+            method: "HEAD",
             signal: controller.signal,
-            redirect: 'follow',
+            redirect: "follow",
           });
 
           clearTimeout(timeoutId);
 
           if (!response.ok) {
             issues.push(
-              `HTTP ${response.status}: ${response.statusText || 'Error'}`
+              `HTTP ${response.status}: ${response.statusText || "Error"}`
             );
           }
         } catch (error: unknown) {
           // Type guard for error objects with name and message properties
           const isErrorWithName = (err: unknown): err is { name: string } => {
-            return typeof err === 'object' && err !== null && 'name' in err;
+            return typeof err === "object" && err !== null && "name" in err;
           };
           const isErrorWithMessage = (
             err: unknown
           ): err is { message: string } => {
-            return typeof err === 'object' && err !== null && 'message' in err;
+            return typeof err === "object" && err !== null && "message" in err;
           };
 
-          if (isErrorWithName(error) && error.name === 'AbortError') {
+          if (isErrorWithName(error) && error.name === "AbortError") {
             issues.push(`Timeout after ${timeout}ms`);
           } else if (
             isErrorWithMessage(error) &&
-            error.message?.includes('fetch')
+            error.message?.includes("fetch")
           ) {
             issues.push(`Unreachable: ${error.message}`);
           } else if (isErrorWithMessage(error)) {
             issues.push(`Network error: ${error.message}`);
           } else {
-            issues.push('Network error: Unknown error');
+            issues.push("Network error: Unknown error");
           }
         }
       }
@@ -562,9 +559,9 @@ export class Hyperlink {
    */
   resetToStandardFormatting(): this {
     const standardFormatting: RunFormatting = {
-      font: 'Calibri',
-      color: '0563C1', // Standard hyperlink blue
-      underline: 'single',
+      font: "Verdana",
+      color: "0000FF", // Standard hyperlink blue
+      underline: "single",
       // Clear any other formatting that might be causing issues
       bold: false,
       italic: false,
@@ -603,8 +600,8 @@ export class Hyperlink {
     // VALIDATION: Hyperlink must have url OR anchor
     if (!this.url && !this.anchor) {
       throw new Error(
-        'CRITICAL: Hyperlink must have either a URL (external link) or anchor (internal link). ' +
-        'Cannot generate valid XML for empty hyperlink.'
+        "CRITICAL: Hyperlink must have either a URL (external link) or anchor (internal link). " +
+          "Cannot generate valid XML for empty hyperlink."
       );
     }
 
@@ -613,9 +610,9 @@ export class Hyperlink {
     if (this.url && !this.relationshipId) {
       throw new Error(
         `CRITICAL: External hyperlink to "${this.url}" is missing relationship ID. ` +
-        `This would create an invalid OpenXML document per ECMA-376 §17.16.22. ` +
-        `Solution: Use Document.save() which automatically registers relationships, ` +
-        `or manually call relationshipManager.addHyperlink(url) and set the relationship ID.`
+          `This would create an invalid OpenXML document per ECMA-376 §17.16.22. ` +
+          `Solution: Use Document.save() which automatically registers relationships, ` +
+          `or manually call relationshipManager.addHyperlink(url) and set the relationship ID.`
       );
     }
 
@@ -623,12 +620,12 @@ export class Hyperlink {
 
     // External link - add relationship ID
     if (this.url && this.relationshipId) {
-      attributes['r:id'] = this.relationshipId;
+      attributes["r:id"] = this.relationshipId;
     }
 
     // Internal link - uses anchor
     if (this.anchor) {
-      attributes['w:anchor'] = this.anchor;
+      attributes["w:anchor"] = this.anchor;
     }
 
     // Tooltip - explicitly escape attribute value for safety
@@ -636,14 +633,14 @@ export class Hyperlink {
     if (this.tooltip) {
       // Note: XMLBuilder.elementToString() will escape this via escapeXmlAttribute()
       // when generating the actual XML string. We store the raw value here.
-      attributes['w:tooltip'] = this.tooltip;
+      attributes["w:tooltip"] = this.tooltip;
     }
 
     // Generate run XML
     const runXml = this.run.toXML();
 
     return {
-      name: 'w:hyperlink',
+      name: "w:hyperlink",
       attributes,
       children: [runXml],
     };
@@ -655,7 +652,11 @@ export class Hyperlink {
    * @param text Display text
    * @param formatting Optional formatting
    */
-  static createExternal(url: string, text: string, formatting?: RunFormatting): Hyperlink {
+  static createExternal(
+    url: string,
+    text: string,
+    formatting?: RunFormatting
+  ): Hyperlink {
     return new Hyperlink({ url, text, formatting });
   }
 
@@ -665,7 +666,11 @@ export class Hyperlink {
    * @param text Display text
    * @param formatting Optional formatting
    */
-  static createInternal(anchor: string, text: string, formatting?: RunFormatting): Hyperlink {
+  static createInternal(
+    anchor: string,
+    text: string,
+    formatting?: RunFormatting
+  ): Hyperlink {
     return new Hyperlink({ anchor, text, formatting });
   }
 
@@ -675,7 +680,11 @@ export class Hyperlink {
    * @param text Display text (defaults to URL)
    * @param formatting Optional formatting
    */
-  static createWebLink(url: string, text?: string, formatting?: RunFormatting): Hyperlink {
+  static createWebLink(
+    url: string,
+    text?: string,
+    formatting?: RunFormatting
+  ): Hyperlink {
     return new Hyperlink({
       url,
       text: text || url,
@@ -689,7 +698,11 @@ export class Hyperlink {
    * @param text Display text (defaults to email)
    * @param formatting Optional formatting
    */
-  static createEmail(email: string, text?: string, formatting?: RunFormatting): Hyperlink {
+  static createEmail(
+    email: string,
+    text?: string,
+    formatting?: RunFormatting
+  ): Hyperlink {
     return new Hyperlink({
       url: `mailto:${email}`,
       text: text || email,
