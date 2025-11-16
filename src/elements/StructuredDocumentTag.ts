@@ -368,7 +368,7 @@ export class StructuredDocumentTag {
   setBuildingBlockProperties(properties: BuildingBlockProperties): this {
     this.properties.controlType = 'buildingBlock';
     this.properties.buildingBlock = properties;
-    return this.L;
+    return this;
   }
 
   /**
