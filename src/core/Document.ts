@@ -25,7 +25,7 @@ import { Section } from "../elements/Section";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { Table, TableBorder } from "../elements/Table";
 import { TableCell } from "../elements/TableCell";
-import { TableOfContents } from "../elements/TableOfContents";
+import { TableOfContents, TOCProperties } from "../elements/TableOfContents";
 import { TableOfContentsElement } from "../elements/TableOfContentsElement";
 import { NumberingManager } from "../formatting/NumberingManager";
 import { Style, StyleProperties } from "../formatting/Style";
@@ -174,6 +174,10 @@ export class Document {
     showFormatting: true,
     showInkAnnotations: true,
   };
+
+  // TOC auto-population setting
+  private autoPopulateTOCs: boolean = false;
+
   private rsidRoot?: string;
   private rsids: Set<string> = new Set();
   private documentProtection?: {
@@ -532,6 +536,68 @@ export class Document {
   createTableOfContents(title?: string): this {
     const tocElement = TableOfContentsElement.createStandard(title);
     return this.addTableOfContents(tocElement);
+  }
+
+  /**
+   * Creates and adds a pre-populated Table of Contents
+   * The TOC will display actual heading entries when document is first opened in Word
+   * Field structure is preserved so users can still right-click "Update Field"
+   *
+   * @param title - Optional TOC title
+   * @param options - Optional TOC configuration
+   * @returns This document for chaining
+   *
+   * @example
+   * const doc = Document.create();
+   * doc.createParagraph('Chapter 1').setStyle('Heading1');
+   * doc.createParagraph('Section 1.1').setStyle('Heading2');
+   *
+   * // Create pre-populated TOC
+   * doc.createPrePopulatedTableOfContents('Contents', {
+   *   levels: 3,
+   *   useHyperlinks: true
+   * });
+   *
+   * await doc.save('output.docx');
+   * // TOC entries are already visible when opened!
+   */
+  createPrePopulatedTableOfContents(
+    title?: string,
+    options?: Partial<TOCProperties>
+  ): this {
+    const toc = TableOfContents.create({
+      title: title || "Table of Contents",
+      ...options,
+    });
+    this.addTableOfContents(toc);
+    this.setAutoPopulateTOCs(true);
+    return this;
+  }
+
+  /**
+   * Enables or disables automatic TOC population during save
+   * When enabled, TOCs will be pre-populated with heading entries
+   *
+   * @param enabled - Whether to auto-populate TOCs
+   * @returns This document for chaining
+   *
+   * @example
+   * doc.setAutoPopulateTOCs(true);
+   * doc.createTableOfContents();
+   * await doc.save('output.docx');
+   * // TOC is pre-populated with entries
+   */
+  setAutoPopulateTOCs(enabled: boolean): this {
+    this.autoPopulateTOCs = enabled;
+    return this;
+  }
+
+  /**
+   * Checks if automatic TOC population is enabled
+   * @returns True if TOCs will be auto-populated on save
+   */
+  isAutoPopulateTOCsEnabled(): boolean {
+    return this.autoPopulateTOCs;
   }
 
   /**
@@ -904,6 +970,11 @@ export class Document {
       // Save to temporary file first
       await this.zipHandler.save(tempPath);
 
+      // Auto-populate TOCs if enabled
+      if (this.autoPopulateTOCs) {
+        await this.populateTOCsInFile(tempPath);
+      }
+
       // Atomic rename - only if save succeeded
       const { promises: fs } = await import("fs");
       await fs.rename(tempPath, filePath);
@@ -966,6 +1037,18 @@ export class Document {
       this.saveComments();
       this.updateRelationships();
       this.updateContentTypesWithImagesHeadersFootersAndComments();
+
+      // Auto-populate TOCs if enabled
+      if (this.autoPopulateTOCs) {
+        const docXml = this.zipHandler.getFileAsString("word/document.xml");
+        if (docXml) {
+          const populatedXml = this.populateAllTOCsInXML(docXml);
+          if (populatedXml !== docXml) {
+            this.zipHandler.updateFile("word/document.xml", populatedXml);
+          }
+        }
+      }
+
       return await this.zipHandler.toBuffer();
     } finally {
       // Release image data to free memory
@@ -5081,6 +5164,105 @@ export class Document {
   }
 
   /**
+   * Populates TOCs in a saved file
+   * Private helper used by save() when auto-populate is enabled
+   *
+   * @param filePath Path to the saved DOCX file
+   * @returns Promise resolving to the number of TOCs populated
+   * @private
+   */
+  private async populateTOCsInFile(filePath: string): Promise<number> {
+    // Load the saved document
+    const handler = new ZipHandler();
+    await handler.load(filePath);
+
+    // Get document.xml
+    const docXml = handler.getFileAsString("word/document.xml");
+    if (!docXml) {
+      return 0;
+    }
+
+    // Populate all TOCs in the XML
+    const modifiedXml = this.populateAllTOCsInXML(docXml);
+
+    // Update and save if changes were made
+    if (modifiedXml !== docXml) {
+      handler.updateFile("word/document.xml", modifiedXml);
+      await handler.save(filePath);
+
+      // Count TOCs that were populated
+      const tocRegex =
+        /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
+      const matches = Array.from(docXml.matchAll(tocRegex));
+      return matches.length;
+    }
+
+    return 0;
+  }
+
+  /**
+   * Populates all TOCs in document XML
+   * Extracted from replaceTableOfContents for reuse
+   *
+   * @param docXml The document XML string
+   * @returns Modified XML with populated TOCs
+   * @private
+   */
+  private populateAllTOCsInXML(docXml: string): string {
+    const tocRegex =
+      /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
+    const tocMatches = Array.from(docXml.matchAll(tocRegex));
+
+    if (tocMatches.length === 0) return docXml;
+
+    let modifiedXml = docXml;
+
+    for (const match of tocMatches) {
+      try {
+        const tocXml = match[0];
+
+        // Extract field instruction
+        const instrMatch = tocXml.match(
+          /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/
+        );
+        if (!instrMatch?.[1]) continue;
+
+        // Decode XML entities
+        let fieldInstruction = instrMatch[1]
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'");
+
+        // Parse levels and find headings
+        const levels = this.parseTOCFieldInstruction(fieldInstruction);
+        const headings = this.findHeadingsForTOCFromXML(docXml, levels);
+
+        if (headings.length === 0) continue;
+
+        // Generate populated TOC
+        const newTocXml = this.generateTOCXML(headings, fieldInstruction);
+        modifiedXml = modifiedXml.replace(tocXml, newTocXml);
+      } catch (error) {
+        // Skip this TOC on error
+        this.logger.error(
+          "Error populating TOC",
+          error instanceof Error
+            ? {
+                message: error.message,
+                stack: error.stack,
+              }
+            : { error: String(error) }
+        );
+        continue;
+      }
+    }
+
+    return modifiedXml;
+  }
+
+  /**
    * Replaces all Table of Contents in a saved document file with pre-populated entries
    *
    * This helper function works with saved DOCX files:
@@ -5106,81 +5288,8 @@ export class Document {
    * console.log(`Replaced ${count} TOC element(s) with populated entries`);
    */
   public async replaceTableOfContents(filePath: string): Promise<number> {
-    // Load the saved document
-    const handler = new ZipHandler();
-    await handler.load(filePath);
-
-    // Get document.xml
-    const docXml = handler.getFileAsString("word/document.xml");
-    if (!docXml) {
-      throw new Error("word/document.xml not found in document");
-    }
-
-    // Find all TOC SDTs in the XML
-    const tocRegex =
-      /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
-    const tocMatches = Array.from(docXml.matchAll(tocRegex));
-
-    if (tocMatches.length === 0) {
-      return 0; // No TOCs found
-    }
-
-    let replacedCount = 0;
-    let modifiedXml = docXml;
-
-    // Process each TOC
-    for (const match of tocMatches) {
-      try {
-        const tocXml = match[0];
-
-        // Extract field instruction from TOC XML
-        const instrMatch = tocXml.match(
-          /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/
-        );
-        if (!instrMatch || !instrMatch[1]) {
-          continue; // No instruction found, skip
-        }
-
-        let fieldInstruction = instrMatch[1];
-        // Decode XML entities (decode &amp; first to handle double-encoding)
-        fieldInstruction = fieldInstruction
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"')
-          .replace(/&apos;/g, "'");
-
-        // Parse the field instruction to determine levels
-        const levels = this.parseTOCFieldInstruction(fieldInstruction);
-
-        // Find all headings in the document matching these levels (using XML parsing to search tables too)
-        const headings = this.findHeadingsForTOCFromXML(docXml, levels);
-
-        if (headings.length === 0) {
-          continue; // No headings found, skip this TOC
-        }
-
-        // Generate new TOC XML with populated entries
-        const newTocXml = this.generateTOCXML(headings, fieldInstruction);
-
-        // Replace this TOC in the document XML
-        modifiedXml = modifiedXml.replace(tocXml, newTocXml);
-
-        replacedCount++;
-      } catch (error) {
-        // Skip this TOC if there's an error
-        defaultLogger.error(`Error replacing TOC: ${error}`);
-        continue;
-      }
-    }
-
-    // Update document.xml in the archive
-    if (replacedCount > 0) {
-      handler.updateFile("word/document.xml", modifiedXml);
-      await handler.save(filePath);
-    }
-
-    return replacedCount;
+    // Reuse the new extracted logic
+    return await this.populateTOCsInFile(filePath);
   }
 
   /**

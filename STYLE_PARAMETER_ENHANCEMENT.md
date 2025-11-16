@@ -141,7 +141,3 @@ doc.ensureBlankLinesAfterOtherTables({
 - [`src/core/Document.ts`](src/core/Document.ts) - Core implementation
 - [`examples/ensure-blank-lines-after-tables.ts`](examples/ensure-blank-lines-after-tables.ts) - Usage examples
 - [`src/__tests__/ensure-blank-lines-style.test.ts`](src/__tests__/ensure-blank-lines-style.test.ts) - Test coverage
-
-## Note on Prettier
-
-Prettier is auto-formatting code according to project configuration (converting double quotes to single quotes). This is expected behavior and doesn't affect functionality - it's just code style enforcement.
