@@ -3,31 +3,31 @@
  * A run is the smallest unit of text formatting in a Word document
  */
 
-import { deepClone } from '../utils/deepClone';
-import { logSerialization, logTextDirection } from '../utils/diagnostics';
-import { defaultLogger } from '../utils/logger';
-import { normalizeColor, validateRunText } from '../utils/validation';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { deepClone } from "../utils/deepClone";
+import { logSerialization, logTextDirection } from "../utils/diagnostics";
+import { defaultLogger } from "../utils/logger";
+import { normalizeColor, validateRunText } from "../utils/validation";
+import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 
 /**
  * Run content element types
  * Per ECMA-376 Part 1 §17.3.3 EG_RunInnerContent, runs can contain multiple types of content
  */
 export type RunContentType =
-  | 'text'            // <w:t> - Regular text
-  | 'tab'             // <w:tab/> - Tab character (used in TOC entries)
-  | 'break'           // <w:br/> - Line/page/column break
-  | 'carriageReturn'  // <w:cr/> - Carriage return
-  | 'softHyphen'      // <w:softHyphen/> - Optional hyphen
-  | 'noBreakHyphen'   // <w:noBreakHyphen/> - Non-breaking hyphen
-  | 'instructionText' // <w:instrText> - Field instruction text
-  | 'fieldChar';      // <w:fldChar/> - Field character markers
+  | "text" // <w:t> - Regular text
+  | "tab" // <w:tab/> - Tab character (used in TOC entries)
+  | "break" // <w:br/> - Line/page/column break
+  | "carriageReturn" // <w:cr/> - Carriage return
+  | "softHyphen" // <w:softHyphen/> - Optional hyphen
+  | "noBreakHyphen" // <w:noBreakHyphen/> - Non-breaking hyphen
+  | "instructionText" // <w:instrText> - Field instruction text
+  | "fieldChar"; // <w:fldChar/> - Field character markers
 
 /**
  * Break type for <w:br> elements
  * Per ECMA-376 Part 1 §17.18.3
  */
-export type BreakType = 'page' | 'column' | 'textWrapping';
+export type BreakType = "page" | "column" | "textWrapping";
 
 /**
  * Run content element
@@ -41,7 +41,7 @@ export interface RunContent {
   /** Break type (only for 'break' type) */
   breakType?: BreakType;
   /** Field character subtype (only for 'fieldChar' type) */
-  fieldCharType?: 'begin' | 'separate' | 'end';
+  fieldCharType?: "begin" | "separate" | "end";
   /** Whether the field char is marked dirty */
   fieldCharDirty?: boolean;
   /** Whether the field char is locked */
@@ -51,7 +51,16 @@ export interface RunContent {
 /**
  * Border style for text
  */
-export type TextBorderStyle = 'single' | 'double' | 'dashed' | 'dotted' | 'thick' | 'wave' | 'dashDotStroked' | 'threeDEmboss' | 'threeDEngrave';
+export type TextBorderStyle =
+  | "single"
+  | "double"
+  | "dashed"
+  | "dotted"
+  | "thick"
+  | "wave"
+  | "dashDotStroked"
+  | "threeDEmboss"
+  | "threeDEngrave";
 
 /**
  * Text border definition
@@ -70,7 +79,44 @@ export interface TextBorder {
 /**
  * Shading pattern for text background
  */
-export type ShadingPattern = 'clear' | 'solid' | 'horzStripe' | 'vertStripe' | 'reverseDiagStripe' | 'diagStripe' | 'horzCross' | 'diagCross' | 'thinHorzStripe' | 'thinVertStripe' | 'thinReverseDiagStripe' | 'thinDiagStripe' | 'thinHorzCross' | 'thinDiagCross' | 'pct5' | 'pct10' | 'pct12' | 'pct15' | 'pct20' | 'pct25' | 'pct30' | 'pct35' | 'pct37' | 'pct40' | 'pct45' | 'pct50' | 'pct55' | 'pct60' | 'pct62' | 'pct65' | 'pct70' | 'pct75' | 'pct80' | 'pct85' | 'pct87' | 'pct90' | 'pct95';
+export type ShadingPattern =
+  | "clear"
+  | "solid"
+  | "horzStripe"
+  | "vertStripe"
+  | "reverseDiagStripe"
+  | "diagStripe"
+  | "horzCross"
+  | "diagCross"
+  | "thinHorzStripe"
+  | "thinVertStripe"
+  | "thinReverseDiagStripe"
+  | "thinDiagStripe"
+  | "thinHorzCross"
+  | "thinDiagCross"
+  | "pct5"
+  | "pct10"
+  | "pct12"
+  | "pct15"
+  | "pct20"
+  | "pct25"
+  | "pct30"
+  | "pct35"
+  | "pct37"
+  | "pct40"
+  | "pct45"
+  | "pct50"
+  | "pct55"
+  | "pct60"
+  | "pct62"
+  | "pct65"
+  | "pct70"
+  | "pct75"
+  | "pct80"
+  | "pct85"
+  | "pct87"
+  | "pct90"
+  | "pct95";
 
 /**
  * Character shading definition
@@ -97,13 +143,13 @@ export interface EastAsianLayout {
   /** Combine characters into single character space */
   combine?: boolean;
   /** Bracket characters for combined text */
-  combineBrackets?: 'none' | 'round' | 'square' | 'angle' | 'curly';
+  combineBrackets?: "none" | "round" | "square" | "angle" | "curly";
 }
 
 /**
  * Emphasis mark type - decorative marks above/below text
  */
-export type EmphasisMark = 'dot' | 'comma' | 'circle' | 'underDot';
+export type EmphasisMark = "dot" | "comma" | "circle" | "underDot";
 
 /**
  * Text formatting options for a run
@@ -136,7 +182,7 @@ export interface RunFormatting {
   /** Language code (e.g., 'en-US', 'fr-FR', 'es-ES') */
   language?: string;
   /** Underline text */
-  underline?: boolean | 'single' | 'double' | 'thick' | 'dotted' | 'dash';
+  underline?: boolean | "single" | "double" | "thick" | "dotted" | "dash";
   /** Strikethrough text */
   strike?: boolean;
   /** Double strikethrough */
@@ -152,7 +198,23 @@ export interface RunFormatting {
   /** Text color in hex format (without #) */
   color?: string;
   /** Highlight color */
-  highlight?: 'yellow' | 'green' | 'cyan' | 'magenta' | 'blue' | 'red' | 'darkBlue' | 'darkCyan' | 'darkGreen' | 'darkMagenta' | 'darkRed' | 'darkYellow' | 'darkGray' | 'lightGray' | 'black' | 'white';
+  highlight?:
+    | "yellow"
+    | "green"
+    | "cyan"
+    | "magenta"
+    | "blue"
+    | "red"
+    | "darkBlue"
+    | "darkCyan"
+    | "darkGreen"
+    | "darkMagenta"
+    | "darkRed"
+    | "darkYellow"
+    | "darkGray"
+    | "lightGray"
+    | "black"
+    | "white";
   /** Small caps */
   smallCaps?: boolean;
   /** All caps */
@@ -176,7 +238,16 @@ export interface RunFormatting {
   /** Special vanish - hidden text for specific scenarios (like TOC entries) */
   specVanish?: boolean;
   /** Text effect/animation type */
-  effect?: 'none' | 'lights' | 'blinkBackground' | 'sparkleText' | 'marchingBlackAnts' | 'marchingRedAnts' | 'shimmer' | 'antsBlack' | 'antsRed';
+  effect?:
+    | "none"
+    | "lights"
+    | "blinkBackground"
+    | "sparkleText"
+    | "marchingBlackAnts"
+    | "marchingRedAnts"
+    | "shimmer"
+    | "antsBlack"
+    | "antsRed";
   /** Fit text to width in twips (1/20th of a point) */
   fitText?: number;
   /** East Asian typography layout options */
@@ -207,8 +278,10 @@ export class Run {
     if (text === undefined || text === null) {
       defaultLogger.warn(
         `DocXML Text Validation Warning [Run constructor]:\n` +
-        `  - Received ${text === undefined ? 'undefined' : 'null'} text value\n` +
-        `  - Converting to empty string for Word compatibility`
+          `  - Received ${
+            text === undefined ? "undefined" : "null"
+          } text value\n` +
+          `  - Converting to empty string for Word compatibility`
       );
     }
 
@@ -217,16 +290,16 @@ export class Run {
 
     // Validate text for XML patterns
     const validation = validateRunText(text, {
-      context: 'Run constructor',
+      context: "Run constructor",
       autoClean: shouldClean,
-      warnToConsole: true,  // Enable warnings to help catch data quality issues
+      warnToConsole: true, // Enable warnings to help catch data quality issues
     });
 
     // Use cleaned text if available and cleaning was requested
     const cleanedText = validation.cleanedText || text;
 
     // Convert undefined/null to empty string for consistent XML generation
-    const normalizedText = cleanedText ?? '';
+    const normalizedText = cleanedText ?? "";
 
     // Parse text to extract special characters into separate content elements
     this.content = this.parseTextWithSpecialCharacters(normalizedText);
@@ -244,64 +317,64 @@ export class Run {
    */
   private parseTextWithSpecialCharacters(text: string): RunContent[] {
     if (!text) {
-      return [{ type: 'text', value: '' }];
+      return [{ type: "text", value: "" }];
     }
 
     const content: RunContent[] = [];
-    let currentText = '';
+    let currentText = "";
 
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
 
       switch (char) {
-        case '\t':
+        case "\t":
           // Add accumulated text before tab
           if (currentText) {
-            content.push({ type: 'text', value: currentText });
-            currentText = '';
+            content.push({ type: "text", value: currentText });
+            currentText = "";
           }
           // Add tab element
-          content.push({ type: 'tab' });
+          content.push({ type: "tab" });
           break;
 
-        case '\n':
+        case "\n":
           // Add accumulated text before newline
           if (currentText) {
-            content.push({ type: 'text', value: currentText });
-            currentText = '';
+            content.push({ type: "text", value: currentText });
+            currentText = "";
           }
           // Add break element
-          content.push({ type: 'break' });
+          content.push({ type: "break" });
           break;
 
-        case '\u2011': // Non-breaking hyphen
+        case "\u2011": // Non-breaking hyphen
           // Add accumulated text before non-breaking hyphen
           if (currentText) {
-            content.push({ type: 'text', value: currentText });
-            currentText = '';
+            content.push({ type: "text", value: currentText });
+            currentText = "";
           }
           // Add non-breaking hyphen element
-          content.push({ type: 'noBreakHyphen' });
+          content.push({ type: "noBreakHyphen" });
           break;
 
-        case '\r': // Carriage return
+        case "\r": // Carriage return
           // Add accumulated text before carriage return
           if (currentText) {
-            content.push({ type: 'text', value: currentText });
-            currentText = '';
+            content.push({ type: "text", value: currentText });
+            currentText = "";
           }
           // Add carriage return element
-          content.push({ type: 'carriageReturn' });
+          content.push({ type: "carriageReturn" });
           break;
 
-        case '\u00AD': // Soft hyphen
+        case "\u00AD": // Soft hyphen
           // Add accumulated text before soft hyphen
           if (currentText) {
-            content.push({ type: 'text', value: currentText });
-            currentText = '';
+            content.push({ type: "text", value: currentText });
+            currentText = "";
           }
           // Add soft hyphen element
-          content.push({ type: 'softHyphen' });
+          content.push({ type: "softHyphen" });
           break;
 
         default:
@@ -313,60 +386,83 @@ export class Run {
 
     // Add any remaining text
     if (currentText) {
-      content.push({ type: 'text', value: currentText });
+      content.push({ type: "text", value: currentText });
     }
 
     // If no content was added (empty string), add empty text element
     if (content.length === 0) {
-      content.push({ type: 'text', value: '' });
+      content.push({ type: "text", value: "" });
     }
 
     return content;
   }
 
   /**
-   * Gets the text content (concatenates all content elements)
-   * Converts special characters back to their string representation
+   * Gets the text content from the run
+   *
+   * Concatenates all content elements and converts special characters
+   * (tabs, breaks, etc.) back to their string representation.
+   *
+   * @returns The complete text string including tabs (\t) and line breaks (\n)
+   *
+   * @example
+   * ```typescript
+   * const run = new Run('Hello\tWorld');
+   * console.log(run.getText()); // "Hello\tWorld"
+   * ```
    */
   getText(): string {
     return this.content
-      .map(c => {
+      .map((c) => {
         switch (c.type) {
-          case 'text':
-            return c.value || '';
-          case 'tab':
-            return '\t';
-          case 'break':
-            return '\n';
-          case 'carriageReturn':
-            return '\r';
-        case 'softHyphen':
-          return '\u00AD';
-        case 'noBreakHyphen':
-          return '\u2011';
-        case 'instructionText':
-          return '';
-        case 'fieldChar':
-          return '';
-        default:
-          return '';
+          case "text":
+            return c.value || "";
+          case "tab":
+            return "\t";
+          case "break":
+            return "\n";
+          case "carriageReturn":
+            return "\r";
+          case "softHyphen":
+            return "\u00AD";
+          case "noBreakHyphen":
+            return "\u2011";
+          case "instructionText":
+            return "";
+          case "fieldChar":
+            return "";
+          default:
+            return "";
         }
       })
-      .join('');
+      .join("");
   }
 
   /**
-   * Sets the text content (replaces all content with single text element)
-   * Backward-compatible method that preserves existing API
-   * @param text - New text content
+   * Sets the text content of the run
+   *
+   * Replaces all existing content with new text. Special characters like
+   * tabs (\t) and newlines (\n) are automatically converted to their
+   * corresponding XML elements.
+   *
+   * @param text - The new text content
+   *
+   * @example
+   * ```typescript
+   * const run = new Run('Old text');
+   * run.setText('New text');
+   * run.setText('Text with\ttab'); // Tab is preserved
+   * ```
    */
   setText(text: string): void {
     // Warn about undefined/null text to help catch data quality issues
     if (text === undefined || text === null) {
       defaultLogger.warn(
         `DocXML Text Validation Warning [Run.setText]:\n` +
-        `  - Received ${text === undefined ? 'undefined' : 'null'} text value\n` +
-        `  - Converting to empty string for Word compatibility`
+          `  - Received ${
+            text === undefined ? "undefined" : "null"
+          } text value\n` +
+          `  - Converting to empty string for Word compatibility`
       );
     }
 
@@ -376,23 +472,37 @@ export class Run {
 
     // Validate text for XML patterns
     const validation = validateRunText(text, {
-      context: 'Run.setText',
+      context: "Run.setText",
       autoClean: shouldClean,
-      warnToConsole: true,  // Enable warnings to help catch data quality issues
+      warnToConsole: true, // Enable warnings to help catch data quality issues
     });
 
     // Use cleaned text if available and cleaning was requested
     const cleanedText = validation.cleanedText || text;
 
     // Convert undefined/null to empty string for consistent XML generation
-    const normalizedText = cleanedText ?? '';
+    const normalizedText = cleanedText ?? "";
 
     // Parse text to extract special characters into separate content elements
     this.content = this.parseTextWithSpecialCharacters(normalizedText);
   }
 
   /**
-   * Gets the formatting
+   * Gets a copy of the run formatting
+   *
+   * Returns a copy of all formatting properties including font, size,
+   * bold, italic, color, and all other formatting attributes.
+   *
+   * @returns Copy of the run formatting object
+   *
+   * @example
+   * ```typescript
+   * const formatting = run.getFormatting();
+   * console.log(`Font: ${formatting.font}, Size: ${formatting.size}pt`);
+   * if (formatting.bold) {
+   *   console.log('Text is bold');
+   * }
+   * ```
    */
   getFormatting(): RunFormatting {
     return { ...this.formatting };
@@ -444,7 +554,18 @@ export class Run {
 
   /**
    * Sets bold formatting
-   * @param bold - Whether text is bold
+   *
+   * Makes the text bold or removes bold formatting.
+   *
+   * @param bold - If true, applies bold; if false, removes bold (default: true)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setBold();        // Apply bold
+   * run.setBold(true);    // Apply bold
+   * run.setBold(false);   // Remove bold
+   * ```
    */
   setBold(bold: boolean = true): this {
     this.formatting.bold = bold;
@@ -453,7 +574,18 @@ export class Run {
 
   /**
    * Sets italic formatting
-   * @param italic - Whether text is italic
+   *
+   * Makes the text italic or removes italic formatting.
+   *
+   * @param italic - If true, applies italic; if false, removes italic (default: true)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setItalic();       // Apply italic
+   * run.setItalic(true);   // Apply italic
+   * run.setItalic(false);  // Remove italic
+   * ```
    */
   setItalic(italic: boolean = true): this {
     this.formatting.italic = italic;
@@ -532,16 +664,43 @@ export class Run {
 
   /**
    * Sets underline formatting
-   * @param underline - Underline style or boolean
+   *
+   * Applies various underline styles or removes underlining.
+   *
+   * @param underline - Underline style or boolean (default: true = 'single')
+   *   - true or 'single': Single underline
+   *   - 'double': Double underline
+   *   - 'thick': Thick underline
+   *   - 'dotted': Dotted underline
+   *   - 'dash': Dashed underline
+   *   - false: No underline
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setUnderline();          // Single underline
+   * run.setUnderline('double');  // Double underline
+   * run.setUnderline(false);     // Remove underline
+   * ```
    */
-  setUnderline(underline: RunFormatting['underline'] = true): this {
+  setUnderline(underline: RunFormatting["underline"] = true): this {
     this.formatting.underline = underline;
     return this;
   }
 
   /**
    * Sets strikethrough formatting
-   * @param strike - Whether text has strikethrough
+   *
+   * Adds or removes a line through the text.
+   *
+   * @param strike - If true, applies strikethrough; if false, removes it (default: true)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setStrike();       // Apply strikethrough
+   * run.setStrike(false);  // Remove strikethrough
+   * ```
    */
   setStrike(strike: boolean = true): this {
     this.formatting.strike = strike;
@@ -550,7 +709,18 @@ export class Run {
 
   /**
    * Sets subscript formatting
-   * @param subscript - Whether text is subscript
+   *
+   * Lowers the text below the baseline (e.g., H₂O).
+   * Automatically removes superscript if set.
+   *
+   * @param subscript - If true, applies subscript; if false, removes it (default: true)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setText('H₂O');
+   * run.setSubscript();  // Format as subscript
+   * ```
    */
   setSubscript(subscript: boolean = true): this {
     this.formatting.subscript = subscript;
@@ -562,7 +732,18 @@ export class Run {
 
   /**
    * Sets superscript formatting
-   * @param superscript - Whether text is superscript
+   *
+   * Raises the text above the baseline (e.g., x²).
+   * Automatically removes subscript if set.
+   *
+   * @param superscript - If true, applies superscript; if false, removes it (default: true)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setText('x²');
+   * run.setSuperscript();  // Format as superscript
+   * ```
    */
   setSuperscript(superscript: boolean = true): this {
     this.formatting.superscript = superscript;
@@ -573,9 +754,19 @@ export class Run {
   }
 
   /**
-   * Sets font
-   * @param font - Font name
-   * @param size - Font size in points (optional)
+   * Sets font family and optionally size
+   *
+   * Changes the font family (typeface) and optionally the font size.
+   *
+   * @param font - Font family name (e.g., 'Arial', 'Times New Roman', 'Verdana')
+   * @param size - Optional font size in points
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setFont('Arial');           // Change font only
+   * run.setFont('Verdana', 14);     // Change font and size
+   * ```
    */
   setFont(font: string, size?: number): this {
     this.formatting.font = font;
@@ -587,7 +778,17 @@ export class Run {
 
   /**
    * Sets font size
-   * @param size - Font size in points
+   *
+   * Changes the size of the text in points.
+   *
+   * @param size - Font size in points (e.g., 12 for 12pt text)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setSize(12);   // 12pt text
+   * run.setSize(18);   // 18pt text
+   * ```
    */
   setSize(size: number): this {
     this.formatting.size = size;
@@ -595,28 +796,64 @@ export class Run {
   }
 
   /**
-   * Sets text color with normalization to uppercase hex
-   * @param color - Color in hex format (with or without #)
-   * @throws Error if color format is invalid
+   * Sets text color
+   *
+   * Sets the foreground (text) color using hexadecimal format.
+   * Color is automatically normalized to uppercase without the # prefix.
+   *
+   * @param color - Color in hex format (with or without # prefix)
+   * @returns This run instance for method chaining
+   *
+   * @throws Error if color format is invalid (not 6 hex characters)
+   *
+   * @example
+   * ```typescript
+   * run.setColor('FF0000');   // Red text
+   * run.setColor('#0000FF');  // Blue text (# is removed)
+   * run.setColor('00FF00');   // Green text
+   * ```
    */
   setColor(color: string): this {
     this.formatting.color = normalizeColor(color);
     return this;
   }
 
-
   /**
-   * Sets highlight color
-   * @param highlight - Highlight color
+   * Sets highlight (background) color
+   *
+   * Applies a background highlight color to the text, similar to using
+   * a highlighter marker.
+   *
+   * @param highlight - Highlight color name
+   *   - Standard colors: 'yellow', 'green', 'cyan', 'magenta', 'blue', 'red'
+   *   - Dark variants: 'darkBlue', 'darkCyan', 'darkGreen', 'darkMagenta', 'darkRed', 'darkYellow'
+   *   - Grayscale: 'darkGray', 'lightGray', 'black', 'white'
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setHighlight('yellow');     // Yellow highlight
+   * run.setHighlight('darkGreen');  // Dark green highlight
+   * ```
    */
-  setHighlight(highlight: RunFormatting['highlight']): this {
+  setHighlight(highlight: RunFormatting["highlight"]): this {
     this.formatting.highlight = highlight;
     return this;
   }
 
   /**
-   * Sets small caps
-   * @param smallCaps - Whether text is in small caps
+   * Sets small caps formatting
+   *
+   * Formats lowercase letters as smaller versions of capital letters.
+   *
+   * @param smallCaps - If true, applies small caps; if false, removes it (default: true)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setText('Small Caps Text');
+   * run.setSmallCaps();  // SMALL CAPS TEXT
+   * ```
    */
   setSmallCaps(smallCaps: boolean = true): this {
     this.formatting.smallCaps = smallCaps;
@@ -624,8 +861,18 @@ export class Run {
   }
 
   /**
-   * Sets all caps
-   * @param allCaps - Whether text is in all caps
+   * Sets all caps formatting
+   *
+   * Displays all text in capital letters regardless of original case.
+   *
+   * @param allCaps - If true, applies all caps; if false, removes it (default: true)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setText('All Caps Text');
+   * run.setAllCaps();  // ALL CAPS TEXT
+   * ```
    */
   setAllCaps(allCaps: boolean = true): this {
     this.formatting.allCaps = allCaps;
@@ -727,7 +974,18 @@ export class Run {
    * @param effect - Effect type (e.g., 'shimmer', 'sparkleText')
    * @returns This run for method chaining
    */
-  setEffect(effect: 'none' | 'lights' | 'blinkBackground' | 'sparkleText' | 'marchingBlackAnts' | 'marchingRedAnts' | 'shimmer' | 'antsBlack' | 'antsRed'): this {
+  setEffect(
+    effect:
+      | "none"
+      | "lights"
+      | "blinkBackground"
+      | "sparkleText"
+      | "marchingBlackAnts"
+      | "marchingRedAnts"
+      | "shimmer"
+      | "antsBlack"
+      | "antsRed"
+  ): this {
     this.formatting.effect = effect;
     return this;
   }
@@ -777,7 +1035,9 @@ export class Run {
     const text = this.getText();
 
     // Diagnostic logging before serialization
-    logSerialization(`Serializing run: "${text}"`, { rtl: this.formatting.rtl || false });
+    logSerialization(`Serializing run: "${text}"`, {
+      rtl: this.formatting.rtl || false,
+    });
     if (this.formatting.rtl) {
       logTextDirection(`Run with RTL being serialized: "${text}"`);
     }
@@ -794,73 +1054,98 @@ export class Run {
     // Add run content elements (text, tabs, breaks, etc.) in order
     for (const contentElement of this.content) {
       switch (contentElement.type) {
-        case 'text':
+        case "text":
           // Always generate <w:t> element, even for empty strings
           // This ensures proper Word compatibility and round-trip preservation
-          runChildren.push(XMLBuilder.w('t', {
-            'xml:space': 'preserve',
-          }, [contentElement.value || '']));
-          break;
-
-        case 'tab':
-          runChildren.push(XMLBuilder.wSelf('tab'));
-          break;
-
-        case 'break':
-          {
-            const attrs: Record<string, string> = {};
-            if (contentElement.breakType) {
-              attrs['w:type'] = contentElement.breakType;
-            }
-            runChildren.push(XMLBuilder.wSelf('br', Object.keys(attrs).length > 0 ? attrs : undefined));
-          }
-          break;
-
-        case 'carriageReturn':
-          runChildren.push(XMLBuilder.wSelf('cr'));
-          break;
-
-        case 'softHyphen':
-          runChildren.push(XMLBuilder.wSelf('softHyphen'));
-          break;
-
-        case 'noBreakHyphen':
-          runChildren.push(XMLBuilder.wSelf('noBreakHyphen'));
-          break;
-
-        case 'instructionText':
           runChildren.push(
-            XMLBuilder.w('instrText', { 'xml:space': 'preserve' }, [contentElement.value || ''])
+            XMLBuilder.w(
+              "t",
+              {
+                "xml:space": "preserve",
+              },
+              [contentElement.value || ""]
+            )
           );
           break;
 
-        case 'fieldChar': {
+        case "tab":
+          runChildren.push(XMLBuilder.wSelf("tab"));
+          break;
+
+        case "break":
+          {
+            const attrs: Record<string, string> = {};
+            if (contentElement.breakType) {
+              attrs["w:type"] = contentElement.breakType;
+            }
+            runChildren.push(
+              XMLBuilder.wSelf(
+                "br",
+                Object.keys(attrs).length > 0 ? attrs : undefined
+              )
+            );
+          }
+          break;
+
+        case "carriageReturn":
+          runChildren.push(XMLBuilder.wSelf("cr"));
+          break;
+
+        case "softHyphen":
+          runChildren.push(XMLBuilder.wSelf("softHyphen"));
+          break;
+
+        case "noBreakHyphen":
+          runChildren.push(XMLBuilder.wSelf("noBreakHyphen"));
+          break;
+
+        case "instructionText":
+          runChildren.push(
+            XMLBuilder.w("instrText", { "xml:space": "preserve" }, [
+              contentElement.value || "",
+            ])
+          );
+          break;
+
+        case "fieldChar": {
           if (!contentElement.fieldCharType) {
             break;
           }
           const attrs: Record<string, string> = {
-            'w:fldCharType': contentElement.fieldCharType,
+            "w:fldCharType": contentElement.fieldCharType,
           };
           if (contentElement.fieldCharDirty !== undefined) {
-            attrs['w:dirty'] = contentElement.fieldCharDirty ? '1' : '0';
+            attrs["w:dirty"] = contentElement.fieldCharDirty ? "1" : "0";
           }
           if (contentElement.fieldCharLocked !== undefined) {
-            attrs['w:fldLock'] = contentElement.fieldCharLocked ? '1' : '0';
+            attrs["w:fldLock"] = contentElement.fieldCharLocked ? "1" : "0";
           }
           runChildren.push(
-            XMLBuilder.wSelf('fldChar', Object.keys(attrs).length > 0 ? attrs : undefined)
+            XMLBuilder.wSelf(
+              "fldChar",
+              Object.keys(attrs).length > 0 ? attrs : undefined
+            )
           );
           break;
         }
       }
     }
 
-    return XMLBuilder.w('r', undefined, runChildren);
+    return XMLBuilder.w("r", undefined, runChildren);
   }
 
   /**
-   * Checks if the run has non-empty text content
-   * @returns True if the run has text with length > 0
+   * Checks if the run contains non-empty text
+   *
+   * @returns True if the run has text content with length > 0
+   *
+   * @example
+   * ```typescript
+   * const run1 = new Run('Hello');
+   * const run2 = new Run('');
+   * console.log(run1.hasText()); // true
+   * console.log(run2.hasText()); // false
+   * ```
    */
   hasText(): boolean {
     const text = this.getText();
@@ -868,25 +1153,59 @@ export class Run {
   }
 
   /**
-   * Checks if the run has any formatting applied
-   * @returns True if any formatting properties are set
+   * Checks if the run has any formatting properties
+   *
+   * @returns True if any formatting properties (bold, italic, font, etc.) are set
+   *
+   * @example
+   * ```typescript
+   * const run1 = new Run('Text', { bold: true });
+   * const run2 = new Run('Text');
+   * console.log(run1.hasFormatting()); // true
+   * console.log(run2.hasFormatting()); // false
+   * ```
    */
   hasFormatting(): boolean {
     return Object.keys(this.formatting).length > 0;
   }
 
   /**
-   * Checks if the run is valid (has either text or formatting)
-   * An empty run with no formatting is considered invalid
-   * @returns True if the run has text or formatting
+   * Checks if the run is valid
+   *
+   * A run is considered valid if it has either text content or formatting.
+   * An empty run with no formatting is invalid.
+   *
+   * @returns True if the run has text content or formatting properties
+   *
+   * @example
+   * ```typescript
+   * const run1 = new Run('Text');
+   * const run2 = new Run('', { bold: true });
+   * const run3 = new Run('');
+   * console.log(run1.isValid()); // true (has text)
+   * console.log(run2.isValid()); // true (has formatting)
+   * console.log(run3.isValid()); // false (empty and unformatted)
+   * ```
    */
   isValid(): boolean {
     return this.hasText() || this.hasFormatting();
   }
 
   /**
-   * Gets the run content elements (text, tabs, breaks, etc.)
-   * @returns Array of run content elements
+   * Gets the run content elements
+   *
+   * Returns the internal content structure including text elements,
+   * tabs, breaks, and other special characters.
+   *
+   * @returns Array of RunContent elements
+   *
+   * @example
+   * ```typescript
+   * const content = run.getContent();
+   * for (const element of content) {
+   *   console.log(`Type: ${element.type}, Value: ${element.value || 'N/A'}`);
+   * }
+   * ```
    */
   getContent(): RunContent[] {
     return [...this.content];
@@ -894,32 +1213,66 @@ export class Run {
 
   /**
    * Adds a tab character to the run
-   * Used in TOC entries to separate heading text from page numbers
-   * @returns This run for method chaining
+   *
+   * Inserts a tab character, commonly used in TOC entries to separate
+   * heading text from page numbers, or for general text alignment.
+   *
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const run = new Run('Heading');
+   * run.addTab();
+   * run.appendText('Page 5'); // "Heading\tPage 5"
+   * ```
    */
   addTab(): this {
-    this.content.push({ type: 'tab' });
+    this.content.push({ type: "tab" });
     return this;
   }
 
   /**
    * Adds a line, page, or column break to the run
-   * @param breakType - Type of break ('page' | 'column' | 'textWrapping')
-   * @returns This run for method chaining
+   *
+   * Inserts a break element for line breaks, page breaks, or column breaks.
+   *
+   * @param breakType - Type of break (default: line break if not specified)
+   *   - undefined or 'textWrapping': Line break (like pressing Enter within a paragraph)
+   *   - 'page': Page break
+   *   - 'column': Column break
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.addBreak();          // Line break
+   * run.addBreak('page');    // Page break
+   * run.addBreak('column');  // Column break
+   * ```
    */
   addBreak(breakType?: BreakType): this {
-    this.content.push({ type: 'break', breakType });
+    this.content.push({ type: "break", breakType });
     return this;
   }
 
   /**
-   * Appends text to the run (adds new text element)
+   * Appends text to the run
+   *
+   * Adds additional text as a new content element without replacing
+   * existing content. Useful for building text incrementally.
+   *
    * @param text - Text to append
-   * @returns This run for method chaining
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const run = new Run('Hello');
+   * run.appendText(' ');
+   * run.appendText('World');  // "Hello World"
+   * ```
    */
   appendText(text: string): this {
     if (text) {
-      this.content.push({ type: 'text', value: text });
+      this.content.push({ type: "text", value: text });
     }
     return this;
   }
@@ -929,7 +1282,7 @@ export class Run {
    * @returns This run for method chaining
    */
   addCarriageReturn(): this {
-    this.content.push({ type: 'carriageReturn' });
+    this.content.push({ type: "carriageReturn" });
     return this;
   }
 
@@ -940,7 +1293,10 @@ export class Run {
    * @param formatting - Run formatting options
    * @returns New Run instance
    */
-  static createFromContent(content: RunContent[], formatting: RunFormatting = {}): Run {
+  static createFromContent(
+    content: RunContent[],
+    formatting: RunFormatting = {}
+  ): Run {
     const run = Object.create(Run.prototype) as Run;
     run.content = content;
     const { cleanXmlFromText, ...displayFormatting } = formatting;
@@ -957,219 +1313,251 @@ export class Run {
    * @param formatting - Run formatting options
    * @returns XMLElement representing <w:rPr> or null if no formatting
    */
-  static generateRunPropertiesXML(formatting: RunFormatting): XMLElement | null {
+  static generateRunPropertiesXML(
+    formatting: RunFormatting
+  ): XMLElement | null {
     const rPrChildren: XMLElement[] = [];
 
     // 1. Character style reference (must be absolutely first per ECMA-376 §17.3.2.36)
     if (formatting.characterStyle) {
-      rPrChildren.push(XMLBuilder.wSelf('rStyle', {
-        'w:val': formatting.characterStyle,
-      }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("rStyle", {
+          "w:val": formatting.characterStyle,
+        })
+      );
     }
 
     // 2. Font family (must be second per ECMA-376 §17.3.2.28)
     if (formatting.font) {
-      rPrChildren.push(XMLBuilder.wSelf('rFonts', {
-        'w:ascii': formatting.font,
-        'w:hAnsi': formatting.font,
-        'w:cs': formatting.font,
-      }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("rFonts", {
+          "w:ascii": formatting.font,
+          "w:hAnsi": formatting.font,
+          "w:cs": formatting.font,
+        })
+      );
     }
 
     // 2.5. Text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5
     if (formatting.border) {
       const bdrAttrs: Record<string, string | number> = {};
-      if (formatting.border.style) bdrAttrs['w:val'] = formatting.border.style;
-      if (formatting.border.size !== undefined) bdrAttrs['w:sz'] = formatting.border.size;
-      if (formatting.border.color) bdrAttrs['w:color'] = formatting.border.color;
-      if (formatting.border.space !== undefined) bdrAttrs['w:space'] = formatting.border.space;
+      if (formatting.border.style) bdrAttrs["w:val"] = formatting.border.style;
+      if (formatting.border.size !== undefined)
+        bdrAttrs["w:sz"] = formatting.border.size;
+      if (formatting.border.color)
+        bdrAttrs["w:color"] = formatting.border.color;
+      if (formatting.border.space !== undefined)
+        bdrAttrs["w:space"] = formatting.border.space;
 
       if (Object.keys(bdrAttrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf('bdr', bdrAttrs));
+        rPrChildren.push(XMLBuilder.wSelf("bdr", bdrAttrs));
       }
     }
 
     // 3. Bold
     if (formatting.bold) {
-      rPrChildren.push(XMLBuilder.wSelf('b', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("b", { "w:val": "1" }));
     }
 
     // 3.5. Bold for complex scripts (w:bCs) per ECMA-376 Part 1 §17.3.2.3
     if (formatting.complexScriptBold) {
-      rPrChildren.push(XMLBuilder.wSelf('bCs', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("bCs", { "w:val": "1" }));
     }
 
     // 4. Italic
     if (formatting.italic) {
-      rPrChildren.push(XMLBuilder.wSelf('i', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("i", { "w:val": "1" }));
     }
 
     // 4.5. Italic for complex scripts (w:iCs) per ECMA-376 Part 1 §17.3.2.17
     if (formatting.complexScriptItalic) {
-      rPrChildren.push(XMLBuilder.wSelf('iCs', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("iCs", { "w:val": "1" }));
     }
 
     // 5. Capitalization (caps/smallCaps)
     if (formatting.allCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('caps', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("caps", { "w:val": "1" }));
     }
     if (formatting.smallCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('smallCaps', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("smallCaps", { "w:val": "1" }));
     }
 
     // 6. Character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
     if (formatting.shading) {
       const shdAttrs: Record<string, string> = {};
-      if (formatting.shading.val) shdAttrs['w:val'] = formatting.shading.val;
-      if (formatting.shading.fill) shdAttrs['w:fill'] = formatting.shading.fill;
-      if (formatting.shading.color) shdAttrs['w:color'] = formatting.shading.color;
+      if (formatting.shading.val) shdAttrs["w:val"] = formatting.shading.val;
+      if (formatting.shading.fill) shdAttrs["w:fill"] = formatting.shading.fill;
+      if (formatting.shading.color)
+        shdAttrs["w:color"] = formatting.shading.color;
 
       if (Object.keys(shdAttrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf('shd', shdAttrs));
+        rPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
       }
     }
 
     // 6.5. Emphasis marks (w:em) per ECMA-376 Part 1 §17.3.2.13
     if (formatting.emphasis) {
-      rPrChildren.push(XMLBuilder.wSelf('em', { 'w:val': formatting.emphasis }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("em", { "w:val": formatting.emphasis })
+      );
     }
 
     // 6.6. Outline text effect (w:outline) per ECMA-376 Part 1 §17.3.2.23
     if (formatting.outline) {
-      rPrChildren.push(XMLBuilder.wSelf('outline', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("outline", { "w:val": "1" }));
     }
 
     // 6.7. Shadow text effect (w:shadow) per ECMA-376 Part 1 §17.3.2.32
     if (formatting.shadow) {
-      rPrChildren.push(XMLBuilder.wSelf('shadow', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("shadow", { "w:val": "1" }));
     }
 
     // 6.8. Emboss text effect (w:emboss) per ECMA-376 Part 1 §17.3.2.13
     if (formatting.emboss) {
-      rPrChildren.push(XMLBuilder.wSelf('emboss', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("emboss", { "w:val": "1" }));
     }
 
     // 6.9. Imprint/engrave text effect (w:imprint) per ECMA-376 Part 1 §17.3.2.18
     if (formatting.imprint) {
-      rPrChildren.push(XMLBuilder.wSelf('imprint', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("imprint", { "w:val": "1" }));
     }
 
     // 6.10. No proofing (w:noProof) per ECMA-376 Part 1 §17.3.2.21
     if (formatting.noProof) {
-      rPrChildren.push(XMLBuilder.wSelf('noProof', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("noProof", { "w:val": "1" }));
     }
 
     // 6.11. Snap to grid (w:snapToGrid) per ECMA-376 Part 1 §17.3.2.35
     if (formatting.snapToGrid) {
-      rPrChildren.push(XMLBuilder.wSelf('snapToGrid', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("snapToGrid", { "w:val": "1" }));
     }
 
     // 6.12. Vanish/hidden (w:vanish) per ECMA-376 Part 1 §17.3.2.42
     if (formatting.vanish) {
-      rPrChildren.push(XMLBuilder.wSelf('vanish', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("vanish", { "w:val": "1" }));
     }
 
     // 6.12.5. Special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
     if (formatting.specVanish) {
-      rPrChildren.push(XMLBuilder.wSelf('specVanish', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("specVanish", { "w:val": "1" }));
     }
 
     // 6.13. RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
     // FIX: Must include w:val="1" to explicitly enable RTL, otherwise Word interprets empty tag incorrectly
     if (formatting.rtl) {
-      rPrChildren.push(XMLBuilder.wSelf('rtl', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("rtl", { "w:val": "1" }));
     }
 
     // 7. Strikethrough
     if (formatting.strike) {
-      rPrChildren.push(XMLBuilder.wSelf('strike', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("strike", { "w:val": "1" }));
     }
     if (formatting.dstrike) {
-      rPrChildren.push(XMLBuilder.wSelf('dstrike', { 'w:val': '1' }));
+      rPrChildren.push(XMLBuilder.wSelf("dstrike", { "w:val": "1" }));
     }
 
     // 8. Underline
     if (formatting.underline) {
-      const underlineValue = typeof formatting.underline === 'string'
-        ? formatting.underline
-        : 'single';
-      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': underlineValue }));
+      const underlineValue =
+        typeof formatting.underline === "string"
+          ? formatting.underline
+          : "single";
+      rPrChildren.push(XMLBuilder.wSelf("u", { "w:val": underlineValue }));
     }
 
     // 8.5. Character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.33
     if (formatting.characterSpacing !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf('spacing', { 'w:val': formatting.characterSpacing }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("spacing", { "w:val": formatting.characterSpacing })
+      );
     }
 
     // 8.6. Horizontal scaling (w:w) per ECMA-376 Part 1 §17.3.2.43
     if (formatting.scaling !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf('w', { 'w:val': formatting.scaling }));
+      rPrChildren.push(XMLBuilder.wSelf("w", { "w:val": formatting.scaling }));
     }
 
     // 8.7. Vertical position (w:position) per ECMA-376 Part 1 §17.3.2.31
     if (formatting.position !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf('position', { 'w:val': formatting.position }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("position", { "w:val": formatting.position })
+      );
     }
 
     // 8.8. Kerning (w:kern) per ECMA-376 Part 1 §17.3.2.20
     if (formatting.kerning !== undefined && formatting.kerning !== null) {
-      rPrChildren.push(XMLBuilder.wSelf('kern', { 'w:val': formatting.kerning }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("kern", { "w:val": formatting.kerning })
+      );
     }
 
     // 8.9. Language (w:lang) per ECMA-376 Part 1 §17.3.2.20
     if (formatting.language) {
-      rPrChildren.push(XMLBuilder.wSelf('lang', { 'w:val': formatting.language }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("lang", { "w:val": formatting.language })
+      );
     }
 
     // 8.9.5. East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
     if (formatting.eastAsianLayout) {
       const layout = formatting.eastAsianLayout;
       const attrs: Record<string, string | number> = {};
-      if (layout.id !== undefined) attrs['w:id'] = layout.id;
-      if (layout.vert) attrs['w:vert'] = '1';
-      if (layout.vertCompress) attrs['w:vertCompress'] = '1';
-      if (layout.combine) attrs['w:combine'] = '1';
-      if (layout.combineBrackets) attrs['w:combineBrackets'] = layout.combineBrackets;
+      if (layout.id !== undefined) attrs["w:id"] = layout.id;
+      if (layout.vert) attrs["w:vert"] = "1";
+      if (layout.vertCompress) attrs["w:vertCompress"] = "1";
+      if (layout.combine) attrs["w:combine"] = "1";
+      if (layout.combineBrackets)
+        attrs["w:combineBrackets"] = layout.combineBrackets;
 
       if (Object.keys(attrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf('eastAsianLayout', attrs));
+        rPrChildren.push(XMLBuilder.wSelf("eastAsianLayout", attrs));
       }
     }
 
     // 8.10. Fit text to width (w:fitText) per ECMA-376 Part 1 §17.3.2.15
     if (formatting.fitText !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf('fitText', { 'w:val': formatting.fitText }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("fitText", { "w:val": formatting.fitText })
+      );
     }
 
     // 8.11. Text effect/animation (w:effect) per ECMA-376 Part 1 §17.3.2.12
     if (formatting.effect) {
-      rPrChildren.push(XMLBuilder.wSelf('effect', { 'w:val': formatting.effect }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("effect", { "w:val": formatting.effect })
+      );
     }
 
     // 9. Font size
     if (formatting.size !== undefined) {
       // Word uses half-points (size * 2)
       const halfPoints = formatting.size * 2;
-      rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': halfPoints }));
-      rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': halfPoints }));
+      rPrChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints }));
+      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": halfPoints }));
     }
 
     // 10. Text color
     if (formatting.color) {
-      rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': formatting.color }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("color", { "w:val": formatting.color })
+      );
     }
 
     // 11. Highlight color
     if (formatting.highlight) {
-      rPrChildren.push(XMLBuilder.wSelf('highlight', { 'w:val': formatting.highlight }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("highlight", { "w:val": formatting.highlight })
+      );
     }
 
     // 12. Vertical alignment (subscript/superscript) - must be last
     if (formatting.subscript) {
-      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
+      rPrChildren.push(XMLBuilder.wSelf("vertAlign", { "w:val": "subscript" }));
     }
     if (formatting.superscript) {
-      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'superscript' }));
+      rPrChildren.push(
+        XMLBuilder.wSelf("vertAlign", { "w:val": "superscript" })
+      );
     }
 
     // Return null if no properties (prevents empty <w:rPr/> elements)
@@ -1177,14 +1565,23 @@ export class Run {
       return null;
     }
 
-    return XMLBuilder.w('rPr', undefined, rPrChildren);
+    return XMLBuilder.w("rPr", undefined, rPrChildren);
   }
 
   /**
-   * Creates a new Run with the specified text and formatting
-   * @param text - Text content
-   * @param formatting - Formatting options
+   * Creates a new Run instance
+   *
+   * Factory method for creating a Run with text and optional formatting.
+   *
+   * @param text - The text content
+   * @param formatting - Optional formatting to apply
    * @returns New Run instance
+   *
+   * @example
+   * ```typescript
+   * const run = Run.create('Hello World');
+   * const boldRun = Run.create('Bold Text', { bold: true });
+   * ```
    */
   static create(text: string, formatting?: RunFormatting): Run {
     return new Run(text, formatting);
@@ -1224,7 +1621,8 @@ export class Run {
     if (index < 0) index = 0;
     if (index > currentText.length) index = currentText.length;
 
-    const newText = currentText.slice(0, index) + text + currentText.slice(index);
+    const newText =
+      currentText.slice(0, index) + text + currentText.slice(index);
     this.setText(newText);
     return this;
   }
@@ -1246,7 +1644,7 @@ export class Run {
     const currentText = this.getText();
     if (start < 0) start = 0;
     if (end > currentText.length) end = currentText.length;
-    if (start > end) [start, end] = [end, start];  // Swap if reversed
+    if (start > end) [start, end] = [end, start]; // Swap if reversed
 
     const newText = currentText.slice(0, start) + text + currentText.slice(end);
     this.setText(newText);

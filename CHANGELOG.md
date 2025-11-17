@@ -5,6 +5,17 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - [3.5.0] - 2025-01-17 to Present
+
+### Note
+
+For detailed changes between v3.2.0 and v3.5.0, see:
+
+- Git commit history: `git log v3.1.0..v3.5.0`
+- GitHub releases: <https://github.com/ItMeDiaTech/docXMLater/releases>
+
+---
+
 ## [3.1.0] - 2025-01-17
 
 ### Added
