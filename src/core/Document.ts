@@ -32,7 +32,7 @@ import { Style, StyleProperties } from "../formatting/Style";
 import { StylesManager } from "../formatting/StylesManager";
 import { FormatOptions, StyleApplyOptions } from "../types/formatting";
 import {
-  ApplyCustomFormattingOptions,
+  ApplyStylesOptions,
   Heading2Config,
   StyleConfig,
 } from "../types/styleConfig";
@@ -1413,6 +1413,25 @@ export class Document {
    * ```
    */
   getStylesManager(): StylesManager {
+    return this.stylesManager;
+  }
+
+  /**
+   * Convenience shortcut for {@link getStylesManager}
+   *
+   * Provides quick access to the StylesManager for style operations.
+   * This is a shorter alternative to calling getStylesManager().
+   *
+   * @returns The StylesManager instance managing this document's styles
+   *
+   * @example
+   * ```typescript
+   * // Quick access to styles manager
+   * const styles = doc.styles();
+   * styles.addStyle(customStyle);
+   * ```
+   */
+  styles(): StylesManager {
     return this.stylesManager;
   }
 
@@ -3096,152 +3115,7 @@ export class Document {
     return table;
   }
 
-  /**
-   * Creates and applies custom styles to the document
-   * Applies three custom styles: Header1, Header2, and Normal
-   *
-   * - Header1: 18pt black bold Verdana, left aligned, 0pt before / 12pt after
-   * - Header2: 14pt black bold Verdana, left aligned, 6pt before/after, wrapped in gray table
-   * - Normal: 12pt Verdana, left aligned, 3pt before/after
-   *
-   * @returns Object with counts of modified paragraphs
-   */
-  public applyCustomStylesToDocument(): {
-    heading1: number;
-    heading2: number;
-    normal: number;
-  } {
-    const counts = { heading1: 0, heading2: 0, normal: 0 };
-
-    // Create custom styles
-    const header1Style = Style.create({
-      styleId: "CustomHeader1",
-      name: "Custom Header 1",
-      type: "paragraph",
-      basedOn: "Normal",
-      runFormatting: {
-        font: "Verdana",
-        size: 18,
-        bold: true,
-        color: "000000",
-      },
-      paragraphFormatting: {
-        alignment: "left",
-        spacing: {
-          before: 0, // 0pt before
-          after: 240, // 12pt after (240 twips)
-        },
-      },
-    });
-
-    const header2Style = Style.create({
-      styleId: "CustomHeader2",
-      name: "Custom Header 2",
-      type: "paragraph",
-      basedOn: "Normal",
-      runFormatting: {
-        font: "Verdana",
-        size: 14,
-        bold: true,
-        color: "000000",
-      },
-      paragraphFormatting: {
-        alignment: "left",
-        spacing: {
-          before: 120, // 6pt before (120 twips)
-          after: 120, // 6pt after (120 twips)
-        },
-      },
-    });
-
-    const normalStyle = Style.create({
-      styleId: "CustomNormal",
-      name: "Custom Normal",
-      type: "paragraph",
-      basedOn: "Normal",
-      runFormatting: {
-        font: "Verdana",
-        size: 12,
-        color: "000000",
-      },
-      paragraphFormatting: {
-        alignment: "left",
-        spacing: {
-          before: 60, // 3pt before (60 twips)
-          after: 60, // 3pt after (60 twips)
-        },
-      },
-    });
-
-    // Add styles to document
-    this.addStyle(header1Style);
-    this.addStyle(header2Style);
-    this.addStyle(normalStyle);
-
-    // Get all paragraphs (this will be modified as we wrap some in tables)
-    // We need to work with a copy since we'll be modifying bodyElements
-    const allParagraphs = this.getAllParagraphs();
-
-    // Process each paragraph
-    for (const para of allParagraphs) {
-      const currentStyle = para.getStyle();
-
-      // Match Heading1 / Heading 1
-      if (currentStyle === "Heading1" || currentStyle === "Heading 1") {
-        para.setStyle("CustomHeader1");
-        counts.heading1++;
-      }
-      // Match Heading2 / Heading 2
-      else if (currentStyle === "Heading2" || currentStyle === "Heading 2") {
-        para.setStyle("CustomHeader2");
-
-        // Check if paragraph is in a table
-        const { inTable, cell } = this.isParagraphInTable(para);
-
-        if (inTable && cell) {
-          // Paragraph is already in a table - apply cell formatting
-          cell.setShading({ fill: "BFBFBF" });
-          cell.setMargins({ top: 0, bottom: 0, left: 101, right: 101 });
-
-          // Set table width to 100%
-          const table = this.getAllTables().find((t) => {
-            for (const row of t.getRows()) {
-              for (const c of row.getCells()) {
-                if (c === cell) return true;
-              }
-            }
-            return false;
-          });
-          if (table) {
-            table.setWidth(5000); // 100% width
-            table.setWidthType("pct");
-          }
-        } else {
-          // Paragraph is not in a table - wrap it
-          this.wrapParagraphInTable(para, {
-            shading: "BFBFBF",
-            marginTop: 0,
-            marginBottom: 0,
-            marginLeft: 101,
-            marginRight: 101,
-            tableWidthPercent: 5000, // 100% in Word's percentage units
-          });
-        }
-
-        counts.heading2++;
-      }
-      // Match Normal (explicit "Normal" style or undefined/no style set)
-      // In Word, paragraphs without an explicit pStyle default to "Normal"
-      else if (currentStyle === "Normal" || currentStyle === undefined) {
-        para.setStyle("CustomNormal");
-        counts.normal++;
-      }
-    }
-
-    return counts;
-  }
-
-  // Default style configurations for applyCustomFormattingToExistingStyles()
+  // Default style configurations for applyStyles()
   private static readonly DEFAULT_HEADING1_CONFIG: StyleConfig = {
     run: {
       font: "Verdana",
@@ -3316,7 +3190,9 @@ export class Document {
   };
 
   /**
-   * Modifies the existing Heading1, Heading2, Heading3, Normal, and List Paragraph style definitions
+   * Applies styles to the document with custom formatting
+   *
+   * Modifies existing Heading1, Heading2, Heading3, Normal, and List Paragraph style definitions
    * with custom formatting. This approach preserves the original style names while updating their formatting.
    *
    * **Key Feature**: Only properties explicitly provided in options will override current style values.
@@ -3344,20 +3220,25 @@ export class Document {
    * @returns Object indicating which styles were successfully modified
    *
    * @example
+   * ```typescript
    * // Use default formatting (applies Verdana defaults)
-   * doc.applyCustomFormattingToExistingStyles();
+   * doc.applyStyles();
+   * ```
    *
    * @example
+   * ```typescript
    * // Just change font, keep all other existing style values
-   * doc.applyCustomFormattingToExistingStyles({
+   * doc.applyStyles({
    *   heading1: {
    *     run: { font: 'Arial' } // Only overrides font, keeps existing size/bold/color/etc.
    *   }
    * });
+   * ```
    *
    * @example
+   * ```typescript
    * // Comprehensive custom formatting
-   * doc.applyCustomFormattingToExistingStyles({
+   * doc.applyStyles({
    *   heading1: {
    *     run: { font: 'Arial', size: 16, bold: true, color: '000000' },
    *     paragraph: { spacing: { before: 0, after: 200, line: 240, lineRule: 'auto' } }
@@ -3368,10 +3249,9 @@ export class Document {
    *     tableOptions: { shading: '808080', marginLeft: 150, marginRight: 150 }
    *   }
    * });
+   * ```
    */
-  public applyCustomFormattingToExistingStyles(
-    options?: ApplyCustomFormattingOptions
-  ): {
+  public applyStyles(options?: ApplyStylesOptions): {
     heading1: boolean;
     heading2: boolean;
     heading3: boolean;
@@ -3936,7 +3816,7 @@ export class Document {
    * Helper function to apply formatting from Style objects
    *
    * This is a convenience wrapper that accepts Style objects, extracts their properties,
-   * and converts them to configuration format before calling applyCustomFormattingToExistingStyles().
+   * and converts them to configuration format before calling {@link applyStyles}.
    *
    * Style objects are matched by their styleId property:
    * - 'Heading1' → applies to Heading1 style
@@ -3984,8 +3864,8 @@ export class Document {
     normal: boolean;
     listParagraph: boolean;
   } {
-    // Convert Style objects to ApplyCustomFormattingOptions
-    const options: ApplyCustomFormattingOptions = {};
+    // Convert Style objects to ApplyStylesOptions
+    const options: ApplyStylesOptions = {};
 
     for (const style of styles) {
       const styleId = style.getStyleId();
@@ -4034,7 +3914,7 @@ export class Document {
     }
 
     // Call existing method with converted options
-    return this.applyCustomFormattingToExistingStyles(options);
+    return this.applyStyles(options);
   }
 
   /**

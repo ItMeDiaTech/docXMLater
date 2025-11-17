@@ -2,13 +2,19 @@
  * TableCell - Represents a cell in a table
  */
 
-import { Paragraph, TextDirection } from './Paragraph';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { Paragraph, TextDirection } from "./Paragraph";
+import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 
 /**
  * Cell border style
  */
-export type BorderStyle = 'none' | 'single' | 'double' | 'dashed' | 'dotted' | 'thick';
+export type BorderStyle =
+  | "none"
+  | "single"
+  | "double"
+  | "dashed"
+  | "dotted"
+  | "thick";
 
 /**
  * Cell border definition
@@ -40,7 +46,7 @@ export interface CellShading {
 /**
  * Vertical alignment in cell
  */
-export type CellVerticalAlignment = 'top' | 'center' | 'bottom';
+export type CellVerticalAlignment = "top" | "center" | "bottom";
 
 /**
  * Cell margins (spacing inside cell borders)
@@ -57,13 +63,13 @@ export interface CellMargins {
  * Cell width type
  * Per ECMA-376 Part 1 §17.18.87
  */
-export type CellWidthType = 'auto' | 'dxa' | 'pct';
+export type CellWidthType = "auto" | "dxa" | "pct";
 
 /**
  * Vertical merge type for cells
  * Per ECMA-376 Part 1 §17.4.85
  */
-export type VerticalMerge = 'restart' | 'continue';
+export type VerticalMerge = "restart" | "continue";
 
 /**
  * Cell formatting options
@@ -137,7 +143,84 @@ export class TableCell {
    * @returns Combined text
    */
   getText(): string {
-    return this.paragraphs.map(p => p.getText()).join('\n');
+    return this.paragraphs.map((p) => p.getText()).join("\n");
+  }
+
+  /**
+   * Gets all fields from paragraphs in this cell
+   *
+   * Collects all Field and ComplexField instances from every paragraph
+   * in the table cell.
+   *
+   * @returns Array of fields (Field and ComplexField instances)
+   *
+   * @example
+   * ```typescript
+   * const cell = table.getCell(0, 0);
+   * const fields = cell?.getFields() || [];
+   * console.log(`Cell has ${fields.length} fields`);
+   * ```
+   */
+  getFields(): Array<import("./Field").Field | import("./Field").ComplexField> {
+    const fields: Array<
+      import("./Field").Field | import("./Field").ComplexField
+    > = [];
+    for (const para of this.paragraphs) {
+      fields.push(...para.getFields());
+    }
+    return fields;
+  }
+
+  /**
+   * Finds fields matching a predicate function
+   *
+   * Searches through all fields in the cell and returns those matching
+   * the specified criteria.
+   *
+   * @param predicate - Function to test each field
+   * @returns Array of matching fields
+   *
+   * @example
+   * ```typescript
+   * // Find all PAGE fields
+   * const pageFields = cell.findFields(f =>
+   *   f.getInstruction().startsWith('PAGE')
+   * );
+   *
+   * // Find fields with specific switches
+   * const mergeFields = cell.findFields(f =>
+   *   f.getInstruction().includes('MERGEFIELD')
+   * );
+   * ```
+   */
+  findFields(
+    predicate: (
+      field: import("./Field").Field | import("./Field").ComplexField
+    ) => boolean
+  ): Array<import("./Field").Field | import("./Field").ComplexField> {
+    return this.getFields().filter(predicate);
+  }
+
+  /**
+   * Removes all fields from paragraphs in this cell
+   *
+   * Iterates through each paragraph and removes all fields,
+   * preserving text content.
+   *
+   * @returns Count of fields removed
+   *
+   * @example
+   * ```typescript
+   * const count = cell.removeAllFields();
+   * console.log(`Removed ${count} fields from cell`);
+   * ```
+   */
+  removeAllFields(): number {
+    let count = 0;
+    for (const para of this.paragraphs) {
+      count += para.removeAllFields();
+    }
+    return count;
   }
 
   /**
@@ -207,7 +290,12 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setAllMargins(margin: number): this {
-    this.formatting.margins = { top: margin, bottom: margin, left: margin, right: margin };
+    this.formatting.margins = {
+      top: margin,
+      bottom: margin,
+      left: margin,
+      right: margin,
+    };
     return this;
   }
 
@@ -280,7 +368,7 @@ export class TableCell {
    * @param type - Width type: 'auto' (automatic), 'dxa' (twips), or 'pct' (percentage * 50)
    * @returns This cell for chaining
    */
-  setWidthType(width: number, type: CellWidthType = 'dxa'): this {
+  setWidthType(width: number, type: CellWidthType = "dxa"): this {
     this.formatting.width = width;
     this.formatting.widthType = type;
     return this;
@@ -317,15 +405,17 @@ export class TableCell {
     // Add cell width (tcW) per ECMA-376 Part 1 §17.4.81
     if (this.formatting.width !== undefined) {
       const widthAttrs: Record<string, string | number> = {
-        'w:w': this.formatting.width,
-        'w:type': this.formatting.widthType || 'dxa',
+        "w:w": this.formatting.width,
+        "w:type": this.formatting.widthType || "dxa",
       };
-      tcPrChildren.push(XMLBuilder.wSelf('tcW', widthAttrs));
+      tcPrChildren.push(XMLBuilder.wSelf("tcW", widthAttrs));
     }
 
     // Add conditional formatting style (cnfStyle) per ECMA-376 Part 1 §17.4.7
     if (this.formatting.cnfStyle) {
-      tcPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
+      tcPrChildren.push(
+        XMLBuilder.wSelf("cnfStyle", { "w:val": this.formatting.cnfStyle })
+      );
     }
 
     // Add cell borders
@@ -334,37 +424,37 @@ export class TableCell {
       const borders = this.formatting.borders;
 
       if (borders.top) {
-        borderElements.push(XMLBuilder.createBorder('top', borders.top));
+        borderElements.push(XMLBuilder.createBorder("top", borders.top));
       }
       if (borders.bottom) {
-        borderElements.push(XMLBuilder.createBorder('bottom', borders.bottom));
+        borderElements.push(XMLBuilder.createBorder("bottom", borders.bottom));
       }
       if (borders.left) {
-        borderElements.push(XMLBuilder.createBorder('left', borders.left));
+        borderElements.push(XMLBuilder.createBorder("left", borders.left));
       }
       if (borders.right) {
-        borderElements.push(XMLBuilder.createBorder('right', borders.right));
+        borderElements.push(XMLBuilder.createBorder("right", borders.right));
       }
 
       if (borderElements.length > 0) {
-        tcPrChildren.push(XMLBuilder.w('tcBorders', undefined, borderElements));
+        tcPrChildren.push(XMLBuilder.w("tcBorders", undefined, borderElements));
       }
     }
 
     // Add shading
     if (this.formatting.shading) {
       const shadingAttrs: Record<string, string> = {
-        'w:val': 'clear',
+        "w:val": "clear",
       };
 
       if (this.formatting.shading.fill) {
-        shadingAttrs['w:fill'] = this.formatting.shading.fill;
+        shadingAttrs["w:fill"] = this.formatting.shading.fill;
       }
       if (this.formatting.shading.color) {
-        shadingAttrs['w:color'] = this.formatting.shading.color;
+        shadingAttrs["w:color"] = this.formatting.shading.color;
       }
 
-      tcPrChildren.push(XMLBuilder.wSelf('shd', shadingAttrs));
+      tcPrChildren.push(XMLBuilder.wSelf("shd", shadingAttrs));
     }
 
     // Add cell margins (tcMar) per ECMA-376 Part 1 §17.4.43
@@ -373,64 +463,90 @@ export class TableCell {
       const marginChildren: XMLElement[] = [];
 
       if (margins.top !== undefined) {
-        marginChildren.push(XMLBuilder.wSelf('top', { 'w:w': margins.top.toString(), 'w:type': 'dxa' }));
+        marginChildren.push(
+          XMLBuilder.wSelf("top", {
+            "w:w": margins.top.toString(),
+            "w:type": "dxa",
+          })
+        );
       }
       if (margins.bottom !== undefined) {
-        marginChildren.push(XMLBuilder.wSelf('bottom', { 'w:w': margins.bottom.toString(), 'w:type': 'dxa' }));
+        marginChildren.push(
+          XMLBuilder.wSelf("bottom", {
+            "w:w": margins.bottom.toString(),
+            "w:type": "dxa",
+          })
+        );
       }
       if (margins.left !== undefined) {
-        marginChildren.push(XMLBuilder.wSelf('left', { 'w:w': margins.left.toString(), 'w:type': 'dxa' }));
+        marginChildren.push(
+          XMLBuilder.wSelf("left", {
+            "w:w": margins.left.toString(),
+            "w:type": "dxa",
+          })
+        );
       }
       if (margins.right !== undefined) {
-        marginChildren.push(XMLBuilder.wSelf('right', { 'w:w': margins.right.toString(), 'w:type': 'dxa' }));
+        marginChildren.push(
+          XMLBuilder.wSelf("right", {
+            "w:w": margins.right.toString(),
+            "w:type": "dxa",
+          })
+        );
       }
 
       if (marginChildren.length > 0) {
-        tcPrChildren.push(XMLBuilder.w('tcMar', undefined, marginChildren));
+        tcPrChildren.push(XMLBuilder.w("tcMar", undefined, marginChildren));
       }
     }
 
     // Add vertical alignment
     if (this.formatting.verticalAlignment) {
       tcPrChildren.push(
-        XMLBuilder.wSelf('vAlign', { 'w:val': this.formatting.verticalAlignment })
+        XMLBuilder.wSelf("vAlign", {
+          "w:val": this.formatting.verticalAlignment,
+        })
       );
     }
 
     // Add column span (gridSpan)
     if (this.formatting.columnSpan && this.formatting.columnSpan > 1) {
       tcPrChildren.push(
-        XMLBuilder.wSelf('gridSpan', { 'w:val': this.formatting.columnSpan })
+        XMLBuilder.wSelf("gridSpan", { "w:val": this.formatting.columnSpan })
       );
     }
 
     // Add text direction (textDirection) per ECMA-376 Part 1 §17.4.72
     if (this.formatting.textDirection) {
-      tcPrChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': this.formatting.textDirection }));
+      tcPrChildren.push(
+        XMLBuilder.wSelf("textDirection", {
+          "w:val": this.formatting.textDirection,
+        })
+      );
     }
 
     // Add no wrap (noWrap) per ECMA-376 Part 1 §17.4.34
     if (this.formatting.noWrap) {
-      tcPrChildren.push(XMLBuilder.wSelf('noWrap'));
+      tcPrChildren.push(XMLBuilder.wSelf("noWrap"));
     }
 
     // Add hide mark (hideMark) per ECMA-376 Part 1 §17.4.24
     if (this.formatting.hideMark) {
-      tcPrChildren.push(XMLBuilder.wSelf('hideMark'));
+      tcPrChildren.push(XMLBuilder.wSelf("hideMark"));
     }
 
     // Add fit text (tcFitText) per ECMA-376 Part 1 §17.4.68
     if (this.formatting.fitText) {
-      tcPrChildren.push(XMLBuilder.wSelf('tcFitText'));
+      tcPrChildren.push(XMLBuilder.wSelf("tcFitText"));
     }
 
     // Add vertical merge (vMerge) per ECMA-376 Part 1 §17.4.85
     if (this.formatting.vMerge) {
-      if (this.formatting.vMerge === 'restart') {
-        tcPrChildren.push(XMLBuilder.wSelf('vMerge', { 'w:val': 'restart' }));
+      if (this.formatting.vMerge === "restart") {
+        tcPrChildren.push(XMLBuilder.wSelf("vMerge", { "w:val": "restart" }));
       } else {
         // 'continue' uses empty element (no val attribute)
-        tcPrChildren.push(XMLBuilder.wSelf('vMerge'));
+        tcPrChildren.push(XMLBuilder.wSelf("vMerge"));
       }
     }
 
@@ -439,7 +555,7 @@ export class TableCell {
 
     // Add cell properties if there are any
     if (tcPrChildren.length > 0) {
-      cellChildren.push(XMLBuilder.w('tcPr', undefined, tcPrChildren));
+      cellChildren.push(XMLBuilder.w("tcPr", undefined, tcPrChildren));
     }
 
     // Add paragraphs (at least one required)
@@ -452,9 +568,8 @@ export class TableCell {
       cellChildren.push(new Paragraph().toXML());
     }
 
-    return XMLBuilder.w('tc', undefined, cellChildren);
+    return XMLBuilder.w("tc", undefined, cellChildren);
   }
-
 
   /**
    * Creates a new TableCell
