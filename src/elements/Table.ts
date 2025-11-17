@@ -2,26 +2,26 @@
  * Table - Represents a table in a document
  */
 
-import { TableRow, RowFormatting } from './TableRow';
-import { TableCell, CellFormatting } from './TableCell';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { deepClone } from '../utils/deepClone';
+import { TableRow, RowFormatting } from "./TableRow";
+import { TableCell, CellFormatting } from "./TableCell";
+import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
+import { deepClone } from "../utils/deepClone";
 
 /**
  * Table alignment
  */
-export type TableAlignment = 'left' | 'center' | 'right';
+export type TableAlignment = "left" | "center" | "right";
 
 /**
  * Table layout type
  */
-export type TableLayout = 'auto' | 'fixed';
+export type TableLayout = "auto" | "fixed";
 
 /**
  * Table border definition (same as cell borders)
  */
 export interface TableBorder {
-  style?: 'none' | 'single' | 'double' | 'dashed' | 'dotted' | 'thick';
+  style?: "none" | "single" | "double" | "dashed" | "dotted" | "thick";
   size?: number;
   space?: number; // Border spacing (padding) in points
   color?: string;
@@ -42,22 +42,32 @@ export interface TableBorders {
 /**
  * Horizontal anchor for table positioning
  */
-export type TableHorizontalAnchor = 'text' | 'margin' | 'page';
+export type TableHorizontalAnchor = "text" | "margin" | "page";
 
 /**
  * Vertical anchor for table positioning
  */
-export type TableVerticalAnchor = 'text' | 'margin' | 'page';
+export type TableVerticalAnchor = "text" | "margin" | "page";
 
 /**
  * Horizontal alignment for relative table positioning
  */
-export type TableHorizontalAlignment = 'left' | 'center' | 'right' | 'inside' | 'outside';
+export type TableHorizontalAlignment =
+  | "left"
+  | "center"
+  | "right"
+  | "inside"
+  | "outside";
 
 /**
  * Vertical alignment for relative table positioning
  */
-export type TableVerticalAlignment = 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+export type TableVerticalAlignment =
+  | "top"
+  | "center"
+  | "bottom"
+  | "inside"
+  | "outside";
 
 /**
  * Table positioning properties (for floating tables)
@@ -89,7 +99,7 @@ export interface TablePositionProperties {
 /**
  * Table width type
  */
-export type TableWidthType = 'auto' | 'dxa' | 'pct';
+export type TableWidthType = "auto" | "dxa" | "pct";
 
 /**
  * Table formatting options
@@ -119,13 +129,13 @@ export interface TableFormatting {
  */
 export interface FirstRowFormattingOptions {
   /** Text alignment in cells */
-  alignment?: 'left' | 'center' | 'right';
+  alignment?: "left" | "center" | "right";
   /** Bold text */
   bold?: boolean;
   /** Italic text */
   italic?: boolean;
   /** Underline text */
-  underline?: boolean | 'single' | 'double' | 'thick' | 'dotted' | 'dash';
+  underline?: boolean | "single" | "double" | "thick" | "dotted" | "dash";
   /** Spacing before paragraph (in twips) */
   spacingBefore?: number;
   /** Spacing after paragraph (in twips) */
@@ -147,7 +157,11 @@ export class Table {
    * @param columns - Number of columns per row (optional)
    * @param formatting - Table formatting options
    */
-  constructor(rows?: number, columns?: number, formatting: TableFormatting = {}) {
+  constructor(
+    rows?: number,
+    columns?: number,
+    formatting: TableFormatting = {}
+  ) {
     // Set default width if not specified
     // Per ECMA-376, tables require <w:tblW> element for Word compatibility
     // Default: Letter page width (12240 twips) minus standard margins (2*1440 twips) = 9360 twips
@@ -157,7 +171,12 @@ export class Table {
 
     this.formatting = formatting;
 
-    if (rows !== undefined && rows > 0 && columns !== undefined && columns > 0) {
+    if (
+      rows !== undefined &&
+      rows > 0 &&
+      columns !== undefined &&
+      columns > 0
+    ) {
       for (let i = 0; i < rows; i++) {
         this.rows.push(new TableRow(columns));
       }
@@ -166,8 +185,18 @@ export class Table {
 
   /**
    * Adds a row to the table
-   * @param row - Row to add
-   * @returns This table for chaining
+   *
+   * Appends a TableRow instance to the end of the table.
+   *
+   * @param row - The TableRow instance to add
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const table = new Table();
+   * const row = new TableRow(3);
+   * table.addRow(row);
+   * ```
    */
   addRow(row: TableRow): this {
     this.rows.push(row);
@@ -175,10 +204,20 @@ export class Table {
   }
 
   /**
-   * Creates and adds a new row
-   * @param cellCount - Number of cells in the row
-   * @param formatting - Row formatting
-   * @returns The created row
+   * Creates a new row and adds it to the table
+   *
+   * Convenience method that creates a TableRow and appends it in one operation.
+   *
+   * @param cellCount - Number of cells to create in the row
+   * @param formatting - Optional row formatting properties
+   * @returns The created TableRow instance for further customization
+   *
+   * @example
+   * ```typescript
+   * const table = new Table();
+   * const row = table.createRow(4);
+   * row.getCell(0)?.addParagraph(new Paragraph().addText('Cell 1'));
+   * ```
    */
   createRow(cellCount?: number, formatting?: RowFormatting): TableRow {
     const row = new TableRow(cellCount, formatting);
@@ -187,9 +226,19 @@ export class Table {
   }
 
   /**
-   * Gets a row by index
-   * @param index - Row index (0-based)
-   * @returns The row at the index, or undefined
+   * Gets a row by its index
+   *
+   * @param index - The row index (0-based, where 0 is the first row)
+   * @returns The TableRow at the specified index, or undefined if index is out of bounds
+   *
+   * @example
+   * ```typescript
+   * const firstRow = table.getRow(0);
+   * const secondRow = table.getRow(1);
+   * if (firstRow) {
+   *   console.log(`First row has ${firstRow.getCellCount()} cells`);
+   * }
+   * ```
    */
   getRow(index: number): TableRow | undefined {
     return this.rows[index];
@@ -197,25 +246,55 @@ export class Table {
 
   /**
    * Gets all rows in the table
-   * @returns Array of rows
+   *
+   * Returns a copy of the rows array to prevent external modification.
+   *
+   * @returns Array of all TableRow instances
+   *
+   * @example
+   * ```typescript
+   * const rows = table.getRows();
+   * console.log(`Table has ${rows.length} rows`);
+   * for (const row of rows) {
+   *   console.log(`Row has ${row.getCellCount()} cells`);
+   * }
+   * ```
    */
   getRows(): TableRow[] {
     return [...this.rows];
   }
 
   /**
-   * Gets the number of rows
+   * Gets the total number of rows in the table
+   *
    * @returns Number of rows
+   *
+   * @example
+   * ```typescript
+   * console.log(`Table has ${table.getRowCount()} rows`);
+   * ```
    */
   getRowCount(): number {
     return this.rows.length;
   }
 
   /**
-   * Gets a cell by row and column index
-   * @param rowIndex - Row index (0-based)
-   * @param columnIndex - Column index (0-based)
-   * @returns The cell, or undefined
+   * Gets a specific cell by row and column indices
+   *
+   * @param rowIndex - The row index (0-based)
+   * @param columnIndex - The column index (0-based)
+   * @returns The TableCell at the specified position, or undefined if indices are out of bounds
+   *
+   * @example
+   * ```typescript
+   * const cell = table.getCell(0, 0); // Top-left cell
+   * if (cell) {
+   *   cell.addParagraph(new Paragraph().addText('A1'));
+   * }
+   *
+   * // Access cell in third row, second column
+   * const cell2 = table.getCell(2, 1);
+   * ```
    */
   getCell(rowIndex: number, columnIndex: number): TableCell | undefined {
     const row = this.getRow(rowIndex);
@@ -223,9 +302,22 @@ export class Table {
   }
 
   /**
-   * Sets table width
-   * @param twips - Width in twips
-   * @returns This table for chaining
+   * Sets the table width
+   *
+   * Defines the total width of the table. Use with {@link setWidthType}
+   * to specify if width is in twips, percentage, or auto.
+   *
+   * @param twips - Width value (interpretation depends on widthType)
+   *   - For 'dxa' (default): Width in twips (1/20th of a point)
+   *   - For 'pct': Percentage * 50 (e.g., 5000 = 100%)
+   *   - For 'auto': Value is ignored
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * table.setWidth(9360);              // 6.5 inches in twips
+   * table.setWidth(5000).setWidthType('pct');  // 100% width
+   * ```
    */
   setWidth(twips: number): this {
     this.formatting.width = twips;
@@ -233,9 +325,18 @@ export class Table {
   }
 
   /**
-   * Sets table alignment
-   * @param alignment - Table alignment
-   * @returns This table for chaining
+   * Sets table horizontal alignment
+   *
+   * Controls where the table is positioned horizontally on the page.
+   *
+   * @param alignment - Alignment value ('left' |'center' | 'right')
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * table.setAlignment('center');  // Center the table on page
+   * table.setAlignment('right');   // Align table to right margin
+   * ```
    */
   setAlignment(alignment: TableAlignment): this {
     this.formatting.alignment = alignment;
@@ -243,9 +344,20 @@ export class Table {
   }
 
   /**
-   * Sets table layout
+   * Sets table layout algorithm
+   *
+   * Controls how table column widths are calculated.
+   *
    * @param layout - Layout type
-   * @returns This table for chaining
+   *   - 'auto': Columns auto-fit to content and window width
+   *   - 'fixed': Columns use fixed widths (faster rendering)
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * table.setLayout('auto');   // Auto-fit to window
+   * table.setLayout('fixed');  // Use fixed column widths
+   * ```
    */
   setLayout(layout: TableLayout): this {
     this.formatting.layout = layout;
@@ -254,8 +366,27 @@ export class Table {
 
   /**
    * Sets table borders
-   * @param borders - Border definitions
-   * @returns This table for chaining
+   *
+   * Defines borders for all sides of the table and interior borders.
+   *
+   * @param borders - Border definitions for each edge
+   * @param borders.top - Top border of table
+   * @param borders.bottom - Bottom border of table
+   * @param borders.left - Left border of table
+   * @param borders.right - Right border of table
+   * @param borders.insideH - Horizontal borders between rows
+   * @param borders.insideV - Vertical borders between columns
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * table.setBorders({
+   *   top: { style: 'single', size: 4, color: '000000' },
+   *   bottom: { style: 'single', size: 4, color: '000000' },
+   *   insideH: { style: 'single', size: 2, color: 'CCCCCC' },
+   *   insideV: { style: 'single', size: 2, color: 'CCCCCC' }
+   * });
+   * ```
    */
   setBorders(borders: TableBorders): this {
     this.formatting.borders = borders;
@@ -263,9 +394,23 @@ export class Table {
   }
 
   /**
-   * Sets all borders to the same style (convenience method)
-   * @param border - Border definition to apply to all sides
-   * @returns This table for chaining
+   * Sets all borders to the same style
+   *
+   * Convenience method that applies identical borders to all edges
+   * (top, bottom, left, right, insideH, insideV).
+   *
+   * @param border - Border definition to apply uniformly
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // Apply single black border to all edges
+   * table.setAllBorders({
+   *   style: 'single',
+   *   size: 4,
+   *   color: '000000'
+   * });
+   * ```
    */
   setAllBorders(border: TableBorder): this {
     this.formatting.borders = {
@@ -489,7 +634,11 @@ export class Table {
       odd?: Partial<CellFormatting>;
     };
     contentRules?: Array<{
-      condition: (cellText: string, rowIndex: number, colIndex: number) => boolean;
+      condition: (
+        cellText: string,
+        rowIndex: number,
+        colIndex: number
+      ) => boolean;
       formatting: Partial<CellFormatting>;
     }>;
   }): this {
@@ -499,7 +648,7 @@ export class Table {
     if (rules.headerRow && rows.length > 0) {
       const headerFormatting: Partial<CellFormatting> =
         rules.headerRow === true
-          ? { shading: { fill: '4472C4' } } // Default blue header
+          ? { shading: { fill: "4472C4" } } // Default blue header
           : rules.headerRow;
 
       const headerRow = rows[0];
@@ -533,7 +682,7 @@ export class Table {
           const cellText = cell
             .getParagraphs()
             .map((p) => p.getText())
-            .join('');
+            .join("");
 
           for (const rule of rules.contentRules!) {
             if (rule.condition(cellText, rowIndex, colIndex)) {
@@ -677,9 +826,22 @@ export class Table {
 
   /**
    * Sets table width type
+   *
+   * Defines how the table width value should be interpreted.
    * Per ECMA-376 Part 1 §17.4.64
-   * @param type - Width type ('auto', 'dxa' for twips, 'pct' for percentage)
-   * @returns This table for chaining
+   *
+   * @param type - Width interpretation type
+   *   - 'auto': Automatic width (ignores width value)
+   *   - 'dxa': Width in twips (1/20th of a point)
+   *   - 'pct': Width as percentage (value * 50 = percentage, e.g., 5000 = 100%)
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * table.setWidth(5000).setWidthType('pct');  // 100% page width
+   * table.setWidth(9360).setWidthType('dxa');  // 6.5 inches (absolute)
+   * table.setWidthType('auto');                // Auto-fit content
+   * ```
    */
   setWidthType(type: TableWidthType): this {
     this.formatting.widthType = type;
@@ -697,8 +859,19 @@ export class Table {
   }
 
   /**
-   * Gets the table formatting
-   * @returns Table formatting
+   * Gets a copy of the table formatting
+   *
+   * Returns a copy of all formatting properties including width, alignment,
+   * layout, borders, and other table-level settings.
+   *
+   * @returns Copy of the table formatting object
+   *
+   * @example
+   * ```typescript
+   * const formatting = table.getFormatting();
+   * console.log(`Width: ${formatting.width} twips`);
+   * console.log(`Layout: ${formatting.layout}`);
+   * ```
    */
   getFormatting(): TableFormatting {
     return { ...this.formatting };
@@ -713,7 +886,9 @@ export class Table {
 
     // Add table style (must come first per ECMA-376)
     if (this.formatting.style) {
-      tblPrChildren.push(XMLBuilder.wSelf('tblStyle', { 'w:val': this.formatting.style }));
+      tblPrChildren.push(
+        XMLBuilder.wSelf("tblStyle", { "w:val": this.formatting.style })
+      );
     }
 
     // Add table positioning properties (tblpPr) - for floating tables
@@ -721,54 +896,64 @@ export class Table {
       const pos = this.formatting.position;
       const posAttrs: Record<string, string | number> = {};
 
-      if (pos.x !== undefined) posAttrs['w:tblpX'] = pos.x;
-      if (pos.y !== undefined) posAttrs['w:tblpY'] = pos.y;
-      if (pos.horizontalAnchor) posAttrs['w:tblpXSpec'] = pos.horizontalAnchor;
-      if (pos.verticalAnchor) posAttrs['w:tblpYSpec'] = pos.verticalAnchor;
-      if (pos.horizontalAlignment) posAttrs['w:tblpXAlign'] = pos.horizontalAlignment;
-      if (pos.verticalAlignment) posAttrs['w:tblpYAlign'] = pos.verticalAlignment;
-      if (pos.leftFromText !== undefined) posAttrs['w:leftFromText'] = pos.leftFromText;
-      if (pos.rightFromText !== undefined) posAttrs['w:rightFromText'] = pos.rightFromText;
-      if (pos.topFromText !== undefined) posAttrs['w:topFromText'] = pos.topFromText;
-      if (pos.bottomFromText !== undefined) posAttrs['w:bottomFromText'] = pos.bottomFromText;
+      if (pos.x !== undefined) posAttrs["w:tblpX"] = pos.x;
+      if (pos.y !== undefined) posAttrs["w:tblpY"] = pos.y;
+      if (pos.horizontalAnchor) posAttrs["w:tblpXSpec"] = pos.horizontalAnchor;
+      if (pos.verticalAnchor) posAttrs["w:tblpYSpec"] = pos.verticalAnchor;
+      if (pos.horizontalAlignment)
+        posAttrs["w:tblpXAlign"] = pos.horizontalAlignment;
+      if (pos.verticalAlignment)
+        posAttrs["w:tblpYAlign"] = pos.verticalAlignment;
+      if (pos.leftFromText !== undefined)
+        posAttrs["w:leftFromText"] = pos.leftFromText;
+      if (pos.rightFromText !== undefined)
+        posAttrs["w:rightFromText"] = pos.rightFromText;
+      if (pos.topFromText !== undefined)
+        posAttrs["w:topFromText"] = pos.topFromText;
+      if (pos.bottomFromText !== undefined)
+        posAttrs["w:bottomFromText"] = pos.bottomFromText;
 
       if (Object.keys(posAttrs).length > 0) {
-        tblPrChildren.push(XMLBuilder.wSelf('tblpPr', posAttrs));
+        tblPrChildren.push(XMLBuilder.wSelf("tblpPr", posAttrs));
       }
     }
 
     // Add table overlap
     if (this.formatting.overlap !== undefined) {
-      tblPrChildren.push(XMLBuilder.wSelf('tblOverlap', {
-        'w:val': this.formatting.overlap ? 'overlap' : 'never'
-      }));
+      tblPrChildren.push(
+        XMLBuilder.wSelf("tblOverlap", {
+          "w:val": this.formatting.overlap ? "overlap" : "never",
+        })
+      );
     }
 
     // Add bidirectional visual layout
     if (this.formatting.bidiVisual) {
-      tblPrChildren.push(XMLBuilder.wSelf('bidiVisual'));
+      tblPrChildren.push(XMLBuilder.wSelf("bidiVisual"));
     }
 
     // Add table width
     if (this.formatting.width !== undefined) {
-      const widthType = this.formatting.widthType || 'dxa';
+      const widthType = this.formatting.widthType || "dxa";
       tblPrChildren.push(
-        XMLBuilder.wSelf('tblW', {
-          'w:w': this.formatting.width,
-          'w:type': widthType,
+        XMLBuilder.wSelf("tblW", {
+          "w:w": this.formatting.width,
+          "w:type": widthType,
         })
       );
     }
 
     // Add table alignment (jc = justification/alignment)
     if (this.formatting.alignment) {
-      tblPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': this.formatting.alignment }));
+      tblPrChildren.push(
+        XMLBuilder.wSelf("jc", { "w:val": this.formatting.alignment })
+      );
     }
 
     // Add table layout
     if (this.formatting.layout) {
       tblPrChildren.push(
-        XMLBuilder.wSelf('tblLayout', { 'w:type': this.formatting.layout })
+        XMLBuilder.wSelf("tblLayout", { "w:type": this.formatting.layout })
       );
     }
 
@@ -778,36 +963,42 @@ export class Table {
       const borders = this.formatting.borders;
 
       if (borders.top) {
-        borderElements.push(XMLBuilder.createBorder('top', borders.top));
+        borderElements.push(XMLBuilder.createBorder("top", borders.top));
       }
       if (borders.bottom) {
-        borderElements.push(XMLBuilder.createBorder('bottom', borders.bottom));
+        borderElements.push(XMLBuilder.createBorder("bottom", borders.bottom));
       }
       if (borders.left) {
-        borderElements.push(XMLBuilder.createBorder('left', borders.left));
+        borderElements.push(XMLBuilder.createBorder("left", borders.left));
       }
       if (borders.right) {
-        borderElements.push(XMLBuilder.createBorder('right', borders.right));
+        borderElements.push(XMLBuilder.createBorder("right", borders.right));
       }
       if (borders.insideH) {
-        borderElements.push(XMLBuilder.createBorder('insideH', borders.insideH));
+        borderElements.push(
+          XMLBuilder.createBorder("insideH", borders.insideH)
+        );
       }
       if (borders.insideV) {
-        borderElements.push(XMLBuilder.createBorder('insideV', borders.insideV));
+        borderElements.push(
+          XMLBuilder.createBorder("insideV", borders.insideV)
+        );
       }
 
       if (borderElements.length > 0) {
-        tblPrChildren.push(XMLBuilder.w('tblBorders', undefined, borderElements));
+        tblPrChildren.push(
+          XMLBuilder.w("tblBorders", undefined, borderElements)
+        );
       }
     }
 
     // Add cell spacing
     if (this.formatting.cellSpacing !== undefined) {
-      const cellSpacingType = this.formatting.cellSpacingType || 'dxa';
+      const cellSpacingType = this.formatting.cellSpacingType || "dxa";
       tblPrChildren.push(
-        XMLBuilder.wSelf('tblCellSpacing', {
-          'w:w': this.formatting.cellSpacing,
-          'w:type': cellSpacingType,
+        XMLBuilder.wSelf("tblCellSpacing", {
+          "w:w": this.formatting.cellSpacing,
+          "w:type": cellSpacingType,
         })
       );
     }
@@ -815,38 +1006,48 @@ export class Table {
     // Add table indent
     if (this.formatting.indent !== undefined) {
       tblPrChildren.push(
-        XMLBuilder.wSelf('tblInd', {
-          'w:w': this.formatting.indent,
-          'w:type': 'dxa',
+        XMLBuilder.wSelf("tblInd", {
+          "w:w": this.formatting.indent,
+          "w:type": "dxa",
         })
       );
     }
 
     // Add table look (appearance flags)
     if (this.formatting.tblLook) {
-      tblPrChildren.push(XMLBuilder.wSelf('tblLook', { 'w:val': this.formatting.tblLook }));
+      tblPrChildren.push(
+        XMLBuilder.wSelf("tblLook", { "w:val": this.formatting.tblLook })
+      );
     }
 
     // Add table caption (accessibility)
     if (this.formatting.caption) {
-      tblPrChildren.push(XMLBuilder.wSelf('tblCaption', { 'w:val': this.formatting.caption }));
+      tblPrChildren.push(
+        XMLBuilder.wSelf("tblCaption", { "w:val": this.formatting.caption })
+      );
     }
 
     // Add table description (accessibility)
     if (this.formatting.description) {
-      tblPrChildren.push(XMLBuilder.wSelf('tblDescription', { 'w:val': this.formatting.description }));
+      tblPrChildren.push(
+        XMLBuilder.wSelf("tblDescription", {
+          "w:val": this.formatting.description,
+        })
+      );
     }
 
     // Build table element
     const tableChildren: XMLElement[] = [];
 
     // Add table properties
-    tableChildren.push(XMLBuilder.w('tblPr', undefined, tblPrChildren));
+    tableChildren.push(XMLBuilder.w("tblPr", undefined, tblPrChildren));
 
     // Add table grid (column definitions)
     // Use custom tableGrid if specified, otherwise auto-generate
     const gridWidths = this.formatting.tableGrid;
-    const maxColumns = gridWidths ? gridWidths.length : Math.max(...this.rows.map(row => row.getCellCount()), 0);
+    const maxColumns = gridWidths
+      ? gridWidths.length
+      : Math.max(...this.rows.map((row) => row.getCellCount()), 0);
 
     if (maxColumns > 0) {
       const tblGridChildren: XMLElement[] = [];
@@ -854,13 +1055,15 @@ export class Table {
       for (let i = 0; i < maxColumns; i++) {
         if (gridWidths && gridWidths[i] !== undefined) {
           // Use specified grid width
-          tblGridChildren.push(XMLBuilder.wSelf('gridCol', { 'w:w': gridWidths[i] }));
+          tblGridChildren.push(
+            XMLBuilder.wSelf("gridCol", { "w:w": gridWidths[i] })
+          );
         } else {
           // Auto width (default to 2880 twips = 2 inches)
-          tblGridChildren.push(XMLBuilder.wSelf('gridCol', { 'w:w': 2880 }));
+          tblGridChildren.push(XMLBuilder.wSelf("gridCol", { "w:w": 2880 }));
         }
       }
-      tableChildren.push(XMLBuilder.w('tblGrid', undefined, tblGridChildren));
+      tableChildren.push(XMLBuilder.w("tblGrid", undefined, tblGridChildren));
     }
 
     // Add rows
@@ -868,14 +1071,22 @@ export class Table {
       tableChildren.push(row.toXML());
     }
 
-    return XMLBuilder.w('tbl', undefined, tableChildren);
+    return XMLBuilder.w("tbl", undefined, tableChildren);
   }
-
 
   /**
    * Removes a row from the table
-   * @param index - Row index to remove (0-based)
+   *
+   * Deletes the row at the specified index and shifts subsequent rows up.
+   *
+   * @param index - The row index to remove (0-based)
    * @returns True if the row was removed, false if index was invalid
+   *
+   * @example
+   * ```typescript
+   * table.removeRow(0);  // Remove first row
+   * table.removeRow(2);  // Remove third row
+   * ```
    */
   removeRow(index: number): boolean {
     if (index >= 0 && index < this.rows.length) {
@@ -886,10 +1097,24 @@ export class Table {
   }
 
   /**
-   * Inserts a row at the specified position
-   * @param index - Position to insert at (0-based)
-   * @param row - Row to insert (optional, creates empty row if not provided)
-   * @returns The inserted row
+   * Inserts a row at a specific position
+   *
+   * Inserts a new row at the specified index. If no row is provided,
+   * creates an empty row with columns matching the table's column count.
+   *
+   * @param index - Position to insert at (0-based, clamped to valid range)
+   * @param row - Optional TableRow to insert (creates new row if not provided)
+   * @returns The inserted TableRow instance
+   *
+   * @example
+   * ```typescript
+   * // Insert empty row at beginning
+   * const row = table.insertRow(0);
+   *
+   * // Insert custom row in the middle
+   * const customRow = new TableRow(3);
+   * table.insertRow(2, customRow);
+   * ```
    */
   insertRow(index: number, row?: TableRow): TableRow {
     // Clamp index to valid range
@@ -909,8 +1134,19 @@ export class Table {
 
   /**
    * Adds a column to all rows in the table
-   * @param index - Optional position to insert column (defaults to end)
-   * @returns This table for chaining
+   *
+   * Inserts a new cell in each row at the specified position.
+   * If no index is provided, adds the column at the end.
+   *
+   * @param index - Optional position to insert the column (0-based, defaults to end)
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * table.addColumn();     // Add column at end
+   * table.addColumn(0);    // Insert column at beginning
+   * table.addColumn(2);    // Insert column at position 2
+   * ```
    */
   addColumn(index?: number): this {
     for (const row of this.rows) {
@@ -935,8 +1171,17 @@ export class Table {
 
   /**
    * Removes a column from all rows in the table
-   * @param index - Column index to remove (0-based)
-   * @returns True if the column was removed, false if index was invalid
+   *
+   * Deletes the cell at the specified column index in every row.
+   *
+   * @param index - The column index to remove (0-based)
+   * @returns True if the column was removed from at least one row, false if index was invalid
+   *
+   * @example
+   * ```typescript
+   * table.removeColumn(0);  // Remove first column
+   * table.removeColumn(2);  // Remove third column
+   * ```
    */
   removeColumn(index: number): boolean {
     if (index < 0 || this.rows.length === 0) {
@@ -958,19 +1203,37 @@ export class Table {
 
   /**
    * Gets the maximum column count across all rows
-   * @returns Maximum number of columns
+   *
+   * Returns the highest number of cells in any row. Useful since
+   * rows may have different numbers of cells.
+   *
+   * @returns Maximum number of columns in the table
+   *
+   * @example
+   * ```typescript
+   * console.log(`Table has up to ${table.getColumnCount()} columns`);
+   * ```
    */
   getColumnCount(): number {
     if (this.rows.length === 0) {
       return 0;
     }
-    return Math.max(...this.rows.map(row => row.getCellCount()));
+    return Math.max(...this.rows.map((row) => row.getCellCount()));
   }
 
   /**
-   * Sets column widths for the table
-   * @param widths - Array of widths in twips (null for auto width)
-   * @returns This table for chaining
+   * Sets specific widths for table columns
+   *
+   * Defines the width of each column. Use null for auto-width columns.
+   *
+   * @param widths - Array of column widths in twips (null = auto width)
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // First column 2", second column 3", third auto
+   * table.setColumnWidths([2880, 4320, null]);
+   * ```
    */
   setColumnWidths(widths: (number | null)[]): this {
     // Store column widths in formatting for use in toXML
@@ -979,13 +1242,29 @@ export class Table {
   }
 
   /**
-   * Creates a new Table
-   * @param rows - Number of rows
-   * @param columns - Number of columns
-   * @param formatting - Table formatting
+   * Creates a new Table instance
+   *
+   * Factory method for creating a table with specified dimensions and formatting.
+   *
+   * @param rows - Number of rows to create
+   * @param columns - Number of columns per row
+   * @param formatting - Optional table formatting properties
    * @returns New Table instance
+   *
+   * @example
+   * ```typescript
+   * const table = Table.create(3, 4);  // 3 rows × 4 columns
+   * const styledTable = Table.create(2, 3, {
+   *   alignment: 'center',
+   *   layout: 'auto'
+   * });
+   * ```
    */
-  static create(rows?: number, columns?: number, formatting?: TableFormatting): Table {
+  static create(
+    rows?: number,
+    columns?: number,
+    formatting?: TableFormatting
+  ): Table {
     return new Table(rows, columns, formatting);
   }
 
@@ -1002,8 +1281,18 @@ export class Table {
    * table.mergeCells(0, 0, 2, 0);  // Merge cells down rows in first column
    * ```
    */
-  mergeCells(startRow: number, startCol: number, endRow: number, endCol: number): this {
-    if (startRow < 0 || endRow >= this.rows.length || startCol < 0 || endCol < 0) {
+  mergeCells(
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number
+  ): this {
+    if (
+      startRow < 0 ||
+      endRow >= this.rows.length ||
+      startCol < 0 ||
+      endCol < 0
+    ) {
       return this;
     }
 
@@ -1020,13 +1309,13 @@ export class Table {
     // Set vertical merge if merging vertically
     if (endRow > startRow) {
       // First cell starts the merge region
-      cell.setVerticalMerge('restart');
+      cell.setVerticalMerge("restart");
 
       // Subsequent cells continue the merge
       for (let row = startRow + 1; row <= endRow; row++) {
         const mergeCell = this.getCell(row, startCol);
         if (mergeCell) {
-          mergeCell.setVerticalMerge('continue');
+          mergeCell.setVerticalMerge("continue");
           // If also merging horizontally, set column span on all merged cells
           if (endCol > startCol) {
             mergeCell.setColumnSpan(endCol - startCol + 1);
@@ -1051,7 +1340,7 @@ export class Table {
   splitCell(row: number, col: number): this {
     const cell = this.getCell(row, col);
     if (cell) {
-      cell.setColumnSpan(1);  // Reset to single cell
+      cell.setColumnSpan(1); // Reset to single cell
     }
     return this;
   }
@@ -1068,7 +1357,12 @@ export class Table {
    * table.moveCell(0, 0, 1, 1);  // Move cell from [0,0] to [1,1]
    * ```
    */
-  moveCell(fromRow: number, fromCol: number, toRow: number, toCol: number): this {
+  moveCell(
+    fromRow: number,
+    fromCol: number,
+    toRow: number,
+    toCol: number
+  ): this {
     const fromCell = this.getCell(fromRow, fromCol);
     const toCell = this.getCell(toRow, toCol);
 
@@ -1087,7 +1381,8 @@ export class Table {
     if (formatting.shading) toCell.setShading(formatting.shading);
     if (formatting.borders) toCell.setBorders(formatting.borders);
     if (formatting.width) toCell.setWidth(formatting.width);
-    if (formatting.verticalAlignment) toCell.setVerticalAlignment(formatting.verticalAlignment);
+    if (formatting.verticalAlignment)
+      toCell.setVerticalAlignment(formatting.verticalAlignment);
 
     // Clear source cell (replace with empty paragraph)
     const row = this.getRow(fromRow);
@@ -1135,13 +1430,18 @@ export class Table {
   }
 
   /**
-   * Sets width for a specific column
-   * @param columnIndex - Column index (0-based)
-   * @param width - Width in twips
-   * @returns This table for chaining
+   * Sets the width of a specific column
+   *
+   * Defines the width for a single column without affecting others.
+   *
+   * @param columnIndex - The column index (0-based)
+   * @param width - Width in twips (1/20th of a point)
+   * @returns This table instance for method chaining
+   *
    * @example
    * ```typescript
-   * table.setColumnWidth(0, 2000);  // Set first column to 2000 twips
+   * table.setColumnWidth(0, 2880);  // First column = 2 inches
+   * table.setColumnWidth(1, 1440);  // Second column = 1 inch
    * ```
    */
   setColumnWidth(columnIndex: number, width: number): this {
@@ -1196,11 +1496,20 @@ export class Table {
 
   /**
    * Creates a deep clone of this table
-   * @returns New Table instance with copied rows and formatting
+   *
+   * Creates a new Table with copies of all rows, cells, content, and formatting.
+   * The clone is completely independent of the original.
+   *
+   * @returns New Table instance with the same structure and content
+   *
    * @example
    * ```typescript
    * const original = new Table(2, 3);
+   * original.getCell(0, 0)?.addParagraph(new Paragraph().addText('Data'));
+   *
    * const copy = original.clone();
+   * copy.getCell(0, 0)?.addParagraph(new Paragraph().addText(' - Modified'));
+   * // Original table unchanged
    * ```
    */
   clone(): Table {

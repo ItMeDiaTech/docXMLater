@@ -3,24 +3,29 @@
  * Contains one or more runs of formatted text
  */
 
-import { deepClone } from '../utils/deepClone';
-import { logParagraphContent, logTextDirection } from '../utils/diagnostics';
-import { defaultLogger } from '../utils/logger';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { Bookmark } from './Bookmark';
-import type { Comment } from './Comment';
-import { ComplexField, Field } from './Field';
-import { Hyperlink } from './Hyperlink';
-import { RangeMarker } from './RangeMarker';
-import { Revision } from './Revision';
-import { Run, RunFormatting } from './Run';
-import { Shape } from './Shape';
-import { TextBox } from './TextBox';
+import { deepClone } from "../utils/deepClone";
+import { logParagraphContent, logTextDirection } from "../utils/diagnostics";
+import { defaultLogger } from "../utils/logger";
+import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
+import { Bookmark } from "./Bookmark";
+import type { Comment } from "./Comment";
+import { ComplexField, Field } from "./Field";
+import { Hyperlink } from "./Hyperlink";
+import { RangeMarker } from "./RangeMarker";
+import { Revision } from "./Revision";
+import { Run, RunFormatting } from "./Run";
+import { Shape } from "./Shape";
+import { TextBox } from "./TextBox";
 
 /**
  * Paragraph alignment options
  */
-export type ParagraphAlignment = 'left' | 'center' | 'right' | 'justify' | 'both';
+export type ParagraphAlignment =
+  | "left"
+  | "center"
+  | "right"
+  | "justify"
+  | "both";
 
 /**
  * Type to indicate ComplexField support in paragraph content
@@ -30,38 +35,75 @@ export type FieldLike = Field | ComplexField;
 /**
  * Border style types for paragraph borders
  */
-export type BorderStyle = 'single' | 'double' | 'dashed' | 'dotted' | 'thick' | 'none';
+export type BorderStyle =
+  | "single"
+  | "double"
+  | "dashed"
+  | "dotted"
+  | "thick"
+  | "none";
 
 /**
  * Shading pattern types
  */
-export type ShadingPattern = 'clear' | 'solid' | 'horzStripe' | 'vertStripe' |
-  'reverseDiagStripe' | 'diagStripe' | 'horzCross' | 'diagCross';
+export type ShadingPattern =
+  | "clear"
+  | "solid"
+  | "horzStripe"
+  | "vertStripe"
+  | "reverseDiagStripe"
+  | "diagStripe"
+  | "horzCross"
+  | "diagCross";
 
 /**
  * Tab stop alignment types
  */
-export type TabAlignment = 'clear' | 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'num';
+export type TabAlignment =
+  | "clear"
+  | "left"
+  | "center"
+  | "right"
+  | "decimal"
+  | "bar"
+  | "num";
 
 /**
  * Tab stop leader types
  */
-export type TabLeader = 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+export type TabLeader =
+  | "none"
+  | "dot"
+  | "hyphen"
+  | "underscore"
+  | "heavy"
+  | "middleDot";
 
 /**
  * Text direction types for paragraphs
  */
-export type TextDirection = 'lrTb' | 'tbRl' | 'btLr' | 'lrTbV' | 'tbRlV' | 'tbLrV';
+export type TextDirection =
+  | "lrTb"
+  | "tbRl"
+  | "btLr"
+  | "lrTbV"
+  | "tbRlV"
+  | "tbLrV";
 
 /**
  * Text vertical alignment types
  */
-export type TextAlignment = 'top' | 'center' | 'baseline' | 'bottom' | 'auto';
+export type TextAlignment = "top" | "center" | "baseline" | "bottom" | "auto";
 
 /**
  * Textbox tight wrap modes
  */
-export type TextboxTightWrap = 'none' | 'allLines' | 'firstAndLastLine' | 'firstLineOnly' | 'lastLineOnly';
+export type TextboxTightWrap =
+  | "none"
+  | "allLines"
+  | "firstAndLastLine"
+  | "firstLineOnly"
+  | "lastLineOnly";
 
 /**
  * Paragraph property change tracking (for revision history)
@@ -86,27 +128,27 @@ export interface FrameProperties {
   /** Height in twips */
   h?: number;
   /** Height rule */
-  hRule?: 'auto' | 'atLeast' | 'exact';
+  hRule?: "auto" | "atLeast" | "exact";
   /** Absolute horizontal position in twips */
   x?: number;
   /** Absolute vertical position in twips */
   y?: number;
   /** Relative horizontal alignment */
-  xAlign?: 'left' | 'center' | 'right' | 'inside' | 'outside';
+  xAlign?: "left" | "center" | "right" | "inside" | "outside";
   /** Relative vertical alignment */
-  yAlign?: 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+  yAlign?: "top" | "center" | "bottom" | "inside" | "outside";
   /** Horizontal anchor/positioning base */
-  hAnchor?: 'page' | 'margin' | 'text';
+  hAnchor?: "page" | "margin" | "text";
   /** Vertical anchor/positioning base */
-  vAnchor?: 'page' | 'margin' | 'text';
+  vAnchor?: "page" | "margin" | "text";
   /** Horizontal padding in twips */
   hSpace?: number;
   /** Vertical padding in twips */
   vSpace?: number;
   /** Text wrapping around frame */
-  wrap?: 'around' | 'notBeside' | 'none' | 'tight';
+  wrap?: "around" | "notBeside" | "none" | "tight";
   /** Drop cap style */
-  dropCap?: 'none' | 'drop' | 'margin';
+  dropCap?: "none" | "drop" | "margin";
   /** Drop cap height in lines */
   lines?: number;
   /** Lock frame anchor to paragraph */
@@ -157,7 +199,7 @@ export interface ParagraphFormatting {
     before?: number;
     after?: number;
     line?: number;
-    lineRule?: 'auto' | 'exact' | 'atLeast';
+    lineRule?: "auto" | "exact" | "atLeast";
   };
   /** Keep with next paragraph */
   keepNext?: boolean;
@@ -244,7 +286,14 @@ export interface ParagraphFormatting {
 /**
  * Paragraph content (runs, fields, hyperlinks, revisions, range markers, shapes, text boxes)
  */
-type ParagraphContent = Run | FieldLike | Hyperlink | Revision | RangeMarker | Shape | TextBox;
+type ParagraphContent =
+  | Run
+  | FieldLike
+  | Hyperlink
+  | Revision
+  | RangeMarker
+  | Shape
+  | TextBox;
 
 /**
  * Represents a paragraph in a document
@@ -285,9 +334,12 @@ export class Paragraph {
    * // Add to document later
    * doc.addParagraph(para1);
    */
-  static create(textOrFormatting?: string | ParagraphFormatting, formatting?: ParagraphFormatting): Paragraph {
+  static create(
+    textOrFormatting?: string | ParagraphFormatting,
+    formatting?: ParagraphFormatting
+  ): Paragraph {
     // Handle overloaded parameters
-    if (typeof textOrFormatting === 'string') {
+    if (typeof textOrFormatting === "string") {
       // First param is text
       const paragraph = new Paragraph(formatting);
       paragraph.addText(textOrFormatting);
@@ -349,9 +401,20 @@ export class Paragraph {
   }
 
   /**
-   * Adds a run to the paragraph
-   * @param run - Run to add
-   * @returns This paragraph for chaining
+   * Adds a Run to the paragraph
+   *
+   * Appends a Run instance to the paragraph's content. Runs are sequences
+   * of text with uniform formatting.
+   *
+   * @param run - The Run instance to add
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * const run = new Run('Bold text', { bold: true });
+   * para.addRun(run);
+   * ```
    */
   addRun(run: Run): this {
     this.content.push(run);
@@ -615,10 +678,23 @@ export class Paragraph {
   }
 
   /**
-   * Adds text with optional formatting
-   * @param text - Text to add
-   * @param formatting - Text formatting
-   * @returns This paragraph for chaining
+   * Adds text to the paragraph with optional formatting
+   *
+   * Creates a new Run with the specified text and formatting, then adds it
+   * to the paragraph. This is a convenience method combining Run creation
+   * and addition in one call.
+   *
+   * @param text - The text content to add
+   * @param formatting - Optional formatting to apply to the text
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * para.addText('Normal text');
+   * para.addText('Bold text', { bold: true });
+   * para.addText('Red italic', { italic: true, color: 'FF0000' });
+   * ```
    */
   addText(text: string, formatting?: RunFormatting): this {
     this.content.push(new Run(text, formatting));
@@ -626,10 +702,22 @@ export class Paragraph {
   }
 
   /**
-   * Sets the text content (replaces all content with a single run)
-   * @param text - Text content
-   * @param formatting - Optional formatting for the text
-   * @returns This paragraph for chaining
+   * Sets the paragraph text content (replaces all existing content)
+   *
+   * Clears all existing runs, fields, hyperlinks, and other content,
+   * then adds a single Run with the specified text and formatting.
+   *
+   * @param text - The new text content
+   * @param formatting - Optional formatting to apply to the text
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * para.addText('First text');
+   * para.addText('More text');
+   * para.setText('Replace all', { bold: true }); // Replaces everything
+   * ```
    */
   setText(text: string, formatting?: RunFormatting): this {
     this.content = [new Run(text, formatting)];
@@ -637,16 +725,47 @@ export class Paragraph {
   }
 
   /**
-   * Gets all runs in the paragraph (excluding fields)
-   * @returns Array of runs
+   * Gets all Run instances in the paragraph
+   *
+   * Returns only Run objects, excluding other content types like fields,
+   * hyperlinks, revisions, and range markers.
+   *
+   * @returns Array of Run instances
+   *
+   * @example
+   * ```typescript
+   * const runs = para.getRuns();
+   * console.log(`Paragraph has ${runs.length} text runs`);
+   *
+   * // Apply formatting to all runs
+   * for (const run of runs) {
+   *   run.setBold(true);
+   * }
+   * ```
    */
   getRuns(): Run[] {
     return this.content.filter((item): item is Run => item instanceof Run);
   }
 
   /**
-   * Gets all content in the paragraph (runs and fields)
-   * @returns Array of content items
+   * Gets all content in the paragraph
+   *
+   * Returns all content items including runs, fields, hyperlinks,
+   * revisions, range markers, shapes, and text boxes.
+   *
+   * @returns Array of all content items in order
+   *
+   * @example
+   * ```typescript
+   * const content = para.getContent();
+   * for (const item of content) {
+   *   if (item instanceof Run) {
+   *     console.log('Text:', item.getText());
+   *   } else if (item instanceof Hyperlink) {
+   *     console.log('Link:', item.getUrl());
+   *   }
+   * }
+   * ```
    */
   getContent(): ParagraphContent[] {
     return [...this.content];
@@ -654,7 +773,17 @@ export class Paragraph {
 
   /**
    * Clears all content from the paragraph
-   * Removes all runs, hyperlinks, fields, and other content items
+   *
+   * Removes all runs, hyperlinks, fields, revisions, and other content items.
+   * The paragraph formatting is preserved.
+   *
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * para.clearContent();
+   * para.addText('Fresh start');
+   * ```
    */
   clearContent(): this {
     this.content = [];
@@ -662,20 +791,48 @@ export class Paragraph {
   }
 
   /**
-   * Gets the text content of all runs and hyperlinks combined
-   * @returns Combined text content from all text-bearing elements
+   * Gets the combined text content of the paragraph
+   *
+   * Concatenates text from all Runs and Hyperlinks in the paragraph,
+   * excluding other content types like fields or revisions.
+   *
+   * @returns Combined text string from all text-bearing elements
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * para.addText('Hello ');
+   * para.addText('World');
+   * console.log(para.getText()); // "Hello World"
+   * ```
    */
   getText(): string {
     return this.content
-      .filter((item): item is Run | Hyperlink =>
-        item instanceof Run || item instanceof Hyperlink)
-      .map(item => item.getText())
-      .join('');
+      .filter(
+        (item): item is Run | Hyperlink =>
+          item instanceof Run || item instanceof Hyperlink
+      )
+      .map((item) => item.getText())
+      .join("");
   }
 
   /**
-   * Gets the paragraph formatting
-   * @returns Paragraph formatting
+   * Gets a copy of the paragraph formatting
+   *
+   * Returns a copy of all formatting properties including alignment,
+   * indentation, spacing, style, numbering, borders, shading, etc.
+   *
+   * @returns Copy of the paragraph formatting object
+   *
+   * @example
+   * ```typescript
+   * const formatting = para.getFormatting();
+   * console.log(`Style: ${formatting.style}`);
+   * console.log(`Alignment: ${formatting.alignment}`);
+   * if (formatting.spacing) {
+   *   console.log(`Spacing before: ${formatting.spacing.before} twips`);
+   * }
+   * ```
    */
   getFormatting(): ParagraphFormatting {
     return { ...this.formatting };
@@ -683,7 +840,18 @@ export class Paragraph {
 
   /**
    * Gets the paragraph style ID
-   * @returns Style ID or undefined if no style is set
+   *
+   * Returns the style identifier if a style is applied to this paragraph.
+   *
+   * @returns Style ID (e.g., 'Heading1', 'Normal') or undefined if no style is set
+   *
+   * @example
+   * ```typescript
+   * const style = para.getStyle();
+   * if (style === 'Heading1') {
+   *   console.log('This is a heading paragraph');
+   * }
+   * ```
    */
   getStyle(): string | undefined {
     return this.formatting.style;
@@ -772,9 +940,18 @@ export class Paragraph {
   }
 
   /**
-   * Sets paragraph alignment
-   * @param alignment - Alignment value
-   * @returns This paragraph for chaining
+   * Sets paragraph text alignment
+   *
+   * Controls how text is aligned within the paragraph boundaries.
+   *
+   * @param alignment - Alignment value ('left' | 'center' | 'right' | 'justify' | 'both')
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * para.setAlignment('center');  // Center-aligned
+   * para.setAlignment('justify'); // Justified text
+   * ```
    */
   setAlignment(alignment: ParagraphAlignment): this {
     this.formatting.alignment = alignment;
@@ -805,8 +982,8 @@ export class Paragraph {
       // Note: This will be cleared when setNumbering() was called or will be on next call
       // Still allow setting for edge cases, but it will have no effect
       defaultLogger.warn(
-        'Setting left indentation on a numbered paragraph has no effect. ' +
-        'Numbering controls indentation. Use different numbering levels to change indent.'
+        "Setting left indentation on a numbered paragraph has no effect. " +
+          "Numbering controls indentation. Use different numbering levels to change indent."
       );
     }
     if (!this.formatting.indentation) {
@@ -842,8 +1019,8 @@ export class Paragraph {
   setFirstLineIndent(twips: number): this {
     if (this.formatting.numbering) {
       defaultLogger.warn(
-        'Setting first line indentation on a numbered paragraph has no effect. ' +
-        'Numbering controls indentation using hanging indent.'
+        "Setting first line indentation on a numbered paragraph has no effect. " +
+          "Numbering controls indentation using hanging indent."
       );
     }
     if (!this.formatting.indentation) {
@@ -854,9 +1031,19 @@ export class Paragraph {
   }
 
   /**
-   * Sets spacing before paragraph
-   * @param twips - Spacing in twips
-   * @returns This paragraph for chaining
+   * Sets spacing before the paragraph
+   *
+   * Controls the vertical space above the paragraph.
+   * 1 point = 20 twips, so 120 twips = 6pt spacing.
+   *
+   * @param twips - Spacing value in twips (1/20th of a point)
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * para.setSpaceBefore(240);  // 12pt (240 twips) before paragraph
+   * para.setSpaceBefore(0);    // No space before
+   * ```
    */
   setSpaceBefore(twips: number): this {
     if (!this.formatting.spacing) {
@@ -867,9 +1054,19 @@ export class Paragraph {
   }
 
   /**
-   * Sets spacing after paragraph
-   * @param twips - Spacing in twips
-   * @returns This paragraph for chaining
+   * Sets spacing after the paragraph
+   *
+   * Controls the vertical space below the paragraph.
+   * 1 point = 20 twips, so 120 twips = 6pt spacing.
+   *
+   * @param twips - Spacing value in twips (1/20th of a point)
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * para.setSpaceAfter(120);  // 6pt (120 twips) after paragraph
+   * para.setSpaceAfter(0);    // No space after
+   * ```
    */
   setSpaceAfter(twips: number): this {
     if (!this.formatting.spacing) {
@@ -880,12 +1077,30 @@ export class Paragraph {
   }
 
   /**
-   * Sets line spacing
-   * @param twips - Line spacing in twips
-   * @param rule - Line spacing rule
-   * @returns This paragraph for chaining
+   * Sets line spacing within the paragraph
+   *
+   * Controls the vertical space between lines of text within the paragraph.
+   * Per ECMA-376 Part 1 §17.3.1.33 (w:spacing/@w:line)
+   *
+   * @param twips - Line spacing value in twips (1/20th of a point)
+   * @param rule - Line spacing rule (default: 'auto')
+   *   - 'auto': Line spacing is based on font size (240 twips = single spacing)
+   *   - 'exact': Exact line height regardless of font size
+   *   - 'atLeast': Minimum line height, expands if content is larger
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * para.setLineSpacing(240, 'auto');    // Single spacing
+   * para.setLineSpacing(360, 'auto');    // 1.5 spacing
+   * para.setLineSpacing(480, 'auto');    // Double spacing
+   * para.setLineSpacing(300, 'exact');   // Exactly 15pt line height
+   * ```
    */
-  setLineSpacing(twips: number, rule: 'auto' | 'exact' | 'atLeast' = 'auto'): this {
+  setLineSpacing(
+    twips: number,
+    rule: "auto" | "exact" | "atLeast" = "auto"
+  ): this {
     if (!this.formatting.spacing) {
       this.formatting.spacing = {};
     }
@@ -895,9 +1110,19 @@ export class Paragraph {
   }
 
   /**
-   * Sets paragraph style
-   * @param styleId - Style ID
-   * @returns This paragraph for chaining
+   * Sets the paragraph style
+   *
+   * Applies a style definition to the paragraph. The style must exist
+   * in the document's StylesManager.
+   *
+   * @param styleId - The style identifier (e.g., 'Heading1', 'Normal', 'ListParagraph')
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * para.setStyle('Heading1');  // Apply Heading1 style
+   * para.setStyle('Normal');    // Apply Normal style
+   * ```
    */
   setStyle(styleId: string): this {
     this.formatting.style = styleId;
@@ -1006,10 +1231,10 @@ export class Paragraph {
    */
   setNumbering(numId: number, level: number = 0): this {
     if (numId < 0) {
-      throw new Error('Numbering ID must be non-negative');
+      throw new Error("Numbering ID must be non-negative");
     }
     if (level < 0 || level > 8) {
-      throw new Error('Level must be between 0 and 8');
+      throw new Error("Level must be between 0 and 8");
     }
 
     this.formatting.numbering = { numId, level };
@@ -1053,7 +1278,9 @@ export class Paragraph {
    * @returns Numbering properties or undefined
    */
   getNumbering(): { numId: number; level: number } | undefined {
-    return this.formatting.numbering ? { ...this.formatting.numbering } : undefined;
+    return this.formatting.numbering
+      ? { ...this.formatting.numbering }
+      : undefined;
   }
 
   /**
@@ -1080,7 +1307,7 @@ export class Paragraph {
    */
   setOutlineLevel(level: number): this {
     if (level < 0 || level > 9) {
-      throw new Error('Outline level must be between 0 and 9');
+      throw new Error("Outline level must be between 0 and 9");
     }
     this.formatting.outlineLevel = level;
     return this;
@@ -1392,11 +1619,11 @@ export class Paragraph {
    */
   toXML(): XMLElement {
     // Diagnostic logging before serialization
-    const runData = this.getRuns().map(run => ({
+    const runData = this.getRuns().map((run) => ({
       text: run.getText(),
       rtl: run.getFormatting().rtl,
     }));
-    logParagraphContent('serialization', -1, runData, this.formatting.bidi);
+    logParagraphContent("serialization", -1, runData, this.formatting.bidi);
 
     if (this.formatting.bidi) {
       logTextDirection(`Serializing paragraph with BiDi enabled`);
@@ -1406,21 +1633,28 @@ export class Paragraph {
 
     // 1. Paragraph style (must be first per ECMA-376 §17.3.1.26)
     if (this.formatting.style) {
-      pPrChildren.push(XMLBuilder.wSelf('pStyle', { 'w:val': this.formatting.style }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("pStyle", { "w:val": this.formatting.style })
+      );
     }
 
     // 1.5. Paragraph mark run properties per ECMA-376 Part 1 §17.3.1.29
     // Controls formatting of the paragraph mark (¶ symbol) itself
-    if (this.formatting.paragraphMarkRunProperties || this.formatting.paragraphMarkDeletion) {
+    if (
+      this.formatting.paragraphMarkRunProperties ||
+      this.formatting.paragraphMarkDeletion
+    ) {
       const rPrChildren: XMLElement[] = [];
 
       // Add run properties for the paragraph mark if they exist
       if (this.formatting.paragraphMarkRunProperties) {
-        const rPr = Run.generateRunPropertiesXML(this.formatting.paragraphMarkRunProperties);
+        const rPr = Run.generateRunPropertiesXML(
+          this.formatting.paragraphMarkRunProperties
+        );
         if (rPr && rPr.children) {
           // Filter to only XMLElement types (children can be XMLElement or string)
           for (const child of rPr.children) {
-            if (typeof child !== 'string') {
+            if (typeof child !== "string") {
               rPrChildren.push(child);
             }
           }
@@ -1431,94 +1665,105 @@ export class Paragraph {
       // Per ECMA-376 Part 1 §17.13.5.14 - tracks deletion of paragraph mark
       if (this.formatting.paragraphMarkDeletion) {
         const del = this.formatting.paragraphMarkDeletion;
-        rPrChildren.push(XMLBuilder.wSelf('del', {
-          'w:id': del.id.toString(),
-          'w:author': del.author,
-          'w:date': del.date.toISOString(),
-        }));
+        rPrChildren.push(
+          XMLBuilder.wSelf("del", {
+            "w:id": del.id.toString(),
+            "w:author": del.author,
+            "w:date": del.date.toISOString(),
+          })
+        );
       }
 
       // Add w:rPr element if there are any run properties
       if (rPrChildren.length > 0) {
-        pPrChildren.push(XMLBuilder.w('rPr', undefined, rPrChildren));
+        pPrChildren.push(XMLBuilder.w("rPr", undefined, rPrChildren));
       }
     }
 
     // 2. Keep with next paragraph
     if (this.formatting.keepNext) {
-      pPrChildren.push(XMLBuilder.wSelf('keepNext'));
+      pPrChildren.push(XMLBuilder.wSelf("keepNext"));
     }
 
     // 3. Keep lines together
     if (this.formatting.keepLines) {
-      pPrChildren.push(XMLBuilder.wSelf('keepLines'));
+      pPrChildren.push(XMLBuilder.wSelf("keepLines"));
     }
 
     // 4. Page break before
     if (this.formatting.pageBreakBefore) {
-      pPrChildren.push(XMLBuilder.wSelf('pageBreakBefore'));
+      pPrChildren.push(XMLBuilder.wSelf("pageBreakBefore"));
     }
 
     // 5. Widow/orphan control per ECMA-376 Part 1 §17.3.1.40
     if (this.formatting.widowControl !== undefined) {
-      pPrChildren.push(XMLBuilder.wSelf('widowControl', { 'w:val': this.formatting.widowControl ? '1' : '0' }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("widowControl", {
+          "w:val": this.formatting.widowControl ? "1" : "0",
+        })
+      );
     }
 
     // 6. Numbering properties
     if (this.formatting.numbering) {
-      const numPr = XMLBuilder.w('numPr', undefined, [
-        XMLBuilder.wSelf('ilvl', { 'w:val': this.formatting.numbering.level.toString() }),
-        XMLBuilder.wSelf('numId', { 'w:val': this.formatting.numbering.numId.toString() })
+      const numPr = XMLBuilder.w("numPr", undefined, [
+        XMLBuilder.wSelf("ilvl", {
+          "w:val": this.formatting.numbering.level.toString(),
+        }),
+        XMLBuilder.wSelf("numId", {
+          "w:val": this.formatting.numbering.numId.toString(),
+        }),
       ]);
       pPrChildren.push(numPr);
     }
 
     // 7. Suppress line numbers per ECMA-376 Part 1 §17.3.1.34
     if (this.formatting.suppressLineNumbers) {
-      pPrChildren.push(XMLBuilder.wSelf('suppressLineNumbers'));
+      pPrChildren.push(XMLBuilder.wSelf("suppressLineNumbers"));
     }
 
     // 7a. Suppress automatic hyphenation per ECMA-376 Part 1 §17.3.1.33
     if (this.formatting.suppressAutoHyphens) {
-      pPrChildren.push(XMLBuilder.wSelf('suppressAutoHyphens'));
+      pPrChildren.push(XMLBuilder.wSelf("suppressAutoHyphens"));
     }
 
     // 8. Spacing (before/after/line) per ECMA-376 Part 1 §17.3.1.33
     if (this.formatting.spacing) {
       const spc = this.formatting.spacing;
       const attributes: Record<string, number | string> = {};
-      if (spc.before !== undefined) attributes['w:before'] = spc.before;
-      if (spc.after !== undefined) attributes['w:after'] = spc.after;
-      if (spc.line !== undefined) attributes['w:line'] = spc.line;
-      if (spc.lineRule) attributes['w:lineRule'] = spc.lineRule;
+      if (spc.before !== undefined) attributes["w:before"] = spc.before;
+      if (spc.after !== undefined) attributes["w:after"] = spc.after;
+      if (spc.line !== undefined) attributes["w:line"] = spc.line;
+      if (spc.lineRule) attributes["w:lineRule"] = spc.lineRule;
       // Only generate spacing element if it has attributes (prevents empty elements)
       if (Object.keys(attributes).length > 0) {
-        pPrChildren.push(XMLBuilder.wSelf('spacing', attributes));
+        pPrChildren.push(XMLBuilder.wSelf("spacing", attributes));
       }
     }
 
     // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
     // Removes spacing between paragraphs of the same style (comes after spacing)
     if (this.formatting.contextualSpacing) {
-      pPrChildren.push(XMLBuilder.wSelf('contextualSpacing', { 'w:val': '1' }));
+      pPrChildren.push(XMLBuilder.wSelf("contextualSpacing", { "w:val": "1" }));
     }
 
     // 7. Indentation (left/right/firstLine/hanging)
     if (this.formatting.indentation) {
       const ind = this.formatting.indentation;
       const attributes: Record<string, number> = {};
-      if (ind.left !== undefined) attributes['w:left'] = ind.left;
-      if (ind.right !== undefined) attributes['w:right'] = ind.right;
-      if (ind.firstLine !== undefined) attributes['w:firstLine'] = ind.firstLine;
-      if (ind.hanging !== undefined) attributes['w:hanging'] = ind.hanging;
+      if (ind.left !== undefined) attributes["w:left"] = ind.left;
+      if (ind.right !== undefined) attributes["w:right"] = ind.right;
+      if (ind.firstLine !== undefined)
+        attributes["w:firstLine"] = ind.firstLine;
+      if (ind.hanging !== undefined) attributes["w:hanging"] = ind.hanging;
       if (Object.keys(attributes).length > 0) {
-        pPrChildren.push(XMLBuilder.wSelf('ind', attributes));
+        pPrChildren.push(XMLBuilder.wSelf("ind", attributes));
       }
     }
 
     // 7a. Mirror indents per ECMA-376 Part 1 §17.3.1.18
     if (this.formatting.mirrorIndents) {
-      pPrChildren.push(XMLBuilder.wSelf('mirrorIndents'));
+      pPrChildren.push(XMLBuilder.wSelf("mirrorIndents"));
     }
 
     // 8. Paragraph borders per ECMA-376 Part 1 §17.3.1.24
@@ -1527,13 +1772,16 @@ export class Paragraph {
       const borders = this.formatting.borders;
 
       // Helper function to create border element
-      const createBorder = (borderType: string, border: BorderDefinition | undefined): XMLElement | null => {
+      const createBorder = (
+        borderType: string,
+        border: BorderDefinition | undefined
+      ): XMLElement | null => {
         if (!border) return null;
         const attributes: Record<string, string | number> = {};
-        if (border.style) attributes['w:val'] = border.style;
-        if (border.size !== undefined) attributes['w:sz'] = border.size;
-        if (border.color) attributes['w:color'] = border.color;
-        if (border.space !== undefined) attributes['w:space'] = border.space;
+        if (border.style) attributes["w:val"] = border.style;
+        if (border.size !== undefined) attributes["w:sz"] = border.size;
+        if (border.color) attributes["w:color"] = border.color;
+        if (border.space !== undefined) attributes["w:space"] = border.space;
         if (Object.keys(attributes).length > 0) {
           return XMLBuilder.wSelf(borderType, attributes);
         }
@@ -1541,26 +1789,26 @@ export class Paragraph {
       };
 
       // Add borders in order: top, left, bottom, right, between, bar
-      const topBorder = createBorder('top', borders.top);
+      const topBorder = createBorder("top", borders.top);
       if (topBorder) borderChildren.push(topBorder);
 
-      const leftBorder = createBorder('left', borders.left);
+      const leftBorder = createBorder("left", borders.left);
       if (leftBorder) borderChildren.push(leftBorder);
 
-      const bottomBorder = createBorder('bottom', borders.bottom);
+      const bottomBorder = createBorder("bottom", borders.bottom);
       if (bottomBorder) borderChildren.push(bottomBorder);
 
-      const rightBorder = createBorder('right', borders.right);
+      const rightBorder = createBorder("right", borders.right);
       if (rightBorder) borderChildren.push(rightBorder);
 
-      const betweenBorder = createBorder('between', borders.between);
+      const betweenBorder = createBorder("between", borders.between);
       if (betweenBorder) borderChildren.push(betweenBorder);
 
-      const barBorder = createBorder('bar', borders.bar);
+      const barBorder = createBorder("bar", borders.bar);
       if (barBorder) borderChildren.push(barBorder);
 
       if (borderChildren.length > 0) {
-        pPrChildren.push(XMLBuilder.w('pBdr', undefined, borderChildren));
+        pPrChildren.push(XMLBuilder.w("pBdr", undefined, borderChildren));
       }
     }
 
@@ -1568,11 +1816,11 @@ export class Paragraph {
     if (this.formatting.shading) {
       const shd = this.formatting.shading;
       const attributes: Record<string, string> = {};
-      if (shd.fill) attributes['w:fill'] = shd.fill;
-      if (shd.color) attributes['w:color'] = shd.color;
-      if (shd.val) attributes['w:val'] = shd.val;
+      if (shd.fill) attributes["w:fill"] = shd.fill;
+      if (shd.color) attributes["w:color"] = shd.color;
+      if (shd.val) attributes["w:val"] = shd.val;
       if (Object.keys(attributes).length > 0) {
-        pPrChildren.push(XMLBuilder.wSelf('shd', attributes));
+        pPrChildren.push(XMLBuilder.wSelf("shd", attributes));
       }
     }
 
@@ -1581,13 +1829,13 @@ export class Paragraph {
       const tabChildren: XMLElement[] = [];
       for (const tab of this.formatting.tabs) {
         const attributes: Record<string, string | number> = {};
-        attributes['w:pos'] = tab.position;
-        if (tab.val) attributes['w:val'] = tab.val;
-        if (tab.leader) attributes['w:leader'] = tab.leader;
-        tabChildren.push(XMLBuilder.wSelf('tab', attributes));
+        attributes["w:pos"] = tab.position;
+        if (tab.val) attributes["w:val"] = tab.val;
+        if (tab.leader) attributes["w:leader"] = tab.leader;
+        tabChildren.push(XMLBuilder.wSelf("tab", attributes));
       }
       if (tabChildren.length > 0) {
-        pPrChildren.push(XMLBuilder.w('tabs', undefined, tabChildren));
+        pPrChildren.push(XMLBuilder.w("tabs", undefined, tabChildren));
       }
     }
 
@@ -1595,76 +1843,106 @@ export class Paragraph {
     if (this.formatting.framePr) {
       const attrs: Record<string, string> = {};
       const f = this.formatting.framePr;
-      if (f.w !== undefined) attrs['w:w'] = f.w.toString();
-      if (f.h !== undefined) attrs['w:h'] = f.h.toString();
-      if (f.hRule) attrs['w:hRule'] = f.hRule;
-      if (f.x !== undefined) attrs['w:x'] = f.x.toString();
-      if (f.y !== undefined) attrs['w:y'] = f.y.toString();
-      if (f.xAlign) attrs['w:xAlign'] = f.xAlign;
-      if (f.yAlign) attrs['w:yAlign'] = f.yAlign;
-      if (f.hAnchor) attrs['w:hAnchor'] = f.hAnchor;
-      if (f.vAnchor) attrs['w:vAnchor'] = f.vAnchor;
-      if (f.hSpace !== undefined) attrs['w:hSpace'] = f.hSpace.toString();
-      if (f.vSpace !== undefined) attrs['w:vSpace'] = f.vSpace.toString();
-      if (f.wrap) attrs['w:wrap'] = f.wrap;
-      if (f.dropCap) attrs['w:dropCap'] = f.dropCap;
-      if (f.lines !== undefined) attrs['w:lines'] = f.lines.toString();
-      if (f.anchorLock !== undefined) attrs['w:anchorLock'] = f.anchorLock ? '1' : '0';
+      if (f.w !== undefined) attrs["w:w"] = f.w.toString();
+      if (f.h !== undefined) attrs["w:h"] = f.h.toString();
+      if (f.hRule) attrs["w:hRule"] = f.hRule;
+      if (f.x !== undefined) attrs["w:x"] = f.x.toString();
+      if (f.y !== undefined) attrs["w:y"] = f.y.toString();
+      if (f.xAlign) attrs["w:xAlign"] = f.xAlign;
+      if (f.yAlign) attrs["w:yAlign"] = f.yAlign;
+      if (f.hAnchor) attrs["w:hAnchor"] = f.hAnchor;
+      if (f.vAnchor) attrs["w:vAnchor"] = f.vAnchor;
+      if (f.hSpace !== undefined) attrs["w:hSpace"] = f.hSpace.toString();
+      if (f.vSpace !== undefined) attrs["w:vSpace"] = f.vSpace.toString();
+      if (f.wrap) attrs["w:wrap"] = f.wrap;
+      if (f.dropCap) attrs["w:dropCap"] = f.dropCap;
+      if (f.lines !== undefined) attrs["w:lines"] = f.lines.toString();
+      if (f.anchorLock !== undefined)
+        attrs["w:anchorLock"] = f.anchorLock ? "1" : "0";
       if (Object.keys(attrs).length > 0) {
-        pPrChildren.push(XMLBuilder.wSelf('framePr', attrs));
+        pPrChildren.push(XMLBuilder.wSelf("framePr", attrs));
       }
     }
 
     // 10b. Suppress text frame overlap per ECMA-376 Part 1 §17.3.1.34
     if (this.formatting.suppressOverlap) {
-      pPrChildren.push(XMLBuilder.wSelf('suppressOverlap'));
+      pPrChildren.push(XMLBuilder.wSelf("suppressOverlap"));
     }
 
     // 11. Bidirectional layout per ECMA-376 Part 1 §17.3.1.6
     if (this.formatting.bidi !== undefined) {
-      pPrChildren.push(XMLBuilder.wSelf('bidi', { 'w:val': this.formatting.bidi ? '1' : '0' }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("bidi", { "w:val": this.formatting.bidi ? "1" : "0" })
+      );
     }
 
     // 12. Auto-adjust right indent per ECMA-376 Part 1 §17.3.1.1
     if (this.formatting.adjustRightInd !== undefined) {
-      pPrChildren.push(XMLBuilder.wSelf('adjustRightInd', { 'w:val': this.formatting.adjustRightInd ? '1' : '0' }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("adjustRightInd", {
+          "w:val": this.formatting.adjustRightInd ? "1" : "0",
+        })
+      );
     }
 
     // 12a. Textbox tight wrap per ECMA-376 Part 1 §17.3.1.37
     if (this.formatting.textboxTightWrap) {
-      pPrChildren.push(XMLBuilder.wSelf('textboxTightWrap', { 'w:val': this.formatting.textboxTightWrap }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("textboxTightWrap", {
+          "w:val": this.formatting.textboxTightWrap,
+        })
+      );
     }
 
     // 13. Justification/Alignment per ECMA-376 §17.3.1.13
     if (this.formatting.alignment) {
       // Map 'justify' to 'both' per ECMA-376 (Word uses 'both' for justified text)
-      const alignmentValue = this.formatting.alignment === 'justify' ? 'both' : this.formatting.alignment;
-      pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': alignmentValue }));
+      const alignmentValue =
+        this.formatting.alignment === "justify"
+          ? "both"
+          : this.formatting.alignment;
+      pPrChildren.push(XMLBuilder.wSelf("jc", { "w:val": alignmentValue }));
     }
 
     // 14. Text vertical alignment per ECMA-376 Part 1 §17.3.1.35
     if (this.formatting.textAlignment) {
-      pPrChildren.push(XMLBuilder.wSelf('textAlignment', { 'w:val': this.formatting.textAlignment }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("textAlignment", {
+          "w:val": this.formatting.textAlignment,
+        })
+      );
     }
 
     // 15. Text direction per ECMA-376 Part 1 §17.3.1.36
     if (this.formatting.textDirection) {
-      pPrChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': this.formatting.textDirection }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("textDirection", {
+          "w:val": this.formatting.textDirection,
+        })
+      );
     }
 
     // 16. Outline level per ECMA-376 Part 1 §17.3.1.19
     if (this.formatting.outlineLevel !== undefined) {
-      pPrChildren.push(XMLBuilder.wSelf('outlineLvl', { 'w:val': this.formatting.outlineLevel.toString() }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("outlineLvl", {
+          "w:val": this.formatting.outlineLevel.toString(),
+        })
+      );
     }
 
     // 17. HTML div ID per ECMA-376 Part 1 §17.3.1.9
     if (this.formatting.divId !== undefined) {
-      pPrChildren.push(XMLBuilder.wSelf('divId', { 'w:val': this.formatting.divId.toString() }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("divId", { "w:val": this.formatting.divId.toString() })
+      );
     }
 
     // 18. Conditional table style formatting per ECMA-376 Part 1 §17.3.1.8
     if (this.formatting.cnfStyle) {
-      pPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
+      pPrChildren.push(
+        XMLBuilder.wSelf("cnfStyle", { "w:val": this.formatting.cnfStyle })
+      );
     }
 
     // 19. Paragraph property change tracking per ECMA-376 Part 1 §17.3.1.27
@@ -1683,9 +1961,9 @@ export class Paragraph {
     if (this.formatting.pPrChange) {
       const change = this.formatting.pPrChange;
       const attrs: Record<string, string> = {};
-      if (change.author) attrs['w:author'] = change.author;
-      if (change.date) attrs['w:date'] = change.date;
-      if (change.id) attrs['w:id'] = change.id;
+      if (change.author) attrs["w:author"] = change.author;
+      if (change.date) attrs["w:date"] = change.date;
+      if (change.id) attrs["w:id"] = change.id;
 
       // Build child w:pPr element with previous properties
       const prevPPrChildren: XMLElement[] = [];
@@ -1695,36 +1973,63 @@ export class Paragraph {
         // Serialize previous properties in ECMA-376 order
         // Only include properties that were explicitly set
         if (prev.style) {
-          prevPPrChildren.push(XMLBuilder.wSelf('pStyle', { 'w:val': prev.style }));
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("pStyle", { "w:val": prev.style })
+          );
         }
         if (prev.keepNext !== undefined) {
-          prevPPrChildren.push(XMLBuilder.wSelf('keepNext', prev.keepNext ? { 'w:val': '1' } : { 'w:val': '0' }));
+          prevPPrChildren.push(
+            XMLBuilder.wSelf(
+              "keepNext",
+              prev.keepNext ? { "w:val": "1" } : { "w:val": "0" }
+            )
+          );
         }
         if (prev.keepLines !== undefined) {
-          prevPPrChildren.push(XMLBuilder.wSelf('keepLines', prev.keepLines ? { 'w:val': '1' } : { 'w:val': '0' }));
+          prevPPrChildren.push(
+            XMLBuilder.wSelf(
+              "keepLines",
+              prev.keepLines ? { "w:val": "1" } : { "w:val": "0" }
+            )
+          );
         }
         if (prev.pageBreakBefore !== undefined) {
-          prevPPrChildren.push(XMLBuilder.wSelf('pageBreakBefore', prev.pageBreakBefore ? { 'w:val': '1' } : { 'w:val': '0' }));
+          prevPPrChildren.push(
+            XMLBuilder.wSelf(
+              "pageBreakBefore",
+              prev.pageBreakBefore ? { "w:val": "1" } : { "w:val": "0" }
+            )
+          );
         }
         if (prev.alignment) {
-          prevPPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': prev.alignment }));
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("jc", { "w:val": prev.alignment })
+          );
         }
         if (prev.indentation) {
           const indAttrs: Record<string, string> = {};
-          if (prev.indentation.left !== undefined) indAttrs['w:left'] = prev.indentation.left.toString();
-          if (prev.indentation.right !== undefined) indAttrs['w:right'] = prev.indentation.right.toString();
-          if (prev.indentation.firstLine !== undefined) indAttrs['w:firstLine'] = prev.indentation.firstLine.toString();
-          if (prev.indentation.hanging !== undefined) indAttrs['w:hanging'] = prev.indentation.hanging.toString();
-          prevPPrChildren.push(XMLBuilder.wSelf('ind', indAttrs));
+          if (prev.indentation.left !== undefined)
+            indAttrs["w:left"] = prev.indentation.left.toString();
+          if (prev.indentation.right !== undefined)
+            indAttrs["w:right"] = prev.indentation.right.toString();
+          if (prev.indentation.firstLine !== undefined)
+            indAttrs["w:firstLine"] = prev.indentation.firstLine.toString();
+          if (prev.indentation.hanging !== undefined)
+            indAttrs["w:hanging"] = prev.indentation.hanging.toString();
+          prevPPrChildren.push(XMLBuilder.wSelf("ind", indAttrs));
         }
         if (prev.spacing) {
           const spacingAttrs: Record<string, string> = {};
-          if (prev.spacing.before !== undefined) spacingAttrs['w:before'] = prev.spacing.before.toString();
-          if (prev.spacing.after !== undefined) spacingAttrs['w:after'] = prev.spacing.after.toString();
-          if (prev.spacing.line !== undefined) spacingAttrs['w:line'] = prev.spacing.line.toString();
-          if (prev.spacing.lineRule) spacingAttrs['w:lineRule'] = prev.spacing.lineRule;
+          if (prev.spacing.before !== undefined)
+            spacingAttrs["w:before"] = prev.spacing.before.toString();
+          if (prev.spacing.after !== undefined)
+            spacingAttrs["w:after"] = prev.spacing.after.toString();
+          if (prev.spacing.line !== undefined)
+            spacingAttrs["w:line"] = prev.spacing.line.toString();
+          if (prev.spacing.lineRule)
+            spacingAttrs["w:lineRule"] = prev.spacing.lineRule;
           if (Object.keys(spacingAttrs).length > 0) {
-            prevPPrChildren.push(XMLBuilder.wSelf('spacing', spacingAttrs));
+            prevPPrChildren.push(XMLBuilder.wSelf("spacing", spacingAttrs));
           }
         }
       }
@@ -1733,14 +2038,14 @@ export class Paragraph {
       const pPrChangeChildren: XMLElement[] = [];
       if (prevPPrChildren.length > 0) {
         pPrChangeChildren.push({
-          name: 'w:pPr',
+          name: "w:pPr",
           attributes: {},
           children: prevPPrChildren,
         });
       }
 
       pPrChildren.push({
-        name: 'w:pPrChange',
+        name: "w:pPrChange",
         attributes: attrs,
         children: pPrChangeChildren,
       });
@@ -1751,7 +2056,7 @@ export class Paragraph {
     if (this.formatting.sectPr) {
       // Simplified: serialize as-is (complex structure)
       // Full implementation would generate complete sectPr XML structure
-      pPrChildren.push(XMLBuilder.wSelf('sectPr', this.formatting.sectPr));
+      pPrChildren.push(XMLBuilder.wSelf("sectPr", this.formatting.sectPr));
     }
 
     // Build paragraph element
@@ -1759,7 +2064,7 @@ export class Paragraph {
 
     // Add paragraph properties if there are any
     if (pPrChildren.length > 0) {
-      paragraphChildren.push(XMLBuilder.w('pPr', undefined, pPrChildren));
+      paragraphChildren.push(XMLBuilder.w("pPr", undefined, pPrChildren));
     }
 
     // Add bookmark start markers
@@ -1777,7 +2082,7 @@ export class Paragraph {
       const item = this.content[i];
       if (item instanceof Field) {
         // Simple Field - wrap in run
-        paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
+        paragraphChildren.push(XMLBuilder.w("r", undefined, [item.toXML()]));
       } else if (item instanceof ComplexField) {
         // ComplexField returns array of runs - spread them directly into paragraphChildren
         const fieldXml = item.toXML();
@@ -1785,7 +2090,7 @@ export class Paragraph {
           paragraphChildren.push(...fieldXml);
         } else {
           // Fallback if toXML() doesn't return array
-          paragraphChildren.push(XMLBuilder.w('r', undefined, [fieldXml]));
+          paragraphChildren.push(XMLBuilder.w("r", undefined, [fieldXml]));
         }
       } else if (item instanceof Hyperlink) {
         // Hyperlinks are their own element
@@ -1798,10 +2103,10 @@ export class Paragraph {
         paragraphChildren.push(item.toXML());
       } else if (item instanceof Shape) {
         // Shapes are wrapped in a run
-        paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
+        paragraphChildren.push(XMLBuilder.w("r", undefined, [item.toXML()]));
       } else if (item instanceof TextBox) {
         // Text boxes are wrapped in a run
-        paragraphChildren.push(XMLBuilder.w('r', undefined, [item.toXML()]));
+        paragraphChildren.push(XMLBuilder.w("r", undefined, [item.toXML()]));
       } else if (item) {
         paragraphChildren.push(item.toXML());
       }
@@ -1809,7 +2114,7 @@ export class Paragraph {
 
     // If no content, add empty run to prevent invalid XML
     if (this.content.length === 0) {
-      paragraphChildren.push(new Run('').toXML());
+      paragraphChildren.push(new Run("").toXML());
     }
 
     // Add comment range end markers
@@ -1830,42 +2135,81 @@ export class Paragraph {
     // Add paragraph-level attributes (Word 2010+ requires w14:paraId)
     const paragraphAttributes: Record<string, string> = {};
     if (this.formatting.paraId) {
-      paragraphAttributes['w14:paraId'] = this.formatting.paraId;
+      paragraphAttributes["w14:paraId"] = this.formatting.paraId;
     }
 
-    return XMLBuilder.w('p', Object.keys(paragraphAttributes).length > 0 ? paragraphAttributes : undefined, paragraphChildren);
+    return XMLBuilder.w(
+      "p",
+      Object.keys(paragraphAttributes).length > 0
+        ? paragraphAttributes
+        : undefined,
+      paragraphChildren
+    );
   }
 
   /**
    * Gets the word count for this paragraph
+   *
+   * Counts words by splitting text on whitespace and filtering empty strings.
+   *
    * @returns Number of words in the paragraph
+   *
+   * @example
+   * ```typescript
+   * const count = para.getWordCount();
+   * console.log(`Paragraph has ${count} words`);
+   * ```
    */
   getWordCount(): number {
     const text = this.getText().trim();
     if (!text) return 0;
 
     // Split by whitespace and filter out empty strings
-    const words = text.split(/\s+/).filter(word => word.length > 0);
+    const words = text.split(/\s+/).filter((word) => word.length > 0);
     return words.length;
   }
 
   /**
    * Gets the character count for this paragraph
-   * @param includeSpaces - Whether to include spaces in the count
+   *
+   * Counts all characters including or excluding whitespace.
+   *
+   * @param includeSpaces - If true, includes spaces; if false, excludes them (default: true)
    * @returns Number of characters in the paragraph
+   *
+   * @example
+   * ```typescript
+   * const withSpaces = para.getLength();       // Includes spaces
+   * const noSpaces = para.getLength(false);    // Excludes spaces
+   * console.log(`${withSpaces} chars (${noSpaces} without spaces)`);
+   * ```
    */
   getLength(includeSpaces: boolean = true): number {
     const text = this.getText();
     if (includeSpaces) {
       return text.length;
     } else {
-      return text.replace(/\s/g, '').length;
+      return text.replace(/\s/g, "").length;
     }
   }
 
   /**
    * Creates a deep clone of this paragraph
+   *
+   * Creates a new Paragraph with copies of all content, formatting,
+   * bookmarks, and comments. The clone is independent of the original.
+   *
    * @returns A new Paragraph instance with the same content and formatting
+   *
+   * @example
+   * ```typescript
+   * const original = new Paragraph();
+   * original.addText('Template text', { bold: true });
+   * original.setStyle('Heading1');
+   *
+   * const copy = original.clone();
+   * copy.addText(' - modified'); // Original unchanged
+   * ```
    */
   clone(): Paragraph {
     // Clone the formatting
@@ -2043,17 +2387,33 @@ export class Paragraph {
   }
 
   /**
-   * Finds text within the paragraph
-   * @param text - Text to search for
-   * @param options - Search options
-   * @returns Array of run indices containing the text
+   * Finds text within the paragraph and returns run indices
+   *
+   * Searches through all runs in the paragraph and returns the indices
+   * of runs that contain the search text.
+   *
+   * @param text - The text to search for
+   * @param options - Optional search configuration
+   * @param options.caseSensitive - If true, match case exactly (default: false)
+   * @param options.wholeWord - If true, match whole words only (default: false)
+   * @returns Array of run indices (0-based) that contain the search text
+   *
    * @example
    * ```typescript
    * const indices = para.findText('important');
    * console.log(`Found in runs: ${indices.join(', ')}`);
+   *
+   * // Highlight all matching runs
+   * for (const idx of indices) {
+   *   const run = para.getRuns()[idx];
+   *   run?.setHighlight('yellow');
+   * }
    * ```
    */
-  findText(text: string, options?: { caseSensitive?: boolean; wholeWord?: boolean }): number[] {
+  findText(
+    text: string,
+    options?: { caseSensitive?: boolean; wholeWord?: boolean }
+  ): number[] {
     const indices: number[] = [];
     const caseSensitive = options?.caseSensitive || false;
     const wholeWord = options?.wholeWord || false;
@@ -2063,11 +2423,15 @@ export class Paragraph {
     for (let i = 0; i < this.content.length; i++) {
       const item = this.content[i];
       if (item instanceof Run) {
-        const runText = caseSensitive ? item.getText() : item.getText().toLowerCase();
+        const runText = caseSensitive
+          ? item.getText()
+          : item.getText().toLowerCase();
 
         if (wholeWord) {
           // Use word boundary regex
-          const wordPattern = new RegExp(`\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+          const wordPattern = new RegExp(
+            `\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`
+          );
           if (wordPattern.test(runText)) {
             indices.push(i);
           }
@@ -2085,17 +2449,37 @@ export class Paragraph {
 
   /**
    * Replaces text within paragraph runs
-   * @param find - Text to find
-   * @param replace - Replacement text
-   * @param options - Search options
+   *
+   * Searches through all runs and replaces matching text while preserving
+   * the original formatting of each run.
+   *
+   * @param find - The text to search for
+   * @param replace - The replacement text
+   * @param options - Optional search configuration
+   * @param options.caseSensitive - If true, match case exactly (default: false)
+   * @param options.wholeWord - If true, match whole words only (default: false)
    * @returns Number of replacements made
+   *
    * @example
    * ```typescript
-   * const count = para.replaceText('old', 'new');
+   * const count = para.replaceText('color', 'colour');
    * console.log(`Replaced ${count} occurrences`);
    * ```
+   *
+   * @example
+   * ```typescript
+   * // Case-sensitive whole word replacement
+   * const count = para.replaceText('Error', 'Warning', {
+   *   caseSensitive: true,
+   *   wholeWord: true
+   * });
+   * ```
    */
-  replaceText(find: string, replace: string, options?: { caseSensitive?: boolean; wholeWord?: boolean }): number {
+  replaceText(
+    find: string,
+    replace: string,
+    options?: { caseSensitive?: boolean; wholeWord?: boolean }
+  ): number {
     let replacementCount = 0;
     const caseSensitive = options?.caseSensitive || false;
     const wholeWord = options?.wholeWord || false;
@@ -2108,8 +2492,8 @@ export class Paragraph {
         if (wholeWord) {
           // Use word boundary regex
           const wordPattern = new RegExp(
-            `\\b${find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
-            caseSensitive ? 'g' : 'gi'
+            `\\b${find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+            caseSensitive ? "g" : "gi"
           );
           const matches = originalText.match(wordPattern);
           if (matches) {
@@ -2119,8 +2503,8 @@ export class Paragraph {
         } else {
           // Simple substring replacement
           const searchPattern = new RegExp(
-            find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-            caseSensitive ? 'g' : 'gi'
+            find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+            caseSensitive ? "g" : "gi"
           );
           const matches = originalText.match(searchPattern);
           if (matches) {
@@ -2140,8 +2524,13 @@ export class Paragraph {
 
   /**
    * Merges another paragraph's content into this one
-   * @param otherPara - Paragraph to merge
-   * @returns This paragraph for chaining
+   *
+   * Appends all content (runs, fields, hyperlinks), bookmarks, and comments
+   * from another paragraph to this one. The other paragraph is not modified.
+   *
+   * @param otherPara - The paragraph whose content to merge
+   * @returns This paragraph instance for method chaining
+   *
    * @example
    * ```typescript
    * const para1 = new Paragraph().addText('Hello ');
@@ -2259,13 +2648,18 @@ export class Paragraph {
    * para.applyStyleAndClearFormatting('Title');
    * ```
    */
-  applyStyleAndClearFormatting(styleId: string, clearProperties?: string[]): this {
+  applyStyleAndClearFormatting(
+    styleId: string,
+    clearProperties?: string[]
+  ): this {
     // Apply the style
     this.setStyle(styleId);
 
     // Clear direct formatting if requested
     if (clearProperties !== undefined) {
-      this.clearDirectRunFormatting(clearProperties.length === 0 ? undefined : clearProperties);
+      this.clearDirectRunFormatting(
+        clearProperties.length === 0 ? undefined : clearProperties
+      );
     }
 
     return this;
@@ -2297,7 +2691,12 @@ export class Paragraph {
    * // Result: Alignment cleared, spacing cleared, runs' color/size cleared, bold preserved
    * ```
    */
-  clearDirectFormattingConflicts(styleDefinition: { getProperties(): { paragraphFormatting?: ParagraphFormatting; runFormatting?: RunFormatting } }): this {
+  clearDirectFormattingConflicts(styleDefinition: {
+    getProperties(): {
+      paragraphFormatting?: ParagraphFormatting;
+      runFormatting?: RunFormatting;
+    };
+  }): this {
     const styleProperties = styleDefinition.getProperties();
     const styleParagraphFormatting = styleProperties.paragraphFormatting || {};
     const styleRunFormatting = styleProperties.runFormatting || {};
@@ -2310,7 +2709,7 @@ export class Paragraph {
       const propKey = key as keyof ParagraphFormatting;
 
       // Always preserve style reference
-      if (propKey === 'style') {
+      if (propKey === "style") {
         continue;
       }
 
@@ -2320,7 +2719,13 @@ export class Paragraph {
       }
 
       // Handle complex objects (indentation, spacing, etc.)
-      if (propKey === 'indentation' || propKey === 'spacing' || propKey === 'borders' || propKey === 'shading' || propKey === 'numbering') {
+      if (
+        propKey === "indentation" ||
+        propKey === "spacing" ||
+        propKey === "borders" ||
+        propKey === "shading" ||
+        propKey === "numbering"
+      ) {
         // Deep comparison for objects
         const paraValue = this.formatting[propKey];
         const styleValue = styleParagraphFormatting[propKey];
@@ -2384,5 +2789,4 @@ export class Paragraph {
 
     return this;
   }
-
 }

@@ -253,9 +253,38 @@ export class Document {
   }
 
   /**
-   * Creates a new empty document
-   * @param options - Document options
-   * @returns New Document instance
+   * Creates a new empty Word document
+   *
+   * Creates a new DOCX document with all required files initialized and ready for content.
+   * The document includes default styles, numbering definitions, and required relationships.
+   *
+   * @param options - Optional document configuration
+   * @param options.properties - Document metadata (title, author, subject, etc.)
+   * @param options.maxMemoryUsagePercent - Maximum memory usage percentage (0-100) before throwing error (default: 80)
+   * @param options.maxRssMB - Maximum absolute RSS in MB (default: 2048)
+   * @param options.strictParsing - Throw errors instead of collecting warnings (default: false)
+   * @param options.logger - Custom logger for framework messages
+   * @returns A new Document instance ready for adding content
+   *
+   * @example
+   * ```typescript
+   * // Create a basic document
+   * const doc = Document.create();
+   * doc.createParagraph('Hello World');
+   * await doc.save('output.docx');
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Create with metadata
+   * const doc = Document.create({
+   *   properties: {
+   *     title: 'My Document',
+   *     creator: 'John Doe',
+   *     subject: 'Report'
+   *   }
+   * });
+   * ```
    */
   static create(options?: DocumentOptions): Document {
     const doc = new Document(undefined, options);
@@ -264,10 +293,36 @@ export class Document {
   }
 
   /**
-   * Loads a document from a file
-   * @param filePath - Path to the DOCX file
-   * @param options - Document options
-   * @returns Document instance
+   * Loads an existing Word document from a file path
+   *
+   * Reads and parses an existing DOCX file, preserving all content, formatting,
+   * styles, numbering, headers, footers, images, and other document elements.
+   *
+   * @param filePath - Absolute or relative path to the DOCX file to load
+   * @param options - Optional document configuration (see {@link DocumentOptions})
+   * @param options.strictParsing - If true, throws errors on malformed content; if false, collects warnings (default: false)
+   * @param options.logger - Custom logger for warnings and errors during parsing
+   * @returns Promise that resolves to a Document instance with all parsed content
+   *
+   * @throws Error if file doesn't exist, is not a valid DOCX, or is corrupted
+   *
+   * @example
+   * ```typescript
+   * // Load and modify a document
+   * const doc = await Document.load('input.docx');
+   * doc.createParagraph('Additional content');
+   * await doc.save('modified.docx');
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Load with strict parsing
+   * try {
+   *   const doc = await Document.load('input.docx', { strictParsing: true });
+   * } catch (error) {
+   *   console.error('Document is corrupted:', error);
+   * }
+   * ```
    */
   static async load(
     filePath: string,
@@ -284,10 +339,32 @@ export class Document {
   }
 
   /**
-   * Loads a document from a buffer
-   * @param buffer - DOCX file buffer
-   * @param options - Document options
-   * @returns Document instance
+   * Loads an existing Word document from a Buffer
+   *
+   * Reads and parses a DOCX file from an in-memory Buffer, useful for processing
+   * documents from HTTP requests, database blobs, or other non-filesystem sources.
+   *
+   * @param buffer - Buffer containing the complete DOCX file data
+   * @param options - Optional document configuration (see {@link DocumentOptions})
+   * @returns Promise that resolves to a Document instance with all parsed content
+   *
+   * @throws Error if buffer doesn't contain valid DOCX data or is corrupted
+   *
+   * @example
+   * ```typescript
+   * // Load from HTTP response
+   * const response = await fetch('https://example.com/doc.docx');
+   * const buffer = Buffer.from(await response.arrayBuffer());
+   * const doc = await Document.loadFromBuffer(buffer);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Load from file system buffer
+   * import { promises as fs } from 'fs';
+   * const buffer = await fs.readFile('input.docx');
+   * const doc = await Document.loadFromBuffer(buffer);
+   * ```
    */
   static async loadFromBuffer(
     buffer: Buffer,
@@ -456,9 +533,27 @@ export class Document {
   }
 
   /**
-   * Adds a paragraph to the document
-   * @param paragraph - Paragraph to add
-   * @returns This document for chaining
+   * Adds an existing paragraph to the document body
+   *
+   * Appends a Paragraph instance to the end of the document's body elements.
+   * The paragraph maintains all its content, formatting, and properties.
+   *
+   * @param paragraph - The Paragraph instance to add
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * para.addText('Hello World', { bold: true });
+   * doc.addParagraph(para);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Create and add in one chain
+   * const para = Paragraph.create('Formatted text', { alignment: 'center' });
+   * doc.addParagraph(para);
+   * ```
    */
   addParagraph(paragraph: Paragraph): this {
     this.bodyElements.push(paragraph);
@@ -466,10 +561,28 @@ export class Document {
   }
 
   /**
-   * Creates and adds a new paragraph with text
-   * @param text - Text content
-   * @param formatting - Paragraph and run formatting
-   * @returns The created paragraph
+   * Creates a new paragraph and adds it to the document
+   *
+   * This is a convenience method that creates a Paragraph, optionally adds text content,
+   * and appends it to the document in one operation. The returned paragraph can be
+   * further modified using its chainable methods.
+   *
+   * @param text - Optional text content for the paragraph
+   * @returns The created Paragraph instance for further customization
+   *
+   * @example
+   * ```typescript
+   * // Create empty paragraph
+   * const para1 = doc.createParagraph();
+   *
+   * // Create with text
+   * const para2 = doc.createParagraph('Hello World');
+   *
+   * // Create and customize
+   * doc.createParagraph('Chapter 1')
+   *   .setStyle('Heading1')
+   *   .setAlignment('center');
+   * ```
    */
   createParagraph(text?: string): Paragraph {
     const para = new Paragraph();
@@ -481,9 +594,20 @@ export class Document {
   }
 
   /**
-   * Adds a table to the document
-   * @param table - Table to add
-   * @returns This document for chaining
+   * Adds an existing table to the document body
+   *
+   * Appends a Table instance to the end of the document's body elements.
+   * The table maintains all its rows, cells, content, and formatting.
+   *
+   * @param table - The Table instance to add
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const table = new Table(3, 4);
+   * table.getCell(0, 0)?.addParagraph(new Paragraph().addText('Header'));
+   * doc.addTable(table);
+   * ```
    */
   addTable(table: Table): this {
     this.bodyElements.push(table);
@@ -491,10 +615,32 @@ export class Document {
   }
 
   /**
-   * Creates and adds a new table
-   * @param rows - Number of rows
-   * @param columns - Number of columns
-   * @returns The created table
+   * Creates a new table and adds it to the document
+   *
+   * This is a convenience method that creates a Table with the specified dimensions
+   * and appends it to the document in one operation. The returned table can be
+   * further customized using its chainable methods.
+   *
+   * @param rows - Number of rows to create (must be positive)
+   * @param columns - Number of columns per row (must be positive)
+   * @returns The created Table instance for further customization
+   *
+   * @throws Error if rows or columns is 0 or negative
+   *
+   * @example
+   * ```typescript
+   * // Create a 3x4 table
+   * const table = doc.createTable(3, 4);
+   * table.getCell(0, 0)?.addParagraph(new Paragraph().addText('A1'));
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Create and format in one chain
+   * doc.createTable(2, 3)
+   *   .setAllBorders({ style: 'single', size: 4, color: '000000' })
+   *   .setFirstRowShading('DFDFDF');
+   * ```
    */
   createTable(rows: number, columns: number): Table {
     const table = new Table(rows, columns);
@@ -601,8 +747,23 @@ export class Document {
   }
 
   /**
-   * Gets all paragraphs in the document
-   * @returns Array of paragraphs
+   * Gets all paragraphs in the document body (top-level only)
+   *
+   * Returns only paragraphs that are direct children of the document body.
+   * Does NOT include paragraphs inside tables, headers, footers, or SDTs.
+   * Use {@link getAllParagraphs} for recursive search including nested content.
+   *
+   * @returns Array of Paragraph instances in the document body
+   *
+   * @example
+   * ```typescript
+   * const paragraphs = doc.getParagraphs();
+   * console.log(`Document has ${paragraphs.length} body paragraphs`);
+   *
+   * for (const para of paragraphs) {
+   *   console.log(para.getText());
+   * }
+   * ```
    */
   getParagraphs(): Paragraph[] {
     return this.bodyElements.filter(
@@ -611,8 +772,23 @@ export class Document {
   }
 
   /**
-   * Gets all tables in the document
-   * @returns Array of tables
+   * Gets all tables in the document body (top-level only)
+   *
+   * Returns only tables that are direct children of the document body.
+   * Does NOT include tables inside SDTs or nested tables.
+   * Use {@link getAllTables} for recursive search including nested content.
+   *
+   * @returns Array of Table instances in the document body
+   *
+   * @example
+   * ```typescript
+   * const tables = doc.getTables();
+   * console.log(`Document has ${tables.length} tables`);
+   *
+   * for (const table of tables) {
+   *   console.log(`Table: ${table.getRowCount()} rows x ${table.getColumnCount()} columns`);
+   * }
+   * ```
    */
   getTables(): Table[] {
     return this.bodyElements.filter((el): el is Table => el instanceof Table);
@@ -620,8 +796,30 @@ export class Document {
 
   /**
    * Gets all paragraphs in the document recursively
-   * Includes paragraphs in tables and SDTs
-   * @returns Array of all paragraphs
+   *
+   * Performs a deep search and returns ALL paragraphs in the document,
+   * including those nested inside:
+   * - Tables (all cells in all rows)
+   * - Structured Document Tags (content controls)
+   * - Nested SDTs and tables
+   *
+   * @returns Array of all Paragraph instances found anywhere in the document
+   *
+   * @example
+   * ```typescript
+   * // Count all paragraphs including those in tables
+   * const allParas = doc.getAllParagraphs();
+   * console.log(`Total paragraphs: ${allParas.length}`);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Find all headings
+   * const headings = doc.getAllParagraphs().filter(p => {
+   *   const style = p.getStyle();
+   *   return style?.startsWith('Heading');
+   * });
+   * ```
    */
   getAllParagraphs(): Paragraph[] {
     const result: Paragraph[] = [];
@@ -728,8 +926,19 @@ export class Document {
   }
 
   /**
-   * Removes all paragraphs and tables
-   * @returns This document for chaining
+   * Removes all body elements from the document
+   *
+   * Clears all paragraphs, tables, TOCs, and other elements from the document body.
+   * This does NOT affect headers, footers, styles, or document properties.
+   *
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // Clear and rebuild document content
+   * doc.clearParagraphs();
+   * doc.createParagraph('Fresh start');
+   * ```
    */
   clearParagraphs(): this {
     this.bodyElements = [];
@@ -737,9 +946,32 @@ export class Document {
   }
 
   /**
-   * Sets document properties
-   * @param properties - Document properties
-   * @returns This document for chaining
+   * Sets or updates document metadata properties
+   *
+   * Updates document metadata that appears in File > Properties in Word.
+   * Properties are validated and sanitized before storing. Existing properties
+   * are merged with new values.
+   *
+   * @param properties - Document metadata properties
+   * @param properties.title - Document title
+   * @param properties.subject - Document subject
+   * @param properties.creator - Document author/creator
+   * @param properties.keywords - Comma-separated keywords
+   * @param properties.description - Document description
+   * @param properties.category - Document category
+   * @param properties.company - Company name
+   * @param properties.customProperties - Custom key-value properties
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * doc.setProperties({
+   *   title: 'Annual Report 2024',
+   *   creator: 'Finance Department',
+   *   company: 'Acme Corp',
+   *   keywords: 'annual, report, financial'
+   * });
+   * ```
    */
   setProperties(properties: DocumentProperties): this {
     // Validate and sanitize properties before storing
@@ -749,8 +981,19 @@ export class Document {
   }
 
   /**
-   * Gets document properties
-   * @returns Document properties
+   * Gets all document metadata properties
+   *
+   * Returns a copy of all document properties including core properties
+   * (title, creator, etc.) and custom properties.
+   *
+   * @returns Copy of the document properties object
+   *
+   * @example
+   * ```typescript
+   * const props = doc.getProperties();
+   * console.log(`Title: ${props.title}`);
+   * console.log(`Author: ${props.creator}`);
+   * ```
    */
   getProperties(): DocumentProperties {
     return { ...this.properties };
@@ -918,8 +1161,32 @@ export class Document {
   }
 
   /**
-   * Saves the document to a file
-   * @param filePath - Output file path
+   * Saves the document to a file path
+   *
+   * Generates all required XML parts, processes images and relationships, validates
+   * the document structure, and writes the complete DOCX package to disk.
+   * Uses atomic save pattern (temp file + rename) to prevent corruption on failure.
+   *
+   * @param filePath - Absolute or relative path where the DOCX file will be saved
+   *
+   * @throws Error if validation fails, memory limits exceeded, or file system error occurs
+   * @throws Error if image count or size limits are exceeded
+   *
+   * @example
+   * ```typescript
+   * const doc = Document.create();
+   * doc.createParagraph('Hello World');
+   * await doc.save('output.docx');
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Save with TOC auto-population
+   * doc.setAutoPopulateTOCs(true);
+   * doc.createTableOfContents();
+   * doc.createParagraph('Chapter 1').setStyle('Heading1');
+   * await doc.save('document-with-toc.docx');
+   * ```
    */
   async save(filePath: string): Promise<void> {
     // Use atomic save pattern: save to temp file, then rename
@@ -952,6 +1219,9 @@ export class Document {
           images: sizeInfo.images,
         });
       }
+
+      // Clear preserve flags before final save (they're runtime-only)
+      this.clearAllPreserveFlags();
 
       this.processHyperlinks();
       this.updateDocumentXml();
@@ -994,8 +1264,32 @@ export class Document {
   }
 
   /**
-   * Generates the document as a buffer
-   * @returns Document buffer
+   * Generates the document as an in-memory Buffer
+   *
+   * Creates the complete DOCX package in memory without writing to disk.
+   * Useful for streaming documents in HTTP responses, storing in databases,
+   * or processing through additional systems.
+   *
+   * @returns Promise that resolves to a Buffer containing the complete DOCX file
+   *
+   * @throws Error if validation fails, memory limits exceeded, or document is invalid
+   *
+   * @example
+   * ```typescript
+   * // Generate and send via HTTP
+   * const doc = Document.create();
+   * doc.createParagraph('Content');
+   * const buffer = await doc.toBuffer();
+   * res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+   * res.send(buffer);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Save to database
+   * const buffer = await doc.toBuffer();
+   * await db.documents.insert({ name: 'report.docx', data: buffer });
+   * ```
    */
   async toBuffer(): Promise<Buffer> {
     try {
@@ -1024,6 +1318,9 @@ export class Document {
           images: sizeInfo.images,
         });
       }
+
+      // Clear preserve flags before final save (they're runtime-only)
+      this.clearAllPreserveFlags();
 
       this.processHyperlinks();
       this.updateDocumentXml();
@@ -1101,17 +1398,48 @@ export class Document {
   }
 
   /**
-   * Gets the StylesManager
-   * @returns StylesManager instance
+   * Gets the StylesManager for advanced style operations
+   *
+   * Provides direct access to the StylesManager for advanced scenarios
+   * like bulk style operations, custom style creation, or style analysis.
+   *
+   * @returns The StylesManager instance managing this document's styles
+   *
+   * @example
+   * ```typescript
+   * const stylesManager = doc.getStylesManager();
+   * const allStyles = stylesManager.getAllStyles();
+   * console.log(`Document has ${allStyles.length} styles`);
+   * ```
    */
   getStylesManager(): StylesManager {
     return this.stylesManager;
   }
 
   /**
-   * Adds a style to the document
-   * @param style - Style to add
-   * @returns This document for chaining
+   * Adds or updates a style definition in the document
+   *
+   * Registers a style definition that can be applied to paragraphs and tables.
+   * If a style with the same ID already exists, it is replaced.
+   * The styles.xml file is updated immediately.
+   *
+   * @param style - The Style instance to add or update
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const customStyle = Style.create({
+   *   styleId: 'MyCustomStyle',
+   *   name: 'My Custom Style',
+   *   type: 'paragraph',
+   *   runFormatting: { font: 'Arial', size: 14, bold: true },
+   *   paragraphFormatting: { alignment: 'center' }
+   * });
+   * doc.addStyle(customStyle);
+   *
+   * // Apply to paragraphs
+   * doc.createParagraph('Styled text').setStyle('MyCustomStyle');
+   * ```
    */
   addStyle(style: Style): this {
     this.stylesManager.addStyle(style);
@@ -1121,26 +1449,59 @@ export class Document {
   }
 
   /**
-   * Gets a style by ID
-   * @param styleId - Style ID
-   * @returns The style, or undefined if not found
+   * Retrieves a style definition by its ID
+   *
+   * @param styleId - The unique style identifier (e.g., 'Heading1', 'Normal', 'CustomStyle')
+   * @returns The Style instance if found, undefined otherwise
+   *
+   * @example
+   * ```typescript
+   * const heading1 = doc.getStyle('Heading1');
+   * if (heading1) {
+   *   console.log(`Font: ${heading1.getRunFormatting().font}`);
+   * }
+   * ```
    */
   getStyle(styleId: string): Style | undefined {
     return this.stylesManager.getStyle(styleId);
   }
 
   /**
-   * Checks if a style exists
-   * @param styleId - Style ID
-   * @returns True if the style exists
+   * Checks if a style definition exists in the document
+   *
+   * @param styleId - The style identifier to check
+   * @returns True if the style is defined, false otherwise
+   *
+   * @example
+   * ```typescript
+   * if (!doc.hasStyle('CustomHeader')) {
+   *   doc.addStyle(Style.create({
+   *     styleId: 'CustomHeader',
+   *     name: 'Custom Header',
+   *     type: 'paragraph'
+   *   }));
+   * }
+   * ```
    */
   hasStyle(styleId: string): boolean {
     return this.stylesManager.hasStyle(styleId);
   }
 
   /**
-   * Gets all styles in the document
-   * @returns Array of all style definitions
+   * Gets all style definitions in the document
+   *
+   * Returns all registered styles including built-in Word styles
+   * (Normal, Heading1-9, etc.) and custom styles.
+   *
+   * @returns Array of all Style instances in the document
+   *
+   * @example
+   * ```typescript
+   * const styles = doc.getStyles();
+   * for (const style of styles) {
+   *   console.log(`${style.getStyleId()}: ${style.getName()}`);
+   * }
+   * ```
    */
   getStyles(): Style[] {
     return this.stylesManager.getAllStyles();
@@ -2288,36 +2649,102 @@ export class Document {
   }
 
   /**
-   * Gets the underlying ZipHandler (for advanced use cases)
-   * @returns ZipHandler instance
+   * Gets the underlying ZipHandler for advanced ZIP operations
+   *
+   * Provides low-level access to the ZIP archive for advanced scenarios
+   * like direct file manipulation, custom part extraction, or debugging.
+   * Use with caution as direct modifications can corrupt the document.
+   *
+   * @returns The ZipHandler instance managing the DOCX package
+   *
+   * @example
+   * ```typescript
+   * const zipHandler = doc.getZipHandler();
+   * const files = zipHandler.getFilePaths();
+   * console.log('Package contains:', files);
+   * ```
    */
   getZipHandler(): ZipHandler {
     return this.zipHandler;
   }
 
   /**
-   * Gets the NumberingManager
-   * @returns NumberingManager instance
+   * Gets the NumberingManager for advanced list operations
+   *
+   * Provides direct access to the NumberingManager for advanced scenarios
+   * like creating custom list definitions, managing numbering instances,
+   * or analyzing list structures.
+   *
+   * @returns The NumberingManager instance managing this document's lists
+   *
+   * @example
+   * ```typescript
+   * const numManager = doc.getNumberingManager();
+   * const instances = numManager.getAllInstances();
+   * console.log(`Document has ${instances.length} list definitions`);
+   * ```
    */
   getNumberingManager(): NumberingManager {
     return this.numberingManager;
   }
 
   /**
-   * Creates a new bullet list and returns its numId
-   * @param levels - Number of levels (default: 3)
-   * @param bullets - Array of bullet characters
-   * @returns The numId to use with setNumbering()
+   * Creates a new bullet list definition and returns its ID
+   *
+   * Creates a multi-level bullet list with customizable bullet characters
+   * for each level. The returned numId can be used with {@link Paragraph.setNumbering}
+   * to apply the list to paragraphs.
+   *
+   * @param levels - Number of indentation levels to create (default: 3, max: 9)
+   * @param bullets - Optional array of bullet characters for each level (default: ['•', '○', '■'])
+   * @returns The numbering instance ID to use with paragraph.setNumbering()
+   *
+   * @example
+   * ```typescript
+   * // Create simple 3-level bullet list
+   * const listId = doc.createBulletList();
+   * doc.createParagraph('Level 1 item').setNumbering(listId, 0);
+   * doc.createParagraph('Level 2 item').setNumbering(listId, 1);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Create with custom bullets
+   * const listId = doc.createBulletList(4, ['★', '☆', '▶', '▷']);
+   * doc.createParagraph('Star item').setNumbering(listId, 0);
+   * doc.createParagraph('Hollow star').setNumbering(listId, 1);
+   * ```
    */
   createBulletList(levels: number = 3, bullets?: string[]): number {
     return this.numberingManager.createBulletList(levels, bullets);
   }
 
   /**
-   * Creates a new numbered list and returns its numId
-   * @param levels - Number of levels (default: 3)
-   * @param formats - Array of formats for each level
-   * @returns The numId to use with setNumbering()
+   * Creates a new numbered list definition and returns its ID
+   *
+   * Creates a multi-level numbered list with customizable number formats
+   * for each level (decimal, roman, letters, etc.). The returned numId can be
+   * used with {@link Paragraph.setNumbering} to apply the list to paragraphs.
+   *
+   * @param levels - Number of indentation levels to create (default: 3, max: 9)
+   * @param formats - Optional array of number formats for each level (default: ['decimal', 'lowerLetter', 'lowerRoman'])
+   * @returns The numbering instance ID to use with paragraph.setNumbering()
+   *
+   * @example
+   * ``` typescript
+   * // Create simple 3-level numbered list
+   * const listId = doc.createNumberedList();
+   * doc.createParagraph('1. First item').setNumbering(listId, 0);
+   * doc.createParagraph('a. Sub-item').setNumbering(listId, 1);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Create custom format list
+   * const listId = doc.createNumberedList(2, ['upperRoman', 'lowerLetter']);
+   * doc.createParagraph('Roman numeral').setNumbering(listId, 0);  // I.
+   * doc.createParagraph('Letter').setNumbering(listId, 1);          // a.
+   * ```
    */
   createNumberedList(
     levels: number = 3,
@@ -3905,7 +4332,8 @@ export class Document {
       if (nextElement instanceof Paragraph) {
         // Next element is a paragraph - check if it's blank
         if (this.isParagraphBlank(nextElement)) {
-          // Blank paragraph exists - mark as preserved if requested
+          // Blank paragraph exists - set style to Normal and mark as preserved
+          nextElement.setStyle(style);
           if (markAsPreserved && !nextElement.isPreserved()) {
             nextElement.setPreserved(true);
             existingLinesMarked++;
@@ -4033,7 +4461,8 @@ export class Document {
       if (nextElement instanceof Paragraph) {
         // Next element is a paragraph - check if it's blank
         if (this.isParagraphBlank(nextElement)) {
-          // Blank paragraph exists - mark as preserved if requested
+          // Blank paragraph exists - set style to Normal and mark as preserved
+          nextElement.setStyle(style);
           if (markAsPreserved && !nextElement.isPreserved()) {
             nextElement.setPreserved(true);
             existingLinesMarked++;
@@ -4070,13 +4499,13 @@ export class Document {
   }
 
   /**
-   * Standardizes all bullet list symbols to be bold, 12pt, and black (#000000)
+   * Standardizes all bullet list symbols formatting (font, size, bold, color)
    *
-   * This helper ensures consistent bullet formatting across all bullet lists in the document.
+   * This helper ensures consistent bullet FORMATTING across all bullet lists in the document.
    * It modifies the numbering definitions (not individual paragraphs), preserving the actual
    * bullet symbols (•, ○, ▪, etc.) while standardizing their visual formatting.
    *
-   * **Important**: This only affects the bullet symbol formatting, not the text content after it.
+   * **Important**: This only affects the bullet symbol FORMATTING, not the symbol itself.
    * The actual bullet characters are preserved as they were originally defined.
    *
    * @param options Formatting options
@@ -4128,11 +4557,12 @@ export class Document {
       const level0 = abstractNum.getLevel(0);
       if (!level0 || level0.getFormat() !== "bullet") continue;
 
-      // Update all 9 levels (0-8)
+      // Update all 9 levels (0-8) with formatting only (preserve existing symbols)
       for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
         const numLevel = abstractNum.getLevel(levelIndex);
         if (!numLevel) continue;
 
+        // Only set formatting - do NOT change the bullet symbol itself
         numLevel.setFont(font);
         numLevel.setFontSize(fontSize);
         numLevel.setBold(bold);
@@ -4736,6 +5166,25 @@ export class Document {
   }
 
   /**
+   * Clears preserve flags from all paragraphs in the document
+   * Called automatically before save since preserve flags are runtime-only
+   * @returns Number of paragraphs that had preserve flags cleared
+   * @private
+   */
+  private clearAllPreserveFlags(): number {
+    let cleared = 0;
+
+    for (const para of this.getAllParagraphs()) {
+      if (para.isPreserved()) {
+        para.setPreserved(false);
+        cleared++;
+      }
+    }
+
+    return cleared;
+  }
+
+  /**
    * Parses a TOC field instruction to extract which heading levels to include
    *
    * Handles field codes like:
@@ -4755,8 +5204,8 @@ export class Document {
     let hasOutlineSwitch = false;
     let hasTableSwitch = false;
 
-    // Normalize quotes: replace &quot; with " for consistent parsing
-    const normalizedText = instrText.replace(/&quot;/g, '"');
+    // Normalize whitespace and quotes: trim input and replace &quot; with " for consistent parsing
+    const normalizedText = instrText.trim().replace(/&quot;/g, '"');
 
     // === Parse \o "X-Y" switch (outline levels) ===
     const outlineMatch = normalizedText.match(/\\o\s+"(\d+)-(\d+)"/);
@@ -4770,7 +5219,7 @@ export class Document {
     }
 
     // === Parse \u switch (use outline levels) ===
-    if (/\bu\b/.test(normalizedText)) {
+    if (/\\u(?:\s|\\|$)/.test(normalizedText)) {
       // When \u is present without \o or \t, default to 1-9
       const hasTSwitch = /\\t\s+"/.test(normalizedText);
       if (!hasOutlineSwitch && !hasTSwitch) {
@@ -5812,8 +6261,18 @@ export class Document {
   }
 
   /**
-   * Gets the BookmarkManager
-   * @returns BookmarkManager instance
+   * Gets the BookmarkManager for bookmark operations
+   *
+   * Provides access to the BookmarkManager for advanced bookmark management,
+   * including creating, querying, and managing document bookmarks.
+   *
+   * @returns The BookmarkManager instance managing this document's bookmarks
+   *
+   * @example
+   * ```typescript
+   * const bookmarks = doc.getBookmarkManager();
+   * console.log(`Document has ${bookmarks.getAllBookmarks().length} bookmarks`);
+   * ```
    */
   getBookmarkManager(): BookmarkManager {
     return this.bookmarkManager;
@@ -5821,8 +6280,23 @@ export class Document {
 
   /**
    * Creates and registers a new bookmark with a unique name
-   * @param name - Desired bookmark name
-   * @returns The created and registered bookmark
+   *
+   * Creates a bookmark that can be used as an anchor for internal hyperlinks
+   * or cross-references. The name is automatically normalized and made unique.
+   *
+   * @param name - Desired bookmark name (will be normalized to remove spaces and special characters)
+   * @returns The created and registered Bookmark instance
+   *
+   * @example
+   * ```typescript
+   * const bookmark = doc.createBookmark('ImportantSection');
+   * const para = doc.createParagraph('This is important');
+   * para.addBookmark(bookmark);
+   *
+   * // Link to it from elsewhere
+   * const link = Hyperlink.createInternal(bookmark.getName(), 'Go to section');
+   * doc.createParagraph().addHyperlink(link);
+   * ```
    */
   createBookmark(name: string): Bookmark {
     return this.bookmarkManager.createBookmark(name);
@@ -5956,8 +6430,19 @@ export class Document {
   }
 
   /**
-   * Gets the RevisionManager
-   * @returns RevisionManager instance
+   * Gets the RevisionManager for track changes operations
+   *
+   * Provides access to the RevisionManager for managing tracked changes
+   * (insertions, deletions, formatting changes, etc.) in the document.
+   *
+   * @returns The RevisionManager instance managing this document's revisions
+   *
+   * @example
+   * ```typescript
+   * const revManager = doc.getRevisionManager();
+   * const stats = revManager.getStats();
+   * console.log(`Document has ${stats.total} tracked changes`);
+   * ```
    */
   getRevisionManager(): RevisionManager {
     return this.revisionManager;
@@ -6098,16 +6583,42 @@ export class Document {
   }
 
   /**
-   * Checks if track changes is enabled (has any revisions)
-   * @returns True if there are revisions
+   * Checks if the document contains any tracked changes
+   *
+   * Note: This checks if revisions exist, not if tracking is enabled.
+   * Use {@link isTrackChangesEnabled} to check the tracking mode setting.
+   *
+   * @returns True if the document has one or more tracked changes (insertions, deletions, etc.)
+   *
+   * @example
+   * ```typescript
+   * if (doc.isTrackingChanges()) {
+   *   console.log('Document has pending changes to review');
+   *   const stats = doc.getRevisionStats();
+   *   console.log(`${stats.insertions} insertions, ${stats.deletions} deletions`);
+   * }
+   * ```
    */
   isTrackingChanges(): boolean {
     return this.revisionManager.isTrackingChanges();
   }
 
   /**
-   * Gets statistics about tracked changes
-   * @returns Object with revision statistics
+   * Gets detailed statistics about tracked changes in the document
+   *
+   * Provides a comprehensive breakdown of all revisions including counts
+   * by type, list of authors, and the next available revision ID.
+   *
+   * @returns Object containing revision statistics
+   *
+   * @example
+   * ```typescript
+   * const stats = doc.getRevisionStats();
+   * console.log(`Total changes: ${stats.total}`);
+   * console.log(`Insertions: ${stats.insertions}`);
+   * console.log(`Deletions: ${stats.deletions}`);
+   * console.log(`Authors: ${stats.authors.join(', ')}`);
+   * ```
    */
   getRevisionStats(): {
     total: number;
@@ -6123,9 +6634,33 @@ export class Document {
   }
 
   /**
-   * Enables track changes for this document
-   * When enabled, the w:trackRevisions flag is added to settings.xml
-   * @param options - Optional track changes settings
+   * Enables track changes mode for the document
+   *
+   * When enabled, Word will track all future edits made to the document.
+   * This adds the w:trackRevisions flag to settings.xml and configures
+   * revision view settings (what changes are visible).
+   *
+   * @param options - Optional track changes configuration
+   * @param options.trackFormatting - Track formatting changes (default: true)
+   * @param options.showInsertionsAndDeletions - Display insertions/deletions in Word (default: true)
+   * @param options.showFormatting - Display formatting changes in Word (default: true)
+   * @param options.showInkAnnotations - Display ink annotations in Word (default: true)
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // Enable with defaults
+   * doc.enableTrackChanges();
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Enable with custom settings
+   * doc.enableTrackChanges({
+   *   trackFormatting: false,
+   *   showInsertionsAndDeletions: true
+   * });
+   * ```
    */
   enableTrackChanges(options?: {
     trackFormatting?: boolean;
@@ -6156,7 +6691,18 @@ export class Document {
   }
 
   /**
-   * Disables track changes for this document
+   * Disables track changes mode for the document
+   *
+   * When disabled, Word will not track future edits.
+   * Note: This does NOT remove existing tracked changes.
+   *
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * doc.disableTrackChanges();
+   * await doc.save('output.docx');  // Future edits won't be tracked
+   * ```
    */
   disableTrackChanges(): this {
     this.trackChangesEnabled = false;
@@ -6558,8 +7104,19 @@ export class Document {
   }
 
   /**
-   * Gets the CommentManager
-   * @returns CommentManager instance
+   * Gets the CommentManager for comment operations
+   *
+   * Provides access to the CommentManager for creating, managing, and
+   * querying document comments and comment threads.
+   *
+   * @returns The CommentManager instance managing this document's comments
+   *
+   * @example
+   * ```typescript
+   * const commentMgr = doc.getCommentManager();
+   * const allComments = commentMgr.getAllComments();
+   * console.log(`Document has ${allComments.length} comments`);
+   * ```
    */
   getCommentManager(): CommentManager {
     return this.commentManager;
@@ -6567,10 +7124,30 @@ export class Document {
 
   /**
    * Creates and registers a new comment
-   * @param author - Comment author
-   * @param content - Comment content (text or runs)
-   * @param initials - Optional author initials
-   * @returns The created and registered comment
+   *
+   * Creates a comment that can be attached to paragraphs or text ranges.
+   * The comment is automatically registered with the CommentManager and
+   * assigned a unique ID.
+   *
+   * @param author - Name of the comment author
+   * @param content - Comment text content, single Run, or array of Runs
+   * @param initials - Optional author initials (defaults to first letters of author name)
+   * @returns The created and registered Comment instance
+   *
+   * @example
+   * ```typescript
+   * // Create simple text comment
+   * const comment = doc.createComment('John Doe', 'Please review this section');
+   * const para = doc.createParagraph('Important text');
+   * para.addComment(comment);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Create comment with formatted content
+   * const run = new Run('This needs attention', { bold: true, color: 'FF0000' });
+   * const comment = doc.createComment('Alice', run, 'A');
+   * ```
    */
   createComment(
     author: string,
@@ -7541,10 +8118,37 @@ export class Document {
   }
 
   /**
-   * Finds all occurrences of text in the document
-   * @param text - Text to search for
-   * @param options - Search options
-   * @returns Array of search results with paragraph and run information
+   * Finds all occurrences of specific text in the document
+   *
+   * Searches through all paragraphs (including those in tables) and returns
+   * detailed information about each match, including the containing paragraph,
+   * run, and position within the run.
+   *
+   * @param text - The text string to search for
+   * @param options - Optional search configuration
+   * @param options.caseSensitive - If true, match case exactly (default: false)
+   * @param options.wholeWord - If true, match whole words only (default: false)
+   * @returns Array of search results with location and context information
+   *
+   * @example
+   * ```typescript
+   * // Find all occurrences (case-insensitive)
+   * const results = doc.findText('important');
+   * console.log(`Found ${results.length} matches`);
+   *
+   * for (const result of results) {
+   *   console.log(`Match in paragraph ${result.paragraphIndex}: "${result.text}"`);
+   * }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Find exact case and whole word only
+   * const results = doc.findText('Error', {
+   *   caseSensitive: true,
+   *   wholeWord: true
+   * });
+   * ```
    */
   findText(
     text: string,
@@ -7690,10 +8294,33 @@ export class Document {
 
   /**
    * Replaces all occurrences of text in the document
-   * @param find - Text to find
-   * @param replace - Text to replace with
-   * @param options - Replace options
+   *
+   * Searches through all paragraphs (including those in tables) and replaces
+   * matching text with the replacement string. Preserves the original formatting
+   * of the text runs.
+   *
+   * @param find - The text string to search for
+   * @param replace - The text string to replace with
+   * @param options - Optional replacement configuration
+   * @param options.caseSensitive - If true, match case exactly (default: false)
+   * @param options.wholeWord - If true, match whole words only (default: false)
    * @returns Number of replacements made
+   *
+   * @example
+   * ```typescript
+   * // Simple find and replace
+   * const count = doc.replaceText('color', 'colour');
+   * console.log(`Replaced ${count} occurrences`);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Case-sensitive whole word replacement
+   * const count = doc.replaceText('Error', 'Warning', {
+   *   caseSensitive: true,
+   *   wholeWord: true
+   * });
+   * ```
    */
   replaceText(
     find: string,
@@ -7856,7 +8483,17 @@ export class Document {
 
   /**
    * Gets the total word count in the document
-   * @returns Total number of words
+   *
+   * Counts all words in paragraphs including those inside tables.
+   * Words are determined by splitting text on whitespace.
+   *
+   * @returns Total number of words in the document
+   *
+   * @example
+   * ```typescript
+   * const words = doc.getWordCount();
+   * console.log(`Document contains ${words} words`);
+   * ```
    */
   getWordCount(): number {
     let totalWords = 0;
@@ -7895,8 +8532,19 @@ export class Document {
 
   /**
    * Gets the total character count in the document
-   * @param includeSpaces - Whether to include spaces in the count
-   * @returns Total number of characters
+   *
+   * Counts all characters in paragraphs including those inside tables.
+   * Optionally includes or excludes spaces from the count.
+   *
+   * @param includeSpaces - If true, includes spaces in count; if false, excludes them (default: true)
+   * @returns Total number of characters in the document
+   *
+   * @example
+   * ```typescript
+   * const charsWithSpaces = doc.getCharacterCount();
+   * const charsNoSpaces = doc.getCharacterCount(false);
+   * console.log(`Characters: ${charsWithSpaces} (with spaces), ${charsNoSpaces} (without)`);
+   * ```
    */
   getCharacterCount(includeSpaces: boolean = true): number {
     let totalChars = 0;
@@ -8313,7 +8961,33 @@ export class Document {
 
   /**
    * Gets all hyperlinks in the document
-   * @returns Array of hyperlinks with their containing paragraph
+   *
+   * Searches through all paragraphs (including those in tables) and returns
+   * all Hyperlink instances along with their containing paragraphs.
+   *
+   * @returns Array of objects containing hyperlink and its parent paragraph
+   *
+   * @example
+   * ```typescript
+   * const hyperlinks = doc.getHyperlinks();
+   * console.log(`Found ${hyperlinks.length} hyperlinks`);
+   *
+   * for (const { hyperlink, paragraph } of hyperlinks) {
+   *   console.log(`Link: ${hyperlink.getText()} -> ${hyperlink.getUrl()}`);
+   * }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Find broken links
+   * const hyperlinks = doc.getHyperlinks();
+   * for (const { hyperlink } of hyperlinks) {
+   *   const url = hyperlink.getUrl();
+   *   if (url && url.includes('old-domain.com')) {
+   *     console.log(`Update needed: ${url}`);
+   *   }
+   * }
+   * ```
    */
   getHyperlinks(): Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> {
     const hyperlinks: Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> =
@@ -8472,8 +9146,22 @@ export class Document {
   }
 
   /**
-   * Gets all images in the document
-   * @returns Array of images with their metadata
+   * Gets all images in the document with metadata
+   *
+   * Returns all Image instances registered in the document along with
+   * their relationship IDs and filenames in the media folder.
+   *
+   * @returns Array of objects containing image, relationship ID, and filename
+   *
+   * @example
+   * ```typescript
+   * const images = doc.getImages();
+   * console.log(`Document contains ${images.length} images`);
+   *
+   * for (const { image, filename } of images) {
+   *   console.log(`${filename}: ${image.getWidth()}x${image.getHeight()} EMUs`);
+   * }
+   * ```
    */
   getImages(): Array<{
     image: Image;
@@ -8830,8 +9518,17 @@ export class Document {
   }
 
   /**
-   * Gets the document language
-   * @returns Language code or undefined if not set
+   * Gets the document language code
+   *
+   * @returns Language code (e.g., 'en-US', 'fr-FR') or undefined if not set
+   *
+   * @example
+   * ```typescript
+   * const lang = doc.getLanguage();
+   * if (lang) {
+   *   console.log(`Document language: ${lang}`);
+   * }
+   * ```
    */
   getLanguage(): string | undefined {
     return this.properties?.language;
