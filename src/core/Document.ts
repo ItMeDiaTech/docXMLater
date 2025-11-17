@@ -4741,6 +4741,7 @@ export class Document {
    * Handles field codes like:
    * - "TOC \o "1-3"" → [1, 2, 3]
    * - "TOC \t "Heading 2,2,"" → [2]
+   * - "TOC \t "2-3"" → [2, 3] (range format)
    * - "TOC \o "1-2" \t "Heading 3,3,"" → [1, 2, 3]
    * - "TOC \h \u \z \t "Heading 2,2,"" → [2] (only Heading 2, no default)
    *
@@ -4779,14 +4780,31 @@ export class Document {
       }
     }
 
-    // Parse \t "StyleName,Level," switches (custom styles)
-    // Microsoft Word format: \t "Heading 2,2," (everything inside quotes)
+    // Parse \t switches (table entry fields)
+    // Two formats supported:
+    // 1. \t "StyleName,Level," - e.g., "Heading 2,2,"
+    // 2. \t "X-Y" - e.g., "2-3" (range format)
     const styleMatches = instrText.matchAll(/\\t\s+"([^"]+)"/g);
     for (const match of styleMatches) {
       hasTableSwitch = true;
-      const content = match[1]; // e.g., "Heading 2,2,"
+      const content = match[1]; // e.g., "Heading 2,2," or "2-3"
       if (!content) continue;
 
+      // Check if it's a range format (e.g., "2-3")
+      const rangeMatch = content.match(/^(\d+)-(\d+)$/);
+      if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
+        // Range format: add all levels in range
+        const start = parseInt(rangeMatch[1], 10);
+        const end = parseInt(rangeMatch[2], 10);
+        for (let i = start; i <= end; i++) {
+          if (i >= 1 && i <= 9) {
+            levels.add(i);
+          }
+        }
+        continue;
+      }
+
+      // Style name format: "StyleName,Level,"
       // Split by comma: ["Heading 2", "2", ""]
       const parts = content
         .split(",")
