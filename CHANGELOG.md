@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **TOC Field Instruction Extraction**: Fixed critical bug in Test_Code.docx and similar documents where TOC field instructions couldn't be parsed
+  - **Root Cause**: Single run can contain multiple `w:fldChar` elements in an array (e.g., both `begin` and `separate` in same run)
+  - **Previous Behavior**: Code assumed `runObj["w:fldChar"]` was always a single object, resulting in `undefined` when accessing `fldChar["@_w:fldCharType"]` on an array
+  - **Impact**: TOC elements were recognized but field instructions couldn't be extracted, returning `null` for TOC properties
+  - **Solution**: Updated [`extractInstructionFromRawXML()`](src/core/DocumentParser.ts:3190) to handle `w:fldChar` as either object or array
+  - **Implementation**: Added array detection and iteration - `const fldCharArray = Array.isArray(fldChar) ? fldChar : [fldChar]`
+  - **Enhanced Logging**: Added diagnostic logging showing field marker counts and extraction steps
+  - **Multi-Paragraph Support**: Field tracking now spans multiple paragraphs (TOC fields can have begin/separate in paragraph 1, end in paragraph 5)
+  - **Tested With**: Test_Code.docx successfully extracts `TOC \h \u \z \t "Heading 2,2,"` instruction
+
 ### Removed
 
 - **`Document.cleanFormatting()` Method**: Removed overly aggressive formatting cleanup method
