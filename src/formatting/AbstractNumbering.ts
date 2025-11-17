@@ -286,7 +286,7 @@ export class AbstractNumbering {
   static createBulletList(
     abstractNumId: number,
     levels: number = 9,
-    bullets: string[] = ["•", "○", "•"]
+    bullets: string[] = ["•", "○"] // Alternates: even levels=closed, odd levels=open
   ): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
       abstractNumId,
