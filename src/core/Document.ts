@@ -4739,111 +4739,86 @@ export class Document {
    * Parses a TOC field instruction to extract which heading levels to include
    *
    * Handles field codes like:
-   * - "TOC \o "1-3"" → [1, 2, 3]
-   * - "TOC \t "Heading 2,2,"" → [2]
-   * - "TOC \t "2-3"" → [2, 3] (range format)
-   * - "TOC \o "1-2" \t "Heading 3,3,"" → [1, 2, 3]
-   * - "TOC \h \u \z \t "Heading 2,2,"" → [2] (only Heading 2, no default)
+   * - "TOC \o &quot;1-3&quot;" → [1, 2, 3]
+   * - "TOC \t &quot;Heading 2,2,&quot;" → [2]
+   * - "TOC \t &quot;2-3&quot;" → [2, 3]
+   * - "TOC \o &quot;1-2&quot; \t &quot;Heading 3,3,&quot;" → [1, 2, 3]
+   * - "TOC \h \u \z \t &quot;Heading 2,2,&quot;" → [2]
    *
-   * @param instrText The TOC field instruction text
-   * @returns Array of heading levels (1-9) to include
+   * Supports both literal `"` and HTML-encoded `&quot;` in quotes.
+   *
+   * @param instrText The TOC field instruction text (may contain &quot;)
+   * @returns Array of heading levels (1-9) to include, sorted
    */
   private parseTOCFieldInstruction(instrText: string): number[] {
     const levels = new Set<number>();
     let hasOutlineSwitch = false;
     let hasTableSwitch = false;
-    let hasUseOutlineLevelsSwitch = false;
 
-    // Parse \o "X-Y" switch (outline levels)
-    const outlineMatch = instrText.match(/\\o\s+"(\d+)-(\d+)"/);
-    if (outlineMatch && outlineMatch[1] && outlineMatch[2]) {
+    // Normalize quotes: replace &quot; with " for consistent parsing
+    const normalizedText = instrText.replace(/&quot;/g, '"');
+
+    // === Parse \o "X-Y" switch (outline levels) ===
+    const outlineMatch = normalizedText.match(/\\o\s+"(\d+)-(\d+)"/);
+    if (outlineMatch?.[1] && outlineMatch?.[2]) {
       hasOutlineSwitch = true;
       const start = parseInt(outlineMatch[1], 10);
       const end = parseInt(outlineMatch[2], 10);
       for (let i = start; i <= end; i++) {
-        if (i >= 1 && i <= 9) {
-          levels.add(i);
-        }
+        if (i >= 1 && i <= 9) levels.add(i);
       }
     }
 
-    // Parse \u switch (use outline levels from paragraphs with outline level formatting)
-    // This switch works similarly to \o but applies to paragraphs with outline level properties
-    if (instrText.match(/\\u\b/)) {
-      hasUseOutlineLevelsSwitch = true;
-      // When \u is present without \o, default to levels 1-9
-      // unless \t switches provide specific levels
-      if (!hasOutlineSwitch && !instrText.match(/\\t\s+"/)) {
-        for (let i = 1; i <= 9; i++) {
-          levels.add(i);
-        }
+    // === Parse \u switch (use outline levels) ===
+    if (/\bu\b/.test(normalizedText)) {
+      // When \u is present without \o or \t, default to 1-9
+      const hasTSwitch = /\\t\s+"/.test(normalizedText);
+      if (!hasOutlineSwitch && !hasTSwitch) {
+        for (let i = 1; i <= 9; i++) levels.add(i);
       }
     }
 
-    // Parse \t switches (table entry fields)
-    // Two formats supported:
-    // 1. \t "StyleName,Level," - e.g., "Heading 2,2,"
-    // 2. \t "X-Y" - e.g., "2-3" (range format)
-    const styleMatches = instrText.matchAll(/\\t\s+"([^"]+)"/g);
-    for (const match of styleMatches) {
+    // === Parse all \t "..." switches (style or range) ===
+    // Match: \t followed by space and quoted string (supports nested commas safely)
+    const tSwitchRegex = /\\t\s+"([^"]*)"/g; // Captures content inside quotes
+    const tMatches = [...normalizedText.matchAll(tSwitchRegex)];
+
+    for (const match of tMatches) {
       hasTableSwitch = true;
-      const content = match[1]; // e.g., "Heading 2,2," or "2-3"
+      const content = (match[1] || "").trim();
       if (!content) continue;
 
-      // Check if it's a range format (e.g., "2-3")
+      // --- Case 1: Range format "X-Y" ---
       const rangeMatch = content.match(/^(\d+)-(\d+)$/);
-      if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
-        // Range format: add all levels in range
+      if (rangeMatch?.[1] && rangeMatch?.[2]) {
         const start = parseInt(rangeMatch[1], 10);
         const end = parseInt(rangeMatch[2], 10);
         for (let i = start; i <= end; i++) {
-          if (i >= 1 && i <= 9) {
-            levels.add(i);
-          }
+          if (i >= 1 && i <= 9) levels.add(i);
         }
         continue;
       }
 
-      // Style name format: "StyleName,Level,"
-      // Split by comma: ["Heading 2", "2", ""]
+      // --- Case 2: Style format "StyleName,Level," (e.g., "Heading 2,2,") ---
+      // Split by comma, expect pattern: styleName, level, [optional trailing comma]
       const parts = content
         .split(",")
         .map((p) => p.trim())
-        .filter((p) => p);
-      if (parts.length < 2) continue;
-
-      const styleName = parts[0]; // "Heading 2"
-      const levelStr = parts[1]; // "2"
-
-      if (!styleName || !levelStr) continue;
-
-      const level = parseInt(levelStr, 10);
-      if (isNaN(level)) continue;
-
-      // Extract level from Heading style names (e.g., "Heading 2" → 2)
-      const headingMatch = styleName.match(/Heading\s*(\d+)/i);
-      if (headingMatch && headingMatch[1]) {
-        const headingLevel = parseInt(headingMatch[1], 10);
-        if (headingLevel >= 1 && headingLevel <= 9) {
-          levels.add(headingLevel);
+        .filter(Boolean);
+      for (let i = 0; i < parts.length; i += 2) {
+        if (i + 1 < parts.length) {
+          const levelStr = parts[i + 1];
+          if (levelStr) {
+            const level = parseInt(levelStr, 10);
+            if (!isNaN(level) && level >= 1 && level <= 9) {
+              levels.add(level);
+            }
+          }
         }
-      } else if (level >= 1 && level <= 9) {
-        // For custom styles, use the level number from the \t switch
-        levels.add(level);
       }
     }
 
-    // Only default to [1,2,3] when NO switches were found
-    // If \t or \o switches were present but resulted in empty levels, return empty array
-    if (levels.size === 0) {
-      if (!hasOutlineSwitch && !hasTableSwitch && !hasUseOutlineLevelsSwitch) {
-        // No switches at all - use default
-        return [1, 2, 3];
-      }
-      // Switches were present but no valid levels found - return empty
-      return [];
-    }
-
+    // Final: Return sorted array (no duplicates)
     return Array.from(levels).sort((a, b) => a - b);
   }
 
