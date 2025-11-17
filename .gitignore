@@ -182,3 +182,6 @@ Incorrect.docx
 *-test.docx
 *_test.docx
 /.gitignore
+/Test_Code.docx
+/COMPATIBILITY_ANALYSIS_UPDATED.md
+docs/guides/toc-style-synchronization.md

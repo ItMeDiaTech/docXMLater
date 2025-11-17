@@ -5,6 +5,27 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **`Document.cleanFormatting()` Method**: Removed overly aggressive formatting cleanup method
+  - **Reason**: Too aggressive - destroyed intentional direct formatting (bold, colors, fonts)
+  - **Reason**: Redundant - all `applyX()` methods already clear formatting conflicts internally
+  - **Reason**: Context-blind - didn't distinguish between body paragraphs and table cells
+  - **Issue**: Was removing formatting from Header 2 paragraphs in table cells
+  - **Replacement**: Use `Paragraph.clearDirectFormattingConflicts(style)` for smart conflict detection
+  - **Impact**: None - single internal usage in WordDocumentProcessor was redundant
+  - **Note**: The safe utility function `cleanFormatting()` in `src/utils/formatting.ts` (removes null/undefined from objects) is unchanged
+
+### Changed
+
+- **WordDocumentProcessor**: Removed redundant `doc.cleanFormatting()` call (line 797)
+  - Direct formatting conflicts already handled by `applyH1()`, `applyH2()`, `applyH3()`, etc.
+  - Each method internally calls `clearDirectFormattingConflicts()` which preserves non-conflicting formatting
+
+---
+
 ## [3.2.0] - [3.5.0] - 2025-01-17 to Present
 
 ### Note
