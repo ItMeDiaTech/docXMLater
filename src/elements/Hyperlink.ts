@@ -124,9 +124,11 @@ export class Hyperlink {
       this.text = validation.cleanedText;
     }
 
-    // Create run with default hyperlink styling (blue, underlined)
+    // Create run with default hyperlink styling (Verdana 12pt blue underlined)
     this.formatting = {
-      color: "0563C1", // Word's default hyperlink blue
+      font: "Verdana",
+      size: 12,
+      color: "0000FF", // Standard hyperlink blue
       underline: "single",
       ...properties.formatting,
     };

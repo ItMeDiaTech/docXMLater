@@ -1376,15 +1376,18 @@ export class Style {
       isDefault: true,
       next: "Normal",
       paragraphFormatting: {
+        alignment: "left",
         spacing: {
-          after: 200,
-          line: 276,
+          before: 60, // 3pt
+          after: 60, // 3pt
+          line: 240, // Single line spacing
           lineRule: "auto",
         },
       },
       runFormatting: {
-        font: "Calibri",
-        size: 11,
+        font: "Verdana",
+        size: 12,
+        color: "000000",
       },
     });
   }
@@ -1399,8 +1402,16 @@ export class Style {
       throw new Error("Heading level must be between 1 and 9");
     }
 
-    const sizes = [18, 14, 12, 12, 12, 12, 12, 12, 12]; // Font sizes for Heading1-9
-    const bold = level <= 4; // Headings 1-4 are bold
+    // Font sizes: H1=18pt, H2=14pt, H3=12pt, H4-9=12pt
+    const sizes = [18, 14, 12, 12, 12, 12, 12, 12, 12];
+
+    // Spacing before: H1=0pt, H2=6pt, H3=3pt, H4-9=6pt (in twips: 1pt = 20 twips)
+    const spacingBefore =
+      level === 1 ? 0 : level === 2 ? 120 : level === 3 ? 60 : 120;
+
+    // Spacing after: H1=12pt, H2=6pt, H3=3pt, H4-9=6pt (in twips)
+    const spacingAfter =
+      level === 1 ? 240 : level === 2 ? 120 : level === 3 ? 60 : 120;
 
     return new Style({
       styleId: `Heading${level}`,
@@ -1409,9 +1420,12 @@ export class Style {
       basedOn: "Normal",
       next: "Normal",
       paragraphFormatting: {
+        alignment: "left",
         spacing: {
-          before: level === 1 ? 240 : 120,
-          after: 120,
+          before: spacingBefore,
+          after: spacingAfter,
+          line: 240, // Single line spacing
+          lineRule: "auto",
         },
         keepNext: true,
         keepLines: true,
@@ -1419,8 +1433,8 @@ export class Style {
       runFormatting: {
         font: "Verdana",
         size: sizes[level - 1],
-        bold: bold,
-        color: level === 1 ? "2E74B5" : "1F4D78",
+        bold: true,
+        color: "000000",
       },
     });
   }
@@ -1486,9 +1500,24 @@ export class Style {
       basedOn: "Normal",
       next: "ListParagraph",
       paragraphFormatting: {
+        alignment: "left",
         indentation: {
-          left: 720, // 0.5 inch
+          left: 720, // 0.5 inch (text indentation)
+          hanging: 360, // 0.25 inch (bullet/number indentation)
         },
+        spacing: {
+          before: 0, // 0pt
+          after: 60, // 3pt
+          line: 240, // Single line spacing
+          lineRule: "auto",
+        },
+        contextualSpacing: true, // No space between similar paragraphs
+      },
+      runFormatting: {
+        font: "Verdana",
+        size: 12,
+        bold: true,
+        color: "000000",
       },
     });
   }
