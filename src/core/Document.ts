@@ -1357,11 +1357,16 @@ export class Document {
    * Updates the document.xml file with current paragraphs
    */
   private updateDocumentXml(): void {
-    const xml = this.generator.generateDocumentXml(
+    let xml = this.generator.generateDocumentXml(
       this.bodyElements,
       this.section,
       this.namespaces
     );
+
+    // Sync TOC field instructions with actual style names
+    // This ensures TOC \t switches reference styles by their current names
+    xml = this.syncTOCFieldInstructions(xml);
+
     this.zipHandler.updateFile(DOCX_PATHS.DOCUMENT, xml);
   }
 
@@ -4586,40 +4591,6 @@ export class Document {
     return hyperlinks.length;
   }
 
-  /**
-   * Cleans direct formatting from paragraphs that have a style applied.
-   * Preserves the style reference while removing formatting overrides.
-   *
-   * @param options Optional list of style names to clean (default: all styles)
-   * @returns Number of paragraphs cleaned
-   * @example
-   * ```typescript
-   * // Clean all styled paragraphs
-   * const count = doc.cleanFormatting();
-   *
-   * // Clean specific styles only
-   * const count = doc.cleanFormatting(['Heading1', 'Heading2', 'Normal']);
-   * ```
-   */
-  public cleanFormatting(styleNames?: string[]): number {
-    let cleaned = 0;
-
-    for (const para of this.bodyElements) {
-      if (!(para instanceof Paragraph)) continue;
-      if (para.isPreserved()) continue;
-
-      const currentStyle = para.getStyle();
-      if (!currentStyle) continue;
-
-      // If style filter provided, only clean matching styles
-      if (styleNames && !styleNames.includes(currentStyle)) continue;
-
-      para.clearDirectFormatting();
-      cleaned++;
-    }
-
-    return cleaned;
-  }
 
   /**
    * Applies Heading 1 style to paragraphs with H1-like style names
@@ -5149,6 +5120,196 @@ export class Document {
 
     // Final: Return sorted array (no duplicates)
     return Array.from(levels).sort((a, b) => a - b);
+  }
+
+  /**
+   * Synchronizes TOC field instructions with actual style names from styles.xml
+   * This ensures \t switches reference styles by their current names, not outdated ones
+   *
+   * IMPORTANT: Does NOT modify style names - only updates TOC field references
+   * This prevents TOC population failures when style names don't match field instructions
+   *
+   * @param documentXml - The generated document.xml content
+   * @returns Modified XML with synchronized TOC field instructions
+   * @private
+   */
+  private syncTOCFieldInstructions(documentXml: string): string {
+    try {
+      // Find all TOC SDT elements
+      const tocRegex = /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
+      const tocMatches = Array.from(documentXml.matchAll(tocRegex));
+
+      if (tocMatches.length === 0) {
+        return documentXml; // No TOCs to sync
+      }
+
+      let modifiedXml = documentXml;
+
+      for (const match of tocMatches) {
+        const tocXml = match[0];
+
+        // Extract field instruction
+        const instrMatch = tocXml.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
+        if (!instrMatch?.[1]) {
+          continue; // No instruction text found
+        }
+
+        // Decode XML entities in instruction
+        let fieldInstruction = instrMatch[1]
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'");
+
+        // Check if instruction contains \t switches (style-specific TOC)
+        if (!fieldInstruction.includes('\\t')) {
+          continue; // Outline-based TOC, no style names to sync
+        }
+
+        // Parse and update \t switches
+        const updatedInstruction = this.updateTOCStyleNames(fieldInstruction);
+
+        // If instruction changed, replace in XML
+        if (updatedInstruction !== fieldInstruction) {
+          // Re-encode for XML
+          const encodedInstruction = updatedInstruction
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+
+          // Replace the instruction in the TOC XML
+          const updatedTocXml = tocXml.replace(
+            /<w:instrText[^>]*>[\s\S]*?<\/w:instrText>/,
+            `<w:instrText xml:space="preserve">${encodedInstruction}</w:instrText>`
+          );
+
+          // Replace in document
+          modifiedXml = modifiedXml.replace(tocXml, updatedTocXml);
+
+          this.logger.info(
+            `Synced TOC field instruction: "${fieldInstruction.substring(0, 50)}..." → "${updatedInstruction.substring(0, 50)}..."`
+          );
+        }
+      }
+
+      return modifiedXml;
+    } catch (error) {
+      // Log error but don't fail the save
+      this.logger.error(
+        'Error syncing TOC field instructions - document will save with original instructions',
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
+      return documentXml; // Return original on error
+    }
+  }
+
+  /**
+   * Updates style names in a TOC field instruction to match actual styles.xml names
+   * Parses \t switches, resolves each style name, and rebuilds instruction
+   *
+   * @param fieldInstruction - Original TOC field instruction
+   * @returns Updated field instruction with current style names
+   * @private
+   */
+  private updateTOCStyleNames(fieldInstruction: string): string {
+    // Extract all \t switches using regex
+    // Format: \t "StyleName,Level," or \t "StyleName,Level,StyleName2,Level2,..."
+    const tSwitchRegex = /\\t\s+"([^"]+)"/g;
+    let updatedInstruction = fieldInstruction;
+    let hasChanges = false;
+
+    const matches = Array.from(fieldInstruction.matchAll(tSwitchRegex));
+
+    for (const match of matches) {
+      const originalSwitch = match[0]; // Full match: \t "StyleName,Level,"
+      const content = match[1]; // Content inside quotes
+      if (!content) continue;
+
+      // Parse style names and levels from the switch content
+      // Format: "StyleName,Level," or "StyleName,Level,StyleName2,Level2,..."
+      const parts = content.split(',').map(p => p.trim()).filter(Boolean);
+      const updatedParts: string[] = [];
+
+      for (let i = 0; i < parts.length; i += 2) {
+        const styleName = parts[i];
+        const levelStr = parts[i + 1];
+
+        if (!styleName || !levelStr) {
+          // Preserve malformed parts
+          if (styleName) updatedParts.push(styleName);
+          if (levelStr) updatedParts.push(levelStr);
+          continue;
+        }
+
+        // Resolve style name to actual name in styles.xml
+        const actualStyleName = this.resolveStyleNameForTOC(styleName);
+
+        if (actualStyleName && actualStyleName !== styleName) {
+          // Style name changed - use actual name
+          updatedParts.push(actualStyleName, levelStr);
+          hasChanges = true;
+        } else if (actualStyleName) {
+          // Style name unchanged
+          updatedParts.push(styleName, levelStr);
+        } else {
+          // Style not found - preserve original reference and log warning
+          updatedParts.push(styleName, levelStr);
+          this.logger.warn(
+            `TOC references style "${styleName}" which doesn't exist in styles.xml - preserving original reference`
+          );
+        }
+      }
+
+      // Rebuild the \t switch with updated names
+      if (hasChanges) {
+        const updatedContent = updatedParts.join(',') + (content.endsWith(',') ? ',' : '');
+        const updatedSwitch = `\\t "${updatedContent}"`;
+        updatedInstruction = updatedInstruction.replace(originalSwitch, updatedSwitch);
+      }
+    }
+
+    return updatedInstruction;
+  }
+
+  /**
+   * Resolves a TOC style reference to the actual style name in styles.xml
+   * Handles various naming patterns (Heading2 vs Heading 2 vs CustomHeader2)
+   *
+   * @param tocStyleName - Style name from TOC \t switch
+   * @returns Actual style name from styles.xml or undefined if not found
+   * @private
+   */
+  private resolveStyleNameForTOC(tocStyleName: string): string | undefined {
+    // Strategy 1: Direct name match (exact)
+    const allStyles = this.stylesManager.getAllStyles();
+    for (const style of allStyles) {
+      if (style.getName() === tocStyleName) {
+        return style.getName();
+      }
+    }
+
+    // Strategy 2: Match by styleId pattern
+    // "Heading 2" → styleId="Heading2" → get actual name
+    // "List Paragraph" → styleId="ListParagraph" → get actual name
+    const normalizedId = tocStyleName.replace(/\s+/g, '');
+    const styleById = this.stylesManager.getStyle(normalizedId);
+    if (styleById) {
+      return styleById.getName();
+    }
+
+    // Strategy 3: Fuzzy match (case-insensitive search)
+    const fuzzyResults = this.stylesManager.searchByName(tocStyleName);
+    if (fuzzyResults.length > 0 && fuzzyResults[0]) {
+      return fuzzyResults[0].getName();
+    }
+
+    // Style not found
+    return undefined;
   }
 
   /**
