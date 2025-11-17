@@ -140,4 +140,45 @@ hyperlink_defragmentation_fix.ts
 /docs/analysis
 /docXMLater.code-workspace
 /.npmignore
+
+# Planning and implementation documentation (completed/obsolete)
+*_PLAN.md
+*_PLAN_*.md
+*_FIX_*.md
+*_PARSING_*.md
+*_PREPOPULATION_*.md
+*_ARCHITECTURE.md
+*_GUIDE.md
+*_COMPLETE.md
+*_SPEC.md
+*_COMPARISON_*.md
+*_CLEANUP_*.md
+COMPREHENSIVE_*.md
+FINAL_*.md
+IMPLEMENTATION_*.md
+TOC_*.md
+FORMATTING_HELPERS_*.md
+RefactorStyles.md
+STYLE_PARAMETER_*.md
+Corruption_Analysis_*.md
+
+# Release notes (keep only in docs/releases/)
+release-notes-*.md
+RELEASE_SUMMARY_*.md
+RELEASE_NOTES_*.md
+
+# Temporary null/nul files
+nul
+
+# Word temporary files
+~$*.docx
+~$*.doc
+
+# Additional temp patterns
+*_CORRECTED.docx
+AFTER.docx
+BEFORE.docx
+Incorrect.docx
+*-test.docx
+*_test.docx
 /.gitignore
