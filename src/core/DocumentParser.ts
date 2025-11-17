@@ -3143,7 +3143,199 @@ export class DocumentParser {
   }
 
   /**
+   * Extracts TOC field instruction from assembled ComplexField objects
+   * This is the preferred method as it uses already-assembled fields
+   * @private
+   */
+  private extractInstructionFromContent(content: any[]): string | undefined {
+    defaultLogger.debug(
+      `[TOC Parser] Searching ${content.length} content elements for TOC ComplexField`
+    );
+
+    for (const element of content) {
+      if (element instanceof Paragraph) {
+        const paragraphContent = element.getContent();
+
+        for (const item of paragraphContent) {
+          // Check for ComplexField (assembled field with begin/sep/end)
+          if (item instanceof ComplexField) {
+            const instruction = item.getInstruction();
+
+            // Check if this is a TOC field
+            if (instruction && instruction.trim().startsWith("TOC")) {
+              defaultLogger.debug(
+                `[TOC Parser] Found ComplexField with TOC instruction: "${instruction.substring(
+                  0,
+                  100
+                )}..."`
+              );
+              return instruction.trim();
+            }
+          }
+        }
+      }
+    }
+
+    defaultLogger.debug(
+      "[TOC Parser] No ComplexField with TOC instruction found in assembled content"
+    );
+    return undefined;
+  }
+
+  /**
+   * Fallback: Extracts TOC instruction from raw XML when ComplexField not available
+   * Handles instructions split across multiple runs by concatenating all runs between begin/separate markers
+   * @private
+   */
+  private extractInstructionFromRawXML(sdtContent: any): string | undefined {
+    const paragraphs = sdtContent["w:p"];
+    const paraArray = Array.isArray(paragraphs)
+      ? paragraphs
+      : paragraphs
+      ? [paragraphs]
+      : [];
+
+    defaultLogger.debug(
+      `[TOC Parser] Fallback: Parsing raw XML from ${paraArray.length} paragraph(s)`
+    );
+
+    // Track field state across paragraphs (TOC fields can span multiple paragraphs)
+    let inField = false;
+    let instructionParts: string[] = [];
+    let foundTOCInstruction: string | undefined;
+
+    for (let pIdx = 0; pIdx < paraArray.length; pIdx++) {
+      const paraObj = paraArray[pIdx];
+      const runs = paraObj["w:r"];
+      const runArray = Array.isArray(runs) ? runs : runs ? [runs] : [];
+
+      defaultLogger.debug(
+        `[TOC Parser] Paragraph ${pIdx + 1}: ${runArray.length} runs`
+      );
+
+      for (let rIdx = 0; rIdx < runArray.length; rIdx++) {
+        const runObj = runArray[rIdx];
+
+        // Check for field character(s) - can be single object or array
+        const fldChar = runObj["w:fldChar"];
+        if (fldChar) {
+          // Handle both single object and array of objects
+          const fldCharArray = Array.isArray(fldChar) ? fldChar : [fldChar];
+
+          defaultLogger.debug(
+            `[TOC Parser] Paragraph ${pIdx + 1}, Run ${rIdx + 1}: Found ${
+              fldCharArray.length
+            } fldChar element(s)`
+          );
+
+          // Process each fldChar in the array
+          for (const fldCharObj of fldCharArray) {
+            const charType =
+              fldCharObj["@_w:fldCharType"] || fldCharObj["@_fldCharType"];
+
+            if (!charType) {
+              defaultLogger.debug(
+                `[TOC Parser] Warning: fldChar without charType attribute`
+              );
+              continue;
+            }
+
+            defaultLogger.debug(
+              `[TOC Parser] Paragraph ${pIdx + 1}, Run ${
+                rIdx + 1
+              }: fldChar type = "${charType}"`
+            );
+
+            if (charType === "begin") {
+              inField = true;
+              instructionParts = [];
+              defaultLogger.debug(
+                "[TOC Parser] Found field begin marker, starting instruction collection"
+              );
+              continue;
+            }
+
+            // Check for field end/separate marker
+            if (charType === "end" || charType === "separate") {
+              // If we collected instruction parts, join and check if TOC
+              const fullInstruction = instructionParts.join("").trim();
+              defaultLogger.debug(
+                `[TOC Parser] Field ${charType} marker found. Collected instruction: "${fullInstruction.substring(
+                  0,
+                  100
+                )}..."`
+              );
+
+              if (fullInstruction.startsWith("TOC")) {
+                foundTOCInstruction = fullInstruction;
+                defaultLogger.debug(
+                  `[TOC Parser] ✓ Extracted complete TOC instruction from ${instructionParts.length} part(s)`
+                );
+                // Don't return yet - field might have more content after separate
+                // But save it in case we don't find end marker
+              }
+
+              // Only reset on "end", not "separate" (there's content between separate and end)
+              if (charType === "end") {
+                inField = false;
+                instructionParts = [];
+
+                // If we found a TOC instruction, return it now
+                if (foundTOCInstruction) {
+                  return foundTOCInstruction;
+                }
+              }
+              continue;
+            }
+          }
+        }
+
+        // Collect instruction text while inside field
+        if (inField) {
+          const instrText = runObj["w:instrText"];
+          if (instrText) {
+            // Extract text value and decode XML entities
+            let text = "";
+            if (typeof instrText === "string") {
+              text = instrText;
+            } else if (instrText["#text"]) {
+              text = instrText["#text"];
+            } else {
+              // Sometimes the text is directly in the object
+              text = String(instrText);
+            }
+
+            instructionParts.push(text);
+            defaultLogger.debug(
+              `[TOC Parser] Paragraph ${pIdx + 1}, Run ${
+                rIdx + 1
+              }: Collected instrText = "${text.substring(0, 50)}..."`
+            );
+          }
+        }
+      }
+    }
+
+    // If we found a TOC instruction but never hit the end marker, return it anyway
+    if (foundTOCInstruction) {
+      defaultLogger.debug(
+        `[TOC Parser] Returning TOC instruction (no end marker found): "${foundTOCInstruction.substring(
+          0,
+          100
+        )}..."`
+      );
+      return foundTOCInstruction;
+    }
+
+    defaultLogger.debug(
+      "[TOC Parser] No TOC instruction found in raw XML fallback"
+    );
+    return undefined;
+  }
+
+  /**
    * Helper to parse TOC from SDT content
+   * Now uses two-tier extraction: ComplexField objects first, then raw XML fallback
    */
   private parseTOCFromSDTContent(
     content: any[],
@@ -3166,42 +3358,27 @@ export class DocumentParser {
         }
       }
 
-      // Extract field instruction from raw XML
-      const paragraphs = sdtContent["w:p"];
-      const paraArray = Array.isArray(paragraphs)
-        ? paragraphs
-        : paragraphs
-        ? [paragraphs]
-        : [];
+      // NEW: Extract field instruction from assembled ComplexField objects first
+      fieldInstruction = this.extractInstructionFromContent(content);
 
-      for (const paraObj of paraArray) {
-        // Look for w:instrText in runs
-        const runs = paraObj["w:r"];
-        const runArray = Array.isArray(runs) ? runs : runs ? [runs] : [];
-
-        for (const runObj of runArray) {
-          const instrText = runObj["w:instrText"];
-          if (instrText) {
-            // Extract text content
-            if (typeof instrText === "string") {
-              fieldInstruction = instrText.trim();
-            } else if (instrText["#text"]) {
-              fieldInstruction = instrText["#text"].trim();
-            }
-
-            if (fieldInstruction) break;
-          }
-        }
-
-        if (fieldInstruction) break;
+      // FALLBACK: Use raw XML parsing if no ComplexField found
+      if (!fieldInstruction) {
+        defaultLogger.debug(
+          "[TOC Parser] ComplexField extraction failed, falling back to raw XML parsing"
+        );
+        fieldInstruction = this.extractInstructionFromRawXML(sdtContent);
       }
 
       if (!fieldInstruction) {
         defaultLogger.warn(
-          "[DocumentParser] No TOC field instruction found in SDT content"
+          "[DocumentParser] No TOC field instruction found in SDT content (tried both ComplexField and raw XML)"
         );
         return null;
       }
+
+      defaultLogger.debug(
+        `[TOC Parser] Successfully extracted instruction: "${fieldInstruction}"`
+      );
 
       // Parse field switches from instruction
       const tocOptions: any = {
