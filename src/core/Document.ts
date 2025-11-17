@@ -4742,16 +4742,21 @@ export class Document {
    * - "TOC \o "1-3"" → [1, 2, 3]
    * - "TOC \t "Heading 2,2,"" → [2]
    * - "TOC \o "1-2" \t "Heading 3,3,"" → [1, 2, 3]
+   * - "TOC \h \u \z \t "Heading 2,2,"" → [2] (only Heading 2, no default)
    *
    * @param instrText The TOC field instruction text
    * @returns Array of heading levels (1-9) to include
    */
   private parseTOCFieldInstruction(instrText: string): number[] {
     const levels = new Set<number>();
+    let hasOutlineSwitch = false;
+    let hasTableSwitch = false;
+    let hasUseOutlineLevelsSwitch = false;
 
     // Parse \o "X-Y" switch (outline levels)
     const outlineMatch = instrText.match(/\\o\s+"(\d+)-(\d+)"/);
     if (outlineMatch && outlineMatch[1] && outlineMatch[2]) {
+      hasOutlineSwitch = true;
       const start = parseInt(outlineMatch[1], 10);
       const end = parseInt(outlineMatch[2], 10);
       for (let i = start; i <= end; i++) {
@@ -4761,10 +4766,24 @@ export class Document {
       }
     }
 
+    // Parse \u switch (use outline levels from paragraphs with outline level formatting)
+    // This switch works similarly to \o but applies to paragraphs with outline level properties
+    if (instrText.match(/\\u\b/)) {
+      hasUseOutlineLevelsSwitch = true;
+      // When \u is present without \o, default to levels 1-9
+      // unless \t switches provide specific levels
+      if (!hasOutlineSwitch && !instrText.match(/\\t\s+"/)) {
+        for (let i = 1; i <= 9; i++) {
+          levels.add(i);
+        }
+      }
+    }
+
     // Parse \t "StyleName,Level," switches (custom styles)
     // Microsoft Word format: \t "Heading 2,2," (everything inside quotes)
     const styleMatches = instrText.matchAll(/\\t\s+"([^"]+)"/g);
     for (const match of styleMatches) {
+      hasTableSwitch = true;
       const content = match[1]; // e.g., "Heading 2,2,"
       if (!content) continue;
 
@@ -4796,9 +4815,15 @@ export class Document {
       }
     }
 
-    // If no levels found, default to 1-3
+    // Only default to [1,2,3] when NO switches were found
+    // If \t or \o switches were present but resulted in empty levels, return empty array
     if (levels.size === 0) {
-      return [1, 2, 3];
+      if (!hasOutlineSwitch && !hasTableSwitch && !hasUseOutlineLevelsSwitch) {
+        // No switches at all - use default
+        return [1, 2, 3];
+      }
+      // Switches were present but no valid levels found - return empty
+      return [];
     }
 
     return Array.from(levels).sort((a, b) => a - b);
