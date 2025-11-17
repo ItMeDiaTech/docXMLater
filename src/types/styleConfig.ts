@@ -40,7 +40,7 @@ export interface StyleRunFormatting {
  */
 export interface StyleParagraphFormatting {
   /** Text alignment */
-  alignment?: 'left' | 'center' | 'right' | 'justify';
+  alignment?: "left" | "center" | "right" | "justify";
 
   /** Spacing configuration */
   spacing?: {
@@ -54,7 +54,7 @@ export interface StyleParagraphFormatting {
     line?: number;
 
     /** How to interpret the line spacing value */
-    lineRule?: 'auto' | 'exact' | 'atLeast';
+    lineRule?: "auto" | "exact" | "atLeast";
   };
 
   /** Indentation configuration */
@@ -124,10 +124,10 @@ export interface Heading2Config extends StyleConfig {
 }
 
 /**
- * Complete configuration for applyCustomFormattingToExistingStyles()
+ * Complete configuration for applyStyles()
  * All properties are optional - defaults will be used if not provided
  */
-export interface ApplyCustomFormattingOptions {
+export interface ApplyStylesOptions {
   /** Heading1 style configuration */
   heading1?: StyleConfig;
 
@@ -151,3 +151,8 @@ export interface ApplyCustomFormattingOptions {
    */
   preserveBlankLinesAfterHeader2Tables?: boolean;
 }
+
+/**
+ * @deprecated Use {@link ApplyStylesOptions} instead (renamed in v4.0.0)
+ */
+export type ApplyCustomFormattingOptions = ApplyStylesOptions;

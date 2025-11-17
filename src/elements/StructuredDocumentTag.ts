@@ -6,28 +6,32 @@
  * tables, or other block-level elements.
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { Paragraph } from './Paragraph';
-import { Table } from './Table';
+import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
+import { Paragraph } from "./Paragraph";
+import { Table } from "./Table";
 
 /**
  * Type of content lock for SDT
  */
-export type SDTLockType = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
+export type SDTLockType =
+  | "unlocked"
+  | "sdtLocked"
+  | "contentLocked"
+  | "sdtContentLocked";
 
 /**
  * Content control type
  */
 export type ContentControlType =
-  | 'richText'
-  | 'plainText'
-  | 'comboBox'
-  | 'dropDownList'
-  | 'datePicker'
-  | 'checkbox'
-  | 'picture'
-  | 'buildingBlock'
-  | 'group';
+  | "richText"
+  | "plainText"
+  | "comboBox"
+  | "dropDownList"
+  | "datePicker"
+  | "checkbox"
+  | "picture"
+  | "buildingBlock"
+  | "group";
 
 /**
  * List item for combo box or dropdown
@@ -78,7 +82,14 @@ export interface DatePickerProperties {
   /** Locale ID */
   lid?: string;
   /** Calendar type */
-  calendar?: 'gregorian' | 'hijri' | 'hebrew' | 'taiwan' | 'japan' | 'thai' | 'korean';
+  calendar?:
+    | "gregorian"
+    | "hijri"
+    | "hebrew"
+    | "taiwan"
+    | "japan"
+    | "thai"
+    | "korean";
 }
 
 /**
@@ -268,7 +279,7 @@ export class StructuredDocumentTag {
    * @param properties - Plain text properties
    */
   setPlainTextProperties(properties: PlainTextProperties): this {
-    this.properties.controlType = 'plainText';
+    this.properties.controlType = "plainText";
     this.properties.plainText = properties;
     return this;
   }
@@ -286,7 +297,7 @@ export class StructuredDocumentTag {
    * @param properties - Combo box properties
    */
   setComboBoxProperties(properties: ComboBoxProperties): this {
-    this.properties.controlType = 'comboBox';
+    this.properties.controlType = "comboBox";
     this.properties.comboBox = properties;
     return this;
   }
@@ -304,7 +315,7 @@ export class StructuredDocumentTag {
    * @param properties - Dropdown list properties
    */
   setDropDownListProperties(properties: DropDownListProperties): this {
-    this.properties.controlType = 'dropDownList';
+    this.properties.controlType = "dropDownList";
     this.properties.dropDownList = properties;
     return this;
   }
@@ -322,7 +333,7 @@ export class StructuredDocumentTag {
    * @param properties - Date picker properties
    */
   setDatePickerProperties(properties: DatePickerProperties): this {
-    this.properties.controlType = 'datePicker';
+    this.properties.controlType = "datePicker";
     this.properties.datePicker = properties;
     return this;
   }
@@ -340,7 +351,7 @@ export class StructuredDocumentTag {
    * @param properties - Checkbox properties
    */
   setCheckboxProperties(properties: CheckboxProperties): this {
-    this.properties.controlType = 'checkbox';
+    this.properties.controlType = "checkbox";
     this.properties.checkbox = properties;
     return this;
   }
@@ -366,7 +377,7 @@ export class StructuredDocumentTag {
    * @param properties - Building block properties
    */
   setBuildingBlockProperties(properties: BuildingBlockProperties): this {
-    this.properties.controlType = 'buildingBlock';
+    this.properties.controlType = "buildingBlock";
     this.properties.buildingBlock = properties;
     return this;
   }
@@ -457,105 +468,110 @@ export class StructuredDocumentTag {
 
     if (this.properties.lock) {
       sdtPrChildren.push(
-        XMLBuilder.wSelf('lock', { 'w:val': this.properties.lock })
+        XMLBuilder.wSelf("lock", { "w:val": this.properties.lock })
       );
     }
 
     if (this.properties.id !== undefined) {
       sdtPrChildren.push(
-        XMLBuilder.wSelf('id', { 'w:val': this.properties.id.toString() })
+        XMLBuilder.wSelf("id", { "w:val": this.properties.id.toString() })
       );
     }
 
     if (this.properties.tag) {
       sdtPrChildren.push(
-        XMLBuilder.wSelf('tag', { 'w:val': this.properties.tag })
+        XMLBuilder.wSelf("tag", { "w:val": this.properties.tag })
       );
     }
 
     if (this.properties.alias) {
       sdtPrChildren.push(
-        XMLBuilder.wSelf('alias', { 'w:val': this.properties.alias })
+        XMLBuilder.wSelf("alias", { "w:val": this.properties.alias })
       );
     }
 
     // Add control type-specific XML
     if (this.properties.controlType) {
       switch (this.properties.controlType) {
-        case 'richText':
-          sdtPrChildren.push(XMLBuilder.wSelf('richText', {}));
+        case "richText":
+          sdtPrChildren.push(XMLBuilder.wSelf("richText", {}));
           break;
 
-        case 'plainText':
+        case "plainText":
           if (this.properties.plainText) {
             const attrs: Record<string, string> = {};
             if (this.properties.plainText.multiLine !== undefined) {
-              attrs['w:multiLine'] = this.properties.plainText.multiLine ? '1' : '0';
+              attrs["w:multiLine"] = this.properties.plainText.multiLine
+                ? "1"
+                : "0";
             }
-            sdtPrChildren.push(XMLBuilder.wSelf('text', attrs));
+            sdtPrChildren.push(XMLBuilder.wSelf("text", attrs));
           } else {
-            sdtPrChildren.push(XMLBuilder.wSelf('text', {}));
+            sdtPrChildren.push(XMLBuilder.wSelf("text", {}));
           }
           break;
 
-        case 'comboBox':
+        case "comboBox":
           if (this.properties.comboBox) {
             const comboBoxChildren: XMLElement[] = [];
             for (const item of this.properties.comboBox.items) {
               comboBoxChildren.push(
-                XMLBuilder.wSelf('listItem', {
-                  'w:displayText': item.displayText,
-                  'w:value': item.value,
+                XMLBuilder.wSelf("listItem", {
+                  "w:displayText": item.displayText,
+                  "w:value": item.value,
                 })
               );
             }
-            sdtPrChildren.push(XMLBuilder.w('comboBox', {}, comboBoxChildren));
+            sdtPrChildren.push(XMLBuilder.w("comboBox", {}, comboBoxChildren));
           }
           break;
 
-        case 'dropDownList':
+        case "dropDownList":
           if (this.properties.dropDownList) {
             const dropDownChildren: XMLElement[] = [];
             for (const item of this.properties.dropDownList.items) {
               dropDownChildren.push(
-                XMLBuilder.wSelf('listItem', {
-                  'w:displayText': item.displayText,
-                  'w:value': item.value,
+                XMLBuilder.wSelf("listItem", {
+                  "w:displayText": item.displayText,
+                  "w:value": item.value,
                 })
               );
             }
-            sdtPrChildren.push(XMLBuilder.w('dropDownList', {}, dropDownChildren));
+            sdtPrChildren.push(
+              XMLBuilder.w("dropDownList", {}, dropDownChildren)
+            );
           }
           break;
 
-        case 'datePicker':
+        case "datePicker":
           if (this.properties.datePicker) {
             const dateAttrs: Record<string, string> = {};
             if (this.properties.datePicker.dateFormat) {
-              dateAttrs['w:dateFormat'] = this.properties.datePicker.dateFormat;
+              dateAttrs["w:dateFormat"] = this.properties.datePicker.dateFormat;
             }
             if (this.properties.datePicker.lid) {
-              dateAttrs['w:lid'] = this.properties.datePicker.lid;
+              dateAttrs["w:lid"] = this.properties.datePicker.lid;
             }
             if (this.properties.datePicker.fullDate) {
-              dateAttrs['w:fullDate'] = this.properties.datePicker.fullDate.toISOString();
+              dateAttrs["w:fullDate"] =
+                this.properties.datePicker.fullDate.toISOString();
             }
             if (this.properties.datePicker.calendar) {
-              dateAttrs['w:calendar'] = this.properties.datePicker.calendar;
+              dateAttrs["w:calendar"] = this.properties.datePicker.calendar;
             }
-            sdtPrChildren.push(XMLBuilder.wSelf('date', dateAttrs));
+            sdtPrChildren.push(XMLBuilder.wSelf("date", dateAttrs));
           }
           break;
 
-        case 'checkbox':
+        case "checkbox":
           if (this.properties.checkbox) {
             const checkboxChildren: XMLElement[] = [];
 
             // Add checked state
             if (this.properties.checkbox.checked !== undefined) {
               checkboxChildren.push(
-                XMLBuilder.wSelf('checked', {
-                  'w:val': this.properties.checkbox.checked ? '1' : '0',
+                XMLBuilder.wSelf("checked", {
+                  "w:val": this.properties.checkbox.checked ? "1" : "0",
                 })
               );
             }
@@ -563,9 +579,9 @@ export class StructuredDocumentTag {
             // Add checked state symbol
             if (this.properties.checkbox.checkedState) {
               checkboxChildren.push(
-                XMLBuilder.wSelf('checkedState', {
-                  'w:val': this.properties.checkbox.checkedState,
-                  'w:font': 'MS Gothic',
+                XMLBuilder.wSelf("checkedState", {
+                  "w:val": this.properties.checkbox.checkedState,
+                  "w:font": "MS Gothic",
                 })
               );
             }
@@ -573,50 +589,52 @@ export class StructuredDocumentTag {
             // Add unchecked state symbol
             if (this.properties.checkbox.uncheckedState) {
               checkboxChildren.push(
-                XMLBuilder.wSelf('uncheckedState', {
-                  'w:val': this.properties.checkbox.uncheckedState,
-                  'w:font': 'MS Gothic',
+                XMLBuilder.wSelf("uncheckedState", {
+                  "w:val": this.properties.checkbox.uncheckedState,
+                  "w:font": "MS Gothic",
                 })
               );
             }
 
-            sdtPrChildren.push(XMLBuilder.w14('checkbox', {}, checkboxChildren));
+            sdtPrChildren.push(
+              XMLBuilder.w14("checkbox", {}, checkboxChildren)
+            );
           }
           break;
 
-        case 'picture':
-          sdtPrChildren.push(XMLBuilder.wSelf('picture', {}));
+        case "picture":
+          sdtPrChildren.push(XMLBuilder.wSelf("picture", {}));
           break;
 
-        case 'buildingBlock':
+        case "buildingBlock":
           if (this.properties.buildingBlock) {
             const bbChildren: XMLElement[] = [];
             if (this.properties.buildingBlock.gallery) {
               bbChildren.push(
-                XMLBuilder.wSelf('docPartGallery', {
-                  'w:val': this.properties.buildingBlock.gallery,
+                XMLBuilder.wSelf("docPartGallery", {
+                  "w:val": this.properties.buildingBlock.gallery,
                 })
               );
             }
             if (this.properties.buildingBlock.category) {
               bbChildren.push(
-                XMLBuilder.wSelf('docPartCategory', {
-                  'w:val': this.properties.buildingBlock.category,
+                XMLBuilder.wSelf("docPartCategory", {
+                  "w:val": this.properties.buildingBlock.category,
                 })
               );
             }
-            sdtPrChildren.push(XMLBuilder.w('docPartObj', {}, bbChildren));
+            sdtPrChildren.push(XMLBuilder.w("docPartObj", {}, bbChildren));
           }
           break;
 
-        case 'group':
-          sdtPrChildren.push(XMLBuilder.wSelf('group', {}));
+        case "group":
+          sdtPrChildren.push(XMLBuilder.wSelf("group", {}));
           break;
       }
     }
 
     if (sdtPrChildren.length > 0) {
-      children.push(XMLBuilder.w('sdtPr', {}, sdtPrChildren));
+      children.push(XMLBuilder.w("sdtPr", {}, sdtPrChildren));
     }
 
     // Build sdtContent
@@ -625,23 +643,36 @@ export class StructuredDocumentTag {
       sdtContentChildren.push(element.toXML());
     }
 
-    children.push(XMLBuilder.w('sdtContent', {}, sdtContentChildren));
+    children.push(XMLBuilder.w("sdtContent", {}, sdtContentChildren));
 
-    return XMLBuilder.w('sdt', {}, children);
+    return XMLBuilder.w("sdt", {}, children);
   }
 
   /**
    * Create an SDT wrapping a table (common for Google Docs)
    * @param table - Table to wrap
    * @param tag - Optional tag value
+   * @param lock - Optional lock type (default: unlocked for editability)
    * @returns New SDT instance
+   * @example
+   * ```typescript
+   * // Unlocked table (editable in Word) - RECOMMENDED
+   * const sdt = StructuredDocumentTag.wrapTable(table);
+   *
+   * // Locked table (read-only in Word)
+   * const lockedSdt = StructuredDocumentTag.wrapTable(table, 'my-table', 'contentLocked');
+   * ```
    */
-  static wrapTable(table: Table, tag: string = 'goog_rdk_0'): StructuredDocumentTag {
+  static wrapTable(
+    table: Table,
+    tag: string = "goog_rdk_0",
+    lock?: SDTLockType
+  ): StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000, // Generate a reasonable ID
         tag,
-        lock: 'contentLocked',
+        lock, // Only set if provided - defaults to unlocked
       },
       [table]
     );
@@ -653,7 +684,10 @@ export class StructuredDocumentTag {
    * @param tag - Optional tag value
    * @returns New SDT instance
    */
-  static wrapParagraph(paragraph: Paragraph, tag?: string): StructuredDocumentTag {
+  static wrapParagraph(
+    paragraph: Paragraph,
+    tag?: string
+  ): StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
@@ -685,7 +719,7 @@ export class StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
-        controlType: 'richText',
+        controlType: "richText",
         ...properties,
       },
       content
@@ -707,7 +741,7 @@ export class StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
-        controlType: 'plainText',
+        controlType: "plainText",
         plainText: { multiLine },
         ...properties,
       },
@@ -730,7 +764,7 @@ export class StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
-        controlType: 'comboBox',
+        controlType: "comboBox",
         comboBox: { items },
         ...properties,
       },
@@ -753,7 +787,7 @@ export class StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
-        controlType: 'dropDownList',
+        controlType: "dropDownList",
         dropDownList: { items },
         ...properties,
       },
@@ -769,14 +803,14 @@ export class StructuredDocumentTag {
    * @returns New SDT instance
    */
   static createDatePicker(
-    dateFormat: string = 'M/d/yyyy',
+    dateFormat: string = "M/d/yyyy",
     content: SDTContent[] = [],
     properties: Partial<SDTProperties> = {}
   ): StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
-        controlType: 'datePicker',
+        controlType: "datePicker",
         datePicker: { dateFormat },
         ...properties,
       },
@@ -799,11 +833,11 @@ export class StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
-        controlType: 'checkbox',
+        controlType: "checkbox",
         checkbox: {
           checked,
-          checkedState: '2612', // ☒
-          uncheckedState: '2610', // ☐
+          checkedState: "2612", // ☒
+          uncheckedState: "2610", // ☐
         },
         ...properties,
       },
@@ -824,7 +858,7 @@ export class StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
-        controlType: 'picture',
+        controlType: "picture",
         ...properties,
       },
       content
@@ -848,7 +882,7 @@ export class StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
-        controlType: 'buildingBlock',
+        controlType: "buildingBlock",
         buildingBlock: { gallery, category },
         ...properties,
       },
@@ -869,11 +903,63 @@ export class StructuredDocumentTag {
     return new StructuredDocumentTag(
       {
         id: Date.now() % 1000000000,
-        controlType: 'group',
-        lock: 'sdtContentLocked', // Groups typically lock content
+        controlType: "group",
+        lock: "sdtContentLocked", // Groups typically lock content
         ...properties,
       },
       content
     );
+  }
+
+  /**
+   * Unlocks the SDT content (allows editing)
+   * Removes any lock that prevents content modification
+   * @returns This SDT for chaining
+   * @example
+   * ```typescript
+   * // Unlock a locked SDT to enable editing
+   * sdt.unlock();
+   *
+   * // Chain with other modifications
+   * sdt.unlock().setTag('editable-content');
+   * ```
+   */
+  unlock(): this {
+    delete this.properties.lock;
+    return this;
+  }
+
+  /**
+   * Checks if SDT content is locked in any way
+   * @returns True if content is locked (contentLocked, sdtLocked, or sdtContentLocked)
+   * @example
+   * ```typescript
+   * if (sdt.isLocked()) {
+   *   console.log('SDT is locked - unlocking for editing');
+   *   sdt.unlock();
+   * }
+   * ```
+   */
+  isLocked(): boolean {
+    const lock = this.properties.lock;
+    return (
+      lock === "contentLocked" ||
+      lock === "sdtContentLocked" ||
+      lock === "sdtLocked"
+    );
+  }
+
+  /**
+   * Checks if SDT content can be edited by users
+   * @returns True if content can be modified (not locked by contentLocked or sdtContentLocked)
+   * @example
+   * ```typescript
+   * const editable = sdt.isContentEditable();
+   * console.log(editable ? 'Can edit' : 'Cannot edit');
+   * ```
+   */
+  isContentEditable(): boolean {
+    const lock = this.properties.lock;
+    return lock !== "contentLocked" && lock !== "sdtContentLocked";
   }
 }

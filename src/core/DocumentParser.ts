@@ -1308,11 +1308,41 @@ export class DocumentParser {
       }
     }
 
-    // Validate field structure
-    if (!hasBegin || !hasEnd || !instruction.trim()) {
+    // Validate field structure with detailed diagnostics
+    if (!hasBegin) {
+      const instrPreview = instruction
+        ? instruction.substring(0, 50)
+        : "<none>";
       defaultLogger.warn(
-        "Invalid ComplexField structure: missing begin/end or instruction"
+        `ComplexField missing 'begin' marker. Instruction: "${instrPreview}..."`
       );
+      this.parseErrors.push({
+        element: "complex-field-structure",
+        error: new Error("Missing field begin marker"),
+      });
+      return null;
+    }
+
+    if (!hasEnd) {
+      const instrPreview = instruction
+        ? instruction.substring(0, 50)
+        : "<none>";
+      defaultLogger.warn(
+        `ComplexField missing 'end' marker. Instruction: "${instrPreview}..."`
+      );
+      this.parseErrors.push({
+        element: "complex-field-structure",
+        error: new Error("Missing field end marker"),
+      });
+      return null;
+    }
+
+    if (!instruction.trim()) {
+      defaultLogger.warn(`ComplexField has no instruction content`);
+      this.parseErrors.push({
+        element: "complex-field-structure",
+        error: new Error("Empty field instruction"),
+      });
       return null;
     }
 

@@ -817,6 +817,117 @@ export class Paragraph {
   }
 
   /**
+   * Gets all fields in the paragraph (both Field and ComplexField)
+   *
+   * Returns all field instances including simple fields (`<w:fldSimple>`)
+   * and complex fields (begin/separate/end structure).
+   *
+   * @returns Array of fields
+   *
+   * @example
+   * ```typescript
+   * const fields = para.getFields();
+   * console.log(`P aragraph has ${fields.length} fields`);
+   * for (const field of fields) {
+   *   console.log(`Instruction: ${field.getInstruction()}`);
+   * }
+   * ```
+   */
+  getFields(): FieldLike[] {
+    return this.content.filter(
+      (item): item is FieldLike =>
+        item instanceof Field || item instanceof ComplexField
+    );
+  }
+
+  /**
+   * Finds fields matching an instruction pattern
+   *
+   * Searches all fields and returns those whose instruction matches
+   * the specified pattern (string or regex).
+   *
+   * @param pattern - Regex pattern or string to match against instruction
+   * @returns Array of matching fields
+   *
+   * @example
+   * ```typescript
+   * // Find all PAGE fields
+   * const pageFields = para.findFieldsByInstruction('PAGE');
+   *
+   * // Find all TOC fields
+   * const tocFields = para.findFieldsByInstruction(/^TOC/i);
+   *
+   * // Find fields with specific switches
+   * const hyperlinkedFields = para.findFieldsByInstruction(/\\h/);
+   * ```
+   */
+  findFieldsByInstruction(pattern: string | RegExp): FieldLike[] {
+    const regex =
+      typeof pattern === "string" ? new RegExp(pattern, "i") : pattern;
+
+    return this.getFields().filter((field) => {
+      const instruction = field.getInstruction();
+      return regex.test(instruction);
+    });
+  }
+
+  /**
+   * Removes all fields from the paragraph
+   *
+   * Filters out all Field and ComplexField instances, converting them
+   * to plain text if they have result text.
+   *
+   * @returns Count of fields removed
+   *
+   * @example
+   * ```typescript
+   * const count = para.removeAllFields();
+   * console.log(`Removed ${count} fields`);
+   * ```
+   */
+  removeAllFields(): number {
+    const originalLength = this.content.length;
+    this.content = this.content.filter(
+      (item) => !(item instanceof Field || item instanceof ComplexField)
+    );
+    return originalLength - this.content.length;
+  }
+
+  /**
+   * Replaces a field with another field or text
+   *
+   * Swaps out an existing field with a replacement. If replacement is a string,
+   * converts it to a Run.
+   *
+   * @param oldField - Field to replace
+   * @param replacement - New field or text to insert
+   * @returns True if replacement successful, false if field not found
+   *
+   * @example
+   * ```typescript
+   * const pageField = para.getFields()[0];
+   * if (pageField) {
+   *   // Replace with text
+   *   para.replaceField(pageField, 'Page 1');
+   *
+   *   // Or replace with another field
+   *   para.replaceField(pageField, Field.createDate());
+   * }
+   * ```
+   */
+  replaceField(oldField: FieldLike, replacement: FieldLike | string): boolean {
+    const index = this.content.indexOf(oldField);
+    if (index === -1) return false;
+
+    if (typeof replacement === "string") {
+      this.content[index] = new Run(replacement);
+    } else {
+      this.content[index] = replacement;
+    }
+    return true;
+  }
+
+  /**
    * Gets a copy of the paragraph formatting
    *
    * Returns a copy of all formatting properties including alignment,
