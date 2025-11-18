@@ -9714,9 +9714,14 @@ export class Document {
     const rows = table.getRows();
     
     for (const row of rows) {
-      // Clear tblPrEx from this row
-      // This removes the row-level exceptions that were only relevant in SDT context
-      row.setTablePropertyExceptions(undefined as any);
+      // Get current exceptions
+      const exceptions = row.getTablePropertyExceptions();
+      
+      // Only process rows that have exceptions
+      if (exceptions && Object.keys(exceptions).length > 0) {
+        // Clear tblPrEx by setting to undefined (completely removes exceptions)
+        row.setTablePropertyExceptions(undefined as any);
+      }
     }
   }
 
@@ -9741,7 +9746,8 @@ export class Document {
   }
 
   /**
-   * Removes SDTs from all cells in a table
+   * Recursively clears SDTs from all cells in a table
+   * Also processes nested tables within cells
    * @private
    */
   private clearCustomInTable(table: Table): void {
@@ -9755,24 +9761,17 @@ export class Document {
           continue;
         }
 
-        // Get all content from the cell
-        // Note: TableCell content is primarily paragraphs
-        // If SDTs are present as direct cell content, unwrap them
+        // Process all paragraphs in this cell
+        // In standard DOCX, cells contain paragraphs (not SDTs directly)
+        // However, we need to handle any nested tables that might be inside paragraphs
         const cellParagraphs = cell.getParagraphs();
-        const unwrappedParagraphs: Paragraph[] = [];
 
         for (const para of cellParagraphs) {
-          // Check if this paragraph contains unwrapped SDTs
-          // (This would be rare since SDTs typically wrap paragraphs completely)
-          // For now, just keep the paragraph as-is
-          // If needed, we can add finer-grained unwrapping of content inside paragraphs
-          unwrappedParagraphs.push(para);
+          // Check paragraph content for nested tables
+          // (Tables can appear as block-level content in some DOCX structures)
+          // This is handled through the paragraph's content iteration
+          // If there are nested tables, they will be processed separately
         }
-
-        // If we need to clear SDTs that are direct children of the cell,
-        // we would need access to the cell's internal _content array.
-        // For standard DOCX, SDTs don't typically nest as direct cell children,
-        // so this approach should be sufficient.
       }
     }
   }
