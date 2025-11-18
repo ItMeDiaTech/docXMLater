@@ -9582,16 +9582,25 @@ export class Document {
    * elements, which add complexity without functional benefit in many cases. This helper
    * removes all SDT wrappers while preserving the wrapped content (paragraphs, tables, etc.).
    *
+   * **Important Behavior**: When unwrapping tables from SDTs, this method also sanitizes
+   * table property exceptions (tblPrEx) from row formatting. This is critical because:
+   * - Google Docs uses tblPrEx to define header row formatting (bold, center, shading)
+   * - When the table is relocated outside the SDT context, tblPrEx applies to ALL rows
+   * - Sanitizing tblPrEx prevents formatting from "leaking" to data rows
+   * - Cell-level formatting (direct shading, margins) is preserved
+   *
    * Targeted removal:
    * - Removes `<w:sdt>` elements with `goog_rdk_0` tags
    * - Removes properties `<w:sdtPr>` with lock/id/tag attributes
    * - Keeps all wrapped content intact (paragraphs, tables, nested SDTs)
    * - Recursively processes nested SDTs and SDTs inside table cells
+   * - **Clears row-level tblPrEx from tables coming out of SDTs**
    *
    * Effects:
    * - Resulting XML no longer emits `<w:sdt*>` nodes
    * - Content order is preserved
    * - All inner formatting and styles remain intact
+   * - Row-level exceptions are cleared to prevent styling leakage
    *
    * @returns This document instance for method chaining
    *
@@ -9600,10 +9609,10 @@ export class Document {
    * // Load a document with Google Docs SDT wrappers
    * const doc = await Document.load('google-docs-export.docx');
    *
-   * // Remove all SDT wrappers
+   * // Remove all SDT wrappers and sanitize table formatting
    * doc.clearCustom();
    *
-   * // Save without SDT elements
+   * // Save without SDT elements and without formatting leakage
    * await doc.save('cleaned.docx');
    * ```
    *
@@ -9626,7 +9635,12 @@ export class Document {
         // Unwrap SDT: add its content directly to the body
         const sdtContent = element.getContent();
         for (const item of sdtContent) {
-          if (item instanceof Paragraph || item instanceof Table) {
+          if (item instanceof Table) {
+            // CRITICAL: Sanitize tblPrEx from table rows when coming out of SDT
+            // This prevents row-level formatting exceptions from applying to all rows
+            this.sanitizeTableRowExceptions(item);
+            unwrappedBody.push(item);
+          } else if (item instanceof Paragraph || item instanceof Table) {
             unwrappedBody.push(item);
           } else if (item instanceof StructuredDocumentTag) {
             // Recursively handle nested SDTs
@@ -9647,6 +9661,29 @@ export class Document {
     this.bodyElements = unwrappedBody;
 
     return this;
+  }
+
+  /**
+   * Sanitizes table property exceptions from all rows in a table
+   * 
+   * Clears tblPrEx (row-level table property overrides) to prevent formatting
+   * from leaking when tables are relocated outside SDT context.
+   * 
+   * This is essential after unwrapping Google Docs SDT-wrapped tables where
+   * header formatting (bold, center, shading) is defined via tblPrEx rather
+   * than cell-level formatting.
+   * 
+   * @param table - Table to sanitize
+   * @private
+   */
+  private sanitizeTableRowExceptions(table: Table): void {
+    const rows = table.getRows();
+    
+    for (const row of rows) {
+      // Clear tblPrEx from this row
+      // This removes the row-level exceptions that were only relevant in SDT context
+      row.setTablePropertyExceptions(undefined as any);
+    }
   }
 
   /**
