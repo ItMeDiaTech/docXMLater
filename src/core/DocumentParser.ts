@@ -3334,8 +3334,109 @@ export class DocumentParser {
   }
 
   /**
+   * Normalizes TOC field instructions by converting incomplete \t switches
+   * that reference only standard heading styles to the equivalent \o switch format.
+   *
+   * This fixes documents where TOC was created with \t "Heading 2,2," instead of
+   * the correct \o "1-3" format, which causes the TOC to only capture one heading level.
+   *
+   * @param instruction - The original TOC field instruction
+   * @returns Normalized instruction with \o switch if applicable, otherwise original
+   * @private
+   */
+  private normalizeTOCFieldInstruction(instruction: string): string {
+    // Check if instruction uses \t switch
+    if (!instruction.includes("\\t")) {
+      return instruction; // Already using \o or no style switch
+    }
+
+    // Extract all \t switches
+    const tSwitchPattern = /\\t\s+"([^"]+)"/g;
+    const matches = [...instruction.matchAll(tSwitchPattern)];
+    
+    if (matches.length === 0) {
+      return instruction; // No \t switches found
+    }
+
+    // Parse all styles from \t switches
+    const styles: Array<{ styleName: string; level: number }> = [];
+    for (const match of matches) {
+      const stylesStr = match[1];
+      if (!stylesStr) continue;
+
+      const parts = stylesStr.split(",").filter((p: string) => p.trim());
+      for (let i = 0; i < parts.length; i += 2) {
+        const styleName = parts[i];
+        const levelStr = parts[i + 1];
+        if (styleName && levelStr) {
+          styles.push({
+            styleName: styleName.trim(),
+            level: parseInt(levelStr.trim(), 10),
+          });
+        }
+      }
+    }
+
+    // Check if all styles are standard headings (Heading1, Heading2, etc.)
+    const standardHeadingPattern = /^Heading\s*(\d+)$/i;
+    const allStandardHeadings = styles.every((style) =>
+      standardHeadingPattern.test(style.styleName)
+    );
+
+    if (!allStandardHeadings) {
+      return instruction; // Contains custom styles, keep \t switches
+    }
+
+    // Extract heading numbers and find the range
+    const headingLevels = styles
+      .map((style) => {
+        const match = style.styleName.match(standardHeadingPattern);
+        return match ? parseInt(match[1]!, 10) : 0;
+      })
+      .filter((level) => level > 0)
+      .sort((a, b) => a - b);
+
+    if (headingLevels.length === 0) {
+      return instruction; // No valid heading levels found
+    }
+
+    const minLevel = headingLevels[0]!;
+    const maxLevel = headingLevels[headingLevels.length - 1]!;
+
+    // Check if we should normalize (e.g., only "Heading 2,2," should become "1-3")
+    // We normalize if:
+    // 1. Only one heading style is referenced, OR
+    // 2. The heading levels don't form a complete sequence from 1
+    const shouldNormalize =
+      headingLevels.length === 1 || // Single heading style
+      minLevel !== 1 || // Doesn't start at Heading 1
+      headingLevels.length !== maxLevel - minLevel + 1; // Not a complete sequence
+
+    if (!shouldNormalize) {
+      return instruction; // Already a complete sequence, keep as-is
+    }
+
+    // Normalize to \o "1-N" format where N is the max level
+    // This ensures all heading levels from 1 to max are included
+    const normalizedMaxLevel = Math.max(maxLevel, 3); // Default to at least level 3
+    
+    // Remove all \t switches and replace with \o switch
+    let normalized = instruction.replace(tSwitchPattern, "").trim();
+    
+    // Insert \o switch after "TOC"
+    normalized = normalized.replace(/^TOC\s*/, `TOC \\o "1-${normalizedMaxLevel}" `);
+
+    defaultLogger.debug(
+      `[TOC Parser] Normalized field instruction from "${instruction}" to "${normalized}"`
+    );
+
+    return normalized;
+  }
+
+  /**
    * Helper to parse TOC from SDT content
    * Now uses two-tier extraction: ComplexField objects first, then raw XML fallback
+   * Automatically normalizes incomplete \t switches to \o format for standard headings
    */
   private parseTOCFromSDTContent(
     content: any[],
@@ -3380,36 +3481,52 @@ export class DocumentParser {
         `[TOC Parser] Successfully extracted instruction: "${fieldInstruction}"`
       );
 
-      // Parse field switches from instruction
+      // Decode HTML entities before parsing switches
+      // XML stores quotes as &quot; which need to be converted for regex matching
+      const decodedInstruction = fieldInstruction
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&");
+
+      defaultLogger.debug(
+        `[TOC Parser] Decoded instruction: "${decodedInstruction}"`
+      );
+
+      // NORMALIZATION: Convert incomplete \t switches to \o format for standard headings
+      let normalizedInstruction = this.normalizeTOCFieldInstruction(decodedInstruction);
+
+      // Parse field switches from normalized instruction
       const tocOptions: any = {
         title,
-        originalFieldInstruction: fieldInstruction.trim(), // Preserve original instruction
+        originalFieldInstruction: normalizedInstruction.trim(), // Store normalized version
       };
 
       // Check for \h (hyperlinks)
-      if (fieldInstruction.includes("\\h")) {
+      if (normalizedInstruction.includes("\\h")) {
         tocOptions.useHyperlinks = true;
       }
 
       // Check for \n (omit page numbers)
-      if (fieldInstruction.includes("\\n")) {
+      if (normalizedInstruction.includes("\\n")) {
         tocOptions.showPageNumbers = false;
       }
 
       // Check for \z (hide in web layout)
-      if (fieldInstruction.includes("\\z")) {
+      if (normalizedInstruction.includes("\\z")) {
         tocOptions.hideInWebLayout = true;
       }
 
       // Check for \o "x-y" (outline levels)
-      const outlineMatch = fieldInstruction.match(/\\o\s+"(\d+)-(\d+)"/);
+      const outlineMatch = normalizedInstruction.match(/\\o\s+"(\d+)-(\d+)"/);
       if (outlineMatch && outlineMatch[1] && outlineMatch[2]) {
         tocOptions.minLevel = parseInt(outlineMatch[1], 10);
         tocOptions.maxLevel = parseInt(outlineMatch[2], 10);
       }
 
       // Check for \t "styles..." (include styles)
-      const stylesMatch = fieldInstruction.match(/\\t\s+"([^"]+)"/);
+      const stylesMatch = normalizedInstruction.match(/\\t\s+"([^"]+)"/);
       if (stylesMatch && stylesMatch[1]) {
         const stylesStr = stylesMatch[1];
         const styles: Array<{ styleName: string; level: number }> = [];
