@@ -2,13 +2,13 @@
  * Tests for Document class
  */
 
-import { Document, DocumentProperties } from '../../src/core/Document';
-import { Paragraph } from '../../src/elements/Paragraph';
-import { Table } from '../../src/elements/Table';
-import { Hyperlink } from '../../src/elements/Hyperlink';
-import { DOCX_PATHS } from '../../src/zip/types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { Document, DocumentProperties } from '../../src/core/Document';
+import { Hyperlink } from '../../src/elements/Hyperlink';
+import { Paragraph } from '../../src/elements/Paragraph';
+import { Table } from '../../src/elements/Table';
+import { DOCX_PATHS } from '../../src/zip/types';
 
 const TEST_OUTPUT_DIR = path.join(__dirname, '../../test-output');
 
@@ -931,7 +931,7 @@ describe('Document', () => {
   });
 
   describe('Preserve Blank Lines After Header 2 Tables', () => {
-    describe('applyCustomFormattingToExistingStyles with preserveBlankLinesAfterHeader2Tables', () => {
+    describe('applyStyles with preserveBlankLinesAfterHeader2Tables', () => {
       test('should mark blank lines as preserved when option is true', () => {
         const doc = Document.create();
 
@@ -940,7 +940,7 @@ describe('Document', () => {
         heading.setStyle('Heading2');
 
         // Apply formatting with preserve option enabled
-        doc.applyCustomFormattingToExistingStyles({
+        doc.applyStyles({
           preserveBlankLinesAfterHeader2Tables: true
         });
 
@@ -971,7 +971,7 @@ describe('Document', () => {
         heading.setStyle('Heading2');
 
         // Apply formatting with preserve option disabled
-        doc.applyCustomFormattingToExistingStyles({
+        doc.applyStyles({
           preserveBlankLinesAfterHeader2Tables: false
         });
 
@@ -995,7 +995,7 @@ describe('Document', () => {
         heading.setStyle('Heading2');
 
         // Apply formatting without specifying preserve option
-        doc.applyCustomFormattingToExistingStyles();
+        doc.applyStyles();
 
         // Get body elements
         const bodyElements = doc.getBodyElements();
@@ -1043,7 +1043,7 @@ describe('Document', () => {
         heading.setStyle('Heading2');
 
         // Apply formatting to create table and blank line
-        doc.applyCustomFormattingToExistingStyles({
+        doc.applyStyles({
           preserveBlankLinesAfterHeader2Tables: false // Don't auto-preserve yet
         });
 
@@ -1115,7 +1115,7 @@ describe('Document', () => {
         doc.createParagraph('Content 2');
 
         // Apply formatting (creates tables and adds preserved blank lines)
-        doc.applyCustomFormattingToExistingStyles({
+        doc.applyStyles({
           preserveBlankLinesAfterHeader2Tables: true
         });
 

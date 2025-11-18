@@ -780,40 +780,19 @@ export class XMLParser {
       nameCounts[child.name] = (nameCounts[child.name] || 0) + 1;
     }
 
-    // Build ordered children array to preserve document order
-    const orderedChildren: Array<{type: string, index: number}> = [];
-
     // Build result object
     for (const child of children) {
       const shouldBeArray =
         options.alwaysArray || (nameCounts[child.name] || 0) > 1;
-
-      // Track which index in the array this element is
-      if (nameIndices[child.name] === undefined) {
-        nameIndices[child.name] = 0;
-      }
-      const currentIndex = nameIndices[child.name]!; // We just set it if undefined
-
-      // Add to ordered children array
-      orderedChildren.push({
-        type: child.name,
-        index: currentIndex
-      });
 
       if (shouldBeArray) {
         if (!result[child.name]) {
           result[child.name] = [];
         }
         (result[child.name] as ParsedXMLValue[]).push(child.value);
-        nameIndices[child.name] = currentIndex + 1;
       } else {
         result[child.name] = child.value;
       }
-    }
-
-    // Always add ordered-children metadata when we have tracked order information
-    if (orderedChildren.length > 0) {
-      result["_orderedChildren"] = orderedChildren;
     }
 
     return result;
