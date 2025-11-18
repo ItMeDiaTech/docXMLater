@@ -5017,12 +5017,36 @@ export class Document {
   }
 
   /**
-   * Clears preserve flags from all paragraphs in the document
-   * Called automatically before save since preserve flags are runtime-only
-   * @returns Number of paragraphs that had preserve flags cleared
-   * @private
+   * Removes all preserve flags from paragraphs in the document
+   *
+   * Clears the preserved state from all paragraphs, allowing them to be removed
+   * by automatic cleanup operations like {@link removeExtraBlankParagraphs}.
+   *
+   * Preserve flags are runtime-only markers that prevent paragraphs from being
+   * automatically removed. This method is useful when you need to allow
+   * previously-protected paragraphs to be cleaned up.
+   *
+   * @returns Number of paragraphs that had preserve flags removed
+   *
+   * @example
+   * ```typescript
+   * // Remove all preserve flags to allow cleanup
+   * const cleared = doc.removeAllPreserveFlags();
+   * console.log(`Cleared preserve flags from ${cleared} paragraphs`);
+   *
+   * // Now remove extra blank paragraphs (including previously-preserved ones)
+   * const result = doc.removeExtraBlankParagraphs();
+   * console.log(`Removed ${result.removed} blank paragraphs`);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Clear all preserved paragraphs before applying operations
+   * doc.removeAllPreserveFlags();
+   * doc.normalizeSpacing({ removeDuplicateEmptyParagraphs: true });
+   * ```
    */
-  private clearAllPreserveFlags(): number {
+  public removeAllPreserveFlags(): number {
     let cleared = 0;
 
     for (const para of this.getAllParagraphs()) {
@@ -5033,6 +5057,16 @@ export class Document {
     }
 
     return cleared;
+  }
+
+  /**
+   * Clears preserve flags from all paragraphs in the document
+   * Called automatically before save since preserve flags are runtime-only
+   * @returns Number of paragraphs that had preserve flags cleared
+   * @private
+   */
+  private clearAllPreserveFlags(): number {
+    return this.removeAllPreserveFlags();
   }
 
   /**

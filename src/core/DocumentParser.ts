@@ -478,136 +478,18 @@ export class DocumentParser {
         paragraph.formatting.paraId = paraId as string;
       }
 
-      // Check if we have ordered children metadata from the enhanced parser
-      const orderedChildren = pElement["_orderedChildren"] as
-        | Array<{ type: string; index: number }>
-        | undefined;
-
-      if (orderedChildren && orderedChildren.length > 0) {
-        // Use the preserved order from the parser
-        for (const childInfo of orderedChildren) {
-          const elementType = childInfo.type;
-          const elementIndex = childInfo.index;
-
-          if (elementType === "w:r") {
-            const runs = pElement["w:r"];
-            const runArray = Array.isArray(runs) ? runs : runs ? [runs] : [];
-            if (elementIndex < runArray.length) {
-              const child = runArray[elementIndex];
-              if (child["w:drawing"]) {
-                if (zipHandler && imageManager) {
-                  const imageRun = await this.parseDrawingFromObject(
-                    child["w:drawing"],
-                    zipHandler,
-                    relationshipManager,
-                    imageManager
-                  );
-                  if (imageRun) {
-                    paragraph.addRun(imageRun);
-                  }
-                }
-              } else {
-                const run = this.parseRunFromObject(child);
-                if (run) {
-                  paragraph.addRun(run);
-                }
-              }
-            }
-          } else if (elementType === "w:hyperlink") {
-            const hyperlinks = pElement["w:hyperlink"];
-            const hyperlinkArray = Array.isArray(hyperlinks)
-              ? hyperlinks
-              : hyperlinks
-              ? [hyperlinks]
-              : [];
-            if (elementIndex < hyperlinkArray.length) {
-              const hyperlink = this.parseHyperlinkFromObject(
-                hyperlinkArray[elementIndex],
-                relationshipManager
-              );
-              if (hyperlink) {
-                paragraph.addHyperlink(hyperlink);
-              }
-            }
-          } else if (elementType === "w:fldSimple") {
-            const fields = pElement["w:fldSimple"];
-            const fieldArray = Array.isArray(fields)
-              ? fields
-              : fields
-              ? [fields]
-              : [];
-            if (elementIndex < fieldArray.length) {
-              const field = this.parseSimpleFieldFromObject(
-                fieldArray[elementIndex]
-              );
-              if (field) {
-                paragraph.addField(field);
-              }
-            }
-          }
-        }
-      } else {
-        // Fallback to sequential processing if no order metadata
-        // (This will still have the wrong order, but at least it processes the elements)
-
-        // Handle runs (w:r)
-        const runs = pElement["w:r"];
-        const runChildren = Array.isArray(runs) ? runs : runs ? [runs] : [];
-
-        for (const child of runChildren) {
-          if (child["w:drawing"]) {
-            if (zipHandler && imageManager) {
-              const imageRun = await this.parseDrawingFromObject(
-                child["w:drawing"],
-                zipHandler,
-                relationshipManager,
-                imageManager
-              );
-              if (imageRun) {
-                paragraph.addRun(imageRun);
-              }
-            }
-          } else {
-            const run = this.parseRunFromObject(child);
-            if (run) {
-              paragraph.addRun(run);
-            }
-          }
-        }
-
-        // Handle hyperlinks (w:hyperlink)
-        const hyperlinks = pElement["w:hyperlink"];
-        const hyperlinkChildren = Array.isArray(hyperlinks)
-          ? hyperlinks
-          : hyperlinks
-          ? [hyperlinks]
-          : [];
-
-        for (const hyperlinkObj of hyperlinkChildren) {
-          const hyperlink = this.parseHyperlinkFromObject(
-            hyperlinkObj,
-            relationshipManager
-          );
-          if (hyperlink) {
-            paragraph.addHyperlink(hyperlink);
-          }
-        }
-
-        // Handle simple fields (w:fldSimple)
-        const fields = pElement["w:fldSimple"];
-        const fieldChildren = Array.isArray(fields)
-          ? fields
-          : fields
-          ? [fields]
-          : [];
-
-        for (const fieldObj of fieldChildren) {
-          const field = this.parseSimpleFieldFromObject(fieldObj);
-          if (field) {
-            paragraph.addField(field);
-          }
-        }
-      }
+      // CRITICAL FIX: Preserve document order of paragraph children (runs, hyperlinks, fields)
+      // When XMLParser.parseToObject groups multiple runs/hyperlinks, it creates arrays
+      // We need to reconstruct the original sequence by scanning the raw XML
+      // This prevents punctuation from being reordered (e.g., "Heading." becoming ".Heading")
+      await this.parseOrderedParagraphChildren(
+        paraXml,
+        pElement,
+        paragraph,
+        relationshipManager,
+        zipHandler,
+        imageManager
+      );
 
       // NEW: Assemble complex fields from run tokens
       this.assembleComplexFields(paragraph);
@@ -639,6 +521,148 @@ export class DocumentParser {
       }
 
       return null;
+    }
+  }
+
+  /**
+   * CRITICAL FIX: Parses paragraph children in document order
+   * This preserves the original sequence of runs, hyperlinks, and fields
+   * Fixes issues where punctuation appears at the beginning instead of end
+   * Example: ".Aetna" becomes "Aetna." by respecting original XML order
+   *
+   * @param paraXml - Raw paragraph XML
+   * @param pElement - Parsed paragraph object
+   * @param paragraph - Paragraph instance to populate
+   * @param relationshipManager - Relationship manager
+   * @param zipHandler - ZIP handler for resources
+   * @param imageManager - Image manager for images
+   */
+  private async parseOrderedParagraphChildren(
+    paraXml: string,
+    pElement: any,
+    paragraph: Paragraph,
+    relationshipManager: RelationshipManager,
+    zipHandler?: ZipHandler,
+    imageManager?: ImageManager
+  ): Promise<void> {
+    // Extract the body portion (between pPr and closing tag) to scan for child elements
+    // Find where w:pPr ends
+    const pPrEnd = paraXml.indexOf("</w:pPr>");
+    const contentStart = pPrEnd !== -1 ? pPrEnd + 8 : paraXml.indexOf(">") + 1;
+    const contentEnd = paraXml.lastIndexOf("</w:p>");
+
+    if (contentEnd <= contentStart) {
+      return; // Empty paragraph
+    }
+
+    const paraContent = paraXml.substring(contentStart, contentEnd);
+
+    // Track children by scanning XML for opening tags
+    interface ChildMarker {
+      type: "w:r" | "w:hyperlink" | "w:fldSimple";
+      pos: number;
+      index: number;
+    }
+
+    const children: ChildMarker[] = [];
+    let runIndex = 0;
+    let hyperlinkIndex = 0;
+    let fieldIndex = 0;
+
+    // Scan for all first-level child elements in document order
+    let searchPos = 0;
+    while (searchPos < paraContent.length) {
+      // Find the next opening tag
+      const tagStart = paraContent.indexOf("<", searchPos);
+      if (tagStart === -1) break;
+
+      // Extract tag name
+      const tagEnd = paraContent.indexOf(">", tagStart);
+      if (tagEnd === -1) break;
+
+      const tagContent = paraContent.substring(tagStart + 1, tagEnd);
+      const tagName = tagContent.split(/[\s\/>]/)[0];
+
+      if (tagName === "w:r") {
+        children.push({ type: "w:r", pos: tagStart, index: runIndex++ });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "w:hyperlink") {
+        children.push({
+          type: "w:hyperlink",
+          pos: tagStart,
+          index: hyperlinkIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "w:fldSimple") {
+        children.push({
+          type: "w:fldSimple",
+          pos: tagStart,
+          index: fieldIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else {
+        searchPos = tagEnd + 1;
+      }
+    }
+
+    // Now process children in the order they were found
+    for (const child of children) {
+      if (child.type === "w:r") {
+        const runs = pElement["w:r"];
+        const runArray = Array.isArray(runs) ? runs : runs ? [runs] : [];
+        if (child.index < runArray.length) {
+          const runObj = runArray[child.index];
+          if (runObj["w:drawing"]) {
+            if (zipHandler && imageManager) {
+              const imageRun = await this.parseDrawingFromObject(
+                runObj["w:drawing"],
+                zipHandler,
+                relationshipManager,
+                imageManager
+              );
+              if (imageRun) {
+                paragraph.addRun(imageRun);
+              }
+            }
+          } else {
+            const run = this.parseRunFromObject(runObj);
+            if (run) {
+              paragraph.addRun(run);
+            }
+          }
+        }
+      } else if (child.type === "w:hyperlink") {
+        const hyperlinks = pElement["w:hyperlink"];
+        const hyperlinkArray = Array.isArray(hyperlinks)
+          ? hyperlinks
+          : hyperlinks
+          ? [hyperlinks]
+          : [];
+        if (child.index < hyperlinkArray.length) {
+          const hyperlink = this.parseHyperlinkFromObject(
+            hyperlinkArray[child.index],
+            relationshipManager
+          );
+          if (hyperlink) {
+            paragraph.addHyperlink(hyperlink);
+          }
+        }
+      } else if (child.type === "w:fldSimple") {
+        const fields = pElement["w:fldSimple"];
+        const fieldArray = Array.isArray(fields)
+          ? fields
+          : fields
+          ? [fields]
+          : [];
+        if (child.index < fieldArray.length) {
+          const field = this.parseSimpleFieldFromObject(
+            fieldArray[child.index]
+          );
+          if (field) {
+            paragraph.addField(field);
+          }
+        }
+      }
     }
   }
 
