@@ -286,4 +286,143 @@ describe("Document.clearCustom()", () => {
       expect(paras.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  describe("Google Docs SDT-wrapped tables with row exceptions", () => {
+    it("should clear tblPrEx from table rows when unwrapping SDTs", () => {
+      const doc = Document.create();
+
+      // Create a table that mimics Google Docs pattern:
+      // - Table wrapped in SDT
+      // - Header row has tblPrEx with bold, center, shading
+      // - Data rows don't have tblPrEx
+      const table = new Table(3, 2);
+
+      // Set up header row (row 0) with tblPrEx exceptions
+      const headerRow = table.getRow(0);
+      if (headerRow) {
+        // These tblPrEx would normally apply only within the SDT context
+        headerRow.setTablePropertyExceptions({
+          shading: { fill: "DFDFDF", pattern: "solid" },
+          justification: "center",
+          borders: {
+            top: { style: "single", size: 4, color: "000000" },
+            bottom: { style: "single", size: 4, color: "000000" },
+          },
+        });
+      }
+
+      // Wrap table in SDT (simulating Google Docs export)
+      const sdt = new StructuredDocumentTag();
+      sdt.addContent(table);
+      doc.addStructuredDocumentTag(sdt);
+
+      // Verify initial state: SDT exists and table has tblPrEx in header
+      let sdtCount = doc.getBodyElements().filter((el) => el instanceof StructuredDocumentTag).length;
+      expect(sdtCount).toBe(1);
+
+      const headerRowBefore = doc.getAllTables()[0]?.getRow(0);
+      expect(headerRowBefore?.getTablePropertyExceptions()).toBeDefined();
+      expect(headerRowBefore?.getTablePropertyExceptions()?.shading?.fill).toBe("DFDFDF");
+
+      // Clear SDTs - this should also sanitize tblPrEx
+      doc.clearCustom();
+
+      // Verify SDT is removed
+      const bodyElements = doc.getBodyElements();
+      sdtCount = bodyElements.filter((el) => el instanceof StructuredDocumentTag).length;
+      expect(sdtCount).toBe(0);
+
+      // Verify table is preserved
+      expect(doc.getTables().length).toBe(1);
+
+      // Verify header row still exists
+      const headerRowAfter = doc.getTables()[0]?.getRow(0);
+      expect(headerRowAfter).toBeDefined();
+
+      // After clearCustom(), tblPrEx should be cleared from header row
+      // This prevents the formatting from leaking to all rows
+      const tblPrExAfter = headerRowAfter?.getTablePropertyExceptions();
+      expect(tblPrExAfter).toBeUndefined();
+    });
+
+    it("should preserve table structure when clearing tblPrEx", () => {
+      const doc = Document.create();
+
+      // Create a 2x2 table
+      const table = new Table(2, 2);
+
+      // Set tblPrEx on header row
+      const headerRow = table.getRow(0);
+      if (headerRow) {
+        headerRow.setTablePropertyExceptions({
+          shading: { fill: "DFDFDF" },
+        });
+      }
+
+      // Wrap in SDT
+      const sdt = new StructuredDocumentTag();
+      sdt.addContent(table);
+      doc.addStructuredDocumentTag(sdt);
+
+      // Clear SDTs
+      doc.clearCustom();
+
+      // Verify table is preserved after clearing SDTs
+      const clearedTable = doc.getTables()[0];
+      expect(clearedTable).toBeDefined();
+      expect(clearedTable?.getRows().length).toBe(2);
+      expect(clearedTable?.getColumnCount()).toBe(2);
+
+      // Verify tblPrEx is cleared from header row
+      const headerRowAfter = clearedTable?.getRow(0);
+      expect(headerRowAfter?.getTablePropertyExceptions()).toBeUndefined();
+
+      // Verify data row never had tblPrEx
+      const dataRow = clearedTable?.getRow(1);
+      expect(dataRow?.getTablePropertyExceptions()).toBeUndefined();
+    });
+
+    it("should handle multiple SDT-wrapped tables with row exceptions", () => {
+      const doc = Document.create();
+
+      // Add multiple SDT-wrapped tables
+      for (let t = 0; t < 2; t++) {
+        const table = new Table(2, 1);
+
+        const headerRow = table.getRow(0);
+        if (headerRow) {
+          headerRow.setTablePropertyExceptions({
+            shading: { fill: "DFDFDF" },
+          });
+        }
+
+        const sdt = new StructuredDocumentTag();
+        sdt.addContent(table);
+        doc.addStructuredDocumentTag(sdt);
+      }
+
+      // Verify initial state
+      expect(doc.getAllTables().length).toBe(2);
+
+      // Verify both tables have tblPrEx before clearing
+      for (const table of doc.getAllTables()) {
+        const headerRow = table?.getRow(0);
+        expect(headerRow?.getTablePropertyExceptions()).toBeDefined();
+        expect(headerRow?.getTablePropertyExceptions()?.shading?.fill).toBe("DFDFDF");
+      }
+
+      // Clear SDTs
+      doc.clearCustom();
+
+      // Verify all tables are preserved
+      const tables = doc.getTables();
+      expect(tables.length).toBe(2);
+
+      // Verify tblPrEx is cleared from all tables
+      for (const table of tables) {
+        const headerRow = table?.getRow(0);
+        expect(headerRow?.getTablePropertyExceptions()).toBeUndefined();
+      }
+    });
+  });
 });
