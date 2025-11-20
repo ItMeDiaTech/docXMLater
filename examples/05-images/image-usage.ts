@@ -5,9 +5,9 @@
  * Images are embedded using DrawingML and can be loaded from files or buffers.
  */
 
-import { Document, Image, inchesToEmus } from '../../src';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Document, Image, inchesToEmus } from '../../src';
 
 // Create output directory if it doesn't exist
 const outputDir = __dirname;
@@ -76,12 +76,10 @@ async function example1_SimpleImage() {
   const imageBuffer = createSimplePNG();
 
   // Create image from buffer
-  const image = Image.fromBuffer(
-    imageBuffer,
-    'png',
-    inchesToEmus(2), // 2 inches wide
-    inchesToEmus(2)  // 2 inches tall
-  );
+  const image = await Image.fromBuffer(imageBuffer, {
+    width: inchesToEmus(2), // 2 inches wide
+    height: inchesToEmus(2)  // 2 inches tall
+  });
 
   // Add image to document
   doc.addImage(image);
@@ -136,12 +134,10 @@ async function example2_MultipleImages() {
       .addText(size.label, { bold: true, size: 14 });
 
     // Create and add image
-    const image = Image.fromBuffer(
-      imageBuffer,
-      'png',
-      inchesToEmus(size.width),
-      inchesToEmus(size.height)
-    );
+    const image = await Image.fromBuffer(imageBuffer, {
+      width: inchesToEmus(size.width),
+      height: inchesToEmus(size.height)
+    });
 
     doc.addImage(image);
 
@@ -200,8 +196,7 @@ async function example3_ImageWithText() {
 
   // Add image
   const imageBuffer = createSimplePNG();
-  const image = Image.create({
-    source: imageBuffer,
+  const image = await Image.fromBuffer(imageBuffer, {
     width: inchesToEmus(2.5),
     height: inchesToEmus(2.5),
     name: 'Sample Image',
@@ -227,6 +222,90 @@ async function example3_ImageWithText() {
 
   // Save document
   const outputPath = path.join(outputDir, 'example3-image-with-text.docx');
+  await doc.save(outputPath);
+
+  console.log(`✓ Saved to ${outputPath}`);
+}
+
+/**
+ * Example 5: Advanced Image Features
+ */
+async function example5_AdvancedFeatures() {
+  console.log('Example 5: Advanced image features...');
+
+  const doc = Document.create({
+    properties: {
+      title: 'Advanced Image Features Example',
+      creator: 'DocXML Examples',
+    },
+  });
+
+  // Add title
+  doc.createParagraph()
+    .setAlignment('center')
+    .setSpaceBefore(240)
+    .setSpaceAfter(480)
+    .addText('Advanced Image Features', { bold: true, size: 20 });
+
+  const imageBuffer = createSimplePNG();
+
+  // Floating image top-left
+  doc.createParagraph()
+    .setSpaceAfter(120)
+    .addText('Floating image (top-left):', { bold: true });
+
+  const imageFloatLeft = await Image.fromBuffer(imageBuffer, {
+    width: inchesToEmus(2),
+    height: inchesToEmus(2)
+  });
+  imageFloatLeft.floatTopLeft(inchesToEmus(0.5), inchesToEmus(0.5));
+  doc.addImage(imageFloatLeft);
+
+  doc.createParagraph()
+    .setSpaceAfter(240)
+    .addText('Text should wrap around this image.');
+
+  // Floating image center with rotation and effects
+  doc.createParagraph()
+    .setSpaceAfter(120)
+    .addText('Centered floating image with rotation and effects:', { bold: true });
+
+  const imageCenter = await Image.fromBuffer(imageBuffer, {
+    width: inchesToEmus(2),
+    height: inchesToEmus(2)
+  });
+  imageCenter.floatCenter()
+    .rotate(45)
+    .setEffects({ brightness: 20, contrast: 10, grayscale: true })
+    .setCrop(10, 10, 10, 10);
+  doc.addImage(imageCenter);
+
+  doc.createParagraph()
+    .setSpaceAfter(240)
+    .addText('This image is rotated 45 degrees, with adjusted brightness/contrast, grayscale, and cropped.');
+
+  // Behind text
+  doc.createParagraph()
+    .setSpaceAfter(120)
+    .addText('Image behind text:', { bold: true });
+
+  const imageBehind = await Image.fromBuffer(imageBuffer, {
+    width: inchesToEmus(3),
+    height: inchesToEmus(3)
+  });
+  imageBehind.setBehindText(true);
+  doc.addImage(imageBehind);
+
+  doc.createParagraph()
+    .addText('This text is over the image.');
+
+  // Validation and DPI
+  const validation = imageBehind.validateImageData();
+  console.log('Image validation:', validation.valid ? 'Valid' : validation.error);
+  console.log('Detected DPI:', imageBehind.getDPI());
+
+  // Save document
+  const outputPath = path.join(outputDir, 'example5-advanced-features.docx');
   await doc.save(outputPath);
 
   console.log(`✓ Saved to ${outputPath}`);
@@ -259,7 +338,7 @@ async function example4_ImageMethods() {
     .setSpaceAfter(120)
     .addText('Image created with default size then resized:', { bold: true });
 
-  const image1 = Image.fromBuffer(imageBuffer, 'png');
+  const image1 = await Image.fromBuffer(imageBuffer);
   image1.setWidth(inchesToEmus(2), true); // Maintain aspect ratio
   doc.addImage(image1);
 
@@ -273,7 +352,7 @@ async function example4_ImageMethods() {
     .setSpaceAfter(120)
     .addText('Image with specific dimensions:', { bold: true });
 
-  const image2 = Image.fromBuffer(imageBuffer, 'png');
+  const image2 = await Image.fromBuffer(imageBuffer);
   image2.setSize(inchesToEmus(3), inchesToEmus(1.5)); // 3x1.5 inches
   doc.addImage(image2);
 
@@ -287,7 +366,7 @@ async function example4_ImageMethods() {
     .setSpaceAfter(120)
     .addText('Image with height set:', { bold: true });
 
-  const image3 = Image.fromBuffer(imageBuffer, 'png');
+  const image3 = await Image.fromBuffer(imageBuffer);
   image3.setHeight(inchesToEmus(2.5), true); // Maintain aspect ratio
   doc.addImage(image3);
 
@@ -313,6 +392,7 @@ async function main() {
     await example2_MultipleImages();
     await example3_ImageWithText();
     await example4_ImageMethods();
+    await example5_AdvancedFeatures();
 
     console.log('\n✓ All examples completed successfully!');
     console.log(`\nOutput files saved to: ${outputDir}`);
@@ -332,4 +412,5 @@ export {
   example2_MultipleImages,
   example3_ImageWithText,
   example4_ImageMethods,
+  example5_AdvancedFeatures
 };

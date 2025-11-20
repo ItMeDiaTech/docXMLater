@@ -3542,11 +3542,16 @@ export class DocumentParser {
         tocOptions.hideInWebLayout = true;
       }
 
-      // Check for \o "x-y" (outline levels)
-      const outlineMatch = normalizedInstruction.match(/\\o\s+"(\d+)-(\d+)"/);
-      if (outlineMatch && outlineMatch[1] && outlineMatch[2]) {
-        tocOptions.minLevel = parseInt(outlineMatch[1], 10);
-        tocOptions.maxLevel = parseInt(outlineMatch[2], 10);
+      // Check for \o "x-y" (outline levels) - supports quoted and unquoted formats
+      const outlineMatch = normalizedInstruction.match(/\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/);
+      if (outlineMatch) {
+        // Extract captured groups from whichever format matched
+        const minLevel = outlineMatch[1] || outlineMatch[3] || outlineMatch[5];
+        const maxLevel = outlineMatch[2] || outlineMatch[4] || outlineMatch[6];
+        if (minLevel && maxLevel) {
+          tocOptions.minLevel = parseInt(minLevel, 10);
+          tocOptions.maxLevel = parseInt(maxLevel, 10);
+        }
       }
 
       // Check for \t "styles..." (include styles)
