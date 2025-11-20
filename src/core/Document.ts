@@ -7,9 +7,7 @@ import { Bookmark } from "../elements/Bookmark";
 import { BookmarkManager } from "../elements/BookmarkManager";
 import { Comment } from "../elements/Comment";
 import { CommentManager } from "../elements/CommentManager";
-import { EndnoteManager } from "../elements/EndnoteManager";
 import { Footer } from "../elements/Footer";
-import { FootnoteManager } from "../elements/FootnoteManager";
 import { Header } from "../elements/Header";
 import { HeaderFooterManager } from "../elements/HeaderFooterManager";
 import { Hyperlink } from "../elements/Hyperlink";
@@ -25,7 +23,6 @@ import { Section } from "../elements/Section";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { Table, TableBorder } from "../elements/Table";
 import { TableCell } from "../elements/TableCell";
-import { TableOfContents, TOCProperties } from "../elements/TableOfContents";
 import { TableOfContentsElement } from "../elements/TableOfContentsElement";
 import { NumberingManager } from "../formatting/NumberingManager";
 import { Style, StyleProperties } from "../formatting/Style";
@@ -139,6 +136,37 @@ type BodyElement =
  * Represents a Word document
  */
 export class Document {
+  constructor(zipHandler?: ZipHandler, options: DocumentOptions = {}, initDefaults: boolean = true) {
+    this.zipHandler = zipHandler || new ZipHandler();
+    this.bodyElements = [];
+    this.properties = options.properties || {};
+    this.namespaces = {};
+    this.stylesManager = StylesManager.create();
+    this.numberingManager = NumberingManager.create();
+    this.section = new Section();
+    this.imageManager = ImageManager.create();
+    this.relationshipManager = RelationshipManager.create();
+    this.headerFooterManager = HeaderFooterManager.create();
+    this.bookmarkManager = BookmarkManager.create();
+    this.revisionManager = RevisionManager.create();
+    this.commentManager = CommentManager.create();
+    this.parser = new DocumentParser();
+    this.generator = new DocumentGenerator();
+    this.validator = new DocumentValidator();
+    this.logger = options.logger || defaultLogger;
+    this.trackChangesEnabled = false;
+    this.trackFormatting = true;
+    this.revisionViewSettings = {
+      showInsertionsAndDeletions: true,
+      showFormatting: true,
+      showInkAnnotations: true,
+    };
+    this.autoPopulateTOCs = false;
+    this.rsids = new Set();
+    if (initDefaults) {
+      this.initializeRequiredFiles();
+    }
+  }
   private zipHandler: ZipHandler;
   private bodyElements: BodyElement[] = [];
   private properties: DocumentProperties;
@@ -191,66 +219,6 @@ export class Document {
     hash?: string;
     salt?: string;
   };
-
-  /**
-   * Private constructor - use Document.create() or Document.load()
-   * @param zipHandler Optional ZIP handler (for loading existing documents)
-   * @param options Document options
-   * @param initDefaults Whether to initialize with default relationships (false for loaded docs)
-   */
-  private constructor(
-    zipHandler?: ZipHandler,
-    options: DocumentOptions = {},
-    initDefaults: boolean = true
-  ) {
-    this.zipHandler = zipHandler || new ZipHandler();
-
-    // Initialize logger (use provided or default)
-    this.logger = options.logger || defaultLogger;
-
-    // Initialize helper classes
-    const strictParsing = options.strictParsing ?? false;
-    const memoryPercent = options.maxMemoryUsagePercent ?? 80;
-
-    this.parser = new DocumentParser(strictParsing);
-    this.generator = new DocumentGenerator();
-    this.validator = new DocumentValidator(memoryPercent, {
-      maxMemoryUsagePercent: options.maxMemoryUsagePercent,
-      maxRssMB: options.maxRssMB,
-      useAbsoluteLimit: options.useAbsoluteMemoryLimit,
-    });
-
-    // Validate and sanitize properties before storing
-    this.properties = options.properties
-      ? DocumentValidator.validateProperties(options.properties)
-      : {};
-
-    // Initialize managers
-    this.stylesManager = StylesManager.create();
-    this.numberingManager = NumberingManager.create();
-    this.section = Section.createLetter(); // Default Letter-sized section
-    this.imageManager = ImageManager.create({
-      maxImageCount: options.maxImageCount,
-      maxTotalImageSizeMB: options.maxTotalImageSizeMB,
-      maxSingleImageSizeMB: options.maxSingleImageSizeMB,
-    });
-    this.relationshipManager = RelationshipManager.create();
-    this.headerFooterManager = HeaderFooterManager.create();
-    this.bookmarkManager = BookmarkManager.create();
-    this.revisionManager = RevisionManager.create();
-    this.commentManager = CommentManager.create();
-    this._footnoteManager = FootnoteManager.create();
-    this._endnoteManager = EndnoteManager.create();
-
-    // Add default relationships only for new documents
-    if (initDefaults) {
-      this.relationshipManager.addStyles();
-      this.relationshipManager.addNumbering();
-      this.relationshipManager.addFontTable();
-      this.relationshipManager.addSettings();
-      this.relationshipManager.addTheme();
-    }
-  }
 
   /**
    * Creates a new empty Word document
@@ -381,6 +349,21 @@ export class Document {
   }
 
   /**
+   * Parses an existing document file loaded into the ZIP handler
+   * Populates all document elements from the loaded XML
+   *
+   * @private
+   */
+  private async parseDocument(): Promise<void> {
+    // Use the parser helper that's already created
+    await this.parser.parseDocument(
+      this.zipHandler,
+      this.relationshipManager,
+      this.imageManager
+    );
+  }
+
+  /**
    * Initializes all required DOCX files with minimal valid content
    */
   private initializeRequiredFiles(): void {
@@ -461,76 +444,6 @@ export class Document {
     // Note: docProps/custom.xml is added during save() if custom properties exist
   }
 
-  /**
-   * Parses the document XML and extracts paragraphs, runs, tables, images, and styles
-   */
-  private async parseDocument(): Promise<void> {
-    const result = await this.parser.parseDocument(
-      this.zipHandler,
-      this.relationshipManager,
-      this.imageManager
-    );
-    this.bodyElements = result.bodyElements;
-    this.properties = result.properties;
-    this.relationshipManager = result.relationshipManager;
-    this.namespaces = result.namespaces;
-
-    // Load parsed section properties (preserves page size, margins, headers, etc.)
-    if (result.section) {
-      this.section = result.section;
-    }
-
-    // Load parsed styles into StylesManager
-    // Clear built-in styles and use document-specific styles
-    if (result.styles && result.styles.length > 0) {
-      // Clear all existing styles to avoid conflicts with built-in styles
-      this.stylesManager.clear();
-
-      // Add all parsed styles from the document
-      for (const style of result.styles) {
-        this.stylesManager.addStyle(style);
-      }
-    }
-
-    // Load parsed numbering into NumberingManager
-    // This preserves existing list definitions from the document
-    if (result.abstractNumberings && result.abstractNumberings.length > 0) {
-      for (const abstractNum of result.abstractNumberings) {
-        this.numberingManager.addAbstractNumbering(abstractNum);
-      }
-    }
-
-    if (result.numberingInstances && result.numberingInstances.length > 0) {
-      for (const instance of result.numberingInstances) {
-        this.numberingManager.addInstance(instance);
-      }
-    }
-
-    // Load parsed headers and footers into HeaderFooterManager
-    // This preserves existing headers/footers from the document
-    const { headers, footers } = await this.parser.parseHeadersAndFooters(
-      this.zipHandler,
-      result.section,
-      this.relationshipManager,
-      this.imageManager
-    );
-
-    // Register parsed headers with manager
-    for (const { header, relationshipId, filename } of headers) {
-      // Manually register without creating new relationships
-      // (relationships already exist from loaded document)
-      this.headerFooterManager.registerHeader(header, relationshipId);
-      header.setHeaderId(relationshipId);
-    }
-
-    // Register parsed footers with manager
-    for (const { footer, relationshipId, filename } of footers) {
-      // Manually register without creating new relationships
-      // (relationships already exist from loaded document)
-      this.headerFooterManager.registerFooter(footer, relationshipId);
-      footer.setFooterId(relationshipId);
-    }
-  }
 
   /**
    * Adds an existing paragraph to the document body
@@ -649,127 +562,13 @@ export class Document {
   }
 
   /**
-   * Adds a structured document tag (content control) to the document
-   * @param sdt - Structured document tag to add
-   * @returns This document for chaining
+   * Populates all TOCs in document XML
+   * Extracted from replaceTableOfContents for reuse
+   *
+   * @param docXml The document XML string
+   * @returns Modified XML with populated TOCs
+   * @private
    */
-  addStructuredDocumentTag(sdt: StructuredDocumentTag): this {
-    this.bodyElements.push(sdt);
-    return this;
-  }
-
-  /**
-   * Adds a Table of Contents to the document
-   * @param toc - TableOfContents or TableOfContentsElement to add
-   * @returns This document for chaining
-   */
-  addTableOfContents(toc?: TableOfContents | TableOfContentsElement): this {
-    // Wrap in TableOfContentsElement if plain TableOfContents provided
-    const tocElement =
-      toc instanceof TableOfContentsElement
-        ? toc
-        : new TableOfContentsElement(toc || TableOfContents.createStandard());
-
-    this.bodyElements.push(tocElement);
-    return this;
-  }
-
-  /**
-   * Creates and adds a standard Table of Contents
-   * @param title - Optional custom title
-   * @returns This document for chaining
-   */
-  createTableOfContents(title?: string): this {
-    const tocElement = TableOfContentsElement.createStandard(title);
-    return this.addTableOfContents(tocElement);
-  }
-
-  /**
-   * Creates and adds a pre-populated Table of Contents
-   * The TOC will display actual heading entries when document is first opened in Word
-   * Field structure is preserved so users can still right-click "Update Field"
-   *
-   * @param title - Optional TOC title
-   * @param options - Optional TOC configuration
-   * @returns This document for chaining
-   *
-   * @example
-   * const doc = Document.create();
-   * doc.createParagraph('Chapter 1').setStyle('Heading1');
-   * doc.createParagraph('Section 1.1').setStyle('Heading2');
-   *
-   * // Create pre-populated TOC
-   * doc.createPrePopulatedTableOfContents('Contents', {
-   *   levels: 3,
-   *   useHyperlinks: true
-   * });
-   *
-   * await doc.save('output.docx');
-   * // TOC entries are already visible when opened!
-   */
-  createPrePopulatedTableOfContents(
-    title?: string,
-    options?: Partial<TOCProperties>
-  ): this {
-    const toc = TableOfContents.create({
-      title: title || "Table of Contents",
-      ...options,
-    });
-    this.addTableOfContents(toc);
-    this.setAutoPopulateTOCs(true);
-    return this;
-  }
-
-  /**
-   * Enables or disables automatic TOC population during save
-   * When enabled, TOCs will be pre-populated with heading entries
-   *
-   * @param enabled - Whether to auto-populate TOCs
-   * @returns This document for chaining
-   *
-   * @example
-   * doc.setAutoPopulateTOCs(true);
-   * doc.createTableOfContents();
-   * await doc.save('output.docx');
-   * // TOC is pre-populated with entries
-   */
-  setAutoPopulateTOCs(enabled: boolean): this {
-    this.autoPopulateTOCs = enabled;
-    return this;
-  }
-
-  /**
-   * Checks if automatic TOC population is enabled
-   * @returns True if TOCs will be auto-populated on save
-   */
-  isAutoPopulateTOCsEnabled(): boolean {
-    return this.autoPopulateTOCs;
-  }
-
-  /**
-   * Gets all paragraphs in the document body (top-level only)
-   *
-   * Returns only paragraphs that are direct children of the document body.
-   * Does NOT include paragraphs inside tables, headers, footers, or SDTs.
-   * Use {@link getAllParagraphs} for recursive search including nested content.
-   *
-   * @returns Array of Paragraph instances in the document body
-   *
-   * @example
-   * ```typescript
-   * const paragraphs = doc.getParagraphs();
-   * console.log(`Document has ${paragraphs.length} body paragraphs`);
-   *
-   * for (const para of paragraphs) {
-   *   console.log(para.getText());
-   * }
-   * ```
-   */
-  getParagraphs(): Paragraph[] {
-    return this.bodyElements.filter(
-      (el): el is Paragraph => el instanceof Paragraph
-    );
-  }
 
   /**
    * Gets all tables in the document body (top-level only)
@@ -914,7 +713,7 @@ export class Document {
    * @returns Number of paragraphs
    */
   getParagraphCount(): number {
-    return this.getParagraphs().length;
+    return this.getAllParagraphs().length;
   }
 
   /**
@@ -1969,7 +1768,7 @@ export class Document {
 
     // Ensure _top bookmark exists at document start
     if (!this.hasBookmark("_top")) {
-      const paragraphs = this.getParagraphs();
+      const paragraphs = this.getAllParagraphs();
       if (paragraphs.length > 0) {
         const firstPara = paragraphs[0];
         if (firstPara) {
@@ -2377,7 +2176,7 @@ export class Document {
 
     // Find paragraphs containing these large images and center them
     // Note: Images are embedded in paragraphs as ImageRun elements
-    for (const paragraph of this.getParagraphs()) {
+    for (const paragraph of this.getAllParagraphs()) {
       const content = paragraph.getContent();
 
       for (const item of content) {
@@ -2413,7 +2212,7 @@ export class Document {
   setListLineSpacing(spacingTwips: number = 240): number {
     let count = 0;
 
-    for (const paragraph of this.getParagraphs()) {
+    for (const paragraph of this.getAllParagraphs()) {
       const numbering = paragraph.getNumbering();
 
       if (numbering) {
@@ -2453,7 +2252,7 @@ export class Document {
     ]);
 
     // Collect all paragraphs with numbering and identify numbered lists
-    const paragraphs = this.getParagraphs();
+    const paragraphs = this.getAllParagraphs();
     const numberedParas: { para: Paragraph; level: number }[] = [];
 
     for (const para of paragraphs) {
@@ -2519,7 +2318,7 @@ export class Document {
     ]);
 
     // Collect all paragraphs with numbering and identify bullet lists
-    const paragraphs = this.getParagraphs();
+    const paragraphs = this.getAllParagraphs();
     const bulletParas: { para: Paragraph; level: number }[] = [];
 
     for (const para of paragraphs) {
@@ -2569,7 +2368,7 @@ export class Document {
   private cleanupUnusedNumbering(): void {
     // Collect all numIds currently used by paragraphs
     const usedNumIds = new Set<number>();
-    const paragraphs = this.getParagraphs();
+    const paragraphs = this.getAllParagraphs();
 
     for (const para of paragraphs) {
       const numbering = para.getNumbering();
@@ -5092,14 +4891,17 @@ export class Document {
     // Normalize whitespace and quotes: trim input and replace &quot; with " for consistent parsing
     const normalizedText = instrText.trim().replace(/&quot;/g, '"');
 
-    // === Parse \o "X-Y" switch (outline levels) ===
-    const outlineMatch = normalizedText.match(/\\o\s+"(\d+)-(\d+)"/);
-    if (outlineMatch?.[1] && outlineMatch?.[2]) {
-      hasOutlineSwitch = true;
-      const start = parseInt(outlineMatch[1], 10);
-      const end = parseInt(outlineMatch[2], 10);
-      for (let i = start; i <= end; i++) {
-        if (i >= 1 && i <= 9) levels.add(i);
+    // === Parse \o "X-Y" switch (outline levels) - supports quoted and unquoted formats ===
+    const outlineMatch = normalizedText.match(/\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/);
+    if (outlineMatch) {
+      // Extract captured groups from whichever format matched
+      const start = parseInt(outlineMatch[1] || outlineMatch[3] || outlineMatch[5]!, 10);
+      const end = parseInt(outlineMatch[2] || outlineMatch[4] || outlineMatch[6]!, 10);
+      if (!isNaN(start) && !isNaN(end)) {
+        hasOutlineSwitch = true;
+        for (let i = start; i <= end; i++) {
+          if (i >= 1 && i <= 9) levels.add(i);
+        }
       }
     }
 
@@ -5180,6 +4982,7 @@ export class Document {
       let modifiedXml = documentXml;
 
       for (const match of tocMatches) {
+        if (!match) continue;
         const tocXml = match[0];
 
         // Extract field instruction
@@ -6481,7 +6284,7 @@ export class Document {
 
       // Add bookmark to the first existing paragraph if document has content
       // This avoids creating a visible newline at the top of the document
-      const paragraphs = this.getParagraphs();
+      const paragraphs = this.getAllParagraphs();
 
       if (paragraphs.length > 0 && paragraphs[0]) {
         // Add bookmark to first existing paragraph
@@ -7471,7 +7274,7 @@ export class Document {
     }> = [];
 
     // Iterate through all paragraphs in document body
-    for (const para of this.getParagraphs()) {
+    for (const para of this.getAllParagraphs()) {
       // Get all content items (runs, hyperlinks, fields, revisions)
       for (const content of para.getContent()) {
         // Check if content is a Hyperlink and is external
@@ -8249,7 +8052,7 @@ export class Document {
     const wholeWord = options?.wholeWord ?? false;
     const searchText = caseSensitive ? text : text.toLowerCase();
 
-    const paragraphs = this.getParagraphs();
+    const paragraphs = this.getAllParagraphs();
     for (let pIndex = 0; pIndex < paragraphs.length; pIndex++) {
       const paragraph = paragraphs[pIndex];
       if (!paragraph) continue;
@@ -8406,7 +8209,7 @@ export class Document {
     const caseSensitive = options?.caseSensitive ?? false;
     const wholeWord = options?.wholeWord ?? false;
 
-    const paragraphs = this.getParagraphs();
+    const paragraphs = this.getAllParagraphs();
     for (const paragraph of paragraphs) {
       const runs = paragraph.getRuns();
 
@@ -8573,7 +8376,7 @@ export class Document {
   getWordCount(): number {
     let totalWords = 0;
 
-    const paragraphs = this.getParagraphs();
+    const paragraphs = this.getAllParagraphs();
     for (const paragraph of paragraphs) {
       const text = paragraph.getText().trim();
       if (text) {
@@ -8624,7 +8427,7 @@ export class Document {
   getCharacterCount(includeSpaces: boolean = true): number {
     let totalChars = 0;
 
-    const paragraphs = this.getParagraphs();
+    const paragraphs = this.getAllParagraphs();
     for (const paragraph of paragraphs) {
       const text = paragraph.getText();
       if (includeSpaces) {
@@ -9068,7 +8871,7 @@ export class Document {
     const hyperlinks: Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> =
       [];
 
-    for (const paragraph of this.getParagraphs()) {
+    for (const paragraph of this.getAllParagraphs()) {
       for (const content of paragraph.getContent()) {
         if (content instanceof Hyperlink) {
           hyperlinks.push({ hyperlink: content, paragraph });
@@ -9128,7 +8931,7 @@ export class Document {
     const parser = new DocumentParser();
 
     // Process all paragraphs in the document
-    for (const paragraph of this.getParagraphs()) {
+    for (const paragraph of this.getAllParagraphs()) {
       const originalContent = paragraph.getContent();
 
       // Call the enhanced mergeConsecutiveHyperlinks method
@@ -9197,7 +9000,7 @@ export class Document {
   getBookmarks(): Array<{ bookmark: Bookmark; paragraph: Paragraph }> {
     const bookmarks: Array<{ bookmark: Bookmark; paragraph: Paragraph }> = [];
 
-    for (const paragraph of this.getParagraphs()) {
+    for (const paragraph of this.getAllParagraphs()) {
       // Get bookmarks that start in this paragraph
       for (const bookmark of paragraph.getBookmarksStart()) {
         bookmarks.push({ bookmark, paragraph });
@@ -9273,7 +9076,7 @@ export class Document {
     const runs: Run[] = [];
 
     // Get runs from all body paragraphs
-    for (const paragraph of this.getParagraphs()) {
+    for (const paragraph of this.getAllParagraphs()) {
       runs.push(...paragraph.getRuns());
     }
 
@@ -9498,7 +9301,7 @@ export class Document {
     }
 
     // Apply standard spacing to all paragraphs
-    for (const para of this.getParagraphs()) {
+    for (const para of this.getAllParagraphs()) {
       if (standardParagraphSpacing) {
         if (standardParagraphSpacing.before !== undefined) {
           para.setSpaceBefore(standardParagraphSpacing.before);
