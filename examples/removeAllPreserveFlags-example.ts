@@ -28,10 +28,10 @@ async function removeAllPreserveFlagsExample() {
   doc.createParagraph(""); // Blank line
   doc.createParagraph(""); // Blank line
 
-  console.log(`Before: ${doc.getParagraphCount()} paragraphs`);
+  console.log(`Before: ${doc.getAllParagraphs().length} paragraphs`);
 
   // Mark some blank lines as preserved (to protect them during cleanup)
-  const paragraphs = doc.getParagraphs();
+  const paragraphs = doc.getAllParagraphs();
   const blankParagraphs = paragraphs.filter((p) => p.getText().trim() === "");
   for (const blankPara of blankParagraphs) {
     blankPara.setPreserved(true);
@@ -55,7 +55,7 @@ async function removeAllPreserveFlagsExample() {
     `After removeExtraBlankParagraphs (preserve flags cleared): Removed ${result2.removed}, Preserved ${result2.preserved}`
   );
 
-  console.log(`After: ${doc.getParagraphCount()} paragraphs`);
+  console.log(`After: ${doc.getAllParagraphs().length} paragraphs`);
 
   // Save the document
   await doc.save("removeAllPreserveFlags-example.docx");

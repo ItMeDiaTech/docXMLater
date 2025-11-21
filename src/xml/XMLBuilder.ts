@@ -351,6 +351,133 @@ export class XMLBuilder {
   }
 
   /**
+   * Helper method to create a DrawingML element (a: namespace)
+   * @param name - Element name (without 'a:' prefix)
+   * @param attributes - Element attributes
+   * @param children - Child elements
+   * @returns XMLElement
+   */
+  static a(
+    name: string,
+    attributes?: Record<string, string | number | boolean | undefined>,
+    children?: (XMLElement | string)[]
+  ): XMLElement {
+    return {
+      name: `a:${name}`,
+      attributes,
+      children,
+    };
+  }
+
+  /**
+   * Helper method to create a self-closing DrawingML element
+   * @param name - Element name (without 'a:' prefix)
+   * @param attributes - Element attributes
+   * @returns XMLElement
+   */
+  static aSelf(
+    name: string,
+    attributes?: Record<string, string | number | boolean | undefined>
+  ): XMLElement {
+    return {
+      name: `a:${name}`,
+      attributes,
+      selfClosing: true,
+    };
+  }
+
+  /**
+   * Helper method to create a Picture element (pic: namespace)
+   * @param name - Element name (without 'pic:' prefix)
+   * @param attributes - Element attributes
+   * @param children - Child elements
+   * @returns XMLElement
+   */
+  static pic(
+    name: string,
+    attributes?: Record<string, string | number | boolean | undefined>,
+    children?: (XMLElement | string)[]
+  ): XMLElement {
+    return {
+      name: `pic:${name}`,
+      attributes,
+      children,
+    };
+  }
+
+  /**
+   * Helper method to create a self-closing Picture element
+   * @param name - Element name (without 'pic:' prefix)
+   * @param attributes - Element attributes
+   * @returns XMLElement
+   */
+  static picSelf(
+    name: string,
+    attributes?: Record<string, string | number | boolean | undefined>
+  ): XMLElement {
+    return {
+      name: `pic:${name}`,
+      attributes,
+      selfClosing: true,
+    };
+  }
+
+  /**
+   * Helper method to create a Wordprocessing Drawing element (wp: namespace)
+   * @param name - Element name (without 'wp:' prefix)
+   * @param attributes - Element attributes
+   * @param children - Child elements
+   * @returns XMLElement
+   */
+  static wp(
+    name: string,
+    attributes?: Record<string, string | number | boolean | undefined>,
+    children?: (XMLElement | string)[]
+  ): XMLElement {
+    return {
+      name: `wp:${name}`,
+      attributes,
+      children,
+    };
+  }
+
+  /**
+   * Helper method to create a self-closing Wordprocessing Drawing element
+   * @param name - Element name (without 'wp:' prefix)
+   * @param attributes - Element attributes
+   * @returns XMLElement
+   */
+  static wpSelf(
+    name: string,
+    attributes?: Record<string, string | number | boolean | undefined>
+  ): XMLElement {
+    return {
+      name: `wp:${name}`,
+      attributes,
+      selfClosing: true,
+    };
+  }
+
+  /**
+   * Helper to create cx/cy extent attributes (for a:ext, wp:extent, etc.)
+   * @param name - Element name (e.g., 'ext')
+   * @param cx - Width in EMUs
+   * @param cy - Height in EMUs
+   * @returns Self-closing XMLElement
+   */
+  static cxCy(
+    name: string,
+    cx: number,
+    cy: number
+  ): XMLElement {
+    return {
+      name,
+      attributes: { cx, cy },
+      selfClosing: true
+    };
+  }
+
+  /**
    * Creates an SDT (Structured Document Tag) wrapper for content
    * @param content - Content to wrap (paragraphs, tables, etc.)
    * @param options - SDT options

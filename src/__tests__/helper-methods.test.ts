@@ -471,7 +471,7 @@ describe('Image Helper Methods', () => {
     it('should set and get alt text', async () => {
       // Create a simple test image buffer
       const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // PNG header
-      const image = await Image.fromBuffer(imageBuffer, 'png');
+      const image = await Image.fromBuffer(imageBuffer);
 
       expect(image.getAltText()).toBe('Image');
 
@@ -483,7 +483,7 @@ describe('Image Helper Methods', () => {
   describe('rotate/getRotation', () => {
     it('should set and get rotation', async () => {
       const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-      const image = await Image.fromBuffer(imageBuffer, 'png');
+      const image = await Image.fromBuffer(imageBuffer);
 
       expect(image.getRotation()).toBe(0);
 
@@ -499,7 +499,7 @@ describe('Image Helper Methods', () => {
 
     it('should swap dimensions on 90/270 degree rotation', async () => {
       const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-      const image = await Image.fromBuffer(imageBuffer, 'png', 1000, 2000);
+      const image = await Image.fromBuffer(imageBuffer, { width: 1000, height: 2000 });
 
       const originalWidth = image.getWidth();
       const originalHeight = image.getHeight();

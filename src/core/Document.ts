@@ -205,6 +205,9 @@ export class Document {
 
   // TOC auto-population setting
   private autoPopulateTOCs: boolean = false;
+  
+  // TOC field instruction sync setting (default: OFF to preserve original instructions)
+  private autoSyncTOCStyles: boolean = false;
 
   private rsidRoot?: string;
   private rsids: Set<string> = new Set();
@@ -356,11 +359,52 @@ export class Document {
    */
   private async parseDocument(): Promise<void> {
     // Use the parser helper that's already created
-    await this.parser.parseDocument(
+    const result = await this.parser.parseDocument(
       this.zipHandler,
       this.relationshipManager,
       this.imageManager
     );
+
+    // Populate document properties from parser results
+    this.bodyElements = result.bodyElements;
+    this.relationshipManager = result.relationshipManager;
+    this.namespaces = result.namespaces;
+
+    // Populate styles manager
+    for (const style of result.styles) {
+      this.stylesManager.addStyle(style);
+    }
+
+    // Populate numbering manager
+    for (const abstractNum of result.abstractNumberings) {
+      this.numberingManager.addAbstractNumbering(abstractNum);
+    }
+    for (const instance of result.numberingInstances) {
+      this.numberingManager.addInstance(instance);
+    }
+
+    // Set section if present
+    if (result.section) {
+      this.section = result.section;
+    }
+
+    // Parse and register headers/footers
+    const headersFooters = await this.parser.parseHeadersAndFooters(
+      this.zipHandler,
+      result.section,
+      this.relationshipManager,
+      this.imageManager
+    );
+
+    // Register headers with HeaderFooterManager
+    for (const { header, relationshipId } of headersFooters.headers) {
+      this.headerFooterManager.registerHeader(header, relationshipId);
+    }
+
+    // Register footers with HeaderFooterManager
+    for (const { footer, relationshipId } of headersFooters.footers) {
+      this.headerFooterManager.registerFooter(footer, relationshipId);
+    }
   }
 
   /**
@@ -3722,74 +3766,67 @@ export class Document {
   }
 
   /**
-   * Removes extra blank paragraphs from the document while preserving marked paragraphs
+   * Removes extra blank paragraphs from the document with optional structure spacing
    *
-   * This method removes consecutive blank paragraphs, keeping only one blank line for spacing.
-   * Paragraphs marked as "preserved" (via setPreserved(true)) will NOT be removed.
+   * This method uses a two-pass approach:
+   * 1. First pass: Removes ALL blank paragraphs (ignoring preserve flags)
+   * 2. Second pass (optional): Re-inserts Normal-style blank paragraphs after structural elements
    *
    * A paragraph is considered blank if it:
    * - Has no text content (or only whitespace)
    * - Has no images, hyperlinks, or other non-text content
    * - Has no bookmarks or comments
    *
-   * @param options Configuration options for removal
-   * @returns Statistics about removed paragraphs
+   * When `addStructureBlankLines` is enabled, blank paragraphs are added after:
+   * - Header 1 paragraphs
+   * - Table of Contents elements
+   * - Bullet/numbered list blocks
+   * - "End of Document Warning" paragraph
+   * - Hyperlinks with display text "top of the document" (case-insensitive)
+   * - Every 1×1 table (including those in cells)
+   *
+   * @param options Configuration options for removal and re-insertion
+   * @returns Statistics about removed and added paragraphs
    *
    * @example
-   * // Remove all extra blank paragraphs (except preserved ones)
-   * const result = doc.removeExtraBlankParagraphs();
-   * console.log(`Removed ${result.removed} blank paragraphs, preserved ${result.preserved}`);
+   * // Remove all blank paragraphs and add structure spacing
+   * const result = doc.removeExtraBlankParagraphs({ addStructureBlankLines: true });
+   * console.log(`Removed ${result.removed} blank paragraphs, added ${result.added} structure blanks`);
    *
    * @example
-   * // Keep one blank line between sections
-   * const result = doc.removeExtraBlankParagraphs({ keepOne: true });
-   *
-   * @example
-   * // Preserve Header 2 blank lines before removal
-   * const result = doc.removeExtraBlankParagraphs({
-   *   preserveHeader2BlankLines: true
-   * });
+   * // Remove blanks and re-add structure spacing
+   * const result = doc.removeExtraBlankParagraphs({ addStructureBlankLines: true });
+   * console.log(`Removed ${result.removed}, added ${result.added} structure blanks`);
    */
   public removeExtraBlankParagraphs(options?: {
-    /** Whether to keep one blank paragraph between content blocks (default: true) */
-    keepOne?: boolean;
     /**
-     * Whether to mark blank lines after Header 2 tables as preserved before removing extra paragraphs.
-     * When true, scans for 1x1 tables containing Header 2 paragraphs and marks any blank
-     * paragraphs immediately after them as preserved (so they won't be removed).
+     * Whether to re-insert Normal-style blank paragraphs after structural elements.
+     * When true, adds spacing after headers, TOCs, lists, tables, and special hyperlinks.
      * @default false
      */
-    preserveHeader2BlankLines?: boolean;
+    addStructureBlankLines?: boolean;
   }): {
     removed: number;
-    preserved: number;
+    added: number;
     total: number;
   } {
-    const keepOne = options?.keepOne ?? true;
-    const preserveHeader2BlankLines =
-      options?.preserveHeader2BlankLines ?? false;
+    const addStructureBlankLines = options?.addStructureBlankLines ?? false;
     let removed = 0;
-    let preserved = 0;
+    let added = 0;
 
-    // Step 1: If requested, mark blank lines after Header 2 tables as preserved
-    if (preserveHeader2BlankLines) {
-      this.markHeader2BlankLinesAsPreserved();
+    // OPTIONAL PASS: Remove SDT wrappers if addStructureBlankLines is enabled
+    if (addStructureBlankLines) {
+      this.clearCustom();
     }
 
-    // Track consecutive blank paragraphs
-    const toRemove: Paragraph[] = [];
-    let consecutiveBlanks: Paragraph[] = [];
+    // PASS 1: Remove ALL blank paragraphs (no preserve flag check)
+    const indicesToRemove: number[] = [];
 
     for (let i = 0; i < this.bodyElements.length; i++) {
       const element = this.bodyElements[i];
 
       // Only process paragraphs
       if (!(element instanceof Paragraph)) {
-        // Not a paragraph - process any accumulated blanks
-        if (consecutiveBlanks.length > 0) {
-          this.processConsecutiveBlanks(consecutiveBlanks, keepOne, toRemove);
-          consecutiveBlanks = [];
-        }
         continue;
       }
 
@@ -3799,43 +3836,28 @@ export class Document {
       const isBlank = this.isParagraphBlank(para);
 
       if (isBlank) {
-        consecutiveBlanks.push(para);
-      } else {
-        // Non-blank paragraph - process any accumulated blanks
-        if (consecutiveBlanks.length > 0) {
-          this.processConsecutiveBlanks(consecutiveBlanks, keepOne, toRemove);
-          consecutiveBlanks = [];
-        }
+        indicesToRemove.push(i);
       }
     }
 
-    // Process any remaining consecutive blanks at the end
-    if (consecutiveBlanks.length > 0) {
-      this.processConsecutiveBlanks(consecutiveBlanks, keepOne, toRemove);
-    }
-
-    // Count preserved paragraphs
-    for (const para of toRemove) {
-      if (para.isPreserved()) {
-        preserved++;
+    // Remove in reverse order to maintain indices
+    for (let i = indicesToRemove.length - 1; i >= 0; i--) {
+      const index = indicesToRemove[i];
+      if (index !== undefined) {
+        this.bodyElements.splice(index, 1);
+        removed++;
       }
     }
 
-    // Remove paragraphs that aren't preserved
-    for (const para of toRemove) {
-      if (!para.isPreserved()) {
-        const index = this.bodyElements.indexOf(para);
-        if (index !== -1) {
-          this.bodyElements.splice(index, 1);
-          removed++;
-        }
-      }
+    // PASS 2: If requested, re-insert structure blank lines
+    if (addStructureBlankLines) {
+      added = this.addStructureBlankLinesAfterElements();
     }
 
     return {
       removed,
-      preserved,
-      total: toRemove.length,
+      added,
+      total: removed,
     };
   }
 
@@ -3869,6 +3891,384 @@ export class Document {
    * Marks blank lines after 1x1 Header 2 tables as preserved
    * @private
    */
+  /**
+   * Adds structural blank lines throughout the document for improved readability
+   *
+   * This comprehensive helper method systematically adds Normal-style blank paragraphs after
+   * key structural elements to improve document readability and visual spacing. It combines
+   * multiple spacing operations into a single convenient method.
+   *
+   * **Elements that receive blank lines:**
+   * - All 1×1 tables (configurable via filter)
+   * - All multi-cell tables (configurable via filter)
+   *
+   * **Features:**
+   * - Optional cleanup of duplicate blanks before adding structure blanks
+   * - Configurable spacing after blank paragraphs (default: 120 twips = 6pt)
+   * - Automatic preserve flag marking to protect structural blanks
+   * - Customizable style for blank paragraphs (default: 'Normal')
+   * - Per-table-type filtering for selective processing
+   *
+   * **Typical Workflow:**
+   * 1. (Optional) Remove all duplicate blank paragraphs
+   * 2. Add blank lines after 1×1 tables
+   * 3. Add blank lines after multi-cell tables
+   * 4. Return aggregated statistics
+   *
+   * @param options Configuration options
+   * @returns Statistics about the operation
+   *
+   * @example
+   * // Add structure blanks with defaults (6pt spacing, marked as preserved)
+   * const result = doc.addStructureBlankLines();
+   * console.log(`Processed ${result.tablesProcessed} tables`);
+   * console.log(`Added ${result.blankLinesAdded} new blank lines`);
+   * console.log(`Marked ${result.existingLinesMarked} existing blank lines`);
+   *
+   * @example
+   * // Clean up duplicates first, then add structure blanks
+   * const result = doc.addStructureBlankLines({
+   *   cleanupFirst: true
+   * });
+   * console.log(`Removed ${result.blankLinesRemoved} duplicates`);
+   * console.log(`Added ${result.blankLinesAdded} structure blanks`);
+   *
+   * @example
+   * // Custom spacing and selective processing
+   * const result = doc.addStructureBlankLines({
+   *   spacingAfter: 240,  // 12pt spacing
+   *   after1x1Tables: true,
+   *   afterOtherTables: false,  // Only 1x1 tables
+   *   filter1x1: (table, index) => {
+   *     // Only add blanks after Header 2 tables
+   *     const cell = table.getCell(0, 0);
+   *     if (!cell) return false;
+   *     return cell.getParagraphs().some(p => {
+   *       const style = p.getStyle();
+   *       return style === 'Heading2' || style === 'Heading 2';
+   *     });
+   *   }
+   * });
+   *
+   * @example
+   * // Don't mark as preserved (allow future cleanup)
+   * doc.addStructureBlankLines({
+   *   markAsPreserved: false,
+   *   spacingAfter: 120
+   * });
+   */
+  public addStructureBlankLines(options?: {
+    /** Spacing after blank paragraphs in twips (default: 120 = 6pt) */
+    spacingAfter?: number;
+    /** Mark blank paragraphs as preserved to prevent removal (default: true) */
+    markAsPreserved?: boolean;
+    /** Style to apply to blank paragraphs (default: 'Normal') */
+    style?: string;
+    /** Add blanks after 1×1 tables (default: true) */
+    after1x1Tables?: boolean;
+    /** Add blanks after multi-cell tables (default: true) */
+    afterOtherTables?: boolean;
+    /** Optional filter for selecting which 1×1 tables to process */
+    filter1x1?: (table: Table, index: number) => boolean;
+    /** Optional filter for selecting which multi-cell tables to process */
+    filterOther?: (table: Table, index: number) => boolean;
+    /** Add blank line above the first table in document (default: true) */
+    aboveFirstTable?: boolean;
+    /** Add blank line above "Top of Document" hyperlinks (default: true) */
+    aboveTODHyperlinks?: boolean;
+    /** Add blank line below Header 1 paragraphs with text (default: true) */
+    belowHeader1Lines?: boolean;
+    /** Add blank line below Table of Contents elements (default: true) */
+    belowTOC?: boolean;
+    /** Add blank line above warning message (default: true) */
+    aboveWarning?: boolean;
+  }): {
+    tablesProcessed: number;
+    blankLinesAdded: number;
+    existingLinesMarked: number;
+    blankLinesRemoved: number;
+  } {
+    // Extract options with defaults
+    const spacingAfter = options?.spacingAfter ?? 120;
+    const markAsPreserved = options?.markAsPreserved ?? false;
+    const style = options?.style ?? 'Normal';
+    const after1x1Tables = options?.after1x1Tables ?? true;
+    const afterOtherTables = options?.afterOtherTables ?? true;
+    const filter1x1 = options?.filter1x1;
+    const filterOther = options?.filterOther;
+    const aboveFirstTable = options?.aboveFirstTable ?? true;
+    const aboveTODHyperlinks = options?.aboveTODHyperlinks ?? true;
+    const belowHeader1Lines = options?.belowHeader1Lines ?? true;
+    const belowTOC = options?.belowTOC ?? true;
+    const aboveWarning = options?.aboveWarning ?? true;
+
+    // Aggregated statistics
+    let totalTablesProcessed = 0;
+    let totalBlankLinesAdded = 0;
+    let totalExistingLinesMarked = 0;
+    let blankLinesRemoved: number = 0;
+
+    // Phase 1: Remove duplicate blank paragraphs (always execute)
+    const cleanupResult = this.removeExtraBlankParagraphs();
+    blankLinesRemoved = cleanupResult.removed;
+
+    // Phase 2: Add blanks after 1×1 tables
+    if (after1x1Tables) {
+      const result1x1 = this.ensureBlankLinesAfter1x1Tables({
+        spacingAfter,
+        markAsPreserved,
+        style,
+        filter: filter1x1,
+      });
+      totalTablesProcessed += result1x1.tablesProcessed;
+      totalBlankLinesAdded += result1x1.blankLinesAdded;
+      totalExistingLinesMarked += result1x1.existingLinesMarked;
+    }
+
+    // Phase 3: Add blanks after multi-cell tables
+    if (afterOtherTables) {
+      const resultOther = this.ensureBlankLinesAfterOtherTables({
+        spacingAfter,
+        markAsPreserved,
+        style,
+        filter: filterOther,
+      });
+      totalTablesProcessed += resultOther.tablesProcessed;
+      totalBlankLinesAdded += resultOther.blankLinesAdded;
+      totalExistingLinesMarked += resultOther.existingLinesMarked;
+    }
+
+    // Phase 4: Add blank above first table
+    if (aboveFirstTable) {
+      const tables = this.getAllTables();
+      if (tables.length > 0) {
+        const firstTable = tables[0];
+        if (firstTable) {
+          const tableIndex = this.bodyElements.indexOf(firstTable);
+          if (tableIndex > 0) {
+            const prevElement = this.bodyElements[tableIndex - 1];
+            
+            // Check if previous element is already a blank paragraph
+            if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
+              // Mark existing blank as preserved
+              prevElement.setStyle(style);
+              if (markAsPreserved && !prevElement.isPreserved()) {
+                prevElement.setPreserved(true);
+                totalExistingLinesMarked++;
+              }
+            } else {
+              // Add blank paragraph before first table
+              const blankPara = Paragraph.create();
+              blankPara.setStyle(style);
+              blankPara.setSpaceAfter(spacingAfter);
+              if (markAsPreserved) {
+                blankPara.setPreserved(true);
+              }
+              this.bodyElements.splice(tableIndex, 0, blankPara);
+              totalBlankLinesAdded++;
+            }
+          }
+        }
+      }
+    }
+
+    // Phase 5: Add blank above "Top of Document" hyperlinks
+    if (aboveTODHyperlinks) {
+      const hyperlinks = this.getHyperlinks();
+      
+      for (const { hyperlink, paragraph } of hyperlinks) {
+        const text = hyperlink.getText().toLowerCase();
+        
+        // Match "top of document" or "top of the document" (case-insensitive)
+        if ((text === 'top of document' || text === 'top of the document')) {
+          const paraIndex = this.bodyElements.indexOf(paragraph);
+          
+          if (paraIndex > 0) {
+            const prevElement = this.bodyElements[paraIndex - 1];
+            
+            // Check if previous element is already blank
+            if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
+              // Check if it's a 1x1 table followed by blank - skip to avoid double blanks
+              if (paraIndex >= 2) {
+                const twoPrevElement = this.bodyElements[paraIndex - 2];
+                if (twoPrevElement instanceof Table) {
+                  const is1x1 = twoPrevElement.getRowCount() === 1 && twoPrevElement.getColumnCount() === 1;
+                  if (is1x1) {
+                    continue; // Skip - this blank is already from the 1x1 table
+                  }
+                }
+              }
+              
+              // Mark existing blank as preserved
+              prevElement.setStyle(style);
+              if (markAsPreserved && !prevElement.isPreserved()) {
+                prevElement.setPreserved(true);
+                totalExistingLinesMarked++;
+              }
+            } else if (!(prevElement instanceof Table && prevElement.getRowCount() === 1 && prevElement.getColumnCount() === 1)) {
+              // Add blank only if previous is not a 1x1 table (which already has its own blank)
+              const blankPara = Paragraph.create();
+              blankPara.setStyle(style);
+              blankPara.setSpaceAfter(spacingAfter);
+              if (markAsPreserved) {
+                blankPara.setPreserved(true);
+              }
+              this.bodyElements.splice(paraIndex, 0, blankPara);
+              totalBlankLinesAdded++;
+            }
+          }
+        }
+      }
+    }
+
+    // Phase 6: Add blank below Header 1 paragraphs with text
+    if (belowHeader1Lines) {
+      const allParas = this.getAllParagraphs();
+      
+      for (const para of allParas) {
+        const styleId = para.getStyle();
+        
+        // Check if it's a Heading1 paragraph with text
+        if (styleId === 'Heading1' && para.getText().trim() !== '') {
+          const paraIndex = this.bodyElements.indexOf(para);
+          
+          if (paraIndex !== -1 && paraIndex < this.bodyElements.length - 1) {
+            const nextElement = this.bodyElements[paraIndex + 1];
+            
+            // Check if next element is already blank
+            if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
+              // Mark existing blank as preserved
+              nextElement.setStyle(style);
+              if (markAsPreserved && !nextElement.isPreserved()) {
+                nextElement.setPreserved(true);
+                totalExistingLinesMarked++;
+              }
+            } else {
+              // Add blank paragraph after Header 1
+              const blankPara = Paragraph.create();
+              blankPara.setStyle(style);
+              blankPara.setSpaceAfter(spacingAfter);
+              if (markAsPreserved) {
+                blankPara.setPreserved(true);
+              }
+              this.bodyElements.splice(paraIndex + 1, 0, blankPara);
+              totalBlankLinesAdded++;
+            }
+          }
+        }
+      }
+    }
+
+    // Phase 7: Add blank below Table of Contents elements
+    if (belowTOC) {
+      const tocElements = this.getTableOfContentsElements();
+      
+      for (const toc of tocElements) {
+        const tocIndex = this.bodyElements.indexOf(toc);
+        
+        if (tocIndex !== -1 && tocIndex < this.bodyElements.length - 1) {
+          const nextElement = this.bodyElements[tocIndex + 1];
+          
+          // Check if next element is already blank
+          if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
+            // Mark existing blank as preserved
+            nextElement.setStyle(style);
+            if (markAsPreserved && !nextElement.isPreserved()) {
+              nextElement.setPreserved(true);
+              totalExistingLinesMarked++;
+            }
+          } else {
+            // Add blank paragraph after TOC
+            const blankPara = Paragraph.create();
+            blankPara.setStyle(style);
+            blankPara.setSpaceAfter(spacingAfter);
+            if (markAsPreserved) {
+              blankPara.setPreserved(true);
+            }
+            this.bodyElements.splice(tocIndex + 1, 0, blankPara);
+            totalBlankLinesAdded++;
+          }
+        }
+      }
+    }
+
+    // Phase 8: Add blank above warning message
+    if (aboveWarning) {
+      // Look for the two-line warning pattern in consecutive paragraphs
+      for (let i = 0; i < this.bodyElements.length - 1; i++) {
+        const firstElem = this.bodyElements[i];
+        const secondElem = this.bodyElements[i + 1];
+        
+        if (firstElem instanceof Paragraph && secondElem instanceof Paragraph) {
+          const firstText = firstElem.getText().trim().toLowerCase();
+          const secondText = secondElem.getText().trim().toLowerCase();
+          
+          // Detect warning pattern - look for "warning" or "caution" keywords
+          const isWarningFirst = firstText.includes('warning') || firstText.includes('caution') || 
+                                 firstText.includes('important') || firstText.includes('note');
+          const hasSecondLine = secondText.length > 0;
+          
+          // Additional check: the warning is typically 2 consecutive non-empty paragraphs
+          // with similar formatting or style
+          if (isWarningFirst && hasSecondLine && i > 0) {
+            const prevElement = this.bodyElements[i - 1];
+            
+            // Check if previous element is already blank
+            if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
+              // Mark existing blank as preserved
+              prevElement.setStyle(style);
+              if (markAsPreserved && !prevElement.isPreserved()) {
+                prevElement.setPreserved(true);
+                totalExistingLinesMarked++;
+              }
+            } else {
+              // Add blank paragraph before warning
+              const blankPara = Paragraph.create();
+              blankPara.setStyle(style);
+              blankPara.setSpaceAfter(spacingAfter);
+              if (markAsPreserved) {
+                blankPara.setPreserved(true);
+              }
+              this.bodyElements.splice(i, 0, blankPara);
+              totalBlankLinesAdded++;
+              i++; // Skip the newly inserted blank paragraph
+            }
+            
+            // Only process the first warning found
+            break;
+          }
+        }
+      }
+    }
+
+    // Return aggregated statistics
+    return {
+      tablesProcessed: totalTablesProcessed,
+      blankLinesAdded: totalBlankLinesAdded,
+      existingLinesMarked: totalExistingLinesMarked,
+      blankLinesRemoved,
+    };
+  }
+
+  /**
+   * Helper method called by removeExtraBlankParagraphs to re-insert structural blank lines
+   * @private
+   * @returns Number of blank paragraphs added
+   */
+  private addStructureBlankLinesAfterElements(): number {
+    // Use the public method with default options
+    const result = this.addStructureBlankLines({
+      spacingAfter: 120,
+      markAsPreserved: true,
+      style: 'Normal',
+      after1x1Tables: true,
+      afterOtherTables: true,
+    });
+
+    return result.blankLinesAdded;
+  }
+
+
   private markHeader2BlankLinesAsPreserved(): void {
     const tables = this.getAllTables();
 
@@ -5205,18 +5605,29 @@ export class Document {
           return;
         }
 
-        // Extract bookmark (look for bookmarks with "_heading" in name)
+        // Extract bookmark (use any existing bookmark, prioritize "_heading" or "_Toc")
         let bookmark = "";
         const bookmarkStart = para["w:bookmarkStart"];
         if (bookmarkStart) {
           const bookmarkArray = Array.isArray(bookmarkStart)
             ? bookmarkStart
             : [bookmarkStart];
+          
+          // First try to find preferred bookmark types
           for (const bm of bookmarkArray) {
             const bmName = bm["@_w:name"];
-            if (bmName && bmName.toLowerCase().includes("_heading")) {
+            if (bmName && (bmName.toLowerCase().includes("_heading") || bmName.toLowerCase().includes("_toc"))) {
               bookmark = bmName;
               break;
+            }
+          }
+          
+          // If no preferred bookmark found, use the first available bookmark
+          if (!bookmark && bookmarkArray.length > 0) {
+            const firstBm = bookmarkArray[0];
+            const bmName = firstBm["@_w:name"];
+            if (bmName) {
+              bookmark = bmName;
             }
           }
         }
@@ -9577,6 +9988,167 @@ export class Document {
         }
       }
     }
+  }
+
+  /**
+   * Rebuilds all Table of Contents in the document
+   * 
+   * Analyzes each TOC in the document, parses its field instructions to determine
+   * which heading levels to include, searches for matching headings (including those
+   * in nested tables), and returns a summary of TOC instructions and heading counts.
+   * 
+   * **NEW: This method now also populates the TOCs with hyperlinked entries automatically!**
+   * 
+   * The method:
+   * 1. Removes SDT wrappers around tables if found (uses clearCustom helper)
+   * 2. Ensures `_top` bookmark exists at document start for TOC linking
+   * 3. Scans document.xml for all TOC field instructions
+   * 4. For each TOC, parses the instruction to extract heading levels
+   * 5. Finds all matching headings (searches body AND nested tables)
+   * 6. **Generates bookmarks for headings that don't have them**
+   * 7. **Creates hyperlinked TOC entries pointing to those bookmarks**
+   * 8. **Populates the TOC with entries (Verdana 12pt, blue, underlined, no page numbers)**
+   * 9. **Updates document.xml with the populated TOC**
+   * 10. Retains field instructions so TOCs can be manually updated later
+   * 11. Returns summary: [instruction, [h1Count, h2Count, h3Count, ...]]
+   * 
+   * **Key Features:**
+   * - No arguments required - analyzes the current document state
+   * - Searches nested tables when counting headings
+   * - Automatically removes SDT wrappers that interfere with TOC population
+   * - Ensures `_top` bookmark exists for document-top linking
+   * - **Automatically populates TOCs with clickable hyperlink entries**
+   * - **TOCs display correctly on first open without manual update**
+   * - **Field instructions preserved for manual updates**
+   * - **No page numbers displayed (pure hyperlink navigation)**
+   * - Returns summary data for diagnostics and verification
+   * 
+   * **Output Format:**
+   * Returns a 2D array where each row contains:
+   * - Index 0: The TOC field instruction text (e.g., "TOC \\o \"1-3\"")
+   * - Index 1: Array of heading counts by level (e.g., [5, 12, 8] = 5 H1s, 12 H2s, 8 H3s)
+   * 
+   * @returns Two-dimensional array of [instruction, headingCounts[]] for each TOC
+   * 
+   * @example
+   * ```typescript
+   * const doc = await Document.load('document.docx');
+   * const tocInfo = doc.rebuildTOCs();
+   * 
+   * console.log(`Found ${tocInfo.length} Table(s) of Contents`);
+   * for (const [instruction, counts] of tocInfo) {
+   *   console.log(`TOC Instruction: ${instruction}`);
+   *   counts.forEach((count, level) => {
+   *     if (count > 0) {
+   *       console.log(`  Heading ${level + 1}: ${count} found`);
+   *     }
+   *   });
+   * }
+   * 
+   * // TOCs are now populated with hyperlinks - save the document
+   * await doc.save('output.docx');
+   * // When opened in Word, TOCs will display with clickable links, no manual update needed
+   * ```
+   * 
+   * @example
+   * ```typescript
+   * // Rebuild TOCs and save with populated entries
+   * const doc = await Document.load('input.docx');
+   * const tocSummary = doc.rebuildTOCs();
+   * await doc.save('output.docx');
+   * 
+   * console.log(`Processed ${tocSummary.length} TOCs with hyperlinked entries`);
+   * ```
+   */
+  public rebuildTOCs(): Array<[string, number[]]> {
+    const results: Array<[string, number[]]> = [];
+    
+    // Step 1: Remove SDT wrappers around tables if found (helper already exists)
+    this.clearCustom();
+    
+    // Step 2: Ensure _top bookmark exists at document start
+    this.addTopBookmark();
+    
+    // Step 3: Get document.xml to scan for TOC elements
+    let docXml = this.zipHandler.getFileAsString('word/document.xml');
+    if (!docXml) {
+      return results;
+    }
+    
+    // Step 4: Find all TOC SDT elements
+    const tocRegex = /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
+    const tocMatches = Array.from(docXml.matchAll(tocRegex));
+    
+    if (tocMatches.length === 0) {
+      return results;
+    }
+    
+    // Step 5: For each TOC, parse instructions and count headings
+    for (const match of tocMatches) {
+      try {
+        const tocXml = match[0];
+        
+        // Extract field instruction
+        const instrMatch = tocXml.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
+        if (!instrMatch?.[1]) {
+          continue;
+        }
+        
+        // TypeScript type narrowing: assign to const variable
+        const instrText = instrMatch[1];
+        
+        // Decode XML entities
+        let fieldInstruction = instrText
+          .replace(/&/g, '&')
+          .replace(/</g, '<')
+          .replace(/>/g, '>')
+          .replace(/"/g, '"')
+          .replace(/'/g, "'");
+        
+        // Parse the instruction to get heading levels
+        const levels = this.parseTOCFieldInstruction(fieldInstruction);
+        
+        // Find all headings in document (including nested tables)
+        const headings = this.findHeadingsForTOCFromXML(docXml, levels);
+        
+        // Count headings by level (create array with counts for each level 1-9)
+        const headingCounts: number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0]; // Indices 0-8 for levels 1-9
+        
+        for (const heading of headings) {
+          if (heading.level >= 1 && heading.level <= 9) {
+            const index = heading.level - 1;
+            headingCounts[index] = (headingCounts[index] || 0) + 1;
+          }
+        }
+        
+        // Add to results: [instruction, counts]
+        results.push([fieldInstruction, headingCounts]);
+      } catch (error) {
+        // Skip this TOC on error
+        this.logger.warn(
+          'Error processing TOC in rebuildTOCs',
+          error instanceof Error
+            ? { message: error.message, stack: error.stack }
+            : { error: String(error) }
+        );
+        continue;
+      }
+    }
+    
+    // Step 6: Populate all TOCs in the document with hyperlinked entries
+    // This modifies the XML to include pre-populated TOC entries with hyperlinks
+    const populatedXml = this.populateAllTOCsInXML(docXml);
+    
+    // Step 7: Update document.xml with the populated TOCs
+    if (populatedXml !== docXml) {
+      this.zipHandler.updateFile('word/document.xml', populatedXml);
+      
+      this.logger.info(
+        `Successfully populated ${results.length} TOC(s) with hyperlinked entries`
+      );
+    }
+    
+    return results;
   }
 
   /**

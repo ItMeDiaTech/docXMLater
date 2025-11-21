@@ -2,8 +2,8 @@
  * TableCell - Represents a cell in a table
  */
 
-import { Paragraph, TextDirection } from "./Paragraph";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
+import { Paragraph, TextDirection } from "./Paragraph";
 
 /**
  * Cell border style
@@ -136,6 +136,19 @@ export class TableCell {
    */
   getParagraphs(): Paragraph[] {
     return [...this.paragraphs];
+  }
+
+  /**
+   * Removes a paragraph at the specified index
+   * @param index - Index of paragraph to remove
+   * @returns True if removed, false if index out of bounds
+   */
+  removeParagraph(index: number): boolean {
+    if (index < 0 || index >= this.paragraphs.length) {
+      return false;
+    }
+    this.paragraphs.splice(index, 1);
+    return true;
   }
 
   /**
