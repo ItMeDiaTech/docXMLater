@@ -19,7 +19,7 @@ async function example1_BasicCleanup() {
 
   // Load a document (e.g., exported from Google Docs)
   console.log("Loading document...");
-  const doc = await Document.load("examples/output/sample.docx");
+  const doc = await Document.load("C:/Users/DiaTech/Pictures/DiaTech/Programs/DocHub/development/docXMLater/pre-processed.docx");
 
   // Count SDTs before cleanup
   const bodyElementsBefore = doc.getBodyElements();
@@ -131,7 +131,7 @@ async function example4_HandlingComplexDocuments() {
       }
     }
   }
-  paraCount += doc.getParagraphs().length;
+  paraCount += doc.getBodyElements().filter((el) => el.constructor.name === "Paragraph").length;
 
   console.log(`Before: ${paraCount} paragraphs, ${tableCount} tables`);
 
@@ -149,7 +149,7 @@ async function example4_HandlingComplexDocuments() {
       }
     }
   }
-  paraCountAfter += doc.getParagraphs().length;
+  paraCountAfter += doc.getBodyElements().filter((el) => el.constructor.name === "Paragraph").length;
 
   console.log(
     `After: ${paraCountAfter} paragraphs, ${tableCountAfter} tables`

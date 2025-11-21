@@ -4,15 +4,15 @@
  * with proper error handling and logging
  */
 
-import {
-  Document,
-  Paragraph,
-  TableOfContents,
-  ConsoleLogger,
-  SilentLogger,
-  LogLevel,
-} from "../../src/index";
 import * as path from "path";
+import {
+  ConsoleLogger,
+  Document,
+  LogLevel,
+  Paragraph,
+  SilentLogger,
+  TableOfContents,
+} from "../../src/index";
 
 const OUTPUT_DIR = path.join(__dirname, "output");
 
@@ -345,5 +345,6 @@ export {
   example3_TOCWithCustomStyling,
   example4_MultiLevelTOC,
   example5_TOCUpdateWorkflow,
-  example6_TOCBestPractices,
+  example6_TOCBestPractices
 };
+

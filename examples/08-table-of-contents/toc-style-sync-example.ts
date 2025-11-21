@@ -5,8 +5,8 @@
  * with actual style names on save, preventing TOC population failures.
  */
 
-import { Document, Style, TableOfContents } from "../../src/index";
 import { promises as fs } from "fs";
+import { Document, Style, TableOfContents } from "../../src/index";
 
 async function demonstrateTOCStyleSync() {
   console.log("=== TOC Style Name Synchronization Demo ===\n");
@@ -159,3 +159,4 @@ if (require.main === module) {
 }
 
 export { demonstrateTOCStyleSync };
+

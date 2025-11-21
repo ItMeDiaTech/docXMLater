@@ -312,6 +312,65 @@ async function example5_AdvancedFeatures() {
 }
 
 /**
+ * Example 6: Centered Image with Border
+ */
+async function example6_CenteredBorderedImage() {
+  console.log('Example 6: Centered image with border...');
+
+  const imageBuffer = createSimplePNG();
+
+  // Basic centered image
+  const docBasic = Document.create({
+    properties: {
+      title: 'Basic Centered Image',
+      creator: 'DocXML Examples',
+    },
+  });
+
+  docBasic.createParagraph()
+    .setAlignment('center')
+    .setSpaceBefore(240)
+    .setSpaceAfter(240)
+    .addText('Basic Centered Image', { bold: true, size: 18 });
+
+  const imageBasic = await Image.fromBuffer(imageBuffer, {
+    width: inchesToEmus(2),
+    height: inchesToEmus(2)
+  });
+  imageBasic.floatCenter();
+  docBasic.addImage(imageBasic);
+
+  const outputPathBasic = path.join(outputDir, 'example6-basic-centered.docx');
+  await docBasic.save(outputPathBasic);
+  console.log(`✓ Saved basic centered image to ${outputPathBasic}`);
+
+  // Bordered centered image
+  const docBordered = Document.create({
+    properties: {
+      title: 'Bordered Centered Image',
+      creator: 'DocXML Examples',
+    },
+  });
+
+  docBordered.createParagraph()
+    .setAlignment('center')
+    .setSpaceBefore(240)
+    .setSpaceAfter(240)
+    .addText('Bordered Centered Image', { bold: true, size: 18 });
+
+  const imageBordered = await Image.fromBuffer(imageBuffer, {
+    width: inchesToEmus(2),
+    height: inchesToEmus(2)
+  });
+  imageBordered.applyTwoPixelBlackBorder().floatCenter();
+  docBordered.addImage(imageBordered);
+
+  const outputPathBordered = path.join(outputDir, 'example6-bordered-centered.docx');
+  await docBordered.save(outputPathBordered);
+  console.log(`✓ Saved bordered centered image to ${outputPathBordered}`);
+}
+
+/**
  * Example 4: Using Image class methods
  */
 async function example4_ImageMethods() {
@@ -393,6 +452,7 @@ async function main() {
     await example3_ImageWithText();
     await example4_ImageMethods();
     await example5_AdvancedFeatures();
+    await example6_CenteredBorderedImage();
 
     console.log('\n✓ All examples completed successfully!');
     console.log(`\nOutput files saved to: ${outputDir}`);
@@ -412,5 +472,6 @@ export {
   example2_MultipleImages,
   example3_ImageWithText,
   example4_ImageMethods,
-  example5_AdvancedFeatures
+  example5_AdvancedFeatures,
+  example6_CenteredBorderedImage
 };

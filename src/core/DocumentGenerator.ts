@@ -3,19 +3,19 @@
  * Converts structured data to OpenXML format
  */
 
-import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
-import { Paragraph } from "../elements/Paragraph";
-import { Table } from "../elements/Table";
-import { TableOfContentsElement } from "../elements/TableOfContentsElement";
-import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
-import { Section } from "../elements/Section";
-import { Hyperlink } from "../elements/Hyperlink";
-import { ImageManager } from "../elements/ImageManager";
-import { HeaderFooterManager } from "../elements/HeaderFooterManager";
 import { CommentManager } from "../elements/CommentManager";
 import { FontManager } from "../elements/FontManager";
-import { RelationshipManager } from "./RelationshipManager";
+import { HeaderFooterManager } from "../elements/HeaderFooterManager";
+import { Hyperlink } from "../elements/Hyperlink";
+import { ImageManager } from "../elements/ImageManager";
+import { Paragraph } from "../elements/Paragraph";
+import { Section } from "../elements/Section";
+import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
+import { Table } from "../elements/Table";
+import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { DocumentProperties } from "./Document";
+import { RelationshipManager } from "./RelationshipManager";
 
 /**
  * Body element types
@@ -614,7 +614,8 @@ ${properties}
     let xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <w:zoom w:percent="100"/>`;
+  <w:zoom w:percent="100"/>
+  <w:updateFields w:val="true"/>`;
 
     // Track changes settings
     if (trackChangesSettings?.trackChangesEnabled) {

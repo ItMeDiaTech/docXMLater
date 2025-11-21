@@ -8,6 +8,7 @@
 import { promises as fs } from 'fs';
 import { defaultLogger } from '../utils/logger';
 import { inchesToEmus } from '../utils/units';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
  * Supported image formats
@@ -208,6 +209,7 @@ export class Image {
   private crop?: ImageCrop;
   private effects?: ImageEffects;
   private rotation: number = 0;
+  private border?: { width: number; color: string };
 
   /**
    * Creates a new image from file path (async factory)
@@ -231,6 +233,21 @@ export class Image {
     const image = new Image({ source: buffer, ...properties });
     await image.loadImageDataForDimensions();
     return image;
+  }
+
+  /**
+   * Unified create method for images (async factory)
+   * @param properties Image properties including source (path or buffer)
+   * @returns Promise<Image>
+   */
+  static async create(properties: ImageProperties): Promise<Image> {
+    if (Buffer.isBuffer(properties.source)) {
+      return Image.fromBuffer(properties.source, properties);
+    } else if (typeof properties.source === 'string') {
+      return Image.fromFile(properties.source, properties);
+    } else {
+      throw new Error('Invalid source: must be file path or Buffer');
+    }
   }
 
   /**
@@ -739,7 +756,119 @@ export class Image {
     return this;
   }
 
-  // TODO: Add XML generation method if needed, e.g., toXml(builder: XMLBuilder): XMLElement {
-  //   // Implement XML generation here
-  // }
+  /**
+   * Generates DrawingML XML for this image
+   * @returns XMLElement representing the w:drawing element
+   */
+  applyTwoPixelBlackBorder(): this {
+    this.border = { width: 2, color: '000000' };
+    return this;
+  }
+
+  toXML(): XMLElement {
+    const isFloating = this.isFloating();
+
+    // Common elements
+    const extent = XMLBuilder.cxCy('extent', this.width, this.height);
+
+    const blip = XMLBuilder.a('blip', { 'r:embed': this.relationshipId });
+
+    const spPrChildren: XMLElement[] = [extent];
+
+    // Add preset geometry for rectangle
+    spPrChildren.push(XMLBuilder.a('prstGeom', { prst: 'rect' }));
+
+    // Add border if set
+    if (this.border) {
+      const pxToEmu = 9525; // 914400 EMUs/inch / 96 DPI
+      const widthEmu = this.border.width * pxToEmu;
+      const ln = XMLBuilder.a('ln', { w: widthEmu.toString() }, [
+        XMLBuilder.a('solidFill', undefined, [
+          XMLBuilder.a('srgbClr', { val: this.border.color })
+        ])
+      ]);
+      spPrChildren.push(ln);
+    }
+
+    const graphicData = XMLBuilder.a('graphicData', { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' }, [
+      XMLBuilder.pic('pic', undefined, [
+        XMLBuilder.pic('nvPicPr', undefined, [
+          XMLBuilder.pic('cNvPr', { id: this.docPrId, name: this.name, descr: this.description }),
+          XMLBuilder.pic('cNvPicPr')
+        ]),
+        XMLBuilder.pic('blipFill', undefined, [blip]),
+        XMLBuilder.pic('spPr', undefined, spPrChildren)
+      ])
+    ]);
+
+    const graphic = XMLBuilder.a('graphic', undefined, [graphicData]);
+
+    if (isFloating) {
+      // Floating image (anchor)
+      const positionHChildren: XMLElement[] = [];
+      if (this.position?.horizontal.alignment) {
+        positionHChildren.push(XMLBuilder.wp('align', undefined, [this.position.horizontal.alignment]));
+      } else {
+        positionHChildren.push(XMLBuilder.wp('posOffset', undefined, [(this.position?.horizontal.offset || 0).toString()]));
+      }
+      const positionH = XMLBuilder.wp('positionH', { relativeFrom: this.position?.horizontal.anchor || 'page' }, positionHChildren);
+
+      const positionVChildren: XMLElement[] = [];
+      if (this.position?.vertical.alignment) {
+        positionVChildren.push(XMLBuilder.wp('align', undefined, [this.position.vertical.alignment]));
+      } else {
+        positionVChildren.push(XMLBuilder.wp('posOffset', undefined, [(this.position?.vertical.offset || 0).toString()]));
+      }
+      const positionV = XMLBuilder.wp('positionV', { relativeFrom: this.position?.vertical.anchor || 'page' }, positionVChildren);
+
+      const anchorChildren = [
+        positionH,
+        positionV,
+        extent
+      ];
+
+      if (this.wrap) {
+        const wrapAttrs: Record<string, any> = {};
+        if (this.wrap.distanceTop !== undefined) wrapAttrs.distT = this.wrap.distanceTop;
+        if (this.wrap.distanceBottom !== undefined) wrapAttrs.distB = this.wrap.distanceBottom;
+        if (this.wrap.distanceLeft !== undefined) wrapAttrs.distL = this.wrap.distanceLeft;
+        if (this.wrap.distanceRight !== undefined) wrapAttrs.distR = this.wrap.distanceRight;
+        if (this.wrap.side) wrapAttrs.wrapText = this.wrap.side;
+        
+        let wrapElementName: string;
+        switch (this.wrap.type) {
+          case 'square': wrapElementName = 'wrapSquare'; break;
+          case 'tight': wrapElementName = 'wrapTight'; break;
+          case 'through': wrapElementName = 'wrapThrough'; break;
+          case 'topAndBottom': wrapElementName = 'wrapTopAndBottom'; break;
+          case 'none': wrapElementName = 'wrapNone'; break;
+          default: wrapElementName = 'wrapSquare';
+        }
+        
+        anchorChildren.push(XMLBuilder.wp(wrapElementName, wrapAttrs));
+      }
+
+      anchorChildren.push(XMLBuilder.wp('docPr', { id: this.docPrId, name: this.name, descr: this.description }));
+      anchorChildren.push(graphic);
+
+      return XMLBuilder.w('drawing', undefined, [
+        XMLBuilder.wp('anchor', {
+          behindDoc: this.anchor?.behindDoc ? 1 : 0,
+          locked: this.anchor?.locked ? 1 : 0,
+          layoutInCell: this.anchor?.layoutInCell ? 1 : 0,
+          allowOverlap: this.anchor?.allowOverlap ? 1 : 0,
+          relativeHeight: this.anchor?.relativeHeight
+        }, anchorChildren)
+      ]);
+    } else {
+      // Inline image
+      return XMLBuilder.w('drawing', undefined, [
+        XMLBuilder.wp('inline', undefined, [
+          extent,
+          XMLBuilder.wp('docPr', { id: this.docPrId, name: this.name, descr: this.description }),
+          graphic
+        ])
+      ]);
+    }
+  }
 }

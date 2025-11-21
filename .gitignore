@@ -191,3 +191,5 @@ Debug_Log.txt
 FULL_TEST/_rels/.rels
 FULL_TEST/word/_rels/document.xml.rels
 /CHANGELOG.md
+/WordDocumentProcessor.ts
+/workingMethodFromDocHub.ts

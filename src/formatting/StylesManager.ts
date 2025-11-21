@@ -3,10 +3,10 @@
  * Handles style registration, retrieval, and styles.xml generation
  */
 
-import { Style, StyleType } from "./Style";
+import { Paragraph } from "../elements/Paragraph";
 import { XMLBuilder } from "../xml/XMLBuilder";
 import { XMLParser } from "../xml/XMLParser";
-import { Paragraph } from "../elements/Paragraph";
+import { Style, StyleType } from "./Style";
 
 /**
  * Result of XML validation

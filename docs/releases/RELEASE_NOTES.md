@@ -1,91 +1,83 @@
-# docXMLater v0.20.1 Release Notes
+# docXMLater v5.0.0 Release Notes
 
-## Release Date: October 18, 2025
+## Release Date: November 19, 2025
 
-### Critical Bug Fix Release
+### Major Release
 
-This release addresses a critical bug that could cause silent text loss when mixing text and hyperlinks in paragraphs.
+This major version introduces significant enhancements, including a new CleanupHelper class and various fixes and improvements since the last documented release.
 
-## Critical Bug Fixed
+## Key Features Added
 
-### Paragraph.getText() - Hyperlink Text Loss
-**Issue**: When using `paragraph.addText()` and `paragraph.addHyperlink()` in the same paragraph, the hyperlink text was completely omitted from `getText()` results.
+### CleanupHelper
+- New utility class for comprehensive document cleanup
+- Methods include: unlockSDTs, removeSDTs, clearPreserveFlags, defragmentHyperlinks, cleanupNumbering, cleanupStyles, cleanupRelationships, removeCustomXML, unlockFields, unlockFrames, sanitizeTables
+- Preset configurations: googleDocsPreset, fullCleanupPreset, minimalPreset
+- Run all cleanups with `cleanup.all()` or selective with `cleanup.run(options)`
 
-**Root Cause**: The `Paragraph.getText()` method only filtered for `Run` instances and completely ignored `Hyperlink` instances.
+## Major Bug Fixes
 
-**Fix**: Updated the filter to include both `Run` and `Hyperlink` instances, ensuring all text content is properly consolidated.
+### TOC Field Instruction Parsing
+- Enhanced support for \o switch formats (unquoted, single-quoted, double-quoted)
+- Fixed extraction bug for fields with multiple w:fldChar in single run
+- Added multi-paragraph support for field tracking
 
-**Impact**: This bug could cause serious data loss in production, as hyperlink text would silently disappear.
+### Other Fixes
+- Removed overly aggressive Document.cleanFormatting() method
+- Fixed type error in CleanupHelper for RunFormatting access
+- Various improvements to hyperlink handling, list formatting, and special character serialization
+
+## Breaking Changes
+
+- Removed Document.cleanFormatting() - Use Paragraph.clearDirectFormattingConflicts() instead
+- Updated list indentation formula to match Microsoft Word standards
+- Default bullet font changed from 'Symbol' to 'Calibri'
 
 ## What's Included
 
-### Bug Fixes
-- Paragraph.getText() now includes hyperlink text content
-- Fixed type safety with XMLElement handling
-- Improved StylesManager corruption detection
-- Enhanced hyperlink relationship ID management
+### New Features
+- CleanupHelper with 12 cleanup operations
+- Enhanced TOC parsing with 10 new regression tests
+- Special character handling in runs (tabs, newlines, hyphens)
+
+### Improvements
+- WordDocumentProcessor optimizations
+- Expanded numbered list formats to 5 levels
+- Improved bullet symbol display
 
 ### Test Improvements
-- Added 6 comprehensive hyperlink integration tests
-- 474/478 tests passing (98.1% pass rate)
-- Full test coverage for mixed content scenarios
-
-### Test Cases Added
-1. Mixed text + hyperlink retrieval
-2. Hyperlink-only paragraph content
-3. Multiple hyperlinks with runs
-4. Hyperlink before runs
-5. Internal (bookmark) hyperlinks
-6. Complex multi-hyperlink scenarios
+- 2073+ tests across 59 files
+- 100% pass rate
+- New coverage for TOC parsing, cleanup operations, special characters
 
 ## Test Suite Status
 
 | Metric | Value |
 |--------|-------|
-| **Total Tests** | 478 |
-| **Passing** | 474 |
-| **Skipped** | 9 (external fixtures) |
-| **Failing** | 0 |
-| **Pass Rate** | 98.1% |
+| **Total Tests** | 2073+ |
+| **Passing** | 100% |
+| **Coverage** | Comprehensive across all modules |
 
-## Technical Details
+## Migration Guide
 
-### Modified Files
-- `src/elements/Paragraph.ts` - Fixed getText() method
-- `tests/elements/Paragraph.test.ts` - Added 6 new test cases
-- `README.md` - Updated with v0.20.1 information
-
-### Commit History
-- `e0dafe2` - docs: Update README with v0.20.1 release information
-- `fc4f540` - Version bump to 0.20.1
-- `e656f40` - fix: Fix Paragraph.getText() to include hyperlinks
+See CHANGELOG.md for detailed migration notes, especially for list formatting changes.
 
 ## Installation
 
 ```bash
-npm install docxmlater@0.20.1
+npm install docxmlater@5.0.0
 ```
 
 ## Usage Example
 
 ```typescript
-import { Document, Hyperlink } from 'docxmlater';
+import { Document, CleanupHelper } from 'docxmlater';
 
-// Create document
-const doc = Document.create();
-const para = doc.createParagraph();
-
-// Add mixed content
-para.addText('Click ');
-const link = Hyperlink.createExternal('https://example.com', 'here');
-para.addHyperlink(link);
-para.addText(' for more info');
-
-// Now getText() includes ALL content (v0.20.1)
-console.log(para.getText()); // Output: "Click here for more info"
-
-// Save document
-await doc.save('document.docx');
+const doc = await Document.load('document.docx');
+const cleanup = new CleanupHelper(doc);
+const report = cleanup.all(); // Run all cleanups
+console.log(report); // View cleanup statistics
+await doc.save('cleaned.docx');
+doc.dispose();
 ```
 
 ## Package Information
@@ -93,7 +85,7 @@ await doc.save('document.docx');
 | Field | Value |
 |-------|-------|
 | **Name** | docxmlater |
-| **Version** | 0.20.1 |
+| **Version** | 5.0.0 |
 | **License** | MIT |
 | **Repository** | https://github.com/ItMeDiaTech/docXMLater |
 | **npm** | https://www.npmjs.com/package/docxmlater |
@@ -111,4 +103,4 @@ See CHANGELOG.md for complete version history.
 
 ---
 
-Ready to upgrade? Run `npm install docxmlater@0.20.1` to get the latest version with this critical bug fix!
+Ready to upgrade? Run `npm install docxmlater@5.0.0` to get the latest major version!
