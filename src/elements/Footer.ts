@@ -5,9 +5,9 @@
  * Different footers can be defined for first page, odd pages, and even pages.
  */
 
+import { XMLElement } from '../xml/XMLBuilder';
 import { Paragraph } from './Paragraph';
 import { Table } from './Table';
-import { XMLElement } from '../xml/XMLBuilder';
 
 /**
  * Footer type
@@ -34,6 +34,7 @@ export class Footer {
   private elements: FooterElement[] = [];
   private type: FooterType;
   private footerId?: string;
+  private rawXML?: string; // Store original XML for preservation
 
   /**
    * Creates a new footer
@@ -41,6 +42,22 @@ export class Footer {
    */
   constructor(properties: FooterProperties = {}) {
     this.type = properties.type || 'default';
+  }
+
+  /**
+   * Sets the raw XML content (used when loading existing footers)
+   * @param xml Raw XML content
+   */
+  setRawXML(xml: string): this {
+    this.rawXML = xml;
+    return this;
+  }
+
+  /**
+   * Gets the raw XML content if available
+   */
+  getRawXML(): string | undefined {
+    return this.rawXML;
   }
 
   /**
@@ -135,6 +152,12 @@ export class Footer {
    * This creates a complete footer document (footer1.xml, etc.)
    */
   toXML(): string {
+    // If we have raw XML preserved from loading, use it
+    if (this.rawXML) {
+      return this.rawXML;
+    }
+
+    // Otherwise generate from elements
     const elementXmls = this.elements.map(el => el.toXML());
 
     let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';

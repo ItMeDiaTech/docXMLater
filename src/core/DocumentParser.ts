@@ -488,13 +488,15 @@ export class DocumentParser {
         paragraph,
         relationshipManager,
         zipHandler,
-        imageManager
-      );
+      imageManager
+    );
 
-      // NEW: Assemble complex fields from run tokens
-      this.assembleComplexFields(paragraph);
+    // NEW: Assemble complex fields from run tokens
+    // DISABLED: ComplexField assembly causes parsing failures for multi-paragraph fields (e.g., TOC)
+    // TODO: Re-enable when multi-paragraph field support is added
+    // this.assembleComplexFields(paragraph);
 
-      // Diagnostic logging for paragraph
+    // Diagnostic logging for paragraph
       const runs = paragraph.getRuns();
       const runData = runs.map((run) => ({
         text: run.getText(),
@@ -1279,8 +1281,9 @@ export class DocumentParser {
    */
   private createComplexFieldFromRuns(fieldRuns: Run[]): ComplexField | null {
     if (fieldRuns.length < 2) {
-      defaultLogger.warn(
-        "Insufficient runs for ComplexField (minimum 2: begin and instr)"
+      // LENIENT: Just log debug message, don't prevent document loading
+      defaultLogger.debug(
+        "Skipping ComplexField assembly: insufficient runs (minimum 2: begin and instr)"
       );
       return null;
     }
@@ -5435,6 +5438,9 @@ export class DocumentParser {
       const { Header } = require("../elements/Header");
       const header = new Header({ type });
 
+      // Store raw XML for preservation when saving
+      header.setRawXML(headerXml);
+
       // Extract w:hdr content
       const hdrContent = XMLParser.extractBetweenTags(
         headerXml,
@@ -5493,6 +5499,9 @@ export class DocumentParser {
     try {
       const { Footer } = require("../elements/Footer");
       const footer = new Footer({ type });
+
+      // Store raw XML for preservation when saving
+      footer.setRawXML(footerXml);
 
       // Extract w:ftr content
       const ftrContent = XMLParser.extractBetweenTags(
