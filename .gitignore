@@ -185,3 +185,9 @@ Incorrect.docx
 /Test_Code.docx
 /COMPATIBILITY_ANALYSIS_UPDATED.md
 docs/guides/toc-style-synchronization.md
+build.bat
+CHANGELOG.md
+Debug_Log.txt
+FULL_TEST/_rels/.rels
+FULL_TEST/word/_rels/document.xml.rels
+/CHANGELOG.md
