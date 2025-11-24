@@ -8,6 +8,7 @@ import { Hyperlink } from "../elements/Hyperlink";
 import { ImageManager } from "../elements/ImageManager";
 import { ImageRun } from "../elements/ImageRun";
 import { Paragraph, ParagraphFormatting } from "../elements/Paragraph";
+import { Revision } from "../elements/Revision";
 import { BreakType, Run, RunContent, RunFormatting } from "../elements/Run";
 import {
   PageNumberFormat,
@@ -224,7 +225,8 @@ export class DocumentParser {
               parsed["w:tbl"],
               relationshipManager,
               zipHandler,
-              imageManager
+              imageManager,
+              elementXml
             );
             if (table) bodyElements.push(table);
             pos = next.pos + elementXml.length;
@@ -559,9 +561,13 @@ export class DocumentParser {
 
     const paraContent = paraXml.substring(contentStart, contentEnd);
 
+    // DEBUG: Log paragraph content to diagnose revision extraction
+    console.log(`[Revision Debug] Paragraph content (first 500 chars): ${paraContent.substring(0, 500)}`);
+    console.log(`[Revision Debug] Full paragraph content length: ${paraContent.length}`);
+
     // Track children by scanning XML for opening tags
     interface ChildMarker {
-      type: "w:r" | "w:hyperlink" | "w:fldSimple";
+      type: "w:r" | "w:hyperlink" | "w:fldSimple" | "w:ins" | "w:del" | "w:moveFrom" | "w:moveTo";
       pos: number;
       index: number;
     }
@@ -570,6 +576,10 @@ export class DocumentParser {
     let runIndex = 0;
     let hyperlinkIndex = 0;
     let fieldIndex = 0;
+    let insIndex = 0;
+    let delIndex = 0;
+    let moveFromIndex = 0;
+    let moveToIndex = 0;
 
     // Scan for all first-level child elements in document order
     let searchPos = 0;
@@ -602,11 +612,49 @@ export class DocumentParser {
           index: fieldIndex++,
         });
         searchPos = tagEnd + 1;
+      } else if (tagName === "w:ins") {
+        children.push({
+          type: "w:ins",
+          pos: tagStart,
+          index: insIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "w:del") {
+        children.push({
+          type: "w:del",
+          pos: tagStart,
+          index: delIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "w:moveFrom") {
+        children.push({
+          type: "w:moveFrom",
+          pos: tagStart,
+          index: moveFromIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "w:moveTo") {
+        children.push({
+          type: "w:moveTo",
+          pos: tagStart,
+          index: moveToIndex++,
+        });
+        searchPos = tagEnd + 1;
       } else {
         searchPos = tagEnd + 1;
       }
     }
 
+    // Extract revision XMLs from paragraph content for raw XML parsing
+    const insXmls = XMLParser.extractElements(paraContent, "w:ins");
+    const delXmls = XMLParser.extractElements(paraContent, "w:del");
+    const moveFromXmls = XMLParser.extractElements(paraContent, "w:moveFrom");
+    const moveToXmls = XMLParser.extractElements(paraContent, "w:moveTo");
+
+    // DEBUG: Log extraction results
+    console.log(`[Extraction] ins: ${insXmls.length}, del: ${delXmls.length}, moveFrom: ${moveFromXmls.length}, moveTo: ${moveToXmls.length}`);
+    console.log(`[Scanning] total children: ${children.length}, ins markers: ${insIndex}, del markers: ${delIndex}, moveFrom markers: ${moveFromIndex}, moveTo markers: ${moveToIndex}`);
+    
     // Now process children in the order they were found
     for (const child of children) {
       if (child.type === "w:r") {
@@ -664,7 +712,130 @@ export class DocumentParser {
             paragraph.addField(field);
           }
         }
+      } else if (child.type === "w:ins") {
+        if (child.index < insXmls.length) {
+          const revisionXml = insXmls[child.index];
+          if (revisionXml) {
+            const revision = this.parseRevisionFromXml(revisionXml, "w:ins");
+            if (revision) {
+              paragraph.addRevision(revision);
+            }
+          }
+        }
+      } else if (child.type === "w:del") {
+        if (child.index < delXmls.length) {
+          const revisionXml = delXmls[child.index];
+          if (revisionXml) {
+            const revision = this.parseRevisionFromXml(revisionXml, "w:del");
+            if (revision) {
+              paragraph.addRevision(revision);
+            }
+          }
+        }
+      } else if (child.type === "w:moveFrom") {
+        if (child.index < moveFromXmls.length) {
+          const revisionXml = moveFromXmls[child.index];
+          if (revisionXml) {
+            const revision = this.parseRevisionFromXml(revisionXml, "w:moveFrom");
+            if (revision) {
+              paragraph.addRevision(revision);
+            }
+          }
+        }
+      } else if (child.type === "w:moveTo") {
+        if (child.index < moveToXmls.length) {
+          const revisionXml = moveToXmls[child.index];
+          if (revisionXml) {
+            const revision = this.parseRevisionFromXml(revisionXml, "w:moveTo");
+            if (revision) {
+              paragraph.addRevision(revision);
+            }
+          }
+        }
       }
+    }
+  }
+
+  /**
+   * Parses a revision element from raw XML
+   * Extracts revision metadata (id, author, date) and contained runs
+   * @param revisionXml - Raw XML of the revision element
+   * @param tagName - Tag name (w:ins, w:del, w:moveFrom, w:moveTo)
+   * @returns Parsed Revision instance or null
+   */
+  private parseRevisionFromXml(
+    revisionXml: string,
+    tagName: string
+  ): Revision | null {
+    try {
+      // Map XML tag to RevisionType
+      let revisionType: import("../elements/Revision").RevisionType;
+      switch (tagName) {
+        case "w:ins":
+          revisionType = "insert";
+          break;
+        case "w:del":
+          revisionType = "delete";
+          break;
+        case "w:moveFrom":
+          revisionType = "moveFrom";
+          break;
+        case "w:moveTo":
+          revisionType = "moveTo";
+          break;
+        default:
+          return null;
+      }
+
+      // Extract attributes
+      const idAttr = XMLParser.extractAttribute(revisionXml, "w:id");
+      const author = XMLParser.extractAttribute(revisionXml, "w:author");
+      const dateAttr = XMLParser.extractAttribute(revisionXml, "w:date");
+      const moveId = XMLParser.extractAttribute(revisionXml, "w:moveId");
+
+      if (!idAttr || !author) {
+        return null; // Required attributes missing
+      }
+
+      const id = parseInt(idAttr, 10);
+      const date = dateAttr ? new Date(dateAttr) : new Date();
+
+      // Extract runs from revision element
+      const runXmls = XMLParser.extractElements(revisionXml, "w:r");
+      const runs: Run[] = [];
+
+      for (const runXml of runXmls) {
+        // Parse the run object
+        const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
+        const run = this.parseRunFromObject(runObj["w:r"]);
+        if (run) {
+          runs.push(run);
+        }
+      }
+
+      if (runs.length === 0) {
+        return null; // No content in revision
+      }
+
+      // Create Revision instance
+      const revision = new Revision({
+        id,
+        author,
+        date,
+        type: revisionType,
+        content: runs,
+        moveId,
+      });
+
+      return revision;
+    } catch (error) {
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse revision:",
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
+      return null;
     }
   }
 
@@ -2401,7 +2572,8 @@ export class DocumentParser {
     tableObj: any,
     relationshipManager: RelationshipManager,
     zipHandler: ZipHandler,
-    imageManager: ImageManager
+    imageManager: ImageManager,
+    rawTableXml?: string
   ): Promise<Table | null> {
     try {
       // Create empty table
@@ -2429,12 +2601,22 @@ export class DocumentParser {
       const rows = tableObj["w:tr"];
       const rowChildren = Array.isArray(rows) ? rows : rows ? [rows] : [];
 
-      for (const rowObj of rowChildren) {
+      // Extract row XMLs from raw table XML if available
+      let rowXmls: string[] = [];
+      if (rawTableXml) {
+        rowXmls = XMLParser.extractElements(rawTableXml, "w:tr");
+      }
+
+      for (let i = 0; i < rowChildren.length; i++) {
+        const rowObj = rowChildren[i];
+        const rawRowXml = i < rowXmls.length ? rowXmls[i] : undefined;
+        
         const row = await this.parseTableRowFromObject(
           rowObj,
           relationshipManager,
           zipHandler,
-          imageManager
+          imageManager,
+          rawRowXml
         );
         if (row) {
           table.addRow(row);
@@ -2547,7 +2729,8 @@ export class DocumentParser {
     rowObj: any,
     relationshipManager: RelationshipManager,
     zipHandler: ZipHandler,
-    imageManager: ImageManager
+    imageManager: ImageManager,
+    rawRowXml?: string
   ): Promise<TableRow | null> {
     try {
       // Create empty row
@@ -2572,12 +2755,22 @@ export class DocumentParser {
       const cells = rowObj["w:tc"];
       const cellChildren = Array.isArray(cells) ? cells : cells ? [cells] : [];
 
-      for (const cellObj of cellChildren) {
+      // Extract cell XMLs from raw row XML if available
+      let cellXmls: string[] = [];
+      if (rawRowXml) {
+        cellXmls = XMLParser.extractElements(rawRowXml, "w:tc");
+      }
+
+      for (let i = 0; i < cellChildren.length; i++) {
+        const cellObj = cellChildren[i];
+        const rawCellXml = i < cellXmls.length ? cellXmls[i] : undefined;
+        
         const cell = await this.parseTableCellFromObject(
           cellObj,
           relationshipManager,
           zipHandler,
-          imageManager
+          imageManager,
+          rawCellXml
         );
         if (cell) {
           row.addCell(cell);
@@ -2753,7 +2946,8 @@ export class DocumentParser {
     cellObj: any,
     relationshipManager: RelationshipManager,
     zipHandler: ZipHandler,
-    imageManager: ImageManager
+    imageManager: ImageManager,
+    rawCellXml?: string
   ): Promise<TableCell | null> {
     try {
       // Create empty cell
@@ -2897,25 +3091,47 @@ export class DocumentParser {
         }
       }
 
-      // Parse paragraphs in cell (w:p)
-      const paragraphs = cellObj["w:p"];
-      const paraChildren = Array.isArray(paragraphs)
-        ? paragraphs
-        : paragraphs
-        ? [paragraphs]
-        : [];
+    // Parse paragraphs in cell (w:p)
+    const paragraphs = cellObj["w:p"];
+    const paraChildren = Array.isArray(paragraphs)
+      ? paragraphs
+      : paragraphs
+      ? [paragraphs]
+      : [];
 
-      for (const paraObj of paraChildren) {
-        const paragraph = await this.parseParagraphFromObject(
+    // Extract paragraph XMLs from raw cell XML if available
+    let paraXmls: string[] = [];
+    if (rawCellXml) {
+      paraXmls = XMLParser.extractElements(rawCellXml, "w:p");
+    }
+
+    for (let i = 0; i < paraChildren.length; i++) {
+      const paraObj = paraChildren[i];
+      const rawParaXml = i < paraXmls.length ? paraXmls[i] : undefined;
+      
+      // CRITICAL FIX: Use parseParagraphWithOrder to preserve revisions in table cells
+      // parseParagraphFromObject doesn't scan for revisions, causing 62+ revisions to be lost
+      let paragraph;
+      if (rawParaXml) {
+        paragraph = await this.parseParagraphWithOrder(
+          rawParaXml,
+          relationshipManager,
+          zipHandler,
+          imageManager
+        );
+      } else {
+        paragraph = await this.parseParagraphFromObject(
           paraObj,
           relationshipManager,
           zipHandler,
           imageManager
         );
-        if (paragraph) {
-          cell.addParagraph(paragraph);
-        }
       }
+      
+      if (paragraph) {
+        cell.addParagraph(paragraph);
+      }
+    }
 
       return cell;
     } catch (error) {
