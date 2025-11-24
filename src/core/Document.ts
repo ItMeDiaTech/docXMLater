@@ -3901,6 +3901,7 @@ export class Document {
    * **Elements that receive blank lines:**
    * - All 1×1 tables (configurable via filter)
    * - All multi-cell tables (configurable via filter)
+   * - Bullet and numbered list blocks (configurable)
    *
    * **Features:**
    * - Optional cleanup of duplicate blanks before adding structure blanks
@@ -3908,12 +3909,14 @@ export class Document {
    * - Automatic preserve flag marking to protect structural blanks
    * - Customizable style for blank paragraphs (default: 'Normal')
    * - Per-table-type filtering for selective processing
+   * - List block detection via paragraph numbering properties
    *
    * **Typical Workflow:**
    * 1. (Optional) Remove all duplicate blank paragraphs
    * 2. Add blank lines after 1×1 tables
    * 3. Add blank lines after multi-cell tables
-   * 4. Return aggregated statistics
+   * 4. Add blank lines after list blocks
+   * 5. Return aggregated statistics
    *
    * @param options Configuration options
    * @returns Statistics about the operation
@@ -3982,11 +3985,14 @@ export class Document {
     belowTOC?: boolean;
     /** Add blank line above warning message (default: true) */
     aboveWarning?: boolean;
+    /** Add blank line after bullet/numbered list blocks (default: true) */
+    afterLists?: boolean;
   }): {
     tablesProcessed: number;
     blankLinesAdded: number;
     existingLinesMarked: number;
     blankLinesRemoved: number;
+    listsProcessed: number;
   } {
     // Extract options with defaults
     const spacingAfter = options?.spacingAfter ?? 120;
@@ -4001,12 +4007,14 @@ export class Document {
     const belowHeader1Lines = options?.belowHeader1Lines ?? true;
     const belowTOC = options?.belowTOC ?? true;
     const aboveWarning = options?.aboveWarning ?? true;
+    const afterLists = options?.afterLists ?? true;
 
     // Aggregated statistics
     let totalTablesProcessed = 0;
     let totalBlankLinesAdded = 0;
     let totalExistingLinesMarked = 0;
     let blankLinesRemoved: number = 0;
+    let totalListsProcessed = 0;
 
     // Phase 1: Remove duplicate blank paragraphs (always execute)
     const cleanupResult = this.removeExtraBlankParagraphs();
@@ -4241,12 +4249,119 @@ export class Document {
       }
     }
 
+    // Phase 9: Add blank after bullet/numbered list blocks
+    if (afterLists) {
+      let inListBlock = false;
+      let listBlockStartIndex = -1;
+      
+      for (let i = 0; i < this.bodyElements.length; i++) {
+        const element = this.bodyElements[i];
+        
+        if (element instanceof Paragraph) {
+          const numbering = element.getNumbering();
+          
+          if (numbering) {
+            // This paragraph is part of a list
+            if (!inListBlock) {
+              // Start of a new list block
+              inListBlock = true;
+              listBlockStartIndex = i;
+            }
+            // Continue tracking the list block
+          } else {
+            // This paragraph is NOT part of a list
+            if (inListBlock) {
+              // End of list block detected - insert blank after previous paragraph
+              const listEndIndex = i - 1;
+              
+              // Check if next element is already blank
+              const nextElement = this.bodyElements[i];
+              
+              if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
+                // Mark existing blank as preserved
+                nextElement.setStyle(style);
+                if (markAsPreserved && !nextElement.isPreserved()) {
+                  nextElement.setPreserved(true);
+                  totalExistingLinesMarked++;
+                }
+              } else {
+                // Add blank paragraph after list block
+                const blankPara = Paragraph.create();
+                blankPara.setStyle(style);
+                blankPara.setSpaceAfter(spacingAfter);
+                if (markAsPreserved) {
+                  blankPara.setPreserved(true);
+                }
+                this.bodyElements.splice(i, 0, blankPara);
+                totalBlankLinesAdded++;
+                i++; // Skip the newly inserted blank paragraph
+              }
+              
+              totalListsProcessed++;
+              inListBlock = false;
+              listBlockStartIndex = -1;
+            }
+          }
+        } else {
+          // Non-paragraph element (table, TOC, etc.) - ends list block
+          if (inListBlock) {
+            // End of list block detected - insert blank before this element
+            const listEndIndex = i - 1;
+            
+            // Check if current element is already preceded by blank
+            if (i > 0) {
+              const prevElement = this.bodyElements[i - 1];
+              
+              if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
+                // Mark existing blank as preserved
+                prevElement.setStyle(style);
+                if (markAsPreserved && !prevElement.isPreserved()) {
+                  prevElement.setPreserved(true);
+                  totalExistingLinesMarked++;
+                }
+              } else {
+                // Add blank paragraph after list block
+                const blankPara = Paragraph.create();
+                blankPara.setStyle(style);
+                blankPara.setSpaceAfter(spacingAfter);
+                if (markAsPreserved) {
+                  blankPara.setPreserved(true);
+                }
+                this.bodyElements.splice(i, 0, blankPara);
+                totalBlankLinesAdded++;
+                i++; // Skip the newly inserted blank paragraph
+              }
+            }
+            
+            totalListsProcessed++;
+            inListBlock = false;
+            listBlockStartIndex = -1;
+          }
+        }
+      }
+      
+      // Handle case where list block extends to end of document
+      if (inListBlock && this.bodyElements.length > 0) {
+        // Add blank paragraph at the end
+        const blankPara = Paragraph.create();
+        blankPara.setStyle(style);
+        blankPara.setSpaceAfter(spacingAfter);
+        if (markAsPreserved) {
+          blankPara.setPreserved(true);
+        }
+        this.bodyElements.push(blankPara);
+        totalBlankLinesAdded++;
+        totalListsProcessed++;
+      }
+    }
+
     // Return aggregated statistics
     return {
       tablesProcessed: totalTablesProcessed,
       blankLinesAdded: totalBlankLinesAdded,
       existingLinesMarked: totalExistingLinesMarked,
       blankLinesRemoved,
+      listsProcessed: totalListsProcessed,
     };
   }
 
