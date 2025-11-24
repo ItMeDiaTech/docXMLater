@@ -45,6 +45,8 @@ export interface TOCProperties {
   hyperlinkColor?: string;
   /** Original field instruction from loaded document (internal use) */
   originalFieldInstruction?: string;
+  /** Enable automatic normalization of incomplete \t switches (default: false) */
+  normalizeFieldInstruction?: boolean;
 }
 
 /**

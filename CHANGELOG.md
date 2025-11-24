@@ -5,9 +5,24 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [5.0.0] - 2025-11-19
+
+### Added
+- **CleanupHelper Class**: Comprehensive document cleanup utilities including unlocking SDTs, removing preserve flags, defragmenting hyperlinks, cleaning unused elements, removing customXML, unlocking fields/frames, and sanitizing tables.
 
 ### Fixed
+
+- **TOC Field Instruction \o Switch Format Support**: Enhanced TOC outline level switch to support unquoted, single-quoted, and double-quoted formats
+  - **Previous Behavior**: Only supported double-quoted format like `\o "1-3"`
+  - **Issue**: Documents from some generators (e.g., Google Docs) use unquoted format `\o 1-3` which wasn't recognized
+  - **Solution**: Updated regex in [`parseTOCFieldInstruction()`](src/core/DocumentParser.ts) and [`Document.parseTOCFieldInstruction()`](src/core/Document.ts) to support multiple formats
+  - **New Regex**: `/\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/` handles:
+    - Double-quoted: `\o "1-3"` (original format)
+    - Single-quoted: `\o '1-3'` (alternative quoted format)
+    - Unquoted: `\o 1-3` (unquoted format from Google Docs)
+  - **Implementation**: Uses grouped captures with fallback logic: `parseInt(match[1] || match[3] || match[5]!, 10)`
+  - **Backward Compatibility**: Existing documents continue to work unchanged
+  - **Test Coverage**: Added 10 regression tests covering all three formats and edge cases
 
 - **TOC Field Instruction Extraction**: Fixed critical bug in Test_Code.docx and similar documents where TOC field instructions couldn't be parsed
   - **Root Cause**: Single run can contain multiple `w:fldChar` elements in an array (e.g., both `begin` and `separate` in same run)
@@ -18,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Enhanced Logging**: Added diagnostic logging showing field marker counts and extraction steps
   - **Multi-Paragraph Support**: Field tracking now spans multiple paragraphs (TOC fields can have begin/separate in paragraph 1, end in paragraph 5)
   - **Tested With**: Test_Code.docx successfully extracts `TOC \h \u \z \t "Heading 2,2,"` instruction
+
 
 ### Removed
 
@@ -38,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.2.0] - [3.5.0] - 2025-01-17 to Present
+## [3.2.0] - [4.9.0] - 2025-01-17 to 2025-11-18
 
 ### Note
 

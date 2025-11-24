@@ -209,7 +209,7 @@ export class Image {
   private crop?: ImageCrop;
   private effects?: ImageEffects;
   private rotation: number = 0;
-  private border?: { width: number; color: string };
+  private border?: { width: number }; // Width in points, color always black
 
   /**
    * Creates a new image from file path (async factory)
@@ -757,12 +757,31 @@ export class Image {
   }
 
   /**
-   * Generates DrawingML XML for this image
-   * @returns XMLElement representing the w:drawing element
+   * Applies a black border around the image
+   * @param thicknessPt Border thickness in points (default: 2pt)
+   * @returns This image for chaining
+   */
+  setBorder(thicknessPt: number = 2): this {
+    this.border = { width: thicknessPt };
+    return this;
+  }
+
+  /**
+   * Removes the border from the image
+   * @returns This image for chaining
+   */
+  removeBorder(): this {
+    this.border = undefined;
+    return this;
+  }
+
+  /**
+   * @deprecated Use setBorder() instead. This method will be removed in a future version.
+   * Applies a 2-point black border around the image.
+   * @returns This image for chaining
    */
   applyTwoPixelBlackBorder(): this {
-    this.border = { width: 2, color: '000000' };
-    return this;
+    return this.setBorder(2);
   }
 
   toXML(): XMLElement {
@@ -780,11 +799,11 @@ export class Image {
 
     // Add border if set
     if (this.border) {
-      const pxToEmu = 9525; // 914400 EMUs/inch / 96 DPI
-      const widthEmu = this.border.width * pxToEmu;
+      const ptToEmu = 12700; // 1 point = 12700 EMUs (Word standard)
+      const widthEmu = this.border.width * ptToEmu;
       const ln = XMLBuilder.a('ln', { w: widthEmu.toString() }, [
         XMLBuilder.a('solidFill', undefined, [
-          XMLBuilder.a('srgbClr', { val: this.border.color })
+          XMLBuilder.a('srgbClr', { val: '000000' }) // Always black
         ])
       ]);
       spPrChildren.push(ln);

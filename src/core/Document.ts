@@ -6893,6 +6893,34 @@ export class Document {
   }
 
   /**
+   * Checks if the document has any tracked changes (revisions)
+   *
+   * Convenience method that checks whether the document contains any revision
+   * objects (insertions, deletions, moves, property changes, etc.).
+   *
+   * This is functionally equivalent to {@link isTrackingChanges} but uses a
+   * more intuitive name that clarifies it checks for the *presence* of revisions,
+   * not whether tracking mode is enabled.
+   *
+   * @returns True if the document contains one or more tracked changes
+   *
+   * @example
+   * ```typescript
+   * if (doc.hasTrackedChanges()) {
+   *   console.log('Document has pending revisions to review');
+   *   const stats = doc.getRevisionStats();
+   *   console.log(`Found ${stats.total} tracked changes`);
+   * }
+   * ```
+   *
+   * @see {@link isTrackingChanges} - Identical functionality
+   * @see {@link isTrackChangesEnabled} - Checks if tracking mode is enabled
+   */
+  hasTrackedChanges(): boolean {
+    return this.revisionManager.isTrackingChanges();
+  }
+
+  /**
    * Gets detailed statistics about tracked changes in the document
    *
    * Provides a comprehensive breakdown of all revisions including counts

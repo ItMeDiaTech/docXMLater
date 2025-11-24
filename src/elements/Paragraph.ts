@@ -748,6 +748,28 @@ export class Paragraph {
   }
 
   /**
+   * Gets all Revision instances in the paragraph
+   *
+   * Returns only Revision objects (tracked changes), excluding other content types.
+   *
+   * @returns Array of Revision instances
+   *
+   * @example
+   * ```typescript
+   * const revisions = para.getRevisions();
+   * console.log(`Paragraph has ${revisions.length} tracked changes`);
+   *
+   * // Check each revision
+   * for (const rev of revisions) {
+   *   console.log(`${rev.getType()} by ${rev.getAuthor()}`);
+   * }
+   * ```
+   */
+  getRevisions(): Revision[] {
+    return this.content.filter((item): item is Revision => item instanceof Revision);
+  }
+
+  /**
    * Gets all content in the paragraph
    *
    * Returns all content items including runs, fields, hyperlinks,
