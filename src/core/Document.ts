@@ -2272,7 +2272,7 @@ export class Document {
    * console.log(`Applied 3pt borders to ${count} images > 100x100`);
    * ```
    */
-  borderAndCenterLargeImages(minPixels: number = 50, borderThicknessPt: number = 2): number {
+  public borderAndCenterLargeImages(minPixels: number = 50, borderThicknessPt: number = 2): number {
     let count = 0;
 
     // Convert pixels to EMUs (914400 EMUs per inch, 96 DPI)
