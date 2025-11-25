@@ -763,6 +763,15 @@ export class Image {
    */
   setBorder(thicknessPt: number = 2): this {
     this.border = { width: thicknessPt };
+    
+    // Auto-set effectExtent to provide space for the border
+    // Border needs space around it to render properly
+    // Use 1.5x the border width as padding (converted to EMUs)
+    const ptToEmu = 12700; // 1 point = 12700 EMUs
+    const paddingEmu = Math.round(thicknessPt * ptToEmu * 1.5);
+    
+    this.setEffectExtent(paddingEmu, paddingEmu, paddingEmu, paddingEmu);
+    
     return this;
   }
 
@@ -787,23 +796,40 @@ export class Image {
   toXML(): XMLElement {
     const isFloating = this.isFloating();
 
-    // Common elements
-    const extent = XMLBuilder.cxCy('extent', this.width, this.height);
+    // Common elements - must include wp: namespace prefix
+    const extent = XMLBuilder.wp('extent', { cx: this.width.toString(), cy: this.height.toString() });
 
-    const blip = XMLBuilder.a('blip', { 'r:embed': this.relationshipId });
+    // Blip with required cstate attribute
+    const blip = XMLBuilder.a('blip', { 
+      'r:embed': this.relationshipId,
+      cstate: 'none'
+    });
 
-    const spPrChildren: XMLElement[] = [extent];
+    // Transform element with offset and extent (required by Word)
+    const xfrm = XMLBuilder.a('xfrm', undefined, [
+      XMLBuilder.a('off', { x: '0', y: '0' }),
+      XMLBuilder.a('ext', { cx: this.width.toString(), cy: this.height.toString() })
+    ]);
 
-    // Add preset geometry for rectangle
-    spPrChildren.push(XMLBuilder.a('prstGeom', { prst: 'rect' }));
+    const spPrChildren: XMLElement[] = [xfrm];
 
-    // Add border if set
+    // Add preset geometry for rectangle with avLst
+    spPrChildren.push(XMLBuilder.a('prstGeom', { prst: 'rect' }, [
+      XMLBuilder.a('avLst')
+    ]));
+
+    // Add border if set (Word-compatible structure)
     if (this.border) {
+      // Add noFill element before the border line (required by Word)
+      spPrChildren.push(XMLBuilder.a('noFill'));
+      
       const ptToEmu = 12700; // 1 point = 12700 EMUs (Word standard)
       const widthEmu = this.border.width * ptToEmu;
+      
+      // Simplified border structure matching Word's output
       const ln = XMLBuilder.a('ln', { w: widthEmu.toString() }, [
         XMLBuilder.a('solidFill', undefined, [
-          XMLBuilder.a('srgbClr', { val: '000000' }) // Always black
+          XMLBuilder.a('schemeClr', { val: 'tx1' }) // Use scheme color like Word does
         ])
       ]);
       spPrChildren.push(ln);
@@ -812,11 +838,19 @@ export class Image {
     const graphicData = XMLBuilder.a('graphicData', { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' }, [
       XMLBuilder.pic('pic', undefined, [
         XMLBuilder.pic('nvPicPr', undefined, [
-          XMLBuilder.pic('cNvPr', { id: this.docPrId, name: this.name, descr: this.description }),
-          XMLBuilder.pic('cNvPicPr')
+          XMLBuilder.pic('cNvPr', { id: '0', name: '', descr: '' }),
+          XMLBuilder.pic('cNvPicPr', undefined, [
+            XMLBuilder.a('picLocks', { noChangeAspect: '1', noChangeArrowheads: '1' })
+          ])
         ]),
-        XMLBuilder.pic('blipFill', undefined, [blip]),
-        XMLBuilder.pic('spPr', undefined, spPrChildren)
+        XMLBuilder.pic('blipFill', undefined, [
+          blip,
+          XMLBuilder.a('srcRect'),
+          XMLBuilder.a('stretch', undefined, [
+            XMLBuilder.a('fillRect')
+          ])
+        ]),
+        XMLBuilder.pic('spPr', { bwMode: 'auto' }, spPrChildren)
       ])
     ]);
 
@@ -880,11 +914,35 @@ export class Image {
         }, anchorChildren)
       ]);
     } else {
-      // Inline image
+      // Inline image - requires specific attributes and elements for Word compatibility
+      const effectExt = this.effectExtent || { left: 0, top: 0, right: 0, bottom: 0 };
+      
       return XMLBuilder.w('drawing', undefined, [
-        XMLBuilder.wp('inline', undefined, [
+        XMLBuilder.wp('inline', {
+          distT: '0',
+          distB: '0',
+          distL: '0',
+          distR: '0'
+        }, [
           extent,
-          XMLBuilder.wp('docPr', { id: this.docPrId, name: this.name, descr: this.description }),
+          XMLBuilder.wp('effectExtent', {
+            t: effectExt.top.toString(),
+            r: effectExt.right.toString(),
+            b: effectExt.bottom.toString(),
+            l: effectExt.left.toString()
+          }),
+          XMLBuilder.wp('docPr', {
+            id: this.docPrId.toString(),
+            name: '',
+            descr: '',
+            title: ''
+          }),
+          XMLBuilder.wp('cNvGraphicFramePr', undefined, [
+            XMLBuilder.a('graphicFrameLocks', {
+              'xmlns:a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+              noChangeAspect: '1'
+            })
+          ]),
           graphic
         ])
       ]);
