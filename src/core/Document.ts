@@ -2243,6 +2243,91 @@ export class Document {
   }
 
   /**
+   * Applies border and centers all images greater than specified pixel size
+   *
+   * This helper combines two operations:
+   * 1. Applies a border to the image (with auto-calculated effectExtent)
+   * 2. Centers the paragraph containing the image
+   *
+   * Only processes images where BOTH width AND height exceed the minimum size.
+   * The border is applied using Image.setBorder() which automatically calculates
+   * and sets the effectExtent to ensure proper rendering in Microsoft Word.
+   *
+   * Conversion: 50 pixels = 476,250 EMUs (at 96 DPI)
+   * Border defaults to 2pt with black color
+   *
+   * @param minPixels Minimum size in pixels for both width and height (default: 50)
+   * @param borderThicknessPt Border thickness in points (default: 2)
+   * @returns Number of images processed (bordered and centered)
+   * @example
+   * ```typescript
+   * // Apply 2pt border and center all images > 50x50 pixels
+   * const count = doc.borderAndCenterLargeImages();
+   * console.log(`Processed ${count} large images`);
+   * ```
+   * @example
+   * ```typescript
+   * // Custom threshold and border thickness
+   * const count = doc.borderAndCenterLargeImages(100, 3);
+   * console.log(`Applied 3pt borders to ${count} images > 100x100`);
+   * ```
+   */
+  borderAndCenterLargeImages(minPixels: number = 50, borderThicknessPt: number = 2): number {
+    let count = 0;
+
+    // Convert pixels to EMUs (914400 EMUs per inch, 96 DPI)
+    // Formula: pixels * (914400 / 96) = pixels * 9525
+    const minEmus = Math.round(minPixels * 9525);
+
+    // Get all images with metadata
+    const images = this.imageManager.getAllImages();
+
+    // Create a Set of image IDs that meet size criteria
+    const largeImageIds = new Set<string>();
+
+    for (const entry of images) {
+      const image = entry.image;
+      const width = image.getWidth();
+      const height = image.getHeight();
+
+      // Check if both dimensions meet minimum
+      if (width >= minEmus && height >= minEmus) {
+        // Apply border (automatically sets effectExtent)
+        image.setBorder(borderThicknessPt);
+
+        // Track this image's relationship ID
+        const relId = image.getRelationshipId();
+        if (relId) {
+          largeImageIds.add(relId);
+        }
+      }
+    }
+
+    // Find paragraphs containing these large images and center them
+    // Note: Images are embedded in paragraphs as ImageRun elements
+    for (const paragraph of this.getAllParagraphs()) {
+      const content = paragraph.getContent();
+
+      for (const item of content) {
+        // Check if this is an ImageRun (subclass of Run)
+        if (item instanceof ImageRun) {
+          const image = item.getImageElement();
+          const relId = image.getRelationshipId();
+
+          if (relId && largeImageIds.has(relId)) {
+            // Center this paragraph
+            paragraph.setAlignment("center");
+            count++;
+            break; // Only count paragraph once
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  /**
    * Sets line spacing for all list items (numbered or bulleted)
    *
    * @param spacingTwips Line spacing in twips (default: 240 = 12pt)
@@ -3996,7 +4081,7 @@ export class Document {
   } {
     // Extract options with defaults
     const spacingAfter = options?.spacingAfter ?? 120;
-    const markAsPreserved = options?.markAsPreserved ?? false;
+    const markAsPreserved = options?.markAsPreserved ?? true;
     const style = options?.style ?? 'Normal';
     const after1x1Tables = options?.after1x1Tables ?? true;
     const afterOtherTables = options?.afterOtherTables ?? true;
@@ -4289,9 +4374,7 @@ export class Document {
                 const blankPara = Paragraph.create();
                 blankPara.setStyle(style);
                 blankPara.setSpaceAfter(spacingAfter);
-                if (markAsPreserved) {
-                  blankPara.setPreserved(true);
-                }
+                blankPara.setPreserved(markAsPreserved);
                 this.bodyElements.splice(i, 0, blankPara);
                 totalBlankLinesAdded++;
                 i++; // Skip the newly inserted blank paragraph
@@ -4324,9 +4407,7 @@ export class Document {
                 const blankPara = Paragraph.create();
                 blankPara.setStyle(style);
                 blankPara.setSpaceAfter(spacingAfter);
-                if (markAsPreserved) {
-                  blankPara.setPreserved(true);
-                }
+                blankPara.setPreserved(markAsPreserved);
                 this.bodyElements.splice(i, 0, blankPara);
                 totalBlankLinesAdded++;
                 i++; // Skip the newly inserted blank paragraph
@@ -4346,9 +4427,7 @@ export class Document {
         const blankPara = Paragraph.create();
         blankPara.setStyle(style);
         blankPara.setSpaceAfter(spacingAfter);
-        if (markAsPreserved) {
-          blankPara.setPreserved(true);
-        }
+        blankPara.setPreserved(markAsPreserved);
         this.bodyElements.push(blankPara);
         totalBlankLinesAdded++;
         totalListsProcessed++;
