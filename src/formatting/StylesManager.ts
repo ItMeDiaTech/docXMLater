@@ -31,6 +31,9 @@ export class StylesManager {
   private styles: Map<string, Style> = new Map();
   private includeBuiltInStyles: boolean;
 
+  // Track if styles have been modified (for XML preservation)
+  private _modified: boolean = false;
+
   /**
    * Registry of built-in style factory functions
    * Maps style ID to factory function for lazy loading
@@ -100,6 +103,7 @@ export class StylesManager {
    */
   addStyle(style: Style): this {
     this.styles.set(style.getStyleId(), style);
+    this._modified = true;
     return this;
   }
 
@@ -148,6 +152,23 @@ export class StylesManager {
    */
   getAllStyles(): Style[] {
     return Array.from(this.styles.values());
+  }
+
+  /**
+   * Checks if styles have been modified since loading
+   * Used for XML preservation optimization
+   * @returns True if styles were added or modified
+   */
+  isModified(): boolean {
+    return this._modified;
+  }
+
+  /**
+   * Resets the modified flag
+   * Called after parsing to indicate that loaded styles don't count as modifications
+   */
+  resetModified(): void {
+    this._modified = false;
   }
 
   /**

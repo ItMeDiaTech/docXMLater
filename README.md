@@ -227,8 +227,35 @@ doc.dispose();
 **Creation & Loading:**
 
 - `Document.create(options?)` - Create new document
-- `Document.load(filepath)` - Load from file
-- `Document.loadFromBuffer(buffer)` - Load from memory
+- `Document.load(filepath, options?)` - Load from file
+- `Document.loadFromBuffer(buffer, options?)` - Load from memory
+
+**Handling Tracked Changes:**
+
+By default, docXMLater accepts all tracked changes during document loading to prevent corruption:
+
+```typescript
+// Default: Accepts all changes (recommended)
+const doc = await Document.load('document.docx');
+
+// Explicit control
+const doc = await Document.load('document.docx', {
+  revisionHandling: 'accept'  // Accept all changes (default)
+  // OR
+  revisionHandling: 'strip'   // Remove all revision markup
+  // OR
+  revisionHandling: 'preserve' // Keep tracked changes (may cause corruption)
+});
+```
+
+**Revision Handling Options:**
+- `'accept'` (default): Removes revision markup, keeps inserted content, removes deleted content
+- `'strip'`: Removes all revision markup completely
+- `'preserve'`: Keeps tracked changes as-is (may cause Word "unreadable content" errors)
+
+**Why Accept By Default?**
+
+Documents with tracked changes can cause Word corruption errors during round-trip processing due to revision ID conflicts. Accepting changes automatically prevents this issue while preserving document content.
 
 **Content Management:**
 

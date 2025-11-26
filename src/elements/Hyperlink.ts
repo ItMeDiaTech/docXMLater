@@ -355,10 +355,90 @@ export class Hyperlink {
   }
 
   /**
-   * Gets run formatting
+   * Gets run formatting (returns this hyperlink for fluent API)
+   * @returns This hyperlink for method chaining
+   *
+   * @example
+   * ```typescript
+   * hyperlink.getFormatting().setColor('0563C1').setUnderline('single');
+   * ```
    */
-  getFormatting(): RunFormatting {
+  getFormatting(): this {
+    return this;
+  }
+
+  /**
+   * Gets the raw formatting object (for direct access)
+   * @returns RunFormatting object
+   */
+  getRawFormatting(): RunFormatting {
     return this.formatting;
+  }
+
+  /**
+   * Sets text color
+   * @param color Color in hex format (e.g., '0563C1')
+   * @returns This hyperlink for chaining
+   */
+  setColor(color: string): this {
+    this.formatting.color = color;
+    this.run = new Run(this.text, this.formatting);
+    return this;
+  }
+
+  /**
+   * Sets underline style
+   * @param underline Underline style ('single', 'double', etc.)
+   * @returns This hyperlink for chaining
+   */
+  setUnderline(underline: boolean | "single" | "double" | "dotted" | "thick" | "dash"): this {
+    this.formatting.underline = underline;
+    this.run = new Run(this.text, this.formatting);
+    return this;
+  }
+
+  /**
+   * Sets bold formatting
+   * @param bold Bold state (default: true)
+   * @returns This hyperlink for chaining
+   */
+  setBold(bold: boolean = true): this {
+    this.formatting.bold = bold;
+    this.run = new Run(this.text, this.formatting);
+    return this;
+  }
+
+  /**
+   * Sets italic formatting
+   * @param italic Italic state (default: true)
+   * @returns This hyperlink for chaining
+   */
+  setItalic(italic: boolean = true): this {
+    this.formatting.italic = italic;
+    this.run = new Run(this.text, this.formatting);
+    return this;
+  }
+
+  /**
+   * Sets font family
+   * @param font Font name (e.g., 'Arial', 'Verdana')
+   * @returns This hyperlink for chaining
+   */
+  setFont(font: string): this {
+    this.formatting.font = font;
+    this.run = new Run(this.text, this.formatting);
+    return this;
+  }
+
+  /**
+   * Sets font size
+   * @param size Font size in points (e.g., 12, 14)
+   * @returns This hyperlink for chaining
+   */
+  setSize(size: number): this {
+    this.formatting.size = size;
+    this.run = new Run(this.text, this.formatting);
+    return this;
   }
 
   /**

@@ -111,7 +111,7 @@ export {
 } from './utils/units';
 
 // Core classes
-export { Document, DocumentProperties, DocumentOptions, DocumentPart } from './core/Document';
+export { Document, DocumentProperties, DocumentOptions, DocumentLoadOptions, DocumentPart } from './core/Document';
 export { Relationship, RelationshipType, RelationshipProperties } from './core/Relationship';
 export { RelationshipManager } from './core/RelationshipManager';
 export { DocumentParser, ParseError } from './core/DocumentParser';

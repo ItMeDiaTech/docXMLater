@@ -443,12 +443,50 @@ export class Paragraph {
 
   /**
    * Adds a hyperlink to the paragraph
-   * @param hyperlink - Hyperlink to add
+   * @param urlOrHyperlink - URL string for new hyperlink, or existing Hyperlink object
+   * @returns Hyperlink object for fluent chaining (when creating new), or this paragraph (when adding existing)
+   *
+   * @example
+   * // Fluent API (new signature)
+   * const link = para.addHyperlink('https://example.com');
+   * link.setText('Visit Example');
+   *
+   * // Or use without URL
+   * const link2 = para.addHyperlink();
+   * link2.setUrl('https://example.com').setText('Link');
+   *
+   * // Legacy API (still supported)
+   * const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+   * para.addHyperlink(hyperlink);
+   */
+  /**
+   * Adds a hyperlink to the paragraph
+   * @param url - Optional URL for the hyperlink
+   * @returns Hyperlink object for fluent chaining
+   */
+  addHyperlink(url?: string): Hyperlink;
+  /**
+   * Adds an existing hyperlink to the paragraph
+   * @param hyperlink - Existing Hyperlink object
    * @returns This paragraph for chaining
    */
-  addHyperlink(hyperlink: Hyperlink): this {
-    this.content.push(hyperlink);
-    return this;
+  addHyperlink(hyperlink: Hyperlink): this;
+  addHyperlink(urlOrHyperlink?: string | Hyperlink): Hyperlink | this {
+    if (typeof urlOrHyperlink === 'string') {
+      // New fluent API: create hyperlink from URL
+      const hyperlink = new Hyperlink({ url: urlOrHyperlink, text: urlOrHyperlink });
+      this.content.push(hyperlink);
+      return hyperlink;
+    } else if (urlOrHyperlink instanceof Hyperlink) {
+      // Legacy API: add existing hyperlink
+      this.content.push(urlOrHyperlink);
+      return this;
+    } else {
+      // No argument: create empty hyperlink for fluent building
+      const hyperlink = new Hyperlink({ text: 'Link' });
+      this.content.push(hyperlink);
+      return hyperlink;
+    }
   }
 
   /**

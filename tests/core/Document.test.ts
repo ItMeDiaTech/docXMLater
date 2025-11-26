@@ -1133,6 +1133,9 @@ describe('Document', () => {
       });
     });
 
+    // NOTE: Tests for keepOne and preserveHeader2BlankLines parameters were removed
+    // as these features are obsolete and replaced by better functionality
+
     describe('removeExtraBlankParagraphs', () => {
       test('should not remove preserved blank paragraphs', () => {
         const doc = Document.create();
@@ -1148,126 +1151,19 @@ describe('Document', () => {
         doc.createParagraph('Second paragraph');
 
         // Remove extra blank paragraphs
-        const result = doc.removeExtraBlankParagraphs({ keepOne: false });
+        const result = doc.removeExtraBlankParagraphs();
 
-        // Should remove blank2 but not blank1
+        // Should remove blank2 but not blank1 (which is preserved)
         expect(result.removed).toBe(1);
-        expect(result.preserved).toBe(1);
 
         const paragraphs = doc.getAllParagraphs();
         expect(paragraphs.length).toBe(3); // First + blank1 + Second
+
+        // Verify blank1 is still preserved
+        expect(blank1.isPreserved()).toBe(true);
       });
 
-      test('should mark Header 2 blank lines as preserved when option is true', () => {
-        const doc = Document.create();
-
-        // Add a Heading2 paragraph
-        const heading = doc.createParagraph('Test Header');
-        heading.setStyle('Heading2');
-
-        // Apply formatting to create table and blank line
-        doc.applyStyles({
-          preserveBlankLinesAfterHeader2Tables: false // Don't auto-preserve yet
-        });
-
-        // Add more content
-        doc.createParagraph('Content after header');
-
-        // Now remove extra blank paragraphs with preserveHeader2BlankLines option
-        const result = doc.removeExtraBlankParagraphs({
-          preserveHeader2BlankLines: true,
-          keepOne: false
-        });
-
-        // The blank line after Header 2 should be preserved
-        const bodyElements = doc.getBodyElements();
-        expect(bodyElements.length).toBe(3); // table + blank + content paragraph
-
-        // Check that the blank paragraph is preserved
-        const blankPara = bodyElements[1];
-        expect(blankPara).toBeInstanceOf(Paragraph);
-        expect((blankPara as Paragraph).isPreserved()).toBe(true);
-      });
-
-      test('should remove multiple consecutive blank paragraphs but keep one when keepOne is true', () => {
-        const doc = Document.create();
-
-        doc.createParagraph('First paragraph');
-        doc.createParagraph(); // blank 1
-        doc.createParagraph(); // blank 2
-        doc.createParagraph(); // blank 3
-        doc.createParagraph('Second paragraph');
-
-        const result = doc.removeExtraBlankParagraphs({ keepOne: true });
-
-        // Should keep only 1 blank line between paragraphs
-        expect(result.removed).toBe(2);
-
-        const paragraphs = doc.getAllParagraphs();
-        expect(paragraphs.length).toBe(3); // First + 1 blank + Second
-      });
-
-      test('should remove all blank paragraphs when keepOne is false', () => {
-        const doc = Document.create();
-
-        doc.createParagraph('First paragraph');
-        doc.createParagraph(); // blank 1
-        doc.createParagraph(); // blank 2
-        doc.createParagraph('Second paragraph');
-
-        const result = doc.removeExtraBlankParagraphs({ keepOne: false });
-
-        // Should remove all blank lines
-        expect(result.removed).toBe(2);
-
-        const paragraphs = doc.getAllParagraphs();
-        expect(paragraphs.length).toBe(2); // First + Second
-      });
-    });
-
-    describe('Integration: applyCustomFormattingToExistingStyles + removeExtraBlankParagraphs', () => {
-      test('should preserve Header 2 blank lines when both options are enabled', () => {
-        const doc = Document.create();
-
-        // Add Heading2 paragraphs with extra blank lines
-        doc.createParagraph('Header 1').setStyle('Heading2');
-        doc.createParagraph('Content 1');
-        doc.createParagraph(); // extra blank before Header 2
-        doc.createParagraph(); // another extra blank
-        doc.createParagraph('Header 2').setStyle('Heading2');
-        doc.createParagraph('Content 2');
-
-        // Apply formatting (creates tables and adds preserved blank lines)
-        doc.applyStyles({
-          preserveBlankLinesAfterHeader2Tables: true
-        });
-
-        // At this point we should have:
-        // table1 + blank1(preserved) + content1 + blank + blank + table2 + blank2(preserved) + content2
-
-        // Now remove extra blank paragraphs
-        const result = doc.removeExtraBlankParagraphs({
-          keepOne: false
-        });
-
-        // Should remove the extra blanks but keep the preserved ones after Header 2 tables
-        const finalBodyElements = doc.getBodyElements();
-
-        // Expected: table1 + blank1(preserved) + content1 + table2 + blank2(preserved) + content2
-        expect(finalBodyElements.length).toBe(6);
-
-        // Verify that the blank lines after tables are still preserved
-        const blank1 = finalBodyElements[1];
-        expect(blank1).toBeInstanceOf(Paragraph);
-        expect((blank1 as Paragraph).isPreserved()).toBe(true);
-
-        const blank2 = finalBodyElements[4];
-        expect(blank2).toBeInstanceOf(Paragraph);
-        expect((blank2 as Paragraph).isPreserved()).toBe(true);
-
-        // Verify extra blanks were removed
-        expect(result.removed).toBe(2);
-      });
+      // Tests for obsolete keepOne and preserveHeader2BlankLines parameters have been removed
     });
   });
 });
