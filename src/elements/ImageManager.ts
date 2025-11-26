@@ -66,25 +66,25 @@ export class ImageManager {
    * @param relationshipId The relationship ID for this image
    * @returns The filename assigned to this image
    * @throws {Error} If image limits are exceeded
-   * 
-   * **Issue #12 Fix:** Tracks images by relationship ID to prevent duplicates
-   * during load-save round trips. Same rId = same image = same filename.
+   *
+   * **Issue #12 Fix:** Reuses filename for images with same relationship ID
+   * to prevent duplicating files in media folder during save.
+   * However, each image occurrence gets its own entry to preserve dimensions
+   * (Word allows same image file displayed at different sizes via wp:extent).
    */
   registerImage(image: Image, relationshipId: string): string {
-    // Issue #12 fix: Check by relationship ID FIRST to prevent duplicates
-    // During load-save, same image gets new object but same rId
-    const existingByRelId = this.imagesByRelId.get(relationshipId);
-    if (existingByRelId) {
-      // Same rId = same image, reuse filename and update object reference
-      this.images.set(image, existingByRelId);
-      return existingByRelId.filename;
-    }
-
-    // Check if already registered by object reference (fallback)
+    // Check if already registered by object reference (exact same object)
     const existing = this.images.get(image);
     if (existing) {
       return existing.filename;
     }
+
+    // Issue #12 fix: Reuse FILENAME for same rId, but create separate entry
+    // This prevents duplicate files in media folder while preserving dimensions
+    const existingByRelId = this.imagesByRelId.get(relationshipId);
+    const filename = existingByRelId
+      ? existingByRelId.filename
+      : `image${this.nextImageNumber++}.${image.getExtension()}`;
 
     // Validate image count limit
     if (this.images.size >= this.maxImageCount) {
@@ -138,10 +138,6 @@ export class ImageManager {
       }
     }
 
-    // Generate unique filename
-    const extension = image.getExtension();
-    const filename = `image${this.nextImageNumber++}.${extension}`;
-
     // Assign docPr ID
     const docPrId = this.nextDocPrId++;
     image.setDocPrId(docPrId);
@@ -149,7 +145,7 @@ export class ImageManager {
     // Set relationship ID
     image.setRelationshipId(relationshipId);
 
-    // Store entry
+    // Store entry (each image occurrence gets its own entry)
     const entry: ImageEntry = {
       image,
       filename,
@@ -158,7 +154,11 @@ export class ImageManager {
     };
 
     this.images.set(image, entry);
-    this.imagesByRelId.set(relationshipId, entry); // Issue #12 fix
+
+    // Only store first image for each rId (used for filename reuse)
+    if (!existingByRelId) {
+      this.imagesByRelId.set(relationshipId, entry);
+    }
 
     return filename;
   }

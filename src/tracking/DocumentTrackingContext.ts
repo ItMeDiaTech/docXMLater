@@ -179,11 +179,11 @@ export class DocumentTrackingContext implements TrackingContext {
     if (!this.enabled) return;
     if (oldValue === newValue) return;
 
-    // Hyperlink changes are tracked as run property changes
+    // Hyperlink changes use dedicated type for proper categorization
     const key = `hyperlink:${changeType}:${this.stringifyValue(newValue)}`;
 
     this.addPendingChange(key, {
-      type: 'runPropertiesChange',
+      type: 'hyperlinkChange',
       property: changeType,
       previousValue: oldValue,
       newValue,

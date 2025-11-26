@@ -20,7 +20,8 @@ export type ChangeCategory =
   | 'content'      // Text insertions, deletions
   | 'formatting'   // Run/paragraph property changes
   | 'structural'   // Moves, section changes
-  | 'table';       // Table structure changes
+  | 'table'        // Table structure changes
+  | 'hyperlink';   // Hyperlink URL, text, or formatting changes
 
 /**
  * Location of a change within the document.
@@ -251,10 +252,28 @@ export class ChangelogGenerator {
       content.affectedText = truncatedText;
     }
 
-    // Build property change details if applicable
-    let propertyChange: ChangeEntry['propertyChange'] | undefined;
+    // Handle hyperlink changes specially
     const prevProps = revision.getPreviousProperties();
     const newProps = revision.getNewProperties();
+    if (type === 'hyperlinkChange' && (prevProps || newProps)) {
+      (content as any).hyperlinkChange = {
+        urlBefore: prevProps?.url,
+        urlAfter: newProps?.url,
+        textBefore: prevProps?.text,
+        textAfter: newProps?.text,
+      };
+      // Set before/after for standard diff view
+      if (prevProps?.url !== newProps?.url) {
+        content.before = prevProps?.url;
+        content.after = newProps?.url;
+      } else if (prevProps?.text !== newProps?.text) {
+        content.before = prevProps?.text;
+        content.after = newProps?.text;
+      }
+    }
+
+    // Build property change details if applicable
+    let propertyChange: ChangeEntry['propertyChange'] | undefined;
     if (prevProps || newProps) {
       // Get the first property that changed
       const allKeys = new Set([
@@ -298,6 +317,7 @@ export class ChangelogGenerator {
       formatting: 0,
       structural: 0,
       table: 0,
+      hyperlink: 0,
     };
     const byType: Record<string, number> = {};
     const byAuthor: Record<string, number> = {};
@@ -489,6 +509,10 @@ export class ChangelogGenerator {
       case 'tableCellMerge':
         return 'table';
 
+      // Hyperlink changes
+      case 'hyperlinkChange':
+        return 'hyperlink';
+
       default:
         return 'content';
     }
@@ -557,9 +581,36 @@ export class ChangelogGenerator {
         return 'Merged table cells';
       case 'numberingChange':
         return 'Changed list numbering';
+      case 'hyperlinkChange':
+        return this.describeHyperlinkChange(revision, maxLength);
       default:
         return `Changed (${type})`;
     }
+  }
+
+  /**
+   * Generate description for a hyperlink change revision.
+   */
+  private static describeHyperlinkChange(revision: Revision, maxLength: number): string {
+    const prevProps = revision.getPreviousProperties() || {};
+    const newProps = revision.getNewProperties() || {};
+    const changes: string[] = [];
+
+    if (prevProps.url !== newProps.url) {
+      changes.push('URL');
+    }
+    if (prevProps.text !== newProps.text) {
+      changes.push('display text');
+    }
+    if (prevProps.formatting !== newProps.formatting) {
+      changes.push('formatting');
+    }
+
+    if (changes.length === 0) {
+      return 'Updated hyperlink';
+    }
+
+    return `Changed hyperlink ${changes.join(' and ')}`;
   }
 
   /**
@@ -678,6 +729,7 @@ export class ChangelogGenerator {
       formatting: 'Formatting Changes',
       structural: 'Structural Changes',
       table: 'Table Changes',
+      hyperlink: 'Hyperlink Changes',
     };
 
     for (const [category, categoryEntries] of byCategory) {

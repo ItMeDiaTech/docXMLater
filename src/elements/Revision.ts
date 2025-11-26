@@ -31,7 +31,9 @@ export type RevisionType =
   | 'tableCellDelete'     // w:cellDel - Table cell deleted
   | 'tableCellMerge'      // w:cellMerge - Table cells merged
   // Numbering
-  | 'numberingChange';    // w:numberingChange - List numbering changed
+  | 'numberingChange'     // w:numberingChange - List numbering changed
+  // Hyperlink changes
+  | 'hyperlinkChange';    // Hyperlink URL, text, or formatting change
 
 /**
  * Revision properties
