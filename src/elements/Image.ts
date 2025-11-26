@@ -798,18 +798,15 @@ export class Image {
    * Applies a black border around the image
    * @param thicknessPt Border thickness in points (default: 2pt)
    * @returns This image for chaining
+   *
+   * Note: effectExtent is NOT set for borders because it causes Word to
+   * increase the visual size of the image. effectExtent is meant for
+   * effects like shadows and glows that need additional space, not borders.
+   * The border is rendered within the image's existing bounds.
    */
   setBorder(thicknessPt: number = 2): this {
     this.border = { width: thicknessPt };
-    
-    // Auto-set effectExtent to provide space for the border
-    // Border needs space around it to render properly
-    // Use 1.5x the border width as padding (converted to EMUs)
-    const ptToEmu = 12700; // 1 point = 12700 EMUs
-    const paddingEmu = Math.round(thicknessPt * ptToEmu * 1.5);
-    
-    this.setEffectExtent(paddingEmu, paddingEmu, paddingEmu, paddingEmu);
-    
+    // Note: Do NOT set effectExtent for borders - it causes image size increase
     return this;
   }
 

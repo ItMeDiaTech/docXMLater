@@ -37,6 +37,8 @@ import { defaultLogger, ILogger } from "../utils/logger";
 import { acceptAllRevisions } from "../utils/acceptRevisions";
 import { stripTrackedChanges } from "../utils/stripTrackedChanges";
 import { XMLParser } from "../xml/XMLParser";
+import { DocumentTrackingContext } from "../tracking/DocumentTrackingContext";
+import type { TrackingContext } from "../tracking/TrackingContext";
 import { ZipHandler } from "../zip/ZipHandler";
 import { DOCX_PATHS } from "../zip/types";
 import { DocumentGenerator } from "./DocumentGenerator";
@@ -185,6 +187,7 @@ export class Document {
     this.bookmarkManager = BookmarkManager.create();
     this.revisionManager = RevisionManager.create();
     this.commentManager = CommentManager.create();
+    this.trackingContext = new DocumentTrackingContext(this.revisionManager);
     this.parser = new DocumentParser();
     this.generator = new DocumentGenerator();
     this.validator = new DocumentValidator();
@@ -215,6 +218,7 @@ export class Document {
   private bookmarkManager: BookmarkManager;
   private revisionManager: RevisionManager;
   private commentManager: CommentManager;
+  private trackingContext: DocumentTrackingContext;
   // Reserved for future implementation - placeholder properties
   private _footnoteManager?: any;
   private _endnoteManager?: any;
@@ -7394,6 +7398,8 @@ export class Document {
    * ```
    */
   enableTrackChanges(options?: {
+    /** Author name for automatically tracked changes (default: 'DocHub') */
+    author?: string;
     trackFormatting?: boolean;
     showInsertionsAndDeletions?: boolean;
     showFormatting?: boolean;
@@ -7418,6 +7424,15 @@ export class Document {
       }
     }
 
+    // Enable the tracking context for automatic change tracking
+    this.trackingContext.enable({
+      author: options?.author,
+      trackFormatting: this.trackFormatting,
+    });
+
+    // Bind tracking context to all existing elements
+    this.bindTrackingToAllElements();
+
     return this;
   }
 
@@ -7437,6 +7452,7 @@ export class Document {
    */
   disableTrackChanges(): this {
     this.trackChangesEnabled = false;
+    this.trackingContext.disable(); // Flushes pending changes and disables
     return this;
   }
 
@@ -7466,6 +7482,79 @@ export class Document {
     showInkAnnotations: boolean;
   } {
     return { ...this.revisionViewSettings };
+  }
+
+  /**
+   * Gets the tracking context for automatic change tracking.
+   * Elements use this to notify the document of changes.
+   * @returns The tracking context
+   */
+  getTrackingContext(): TrackingContext {
+    return this.trackingContext;
+  }
+
+  /**
+   * Flushes all pending tracked changes and creates Revision objects.
+   * Called automatically on save, but can be called manually.
+   * @returns Array of created Revision objects
+   */
+  flushPendingChanges(): Revision[] {
+    return this.trackingContext.flushPendingChanges();
+  }
+
+  /**
+   * Binds the tracking context to all existing elements in the document.
+   * Called automatically when track changes is enabled.
+   * @internal
+   */
+  private bindTrackingToAllElements(): void {
+    for (const element of this.bodyElements) {
+      this.bindTrackingToElement(element);
+    }
+  }
+
+  /**
+   * Binds the tracking context to an element and its children.
+   * @param element - Element to bind
+   * @internal
+   */
+  private bindTrackingToElement(element: any): void {
+    // Set tracking context on element if it supports it
+    if (element && typeof element._setTrackingContext === 'function') {
+      element._setTrackingContext(this.trackingContext);
+    }
+
+    // Recursively bind to runs
+    if (element && typeof element.getRuns === 'function') {
+      for (const run of element.getRuns()) {
+        this.bindTrackingToElement(run);
+      }
+    }
+
+    // Recursively bind to hyperlinks
+    if (element && typeof element.getHyperlinks === 'function') {
+      for (const link of element.getHyperlinks()) {
+        this.bindTrackingToElement(link);
+      }
+    }
+
+    // Recursively bind to table rows and cells
+    if (element && typeof element.getRows === 'function') {
+      for (const row of element.getRows()) {
+        this.bindTrackingToElement(row);
+        if (typeof row.getCells === 'function') {
+          for (const cell of row.getCells()) {
+            this.bindTrackingToElement(cell);
+            // Bind to paragraphs in cell
+            if (typeof cell.getParagraphs === 'function') {
+              for (const para of cell.getParagraphs()) {
+                this.bindTrackingToElement(para);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   /**
