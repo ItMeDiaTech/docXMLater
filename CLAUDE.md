@@ -16,7 +16,7 @@ Build a comprehensive, production-ready DOCX editing framework from scratch that
 | **Phase 4: Rich Content**        | Complete | 500+ tests | Images, headers, footers, hyperlinks, bookmarks   |
 | **Phase 5: Polish**              | Complete | 800+ tests | Track changes, comments, TOC, fields, footnotes   |
 
-**Total: 2073+ tests passing | 65 source files | ~25,000+ lines of code**
+**Total: 1253+ tests passing | 65 source files | ~25,000+ lines of code**
 
 ### What Works Now
 
@@ -341,6 +341,7 @@ The framework correctly handles:
 - Single child element → Object `{}`
 - Namespaces → Preserved in keys (e.g., `w:p`, `w:r`)
 - Self-closing tags → Empty object `{}`
+- Element order → `_orderedChildren` array (see below)
 
 **Usage Example:**
 
@@ -375,7 +376,27 @@ const result = XMLParser.parseToObject(xml);
 - Handles all OOXML structures (Relationships, Styles, Document XML)
 - Safe for large documents (size validation)
 - Full namespace handling (including ignoreNamespace option)
+- Element order preservation via `_orderedChildren`
 - **39 comprehensive tests - 100% passing**
+
+**Element Order Preservation (`_orderedChildren`):**
+
+When parsing XML, element order is preserved via the `_orderedChildren` property. This is critical for correctly parsing mixed content like runs with interleaved tabs and breaks.
+
+```typescript
+const xml = `<w:r><w:t>Hello</w:t><w:tab/><w:t>World</w:t></w:r>`;
+const result = XMLParser.parseToObject(xml);
+
+// result["w:r"]._orderedChildren = [
+//   { type: "w:t", index: 0 },
+//   { type: "w:tab", index: 0 },
+//   { type: "w:t", index: 1 }
+// ]
+```
+
+The `_orderedChildren` array contains `{ type, index }` objects where:
+- `type`: The element tag name
+- `index`: The index within elements of that type (for accessing from arrays)
 
 ### 7. XML Namespaces
 

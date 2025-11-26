@@ -155,9 +155,9 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
 
       doc.addParagraph(para);
 
-      // Save and load
+      // Save and load (preserve revisions to test pPrChange round-trip)
       const buffer = await doc.toBuffer();
-      const loaded = await Document.loadFromBuffer(buffer);
+      const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
 
       // Verify
       const loadedPara = loaded.getParagraphs()[0]!;
@@ -183,9 +183,9 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
 
       doc.addParagraph(para);
 
-      // Save and load
+      // Save and load (preserve revisions to test pPrChange round-trip)
       const buffer = await doc.toBuffer();
-      const loaded = await Document.loadFromBuffer(buffer);
+      const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
 
       // Verify
       const loadedPara = loaded.getParagraphs()[0]!;
@@ -229,9 +229,9 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
 
       doc.addParagraph(para);
 
-      // Save and load
+      // Save and load (preserve revisions to test pPrChange round-trip)
       const buffer = await doc.toBuffer();
-      const loaded = await Document.loadFromBuffer(buffer);
+      const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
 
       // Verify all properties
       const loadedPara = loaded.getParagraphs()[0]!;
@@ -255,17 +255,17 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
 
       doc.addParagraph(para);
 
-      // Cycle 1
+      // Cycle 1 (preserve revisions to test pPrChange round-trip)
       let buffer = await doc.toBuffer();
-      doc = await Document.loadFromBuffer(buffer);
+      doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
 
       // Cycle 2
       buffer = await doc.toBuffer();
-      doc = await Document.loadFromBuffer(buffer);
+      doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
 
       // Cycle 3
       buffer = await doc.toBuffer();
-      const final = await Document.loadFromBuffer(buffer);
+      const final = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
 
       // Verify properties survived 3 cycles
       const loadedPara = final.getParagraphs()[0]!;

@@ -581,6 +581,19 @@ export class DocumentParser {
     let moveFromIndex = 0;
     let moveToIndex = 0;
 
+    // Helper to find closing tag position for a given tag name starting from position
+    const findClosingTagEnd = (content: string, tagName: string, startPos: number): number => {
+      const closingTag = `</${tagName}>`;
+      const closingPos = content.indexOf(closingTag, startPos);
+      if (closingPos === -1) return startPos; // Fallback if not found
+      return closingPos + closingTag.length;
+    };
+
+    // Helper to check if tag is self-closing
+    const isSelfClosing = (tagContent: string): boolean => {
+      return tagContent.endsWith("/");
+    };
+
     // Scan for all first-level child elements in document order
     let searchPos = 0;
     while (searchPos < paraContent.length) {
@@ -594,52 +607,60 @@ export class DocumentParser {
 
       const tagContent = paraContent.substring(tagStart + 1, tagEnd);
       const tagName = tagContent.split(/[\s\/>]/)[0];
+      const selfClosing = isSelfClosing(tagContent);
 
       if (tagName === "w:r") {
         children.push({ type: "w:r", pos: tagStart, index: runIndex++ });
-        searchPos = tagEnd + 1;
+        // Skip past closing tag to avoid counting nested elements
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "w:r", tagEnd);
       } else if (tagName === "w:hyperlink") {
         children.push({
           type: "w:hyperlink",
           pos: tagStart,
           index: hyperlinkIndex++,
         });
-        searchPos = tagEnd + 1;
+        // Skip past closing tag - hyperlinks contain nested runs we shouldn't count
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "w:hyperlink", tagEnd);
       } else if (tagName === "w:fldSimple") {
         children.push({
           type: "w:fldSimple",
           pos: tagStart,
           index: fieldIndex++,
         });
-        searchPos = tagEnd + 1;
+        // Skip past closing tag
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "w:fldSimple", tagEnd);
       } else if (tagName === "w:ins") {
         children.push({
           type: "w:ins",
           pos: tagStart,
           index: insIndex++,
         });
-        searchPos = tagEnd + 1;
+        // Skip past closing tag - ins contains nested runs
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "w:ins", tagEnd);
       } else if (tagName === "w:del") {
         children.push({
           type: "w:del",
           pos: tagStart,
           index: delIndex++,
         });
-        searchPos = tagEnd + 1;
+        // Skip past closing tag - del contains nested runs
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "w:del", tagEnd);
       } else if (tagName === "w:moveFrom") {
         children.push({
           type: "w:moveFrom",
           pos: tagStart,
           index: moveFromIndex++,
         });
-        searchPos = tagEnd + 1;
+        // Skip past closing tag
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "w:moveFrom", tagEnd);
       } else if (tagName === "w:moveTo") {
         children.push({
           type: "w:moveTo",
           pos: tagStart,
           index: moveToIndex++,
         });
-        searchPos = tagEnd + 1;
+        // Skip past closing tag
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "w:moveTo", tagEnd);
       } else {
         searchPos = tagEnd + 1;
       }
@@ -2277,13 +2298,19 @@ export class DocumentParser {
         };
       }
 
-      // Extract name and description from wp:docPr
+      // Extract name, description, and ID from wp:docPr
       const docPrObj = imageObj["wp:docPr"];
       let name = "image";
       let description = "Image";
+      let docPrId = 1;
       if (docPrObj) {
         name = docPrObj["@_name"] || "image";
         description = docPrObj["@_descr"] || "Image";
+        // Parse docPr id to preserve unique image IDs
+        const idAttr = docPrObj["@_id"];
+        if (idAttr) {
+          docPrId = parseInt(String(idAttr), 10);
+        }
       }
 
       // Parse wrap settings (for floating images)
@@ -2343,10 +2370,10 @@ export class DocumentParser {
         return null;
       }
 
-      // Parse crop settings
-      const crop = this.parseImageCrop(blipObj);
+      // Parse crop settings (a:srcRect is sibling of a:blip in blipFill, not child of blip)
+      const crop = this.parseImageCrop(blipFillObj);
 
-      // Parse effects
+      // Parse effects (effects are children of a:blip)
       const effects = this.parseImageEffects(blipObj);
 
       // Extract relationship ID (r:embed)
@@ -2404,6 +2431,9 @@ export class DocumentParser {
       // Register image with ImageManager (reuse existing relationship)
       imageManager.registerImage(image, relationshipId);
       image.setRelationshipId(relationshipId);
+      
+      // Preserve the original docPr ID to prevent corruption
+      image.setDocPrId(docPrId);
 
       // Create and return ImageRun
       return new ImageRun(image);
@@ -2446,17 +2476,18 @@ export class DocumentParser {
     return {
       type,
       side: wrapObj["@_wrapText"] || "bothSides",
-      distanceTop: anchorObj["@_distT"]
-        ? parseInt(anchorObj["@_distT"], 10)
+      // Distance attributes are on the wrap element, not the anchor
+      distanceTop: wrapObj["@_distT"]
+        ? parseInt(wrapObj["@_distT"], 10)
         : undefined,
-      distanceBottom: anchorObj["@_distB"]
-        ? parseInt(anchorObj["@_distB"], 10)
+      distanceBottom: wrapObj["@_distB"]
+        ? parseInt(wrapObj["@_distB"], 10)
         : undefined,
-      distanceLeft: anchorObj["@_distL"]
-        ? parseInt(anchorObj["@_distL"], 10)
+      distanceLeft: wrapObj["@_distL"]
+        ? parseInt(wrapObj["@_distL"], 10)
         : undefined,
-      distanceRight: anchorObj["@_distR"]
-        ? parseInt(anchorObj["@_distR"], 10)
+      distanceRight: wrapObj["@_distR"]
+        ? parseInt(wrapObj["@_distR"], 10)
         : undefined,
     };
   }

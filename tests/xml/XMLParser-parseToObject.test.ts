@@ -25,7 +25,9 @@ describe('XMLParser.parseToObject', () => {
 
       expect(result).toEqual({
         parent: {
+          _orderedChildren: [{ type: 'child', index: 0 }],
           child: {
+            _orderedChildren: [{ type: 'grandchild', index: 0 }],
             grandchild: {},
           },
         },

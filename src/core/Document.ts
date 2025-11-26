@@ -34,6 +34,8 @@ import {
   StyleConfig,
 } from "../types/styleConfig";
 import { defaultLogger, ILogger } from "../utils/logger";
+import { acceptAllRevisions } from "../utils/acceptRevisions";
+import { stripTrackedChanges } from "../utils/stripTrackedChanges";
 import { XMLParser } from "../xml/XMLParser";
 import { ZipHandler } from "../zip/ZipHandler";
 import { DOCX_PATHS } from "../zip/types";
@@ -124,6 +126,39 @@ export interface DocumentOptions {
 }
 
 /**
+ * Document loading options
+ */
+export interface DocumentLoadOptions extends DocumentOptions {
+  /**
+   * How to handle tracked changes during document load
+   *
+   * - 'preserve': Keep tracked changes as-is (may cause corruption if IDs conflict)
+   * - 'accept': Accept all changes - removes revision markup, keeps inserted content, removes deleted content (default)
+   * - 'strip': Remove all revision markup completely
+   *
+   * Default: 'accept' (prevents corruption from revision ID conflicts)
+   *
+   * @default 'accept'
+   *
+   * @example
+   * ```typescript
+   * // Default: accept all changes (recommended)
+   * const doc = await Document.load('file.docx');
+   *
+   * // Explicit accept
+   * const doc = await Document.load('file.docx', { revisionHandling: 'accept' });
+   *
+   * // Strip all tracked changes
+   * const doc = await Document.load('file.docx', { revisionHandling: 'strip' });
+   *
+   * // Preserve tracked changes (may cause corruption)
+   * const doc = await Document.load('file.docx', { revisionHandling: 'preserve' });
+   * ```
+   */
+  revisionHandling?: 'preserve' | 'accept' | 'strip';
+}
+
+/**
  * Body element - can be a Paragraph, Table, or TableOfContentsElement
  */
 type BodyElement =
@@ -208,6 +243,20 @@ export class Document {
   
   // TOC field instruction sync setting (default: OFF to preserve original instructions)
   private autoSyncTOCStyles: boolean = false;
+
+  // Flag to skip document.xml regeneration after stripping tracked changes
+  // When true, save() and toBuffer() will preserve the manually cleaned XML
+  private skipDocumentXmlRegeneration: boolean = false;
+
+  // Store original [Content_Types].xml entries to preserve during save
+  // This ensures round-trip fidelity for documents with features the framework doesn't track
+  // (VBA macros, custom UI, embedded objects, etc.)
+  private _originalContentTypes?: { defaults: Set<string>; overrides: Set<string> };
+
+  // Store original styles.xml and numbering.xml to preserve formatting during save
+  // Prevents loss of formatting details not captured by parsers (bullet indentation, cell padding, etc.)
+  private _originalStylesXml?: string;
+  private _originalNumberingXml?: string;
 
   private rsidRoot?: string;
   private rsids: Set<string> = new Set();
@@ -297,13 +346,53 @@ export class Document {
    */
   static async load(
     filePath: string,
-    options?: DocumentOptions
+    options?: DocumentLoadOptions
   ): Promise<Document> {
     const zipHandler = new ZipHandler();
     await zipHandler.load(filePath);
 
+    // Handle tracked changes BEFORE parsing
+    const revisionHandling = options?.revisionHandling ?? 'accept'; // Default to accept
+
+    if (revisionHandling === 'accept') {
+      // Accept all tracked changes to prevent corruption
+      await acceptAllRevisions(zipHandler);
+    } else if (revisionHandling === 'strip') {
+      // Strip all tracked changes completely
+      await stripTrackedChanges(zipHandler);
+    } else if (revisionHandling === 'preserve') {
+      // Check if document has tracked changes and warn
+      const documentXml = zipHandler.getFileAsString('word/document.xml');
+      if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
+          documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
+        defaultLogger.warn(
+          '[Document] Loading document with tracked changes in preserve mode. ' +
+          'This may cause corruption if the document is saved. ' +
+          'Consider using { revisionHandling: "accept" } to prevent corruption.'
+        );
+      }
+    }
+
     // Create document without default relationships (will parse from file)
     const doc = new Document(zipHandler, options, false);
+
+    // Parse and preserve original [Content_Types].xml entries for round-trip fidelity
+    const contentTypesXml = zipHandler.getFileAsString('[Content_Types].xml');
+    if (contentTypesXml) {
+      doc._originalContentTypes = doc.parseContentTypes(contentTypesXml);
+    }
+
+    // Parse and preserve original styles.xml and numbering.xml for formatting fidelity
+    const stylesXml = zipHandler.getFileAsString(DOCX_PATHS.STYLES);
+    if (stylesXml) {
+      doc._originalStylesXml = stylesXml;
+    }
+
+    const numberingXml = zipHandler.getFileAsString(DOCX_PATHS.NUMBERING);
+    if (numberingXml) {
+      doc._originalNumberingXml = numberingXml;
+    }
+
     await doc.parseDocument();
 
     return doc;
@@ -339,13 +428,53 @@ export class Document {
    */
   static async loadFromBuffer(
     buffer: Buffer,
-    options?: DocumentOptions
+    options?: DocumentLoadOptions
   ): Promise<Document> {
     const zipHandler = new ZipHandler();
     await zipHandler.loadFromBuffer(buffer);
 
+    // Handle tracked changes BEFORE parsing
+    const revisionHandling = options?.revisionHandling ?? 'accept'; // Default to accept
+
+    if (revisionHandling === 'accept') {
+      // Accept all tracked changes to prevent corruption
+      await acceptAllRevisions(zipHandler);
+    } else if (revisionHandling === 'strip') {
+      // Strip all tracked changes completely
+      await stripTrackedChanges(zipHandler);
+    } else if (revisionHandling === 'preserve') {
+      // Check if document has tracked changes and warn
+      const documentXml = zipHandler.getFileAsString('word/document.xml');
+      if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
+          documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
+        defaultLogger.warn(
+          '[Document] Loading document with tracked changes in preserve mode. ' +
+          'This may cause corruption if the document is saved. ' +
+          'Consider using { revisionHandling: "accept" } to prevent corruption.'
+        );
+      }
+    }
+
     // Create document without default relationships (will parse from file)
     const doc = new Document(zipHandler, options, false);
+
+    // Parse and preserve original [Content_Types].xml entries for round-trip fidelity
+    const contentTypesXml = zipHandler.getFileAsString('[Content_Types].xml');
+    if (contentTypesXml) {
+      doc._originalContentTypes = doc.parseContentTypes(contentTypesXml);
+    }
+
+    // Parse and preserve original styles.xml and numbering.xml for formatting fidelity
+    const stylesXml = zipHandler.getFileAsString(DOCX_PATHS.STYLES);
+    if (stylesXml) {
+      doc._originalStylesXml = stylesXml;
+    }
+
+    const numberingXml = zipHandler.getFileAsString(DOCX_PATHS.NUMBERING);
+    if (numberingXml) {
+      doc._originalNumberingXml = numberingXml;
+    }
+
     await doc.parseDocument();
 
     return doc;
@@ -369,6 +498,7 @@ export class Document {
     this.bodyElements = result.bodyElements;
     this.relationshipManager = result.relationshipManager;
     this.namespaces = result.namespaces;
+    this.properties = result.properties;
 
     // Populate styles manager
     for (const style of result.styles) {
@@ -405,6 +535,11 @@ export class Document {
     for (const { footer, relationshipId } of headersFooters.footers) {
       this.headerFooterManager.registerFooter(footer, relationshipId);
     }
+
+    // Reset modified flags - loading doesn't count as modification
+    // This enables XML preservation for unmodified documents
+    this.stylesManager.resetModified();
+    this.numberingManager.resetModified();
   }
 
   /**
@@ -572,6 +707,27 @@ export class Document {
   }
 
   /**
+   * Adds a Structured Document Tag (content control) to the document body
+   *
+   * Appends a StructuredDocumentTag instance to the end of the document's body elements.
+   * SDTs are content controls used for forms, templates, and data-binding.
+   *
+   * @param sdt - The StructuredDocumentTag instance to add
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const sdt = new StructuredDocumentTag();
+   * sdt.addParagraph(new Paragraph().addText('Content'));
+   * doc.addStructuredDocumentTag(sdt);
+   * ```
+   */
+  addStructuredDocumentTag(sdt: StructuredDocumentTag): this {
+    this.bodyElements.push(sdt);
+    return this;
+  }
+
+  /**
    * Creates a new table and adds it to the document
    *
    * This is a convenience method that creates a Table with the specified dimensions
@@ -697,6 +853,15 @@ export class Document {
     }
 
     return result;
+  }
+
+  /**
+   * Gets all paragraphs in the document (alias for getAllParagraphs)
+   * @returns Array of all paragraphs recursively
+   * @deprecated Use getAllParagraphs() instead for clarity
+   */
+  getParagraphs(): Paragraph[] {
+    return this.getAllParagraphs();
   }
 
   /**
@@ -1067,7 +1232,13 @@ export class Document {
       this.clearAllPreserveFlags();
 
       this.processHyperlinks();
-      this.updateDocumentXml();
+
+      // Only regenerate document.xml if we haven't manually stripped tracked changes
+      // Stripping sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
+      if (!this.skipDocumentXmlRegeneration) {
+        this.updateDocumentXml();
+      }
+
       this.updateStylesXml();
       this.updateNumberingXml();
       this.updateCoreProps();
@@ -1166,7 +1337,12 @@ export class Document {
       this.clearAllPreserveFlags();
 
       this.processHyperlinks();
-      this.updateDocumentXml();
+      
+      // Only regenerate document.xml if we haven't manually stripped tracked changes
+      if (!this.skipDocumentXmlRegeneration) {
+        this.updateDocumentXml();
+      }
+      
       this.updateStylesXml();
       this.updateNumberingXml();
       this.updateCoreProps();
@@ -1231,18 +1407,30 @@ export class Document {
 
   /**
    * Updates the styles.xml file with current styles
+   * Preserves original XML if styles haven't been modified (formatting preservation)
    */
   private updateStylesXml(): void {
-    const xml = this.stylesManager.generateStylesXml();
-    this.zipHandler.updateFile(DOCX_PATHS.STYLES, xml);
+    // Preserve original if styles weren't modified
+    if (this._originalStylesXml && !this.stylesManager.isModified()) {
+      this.zipHandler.updateFile(DOCX_PATHS.STYLES, this._originalStylesXml);
+    } else {
+      const xml = this.stylesManager.generateStylesXml();
+      this.zipHandler.updateFile(DOCX_PATHS.STYLES, xml);
+    }
   }
 
   /**
    * Updates the numbering.xml file with current numbering definitions
+   * Preserves original XML if numbering hasn't been modified (formatting preservation)
    */
   private updateNumberingXml(): void {
-    const xml = this.numberingManager.generateNumberingXml();
-    this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
+    // Preserve original if numbering wasn't modified
+    if (this._originalNumberingXml && !this.numberingManager.isModified()) {
+      this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, this._originalNumberingXml);
+    } else {
+      const xml = this.numberingManager.generateNumberingXml();
+      this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
+    }
   }
 
   /**
@@ -3904,7 +4092,7 @@ export class Document {
       this.clearCustom();
     }
 
-    // PASS 1: Remove ALL blank paragraphs (no preserve flag check)
+    // PASS 1: Remove blank paragraphs (respecting preserve flag)
     const indicesToRemove: number[] = [];
 
     for (let i = 0; i < this.bodyElements.length; i++) {
@@ -3916,6 +4104,11 @@ export class Document {
       }
 
       const para = element;
+
+      // Skip preserved paragraphs
+      if (para.isPreserved()) {
+        continue;
+      }
 
       // Check if paragraph is blank
       const isBlank = this.isParagraphBlank(para);
@@ -6723,6 +6916,32 @@ export class Document {
   }
 
   /**
+   * Parses [Content_Types].xml and extracts all Default and Override entries
+   * Stores entries in format "ext|mimetype" and "path|mimetype" to enable round-trip preservation
+   *
+   * @param xml - The [Content_Types].xml content to parse
+   * @returns Object containing sets of defaults and overrides
+   */
+  private parseContentTypes(xml: string): { defaults: Set<string>; overrides: Set<string> } {
+    const defaults = new Set<string>();
+    const overrides = new Set<string>();
+
+    // Extract all <Default Extension="..." ContentType="..."/> entries
+    const defaultMatches = xml.matchAll(/<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"\s*\/>/g);
+    for (const match of defaultMatches) {
+      defaults.add(`${match[1]}|${match[2]}`); // Store as "ext|mimetype"
+    }
+
+    // Extract all <Override PartName="..." ContentType="..."/> entries
+    const overrideMatches = xml.matchAll(/<Override\s+PartName="([^"]+)"\s+ContentType="([^"]+)"\s*\/>/g);
+    for (const match of overrideMatches) {
+      overrides.add(`${match[1]}|${match[2]}`); // Store as "path|mimetype"
+    }
+
+    return { defaults, overrides };
+  }
+
+  /**
    * Updates [Content_Types].xml to include image extensions, headers/footers, comments, and custom properties
    * Preserves entries for files that exist in the loaded document
    */
@@ -6738,7 +6957,8 @@ export class Document {
         this.commentManager,
         this.zipHandler, // Pass zipHandler to check file existence
         undefined, // fontManager (optional)
-        hasCustomProps // Flag to include custom.xml override
+        hasCustomProps, // Flag to include custom.xml override
+        this._originalContentTypes // Pass preserved original entries for round-trip fidelity
       );
     this.zipHandler.updateFile(DOCX_PATHS.CONTENT_TYPES, contentTypes);
   }
@@ -7964,6 +8184,169 @@ export class Document {
   }
 
   /**
+   * Strips all tracked changes from the document
+   * 
+   * Removes all revision markup (<w:ins>, <w:del>, <w:moveFrom>, <w:moveTo>) from the document's XML
+   * and cleans up related metadata. This effectively "accepts" all changes without using Word's 
+   * built-in Accept Changes feature.
+   * 
+   * **IMPORTANT**: This operation:
+   * 1. Modifies the raw XML in the ZIP package to remove all tracked changes
+   * 2. Clears Revision objects from the in-memory object model to prevent re-serialization
+   * 3. Sets flag to prevent XML regeneration on save (preserves the cleaned XML)
+   * 
+   * What gets removed:
+   * - All insertion markers (<w:ins>) - content is kept, wrapper removed
+   * - All deletion markers (<w:del>) - entire element including content removed
+   * - All move operations (<w:moveFrom>, <w:moveTo>)
+   * - All range markers (moveFromRangeStart/End, moveToRangeStart/End, etc.)
+   * - All property change tracking (rPrChange, pPrChange, tblPrChange, etc.)
+   * - Revision authors from word/people.xml
+   * - Track changes settings from word/settings.xml
+   * - Revision count from docProps/core.xml
+   * 
+   * @returns This document instance for method chaining
+   * 
+   * @example
+   * ```typescript
+   * // Load document with tracked changes
+   * const doc = await Document.load('document-with-revisions.docx');
+   * 
+   * // Strip all tracked changes
+   * await doc.stripTrackedChanges();
+   * 
+   * // Now process the document as normal
+   * doc.applyStyles();
+   * await doc.save('cleaned.docx');
+   * ```
+   * 
+   * @example
+   * ```typescript
+   * // Check for tracked changes first
+   * const doc = await Document.load('input.docx');
+   * if (doc.hasTrackedChanges()) {
+   *   console.log('Document has tracked changes - stripping them');
+   *   await doc.stripTrackedChanges();
+   * }
+   * await doc.save('output.docx');
+   * ```
+   * 
+   * @deprecated Use {@link acceptAllRevisions} instead - this method will be removed in a future version
+   */
+  async stripTrackedChanges(): Promise<this> {
+    // Delegate to acceptAllRevisions for backward compatibility
+    return this.acceptAllRevisions();
+  }
+
+  /**
+   * Accepts all tracked changes in the document
+   * 
+   * Processes all revision markup following Microsoft's official OpenXML SDK approach:
+   * - Insertions (<w:ins>): Keep the inserted content, remove wrapper tags
+   * - Deletions (<w:del>): Remove entirely (content was deleted, so discard it)
+   * - Move From (<w:moveFrom>): Remove entirely (source of moved content)
+   * - Move To (<w:moveTo>): Keep content, remove wrapper (destination of moved content)
+   * - Property changes: Remove all tracking elements
+   * - Range markers: Remove all boundary markers
+   * 
+   * Also cleans up metadata:
+   * - Revision authors from word/people.xml
+   * - Track changes settings from word/settings.xml
+   * - Revision count from docProps/core.xml
+   * 
+   * **IMPORTANT**: This operation:
+   * 1. Modifies the raw XML in the ZIP package
+   * 2. Clears Revision objects from the in-memory object model
+   * 3. Sets flag to prevent XML regeneration on save (preserves the cleaned XML)
+   * 
+   * @returns This document instance for method chaining
+   * 
+   * @example
+   * ```typescript
+   * // Load document with tracked changes
+   * const doc = await Document.load('document-with-revisions.docx');
+   * 
+   * // Accept all tracked changes
+   * await doc.acceptAllRevisions();
+   * 
+   * // Now process the document as normal
+   * doc.applyStyles();
+   * await doc.save('cleaned.docx');
+   * ```
+   * 
+   * @example
+   * ```typescript
+   * // Check for tracked changes first
+   * const doc = await Document.load('input.docx');
+   * if (doc.hasTrackedChanges()) {
+   *   console.log('Document has tracked changes - accepting them');
+   *   await doc.acceptAllRevisions();
+   * }
+   * await doc.save('output.docx');
+   * ```
+   * 
+   * @see https://learn.microsoft.com/en-us/office/open-xml/how-to-accept-all-revisions
+   */
+  async acceptAllRevisions(): Promise<this> {
+    const { acceptAllRevisions } = await import('../utils/acceptRevisions');
+    
+    // Step 1: Accept all revisions in the raw XML in ZIP package
+    await acceptAllRevisions(this.zipHandler);
+    
+    // Step 2: Clear Revision objects from in-memory object model
+    // This prevents them from being re-serialized during save()
+    // The DocumentParser parses revision XML into Revision objects stored in paragraph.content
+    // Even after accepting the XML changes, these objects remain in memory and get regenerated
+    this.clearRevisionsFromAllParagraphs();
+    
+    // Step 3: Set flag to prevent document.xml regeneration on save()
+    // This preserves the cleaned XML we just created, preventing corruption
+    // from any remaining Revision references being re-serialized
+    this.skipDocumentXmlRegeneration = true;
+    
+    return this;
+  }
+  
+  /**
+   * Clears all Revision objects from paragraph content throughout the document
+   * This removes in-memory tracked change objects to prevent re-serialization
+   * Called by stripTrackedChanges() after cleaning the raw XML
+   * @private
+   */
+  private clearRevisionsFromAllParagraphs(): void {
+    let clearedCount = 0;
+    
+    // Clear revisions from all paragraphs in the document
+    for (const para of this.getAllParagraphs()) {
+      const revisions = para.getRevisions();
+      
+      if (revisions.length > 0) {
+        // Filter out all Revision objects from paragraph content
+        const content = para.getContent();
+        const nonRevisionContent = content.filter(item => !(item instanceof Revision));
+        
+        // Replace paragraph content with filtered version
+        para.clearContent();
+        for (const item of nonRevisionContent) {
+          if (item instanceof Run || item instanceof ImageRun) {
+            para.addRun(item);
+          } else if (item instanceof Hyperlink) {
+            para.addHyperlink(item);
+          } else if ((item as any).constructor.name === 'Field') {
+            para.addField(item as any);
+          }
+        }
+        
+        clearedCount += revisions.length;
+      }
+    }
+    
+    if (clearedCount > 0) {
+      this.logger.info(`Cleared ${clearedCount} Revision object(s) from in-memory document model`);
+    }
+  }
+
+  /**
    * Cleans up resources and clears all managers
    * Call this after saving in long-running processes to free memory
    * Especially important for API servers processing many documents
@@ -8685,10 +9068,16 @@ export class Document {
     const wholeWord = options?.wholeWord ?? false;
     const searchText = caseSensitive ? text : text.toLowerCase();
 
+    // Track searched paragraphs to prevent duplicates (tables are in both getAllParagraphs() and getTables())
+    const searchedParagraphs = new Set<Paragraph>();
+
     const paragraphs = this.getAllParagraphs();
     for (let pIndex = 0; pIndex < paragraphs.length; pIndex++) {
       const paragraph = paragraphs[pIndex];
       if (!paragraph) continue;
+
+      // Mark this paragraph as searched
+      searchedParagraphs.add(paragraph);
       const runs = paragraph.getRuns();
 
       for (let rIndex = 0; rIndex < runs.length; rIndex++) {
@@ -8743,6 +9132,13 @@ export class Document {
             for (let pIndex = 0; pIndex < cellParagraphs.length; pIndex++) {
               const paragraph = cellParagraphs[pIndex];
               if (!paragraph) continue;
+
+              // Skip if already searched (getAllParagraphs includes table paragraphs)
+              if (searchedParagraphs.has(paragraph)) {
+                continue;
+              }
+              searchedParagraphs.add(paragraph);
+
               const runs = paragraph.getRuns();
 
               for (let rIndex = 0; rIndex < runs.length; rIndex++) {
@@ -9009,8 +9405,12 @@ export class Document {
   getWordCount(): number {
     let totalWords = 0;
 
+    // Track counted paragraphs to prevent duplicates (getAllParagraphs includes table paragraphs)
+    const countedParagraphs = new Set<Paragraph>();
+
     const paragraphs = this.getAllParagraphs();
     for (const paragraph of paragraphs) {
+      countedParagraphs.add(paragraph);
       const text = paragraph.getText().trim();
       if (text) {
         // Split by whitespace and filter out empty strings
@@ -9019,7 +9419,7 @@ export class Document {
       }
     }
 
-    // Also count words in tables
+    // Also count words in tables (skip if already counted)
     const tables = this.getTables();
     for (const table of tables) {
       const rows = table.getRows();
@@ -9028,6 +9428,12 @@ export class Document {
         for (const cell of cells) {
           const cellParas = cell.getParagraphs();
           for (const para of cellParas) {
+            // Skip if already counted
+            if (countedParagraphs.has(para)) {
+              continue;
+            }
+            countedParagraphs.add(para);
+
             const text = para.getText().trim();
             if (text) {
               const words = text.split(/\s+/).filter((word) => word.length > 0);
@@ -9060,8 +9466,12 @@ export class Document {
   getCharacterCount(includeSpaces: boolean = true): number {
     let totalChars = 0;
 
+    // Track counted paragraphs to prevent duplicates (getAllParagraphs includes table paragraphs)
+    const countedParagraphs = new Set<Paragraph>();
+
     const paragraphs = this.getAllParagraphs();
     for (const paragraph of paragraphs) {
+      countedParagraphs.add(paragraph);
       const text = paragraph.getText();
       if (includeSpaces) {
         totalChars += text.length;
@@ -9070,7 +9480,7 @@ export class Document {
       }
     }
 
-    // Also count characters in tables
+    // Also count characters in tables (skip if already counted)
     const tables = this.getTables();
     for (const table of tables) {
       const rows = table.getRows();
@@ -9079,6 +9489,12 @@ export class Document {
         for (const cell of cells) {
           const cellParas = cell.getParagraphs();
           for (const para of cellParas) {
+            // Skip if already counted
+            if (countedParagraphs.has(para)) {
+              continue;
+            }
+            countedParagraphs.add(para);
+
             const text = para.getText();
             if (includeSpaces) {
               totalChars += text.length;

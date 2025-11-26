@@ -57,6 +57,31 @@ try {
 }
 ```
 
+**Document Load Options:**
+
+The `load()` and `loadFromBuffer()` methods accept an optional options object:
+
+```typescript
+interface DocumentLoadOptions {
+  revisionHandling?: 'accept' | 'strip' | 'preserve';
+}
+```
+
+- `accept` (default): Accepts all tracked changes, removing revision markup
+- `strip`: Removes all tracked changes completely
+- `preserve`: Preserves tracked changes for inspection/editing
+
+**Important:** To preserve `pPrChange` (paragraph property change tracking) and other revision elements during round-trip, use `revisionHandling: 'preserve'`:
+
+```typescript
+// Preserve tracked changes
+const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+
+// Access paragraph change tracking
+const para = doc.getParagraphs()[0];
+console.log(para.formatting.pPrChange); // { author, date, id }
+```
+
 ### DocumentParser Class
 
 **File:** `src/core/DocumentParser.ts`
@@ -82,6 +107,8 @@ Converts XML from DOCX files into JavaScript object models.
 - **Special Characters**: Converts `<w:tab/>`, `<w:br/>` to string equivalents
 - **Complex Fields**: Parses field instructions and content
 - **Content Controls**: Handles SDT (Structured Document Tags)
+- **Element Order Preservation**: Uses `_orderedChildren` from XMLParser for correct tab/break ordering
+- **Nested Element Handling**: Skips past closing tags when scanning to avoid counting nested runs
 
 **Error Handling:**
 - Non-critical errors are logged but don't halt parsing
