@@ -89,7 +89,7 @@ export function detectCorruptionInDocument(doc: any): CorruptionReport {
   };
 
   // Get all paragraphs from the document
-  const paragraphs = doc.getParagraphs ? doc.getParagraphs() : [];
+  const paragraphs = doc.getAllParagraphs ? doc.getAllParagraphs() : [];
 
   // Scan each paragraph
   for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {

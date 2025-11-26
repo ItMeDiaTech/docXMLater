@@ -237,6 +237,7 @@ ${properties}
   /**
    * Generates [Content_Types].xml with image extensions, headers/footers, comments, and fonts
    * Preserves entries for files that exist in the loaded document (customXML, etc.)
+   * Merges framework-generated entries with original entries for round-trip fidelity
    */
   generateContentTypesWithImagesHeadersFootersAndComments(
     imageManager: ImageManager,
@@ -244,39 +245,39 @@ ${properties}
     commentManager: CommentManager,
     zipHandler: any, // ZipHandler - to check file existence
     fontManager?: FontManager,
-    hasCustomProperties: boolean = false
+    hasCustomProperties: boolean = false,
+    originalContentTypes?: { defaults: Set<string>; overrides: Set<string> }
   ): string {
     const images = imageManager.getAllImages();
     const headers = headerFooterManager.getAllHeaders();
     const footers = headerFooterManager.getAllFooters();
     const hasComments = commentManager.getCount() > 0;
 
-    // Collect unique extensions
-    const extensions = new Set<string>();
-    for (const entry of images) {
-      extensions.add(entry.image.getExtension());
-    }
+    // Build sets for framework-generated entries
+    const generatedDefaults = new Set<string>();
+    const generatedOverrides = new Set<string>();
 
-    let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-    xml +=
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n';
-
-    // Default types
-    xml +=
-      '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n';
-    xml += '  <Default Extension="xml" ContentType="application/xml"/>\n';
+    // Default types - always needed
+    generatedDefaults.add('rels|application/vnd.openxmlformats-package.relationships+xml');
+    generatedDefaults.add('xml|application/xml');
 
     // Image extensions
-    for (const ext of extensions) {
+    for (const entry of images) {
+      const ext = entry.image.getExtension();
       const mimeType = ImageManager.getMimeType(ext);
-      xml += `  <Default Extension="${ext}" ContentType="${mimeType}"/>\n`;
+      generatedDefaults.add(`${ext}|${mimeType}`);
     }
 
     // Font extensions (if FontManager provided)
     if (fontManager && fontManager.getCount() > 0) {
       const fontEntries = fontManager.generateContentTypeEntries();
       for (const entry of fontEntries) {
-        xml += entry + "\n";
+        // Parse each entry and add to set (entries are XML strings)
+        const extMatch = entry.match(/Extension="([^"]+)"/);
+        const typeMatch = entry.match(/ContentType="([^"]+)"/);
+        if (extMatch && typeMatch) {
+          generatedDefaults.add(`${extMatch[1]}|${typeMatch[1]}`);
+        }
       }
     }
 
@@ -284,68 +285,81 @@ ${properties}
     const files = zipHandler.getFilePaths?.() || [];
     const hasTtfFonts = files.some((f: string) => f.endsWith(".ttf"));
     if (hasTtfFonts) {
-      xml +=
-        '  <Default Extension="ttf" ContentType="application/x-font-ttf"/>\n';
+      generatedDefaults.add('ttf|application/x-font-ttf');
     }
 
-    // Override types
-    xml +=
-      '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>\n';
-    xml +=
-      '  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>\n';
-    xml +=
-      '  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>\n';
+    // Override types - required files
+    generatedOverrides.add('/word/document.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml');
+    generatedOverrides.add('/word/styles.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml');
+    generatedOverrides.add('/word/numbering.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml');
+    generatedOverrides.add('/word/fontTable.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml');
+    generatedOverrides.add('/word/settings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml');
+    generatedOverrides.add('/word/theme/theme1.xml|application/vnd.openxmlformats-officedocument.theme+xml');
 
-    // Required files (MUST be present for DOCX compliance)
-    xml +=
-      '  <Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/>\n';
-    xml +=
-      '  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>\n';
-    xml +=
-      '  <Override PartName="/word/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>\n';
-
-    // Header overrides
+    // Headers
     for (const entry of headers) {
-      xml += `  <Override PartName="/word/${entry.filename}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>\n`;
+      generatedOverrides.add(`/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml`);
     }
 
-    // Footer overrides
+    // Footers
     for (const entry of footers) {
-      xml += `  <Override PartName="/word/${entry.filename}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>\n`;
+      generatedOverrides.add(`/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml`);
     }
 
-    // Comments override
+    // Comments
     if (hasComments) {
-      xml +=
-        '  <Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>\n';
+      generatedOverrides.add('/word/comments.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml');
     }
 
-    xml +=
-      '  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>\n';
+    // Core properties (always needed)
+    generatedOverrides.add('/docProps/core.xml|application/vnd.openxmlformats-package.core-properties+xml');
 
-    // Only add app.xml if it exists (not all documents have it)
+    // App.xml if it exists
     if (zipHandler.hasFile?.("docProps/app.xml")) {
-      xml +=
-        '  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>\n';
+      generatedOverrides.add('/docProps/app.xml|application/vnd.openxmlformats-officedocument.extended-properties+xml');
     }
 
-    // Include custom properties if exists or will be created
+    // Custom properties if exists or will be created
     if (zipHandler.hasFile?.("docProps/custom.xml") || hasCustomProperties) {
-      xml +=
-        '  <Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>\n';
+      generatedOverrides.add('/docProps/custom.xml|application/vnd.openxmlformats-officedocument.custom-properties+xml');
     }
 
-    // Preserve customXML entries if they exist
+    // CustomXML entries if they exist
     if (zipHandler.hasFile?.("customXML/item1.xml")) {
-      xml +=
-        '  <Override PartName="/customXML/item1.xml" ContentType="application/xml"/>\n';
+      generatedOverrides.add('/customXML/item1.xml|application/xml');
     }
     if (zipHandler.hasFile?.("customXML/itemProps1.xml")) {
-      xml +=
-        '  <Override PartName="/customXML/itemProps1.xml" ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/>\n';
+      generatedOverrides.add('/customXML/itemProps1.xml|application/vnd.openxmlformats-officedocument.customXmlProperties+xml');
     }
 
-    xml += "</Types>";
+    // Merge with original entries (preserves ALL entries from original document)
+    const allDefaults = new Set([
+      ...generatedDefaults,
+      ...(originalContentTypes?.defaults || [])
+    ]);
+
+    const allOverrides = new Set([
+      ...generatedOverrides,
+      ...(originalContentTypes?.overrides || [])
+    ]);
+
+    // Build XML from merged sets
+    let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    xml += '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n';
+
+    // Add all default entries
+    for (const entry of allDefaults) {
+      const [ext, contentType] = entry.split('|');
+      xml += `  <Default Extension="${ext}" ContentType="${contentType}"/>\n`;
+    }
+
+    // Add all override entries
+    for (const entry of allOverrides) {
+      const [partName, contentType] = entry.split('|');
+      xml += `  <Override PartName="${partName}" ContentType="${contentType}"/>\n`;
+    }
+
+    xml += '</Types>';
 
     return xml;
   }

@@ -20,6 +20,9 @@ export class NumberingManager {
   private nextAbstractNumId: number;
   private nextNumId: number;
 
+  // Track if numbering has been modified (for XML preservation)
+  private _modified: boolean = false;
+
   /**
    * Creates a new numbering manager
    * @param initializeDefaults Whether to initialize with default numbering definitions
@@ -61,6 +64,7 @@ export class NumberingManager {
       this.nextAbstractNumId = id + 1;
     }
 
+    this._modified = true;
     return this;
   }
 
@@ -121,6 +125,7 @@ export class NumberingManager {
     }
 
     this.instances.set(numId, instance);
+    this._modified = true;
 
     // Update next ID if necessary
     if (numId >= this.nextNumId) {
@@ -161,6 +166,23 @@ export class NumberingManager {
     return Array.from(this.instances.values()).sort(
       (a, b) => a.getNumId() - b.getNumId()
     );
+  }
+
+  /**
+   * Checks if numbering has been modified since loading
+   * Used for XML preservation optimization
+   * @returns True if numbering was added or modified
+   */
+  isModified(): boolean {
+    return this._modified;
+  }
+
+  /**
+   * Resets the modified flag
+   * Called after parsing to indicate that loaded numbering doesn't count as modifications
+   */
+  resetModified(): void {
+    this._modified = false;
   }
 
   /**
