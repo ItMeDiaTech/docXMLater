@@ -775,15 +775,24 @@ export class XMLParser {
     const nameCounts: Record<string, number> = {};
     const nameIndices: Record<string, number> = {};
 
+    // Track element order for correct run content parsing (tabs, breaks, text)
+    // This is critical for preserving the order of mixed content like: text -> tab -> text
+    const orderedChildren: Array<{ type: string; index: number }> = [];
+
     // Count occurrences of each child name
     for (const child of children) {
       nameCounts[child.name] = (nameCounts[child.name] || 0) + 1;
     }
 
-    // Build result object
+    // Build result object while tracking order
     for (const child of children) {
       const shouldBeArray =
         options.alwaysArray || (nameCounts[child.name] || 0) > 1;
+
+      // Track element order with its index in the array
+      const currentIndex = nameIndices[child.name] || 0;
+      orderedChildren.push({ type: child.name, index: currentIndex });
+      nameIndices[child.name] = currentIndex + 1;
 
       if (shouldBeArray) {
         if (!result[child.name]) {
@@ -793,6 +802,11 @@ export class XMLParser {
       } else {
         result[child.name] = child.value;
       }
+    }
+
+    // Add _orderedChildren to track element order (used by DocumentParser for runs)
+    if (orderedChildren.length > 0) {
+      result["_orderedChildren"] = orderedChildren;
     }
 
     return result;

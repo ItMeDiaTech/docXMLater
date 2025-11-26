@@ -225,11 +225,42 @@ export class Image {
 
   /**
    * Creates a new image from buffer (async factory)
+   * Supports both modern and legacy API signatures
+   *
    * @param buffer Image buffer
-   * @param properties Additional properties
+   * @param mimeTypeOrProperties MIME type string ('png', 'jpeg', etc.) or properties object
+   * @param width Optional width in EMUs (legacy API)
+   * @param height Optional height in EMUs (legacy API)
    * @returns Promise<Image>
+   *
+   * @example
+   * // Modern API (recommended)
+   * const img = await Image.fromBuffer(buffer, { mimeType: 'png', width: 914400, height: 914400 });
+   *
+   * // Legacy API (still supported)
+   * const img = await Image.fromBuffer(buffer, 'png', 914400, 914400);
    */
-  static async fromBuffer(buffer: Buffer, properties: Partial<ImageProperties> = {}): Promise<Image> {
+  static async fromBuffer(
+    buffer: Buffer,
+    mimeTypeOrProperties?: string | Partial<ImageProperties>,
+    width?: number,
+    height?: number
+  ): Promise<Image> {
+    let properties: Partial<ImageProperties>;
+
+    // Detect API signature
+    if (typeof mimeTypeOrProperties === 'string') {
+      // Legacy 4-parameter signature: fromBuffer(buffer, 'png', 914400, 914400)
+      // Note: mimeType is ignored - extension is auto-detected from buffer
+      properties = {
+        width: width,
+        height: height
+      };
+    } else {
+      // Modern API: fromBuffer(buffer, { width: 914400, height: 914400 })
+      properties = mimeTypeOrProperties || {};
+    }
+
     const image = new Image({ source: buffer, ...properties });
     await image.loadImageDataForDimensions();
     return image;
@@ -601,7 +632,14 @@ export class Image {
   }
 
   setWrap(type: WrapType, side?: WrapSide, distances?: { top?: number; bottom?: number; left?: number; right?: number }): this {
-    this.wrap = { type, side, ...distances };
+    this.wrap = {
+      type,
+      side,
+      distanceTop: distances?.top,
+      distanceBottom: distances?.bottom,
+      distanceLeft: distances?.left,
+      distanceRight: distances?.right,
+    };
     return this;
   }
 
@@ -799,11 +837,29 @@ export class Image {
     // Common elements - must include wp: namespace prefix
     const extent = XMLBuilder.wp('extent', { cx: this.width.toString(), cy: this.height.toString() });
 
-    // Blip with required cstate attribute
-    const blip = XMLBuilder.a('blip', { 
-      'r:embed': this.relationshipId,
-      cstate: 'none'
-    });
+    // Blip with required cstate attribute and optional effects
+    const blipChildren: XMLElement[] = [];
+
+    // Add luminance effect for brightness/contrast (per ECMA-376 §20.1.8.43)
+    if (this.effects?.brightness !== undefined || this.effects?.contrast !== undefined) {
+      const lumAttrs: Record<string, string> = {};
+      if (this.effects.brightness !== undefined) {
+        lumAttrs.bright = Math.round(this.effects.brightness * 1000).toString();
+      }
+      if (this.effects.contrast !== undefined) {
+        lumAttrs.contrast = Math.round(this.effects.contrast * 1000).toString();
+      }
+      blipChildren.push(XMLBuilder.aSelf('lum', lumAttrs));
+    }
+
+    // Add grayscale effect (per ECMA-376 §20.1.8.37)
+    if (this.effects?.grayscale) {
+      blipChildren.push(XMLBuilder.aSelf('grayscl'));
+    }
+
+    const blip = blipChildren.length > 0
+      ? XMLBuilder.a('blip', { 'r:embed': this.relationshipId, cstate: 'none' }, blipChildren)
+      : XMLBuilder.a('blip', { 'r:embed': this.relationshipId, cstate: 'none' });
 
     // Transform element with offset and extent (required by Word)
     const xfrm = XMLBuilder.a('xfrm', undefined, [
@@ -845,7 +901,13 @@ export class Image {
         ]),
         XMLBuilder.pic('blipFill', undefined, [
           blip,
-          XMLBuilder.a('srcRect'),
+          // Crop values are stored as percentages (0-100), serialized as per-mille (0-100000)
+          XMLBuilder.a('srcRect', this.crop ? {
+            l: Math.round(this.crop.left * 1000).toString(),
+            t: Math.round(this.crop.top * 1000).toString(),
+            r: Math.round(this.crop.right * 1000).toString(),
+            b: Math.round(this.crop.bottom * 1000).toString(),
+          } : undefined),
           XMLBuilder.a('stretch', undefined, [
             XMLBuilder.a('fillRect')
           ])
@@ -874,10 +936,20 @@ export class Image {
       }
       const positionV = XMLBuilder.wp('positionV', { relativeFrom: this.position?.vertical.anchor || 'page' }, positionVChildren);
 
+      // Effect extent for floating images (required by Word)
+      const floatEffectExt = this.effectExtent || { left: 0, top: 0, right: 0, bottom: 0 };
+      const effectExtentElement = XMLBuilder.wp('effectExtent', {
+        t: floatEffectExt.top.toString(),
+        r: floatEffectExt.right.toString(),
+        b: floatEffectExt.bottom.toString(),
+        l: floatEffectExt.left.toString()
+      });
+
       const anchorChildren = [
         positionH,
         positionV,
-        extent
+        extent,
+        effectExtentElement
       ];
 
       if (this.wrap) {

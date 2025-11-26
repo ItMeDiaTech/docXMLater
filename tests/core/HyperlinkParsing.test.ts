@@ -78,7 +78,7 @@ describe('Hyperlink Parsing', () => {
       const paragraphs = doc.getParagraphs();
       const hyperlink = paragraphs[0]!.getContent()[0] as Hyperlink;
 
-      const formatting = hyperlink.getFormatting();
+      const formatting = hyperlink.getRawFormatting();
       expect(formatting.bold).toBe(true);
       expect(formatting.color).toBe('0563C1');
       expect(formatting.underline).toBe('single');
