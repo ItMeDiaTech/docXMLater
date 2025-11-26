@@ -1237,6 +1237,11 @@ export class Document {
 
       this.processHyperlinks();
 
+      // Flush pending tracked changes to create Revision objects before XML generation
+      if (this.trackChangesEnabled && this.trackingContext) {
+        this.flushPendingChanges();
+      }
+
       // Only regenerate document.xml if we haven't manually stripped tracked changes
       // Stripping sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
       if (!this.skipDocumentXmlRegeneration) {
@@ -1341,12 +1346,17 @@ export class Document {
       this.clearAllPreserveFlags();
 
       this.processHyperlinks();
-      
+
+      // Flush pending tracked changes to create Revision objects before XML generation
+      if (this.trackChangesEnabled && this.trackingContext) {
+        this.flushPendingChanges();
+      }
+
       // Only regenerate document.xml if we haven't manually stripped tracked changes
       if (!this.skipDocumentXmlRegeneration) {
         this.updateDocumentXml();
       }
-      
+
       this.updateStylesXml();
       this.updateNumberingXml();
       this.updateCoreProps();
