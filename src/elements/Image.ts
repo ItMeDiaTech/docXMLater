@@ -328,14 +328,24 @@ export class Image {
 
       if (tempData) {
         this.imageData = tempData; // Temporarily store
-        const dimensions = this.detectDimensions();
-        if (dimensions) {
-          this.dpi = this.detectDPI() || 96;
-          const emuPerInch = 914400;
-          const pixelsPerInch = this.dpi;
-          this.width = Math.round((dimensions.width / pixelsPerInch) * emuPerInch);
-          this.height = Math.round((dimensions.height / pixelsPerInch) * emuPerInch);
+
+        // Only auto-detect dimensions if they weren't explicitly provided
+        // This preserves wp:extent values from parsed documents
+        const defaultWidth = inchesToEmus(6);
+        const defaultHeight = inchesToEmus(4);
+        const hasExplicitDimensions = this.width !== defaultWidth || this.height !== defaultHeight;
+
+        if (!hasExplicitDimensions) {
+          const dimensions = this.detectDimensions();
+          if (dimensions) {
+            this.dpi = this.detectDPI() || 96;
+            const emuPerInch = 914400;
+            const pixelsPerInch = this.dpi;
+            this.width = Math.round((dimensions.width / pixelsPerInch) * emuPerInch);
+            this.height = Math.round((dimensions.height / pixelsPerInch) * emuPerInch);
+          }
         }
+
         if (typeof this.source === 'string') {
           this.imageData = undefined; // Release
         }

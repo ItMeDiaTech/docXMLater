@@ -561,10 +561,6 @@ export class DocumentParser {
 
     const paraContent = paraXml.substring(contentStart, contentEnd);
 
-    // DEBUG: Log paragraph content to diagnose revision extraction
-    console.log(`[Revision Debug] Paragraph content (first 500 chars): ${paraContent.substring(0, 500)}`);
-    console.log(`[Revision Debug] Full paragraph content length: ${paraContent.length}`);
-
     // Track children by scanning XML for opening tags
     interface ChildMarker {
       type: "w:r" | "w:hyperlink" | "w:fldSimple" | "w:ins" | "w:del" | "w:moveFrom" | "w:moveTo";
@@ -672,10 +668,6 @@ export class DocumentParser {
     const moveFromXmls = XMLParser.extractElements(paraContent, "w:moveFrom");
     const moveToXmls = XMLParser.extractElements(paraContent, "w:moveTo");
 
-    // DEBUG: Log extraction results
-    console.log(`[Extraction] ins: ${insXmls.length}, del: ${delXmls.length}, moveFrom: ${moveFromXmls.length}, moveTo: ${moveToXmls.length}`);
-    console.log(`[Scanning] total children: ${children.length}, ins markers: ${insIndex}, del markers: ${delIndex}, moveFrom markers: ${moveFromIndex}, moveTo markers: ${moveToIndex}`);
-    
     // Now process children in the order they were found
     for (const child of children) {
       if (child.type === "w:r") {
@@ -737,7 +729,13 @@ export class DocumentParser {
         if (child.index < insXmls.length) {
           const revisionXml = insXmls[child.index];
           if (revisionXml) {
-            const revision = this.parseRevisionFromXml(revisionXml, "w:ins");
+            const revision = await this.parseRevisionFromXml(
+              revisionXml,
+              "w:ins",
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
             if (revision) {
               paragraph.addRevision(revision);
             }
@@ -747,7 +745,13 @@ export class DocumentParser {
         if (child.index < delXmls.length) {
           const revisionXml = delXmls[child.index];
           if (revisionXml) {
-            const revision = this.parseRevisionFromXml(revisionXml, "w:del");
+            const revision = await this.parseRevisionFromXml(
+              revisionXml,
+              "w:del",
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
             if (revision) {
               paragraph.addRevision(revision);
             }
@@ -757,7 +761,13 @@ export class DocumentParser {
         if (child.index < moveFromXmls.length) {
           const revisionXml = moveFromXmls[child.index];
           if (revisionXml) {
-            const revision = this.parseRevisionFromXml(revisionXml, "w:moveFrom");
+            const revision = await this.parseRevisionFromXml(
+              revisionXml,
+              "w:moveFrom",
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
             if (revision) {
               paragraph.addRevision(revision);
             }
@@ -767,7 +777,13 @@ export class DocumentParser {
         if (child.index < moveToXmls.length) {
           const revisionXml = moveToXmls[child.index];
           if (revisionXml) {
-            const revision = this.parseRevisionFromXml(revisionXml, "w:moveTo");
+            const revision = await this.parseRevisionFromXml(
+              revisionXml,
+              "w:moveTo",
+              relationshipManager,
+              zipHandler,
+              imageManager
+            );
             if (revision) {
               paragraph.addRevision(revision);
             }
@@ -782,12 +798,18 @@ export class DocumentParser {
    * Extracts revision metadata (id, author, date) and contained runs
    * @param revisionXml - Raw XML of the revision element
    * @param tagName - Tag name (w:ins, w:del, w:moveFrom, w:moveTo)
+   * @param relationshipManager - Relationship manager for image relationships
+   * @param zipHandler - ZIP handler for loading image data
+   * @param imageManager - Image manager for registering images
    * @returns Parsed Revision instance or null
    */
-  private parseRevisionFromXml(
+  private async parseRevisionFromXml(
     revisionXml: string,
-    tagName: string
-  ): Revision | null {
+    tagName: string,
+    relationshipManager: RelationshipManager,
+    zipHandler?: ZipHandler,
+    imageManager?: ImageManager
+  ): Promise<Revision | null> {
     try {
       // Map XML tag to RevisionType
       let revisionType: import("../elements/Revision").RevisionType;
@@ -828,9 +850,28 @@ export class DocumentParser {
       for (const runXml of runXmls) {
         // Parse the run object
         const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
-        const run = this.parseRunFromObject(runObj["w:r"]);
-        if (run) {
-          runs.push(run);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const runElement = runObj["w:r"] as any;
+
+        // Check if this run contains a drawing (image)
+        if (runElement && runElement["w:drawing"]) {
+          if (zipHandler && imageManager) {
+            const imageRun = await this.parseDrawingFromObject(
+              runElement["w:drawing"],
+              zipHandler,
+              relationshipManager,
+              imageManager
+            );
+            if (imageRun) {
+              runs.push(imageRun);
+            }
+          }
+        } else {
+          // Parse as regular text run
+          const run = this.parseRunFromObject(runElement);
+          if (run) {
+            runs.push(run);
+          }
         }
       }
 
