@@ -10,6 +10,7 @@
 import { Revision, RevisionType } from '../elements/Revision';
 import { RevisionManager } from '../elements/RevisionManager';
 import { Run } from '../elements/Run';
+import { Paragraph } from '../elements/Paragraph';
 import type { TrackingContext, PendingChange } from './TrackingContext';
 
 /**
@@ -257,10 +258,45 @@ export class DocumentTrackingContext implements TrackingContext {
   flushPendingChanges(): Revision[] {
     const revisions: Revision[] = [];
 
+    // Group pending changes by paragraph for consolidation
+    const paragraphChanges = new Map<Paragraph, PendingChange[]>();
+
     for (const [, pending] of this.pendingChanges) {
       const revision = this.createRevision(pending);
       this.revisionManager.register(revision);
       revisions.push(revision);
+
+      // For paragraph property changes, collect changes by paragraph
+      if (pending.type === 'paragraphPropertiesChange' && pending.element instanceof Paragraph) {
+        const changes = paragraphChanges.get(pending.element) || [];
+        changes.push(pending);
+        paragraphChanges.set(pending.element, changes);
+      }
+    }
+
+    // Apply pPrChange to each paragraph that has property changes
+    for (const [paragraph, changes] of paragraphChanges) {
+      // Build previous properties from all changes to this paragraph
+      const previousProperties: Record<string, any> = {};
+      let latestTimestamp = 0;
+
+      for (const change of changes) {
+        if (change.previousValue !== undefined) {
+          previousProperties[change.property] = change.previousValue;
+        }
+        if (change.timestamp > latestTimestamp) {
+          latestTimestamp = change.timestamp;
+        }
+      }
+
+      // Set pPrChange on the paragraph (this is what generates w:pPrChange in XML)
+      const revisionId = this.revisionManager.peekNextId();
+      paragraph.formatting.pPrChange = {
+        author: this.author,
+        date: new Date(latestTimestamp).toISOString(),
+        id: String(revisionId),
+        previousProperties: Object.keys(previousProperties).length > 0 ? previousProperties : undefined,
+      };
     }
 
     this.pendingChanges.clear();
