@@ -267,6 +267,7 @@ export interface RunFormatting {
 export class Run {
   private content: RunContent[];
   private formatting: RunFormatting;
+  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
 
   /**
    * Creates a new Run
@@ -515,7 +516,11 @@ export class Run {
    * @returns This run for chaining
    */
   setCharacterStyle(styleId: string): this {
+    const previousValue = this.formatting.characterStyle;
     this.formatting.characterStyle = styleId;
+    if (this.trackingContext?.isEnabled() && previousValue !== styleId) {
+      this.trackingContext.trackRunPropertyChange(this, 'characterStyle', previousValue, styleId);
+    }
     return this;
   }
 
@@ -526,7 +531,11 @@ export class Run {
    * @returns This run for chaining
    */
   setBorder(border: TextBorder): this {
+    const previousValue = this.formatting.border;
     this.formatting.border = border;
+    if (this.trackingContext?.isEnabled() && previousValue !== border) {
+      this.trackingContext.trackRunPropertyChange(this, 'border', previousValue, border);
+    }
     return this;
   }
 
@@ -537,7 +546,11 @@ export class Run {
    * @returns This run for chaining
    */
   setShading(shading: CharacterShading): this {
+    const previousValue = this.formatting.shading;
     this.formatting.shading = shading;
+    if (this.trackingContext?.isEnabled() && previousValue !== shading) {
+      this.trackingContext.trackRunPropertyChange(this, 'shading', previousValue, shading);
+    }
     return this;
   }
 
@@ -548,8 +561,21 @@ export class Run {
    * @returns This run for chaining
    */
   setEmphasis(emphasis: EmphasisMark): this {
+    const previousValue = this.formatting.emphasis;
     this.formatting.emphasis = emphasis;
+    if (this.trackingContext?.isEnabled() && previousValue !== emphasis) {
+      this.trackingContext.trackRunPropertyChange(this, 'emphasis', previousValue, emphasis);
+    }
     return this;
+  }
+
+  /**
+   * Sets the tracking context for automatic change tracking.
+   * Called by Document when track changes is enabled.
+   * @internal
+   */
+  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+    this.trackingContext = context;
   }
 
   /**
@@ -568,7 +594,11 @@ export class Run {
    * ```
    */
   setBold(bold: boolean = true): this {
+    const previousValue = this.formatting.bold;
     this.formatting.bold = bold;
+    if (this.trackingContext?.isEnabled() && previousValue !== bold) {
+      this.trackingContext.trackRunPropertyChange(this, 'bold', previousValue, bold);
+    }
     return this;
   }
 
@@ -588,7 +618,11 @@ export class Run {
    * ```
    */
   setItalic(italic: boolean = true): this {
+    const previousValue = this.formatting.italic;
     this.formatting.italic = italic;
+    if (this.trackingContext?.isEnabled() && previousValue !== italic) {
+      this.trackingContext.trackRunPropertyChange(this, 'italic', previousValue, italic);
+    }
     return this;
   }
 
@@ -598,7 +632,11 @@ export class Run {
    * @param bold - Whether text is bold for complex scripts
    */
   setComplexScriptBold(bold: boolean = true): this {
+    const previousValue = this.formatting.complexScriptBold;
     this.formatting.complexScriptBold = bold;
+    if (this.trackingContext?.isEnabled() && previousValue !== bold) {
+      this.trackingContext.trackRunPropertyChange(this, 'complexScriptBold', previousValue, bold);
+    }
     return this;
   }
 
@@ -608,7 +646,11 @@ export class Run {
    * @param italic - Whether text is italic for complex scripts
    */
   setComplexScriptItalic(italic: boolean = true): this {
+    const previousValue = this.formatting.complexScriptItalic;
     this.formatting.complexScriptItalic = italic;
+    if (this.trackingContext?.isEnabled() && previousValue !== italic) {
+      this.trackingContext.trackRunPropertyChange(this, 'complexScriptItalic', previousValue, italic);
+    }
     return this;
   }
 
@@ -618,7 +660,11 @@ export class Run {
    * @param spacing - Spacing in twips (1/20th of a point). Positive values expand, negative values condense.
    */
   setCharacterSpacing(spacing: number): this {
+    const previousValue = this.formatting.characterSpacing;
     this.formatting.characterSpacing = spacing;
+    if (this.trackingContext?.isEnabled() && previousValue !== spacing) {
+      this.trackingContext.trackRunPropertyChange(this, 'characterSpacing', previousValue, spacing);
+    }
     return this;
   }
 
@@ -628,7 +674,11 @@ export class Run {
    * @param scaling - Scaling percentage (e.g., 200 = 200% width, 50 = 50% width). Default is 100.
    */
   setScaling(scaling: number): this {
+    const previousValue = this.formatting.scaling;
     this.formatting.scaling = scaling;
+    if (this.trackingContext?.isEnabled() && previousValue !== scaling) {
+      this.trackingContext.trackRunPropertyChange(this, 'scaling', previousValue, scaling);
+    }
     return this;
   }
 
@@ -638,7 +688,11 @@ export class Run {
    * @param position - Position in half-points. Positive values raise text, negative values lower it.
    */
   setPosition(position: number): this {
+    const previousValue = this.formatting.position;
     this.formatting.position = position;
+    if (this.trackingContext?.isEnabled() && previousValue !== position) {
+      this.trackingContext.trackRunPropertyChange(this, 'position', previousValue, position);
+    }
     return this;
   }
 
@@ -648,7 +702,11 @@ export class Run {
    * @param kerning - Font size in half-points at which kerning starts. 0 disables kerning.
    */
   setKerning(kerning: number): this {
+    const previousValue = this.formatting.kerning;
     this.formatting.kerning = kerning;
+    if (this.trackingContext?.isEnabled() && previousValue !== kerning) {
+      this.trackingContext.trackRunPropertyChange(this, 'kerning', previousValue, kerning);
+    }
     return this;
   }
 
@@ -658,7 +716,11 @@ export class Run {
    * @param language - Language code (e.g., 'en-US', 'fr-FR', 'es-ES')
    */
   setLanguage(language: string): this {
+    const previousValue = this.formatting.language;
     this.formatting.language = language;
+    if (this.trackingContext?.isEnabled() && previousValue !== language) {
+      this.trackingContext.trackRunPropertyChange(this, 'language', previousValue, language);
+    }
     return this;
   }
 
@@ -684,7 +746,11 @@ export class Run {
    * ```
    */
   setUnderline(underline: RunFormatting["underline"] = true): this {
+    const previousValue = this.formatting.underline;
     this.formatting.underline = underline;
+    if (this.trackingContext?.isEnabled() && previousValue !== underline) {
+      this.trackingContext.trackRunPropertyChange(this, 'underline', previousValue, underline);
+    }
     return this;
   }
 
@@ -703,7 +769,11 @@ export class Run {
    * ```
    */
   setStrike(strike: boolean = true): this {
+    const previousValue = this.formatting.strike;
     this.formatting.strike = strike;
+    if (this.trackingContext?.isEnabled() && previousValue !== strike) {
+      this.trackingContext.trackRunPropertyChange(this, 'strike', previousValue, strike);
+    }
     return this;
   }
 
@@ -723,9 +793,13 @@ export class Run {
    * ```
    */
   setSubscript(subscript: boolean = true): this {
+    const previousValue = this.formatting.subscript;
     this.formatting.subscript = subscript;
     if (subscript) {
       this.formatting.superscript = false;
+    }
+    if (this.trackingContext?.isEnabled() && previousValue !== subscript) {
+      this.trackingContext.trackRunPropertyChange(this, 'subscript', previousValue, subscript);
     }
     return this;
   }
@@ -746,9 +820,13 @@ export class Run {
    * ```
    */
   setSuperscript(superscript: boolean = true): this {
+    const previousValue = this.formatting.superscript;
     this.formatting.superscript = superscript;
     if (superscript) {
       this.formatting.subscript = false;
+    }
+    if (this.trackingContext?.isEnabled() && previousValue !== superscript) {
+      this.trackingContext.trackRunPropertyChange(this, 'superscript', previousValue, superscript);
     }
     return this;
   }
@@ -769,9 +847,19 @@ export class Run {
    * ```
    */
   setFont(font: string, size?: number): this {
+    const previousFont = this.formatting.font;
+    const previousSize = this.formatting.size;
     this.formatting.font = font;
     if (size !== undefined) {
       this.formatting.size = size;
+    }
+    if (this.trackingContext?.isEnabled()) {
+      if (previousFont !== font) {
+        this.trackingContext.trackRunPropertyChange(this, 'font', previousFont, font);
+      }
+      if (size !== undefined && previousSize !== size) {
+        this.trackingContext.trackRunPropertyChange(this, 'size', previousSize, size);
+      }
     }
     return this;
   }
@@ -791,7 +879,11 @@ export class Run {
    * ```
    */
   setSize(size: number): this {
+    const previousValue = this.formatting.size;
     this.formatting.size = size;
+    if (this.trackingContext?.isEnabled() && previousValue !== size) {
+      this.trackingContext.trackRunPropertyChange(this, 'size', previousValue, size);
+    }
     return this;
   }
 
@@ -814,7 +906,12 @@ export class Run {
    * ```
    */
   setColor(color: string): this {
-    this.formatting.color = normalizeColor(color);
+    const previousValue = this.formatting.color;
+    const normalizedColor = normalizeColor(color);
+    this.formatting.color = normalizedColor;
+    if (this.trackingContext?.isEnabled() && previousValue !== normalizedColor) {
+      this.trackingContext.trackRunPropertyChange(this, 'color', previousValue, normalizedColor);
+    }
     return this;
   }
 
@@ -837,7 +934,11 @@ export class Run {
    * ```
    */
   setHighlight(highlight: RunFormatting["highlight"]): this {
+    const previousValue = this.formatting.highlight;
     this.formatting.highlight = highlight;
+    if (this.trackingContext?.isEnabled() && previousValue !== highlight) {
+      this.trackingContext.trackRunPropertyChange(this, 'highlight', previousValue, highlight);
+    }
     return this;
   }
 
@@ -856,7 +957,11 @@ export class Run {
    * ```
    */
   setSmallCaps(smallCaps: boolean = true): this {
+    const previousValue = this.formatting.smallCaps;
     this.formatting.smallCaps = smallCaps;
+    if (this.trackingContext?.isEnabled() && previousValue !== smallCaps) {
+      this.trackingContext.trackRunPropertyChange(this, 'smallCaps', previousValue, smallCaps);
+    }
     return this;
   }
 
@@ -875,7 +980,11 @@ export class Run {
    * ```
    */
   setAllCaps(allCaps: boolean = true): this {
+    const previousValue = this.formatting.allCaps;
     this.formatting.allCaps = allCaps;
+    if (this.trackingContext?.isEnabled() && previousValue !== allCaps) {
+      this.trackingContext.trackRunPropertyChange(this, 'allCaps', previousValue, allCaps);
+    }
     return this;
   }
 
@@ -885,7 +994,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setOutline(outline: boolean = true): this {
+    const previousValue = this.formatting.outline;
     this.formatting.outline = outline;
+    if (this.trackingContext?.isEnabled() && previousValue !== outline) {
+      this.trackingContext.trackRunPropertyChange(this, 'outline', previousValue, outline);
+    }
     return this;
   }
 
@@ -895,7 +1008,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setShadow(shadow: boolean = true): this {
+    const previousValue = this.formatting.shadow;
     this.formatting.shadow = shadow;
+    if (this.trackingContext?.isEnabled() && previousValue !== shadow) {
+      this.trackingContext.trackRunPropertyChange(this, 'shadow', previousValue, shadow);
+    }
     return this;
   }
 
@@ -905,7 +1022,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setEmboss(emboss: boolean = true): this {
+    const previousValue = this.formatting.emboss;
     this.formatting.emboss = emboss;
+    if (this.trackingContext?.isEnabled() && previousValue !== emboss) {
+      this.trackingContext.trackRunPropertyChange(this, 'emboss', previousValue, emboss);
+    }
     return this;
   }
 
@@ -915,7 +1036,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setImprint(imprint: boolean = true): this {
+    const previousValue = this.formatting.imprint;
     this.formatting.imprint = imprint;
+    if (this.trackingContext?.isEnabled() && previousValue !== imprint) {
+      this.trackingContext.trackRunPropertyChange(this, 'imprint', previousValue, imprint);
+    }
     return this;
   }
 
@@ -925,7 +1050,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setRTL(rtl: boolean = true): this {
+    const previousValue = this.formatting.rtl;
     this.formatting.rtl = rtl;
+    if (this.trackingContext?.isEnabled() && previousValue !== rtl) {
+      this.trackingContext.trackRunPropertyChange(this, 'rtl', previousValue, rtl);
+    }
     return this;
   }
 
@@ -935,7 +1064,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setVanish(vanish: boolean = true): this {
+    const previousValue = this.formatting.vanish;
     this.formatting.vanish = vanish;
+    if (this.trackingContext?.isEnabled() && previousValue !== vanish) {
+      this.trackingContext.trackRunPropertyChange(this, 'vanish', previousValue, vanish);
+    }
     return this;
   }
 
@@ -945,7 +1078,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setNoProof(noProof: boolean = true): this {
+    const previousValue = this.formatting.noProof;
     this.formatting.noProof = noProof;
+    if (this.trackingContext?.isEnabled() && previousValue !== noProof) {
+      this.trackingContext.trackRunPropertyChange(this, 'noProof', previousValue, noProof);
+    }
     return this;
   }
 
@@ -955,7 +1092,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setSnapToGrid(snapToGrid: boolean = true): this {
+    const previousValue = this.formatting.snapToGrid;
     this.formatting.snapToGrid = snapToGrid;
+    if (this.trackingContext?.isEnabled() && previousValue !== snapToGrid) {
+      this.trackingContext.trackRunPropertyChange(this, 'snapToGrid', previousValue, snapToGrid);
+    }
     return this;
   }
 
@@ -965,7 +1106,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setSpecVanish(specVanish: boolean = true): this {
+    const previousValue = this.formatting.specVanish;
     this.formatting.specVanish = specVanish;
+    if (this.trackingContext?.isEnabled() && previousValue !== specVanish) {
+      this.trackingContext.trackRunPropertyChange(this, 'specVanish', previousValue, specVanish);
+    }
     return this;
   }
 
@@ -986,7 +1131,11 @@ export class Run {
       | "antsBlack"
       | "antsRed"
   ): this {
+    const previousValue = this.formatting.effect;
     this.formatting.effect = effect;
+    if (this.trackingContext?.isEnabled() && previousValue !== effect) {
+      this.trackingContext.trackRunPropertyChange(this, 'effect', previousValue, effect);
+    }
     return this;
   }
 
@@ -996,7 +1145,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setFitText(width: number): this {
+    const previousValue = this.formatting.fitText;
     this.formatting.fitText = width;
+    if (this.trackingContext?.isEnabled() && previousValue !== width) {
+      this.trackingContext.trackRunPropertyChange(this, 'fitText', previousValue, width);
+    }
     return this;
   }
 
@@ -1006,7 +1159,11 @@ export class Run {
    * @returns This run for method chaining
    */
   setEastAsianLayout(layout: EastAsianLayout): this {
+    const previousValue = this.formatting.eastAsianLayout;
     this.formatting.eastAsianLayout = layout;
+    if (this.trackingContext?.isEnabled() && previousValue !== layout) {
+      this.trackingContext.trackRunPropertyChange(this, 'eastAsianLayout', previousValue, layout);
+    }
     return this;
   }
 

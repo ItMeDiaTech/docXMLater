@@ -82,6 +82,8 @@ export class Hyperlink {
   private tooltip?: string;
   private relationshipId?: string;
   private formatting: RunFormatting;
+  /** Tracking context for automatic change tracking */
+  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
 
   /**
    * Creates a new hyperlink
@@ -137,6 +139,15 @@ export class Hyperlink {
   }
 
   /**
+   * Sets the tracking context for automatic change tracking.
+   * Called by Document when track changes is enabled.
+   * @internal
+   */
+  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+    this.trackingContext = context;
+  }
+
+  /**
    * Gets the hyperlink URL
    */
   getUrl(): string | undefined {
@@ -178,8 +189,12 @@ export class Hyperlink {
     // Use cleaned text if available
     const cleanedText = validation.cleanedText || text;
 
+    const previousValue = this.text;
     this.text = cleanedText;
     this.run.setText(cleanedText); // Run.setText also validates
+    if (this.trackingContext?.isEnabled() && previousValue !== cleanedText) {
+      this.trackingContext.trackHyperlinkChange(this, 'text', previousValue, cleanedText);
+    }
     return this;
   }
 
@@ -205,7 +220,11 @@ export class Hyperlink {
    * Sets the tooltip
    */
   setTooltip(tooltip: string): this {
+    const previousValue = this.tooltip;
     this.tooltip = tooltip;
+    if (this.trackingContext?.isEnabled() && previousValue !== tooltip) {
+      this.trackingContext.trackHyperlinkChange(this, 'tooltip', previousValue, tooltip);
+    }
     return this;
   }
 
@@ -346,11 +365,15 @@ export class Hyperlink {
    */
   setFormatting(formatting: RunFormatting): this {
     // Update stored formatting
+    const previousValue = { ...this.formatting };
     this.formatting = { ...this.formatting, ...formatting };
     // Create new run with updated formatting, preserving current text
     const currentText = this.run.getText();
     this.run = new Run(currentText, this.formatting);
     this.text = currentText; // Keep cache in sync
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackHyperlinkChange(this, 'formatting', previousValue, this.formatting);
+    }
     return this;
   }
 
@@ -381,8 +404,12 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setColor(color: string): this {
+    const previousValue = this.formatting.color;
     this.formatting.color = color;
     this.run = new Run(this.text, this.formatting);
+    if (this.trackingContext?.isEnabled() && previousValue !== color) {
+      this.trackingContext.trackHyperlinkChange(this, 'color', previousValue, color);
+    }
     return this;
   }
 
@@ -392,8 +419,12 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setUnderline(underline: boolean | "single" | "double" | "dotted" | "thick" | "dash"): this {
+    const previousValue = this.formatting.underline;
     this.formatting.underline = underline;
     this.run = new Run(this.text, this.formatting);
+    if (this.trackingContext?.isEnabled() && previousValue !== underline) {
+      this.trackingContext.trackHyperlinkChange(this, 'underline', previousValue, underline);
+    }
     return this;
   }
 
@@ -403,8 +434,12 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setBold(bold: boolean = true): this {
+    const previousValue = this.formatting.bold;
     this.formatting.bold = bold;
     this.run = new Run(this.text, this.formatting);
+    if (this.trackingContext?.isEnabled() && previousValue !== bold) {
+      this.trackingContext.trackHyperlinkChange(this, 'bold', previousValue, bold);
+    }
     return this;
   }
 
@@ -414,8 +449,12 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setItalic(italic: boolean = true): this {
+    const previousValue = this.formatting.italic;
     this.formatting.italic = italic;
     this.run = new Run(this.text, this.formatting);
+    if (this.trackingContext?.isEnabled() && previousValue !== italic) {
+      this.trackingContext.trackHyperlinkChange(this, 'italic', previousValue, italic);
+    }
     return this;
   }
 
@@ -425,8 +464,12 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setFont(font: string): this {
+    const previousValue = this.formatting.font;
     this.formatting.font = font;
     this.run = new Run(this.text, this.formatting);
+    if (this.trackingContext?.isEnabled() && previousValue !== font) {
+      this.trackingContext.trackHyperlinkChange(this, 'font', previousValue, font);
+    }
     return this;
   }
 
@@ -436,8 +479,12 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setSize(size: number): this {
+    const previousValue = this.formatting.size;
     this.formatting.size = size;
     this.run = new Run(this.text, this.formatting);
+    if (this.trackingContext?.isEnabled() && previousValue !== size) {
+      this.trackingContext.trackHyperlinkChange(this, 'size', previousValue, size);
+    }
     return this;
   }
 

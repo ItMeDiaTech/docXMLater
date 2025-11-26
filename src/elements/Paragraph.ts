@@ -307,6 +307,8 @@ export class Paragraph {
   private commentsEnd: Comment[] = [];
   /** Internal flag to mark paragraph as preserved from removal operations */
   private _isPreserved: boolean = false;
+  /** Tracking context for automatic change tracking */
+  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
 
   /**
    * Creates a new Paragraph
@@ -314,6 +316,15 @@ export class Paragraph {
    */
   constructor(formatting: ParagraphFormatting = {}) {
     this.formatting = formatting;
+  }
+
+  /**
+   * Sets the tracking context for automatic change tracking.
+   * Called by Document when track changes is enabled.
+   * @internal
+   */
+  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+    this.trackingContext = context;
   }
 
   /**
@@ -1125,7 +1136,11 @@ export class Paragraph {
    * ```
    */
   setAlignment(alignment: ParagraphAlignment): this {
+    const previousValue = this.formatting.alignment;
     this.formatting.alignment = alignment;
+    if (this.trackingContext?.isEnabled() && previousValue !== alignment) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'alignment', previousValue, alignment);
+    }
     return this;
   }
 
@@ -1157,10 +1172,14 @@ export class Paragraph {
           "Numbering controls indentation. Use different numbering levels to change indent."
       );
     }
+    const previousValue = this.formatting.indentation?.left;
     if (!this.formatting.indentation) {
       this.formatting.indentation = {};
     }
     this.formatting.indentation.left = twips;
+    if (this.trackingContext?.isEnabled() && previousValue !== twips) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'indentation.left', previousValue, twips);
+    }
     return this;
   }
 
@@ -1170,10 +1189,14 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setRightIndent(twips: number): this {
+    const previousValue = this.formatting.indentation?.right;
     if (!this.formatting.indentation) {
       this.formatting.indentation = {};
     }
     this.formatting.indentation.right = twips;
+    if (this.trackingContext?.isEnabled() && previousValue !== twips) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'indentation.right', previousValue, twips);
+    }
     return this;
   }
 
@@ -1194,10 +1217,14 @@ export class Paragraph {
           "Numbering controls indentation using hanging indent."
       );
     }
+    const previousValue = this.formatting.indentation?.firstLine;
     if (!this.formatting.indentation) {
       this.formatting.indentation = {};
     }
     this.formatting.indentation.firstLine = twips;
+    if (this.trackingContext?.isEnabled() && previousValue !== twips) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'indentation.firstLine', previousValue, twips);
+    }
     return this;
   }
 
@@ -1217,10 +1244,14 @@ export class Paragraph {
    * ```
    */
   setSpaceBefore(twips: number): this {
+    const previousValue = this.formatting.spacing?.before;
     if (!this.formatting.spacing) {
       this.formatting.spacing = {};
     }
     this.formatting.spacing.before = twips;
+    if (this.trackingContext?.isEnabled() && previousValue !== twips) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'spacing.before', previousValue, twips);
+    }
     return this;
   }
 
@@ -1240,10 +1271,14 @@ export class Paragraph {
    * ```
    */
   setSpaceAfter(twips: number): this {
+    const previousValue = this.formatting.spacing?.after;
     if (!this.formatting.spacing) {
       this.formatting.spacing = {};
     }
     this.formatting.spacing.after = twips;
+    if (this.trackingContext?.isEnabled() && previousValue !== twips) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'spacing.after', previousValue, twips);
+    }
     return this;
   }
 
@@ -1272,11 +1307,21 @@ export class Paragraph {
     twips: number,
     rule: "auto" | "exact" | "atLeast" = "auto"
   ): this {
+    const previousLine = this.formatting.spacing?.line;
+    const previousRule = this.formatting.spacing?.lineRule;
     if (!this.formatting.spacing) {
       this.formatting.spacing = {};
     }
     this.formatting.spacing.line = twips;
     this.formatting.spacing.lineRule = rule;
+    if (this.trackingContext?.isEnabled()) {
+      if (previousLine !== twips) {
+        this.trackingContext.trackParagraphPropertyChange(this, 'spacing.line', previousLine, twips);
+      }
+      if (previousRule !== rule) {
+        this.trackingContext.trackParagraphPropertyChange(this, 'spacing.lineRule', previousRule, rule);
+      }
+    }
     return this;
   }
 
@@ -1296,7 +1341,11 @@ export class Paragraph {
    * ```
    */
   setStyle(styleId: string): this {
+    const previousValue = this.formatting.style;
     this.formatting.style = styleId;
+    if (this.trackingContext?.isEnabled() && previousValue !== styleId) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'style', previousValue, styleId);
+    }
     return this;
   }
 
@@ -1314,6 +1363,7 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setKeepNext(keepNext: boolean = true): this {
+    const previousValue = this.formatting.keepNext;
     this.formatting.keepNext = keepNext;
 
     // Resolve property conflicts: keepNext contradicts pageBreakBefore
@@ -1321,6 +1371,9 @@ export class Paragraph {
       this.formatting.pageBreakBefore = false;
     }
 
+    if (this.trackingContext?.isEnabled() && previousValue !== keepNext) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'keepNext', previousValue, keepNext);
+    }
     return this;
   }
 
@@ -1338,6 +1391,7 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setKeepLines(keepLines: boolean = true): this {
+    const previousValue = this.formatting.keepLines;
     this.formatting.keepLines = keepLines;
 
     // Resolve property conflicts: keepLines contradicts pageBreakBefore
@@ -1345,6 +1399,9 @@ export class Paragraph {
       this.formatting.pageBreakBefore = false;
     }
 
+    if (this.trackingContext?.isEnabled() && previousValue !== keepLines) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'keepLines', previousValue, keepLines);
+    }
     return this;
   }
 
@@ -1354,7 +1411,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setPageBreakBefore(pageBreakBefore: boolean = true): this {
+    const previousValue = this.formatting.pageBreakBefore;
     this.formatting.pageBreakBefore = pageBreakBefore;
+    if (this.trackingContext?.isEnabled() && previousValue !== pageBreakBefore) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'pageBreakBefore', previousValue, pageBreakBefore);
+    }
     return this;
   }
 
@@ -1408,6 +1469,7 @@ export class Paragraph {
       throw new Error("Level must be between 0 and 8");
     }
 
+    const previousValue = this.formatting.numbering;
     this.formatting.numbering = { numId, level };
 
     // Clear conflicting indentation properties
@@ -1420,6 +1482,12 @@ export class Paragraph {
       this.formatting.indentation = right !== undefined ? { right } : undefined;
     }
 
+    if (this.trackingContext?.isEnabled()) {
+      const newValue = { numId, level };
+      if (previousValue?.numId !== newValue.numId || previousValue?.level !== newValue.level) {
+        this.trackingContext.trackParagraphPropertyChange(this, 'numbering', previousValue, newValue);
+      }
+    }
     return this;
   }
 
@@ -1431,7 +1499,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setContextualSpacing(enable: boolean = true): this {
+    const previousValue = this.formatting.contextualSpacing;
     this.formatting.contextualSpacing = enable;
+    if (this.trackingContext?.isEnabled() && previousValue !== enable) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'contextualSpacing', previousValue, enable);
+    }
     return this;
   }
 
@@ -1463,7 +1535,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setWidowControl(enable: boolean = true): this {
+    const previousValue = this.formatting.widowControl;
     this.formatting.widowControl = enable;
+    if (this.trackingContext?.isEnabled() && previousValue !== enable) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'widowControl', previousValue, enable);
+    }
     return this;
   }
 
@@ -1480,7 +1556,11 @@ export class Paragraph {
     if (level < 0 || level > 9) {
       throw new Error("Outline level must be between 0 and 9");
     }
+    const previousValue = this.formatting.outlineLevel;
     this.formatting.outlineLevel = level;
+    if (this.trackingContext?.isEnabled() && previousValue !== level) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'outlineLevel', previousValue, level);
+    }
     return this;
   }
 
@@ -1491,7 +1571,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setSuppressLineNumbers(suppress: boolean = true): this {
+    const previousValue = this.formatting.suppressLineNumbers;
     this.formatting.suppressLineNumbers = suppress;
+    if (this.trackingContext?.isEnabled() && previousValue !== suppress) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'suppressLineNumbers', previousValue, suppress);
+    }
     return this;
   }
 
@@ -1503,7 +1587,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setBidi(enable: boolean = true): this {
+    const previousValue = this.formatting.bidi;
     this.formatting.bidi = enable;
+    if (this.trackingContext?.isEnabled() && previousValue !== enable) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'bidi', previousValue, enable);
+    }
     return this;
   }
 
@@ -1520,7 +1608,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setTextDirection(direction: TextDirection): this {
+    const previousValue = this.formatting.textDirection;
     this.formatting.textDirection = direction;
+    if (this.trackingContext?.isEnabled() && previousValue !== direction) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'textDirection', previousValue, direction);
+    }
     return this;
   }
 
@@ -1536,7 +1628,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setTextAlignment(alignment: TextAlignment): this {
+    const previousValue = this.formatting.textAlignment;
     this.formatting.textAlignment = alignment;
+    if (this.trackingContext?.isEnabled() && previousValue !== alignment) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'textAlignment', previousValue, alignment);
+    }
     return this;
   }
 
@@ -1548,7 +1644,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setMirrorIndents(enable: boolean = true): this {
+    const previousValue = this.formatting.mirrorIndents;
     this.formatting.mirrorIndents = enable;
+    if (this.trackingContext?.isEnabled() && previousValue !== enable) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'mirrorIndents', previousValue, enable);
+    }
     return this;
   }
 
@@ -1560,7 +1660,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setAdjustRightInd(enable: boolean = true): this {
+    const previousValue = this.formatting.adjustRightInd;
     this.formatting.adjustRightInd = enable;
+    if (this.trackingContext?.isEnabled() && previousValue !== enable) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'adjustRightInd', previousValue, enable);
+    }
     return this;
   }
 
@@ -1582,7 +1686,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setFrameProperties(props: FrameProperties): this {
+    const previousValue = this.formatting.framePr;
     this.formatting.framePr = props;
+    if (this.trackingContext?.isEnabled() && previousValue !== props) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'framePr', previousValue, props);
+    }
     return this;
   }
 
@@ -1593,7 +1701,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setSuppressAutoHyphens(suppress: boolean = true): this {
+    const previousValue = this.formatting.suppressAutoHyphens;
     this.formatting.suppressAutoHyphens = suppress;
+    if (this.trackingContext?.isEnabled() && previousValue !== suppress) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'suppressAutoHyphens', previousValue, suppress);
+    }
     return this;
   }
 
@@ -1604,7 +1716,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setSuppressOverlap(suppress: boolean = true): this {
+    const previousValue = this.formatting.suppressOverlap;
     this.formatting.suppressOverlap = suppress;
+    if (this.trackingContext?.isEnabled() && previousValue !== suppress) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'suppressOverlap', previousValue, suppress);
+    }
     return this;
   }
 
@@ -1621,7 +1737,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setTextboxTightWrap(wrap: TextboxTightWrap): this {
+    const previousValue = this.formatting.textboxTightWrap;
     this.formatting.textboxTightWrap = wrap;
+    if (this.trackingContext?.isEnabled() && previousValue !== wrap) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'textboxTightWrap', previousValue, wrap);
+    }
     return this;
   }
 
@@ -1633,7 +1753,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setDivId(id: number): this {
+    const previousValue = this.formatting.divId;
     this.formatting.divId = id;
+    if (this.trackingContext?.isEnabled() && previousValue !== id) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'divId', previousValue, id);
+    }
     return this;
   }
 
@@ -1655,7 +1779,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setConditionalFormatting(bitmask: string): this {
+    const previousValue = this.formatting.cnfStyle;
     this.formatting.cnfStyle = bitmask;
+    if (this.trackingContext?.isEnabled() && previousValue !== bitmask) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'cnfStyle', previousValue, bitmask);
+    }
     return this;
   }
 
@@ -1667,7 +1795,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setSectionProperties(properties: any): this {
+    const previousValue = this.formatting.sectPr;
     this.formatting.sectPr = properties;
+    if (this.trackingContext?.isEnabled() && previousValue !== properties) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'sectPr', previousValue, properties);
+    }
     return this;
   }
 
@@ -1679,7 +1811,11 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   setParagraphPropertiesChange(change: ParagraphPropertiesChange): this {
+    const previousValue = this.formatting.pPrChange;
     this.formatting.pPrChange = change;
+    if (this.trackingContext?.isEnabled() && previousValue !== change) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'pPrChange', previousValue, change);
+    }
     return this;
   }
 
@@ -1714,7 +1850,11 @@ export class Paragraph {
    * ```
    */
   setParagraphMarkFormatting(properties: RunFormatting): this {
+    const previousValue = this.formatting.paragraphMarkRunProperties;
     this.formatting.paragraphMarkRunProperties = properties;
+    if (this.trackingContext?.isEnabled() && previousValue !== properties) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'paragraphMarkRunProperties', previousValue, properties);
+    }
     return this;
   }
 

@@ -193,3 +193,41 @@ FULL_TEST/word/_rels/document.xml.rels
 /CHANGELOG.md
 /WordDocumentProcessor.ts
 /workingMethodFromDocHub.ts
+
+# Debug/analysis scripts (session-specific)
+analyze-*.ts
+compare-*.ts
+diagnose.ts
+find-*.ts
+show-cell-xml-structure.ts
+simple-saved-check.ts
+validate-xml-structure.ts
+create-and-test.ts
+deep-corruption-analysis.ts
+detailed-toc-check.ts
+test.ts
+
+# Test output directories
+FULL_TEST/
+Test_For_Review/
+TrackedChanges_Test_CLEAN/
+new/
+pre-processed/
+processed_test/
+test-existing-bookmarks-result/
+test-simple-cleaned/
+
+# Debug notes and context files
+CORRUPTION_SOURCE_IDENTIFIED.md
+Tracked_Changes_Info.md
+context.txt
+conversation.txt
+new-toc-field.txt
+pre-processed-toc-field.txt
+rId5_contexts.txt
+toc-xml-sample.txt
+
+# Batch files
+release.bat
+test.bat
+test-table-cells.bat

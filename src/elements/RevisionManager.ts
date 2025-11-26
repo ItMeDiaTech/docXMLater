@@ -7,6 +7,32 @@
 import { Revision, RevisionType } from './Revision';
 
 /**
+ * Semantic category for grouping revisions.
+ */
+export type RevisionCategory =
+  | 'content'      // Text insertions, deletions
+  | 'formatting'   // Run/paragraph property changes
+  | 'structural'   // Moves, section changes
+  | 'table';       // Table structure changes
+
+/**
+ * Summary statistics for revisions.
+ */
+export interface RevisionSummary {
+  total: number;
+  byType: {
+    insertions: number;
+    deletions: number;
+    moves: number;
+    propertyChanges: number;
+    tableChanges: number;
+  };
+  byCategory: Record<RevisionCategory, number>;
+  authors: string[];
+  dateRange: { earliest: Date; latest: Date } | null;
+}
+
+/**
  * Manages document revisions (track changes)
  */
 export class RevisionManager {
@@ -332,5 +358,261 @@ export class RevisionManager {
    */
   static create(): RevisionManager {
     return new RevisionManager();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NEW METHODS - Added for ChangelogGenerator and RevisionAwareProcessor
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Check if any revisions exist in the manager.
+   * @returns True if there are any revisions
+   */
+  hasRevisions(): boolean {
+    return this.revisions.length > 0;
+  }
+
+  /**
+   * Get revisions by semantic category.
+   *
+   * Categories:
+   * - content: insert, delete
+   * - formatting: runPropertiesChange, paragraphPropertiesChange, numberingChange
+   * - structural: moveFrom, moveTo, sectionPropertiesChange
+   * - table: tablePropertiesChange, tableCellInsert, tableCellDelete, tableCellMerge, etc.
+   *
+   * @param category - Semantic category to filter by
+   * @returns Array of revisions in the specified category
+   */
+  getByCategory(category: RevisionCategory): Revision[] {
+    return this.revisions.filter(rev => {
+      const type = rev.getType();
+      switch (category) {
+        case 'content':
+          return type === 'insert' || type === 'delete';
+
+        case 'formatting':
+          return type === 'runPropertiesChange' ||
+                 type === 'paragraphPropertiesChange' ||
+                 type === 'numberingChange';
+
+        case 'structural':
+          return type === 'moveFrom' ||
+                 type === 'moveTo' ||
+                 type === 'sectionPropertiesChange';
+
+        case 'table':
+          return type === 'tablePropertiesChange' ||
+                 type === 'tableExceptionPropertiesChange' ||
+                 type === 'tableRowPropertiesChange' ||
+                 type === 'tableCellPropertiesChange' ||
+                 type === 'tableCellInsert' ||
+                 type === 'tableCellDelete' ||
+                 type === 'tableCellMerge';
+
+        default:
+          return false;
+      }
+    });
+  }
+
+  /**
+   * Get revisions affecting a specific paragraph.
+   *
+   * Note: This requires paragraph index to be tracked with revisions.
+   * Currently returns revisions by their registration order as a proxy.
+   * For accurate results, use ChangelogGenerator which tracks locations.
+   *
+   * @param paragraphIndex - Index of the paragraph
+   * @returns Array of revisions (by registration order approximation)
+   */
+  getRevisionsForParagraph(paragraphIndex: number): Revision[] {
+    // Since Revision doesn't store paragraph index, we use registration order
+    // This is a best-effort approximation; for accurate tracking,
+    // use ChangelogGenerator.fromDocument() which builds location data
+    if (paragraphIndex < 0 || paragraphIndex >= this.revisions.length) {
+      return [];
+    }
+
+    // Return the revision at this index if it exists
+    // In practice, applications should track paragraph-revision associations
+    const rev = this.revisions[paragraphIndex];
+    return rev ? [rev] : [];
+  }
+
+  /**
+   * Get summary statistics for all revisions.
+   * Provides comprehensive breakdown by type, category, and author.
+   *
+   * @returns Summary statistics object
+   */
+  getSummary(): RevisionSummary {
+    const byCategory: Record<RevisionCategory, number> = {
+      content: 0,
+      formatting: 0,
+      structural: 0,
+      table: 0,
+    };
+
+    let earliest: Date | null = null;
+    let latest: Date | null = null;
+
+    // Count by category and track date range
+    for (const rev of this.revisions) {
+      const type = rev.getType();
+      const date = rev.getDate();
+
+      // Update date range
+      if (!earliest || date < earliest) earliest = date;
+      if (!latest || date > latest) latest = date;
+
+      // Categorize
+      if (type === 'insert' || type === 'delete') {
+        byCategory.content++;
+      } else if (
+        type === 'runPropertiesChange' ||
+        type === 'paragraphPropertiesChange' ||
+        type === 'numberingChange'
+      ) {
+        byCategory.formatting++;
+      } else if (
+        type === 'moveFrom' ||
+        type === 'moveTo' ||
+        type === 'sectionPropertiesChange'
+      ) {
+        byCategory.structural++;
+      } else if (
+        type === 'tablePropertiesChange' ||
+        type === 'tableExceptionPropertiesChange' ||
+        type === 'tableRowPropertiesChange' ||
+        type === 'tableCellPropertiesChange' ||
+        type === 'tableCellInsert' ||
+        type === 'tableCellDelete' ||
+        type === 'tableCellMerge'
+      ) {
+        byCategory.table++;
+      }
+    }
+
+    return {
+      total: this.revisions.length,
+      byType: {
+        insertions: this.getInsertionCount(),
+        deletions: this.getDeletionCount(),
+        moves: this.getAllMoves().length,
+        propertyChanges: this.getAllPropertyChanges().length,
+        tableChanges: this.getAllTableCellChanges().length,
+      },
+      byCategory,
+      authors: this.getAuthors(),
+      dateRange: earliest && latest ? { earliest, latest } : null,
+    };
+  }
+
+  /**
+   * Get a revision by its ID.
+   *
+   * @param id - Revision ID to find
+   * @returns Revision with the specified ID, or undefined
+   */
+  getById(id: number): Revision | undefined {
+    return this.revisions.find(rev => rev.getId() === id);
+  }
+
+  /**
+   * Remove a revision by its ID.
+   *
+   * @param id - ID of the revision to remove
+   * @returns True if revision was found and removed
+   */
+  removeById(id: number): boolean {
+    const index = this.revisions.findIndex(rev => rev.getId() === id);
+    if (index === -1) return false;
+
+    this.revisions.splice(index, 1);
+    return true;
+  }
+
+  /**
+   * Get revisions matching multiple criteria.
+   *
+   * @param criteria - Filter criteria
+   * @returns Array of matching revisions
+   */
+  getMatching(criteria: {
+    types?: RevisionType[];
+    authors?: string[];
+    categories?: RevisionCategory[];
+    dateRange?: { start: Date; end: Date };
+  }): Revision[] {
+    return this.revisions.filter(rev => {
+      // Filter by types
+      if (criteria.types && !criteria.types.includes(rev.getType())) {
+        return false;
+      }
+
+      // Filter by authors
+      if (criteria.authors && !criteria.authors.includes(rev.getAuthor())) {
+        return false;
+      }
+
+      // Filter by categories
+      if (criteria.categories) {
+        const revCategory = this.getRevisionCategory(rev);
+        if (!criteria.categories.includes(revCategory)) {
+          return false;
+        }
+      }
+
+      // Filter by date range
+      if (criteria.dateRange) {
+        const date = rev.getDate();
+        if (date < criteria.dateRange.start || date > criteria.dateRange.end) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }
+
+  /**
+   * Get the semantic category of a revision.
+   * @internal
+   */
+  private getRevisionCategory(revision: Revision): RevisionCategory {
+    const type = revision.getType();
+
+    if (type === 'insert' || type === 'delete') {
+      return 'content';
+    }
+    if (
+      type === 'runPropertiesChange' ||
+      type === 'paragraphPropertiesChange' ||
+      type === 'numberingChange'
+    ) {
+      return 'formatting';
+    }
+    if (
+      type === 'moveFrom' ||
+      type === 'moveTo' ||
+      type === 'sectionPropertiesChange'
+    ) {
+      return 'structural';
+    }
+    if (
+      type === 'tablePropertiesChange' ||
+      type === 'tableExceptionPropertiesChange' ||
+      type === 'tableRowPropertiesChange' ||
+      type === 'tableCellPropertiesChange' ||
+      type === 'tableCellInsert' ||
+      type === 'tableCellDelete' ||
+      type === 'tableCellMerge'
+    ) {
+      return 'table';
+    }
+
+    // Default
+    return 'content';
   }
 }

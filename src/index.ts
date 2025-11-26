@@ -214,7 +214,35 @@ export { Bookmark, BookmarkProperties } from './elements/Bookmark';
 export { BookmarkManager } from './elements/BookmarkManager';
 export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent } from './elements/StructuredDocumentTag';
 export { Revision, RevisionType, RevisionProperties } from './elements/Revision';
-export { RevisionManager } from './elements/RevisionManager';
+export { RevisionManager, RevisionCategory, RevisionSummary } from './elements/RevisionManager';
+
+// Changelog Generation
+export {
+  ChangelogGenerator,
+  ChangeEntry,
+  ChangeCategory,
+  ChangeLocation,
+  ChangelogOptions,
+  ConsolidatedChange,
+  ChangelogSummary,
+} from './utils/ChangelogGenerator';
+
+// Revision-Aware Processing
+export {
+  RevisionAwareProcessor,
+  RevisionHandlingMode,
+  RevisionProcessingOptions,
+  SelectionCriteria,
+  RevisionProcessingResult,
+  ConflictInfo,
+  ProcessingLogEntry,
+} from './utils/RevisionAwareProcessor';
+
+// Selective Revision Acceptance
+export {
+  SelectiveRevisionAcceptor,
+  SelectiveAcceptResult,
+} from './utils/SelectiveRevisionAcceptor';
 export { RangeMarker, RangeMarkerType, RangeMarkerProperties } from './elements/RangeMarker';
 export { Comment, CommentProperties } from './elements/Comment';
 export { CommentManager } from './elements/CommentManager';
