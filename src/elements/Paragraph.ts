@@ -937,6 +937,54 @@ export class Paragraph {
   }
 
   /**
+   * Replaces a content item with one or more new items
+   *
+   * This is useful for tracked changes where a hyperlink needs to be replaced
+   * with a deletion revision (containing old hyperlink) and insertion revision
+   * (containing new hyperlink).
+   *
+   * @param oldItem - The item to replace (must be the exact same object reference)
+   * @param newItems - The new items to insert in place of the old item
+   * @returns true if the item was found and replaced, false if not found
+   *
+   * @example
+   * ```typescript
+   * // Replace a hyperlink with tracked changes
+   * const deletion = Revision.createDeletion(author, [oldHyperlink]);
+   * const insertion = Revision.createInsertion(author, [newHyperlink]);
+   * para.replaceContent(hyperlink, [deletion, insertion]);
+   * ```
+   */
+  replaceContent(oldItem: ParagraphContent, newItems: ParagraphContent[]): boolean {
+    const index = this.content.indexOf(oldItem);
+    if (index === -1) {
+      return false;
+    }
+
+    // Replace the item with the new items
+    this.content.splice(index, 1, ...newItems);
+    return true;
+  }
+
+  /**
+   * Sets all content of the paragraph, replacing existing content
+   *
+   * Used for bulk content operations like regrouping field runs
+   * into ComplexField objects during parsing.
+   *
+   * @param content - Array of content items to set
+   *
+   * @example
+   * ```typescript
+   * // Replace all content with grouped items
+   * para.setContent([run1, complexField, run2]);
+   * ```
+   */
+  setContent(content: ParagraphContent[]): void {
+    this.content = [...content];
+  }
+
+  /**
    * Gets the combined text content of the paragraph
    *
    * Concatenates text from all Runs and Hyperlinks in the paragraph,

@@ -8,6 +8,8 @@
 import { Run } from './Run';
 import { XMLElement } from '../xml/XMLBuilder';
 import type { RevisionLocation } from './PropertyChangeTypes';
+import type { RevisionContent } from './RevisionContent';
+import { isRunContent, isHyperlinkContent } from './RevisionContent';
 
 /**
  * Revision type - All OpenXML WordprocessingML revision types
@@ -54,8 +56,8 @@ export interface RevisionProperties {
   date?: Date;
   /** Type of revision */
   type: RevisionType;
-  /** Content affected by the revision */
-  content: Run | Run[];
+  /** Content affected by the revision (Run, Hyperlink, or arrays thereof) */
+  content: RevisionContent | RevisionContent[];
   /** Previous properties (for property change revisions) */
   previousProperties?: Record<string, any>;
   /** New properties (for property change revisions) */
@@ -76,7 +78,7 @@ export class Revision {
   private author: string;
   private date: Date;
   private type: RevisionType;
-  private runs: Run[];
+  private content: RevisionContent[];
   private previousProperties?: Record<string, any>;
   private newProperties?: Record<string, any>;
   private moveId?: string;
@@ -93,7 +95,7 @@ export class Revision {
     this.author = properties.author;
     this.date = properties.date || new Date();
     this.type = properties.type;
-    this.runs = Array.isArray(properties.content) ? properties.content : [properties.content];
+    this.content = Array.isArray(properties.content) ? properties.content : [properties.content];
     this.previousProperties = properties.previousProperties;
     this.newProperties = properties.newProperties;
     this.moveId = properties.moveId;
@@ -154,17 +156,50 @@ export class Revision {
   }
 
   /**
-   * Gets the runs affected by this revision
+   * Gets all content items in this revision
+   * @returns Array of RevisionContent (Run or Hyperlink objects)
+   */
+  getContent(): RevisionContent[] {
+    return [...this.content];
+  }
+
+  /**
+   * Gets only the Run objects from this revision (backward compatible)
+   * @returns Array of Run objects
    */
   getRuns(): Run[] {
-    return [...this.runs];
+    return this.content.filter((item): item is Run => isRunContent(item));
+  }
+
+  /**
+   * Gets only the Hyperlink objects from this revision
+   * @returns Array of Hyperlink objects
+   */
+  getHyperlinks(): import('./Hyperlink').Hyperlink[] {
+    return this.content.filter((item): item is import('./Hyperlink').Hyperlink => isHyperlinkContent(item));
   }
 
   /**
    * Adds a run to this revision
    */
   addRun(run: Run): this {
-    this.runs.push(run);
+    this.content.push(run);
+    return this;
+  }
+
+  /**
+   * Adds a hyperlink to this revision
+   */
+  addHyperlink(hyperlink: import('./Hyperlink').Hyperlink): this {
+    this.content.push(hyperlink);
+    return this;
+  }
+
+  /**
+   * Adds content (Run or Hyperlink) to this revision
+   */
+  addContent(item: RevisionContent): this {
+    this.content.push(item);
     return this;
   }
 
@@ -376,15 +411,27 @@ export class Revision {
       }
     }
 
-    // Add runs to the revision
-    for (const run of this.runs) {
-      if (this.type === 'delete' || this.type === 'moveFrom') {
-        // For deletions and moveFrom, we need to modify the run XML to use w:delText instead of w:t
-        const runXml = this.createDeletedRunXml(run);
-        children.push(runXml);
-      } else {
-        // For other types, use normal run XML
-        children.push(run.toXML());
+    // Add content to the revision (handles both Run and Hyperlink)
+    for (const item of this.content) {
+      if (isHyperlinkContent(item)) {
+        // Handle Hyperlink content
+        if (this.type === 'delete' || this.type === 'moveFrom') {
+          // For deletions, transform hyperlink's nested runs to use w:delText
+          children.push(this.createDeletedHyperlinkXml(item));
+        } else {
+          // For insertions, use normal hyperlink XML
+          children.push(item.toXML());
+        }
+      } else if (isRunContent(item)) {
+        // Handle Run content (existing behavior)
+        if (this.type === 'delete' || this.type === 'moveFrom') {
+          // For deletions and moveFrom, we need to modify the run XML to use w:delText instead of w:t
+          const runXml = this.createDeletedRunXml(item);
+          children.push(runXml);
+        } else {
+          // For other types, use normal run XML
+          children.push(item.toXML());
+        }
       }
     }
 
@@ -603,15 +650,80 @@ export class Revision {
   }
 
   /**
+   * Creates XML for a deleted hyperlink (transforms nested runs to use w:delText)
+   *
+   * **OOXML Requirement:**
+   * Per ECMA-376, when a hyperlink is inside a w:del element, its nested runs must
+   * use w:delText instead of w:t. This transforms the hyperlink's internal run
+   * content to comply with Word's Track Changes requirements.
+   *
+   * **XML Structure:**
+   * ```xml
+   * <w:del w:id="1" w:author="Author" w:date="...">
+   *   <w:hyperlink r:id="rId1">
+   *     <w:r>
+   *       <w:delText>Link text</w:delText>  <!-- Transformed from w:t -->
+   *     </w:r>
+   *   </w:hyperlink>
+   * </w:del>
+   * ```
+   *
+   * @param hyperlink - Hyperlink containing deleted content
+   * @returns XMLElement with nested runs transformed to use w:delText
+   */
+  private createDeletedHyperlinkXml(hyperlink: import('./Hyperlink').Hyperlink): XMLElement {
+    // Get the hyperlink's normal XML
+    const hyperlinkXml = hyperlink.toXML();
+
+    // Transform nested runs: w:t -> w:delText (or w:delInstrText for field instructions)
+    if (hyperlinkXml.children) {
+      hyperlinkXml.children = hyperlinkXml.children.map(child => {
+        if (typeof child === 'object' && child.name === 'w:r') {
+          // Transform the run's text elements
+          return this.convertRunXmlToDeleted(child);
+        }
+        return child;
+      });
+    }
+
+    return hyperlinkXml;
+  }
+
+  /**
+   * Converts a run XMLElement to use deleted text elements
+   * Helper for createDeletedHyperlinkXml
+   */
+  private convertRunXmlToDeleted(runXml: XMLElement): XMLElement {
+    const deletedTextElement = this.isFieldInstruction ? 'w:delInstrText' : 'w:delText';
+
+    if (!runXml.children) return runXml;
+
+    const modifiedChildren = runXml.children.map(child => {
+      if (typeof child === 'object' && child.name === 'w:t') {
+        return {
+          ...child,
+          name: deletedTextElement,
+        };
+      }
+      return child;
+    });
+
+    return {
+      ...runXml,
+      children: modifiedChildren,
+    };
+  }
+
+  /**
    * Creates an insertion revision
    * @param author - Author who made the insertion
-   * @param content - Inserted content (Run or array of Runs)
+   * @param content - Inserted content (Run, Hyperlink, or arrays thereof)
    * @param date - Optional date (defaults to now)
    * @returns New Revision instance
    */
   static createInsertion(
     author: string,
-    content: Run | Run[],
+    content: RevisionContent | RevisionContent[],
     date?: Date
   ): Revision {
     return new Revision({
@@ -625,13 +737,13 @@ export class Revision {
   /**
    * Creates a deletion revision
    * @param author - Author who made the deletion
-   * @param content - Deleted content (Run or array of Runs)
+   * @param content - Deleted content (Run, Hyperlink, or arrays thereof)
    * @param date - Optional date (defaults to now)
    * @returns New Revision instance
    */
   static createDeletion(
     author: string,
-    content: Run | Run[],
+    content: RevisionContent | RevisionContent[],
     date?: Date
   ): Revision {
     return new Revision({

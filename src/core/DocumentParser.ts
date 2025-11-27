@@ -7,7 +7,7 @@ import { ComplexField, Field } from "../elements/Field";
 import { Hyperlink } from "../elements/Hyperlink";
 import { ImageManager } from "../elements/ImageManager";
 import { ImageRun } from "../elements/ImageRun";
-import { Paragraph, ParagraphFormatting } from "../elements/Paragraph";
+import { Paragraph, ParagraphFormatting, ParagraphContent } from "../elements/Paragraph";
 import { Revision } from "../elements/Revision";
 import { BreakType, Run, RunContent, RunFormatting } from "../elements/Run";
 import {
@@ -877,10 +877,14 @@ export class DocumentParser {
       const id = parseInt(idAttr, 10);
       const date = dateAttr ? new Date(dateAttr) : new Date();
 
-      // Extract runs from revision element
+      // Extract content from revision element (runs and hyperlinks)
       const runXmls = XMLParser.extractElements(revisionXml, "w:r");
-      const runs: Run[] = [];
+      const hyperlinkXmls = XMLParser.extractElements(revisionXml, "w:hyperlink");
 
+      // Use RevisionContent to hold both Run and Hyperlink objects
+      const content: import('../elements/RevisionContent').RevisionContent[] = [];
+
+      // Parse runs
       for (const runXml of runXmls) {
         // Parse the run object
         const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
@@ -897,19 +901,31 @@ export class DocumentParser {
               imageManager
             );
             if (imageRun) {
-              runs.push(imageRun);
+              content.push(imageRun);
             }
           }
         } else {
           // Parse as regular text run
           const run = this.parseRunFromObject(runElement);
           if (run) {
-            runs.push(run);
+            content.push(run);
           }
         }
       }
 
-      if (runs.length === 0) {
+      // Parse hyperlinks inside revision (for tracked hyperlink changes)
+      for (const hyperlinkXml of hyperlinkXmls) {
+        const hyperlinkObj = XMLParser.parseToObject(hyperlinkXml, { trimValues: false });
+        const hyperlink = this.parseHyperlinkFromObject(
+          hyperlinkObj["w:hyperlink"],
+          relationshipManager
+        );
+        if (hyperlink) {
+          content.push(hyperlink);
+        }
+      }
+
+      if (content.length === 0) {
         return null; // No content in revision
       }
 
@@ -919,7 +935,7 @@ export class DocumentParser {
         author,
         date,
         type: revisionType,
-        content: runs,
+        content,
         moveId,
       });
 
@@ -1510,27 +1526,8 @@ export class DocumentParser {
       fieldRuns.forEach((run) => groupedContent.push(run));
     }
 
-    // Replace paragraph content with grouped content
-    // Note: This requires Paragraph to have a replaceContent method
-    // If not available, we'll need to clear and re-add elements
-    if ("replaceContent" in paragraph) {
-      (paragraph as any).replaceContent(groupedContent);
-    } else {
-      // Fallback: Clear and re-add (may be less efficient)
-      paragraph.clearContent();
-      for (const item of groupedContent) {
-        if (item instanceof Run) {
-          paragraph.addRun(item);
-        } else if (item instanceof ComplexField) {
-          paragraph.addField(item); // Assuming Paragraph can add ComplexField
-        } else if (item instanceof Hyperlink) {
-          paragraph.addHyperlink(item);
-        } else {
-          // Handle other types as needed
-          paragraph.addRun(item as Run);
-        }
-      }
-    }
+    // Replace paragraph content with grouped content using setContent
+    paragraph.setContent(groupedContent as ParagraphContent[]);
 
     defaultLogger.debug(
       `Assembled ${

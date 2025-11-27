@@ -9,6 +9,8 @@ import { HeaderFooterManager } from "../elements/HeaderFooterManager";
 import { Hyperlink } from "../elements/Hyperlink";
 import { ImageManager } from "../elements/ImageManager";
 import { Paragraph } from "../elements/Paragraph";
+import { Revision } from "../elements/Revision";
+import { isHyperlinkContent } from "../elements/RevisionContent";
 import { Section } from "../elements/Section";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { Table } from "../elements/Table";
@@ -414,10 +416,25 @@ ${properties}
     // Helper to scan paragraphs for hyperlink relationship IDs
     const scanParagraph = (para: Paragraph) => {
       for (const item of para.getContent()) {
+        // Direct hyperlinks in paragraph
         if (item instanceof Hyperlink && item.isExternal()) {
           const relId = item.getRelationshipId();
           if (relId) {
             usedRelIds.add(relId);
+          }
+        }
+        // Hyperlinks inside Revision objects (tracked changes)
+        if (item instanceof Revision) {
+          for (const revContent of item.getContent()) {
+            if (isHyperlinkContent(revContent)) {
+              const hyperlink = revContent as Hyperlink;
+              if (hyperlink.isExternal()) {
+                const relId = hyperlink.getRelationshipId();
+                if (relId) {
+                  usedRelIds.add(relId);
+                }
+              }
+            }
           }
         }
       }
@@ -548,6 +565,8 @@ ${properties}
    * **Validation:** Throws error if external hyperlink has no URL to prevent
    * document corruption per ECMA-376 §17.16.22.
    *
+   * Also processes hyperlinks inside Revision objects (tracked changes).
+   *
    * @throws {Error} If external hyperlink has undefined/empty URL
    */
   private processHyperlinksInParagraph(
@@ -557,28 +576,52 @@ ${properties}
     const content = paragraph.getContent();
 
     for (const item of content) {
+      // Direct hyperlink in paragraph
       if (
         item instanceof Hyperlink &&
         item.isExternal() &&
         !item.getRelationshipId()
       ) {
-        // Register external hyperlink with relationship manager
-        const url = item.getUrl();
+        this.registerHyperlinkRelationship(item, relationshipManager);
+      }
 
-        // Validate that external hyperlink has a URL
-        // This prevents invalid document generation and fails early with clear error
-        if (!url) {
-          throw new Error(
-            `Invalid hyperlink in paragraph: External hyperlink "${item.getText()}" has no URL. ` +
-              `This would create a corrupted document per ECMA-376 §17.16.22. ` +
-              `Fix the hyperlink by providing a valid URL before saving.`
-          );
+      // Hyperlinks inside Revision objects (tracked changes)
+      if (item instanceof Revision) {
+        for (const revContent of item.getContent()) {
+          if (isHyperlinkContent(revContent)) {
+            const hyperlink = revContent as Hyperlink;
+            if (hyperlink.isExternal() && !hyperlink.getRelationshipId()) {
+              this.registerHyperlinkRelationship(hyperlink, relationshipManager);
+            }
+          }
         }
-
-        const relationship = relationshipManager.addHyperlink(url);
-        item.setRelationshipId(relationship.getId());
       }
     }
+  }
+
+  /**
+   * Registers a hyperlink with the relationship manager
+   *
+   * @throws {Error} If hyperlink has no URL
+   */
+  private registerHyperlinkRelationship(
+    hyperlink: Hyperlink,
+    relationshipManager: RelationshipManager
+  ): void {
+    const url = hyperlink.getUrl();
+
+    // Validate that external hyperlink has a URL
+    // This prevents invalid document generation and fails early with clear error
+    if (!url) {
+      throw new Error(
+        `Invalid hyperlink in paragraph: External hyperlink "${hyperlink.getText()}" has no URL. ` +
+          `This would create a corrupted document per ECMA-376 §17.16.22. ` +
+          `Fix the hyperlink by providing a valid URL before saving.`
+      );
+    }
+
+    const relationship = relationshipManager.addHyperlink(url);
+    hyperlink.setRelationshipId(relationship.getId());
   }
 
   /**
