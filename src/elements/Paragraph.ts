@@ -2418,6 +2418,24 @@ export class Paragraph {
             prevPPrChildren.push(XMLBuilder.wSelf("spacing", spacingAttrs));
           }
         }
+        // Serialize previous numbering properties (w:numPr)
+        // Critical for proper track changes when list formatting changes
+        if (prev.numbering) {
+          const numPrChildren: XMLElement[] = [];
+          if (prev.numbering.level !== undefined) {
+            numPrChildren.push(
+              XMLBuilder.wSelf("ilvl", { "w:val": prev.numbering.level.toString() })
+            );
+          }
+          if (prev.numbering.numId !== undefined) {
+            numPrChildren.push(
+              XMLBuilder.wSelf("numId", { "w:val": prev.numbering.numId.toString() })
+            );
+          }
+          if (numPrChildren.length > 0) {
+            prevPPrChildren.push(XMLBuilder.w("numPr", undefined, numPrChildren));
+          }
+        }
       }
 
       // Create w:pPrChange element with child w:pPr
