@@ -34,7 +34,13 @@ export type RevisionType =
   // Numbering
   | 'numberingChange'     // w:numberingChange - List numbering changed
   // Hyperlink changes
-  | 'hyperlinkChange';    // Hyperlink URL, text, or formatting change
+  | 'hyperlinkChange'     // Hyperlink URL, text, or formatting change
+  // Rich content changes (new tracking types)
+  | 'imageChange'         // Image insertion, deletion, or property change
+  | 'fieldChange'         // Field insertion, deletion, or value change
+  | 'commentChange'       // Comment insertion, deletion, or content change
+  | 'bookmarkChange'      // Bookmark creation, deletion, or range change
+  | 'contentControlChange'; // Content control insertion, deletion, or property change
 
 /**
  * Revision properties
