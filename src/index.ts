@@ -284,6 +284,7 @@ export { Bookmark, BookmarkProperties } from './elements/Bookmark';
 export { BookmarkManager } from './elements/BookmarkManager';
 export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent } from './elements/StructuredDocumentTag';
 export { Revision, RevisionType, RevisionProperties } from './elements/Revision';
+export { RevisionContent, isRunContent, isHyperlinkContent } from './elements/RevisionContent';
 export { RevisionManager, RevisionCategory, RevisionSummary } from './elements/RevisionManager';
 export {
   RevisionLocation,

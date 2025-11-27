@@ -716,6 +716,45 @@ export class Hyperlink {
   }
 
   /**
+   * Creates a deep copy of this hyperlink
+   *
+   * This is useful for preserving the original state before modifications,
+   * particularly when creating tracked changes (revisions) where both the
+   * old and new states need to be preserved.
+   *
+   * @returns A new Hyperlink instance with the same properties
+   *
+   * @example
+   * ```typescript
+   * // Clone before modifying for tracked changes
+   * const originalLink = hyperlink.clone();
+   * hyperlink.setUrl('https://new-url.com');
+   * hyperlink.setText('New Text');
+   *
+   * // Now originalLink has old URL/text, hyperlink has new
+   * const deletion = Revision.createDeletion(author, [originalLink]);
+   * const insertion = Revision.createInsertion(author, [hyperlink]);
+   * ```
+   */
+  clone(): Hyperlink {
+    const cloned = new Hyperlink({
+      url: this.url,
+      anchor: this.anchor,
+      text: this.text,
+      tooltip: this.tooltip,
+      relationshipId: this.relationshipId,
+      formatting: { ...this.formatting },
+    });
+
+    // Copy the run with its formatting
+    if (this.run) {
+      cloned.run = new Run(this.run.getText(), { ...this.run.getFormatting() });
+    }
+
+    return cloned;
+  }
+
+  /**
    * Generates XML for the hyperlink
    *
    * **CRITICAL:** For external links, relationshipId MUST be set before calling toXML().
