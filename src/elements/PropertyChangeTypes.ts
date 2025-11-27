@@ -95,6 +95,11 @@ export interface ParagraphFormattingPartial {
   outlineLevel?: number;
   /** Right-to-left paragraph */
   bidi?: boolean;
+  /** Numbering properties (list formatting) */
+  numbering?: {
+    numId?: number;
+    level?: number;
+  };
 }
 
 /**
@@ -106,6 +111,7 @@ export interface ParagraphFormattingPartial {
  * - Spacing (before, after, line)
  * - Keep with next, keep lines together
  * - Paragraph style
+ * - Numbering/list formatting (numId, ilvl)
  *
  * @example
  * ```xml
