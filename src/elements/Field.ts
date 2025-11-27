@@ -657,6 +657,60 @@ export class ComplexField {
   }
 
   /**
+   * Removes a nested field at the specified index
+   * @param index - Index of the nested field to remove (0-based)
+   * @returns True if removed, false if index out of bounds
+   *
+   * @example
+   * ```typescript
+   * const field = new ComplexField({ instruction: 'TOC' });
+   * field.addNestedField(nested1);
+   * field.addNestedField(nested2);
+   * field.removeNestedField(0); // Removes nested1
+   * ```
+   */
+  removeNestedField(index: number): boolean {
+    if (index < 0 || index >= this.nestedFields.length) {
+      return false;
+    }
+    this.nestedFields.splice(index, 1);
+    return true;
+  }
+
+  /**
+   * Gets the count of nested fields
+   * @returns Number of nested fields
+   */
+  getNestedFieldCount(): number {
+    return this.nestedFields.length;
+  }
+
+  /**
+   * Clears all nested fields
+   * @returns This field for chaining
+   */
+  clearNestedFields(): this {
+    this.nestedFields = [];
+    return this;
+  }
+
+  /**
+   * Updates the field instruction
+   * @param instruction - New field instruction (e.g., 'TOC \\o "1-3"')
+   * @returns This field for chaining
+   *
+   * @example
+   * ```typescript
+   * const field = new ComplexField({ instruction: 'DATE' });
+   * field.updateInstruction('DATE \\@ "yyyy-MM-dd"');
+   * ```
+   */
+  updateInstruction(instruction: string): this {
+    this.instruction = instruction;
+    return this;
+  }
+
+  /**
    * Adds custom XML content to the result section
    */
   addResultContent(content: XMLElement): this {

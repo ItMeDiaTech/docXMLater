@@ -38,6 +38,46 @@ export class ZipWriter {
    * **DOCX Compliance:**
    * - [Content_Types].xml is automatically set to STORE compression
    */
+  /**
+   * Validates a file path for security issues
+   * @param path - Normalized file path
+   * @throws {Error} If path contains path traversal or other security issues
+   * @private
+   */
+  private validatePathSecurity(path: string): void {
+    // Check for path traversal attacks
+    if (path.includes("..")) {
+      throw new Error(
+        `Security error: Path "${path}" contains path traversal sequence "..". ` +
+          `This could be an attempt to write files outside the archive.`
+      );
+    }
+
+    // Check for absolute paths (even after normalization)
+    if (path.startsWith("/") || /^[a-zA-Z]:/.test(path)) {
+      throw new Error(
+        `Security error: Path "${path}" is an absolute path. ` +
+          `Only relative paths are allowed in ZIP archives.`
+      );
+    }
+
+    // Check for null bytes (can be used to truncate paths)
+    if (path.includes("\0")) {
+      throw new Error(
+        `Security error: Path "${path}" contains null byte. ` +
+          `This could be an attempt to exploit path handling.`
+      );
+    }
+
+    // Check for excessively long paths (potential DoS)
+    const MAX_PATH_LENGTH = 260; // Windows MAX_PATH
+    if (path.length > MAX_PATH_LENGTH) {
+      throw new Error(
+        `Security error: Path "${path}" exceeds maximum length of ${MAX_PATH_LENGTH} characters.`
+      );
+    }
+  }
+
   addFile(
     filePath: string,
     content: string | Buffer,
@@ -50,6 +90,9 @@ export class ZipWriter {
     } = options;
 
     const normalizedPath = normalizePath(filePath);
+
+    // Security: Validate path for traversal and other attacks
+    this.validatePathSecurity(normalizedPath);
 
     // Convert string content to UTF-8 Buffer if not already binary
     // This ensures consistent UTF-8 encoding regardless of system locale

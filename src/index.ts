@@ -15,6 +15,8 @@ export {
   LoadOptions,
   SaveOptions,
   AddFileOptions,
+  SizeLimitOptions,
+  DEFAULT_SIZE_LIMITS,
   REQUIRED_DOCX_FILES,
   DOCX_PATHS,
 } from './zip/types';
@@ -115,8 +117,14 @@ export { Document, DocumentProperties, DocumentOptions, DocumentLoadOptions, Doc
 export { Relationship, RelationshipType, RelationshipProperties } from './core/Relationship';
 export { RelationshipManager } from './core/RelationshipManager';
 export { DocumentParser, ParseError } from './core/DocumentParser';
-export { DocumentGenerator } from './core/DocumentGenerator';
+export { DocumentGenerator, IZipHandlerReader } from './core/DocumentGenerator';
 export { DocumentValidator, SizeEstimate, MemoryOptions } from './core/DocumentValidator';
+
+// Document subsystem classes (Phase 7 refactoring)
+export { DocumentMetadata, DocumentProperties as MetadataProperties } from './core/DocumentMetadata';
+export { DocumentContent, BodyElement } from './core/DocumentContent';
+export { DocumentFormatting } from './core/DocumentFormatting';
+export { DocumentTracking } from './core/DocumentTracking';
 
 // Style configuration types
 export {
@@ -147,8 +155,71 @@ export {
 } from './formatting/NumberingInstance';
 export { NumberingManager } from './formatting/NumberingManager';
 
+// Common types (consolidated type definitions)
+export {
+  // Shading patterns
+  ShadingPattern,
+  BasicShadingPattern,
+  // Border types
+  BorderStyle,
+  ExtendedBorderStyle,
+  FullBorderStyle,
+  BorderDefinition,
+  FourSidedBorders,
+  TableBorderDefinitions,
+  // Alignment types
+  HorizontalAlignment,
+  VerticalAlignment,
+  PageVerticalAlignment,
+  CellVerticalAlignment,
+  ParagraphAlignment as CommonParagraphAlignment,
+  TableAlignment as CommonTableAlignment,
+  RowJustification,
+  TextVerticalAlignment,
+  TabAlignment,
+  // Positioning
+  PositionAnchor,
+  HorizontalAnchor,
+  VerticalAnchor,
+  // Text direction
+  TextDirection,
+  SectionTextDirection,
+  // Width types
+  WidthType,
+  // Shading config
+  ShadingConfig,
+  // Tab stops
+  TabLeader,
+  TabStop,
+  // Type guards
+  isShadingPattern,
+  isBorderStyle,
+  isHorizontalAlignment,
+  isVerticalAlignment,
+  isParagraphAlignment,
+  isWidthType,
+  // Constants
+  DEFAULT_BORDER,
+  NO_BORDER,
+} from './elements/CommonTypes';
+
 // Document elements
-export { Paragraph, ParagraphAlignment, ParagraphFormatting } from './elements/Paragraph';
+export {
+  Paragraph,
+  ParagraphAlignment,
+  ParagraphFormatting,
+  ParagraphContent,
+  // Type guards for ParagraphContent
+  isRun,
+  isField,
+  isSimpleField,
+  isComplexField,
+  isHyperlink,
+  isRevision,
+  isRangeMarker,
+  isShape,
+  isTextBox,
+} from './elements/Paragraph';
 export { Run, RunFormatting } from './elements/Run';
 export {
   Section,
@@ -172,11 +243,10 @@ export {
 export { TableRow, RowFormatting } from './elements/TableRow';
 export {
   TableCell,
-  BorderStyle,
+  // BorderStyle and CellVerticalAlignment are now exported from CommonTypes
   CellBorder,
   CellBorders,
   CellShading,
-  CellVerticalAlignment,
   CellFormatting,
 } from './elements/TableCell';
 export { TableGridChange, GridColumn, TableGridChangeProperties } from './elements/TableGridChange';
@@ -215,6 +285,22 @@ export { BookmarkManager } from './elements/BookmarkManager';
 export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent } from './elements/StructuredDocumentTag';
 export { Revision, RevisionType, RevisionProperties } from './elements/Revision';
 export { RevisionManager, RevisionCategory, RevisionSummary } from './elements/RevisionManager';
+export {
+  RevisionLocation,
+  RunPropertyChange,
+  ParagraphPropertyChange,
+  ParagraphFormattingPartial,
+  TablePropertyChange,
+  TablePropertyChangeType,
+  SectionPropertyChange,
+  NumberingChange,
+  AnyPropertyChange,
+  isRunPropertyChange,
+  isParagraphPropertyChange,
+  isTablePropertyChange,
+  isSectionPropertyChange,
+  isNumberingChange,
+} from './elements/PropertyChangeTypes';
 
 // Changelog Generation
 export {
@@ -223,9 +309,29 @@ export {
   ChangeCategory,
   ChangeLocation,
   ChangelogOptions,
+  ChangelogFormat,
   ConsolidatedChange,
   ChangelogSummary,
 } from './utils/ChangelogGenerator';
+
+// Revision Validation and Auto-Fix
+export {
+  REVISION_RULES,
+  ValidationSeverity,
+  ValidationIssue,
+  ValidationRule,
+  ValidationOptions,
+  AutoFixOptions,
+  ValidationResult as RevisionValidationResult,
+  FixAction,
+  AutoFixResult,
+  createIssueFromRule,
+  getRuleByCode,
+  getRulesBySeverity,
+  getAutoFixableRules,
+  RevisionValidator,
+  RevisionAutoFixer,
+} from './validation';
 
 // Revision-Aware Processing
 export {

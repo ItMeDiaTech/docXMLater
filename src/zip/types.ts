@@ -19,6 +19,30 @@ export interface ZipFile {
 }
 
 /**
+ * Size limit configuration for document loading
+ */
+export interface SizeLimitOptions {
+  /**
+   * Size in MB at which to show a warning (default: 50 MB)
+   * Set to 0 to disable warnings
+   */
+  warningSizeMB?: number;
+  /**
+   * Maximum size in MB to load (default: 150 MB)
+   * Set to 0 to disable the limit (not recommended)
+   */
+  maxSizeMB?: number;
+}
+
+/**
+ * Default size limits for document loading
+ */
+export const DEFAULT_SIZE_LIMITS: Required<SizeLimitOptions> = {
+  warningSizeMB: 50,
+  maxSizeMB: 150,
+};
+
+/**
  * Options for loading a DOCX file
  */
 export interface LoadOptions {
@@ -26,6 +50,8 @@ export interface LoadOptions {
   validate?: boolean;
   /** Whether to load files lazily */
   lazy?: boolean;
+  /** Size limit configuration (warning and max size thresholds) */
+  sizeLimits?: SizeLimitOptions;
 }
 
 /**

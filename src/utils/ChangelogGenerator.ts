@@ -12,6 +12,12 @@
 
 import type { Document } from '../core/Document';
 import { Revision, RevisionType } from '../elements/Revision';
+import { getGlobalLogger, createScopedLogger, ILogger } from './logger';
+
+// Scoped logger for ChangelogGenerator
+function getLogger(): ILogger {
+  return createScopedLogger(getGlobalLogger(), 'ChangelogGenerator');
+}
 
 /**
  * Semantic category for grouping changes.
@@ -84,6 +90,11 @@ export interface ChangeEntry {
 }
 
 /**
+ * Output format for changelog generation.
+ */
+export type ChangelogFormat = 'json' | 'markdown' | 'text' | 'html' | 'csv';
+
+/**
  * Options for changelog generation.
  */
 export interface ChangelogOptions {
@@ -99,6 +110,16 @@ export interface ChangelogOptions {
   filterDateRange?: { start: Date; end: Date };
   /** Filter by categories */
   filterCategories?: ChangeCategory[];
+  /** Output format (default: 'markdown') */
+  format?: ChangelogFormat;
+  /** Sort changes by field */
+  sortBy?: 'date' | 'author' | 'type' | 'category';
+  /** Sort order (default: 'asc') */
+  sortOrder?: 'asc' | 'desc';
+  /** Group changes by element type */
+  groupByElement?: boolean;
+  /** Include document context (nearest heading, section) */
+  includeDocumentContext?: boolean;
 }
 
 /**
@@ -174,6 +195,7 @@ export class ChangelogGenerator {
     options?: ChangelogOptions,
     doc?: Document
   ): ChangeEntry[] {
+    const logger = getLogger();
     const opts = {
       includeFormattingChanges: true,
       consolidate: false,
@@ -181,7 +203,17 @@ export class ChangelogGenerator {
       ...options,
     };
 
+    logger.debug('Processing revisions', {
+      total: revisions.length,
+      filters: {
+        categories: opts.filterCategories?.length ?? 0,
+        authors: opts.filterAuthors?.length ?? 0,
+        dateRange: !!opts.filterDateRange
+      }
+    });
+
     const entries: ChangeEntry[] = [];
+    let filtered = 0;
 
     for (let i = 0; i < revisions.length; i++) {
       const revision = revisions[i];
@@ -191,16 +223,19 @@ export class ChangelogGenerator {
 
       // Filter by category
       if (opts.filterCategories && !opts.filterCategories.includes(category)) {
+        filtered++;
         continue;
       }
 
       // Filter out formatting changes if requested
       if (!opts.includeFormattingChanges && category === 'formatting') {
+        filtered++;
         continue;
       }
 
       // Filter by author
       if (opts.filterAuthors && !opts.filterAuthors.includes(revision.getAuthor())) {
+        filtered++;
         continue;
       }
 
@@ -208,12 +243,17 @@ export class ChangelogGenerator {
       if (opts.filterDateRange) {
         const revDate = revision.getDate();
         if (revDate < opts.filterDateRange.start || revDate > opts.filterDateRange.end) {
+          filtered++;
           continue;
         }
       }
 
       const entry = this.revisionToEntry(revision, i, opts.maxContextLength);
       entries.push(entry);
+    }
+
+    if (filtered > 0) {
+      logger.debug('Revisions filtered', { included: entries.length, filtered });
     }
 
     return entries;
@@ -290,6 +330,14 @@ export class ChangelogGenerator {
       }
     }
 
+    // Use revision's location if available, otherwise fall back to index
+    const revisionLocation = revision.getLocation();
+    const location: ChangeLocation = {
+      paragraphIndex: revisionLocation?.paragraphIndex ?? index, // Use actual or fallback
+      sectionIndex: revisionLocation?.sectionIndex,
+      runIndex: revisionLocation?.runIndex,
+    };
+
     return {
       id: revision.getId().toString(),
       revisionType: type,
@@ -297,9 +345,7 @@ export class ChangelogGenerator {
       description: this.describeRevision(revision, maxContextLength),
       author: revision.getAuthor(),
       date: revision.getDate(),
-      location: {
-        paragraphIndex: index, // Default; would need document context for accurate location
-      },
+      location,
       content,
       propertyChange,
     };
@@ -411,6 +457,14 @@ export class ChangelogGenerator {
 
     // Sort by count descending
     consolidated.sort((a, b) => b.count - a.count);
+
+    if (entries.length > 0) {
+      getLogger().info('Entries consolidated', {
+        input: entries.length,
+        groups: consolidated.length,
+        reduction: `${Math.round((1 - consolidated.length / entries.length) * 100)}%`
+      });
+    }
 
     return consolidated;
   }
@@ -659,20 +713,97 @@ export class ChangelogGenerator {
    */
   private static friendlyPropertyName(key: string): string {
     const friendlyNames: Record<string, string> = {
+      // Run (character) properties
       b: 'bold',
       i: 'italic',
       u: 'underline',
       strike: 'strikethrough',
+      dstrike: 'double strikethrough',
       sz: 'font size',
+      szCs: 'complex script font size',
       color: 'text color',
       highlight: 'highlight',
       rFonts: 'font',
+      rStyle: 'character style',
+      vertAlign: 'vertical alignment',
+      vanish: 'hidden text',
+      caps: 'all capitals',
+      smallCaps: 'small capitals',
+      outline: 'outline effect',
+      shadow: 'shadow effect',
+      emboss: 'emboss effect',
+      imprint: 'imprint effect',
+      kern: 'kerning',
+      w: 'character width',
+      spacing: 'character spacing',
+      position: 'text position',
+      shd: 'shading',
+      bdr: 'border',
+      lang: 'language',
+      eastAsianLayout: 'East Asian layout',
+      specVanish: 'special vanish',
+      oMath: 'math mode',
+
+      // Paragraph properties
       jc: 'alignment',
       ind: 'indentation',
-      spacing: 'spacing',
       pStyle: 'paragraph style',
-      rStyle: 'character style',
       numPr: 'list numbering',
+      pBdr: 'paragraph border',
+      tabs: 'tab stops',
+      suppressAutoHyphens: 'hyphenation',
+      kinsoku: 'kinsoku rules',
+      wordWrap: 'word wrap',
+      overflowPunct: 'overflow punctuation',
+      topLinePunct: 'top line punctuation',
+      autoSpaceDE: 'auto space (DE)',
+      autoSpaceDN: 'auto space (DN)',
+      bidi: 'bidirectional',
+      adjustRightInd: 'right indent adjustment',
+      snapToGrid: 'snap to grid',
+      contextualSpacing: 'contextual spacing',
+      mirrorIndents: 'mirror indents',
+      suppressOverlap: 'suppress overlap',
+      outlineLvl: 'outline level',
+      divId: 'HTML division',
+      keepNext: 'keep with next',
+      keepLines: 'keep lines together',
+      pageBreakBefore: 'page break before',
+      widowControl: 'widow/orphan control',
+      suppressLineNumbers: 'suppress line numbers',
+      textboxTightWrap: 'textbox tight wrap',
+
+      // Table properties
+      tblStyle: 'table style',
+      tblW: 'table width',
+      tblInd: 'table indent',
+      tblBorders: 'table borders',
+      tblCellMar: 'table cell margins',
+      tblLook: 'table look',
+      tblLayout: 'table layout',
+      gridSpan: 'column span',
+      vMerge: 'vertical merge',
+      tcW: 'cell width',
+      tcBorders: 'cell borders',
+      vAlign: 'vertical alignment',
+      textDirection: 'text direction',
+      noWrap: 'no wrap',
+      tcMar: 'cell margins',
+      tcFitText: 'fit text',
+      hideMark: 'hide mark',
+
+      // Section properties
+      sectPr: 'section properties',
+      pgSz: 'page size',
+      pgMar: 'page margins',
+      cols: 'columns',
+      docGrid: 'document grid',
+      headerReference: 'header',
+      footerReference: 'footer',
+      pgNumType: 'page numbering',
+      formProt: 'form protection',
+      titlePg: 'different first page',
+      type: 'section type',
     };
 
     return friendlyNames[key] || key;
@@ -796,5 +927,454 @@ export class ChangelogGenerator {
       summary: this.getSummary(entries),
       entries,
     }, null, 2);
+  }
+
+  // ============================================================
+  // Unified API (Phase 2 Enhancement)
+  // ============================================================
+
+  /**
+   * Unified changelog generation - single entry point for all formats.
+   *
+   * Generates changelog from a document in the specified format.
+   * This is the recommended method for most use cases.
+   *
+   * @param doc - Document to extract revisions from
+   * @param options - Generation options including format
+   * @returns Formatted changelog string
+   *
+   * @example
+   * ```typescript
+   * // Generate Markdown changelog
+   * const md = ChangelogGenerator.generate(doc, { format: 'markdown' });
+   *
+   * // Generate HTML changelog
+   * const html = ChangelogGenerator.generate(doc, { format: 'html' });
+   *
+   * // Generate CSV with filtering
+   * const csv = ChangelogGenerator.generate(doc, {
+   *   format: 'csv',
+   *   filterAuthors: ['John Doe'],
+   *   sortBy: 'date',
+   *   sortOrder: 'desc'
+   * });
+   * ```
+   */
+  static generate(doc: Document, options?: ChangelogOptions): string {
+    const logger = getLogger();
+    const format = options?.format || 'markdown';
+
+    logger.info('Generating changelog', { format });
+
+    // Get entries with filtering
+    let entries = this.fromDocument(doc, options);
+
+    // Apply sorting if specified
+    if (options?.sortBy) {
+      entries = this.sortEntries(entries, options.sortBy, options.sortOrder || 'asc');
+    }
+
+    logger.info('Changelog entries processed', {
+      entries: entries.length,
+      format,
+      sorted: !!options?.sortBy
+    });
+
+    // Generate output in specified format
+    switch (format) {
+      case 'json':
+        return this.toJSON(entries);
+      case 'markdown':
+        return this.toMarkdown(entries, { includeMetadata: true });
+      case 'text':
+        return this.toPlainText(entries);
+      case 'html':
+        return this.toHTML(entries, options);
+      case 'csv':
+        return this.toCSV(entries);
+      default:
+        return this.toMarkdown(entries);
+    }
+  }
+
+  /**
+   * Export changelog to HTML format.
+   *
+   * Generates a complete HTML document with styling and structure.
+   *
+   * @param entries - Array of changelog entries
+   * @param options - HTML generation options
+   * @returns Complete HTML document string
+   *
+   * @example
+   * ```typescript
+   * const html = ChangelogGenerator.toHTML(entries);
+   * fs.writeFileSync('changelog.html', html);
+   * ```
+   */
+  static toHTML(entries: ChangeEntry[], options?: ChangelogOptions): string {
+    const summary = this.getSummary(entries);
+
+    // Group entries by category
+    const byCategory = new Map<ChangeCategory, ChangeEntry[]>();
+    for (const entry of entries) {
+      if (!byCategory.has(entry.category)) {
+        byCategory.set(entry.category, []);
+      }
+      byCategory.get(entry.category)!.push(entry);
+    }
+
+    const categoryTitles: Record<ChangeCategory, string> = {
+      content: 'Content Changes',
+      formatting: 'Formatting Changes',
+      structural: 'Structural Changes',
+      table: 'Table Changes',
+      hyperlink: 'Hyperlink Changes',
+    };
+
+    // Build HTML
+    let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document Changes</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; }
+    .summary { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .summary p { margin: 5px 0; }
+    .category { margin-bottom: 30px; }
+    .change-list { list-style: none; padding: 0; }
+    .change-item {
+      background: #fff;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      padding: 12px 15px;
+      margin-bottom: 10px;
+    }
+    .change-item:hover { box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .change-description { font-weight: 500; color: #2c3e50; }
+    .change-meta { font-size: 0.85em; color: #7f8c8d; margin-top: 5px; }
+    .change-content { margin-top: 8px; font-size: 0.9em; }
+    .removed { color: #c0392b; text-decoration: line-through; }
+    .added { color: #27ae60; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75em;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-insert { background: #d4edda; color: #155724; }
+    .badge-delete { background: #f8d7da; color: #721c24; }
+    .badge-formatting { background: #cce5ff; color: #004085; }
+    .badge-structural { background: #fff3cd; color: #856404; }
+    .badge-table { background: #e2e3e5; color: #383d41; }
+  </style>
+</head>
+<body>
+  <h1>Document Changes</h1>
+
+  <div class="summary">
+    <p><strong>Total Changes:</strong> ${summary.total}</p>`;
+
+    if (summary.dateRange) {
+      html += `
+    <p><strong>Date Range:</strong> ${summary.dateRange.earliest.toLocaleDateString()} - ${summary.dateRange.latest.toLocaleDateString()}</p>`;
+    }
+
+    const authors = Object.keys(summary.byAuthor);
+    if (authors.length > 0) {
+      html += `
+    <p><strong>Authors:</strong> ${authors.join(', ')}</p>`;
+    }
+
+    html += `
+  </div>
+`;
+
+    // Add sections by category
+    for (const [category, categoryEntries] of byCategory) {
+      if (categoryEntries.length === 0) continue;
+
+      html += `
+  <section class="category">
+    <h2>${categoryTitles[category]}</h2>
+    <ul class="change-list">`;
+
+      for (const entry of categoryEntries) {
+        const badgeClass = this.getBadgeClass(entry.revisionType);
+        const date = entry.date.toLocaleDateString();
+
+        html += `
+      <li class="change-item">
+        <span class="badge ${badgeClass}">${entry.revisionType}</span>
+        <div class="change-description">${this.escapeHTML(entry.description)}</div>
+        <div class="change-meta">${this.escapeHTML(entry.author)} - ${date}</div>`;
+
+        if (entry.content.before || entry.content.after) {
+          html += `
+        <div class="change-content">`;
+          if (entry.content.before) {
+            html += `<span class="removed">${this.escapeHTML(entry.content.before || '')}</span> `;
+          }
+          if (entry.content.after) {
+            html += `<span class="added">${this.escapeHTML(entry.content.after || '')}</span>`;
+          }
+          html += `</div>`;
+        }
+
+        html += `
+      </li>`;
+      }
+
+      html += `
+    </ul>
+  </section>`;
+    }
+
+    html += `
+</body>
+</html>`;
+
+    return html;
+  }
+
+  /**
+   * Export changelog to CSV format.
+   *
+   * Generates CSV data suitable for spreadsheet applications.
+   *
+   * @param entries - Array of changelog entries
+   * @param options - CSV generation options
+   * @returns CSV string
+   *
+   * @example
+   * ```typescript
+   * const csv = ChangelogGenerator.toCSV(entries);
+   * fs.writeFileSync('changelog.csv', csv);
+   * ```
+   */
+  static toCSV(entries: ChangeEntry[], options?: {
+    delimiter?: string;
+    includeHeaders?: boolean;
+  }): string {
+    const delimiter = options?.delimiter || ',';
+    const includeHeaders = options?.includeHeaders !== false;
+
+    const headers = [
+      'ID',
+      'Type',
+      'Category',
+      'Author',
+      'Date',
+      'Description',
+      'Before',
+      'After',
+      'Paragraph',
+      'Run'
+    ];
+
+    const lines: string[] = [];
+
+    if (includeHeaders) {
+      lines.push(headers.join(delimiter));
+    }
+
+    for (const entry of entries) {
+      const row = [
+        entry.id,
+        entry.revisionType,
+        entry.category,
+        this.escapeCSV(entry.author),
+        entry.date.toISOString(),
+        this.escapeCSV(entry.description),
+        this.escapeCSV(entry.content.before || ''),
+        this.escapeCSV(entry.content.after || ''),
+        entry.location.paragraphIndex?.toString() || '',
+        entry.location.runIndex?.toString() || '',
+      ];
+      lines.push(row.join(delimiter));
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Get timeline view - changes organized by date.
+   *
+   * Groups changelog entries by date (YYYY-MM-DD) for timeline visualization.
+   *
+   * @param entries - Array of changelog entries
+   * @returns Map of date strings to entries for that date
+   *
+   * @example
+   * ```typescript
+   * const timeline = ChangelogGenerator.getTimeline(entries);
+   * for (const [date, dayEntries] of timeline) {
+   *   console.log(`${date}: ${dayEntries.length} changes`);
+   * }
+   * ```
+   */
+  static getTimeline(entries: ChangeEntry[]): Map<string, ChangeEntry[]> {
+    const timeline = new Map<string, ChangeEntry[]>();
+
+    for (const entry of entries) {
+      const dateKey = entry.date.toISOString().split('T')[0]!; // YYYY-MM-DD
+      if (!timeline.has(dateKey)) {
+        timeline.set(dateKey, []);
+      }
+      timeline.get(dateKey)!.push(entry);
+    }
+
+    // Sort the map by date
+    const sortedTimeline = new Map<string, ChangeEntry[]>(
+      [...timeline.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    );
+
+    return sortedTimeline;
+  }
+
+  /**
+   * Get summary by element type.
+   *
+   * Groups entries by the type of document element they affect.
+   *
+   * @param entries - Array of changelog entries
+   * @returns Object with entries grouped by element type
+   */
+  static getSummaryByElement(entries: ChangeEntry[]): {
+    paragraphs: ChangeEntry[];
+    tables: ChangeEntry[];
+    sections: ChangeEntry[];
+    runs: ChangeEntry[];
+    hyperlinks: ChangeEntry[];
+  } {
+    return {
+      paragraphs: entries.filter(e =>
+        e.revisionType === 'paragraphPropertiesChange' ||
+        e.revisionType === 'numberingChange' ||
+        (e.revisionType === 'insert' && !e.location.runIndex) ||
+        (e.revisionType === 'delete' && !e.location.runIndex)
+      ),
+      tables: entries.filter(e =>
+        ['tablePropertiesChange', 'tableRowPropertiesChange',
+         'tableCellPropertiesChange', 'tableExceptionPropertiesChange',
+         'tableCellInsert', 'tableCellDelete', 'tableCellMerge'].includes(e.revisionType)
+      ),
+      sections: entries.filter(e =>
+        e.revisionType === 'sectionPropertiesChange'
+      ),
+      runs: entries.filter(e =>
+        e.revisionType === 'runPropertiesChange' ||
+        (e.revisionType === 'insert' && e.location.runIndex !== undefined) ||
+        (e.revisionType === 'delete' && e.location.runIndex !== undefined)
+      ),
+      hyperlinks: entries.filter(e =>
+        e.revisionType === 'hyperlinkChange'
+      ),
+    };
+  }
+
+  // ============================================================
+  // Helper Methods
+  // ============================================================
+
+  /**
+   * Sort entries by specified field.
+   * @internal
+   */
+  private static sortEntries(
+    entries: ChangeEntry[],
+    sortBy: 'date' | 'author' | 'type' | 'category',
+    order: 'asc' | 'desc'
+  ): ChangeEntry[] {
+    const sorted = [...entries].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortBy) {
+        case 'date':
+          comparison = a.date.getTime() - b.date.getTime();
+          break;
+        case 'author':
+          comparison = a.author.localeCompare(b.author);
+          break;
+        case 'type':
+          comparison = a.revisionType.localeCompare(b.revisionType);
+          break;
+        case 'category':
+          comparison = a.category.localeCompare(b.category);
+          break;
+      }
+
+      return order === 'desc' ? -comparison : comparison;
+    });
+
+    return sorted;
+  }
+
+  /**
+   * Get CSS badge class for revision type.
+   * @internal
+   */
+  private static getBadgeClass(type: RevisionType): string {
+    switch (type) {
+      case 'insert':
+      case 'moveTo':
+      case 'tableCellInsert':
+        return 'badge-insert';
+      case 'delete':
+      case 'moveFrom':
+      case 'tableCellDelete':
+        return 'badge-delete';
+      case 'runPropertiesChange':
+      case 'paragraphPropertiesChange':
+      case 'numberingChange':
+        return 'badge-formatting';
+      case 'sectionPropertiesChange':
+        return 'badge-structural';
+      case 'tablePropertiesChange':
+      case 'tableRowPropertiesChange':
+      case 'tableCellPropertiesChange':
+      case 'tableCellMerge':
+        return 'badge-table';
+      default:
+        return 'badge-formatting';
+    }
+  }
+
+  /**
+   * Escape HTML special characters.
+   * @internal
+   */
+  private static escapeHTML(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /**
+   * Escape CSV special characters.
+   * @internal
+   */
+  private static escapeCSV(str: string): string {
+    // If string contains delimiter, newline, or quotes, wrap in quotes
+    if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
   }
 }

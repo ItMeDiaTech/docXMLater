@@ -6,11 +6,27 @@ import { TableRow, RowFormatting } from "./TableRow";
 import { TableCell, CellFormatting } from "./TableCell";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { deepClone } from "../utils/deepClone";
+import {
+  TableAlignment as CommonTableAlignment,
+  BorderStyle,
+  BorderDefinition,
+  TableBorderDefinitions,
+  HorizontalAnchor,
+  VerticalAnchor,
+  HorizontalAlignment,
+  VerticalAlignment,
+  WidthType,
+} from "./CommonTypes";
+
+// ============================================================================
+// RE-EXPORTED TYPES (for backward compatibility)
+// ============================================================================
 
 /**
  * Table alignment
+ * @see CommonTypes.TableAlignment
  */
-export type TableAlignment = "left" | "center" | "right";
+export type TableAlignment = CommonTableAlignment;
 
 /**
  * Table layout type
@@ -19,9 +35,10 @@ export type TableLayout = "auto" | "fixed";
 
 /**
  * Table border definition (same as cell borders)
+ * @see CommonTypes.BorderDefinition
  */
 export interface TableBorder {
-  style?: "none" | "single" | "double" | "dashed" | "dotted" | "thick";
+  style?: BorderStyle;
   size?: number;
   space?: number; // Border spacing (padding) in points
   color?: string;
@@ -29,6 +46,7 @@ export interface TableBorder {
 
 /**
  * Table borders
+ * @see CommonTypes.TableBorderDefinitions
  */
 export interface TableBorders {
   top?: TableBorder;
@@ -41,33 +59,27 @@ export interface TableBorders {
 
 /**
  * Horizontal anchor for table positioning
+ * @see CommonTypes.HorizontalAnchor
  */
-export type TableHorizontalAnchor = "text" | "margin" | "page";
+export type TableHorizontalAnchor = HorizontalAnchor;
 
 /**
  * Vertical anchor for table positioning
+ * @see CommonTypes.VerticalAnchor
  */
-export type TableVerticalAnchor = "text" | "margin" | "page";
+export type TableVerticalAnchor = VerticalAnchor;
 
 /**
  * Horizontal alignment for relative table positioning
+ * @see CommonTypes.HorizontalAlignment
  */
-export type TableHorizontalAlignment =
-  | "left"
-  | "center"
-  | "right"
-  | "inside"
-  | "outside";
+export type TableHorizontalAlignment = HorizontalAlignment;
 
 /**
  * Vertical alignment for relative table positioning
+ * @see CommonTypes.VerticalAlignment
  */
-export type TableVerticalAlignment =
-  | "top"
-  | "center"
-  | "bottom"
-  | "inside"
-  | "outside";
+export type TableVerticalAlignment = VerticalAlignment;
 
 /**
  * Table positioning properties (for floating tables)

@@ -5,21 +5,32 @@
 import { TableCell } from './TableCell';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { TableBorder, TableBorders } from './Table';
+import {
+  BasicShadingPattern,
+  RowJustification as CommonRowJustification,
+  ShadingConfig,
+} from './CommonTypes';
+import { defaultLogger } from '../utils/logger';
+
+// ============================================================================
+// RE-EXPORTED TYPES (for backward compatibility)
+// ============================================================================
 
 /**
  * Row justification/alignment options
+ * @see CommonTypes.RowJustification
  */
-export type RowJustification = 'left' | 'center' | 'right' | 'start' | 'end';
+export type RowJustification = CommonRowJustification;
 
 /**
  * Shading pattern values per ECMA-376
+ * @see CommonTypes.BasicShadingPattern for the canonical definition
  */
-export type ShadingPattern = 'clear' | 'solid' | 'horzStripe' | 'vertStripe' | 'reverseDiagStripe' |
-  'diagStripe' | 'horzCross' | 'diagCross' | 'thinHorzStripe' | 'thinVertStripe' |
-  'thinReverseDiagStripe' | 'thinDiagStripe' | 'thinHorzCross' | 'thinDiagCross';
+export type ShadingPattern = BasicShadingPattern;
 
 /**
  * Shading configuration
+ * @see CommonTypes.ShadingConfig for the canonical definition
  */
 export interface Shading {
   /** Fill color in hex (e.g., 'FFFF00' for yellow) */
@@ -133,6 +144,80 @@ export class TableRow {
    */
   getCellCount(): number {
     return this.cells.length;
+  }
+
+  /**
+   * Calculates the total grid span of the row (considering column spans)
+   *
+   * For tables with merged cells, this returns the number of logical columns
+   * this row spans based on the columnSpan values of each cell.
+   *
+   * @returns Total grid span (sum of all cell spans, where unspanned cells count as 1)
+   *
+   * @example
+   * ```typescript
+   * // Row with 3 cells, middle one spanning 2 columns
+   * const row = new TableRow();
+   * row.createCell('A');                              // span = 1
+   * row.createCell('B').setColumnSpan(2);             // span = 2
+   * row.createCell('C');                              // span = 1
+   * row.getTotalGridSpan();                           // Returns 4
+   * ```
+   */
+  getTotalGridSpan(): number {
+    let totalSpan = 0;
+    for (const cell of this.cells) {
+      const formatting = cell.getFormatting();
+      totalSpan += formatting.columnSpan || 1;
+    }
+    return totalSpan;
+  }
+
+  /**
+   * Validates the row's grid alignment
+   *
+   * Checks if the total grid span matches the expected column count.
+   * Logs a warning if there's a mismatch, which can indicate:
+   * - Missing cells (grid span < expected)
+   * - Extra cells (grid span > expected)
+   * - Incorrect columnSpan values
+   *
+   * @param expectedColumns - Expected number of columns in the table grid
+   * @returns Object with validation result and details
+   *
+   * @example
+   * ```typescript
+   * const result = row.validateGridAlignment(4);
+   * if (!result.isValid) {
+   *   console.log(result.message); // "Row has 3 grid columns but expected 4"
+   * }
+   * ```
+   */
+  validateGridAlignment(expectedColumns: number): {
+    isValid: boolean;
+    actualSpan: number;
+    message?: string;
+  } {
+    const actualSpan = this.getTotalGridSpan();
+
+    if (actualSpan === expectedColumns) {
+      return { isValid: true, actualSpan };
+    }
+
+    const message =
+      `Row grid alignment mismatch: has ${actualSpan} grid columns but expected ${expectedColumns}. ` +
+      `Cell count: ${this.cells.length}. ` +
+      (actualSpan < expectedColumns
+        ? "Missing cells or incorrect columnSpan values."
+        : "Extra cells or excessive columnSpan values.");
+
+    defaultLogger.warn(`[TableRow] ${message}`);
+
+    return {
+      isValid: false,
+      actualSpan,
+      message,
+    };
   }
 
   /**

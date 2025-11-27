@@ -30,7 +30,12 @@ import {
   logParsing,
   logTextDirection,
 } from "../utils/diagnostics";
-import { defaultLogger } from "../utils/logger";
+import { getGlobalLogger, createScopedLogger, ILogger, defaultLogger } from "../utils/logger";
+
+// Create scoped logger for DocumentParser operations
+function getLogger(): ILogger {
+  return createScopedLogger(getGlobalLogger(), 'DocumentParser');
+}
 import { XMLBuilder } from "../xml/XMLBuilder";
 import { XMLParser } from "../xml/XMLParser";
 import { ZipHandler } from "../zip/ZipHandler";
@@ -101,11 +106,17 @@ export class DocumentParser {
     section: Section | null;
     namespaces: Record<string, string>;
   }> {
+    const logger = getLogger();
+    logger.info('Parsing document');
+
     // Verify the document exists
     const docXml = zipHandler.getFileAsString(DOCX_PATHS.DOCUMENT);
     if (!docXml) {
+      logger.error('Invalid document: word/document.xml not found');
       throw new Error("Invalid document: word/document.xml not found");
     }
+
+    logger.info('Parsing document.xml', { xmlSize: docXml.length });
 
     // Parse existing relationships to avoid ID collisions
     const parsedRelationshipManager = this.parseRelationships(
@@ -127,15 +138,38 @@ export class DocumentParser {
 
     // Parse styles from styles.xml
     const styles = this.parseStyles(zipHandler);
+    logger.info('Parsed styles', { styleCount: styles.length });
 
     // Parse numbering from numbering.xml
     const numbering = this.parseNumbering(zipHandler);
+    logger.info('Parsed numbering', {
+      abstractCount: numbering.abstractNumberings.length,
+      instanceCount: numbering.numberingInstances.length
+    });
 
     // Parse section properties from document.xml
     const section = this.parseSectionProperties(docXml);
 
     // Parse and preserve namespaces from the root <w:document> tag
     const namespaces = this.parseNamespaces(docXml);
+
+    // Count element types for logging
+    let paragraphCount = 0;
+    let tableCount = 0;
+    for (const elem of bodyElements) {
+      if (elem instanceof Paragraph) paragraphCount++;
+      else if (elem instanceof Table) tableCount++;
+    }
+    logger.info('Document parsed', {
+      paragraphs: paragraphCount,
+      tables: tableCount,
+      totalElements: bodyElements.length
+    });
+
+    // Log any parse errors
+    if (this.parseErrors.length > 0) {
+      logger.warn('Parse errors encountered', { errorCount: this.parseErrors.length });
+    }
 
     return {
       bodyElements,
@@ -5570,8 +5604,30 @@ export class DocumentParser {
 
   /**
    * Parses and extracts all namespace declarations from the root <w:document> tag
+   *
    * @param docXml - The full XML content of word/document.xml
    * @returns A record of namespace prefixes to their URIs
+   *
+   * **Known Limitation - Default Namespace Not Extracted:**
+   *
+   * This method intentionally does NOT extract the default namespace (`xmlns="..."`).
+   * Only prefixed namespaces (`xmlns:w`, `xmlns:r`, etc.) are extracted.
+   *
+   * **Rationale:**
+   * 1. Word documents use prefixed namespaces exclusively (w:p, w:r, w:t)
+   * 2. Adding a default namespace to <w:document> causes document corruption
+   * 3. Microsoft Word and LibreOffice reject documents with default namespaces
+   * 4. ECMA-376 examples show only prefixed namespace declarations
+   *
+   * **Impact:**
+   * - If an input document has a default namespace, it will be lost during round-trip
+   * - This is rare (valid OOXML documents don't use default namespaces)
+   * - Documents using default namespace are likely non-standard or corrupted
+   *
+   * **Per ECMA-376 Part 1 Section 11.3.4:**
+   * The document element should use the WordprocessingML namespace with prefix.
+   *
+   * @see ECMA-376-1:2016 Part 1, Section 11.3.4
    */
   private parseNamespaces(docXml: string): Record<string, string> {
     const namespaces: Record<string, string> = {};
@@ -5587,12 +5643,6 @@ export class DocumentParser {
           namespaces[`xmlns:${match[1]}`] = match[2];
         }
       }
-
-      // Note: We do NOT extract default namespace (xmlns="...") because:
-      // - Word documents should only use prefixed namespaces (xmlns:w, xmlns:r, etc.)
-      // - Default namespace on <w:document> causes document corruption
-      // - All Word XML elements use prefixes (w:p, w:r, w:t, etc.)
-      // - Including a default namespace causes Word/LibreOffice to reject the document
     }
 
     return namespaces;
