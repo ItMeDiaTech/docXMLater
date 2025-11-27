@@ -329,8 +329,8 @@ export class ChangelogGenerator {
       if (firstKey) {
         propertyChange = {
           property: firstKey,
-          oldValue: prevProps?.[firstKey]?.toString(),
-          newValue: newProps?.[firstKey]?.toString(),
+          oldValue: this.formatPropertyValue(prevProps?.[firstKey]),
+          newValue: this.formatPropertyValue(newProps?.[firstKey]),
         };
       }
     }
@@ -874,6 +874,28 @@ export class ChangelogGenerator {
     }
 
     return `Changed ${propNames.slice(0, 2).join(', ')} and ${propNames.length - 2} more`;
+  }
+
+  /**
+   * Format a property value for display.
+   * Handles objects, arrays, and primitives properly.
+   */
+  private static formatPropertyValue(value: unknown): string | undefined {
+    if (value === null || value === undefined) {
+      return undefined;
+    }
+    if (typeof value === 'object') {
+      try {
+        // For objects, use JSON.stringify for proper representation
+        const json = JSON.stringify(value);
+        // Truncate if too long
+        return json.length > 100 ? json.substring(0, 97) + '...' : json;
+      } catch {
+        return '[complex value]';
+      }
+    }
+    // For primitives, use String() for safe conversion
+    return String(value);
   }
 
   /**
