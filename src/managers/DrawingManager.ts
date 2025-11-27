@@ -36,10 +36,19 @@ export interface PreservedDrawing {
 
 /**
  * Manages all drawing elements in a document
+ *
+ * Performance: Uses type-indexed Sets for O(1) type-specific lookups
+ * instead of O(n) linear scans through the main Map.
  */
 export class DrawingManager {
   private drawings: Map<string, DrawingElement | PreservedDrawing> = new Map();
   private nextId: number = 1;
+
+  // Type-indexed Sets for O(1) type-specific lookups
+  private imageIds: Set<string> = new Set();
+  private shapeIds: Set<string> = new Set();
+  private textboxIds: Set<string> = new Set();
+  private preservedIds: Set<string> = new Set();
 
   /**
    * Creates a new DrawingManager
@@ -57,6 +66,7 @@ export class DrawingManager {
     const id = this.generateId();
     image.setDocPrId(this.nextId - 1);
     this.drawings.set(id, image);
+    this.imageIds.add(id);
     return id;
   }
 
@@ -69,6 +79,7 @@ export class DrawingManager {
     const id = this.generateId();
     shape.setDocPrId(this.nextId - 1);
     this.drawings.set(id, shape);
+    this.shapeIds.add(id);
     return id;
   }
 
@@ -81,6 +92,7 @@ export class DrawingManager {
     const id = this.generateId();
     textbox.setDocPrId(this.nextId - 1);
     this.drawings.set(id, textbox);
+    this.textboxIds.add(id);
     return id;
   }
 
@@ -92,6 +104,7 @@ export class DrawingManager {
   addPreservedDrawing(drawing: PreservedDrawing): string {
     const id = this.generateId();
     this.drawings.set(id, { ...drawing, id });
+    this.preservedIds.add(id);
     return id;
   }
 
@@ -114,11 +127,13 @@ export class DrawingManager {
 
   /**
    * Gets all images
+   * Performance: O(k) where k = number of images (uses indexed lookup)
    * @returns Array of images
    */
   getAllImages(): Image[] {
     const images: Image[] = [];
-    for (const drawing of this.drawings.values()) {
+    for (const id of this.imageIds) {
+      const drawing = this.drawings.get(id);
       if (drawing instanceof Image) {
         images.push(drawing);
       }
@@ -128,11 +143,13 @@ export class DrawingManager {
 
   /**
    * Gets all shapes
+   * Performance: O(k) where k = number of shapes (uses indexed lookup)
    * @returns Array of shapes
    */
   getAllShapes(): Shape[] {
     const shapes: Shape[] = [];
-    for (const drawing of this.drawings.values()) {
+    for (const id of this.shapeIds) {
+      const drawing = this.drawings.get(id);
       if (drawing instanceof Shape) {
         shapes.push(drawing);
       }
@@ -142,11 +159,13 @@ export class DrawingManager {
 
   /**
    * Gets all text boxes
+   * Performance: O(k) where k = number of text boxes (uses indexed lookup)
    * @returns Array of text boxes
    */
   getAllTextBoxes(): TextBox[] {
     const textboxes: TextBox[] = [];
-    for (const drawing of this.drawings.values()) {
+    for (const id of this.textboxIds) {
+      const drawing = this.drawings.get(id);
       if (drawing instanceof TextBox) {
         textboxes.push(drawing);
       }
@@ -156,12 +175,14 @@ export class DrawingManager {
 
   /**
    * Gets all preserved drawings
+   * Performance: O(k) where k = number of preserved drawings (uses indexed lookup)
    * @returns Array of preserved drawings
    */
   getAllPreservedDrawings(): PreservedDrawing[] {
     const preserved: PreservedDrawing[] = [];
-    for (const drawing of this.drawings.values()) {
-      if (this.isPreservedDrawing(drawing)) {
+    for (const id of this.preservedIds) {
+      const drawing = this.drawings.get(id);
+      if (drawing && this.isPreservedDrawing(drawing)) {
         preserved.push(drawing);
       }
     }
@@ -174,7 +195,15 @@ export class DrawingManager {
    * @returns True if removed, false if not found
    */
   removeDrawing(id: string): boolean {
-    return this.drawings.delete(id);
+    const deleted = this.drawings.delete(id);
+    if (deleted) {
+      // Remove from type-specific indices
+      this.imageIds.delete(id);
+      this.shapeIds.delete(id);
+      this.textboxIds.delete(id);
+      this.preservedIds.delete(id);
+    }
+    return deleted;
   }
 
   /**
@@ -198,6 +227,10 @@ export class DrawingManager {
    */
   clear(): void {
     this.drawings.clear();
+    this.imageIds.clear();
+    this.shapeIds.clear();
+    this.textboxIds.clear();
+    this.preservedIds.clear();
     this.nextId = 1;
   }
 
@@ -265,6 +298,7 @@ export class DrawingManager {
 
   /**
    * Gets statistics about the drawings
+   * Performance: O(1) using indexed Set sizes
    * @returns Statistics object
    */
   getStats(): {
@@ -274,29 +308,12 @@ export class DrawingManager {
     textboxes: number;
     preserved: number;
   } {
-    let images = 0;
-    let shapes = 0;
-    let textboxes = 0;
-    let preserved = 0;
-
-    for (const drawing of this.drawings.values()) {
-      if (drawing instanceof Image) {
-        images++;
-      } else if (drawing instanceof Shape) {
-        shapes++;
-      } else if (drawing instanceof TextBox) {
-        textboxes++;
-      } else if (this.isPreservedDrawing(drawing)) {
-        preserved++;
-      }
-    }
-
     return {
       total: this.drawings.size,
-      images,
-      shapes,
-      textboxes,
-      preserved,
+      images: this.imageIds.size,
+      shapes: this.shapeIds.size,
+      textboxes: this.textboxIds.size,
+      preserved: this.preservedIds.size,
     };
   }
 }

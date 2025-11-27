@@ -4,20 +4,28 @@
 
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { Paragraph, TextDirection } from "./Paragraph";
+import {
+  BorderStyle as CommonBorderStyle,
+  BorderDefinition,
+  FourSidedBorders,
+  CellVerticalAlignment as CommonCellVerticalAlignment,
+  ShadingConfig,
+  WidthType,
+} from "./CommonTypes";
+
+// ============================================================================
+// RE-EXPORTED TYPES (for backward compatibility)
+// ============================================================================
 
 /**
  * Cell border style
+ * @see CommonTypes.BorderStyle
  */
-export type BorderStyle =
-  | "none"
-  | "single"
-  | "double"
-  | "dashed"
-  | "dotted"
-  | "thick";
+export type BorderStyle = CommonBorderStyle;
 
 /**
  * Cell border definition
+ * @see CommonTypes.BorderDefinition
  */
 export interface CellBorder {
   style?: BorderStyle;
@@ -27,6 +35,7 @@ export interface CellBorder {
 
 /**
  * Cell borders
+ * @see CommonTypes.FourSidedBorders
  */
 export interface CellBorders {
   top?: CellBorder;
@@ -37,6 +46,7 @@ export interface CellBorders {
 
 /**
  * Cell shading/background
+ * @see CommonTypes.ShadingConfig
  */
 export interface CellShading {
   fill?: string; // Background color in hex
@@ -45,8 +55,9 @@ export interface CellShading {
 
 /**
  * Vertical alignment in cell
+ * @see CommonTypes.CellVerticalAlignment
  */
-export type CellVerticalAlignment = "top" | "center" | "bottom";
+export type CellVerticalAlignment = CommonCellVerticalAlignment;
 
 /**
  * Cell margins (spacing inside cell borders)
@@ -287,12 +298,46 @@ export class TableCell {
   }
 
   /**
+   * Validates a margin value
+   * @param value - Margin value in twips
+   * @param side - Name of the margin side (for error messages)
+   * @throws {Error} If margin is negative or exceeds maximum
+   * @private
+   */
+  private validateMargin(value: number | undefined, side: string): void {
+    if (value === undefined) return;
+
+    // Margins must be non-negative
+    if (value < 0) {
+      throw new Error(
+        `Invalid ${side} margin: ${value} twips. Cell margins cannot be negative.`
+      );
+    }
+
+    // Maximum reasonable margin (1 inch = 1440 twips)
+    // Word typically allows up to several inches, but we set a reasonable limit
+    const MAX_MARGIN_TWIPS = 14400; // 10 inches
+    if (value > MAX_MARGIN_TWIPS) {
+      throw new Error(
+        `Invalid ${side} margin: ${value} twips exceeds maximum of ${MAX_MARGIN_TWIPS} twips (10 inches).`
+      );
+    }
+  }
+
+  /**
    * Sets cell margins (spacing inside cell borders)
    * Per ECMA-376 Part 1 §17.4.43
    * @param margins - Margin definitions for each side
    * @returns This cell for chaining
+   * @throws {Error} If any margin value is negative or exceeds maximum
    */
   setMargins(margins: CellMargins): this {
+    // Validate each margin
+    this.validateMargin(margins.top, "top");
+    this.validateMargin(margins.bottom, "bottom");
+    this.validateMargin(margins.left, "left");
+    this.validateMargin(margins.right, "right");
+
     this.formatting.margins = margins;
     return this;
   }
@@ -301,8 +346,12 @@ export class TableCell {
    * Sets all cell margins to the same value
    * @param margin - Margin in twips to apply to all sides
    * @returns This cell for chaining
+   * @throws {Error} If margin value is negative or exceeds maximum
    */
   setAllMargins(margin: number): this {
+    // Validate the margin value
+    this.validateMargin(margin, "all");
+
     this.formatting.margins = {
       top: margin,
       bottom: margin,

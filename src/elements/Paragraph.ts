@@ -9,6 +9,19 @@ import { defaultLogger } from "../utils/logger";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { Bookmark } from "./Bookmark";
 import type { Comment } from "./Comment";
+import {
+  // Import common types
+  ParagraphAlignment as CommonParagraphAlignment,
+  BorderStyle as CommonBorderStyle,
+  ShadingPattern as CommonShadingPattern,
+  BasicShadingPattern,
+  TabAlignment as CommonTabAlignment,
+  TabLeader as CommonTabLeader,
+  TextDirection as CommonTextDirection,
+  TextVerticalAlignment,
+  BorderDefinition as CommonBorderDefinition,
+  TabStop as CommonTabStop,
+} from "./CommonTypes";
 import { ComplexField, Field } from "./Field";
 import { Hyperlink } from "./Hyperlink";
 import { RangeMarker } from "./RangeMarker";
@@ -17,15 +30,17 @@ import { Run, RunFormatting } from "./Run";
 import { Shape } from "./Shape";
 import { TextBox } from "./TextBox";
 
+// ============================================================================
+// RE-EXPORTED TYPES (for backward compatibility)
+// These types are now defined in CommonTypes.ts but re-exported here
+// to maintain backward compatibility with existing imports.
+// ============================================================================
+
 /**
  * Paragraph alignment options
+ * @see CommonTypes.ParagraphAlignment
  */
-export type ParagraphAlignment =
-  | "left"
-  | "center"
-  | "right"
-  | "justify"
-  | "both";
+export type ParagraphAlignment = CommonParagraphAlignment;
 
 /**
  * Type to indicate ComplexField support in paragraph content
@@ -34,66 +49,40 @@ export type FieldLike = Field | ComplexField;
 
 /**
  * Border style types for paragraph borders
+ * @see CommonTypes.BorderStyle
  */
-export type BorderStyle =
-  | "single"
-  | "double"
-  | "dashed"
-  | "dotted"
-  | "thick"
-  | "none";
+export type BorderStyle = CommonBorderStyle;
 
 /**
- * Shading pattern types
+ * Shading pattern types (basic patterns without percentage fills)
+ * @see CommonTypes.BasicShadingPattern for basic patterns
+ * @see CommonTypes.ShadingPattern for full pattern set including percentages
  */
-export type ShadingPattern =
-  | "clear"
-  | "solid"
-  | "horzStripe"
-  | "vertStripe"
-  | "reverseDiagStripe"
-  | "diagStripe"
-  | "horzCross"
-  | "diagCross";
+export type ShadingPattern = BasicShadingPattern;
 
 /**
  * Tab stop alignment types
+ * @see CommonTypes.TabAlignment
  */
-export type TabAlignment =
-  | "clear"
-  | "left"
-  | "center"
-  | "right"
-  | "decimal"
-  | "bar"
-  | "num";
+export type TabAlignment = CommonTabAlignment;
 
 /**
  * Tab stop leader types
+ * @see CommonTypes.TabLeader
  */
-export type TabLeader =
-  | "none"
-  | "dot"
-  | "hyphen"
-  | "underscore"
-  | "heavy"
-  | "middleDot";
+export type TabLeader = CommonTabLeader;
 
 /**
  * Text direction types for paragraphs
+ * @see CommonTypes.TextDirection
  */
-export type TextDirection =
-  | "lrTb"
-  | "tbRl"
-  | "btLr"
-  | "lrTbV"
-  | "tbRlV"
-  | "tbLrV";
+export type TextDirection = CommonTextDirection;
 
 /**
  * Text vertical alignment types
+ * @see CommonTypes.TextVerticalAlignment
  */
-export type TextAlignment = "top" | "center" | "baseline" | "bottom" | "auto";
+export type TextAlignment = TextVerticalAlignment;
 
 /**
  * Textbox tight wrap modes
@@ -286,7 +275,7 @@ export interface ParagraphFormatting {
 /**
  * Paragraph content (runs, fields, hyperlinks, revisions, range markers, shapes, text boxes)
  */
-type ParagraphContent =
+export type ParagraphContent =
   | Run
   | FieldLike
   | Hyperlink
@@ -294,6 +283,92 @@ type ParagraphContent =
   | RangeMarker
   | Shape
   | TextBox;
+
+// ============================================================================
+// TYPE GUARDS FOR ParagraphContent
+// These functions help with type narrowing when working with paragraph content
+// ============================================================================
+
+/**
+ * Type guard: Check if content is a Run
+ * @param content - Paragraph content item to check
+ * @returns True if the content is a Run instance
+ */
+export function isRun(content: ParagraphContent): content is Run {
+  return content instanceof Run;
+}
+
+/**
+ * Type guard: Check if content is a Field (simple or complex)
+ * @param content - Paragraph content item to check
+ * @returns True if the content is a Field or ComplexField instance
+ */
+export function isField(content: ParagraphContent): content is FieldLike {
+  return content instanceof Field || content instanceof ComplexField;
+}
+
+/**
+ * Type guard: Check if content is a simple Field
+ * @param content - Paragraph content item to check
+ * @returns True if the content is a Field instance (not ComplexField)
+ */
+export function isSimpleField(content: ParagraphContent): content is Field {
+  return content instanceof Field && !(content instanceof ComplexField);
+}
+
+/**
+ * Type guard: Check if content is a ComplexField
+ * @param content - Paragraph content item to check
+ * @returns True if the content is a ComplexField instance
+ */
+export function isComplexField(content: ParagraphContent): content is ComplexField {
+  return content instanceof ComplexField;
+}
+
+/**
+ * Type guard: Check if content is a Hyperlink
+ * @param content - Paragraph content item to check
+ * @returns True if the content is a Hyperlink instance
+ */
+export function isHyperlink(content: ParagraphContent): content is Hyperlink {
+  return content instanceof Hyperlink;
+}
+
+/**
+ * Type guard: Check if content is a Revision
+ * @param content - Paragraph content item to check
+ * @returns True if the content is a Revision instance
+ */
+export function isRevision(content: ParagraphContent): content is Revision {
+  return content instanceof Revision;
+}
+
+/**
+ * Type guard: Check if content is a RangeMarker (bookmark start/end, comment start/end)
+ * @param content - Paragraph content item to check
+ * @returns True if the content is a RangeMarker instance
+ */
+export function isRangeMarker(content: ParagraphContent): content is RangeMarker {
+  return content instanceof RangeMarker;
+}
+
+/**
+ * Type guard: Check if content is a Shape
+ * @param content - Paragraph content item to check
+ * @returns True if the content is a Shape instance
+ */
+export function isShape(content: ParagraphContent): content is Shape {
+  return content instanceof Shape;
+}
+
+/**
+ * Type guard: Check if content is a TextBox
+ * @param content - Paragraph content item to check
+ * @returns True if the content is a TextBox instance
+ */
+export function isTextBox(content: ParagraphContent): content is TextBox {
+  return content instanceof TextBox;
+}
 
 /**
  * Represents a paragraph in a document

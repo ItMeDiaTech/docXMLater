@@ -332,13 +332,13 @@ export class NumberingManager {
    * Gets the framework's standard indentation for a list level
    *
    * The framework uses a consistent indentation scheme:
-   * - leftIndent: 720 * (level + 1) twips
+   * - leftIndent: 720 + (level * 360) twips
    * - hangingIndent: 360 twips
    *
    * Examples:
    * - Level 0: 720 twips (0.5 inch) left, 360 twips hanging
-   * - Level 1: 1440 twips (1 inch) left, 360 twips hanging
-   * - Level 2: 2160 twips (1.5 inch) left, 360 twips hanging
+   * - Level 1: 1080 twips (0.75 inch) left, 360 twips hanging
+   * - Level 2: 1440 twips (1.0 inch) left, 360 twips hanging
    *
    * @param level The level (0-8)
    * @returns Object with leftIndent and hangingIndent in twips
@@ -423,7 +423,7 @@ export class NumberingManager {
    * Resets all levels in a numbering definition to standard indentation
    *
    * This applies the framework's standard indentation formula to all levels:
-   * - leftIndent: 720 * (level + 1) twips
+   * - leftIndent: 720 + (level * 360) twips
    * - hangingIndent: 360 twips
    *
    * @param numId The numbering instance ID
@@ -466,7 +466,7 @@ export class NumberingManager {
    * Normalizes indentation for all lists in the document
    *
    * Applies standard indentation to every numbering instance:
-   * - leftIndent: 720 * (level + 1) twips
+   * - leftIndent: 720 + (level * 360) twips
    * - hangingIndent: 360 twips
    *
    * This ensures consistent spacing across all lists in the document.

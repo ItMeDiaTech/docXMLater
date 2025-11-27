@@ -4,6 +4,13 @@
  * Completes the DocXML framework (XMLBuilder + XMLParser)
  */
 
+import { getGlobalLogger, createScopedLogger, ILogger } from "../utils/logger";
+
+// Create scoped logger for XMLParser operations
+function getLogger(): ILogger {
+  return createScopedLogger(getGlobalLogger(), 'XMLParser');
+}
+
 /**
  * Options for XML-to-object parsing
  */
@@ -412,6 +419,9 @@ export class XMLParser {
     xml: string,
     options?: ParseToObjectOptions
   ): ParsedXMLObject {
+    const logger = getLogger();
+    logger.debug('Parsing XML to object', { xmlSize: xml.length });
+
     // Default options
     const opts: Required<ParseToObjectOptions> = {
       ignoreAttributes: options?.ignoreAttributes ?? false,
@@ -435,6 +445,7 @@ export class XMLParser {
 
     // Parse root element
     const result = XMLParser.parseElementToObject(xml, 0, opts);
+    logger.debug('XML parsed to object');
     return result.value as ParsedXMLObject;
   }
 

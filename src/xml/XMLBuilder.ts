@@ -20,6 +20,30 @@ export class XMLBuilder {
   private elements: (XMLElement | string)[] = [];
 
   /**
+   * Elements that must NEVER be self-closing in Word XML per ECMA-376.
+   * Self-closing these elements causes Word to not parse correctly or lose content.
+   */
+  private static readonly CANNOT_SELF_CLOSE = [
+    "w:t",
+    "w:r",
+    "w:p",
+    "w:tbl",
+    "w:tr",
+    "w:tc",
+    "w:body",
+    "w:document",
+    "w:hyperlink",
+    "w:sdt",
+    "w:sdtContent",
+    "w:sdtPr",
+    "w:pPr",
+    "w:rPr",
+    "w:sectPr",
+    "w:bookmarkStart",
+    "w:bookmarkEnd",
+  ];
+
+  /**
    * Adds an element to the builder
    * @param name - Element name (with namespace prefix if needed)
    * @param attributes - Element attributes
@@ -130,29 +154,7 @@ export class XMLBuilder {
 
     // Self-closing element validation
     if (element.selfClosing) {
-      // CRITICAL: Certain elements must NEVER be self-closing in Word XML per ECMA-376
-      // Self-closing these elements causes Word to not parse correctly or lose content
-      const CANNOT_SELF_CLOSE = [
-        "w:t",
-        "w:r",
-        "w:p",
-        "w:tbl",
-        "w:tr",
-        "w:tc",
-        "w:body",
-        "w:document",
-        "w:hyperlink",
-        "w:sdt",
-        "w:sdtContent",
-        "w:sdtPr",
-        "w:pPr",
-        "w:rPr",
-        "w:sectPr",
-        "w:bookmarkStart",
-        "w:bookmarkEnd",
-      ];
-
-      if (CANNOT_SELF_CLOSE.includes(element.name)) {
+      if (XMLBuilder.CANNOT_SELF_CLOSE.includes(element.name)) {
         // Instead of throwing, force open/close tags for safety
         xml += "></" + element.name + ">";
         return xml;
@@ -579,7 +581,11 @@ export class XMLBuilder {
 
     for (const key in obj) {
       if (key.startsWith("@_")) {
-        attributes[key.substring(2)] = obj[key];
+        const attrName = key.substring(2);
+        // Validate attribute name is not empty after prefix removal
+        if (attrName.length > 0) {
+          attributes[attrName] = obj[key];
+        }
       } else if (key === "#text") {
         children.push(String(obj[key]));
       } else {
@@ -607,8 +613,7 @@ export class XMLBuilder {
     };
 
     if (!element.children || element.children.length === 0) {
-      const CANNOT_SELF_CLOSE = ["w:t", "w:p", "w:r", "w:document", "w:body"];
-      if (!CANNOT_SELF_CLOSE.includes(name)) {
+      if (!XMLBuilder.CANNOT_SELF_CLOSE.includes(name)) {
         element.selfClosing = true;
       }
     }

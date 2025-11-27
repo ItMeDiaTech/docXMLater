@@ -113,6 +113,13 @@ export class NumberingLevel {
   }
 
   /**
+   * Maximum recommended left indentation in twips.
+   * This is ~4 inches (5760 twips), leaving space for content on standard pages.
+   * Beyond this, text may overflow margins on narrow pages.
+   */
+  private static readonly MAX_RECOMMENDED_INDENT = 5760;
+
+  /**
    * Validates the level properties
    */
   private validate(): void {
@@ -133,6 +140,70 @@ export class NumberingLevel {
     if (this.properties.start < 0) {
       throw new Error("Start value must be non-negative");
     }
+
+    // Warn if indentation is very large (could exceed right margin on narrow pages)
+    if (this.properties.leftIndent > NumberingLevel.MAX_RECOMMENDED_INDENT) {
+      console.warn(
+        `NumberingLevel: Left indentation (${this.properties.leftIndent} twips / ` +
+        `${(this.properties.leftIndent / 1440).toFixed(2)} inches) exceeds recommended maximum ` +
+        `(${NumberingLevel.MAX_RECOMMENDED_INDENT} twips / 4 inches). ` +
+        `This may cause content to overflow margins on narrow pages.`
+      );
+    }
+  }
+
+  /**
+   * Calculates safe indentation values for a given level based on page constraints.
+   *
+   * Use this instead of default indentation when working with narrow pages or
+   * deep nesting levels to ensure content stays within page margins.
+   *
+   * @param level The level index (0-8)
+   * @param pageWidthTwips Page width in twips (default: 12240 = 8.5 inches)
+   * @param leftMarginTwips Left margin in twips (default: 1440 = 1 inch)
+   * @param rightMarginTwips Right margin in twips (default: 1440 = 1 inch)
+   * @param minContentWidth Minimum content width in twips (default: 2880 = 2 inches)
+   * @returns Safe indentation values that won't exceed available space
+   *
+   * @example
+   * ```typescript
+   * // For a narrow page (6" wide with 0.5" margins)
+   * const indent = NumberingLevel.calculateSafeIndentation(
+   *   5,      // level 5
+   *   8640,   // 6 inches page width
+   *   720,    // 0.5 inch left margin
+   *   720     // 0.5 inch right margin
+   * );
+   * ```
+   */
+  static calculateSafeIndentation(
+    level: number,
+    pageWidthTwips: number = 12240,
+    leftMarginTwips: number = 1440,
+    rightMarginTwips: number = 1440,
+    minContentWidth: number = 2880
+  ): { leftIndent: number; hangingIndent: number } {
+    if (level < 0 || level > 8) {
+      throw new Error(`Invalid level ${level}. Level must be between 0 and 8.`);
+    }
+
+    // Calculate available content width
+    const availableWidth = pageWidthTwips - leftMarginTwips - rightMarginTwips;
+
+    // Calculate max safe indent (leave space for content)
+    const maxSafeIndent = Math.max(0, availableWidth - minContentWidth);
+
+    // Standard indentation
+    const standardLeftIndent = 720 + level * 360;
+    const hangingIndent = 360;
+
+    // Cap at safe maximum
+    const safeLeftIndent = Math.min(standardLeftIndent, maxSafeIndent);
+
+    return {
+      leftIndent: safeLeftIndent,
+      hangingIndent,
+    };
   }
 
   /**
@@ -457,17 +528,20 @@ export class NumberingLevel {
    * Creates a bullet list level
    * @param level The level index (0-8)
    * @param bullet The bullet character (default: '•')
+   * @param font The font to use for the bullet (default: 'Calibri')
+   *             Use 'Symbol' or 'Wingdings' for special bullet symbols
    */
   static createBulletLevel(
     level: number,
-    bullet: string = "•"
+    bullet: string = "•",
+    font: string = "Calibri"
   ): NumberingLevel {
     return new NumberingLevel({
       level,
       format: "bullet",
       text: bullet,
       alignment: "left",
-      font: "Calibri",
+      font,
       fontSize: 24, // 12pt
       bold: true,
       color: "000000",

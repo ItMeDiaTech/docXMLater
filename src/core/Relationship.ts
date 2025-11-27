@@ -5,6 +5,8 @@
  * They are stored in _rels/*.xml.rels files throughout the document structure.
  */
 
+import { XMLBuilder } from '../xml/XMLBuilder';
+
 /**
  * Relationship types used in Word documents
  */
@@ -164,9 +166,6 @@ export class Relationship {
    * Per ECMA-376 Part 2 §9, relationship attributes must be escaped.
    */
   toXML(): string {
-    // Import XMLBuilder for escaping (local import to avoid circular dependency)
-    const { XMLBuilder } = require('../xml/XMLBuilder');
-
     // Escape all attributes to prevent XML injection
     const escapedId = XMLBuilder.escapeXmlAttribute(this.id);
     const escapedType = XMLBuilder.escapeXmlAttribute(this.type);
@@ -305,9 +304,9 @@ export class Relationship {
 
   /**
    * Creates a comments relationship
-   * @param id Relationship ID
+   * @param id Relationship ID (required - use RelationshipManager.generateId())
    */
-  static createComments(id: string = 'rId3'): Relationship {
+  static createComments(id: string): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.COMMENTS,
@@ -317,9 +316,9 @@ export class Relationship {
 
   /**
    * Creates a footnotes relationship
-   * @param id Relationship ID
+   * @param id Relationship ID (required - use RelationshipManager.generateId())
    */
-  static createFootnotes(id: string = 'rId4'): Relationship {
+  static createFootnotes(id: string): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.FOOTNOTES,
@@ -329,9 +328,9 @@ export class Relationship {
 
   /**
    * Creates an endnotes relationship
-   * @param id Relationship ID
+   * @param id Relationship ID (required - use RelationshipManager.generateId())
    */
-  static createEndnotes(id: string = 'rId5'): Relationship {
+  static createEndnotes(id: string): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.ENDNOTES,

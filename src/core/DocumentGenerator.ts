@@ -13,9 +13,27 @@ import { Section } from "../elements/Section";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { Table } from "../elements/Table";
 import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { getGlobalLogger, createScopedLogger, ILogger } from "../utils/logger";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { DocumentProperties } from "./Document";
 import { RelationshipManager } from "./RelationshipManager";
+
+// Create scoped logger for DocumentGenerator operations
+function getLogger(): ILogger {
+  return createScopedLogger(getGlobalLogger(), 'DocumentGenerator');
+}
+
+/**
+ * Interface for ZipHandler methods used in content type generation
+ * This provides type safety for the ZipHandler parameter without creating
+ * a circular dependency with the zip module.
+ */
+export interface IZipHandlerReader {
+  /** Get list of file paths in the archive */
+  getFilePaths?(): string[];
+  /** Check if a file exists in the archive */
+  hasFile?(path: string): boolean;
+}
 
 /**
  * Body element types
@@ -69,6 +87,9 @@ export class DocumentGenerator {
     section: Section,
     namespaces: Record<string, string>
   ): string {
+    const logger = getLogger();
+    logger.info('Generating document.xml', { elementCount: bodyElements.length });
+
     const bodyXmls: XMLElement[] = [];
 
     // Generate XML for each body element
@@ -86,7 +107,9 @@ export class DocumentGenerator {
 
     // Add section properties at the end
     bodyXmls.push(section.toXML());
-    return XMLBuilder.createDocument(bodyXmls, namespaces);
+    const result = XMLBuilder.createDocument(bodyXmls, namespaces);
+    logger.info('Document.xml generated', { xmlSize: result.length });
+    return result;
   }
 
   /**
@@ -243,7 +266,7 @@ ${properties}
     imageManager: ImageManager,
     headerFooterManager: HeaderFooterManager,
     commentManager: CommentManager,
-    zipHandler: any, // ZipHandler - to check file existence
+    zipHandler: IZipHandlerReader,
     fontManager?: FontManager,
     hasCustomProperties: boolean = false,
     originalContentTypes?: { defaults: Set<string>; overrides: Set<string> }
@@ -347,16 +370,24 @@ ${properties}
     let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     xml += '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n';
 
-    // Add all default entries
+    // Add all default entries (escape attribute values for security)
     for (const entry of allDefaults) {
-      const [ext, contentType] = entry.split('|');
-      xml += `  <Default Extension="${ext}" ContentType="${contentType}"/>\n`;
+      const parts = entry.split('|');
+      const ext = parts[0] || '';
+      const contentType = parts[1] || '';
+      const escapedExt = XMLBuilder.escapeXmlAttribute(ext);
+      const escapedContentType = XMLBuilder.escapeXmlAttribute(contentType);
+      xml += `  <Default Extension="${escapedExt}" ContentType="${escapedContentType}"/>\n`;
     }
 
-    // Add all override entries
+    // Add all override entries (escape attribute values for security)
     for (const entry of allOverrides) {
-      const [partName, contentType] = entry.split('|');
-      xml += `  <Override PartName="${partName}" ContentType="${contentType}"/>\n`;
+      const parts = entry.split('|');
+      const partName = parts[0] || '';
+      const contentType = parts[1] || '';
+      const escapedPartName = XMLBuilder.escapeXmlAttribute(partName);
+      const escapedContentType = XMLBuilder.escapeXmlAttribute(contentType);
+      xml += `  <Override PartName="${escapedPartName}" ContentType="${escapedContentType}"/>\n`;
     }
 
     xml += '</Types>';
@@ -466,6 +497,9 @@ ${properties}
     headerFooterManager: HeaderFooterManager,
     relationshipManager: RelationshipManager
   ): void {
+    const logger = getLogger();
+    logger.info('Processing hyperlinks');
+
     // Clear ORPHANED hyperlink relationships to prevent corruption
     // This is critical when paragraphs are removed (e.g., via clearParagraphs())
     // but preserves relationships for existing hyperlinks (round-trip integrity)
@@ -504,6 +538,8 @@ ${properties}
     for (const para of paragraphs) {
       this.processHyperlinksInParagraph(para, relationshipManager);
     }
+
+    logger.info('Hyperlinks processed');
   }
 
   /**

@@ -657,13 +657,117 @@ export class Image {
     return this.wrap;
   }
 
+  /**
+   * Validates a position offset value
+   * @param offset - Offset value in EMUs
+   * @param axis - 'horizontal' or 'vertical' for error messages
+   * @throws {Error} If offset exceeds maximum reasonable value
+   * @private
+   */
+  private validatePositionOffset(offset: number | undefined, axis: string): void {
+    if (offset === undefined) return;
+
+    // Maximum reasonable offset: 50 inches = 45,720,000 EMUs
+    const MAX_OFFSET_EMUS = 45720000;
+    if (Math.abs(offset) > MAX_OFFSET_EMUS) {
+      throw new Error(
+        `Invalid ${axis} position offset: ${offset} EMUs exceeds maximum of ${MAX_OFFSET_EMUS} EMUs (50 inches).`
+      );
+    }
+  }
+
+  /**
+   * Sets the position for a floating image
+   *
+   * Position can be specified using either:
+   * - Absolute offset (in EMUs from the anchor point)
+   * - Relative alignment (left, center, right / top, center, bottom)
+   *
+   * @param horizontal - Horizontal positioning configuration
+   * @param vertical - Vertical positioning configuration
+   * @returns This image for chaining
+   * @throws {Error} If offset values exceed maximum
+   *
+   * @example
+   * ```typescript
+   * // Absolute positioning (100,000 EMUs from page edges)
+   * image.setPosition(
+   *   { anchor: 'page', offset: 100000 },
+   *   { anchor: 'page', offset: 100000 }
+   * );
+   *
+   * // Relative alignment (centered on page)
+   * image.setPosition(
+   *   { anchor: 'page', alignment: 'center' },
+   *   { anchor: 'page', alignment: 'center' }
+   * );
+   * ```
+   */
   setPosition(horizontal: ImagePosition['horizontal'], vertical: ImagePosition['vertical']): this {
+    // Validate offset values
+    this.validatePositionOffset(horizontal.offset, 'horizontal');
+    this.validatePositionOffset(vertical.offset, 'vertical');
+
     this.position = { horizontal, vertical };
     return this;
   }
 
   getPosition(): ImagePosition | undefined {
     return this.position;
+  }
+
+  /**
+   * Validates the current image position configuration
+   *
+   * Checks for common configuration issues:
+   * - Missing anchor when offset is used
+   * - Conflicting offset and alignment values
+   * - Invalid combinations
+   *
+   * @returns Validation result with details
+   *
+   * @example
+   * ```typescript
+   * const result = image.validatePosition();
+   * if (!result.isValid) {
+   *   console.log(result.warnings); // Array of warning messages
+   * }
+   * ```
+   */
+  validatePosition(): {
+    isValid: boolean;
+    warnings: string[];
+  } {
+    const warnings: string[] = [];
+
+    if (!this.position) {
+      return { isValid: true, warnings };
+    }
+
+    // Check if both offset and alignment are specified (unusual but not invalid)
+    if (this.position.horizontal.offset !== undefined && this.position.horizontal.alignment) {
+      warnings.push(
+        'Horizontal position has both offset and alignment. Word will use alignment and ignore offset.'
+      );
+    }
+
+    if (this.position.vertical.offset !== undefined && this.position.vertical.alignment) {
+      warnings.push(
+        'Vertical position has both offset and alignment. Word will use alignment and ignore offset.'
+      );
+    }
+
+    // Check for floating image without anchor settings
+    if (this.position && !this.anchor) {
+      warnings.push(
+        'Position is set but anchor is not. Consider setting anchor properties for proper floating behavior.'
+      );
+    }
+
+    return {
+      isValid: warnings.length === 0,
+      warnings,
+    };
   }
 
   setAnchor(options: ImageAnchor): this {

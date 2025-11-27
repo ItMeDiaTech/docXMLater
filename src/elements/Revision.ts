@@ -7,6 +7,7 @@
 
 import { Run } from './Run';
 import { XMLElement } from '../xml/XMLBuilder';
+import type { RevisionLocation } from './PropertyChangeTypes';
 
 /**
  * Revision type - All OpenXML WordprocessingML revision types
@@ -57,6 +58,8 @@ export interface RevisionProperties {
   moveId?: string;
   /** Destination location (for moveFrom) or source location (for moveTo) */
   moveLocation?: string;
+  /** Location of this revision within the document structure */
+  location?: RevisionLocation;
 }
 
 /**
@@ -73,6 +76,7 @@ export class Revision {
   private moveId?: string;
   private moveLocation?: string;
   private isFieldInstruction: boolean = false;
+  private location?: RevisionLocation;
 
   /**
    * Creates a new Revision
@@ -88,6 +92,7 @@ export class Revision {
     this.newProperties = properties.newProperties;
     this.moveId = properties.moveId;
     this.moveLocation = properties.moveLocation;
+    this.location = properties.location;
   }
 
   /**
@@ -183,6 +188,24 @@ export class Revision {
    */
   getMoveLocation(): string | undefined {
     return this.moveLocation;
+  }
+
+  /**
+   * Gets the location of this revision within the document
+   * @returns Location information or undefined if not set
+   */
+  getLocation(): RevisionLocation | undefined {
+    return this.location;
+  }
+
+  /**
+   * Sets the location of this revision within the document
+   * @param location - Location information
+   * @returns This revision for chaining
+   */
+  setLocation(location: RevisionLocation): this {
+    this.location = location;
+    return this;
   }
 
   /**

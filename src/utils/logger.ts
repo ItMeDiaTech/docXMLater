@@ -69,32 +69,36 @@ export interface ILogger {
 
 /**
  * Console-based logger implementation
- * Uses standard console methods for output
+ * Uses standard console methods for output with timestamps and source prefixes
  */
 export class ConsoleLogger implements ILogger {
-  constructor(private minLevel: LogLevel = LogLevel.WARN) {}
+  private showTimestamp: boolean;
+
+  constructor(private minLevel: LogLevel = LogLevel.WARN, options?: { showTimestamp?: boolean }) {
+    this.showTimestamp = options?.showTimestamp ?? true;
+  }
 
   debug(message: string, context?: Record<string, any>): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
-      console.debug(this.formatMessage(message, context));
+      console.debug(this.formatMessage(LogLevel.DEBUG, message, context));
     }
   }
 
   info(message: string, context?: Record<string, any>): void {
     if (this.shouldLog(LogLevel.INFO)) {
-      console.info(this.formatMessage(message, context));
+      console.info(this.formatMessage(LogLevel.INFO, message, context));
     }
   }
 
   warn(message: string, context?: Record<string, any>): void {
     if (this.shouldLog(LogLevel.WARN)) {
-      console.warn(this.formatMessage(message, context));
+      console.warn(this.formatMessage(LogLevel.WARN, message, context));
     }
   }
 
   error(message: string, context?: Record<string, any>): void {
     if (this.shouldLog(LogLevel.ERROR)) {
-      console.error(this.formatMessage(message, context));
+      console.error(this.formatMessage(LogLevel.ERROR, message, context));
     }
   }
 
@@ -105,11 +109,56 @@ export class ConsoleLogger implements ILogger {
     return currentIndex >= minIndex;
   }
 
-  private formatMessage(message: string, context?: Record<string, any>): string {
-    if (context && Object.keys(context).length > 0) {
-      return `${message} ${JSON.stringify(context)}`;
+  private formatMessage(level: LogLevel, message: string, context?: Record<string, any>): string {
+    const parts: string[] = [];
+
+    // Add timestamp if enabled
+    if (this.showTimestamp) {
+      const timestamp = new Date().toISOString().slice(11, 23); // HH:mm:ss.SSS
+      parts.push(timestamp);
     }
-    return message;
+
+    // Add level tag
+    parts.push(`[${level.toUpperCase().padEnd(5)}]`);
+
+    // Add source if present
+    if (context?.source) {
+      parts.push(`[${context.source}]`);
+    }
+
+    // Add message
+    parts.push(message);
+
+    // Add context (excluding source which is already shown)
+    if (context && Object.keys(context).length > 0) {
+      const contextWithoutSource = { ...context };
+      delete contextWithoutSource.source;
+      if (Object.keys(contextWithoutSource).length > 0) {
+        // Format context as key=value pairs for readability
+        const contextStr = this.formatContext(contextWithoutSource);
+        if (contextStr) {
+          parts.push(contextStr);
+        }
+      }
+    }
+
+    return parts.join(' ');
+  }
+
+  private formatContext(context: Record<string, any>): string {
+    const pairs: string[] = [];
+    for (const [key, value] of Object.entries(context)) {
+      if (value === undefined || value === null) continue;
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        // Nested object - use compact JSON
+        pairs.push(`${key}=${JSON.stringify(value)}`);
+      } else if (Array.isArray(value)) {
+        pairs.push(`${key}=[${value.length}]`);
+      } else {
+        pairs.push(`${key}=${value}`);
+      }
+    }
+    return pairs.length > 0 ? pairs.join(' ') : '';
   }
 }
 
@@ -226,4 +275,91 @@ export function createScopedLogger(logger: ILogger, source: string): ILogger {
       logger.error(message, { ...context, source });
     },
   };
+}
+
+/**
+ * Parse log level from string
+ * @param level - Log level string (case-insensitive)
+ * @returns LogLevel or undefined if invalid
+ */
+export function parseLogLevel(level: string | undefined): LogLevel | undefined {
+  if (!level) return undefined;
+  const normalized = level.toLowerCase();
+  switch (normalized) {
+    case 'debug': return LogLevel.DEBUG;
+    case 'info': return LogLevel.INFO;
+    case 'warn': return LogLevel.WARN;
+    case 'error': return LogLevel.ERROR;
+    default: return undefined;
+  }
+}
+
+/**
+ * Create a logger based on environment variables
+ *
+ * Environment variables (in order of precedence):
+ * - DEBUG=docxmlater or DEBUG=docxmlater:* - Enables DEBUG level
+ * - DOCXMLATER_LOG_LEVEL=debug|info|warn|error|silent - Sets specific level
+ *
+ * @returns Logger configured from environment, or SilentLogger if not configured
+ */
+export function createLoggerFromEnv(): ILogger {
+  // Check DEBUG environment variable first (highest precedence for debug mode)
+  const debugEnv = process.env.DEBUG || '';
+  if (debugEnv.includes('docxmlater')) {
+    return new ConsoleLogger(LogLevel.DEBUG);
+  }
+
+  // Check DOCXMLATER_LOG_LEVEL environment variable
+  const envLevel = process.env.DOCXMLATER_LOG_LEVEL?.toLowerCase();
+  if (envLevel === 'silent') {
+    return new SilentLogger();
+  }
+
+  const parsedLevel = parseLogLevel(envLevel);
+  if (parsedLevel) {
+    return new ConsoleLogger(parsedLevel);
+  }
+
+  // Default: silent (no logging unless explicitly enabled)
+  return new SilentLogger();
+}
+
+// Global logger instance - initialized from environment
+let globalLogger: ILogger = createLoggerFromEnv();
+
+/**
+ * Set the global logger instance
+ * Use this to configure logging programmatically
+ *
+ * @example
+ * ```typescript
+ * import { setGlobalLogger, ConsoleLogger, LogLevel } from 'docxmlater';
+ *
+ * // Enable info-level logging
+ * setGlobalLogger(new ConsoleLogger(LogLevel.INFO));
+ * ```
+ *
+ * @param logger - Logger instance to use globally
+ */
+export function setGlobalLogger(logger: ILogger): void {
+  globalLogger = logger;
+}
+
+/**
+ * Get the global logger instance
+ * Used internally by framework components
+ *
+ * @returns Current global logger
+ */
+export function getGlobalLogger(): ILogger {
+  return globalLogger;
+}
+
+/**
+ * Reset the global logger to its default (environment-based) configuration
+ * Useful for testing cleanup
+ */
+export function resetGlobalLogger(): void {
+  globalLogger = createLoggerFromEnv();
 }

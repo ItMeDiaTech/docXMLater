@@ -5,6 +5,13 @@
  */
 
 import { Revision, RevisionType } from './Revision';
+import type { RevisionLocation } from './PropertyChangeTypes';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
+
+// Scoped logger for RevisionManager
+function getLogger(): ILogger {
+  return createScopedLogger(getGlobalLogger(), 'RevisionManager');
+}
 
 /**
  * Semantic category for grouping revisions.
@@ -46,11 +53,18 @@ export class RevisionManager {
    * @returns The registered revision (same instance)
    */
   register(revision: Revision): Revision {
+    const logger = getLogger();
     // Assign unique ID
     revision.setId(this.nextId++);
 
     // Store revision
     this.revisions.push(revision);
+
+    logger.debug('Revision registered', {
+      id: revision.getId(),
+      type: revision.getType(),
+      author: revision.getAuthor()
+    });
 
     return revision;
   }
@@ -121,8 +135,12 @@ export class RevisionManager {
    * Clears all revisions
    */
   clear(): void {
+    const count = this.revisions.length;
     this.revisions = [];
     this.nextId = 0;
+    if (count > 0) {
+      getLogger().info('Revisions cleared', { previousCount: count });
+    }
   }
 
   /**
@@ -336,12 +354,17 @@ export class RevisionManager {
   }
 
   /**
-   * Gets the next available revision ID
-   * Returns the current nextId value and increments it
-   * @returns Next available revision ID
+   * Gets the next available revision ID without consuming it.
+   *
+   * This is an alias for peekNextId() for backward compatibility.
+   * Use consumeNextId() if you need to reserve an ID for manual use.
+   *
+   * @returns Next available revision ID (without consuming it)
+   * @see consumeNextId for reserving IDs
+   * @see register for automatic ID assignment
    */
   getNextId(): number {
-    return this.nextId++;
+    return this.nextId;
   }
 
   /**
@@ -350,6 +373,27 @@ export class RevisionManager {
    */
   peekNextId(): number {
     return this.nextId;
+  }
+
+  /**
+   * Consumes and returns the next revision ID.
+   *
+   * Use this when you need to manually assign an ID to a revision
+   * that won't be registered through register(). The ID is reserved
+   * and won't be reused by subsequent register() calls.
+   *
+   * @returns The consumed revision ID
+   *
+   * @example
+   * ```typescript
+   * // Reserve an ID for manual assignment
+   * const id = revisionManager.consumeNextId();
+   * revision.setId(id);
+   * // Don't call register() - the ID is already consumed
+   * ```
+   */
+  consumeNextId(): number {
+    return this.nextId++;
   }
 
   /**
@@ -419,25 +463,30 @@ export class RevisionManager {
   /**
    * Get revisions affecting a specific paragraph.
    *
-   * Note: This requires paragraph index to be tracked with revisions.
-   * Currently returns revisions by their registration order as a proxy.
-   * For accurate results, use ChangelogGenerator which tracks locations.
+   * Uses the revision's location data if available. Returns revisions
+   * where location.paragraphIndex matches the specified index.
    *
-   * @param paragraphIndex - Index of the paragraph
-   * @returns Array of revisions (by registration order approximation)
+   * Note: Revisions must have location data set (via setLocation()) for
+   * accurate filtering. Revisions without location data are excluded.
+   *
+   * @param paragraphIndex - Index of the paragraph (0-based)
+   * @returns Array of revisions affecting the specified paragraph
+   *
+   * @example
+   * ```typescript
+   * const revisions = revisionManager.getRevisionsForParagraph(3);
+   * console.log(`${revisions.length} revisions affect paragraph 3`);
+   * ```
    */
   getRevisionsForParagraph(paragraphIndex: number): Revision[] {
-    // Since Revision doesn't store paragraph index, we use registration order
-    // This is a best-effort approximation; for accurate tracking,
-    // use ChangelogGenerator.fromDocument() which builds location data
-    if (paragraphIndex < 0 || paragraphIndex >= this.revisions.length) {
+    if (paragraphIndex < 0) {
       return [];
     }
-
-    // Return the revision at this index if it exists
-    // In practice, applications should track paragraph-revision associations
-    const rev = this.revisions[paragraphIndex];
-    return rev ? [rev] : [];
+    return this.revisions.filter(rev => {
+      const loc = rev.getLocation();
+      if (!loc) return false;
+      return loc.paragraphIndex === paragraphIndex;
+    });
   }
 
   /**
@@ -494,7 +543,7 @@ export class RevisionManager {
       }
     }
 
-    return {
+    const summary = {
       total: this.revisions.length,
       byType: {
         insertions: this.getInsertionCount(),
@@ -507,6 +556,18 @@ export class RevisionManager {
       authors: this.getAuthors(),
       dateRange: earliest && latest ? { earliest, latest } : null,
     };
+
+    if (summary.total > 0) {
+      getLogger().info('Revision summary', {
+        total: summary.total,
+        ins: summary.byType.insertions,
+        del: summary.byType.deletions,
+        fmt: summary.byType.propertyChanges,
+        authors: summary.authors.length
+      });
+    }
+
+    return summary;
   }
 
   /**
@@ -614,5 +675,261 @@ export class RevisionManager {
 
     // Default
     return 'content';
+  }
+
+  // ============================================================
+  // Location-Aware Methods
+  // ============================================================
+
+  /**
+   * Gets revisions affecting a specific run within a paragraph.
+   *
+   * Uses the revision's location data if available.
+   *
+   * @param paragraphIndex - Index of the paragraph (0-based)
+   * @param runIndex - Index of the run within the paragraph (0-based)
+   * @returns Array of revisions affecting the specified run
+   *
+   * @example
+   * ```typescript
+   * const revisions = revisionManager.getRevisionsForRun(0, 2);
+   * console.log(`${revisions.length} revisions affect run 2 in paragraph 0`);
+   * ```
+   */
+  getRevisionsForRun(paragraphIndex: number, runIndex: number): Revision[] {
+    return this.revisions.filter(rev => {
+      const loc = rev.getLocation();
+      if (!loc) return false;
+      return loc.paragraphIndex === paragraphIndex && loc.runIndex === runIndex;
+    });
+  }
+
+  /**
+   * Gets revisions by location criteria.
+   *
+   * Filters revisions based on their location within the document structure.
+   * All specified criteria must match (AND logic).
+   *
+   * @param criteria - Location filter criteria
+   * @returns Array of revisions matching the criteria
+   *
+   * @example
+   * ```typescript
+   * // Get all revisions in paragraph 5
+   * const paraRevisions = revisionManager.getRevisionsByLocation({
+   *   paragraphIndex: 5
+   * });
+   *
+   * // Get all revisions in table row 2, cell 1
+   * const cellRevisions = revisionManager.getRevisionsByLocation({
+   *   tableRow: 2,
+   *   tableCell: 1
+   * });
+   * ```
+   */
+  getRevisionsByLocation(criteria: Partial<RevisionLocation>): Revision[] {
+    return this.revisions.filter(rev => {
+      const loc = rev.getLocation();
+      if (!loc) return false;
+
+      // Check each criteria if specified
+      if (criteria.paragraphIndex !== undefined &&
+          loc.paragraphIndex !== criteria.paragraphIndex) {
+        return false;
+      }
+      if (criteria.runIndex !== undefined &&
+          loc.runIndex !== criteria.runIndex) {
+        return false;
+      }
+      if (criteria.tableRow !== undefined &&
+          loc.tableRow !== criteria.tableRow) {
+        return false;
+      }
+      if (criteria.tableCell !== undefined &&
+          loc.tableCell !== criteria.tableCell) {
+        return false;
+      }
+      if (criteria.sectionIndex !== undefined &&
+          loc.sectionIndex !== criteria.sectionIndex) {
+        return false;
+      }
+      if (criteria.headerFooterType !== undefined &&
+          loc.headerFooterType !== criteria.headerFooterType) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  /**
+   * Gets revisions that have location data.
+   *
+   * @returns Array of revisions with location information
+   */
+  getRevisionsWithLocation(): Revision[] {
+    return this.revisions.filter(rev => rev.getLocation() !== undefined);
+  }
+
+  /**
+   * Gets revisions that do NOT have location data.
+   *
+   * @returns Array of revisions without location information
+   */
+  getRevisionsWithoutLocation(): Revision[] {
+    return this.revisions.filter(rev => rev.getLocation() === undefined);
+  }
+
+  // ============================================================
+  // Validation Methods
+  // ============================================================
+
+  /**
+   * Validates that all revision IDs are unique.
+   *
+   * Per ECMA-376, revision IDs must be unique within a document.
+   * Duplicate IDs can cause Word to reject the document or
+   * produce unexpected behavior.
+   *
+   * @returns Validation result with any duplicate IDs found
+   *
+   * @example
+   * ```typescript
+   * const result = revisionManager.validateRevisionIds();
+   * if (!result.valid) {
+   *   console.error('Duplicate IDs found:', result.duplicates);
+   * }
+   * ```
+   */
+  validateRevisionIds(): { valid: boolean; duplicates: number[] } {
+    const seen = new Set<number>();
+    const duplicates: number[] = [];
+
+    for (const rev of this.revisions) {
+      const id = rev.getId();
+      if (seen.has(id)) {
+        if (!duplicates.includes(id)) {
+          duplicates.push(id);
+        }
+      }
+      seen.add(id);
+    }
+
+    return {
+      valid: duplicates.length === 0,
+      duplicates,
+    };
+  }
+
+  /**
+   * Reassigns all revision IDs to ensure uniqueness.
+   *
+   * This is useful after merging documents or when duplicate
+   * IDs are detected. IDs are reassigned sequentially starting
+   * from the specified value.
+   *
+   * @param startId - Starting ID value (default: 0)
+   * @returns Number of IDs reassigned
+   *
+   * @example
+   * ```typescript
+   * const count = revisionManager.reassignRevisionIds();
+   * console.log(`Reassigned ${count} revision IDs`);
+   * ```
+   */
+  reassignRevisionIds(startId: number = 0): number {
+    let currentId = startId;
+
+    for (const rev of this.revisions) {
+      rev.setId(currentId++);
+    }
+
+    // Update nextId to continue from where we left off
+    this.nextId = currentId;
+
+    return this.revisions.length;
+  }
+
+  /**
+   * Validates move operation pairs (moveFrom/moveTo).
+   *
+   * Each moveFrom must have a matching moveTo with the same moveId,
+   * and vice versa. Orphaned move markers can cause document corruption.
+   *
+   * @returns Validation result with orphaned move IDs
+   *
+   * @example
+   * ```typescript
+   * const result = revisionManager.validateMovePairs();
+   * if (!result.valid) {
+   *   console.error('Orphaned moveFrom IDs:', result.orphanedMoveFrom);
+   *   console.error('Orphaned moveTo IDs:', result.orphanedMoveTo);
+   * }
+   * ```
+   */
+  validateMovePairs(): {
+    valid: boolean;
+    orphanedMoveFrom: string[];
+    orphanedMoveTo: string[];
+  } {
+    const moveFromIds = new Map<string, Revision>();
+    const moveToIds = new Map<string, Revision>();
+
+    for (const rev of this.revisions) {
+      const moveId = rev.getMoveId();
+      if (!moveId) continue;
+
+      if (rev.getType() === 'moveFrom') {
+        moveFromIds.set(moveId, rev);
+      } else if (rev.getType() === 'moveTo') {
+        moveToIds.set(moveId, rev);
+      }
+    }
+
+    const orphanedMoveFrom: string[] = [];
+    const orphanedMoveTo: string[] = [];
+
+    // Find moveFrom without matching moveTo
+    for (const moveId of moveFromIds.keys()) {
+      if (!moveToIds.has(moveId)) {
+        orphanedMoveFrom.push(moveId);
+      }
+    }
+
+    // Find moveTo without matching moveFrom
+    for (const moveId of moveToIds.keys()) {
+      if (!moveFromIds.has(moveId)) {
+        orphanedMoveTo.push(moveId);
+      }
+    }
+
+    return {
+      valid: orphanedMoveFrom.length === 0 && orphanedMoveTo.length === 0,
+      orphanedMoveFrom,
+      orphanedMoveTo,
+    };
+  }
+
+  /**
+   * Gets the highest revision ID currently in use.
+   *
+   * @returns Highest ID, or -1 if no revisions exist
+   */
+  getHighestId(): number {
+    if (this.revisions.length === 0) return -1;
+    return Math.max(...this.revisions.map(r => r.getId()));
+  }
+
+  /**
+   * Ensures the next ID is higher than all existing IDs.
+   *
+   * Useful after loading a document with existing revisions
+   * to prevent ID conflicts with new revisions.
+   */
+  syncNextId(): void {
+    const highestId = this.getHighestId();
+    if (highestId >= this.nextId) {
+      this.nextId = highestId + 1;
+    }
   }
 }

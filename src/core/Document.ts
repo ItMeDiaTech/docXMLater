@@ -19,6 +19,14 @@ import { RangeMarker } from "../elements/RangeMarker";
 import { Revision, RevisionType } from "../elements/Revision";
 import { RevisionManager } from "../elements/RevisionManager";
 import { Run, RunFormatting } from "../elements/Run";
+import {
+  RevisionValidator,
+  RevisionAutoFixer,
+  ValidationOptions,
+  AutoFixOptions,
+  ValidationResult,
+  AutoFixResult,
+} from "../validation";
 import { Section } from "../elements/Section";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { Table, TableBorder } from "../elements/Table";
@@ -33,7 +41,12 @@ import {
   Heading2Config,
   StyleConfig,
 } from "../types/styleConfig";
-import { defaultLogger, ILogger } from "../utils/logger";
+import { defaultLogger, ILogger, getGlobalLogger, createScopedLogger } from "../utils/logger";
+
+// Create scoped logger for Document operations
+function getLogger(): ILogger {
+  return createScopedLogger(getGlobalLogger(), 'Document');
+}
 import { acceptAllRevisions } from "../utils/acceptRevisions";
 import { stripTrackedChanges } from "../utils/stripTrackedChanges";
 import { XMLParser } from "../xml/XMLParser";
@@ -352,6 +365,9 @@ export class Document {
     filePath: string,
     options?: DocumentLoadOptions
   ): Promise<Document> {
+    const logger = getLogger();
+    logger.info('Loading document from file', { path: filePath });
+
     const zipHandler = new ZipHandler();
     await zipHandler.load(filePath);
 
@@ -369,11 +385,7 @@ export class Document {
       const documentXml = zipHandler.getFileAsString('word/document.xml');
       if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
           documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
-        defaultLogger.warn(
-          '[Document] Loading document with tracked changes in preserve mode. ' +
-          'This may cause corruption if the document is saved. ' +
-          'Consider using { revisionHandling: "accept" } to prevent corruption.'
-        );
+        logger.warn('Document contains tracked changes in preserve mode');
       }
     }
 
@@ -398,6 +410,7 @@ export class Document {
     }
 
     await doc.parseDocument();
+    logger.info('Document loaded', { paragraphs: doc.getParagraphCount() });
 
     return doc;
   }
@@ -434,6 +447,9 @@ export class Document {
     buffer: Buffer,
     options?: DocumentLoadOptions
   ): Promise<Document> {
+    const logger = getLogger();
+    logger.info('Loading document from buffer', { bufferSize: buffer.length });
+
     const zipHandler = new ZipHandler();
     await zipHandler.loadFromBuffer(buffer);
 
@@ -451,11 +467,7 @@ export class Document {
       const documentXml = zipHandler.getFileAsString('word/document.xml');
       if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
           documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
-        defaultLogger.warn(
-          '[Document] Loading document with tracked changes in preserve mode. ' +
-          'This may cause corruption if the document is saved. ' +
-          'Consider using { revisionHandling: "accept" } to prevent corruption.'
-        );
+        logger.warn('Document contains tracked changes in preserve mode');
       }
     }
 
@@ -480,6 +492,7 @@ export class Document {
     }
 
     await doc.parseDocument();
+    logger.info('Document loaded from buffer', { paragraphs: doc.getParagraphCount() });
 
     return doc;
   }
@@ -1201,6 +1214,9 @@ export class Document {
    * ```
    */
   async save(filePath: string): Promise<void> {
+    const logger = getLogger();
+    logger.info('Saving document', { path: filePath, paragraphs: this.getParagraphCount() });
+
     // Use atomic save pattern: save to temp file, then rename
     // This prevents partial/corrupted saves if operation fails mid-way
     const tempPath = `${filePath}.tmp.${Date.now()}`;
@@ -1271,6 +1287,7 @@ export class Document {
       // Atomic rename - only if save succeeded
       const { promises: fs } = await import("fs");
       await fs.rename(tempPath, filePath);
+      logger.info('Document saved', { path: filePath });
     } catch (error) {
       // Cleanup temporary file on error
       try {
@@ -1315,6 +1332,9 @@ export class Document {
    * ```
    */
   async toBuffer(): Promise<Buffer> {
+    const logger = getLogger();
+    logger.info('Generating document buffer', { paragraphs: this.getParagraphCount() });
+
     try {
       // Validate before saving to prevent data loss
       this.validator.validateBeforeSave(this.bodyElements);
@@ -1379,7 +1399,9 @@ export class Document {
         }
       }
 
-      return await this.zipHandler.toBuffer();
+      const buffer = await this.zipHandler.toBuffer();
+      logger.info('Document buffer generated', { bufferSize: buffer.length });
+      return buffer;
     } finally {
       // Release image data to free memory
       this.imageManager.releaseAllImageData();
@@ -7165,6 +7187,125 @@ export class Document {
     return this.revisionManager;
   }
 
+  // ============================================================
+  // Revision Validation Methods
+  // ============================================================
+
+  /**
+   * Validates all revisions in the document for ECMA-376 compliance.
+   *
+   * Checks for:
+   * - Duplicate revision IDs
+   * - Missing or invalid author attributes
+   * - Orphaned move markers (moveFrom without moveTo or vice versa)
+   * - Missing or invalid date formats
+   * - Empty revisions
+   * - Non-sequential IDs (in strict mode)
+   *
+   * @param options - Validation options
+   * @returns Validation result with all issues found
+   *
+   * @example
+   * ```typescript
+   * const result = doc.validateRevisions();
+   * if (!result.valid) {
+   *   console.error(`Found ${result.errors.length} errors:`);
+   *   for (const error of result.errors) {
+   *     console.error(`  ${error.code}: ${error.message}`);
+   *   }
+   * }
+   * ```
+   */
+  validateRevisions(options?: ValidationOptions): ValidationResult {
+    return RevisionValidator.validate(this, options);
+  }
+
+  /**
+   * Auto-fixes revision validation issues.
+   *
+   * Can fix:
+   * - Duplicate IDs (reassigns unique IDs)
+   * - Missing authors (sets default author)
+   * - Missing dates (sets current date)
+   * - Orphaned move markers (removes orphaned markers)
+   * - Empty revisions (removes them)
+   * - Non-sequential IDs (reassigns sequentially)
+   *
+   * @param options - Auto-fix options
+   * @returns Result with details of all fixes applied
+   *
+   * @example
+   * ```typescript
+   * // Fix all issues
+   * const result = doc.autoFixRevisions();
+   * console.log(`Fixed ${result.issuesFixed} issues`);
+   *
+   * // Preview fixes without applying
+   * const preview = doc.autoFixRevisions({ dryRun: true });
+   * console.log('Would fix:', preview.actions.map(a => a.action));
+   * ```
+   */
+  autoFixRevisions(options?: AutoFixOptions): AutoFixResult {
+    return RevisionAutoFixer.fix(this, options);
+  }
+
+  /**
+   * Quick check if document revisions are valid.
+   *
+   * @returns True if document has no revision errors
+   *
+   * @example
+   * ```typescript
+   * if (!doc.isRevisionValid()) {
+   *   doc.autoFixRevisions();
+   * }
+   * ```
+   */
+  isRevisionsValid(): boolean {
+    return RevisionValidator.isValid(this);
+  }
+
+  /**
+   * Validates and auto-fixes revisions before save.
+   *
+   * This is a convenience method that validates first, then auto-fixes
+   * any issues found. Use this before saving to ensure the document
+   * will open correctly in Word.
+   *
+   * @param options - Options for validation and fixing
+   * @returns Combined result of validation and fixing
+   *
+   * @example
+   * ```typescript
+   * const result = doc.validateAndFixRevisions();
+   * if (result.validation.valid) {
+   *   await doc.save('output.docx');
+   * }
+   * ```
+   */
+  validateAndFixRevisions(options?: {
+    validation?: ValidationOptions;
+    autoFix?: AutoFixOptions;
+  }): { validation: ValidationResult; fix: AutoFixResult } {
+    // First validate
+    const validation = this.validateRevisions(options?.validation);
+
+    // If issues found, auto-fix
+    let fix: AutoFixResult = {
+      allFixed: true,
+      issuesFixed: 0,
+      issuesRemaining: 0,
+      actions: [],
+      errors: [],
+    };
+
+    if (!validation.valid) {
+      fix = this.autoFixRevisions(options?.autoFix);
+    }
+
+    return { validation, fix };
+  }
+
   /**
    * Creates and registers a new insertion revision
    * @param author - Author who made the insertion
@@ -7294,7 +7435,7 @@ export class Document {
     author: string,
     date?: Date
   ): Paragraph {
-    const revisionId = this.revisionManager.getNextId();
+    const revisionId = this.revisionManager.consumeNextId();
     paragraph.markParagraphMarkAsDeleted(revisionId, author, date);
     return paragraph;
   }

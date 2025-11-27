@@ -8,6 +8,12 @@ import { logSerialization, logTextDirection } from "../utils/diagnostics";
 import { defaultLogger } from "../utils/logger";
 import { normalizeColor, validateRunText } from "../utils/validation";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
+import {
+  ShadingPattern as CommonShadingPattern,
+  ExtendedBorderStyle,
+  BorderDefinition,
+} from "./CommonTypes";
+import type { RunPropertyChange } from "./PropertyChangeTypes";
 
 /**
  * Run content element types
@@ -50,17 +56,9 @@ export interface RunContent {
 
 /**
  * Border style for text
+ * @see CommonTypes.ExtendedBorderStyle for the canonical definition
  */
-export type TextBorderStyle =
-  | "single"
-  | "double"
-  | "dashed"
-  | "dotted"
-  | "thick"
-  | "wave"
-  | "dashDotStroked"
-  | "threeDEmboss"
-  | "threeDEngrave";
+export type TextBorderStyle = ExtendedBorderStyle;
 
 /**
  * Text border definition
@@ -78,45 +76,9 @@ export interface TextBorder {
 
 /**
  * Shading pattern for text background
+ * @see CommonTypes.ShadingPattern for the canonical definition
  */
-export type ShadingPattern =
-  | "clear"
-  | "solid"
-  | "horzStripe"
-  | "vertStripe"
-  | "reverseDiagStripe"
-  | "diagStripe"
-  | "horzCross"
-  | "diagCross"
-  | "thinHorzStripe"
-  | "thinVertStripe"
-  | "thinReverseDiagStripe"
-  | "thinDiagStripe"
-  | "thinHorzCross"
-  | "thinDiagCross"
-  | "pct5"
-  | "pct10"
-  | "pct12"
-  | "pct15"
-  | "pct20"
-  | "pct25"
-  | "pct30"
-  | "pct35"
-  | "pct37"
-  | "pct40"
-  | "pct45"
-  | "pct50"
-  | "pct55"
-  | "pct60"
-  | "pct62"
-  | "pct65"
-  | "pct70"
-  | "pct75"
-  | "pct80"
-  | "pct85"
-  | "pct87"
-  | "pct90"
-  | "pct95";
+export type ShadingPattern = CommonShadingPattern;
 
 /**
  * Character shading definition
@@ -268,6 +230,7 @@ export class Run {
   private content: RunContent[];
   private formatting: RunFormatting;
   private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  private propertyChangeRevision?: RunPropertyChange;
 
   /**
    * Creates a new Run
@@ -576,6 +539,71 @@ export class Run {
    */
   _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
     this.trackingContext = context;
+  }
+
+  /**
+   * Gets the property change revision for this run (if any)
+   *
+   * Property change revisions (w:rPrChange) track formatting changes to runs.
+   * They contain the PREVIOUS properties before the change was made.
+   *
+   * @returns Property change revision or undefined if not set
+   *
+   * @example
+   * ```typescript
+   * const propChange = run.getPropertyChangeRevision();
+   * if (propChange) {
+   *   console.log(`Changed by ${propChange.author} on ${propChange.date}`);
+   *   console.log(`Previous: ${JSON.stringify(propChange.previousProperties)}`);
+   * }
+   * ```
+   */
+  getPropertyChangeRevision(): RunPropertyChange | undefined {
+    return this.propertyChangeRevision;
+  }
+
+  /**
+   * Sets the property change revision for this run
+   *
+   * Property change revisions (w:rPrChange) are stored inside the run properties
+   * element (w:rPr) and track what the previous formatting was before a change.
+   * This is used for round-trip preservation of tracked changes.
+   *
+   * @param propChange - Property change revision data
+   * @returns This run for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setPropertyChangeRevision({
+   *   id: 1,
+   *   author: 'John Doe',
+   *   date: new Date(),
+   *   previousProperties: { bold: true }
+   * });
+   * ```
+   */
+  setPropertyChangeRevision(propChange: RunPropertyChange): this {
+    this.propertyChangeRevision = propChange;
+    return this;
+  }
+
+  /**
+   * Clears the property change revision for this run
+   *
+   * @returns This run for method chaining
+   */
+  clearPropertyChangeRevision(): this {
+    this.propertyChangeRevision = undefined;
+    return this;
+  }
+
+  /**
+   * Checks if this run has a property change revision
+   *
+   * @returns True if a property change revision is set
+   */
+  hasPropertyChangeRevision(): boolean {
+    return this.propertyChangeRevision !== undefined;
   }
 
   /**
@@ -1204,8 +1232,96 @@ export class Run {
 
     // Add run properties using the static helper
     const rPr = Run.generateRunPropertiesXML(this.formatting);
-    if (rPr) {
-      runChildren.push(rPr);
+    if (rPr || this.propertyChangeRevision) {
+      // If we have a property change revision, we need to add w:rPrChange to the w:rPr element
+      // Per ECMA-376, w:rPrChange must come after all other run properties
+      const rPrElement = rPr || { name: 'w:rPr', attributes: {}, children: [] };
+
+      if (this.propertyChangeRevision) {
+        // Build w:rPrChange element
+        const rPrChangeChildren: XMLElement[] = [];
+
+        // Build previous properties as w:rPr child
+        const prevPropChildren: XMLElement[] = [];
+        const prevProps = this.propertyChangeRevision.previousProperties;
+
+        if (prevProps) {
+          // Generate XML for each previous property
+          if (prevProps.bold) {
+            prevPropChildren.push(XMLBuilder.wSelf("b", { "w:val": "1" }));
+          }
+          if (prevProps.italic) {
+            prevPropChildren.push(XMLBuilder.wSelf("i", { "w:val": "1" }));
+          }
+          if (prevProps.underline) {
+            const underlineValue = typeof prevProps.underline === 'string'
+              ? prevProps.underline : 'single';
+            prevPropChildren.push(XMLBuilder.wSelf("u", { "w:val": underlineValue }));
+          }
+          if (prevProps.strike) {
+            prevPropChildren.push(XMLBuilder.wSelf("strike", { "w:val": "1" }));
+          }
+          if (prevProps.font) {
+            prevPropChildren.push(XMLBuilder.wSelf("rFonts", {
+              "w:ascii": prevProps.font,
+              "w:hAnsi": prevProps.font,
+              "w:cs": prevProps.font,
+            }));
+          }
+          if (prevProps.size) {
+            const halfPoints = Math.round(prevProps.size * 2);
+            prevPropChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints.toString() }));
+            prevPropChildren.push(XMLBuilder.wSelf("szCs", { "w:val": halfPoints.toString() }));
+          }
+          if (prevProps.color) {
+            prevPropChildren.push(XMLBuilder.wSelf("color", { "w:val": prevProps.color }));
+          }
+          if (prevProps.highlight) {
+            prevPropChildren.push(XMLBuilder.wSelf("highlight", { "w:val": prevProps.highlight }));
+          }
+          if (prevProps.subscript) {
+            prevPropChildren.push(XMLBuilder.wSelf("vertAlign", { "w:val": "subscript" }));
+          }
+          if (prevProps.superscript) {
+            prevPropChildren.push(XMLBuilder.wSelf("vertAlign", { "w:val": "superscript" }));
+          }
+          if (prevProps.smallCaps) {
+            prevPropChildren.push(XMLBuilder.wSelf("smallCaps", { "w:val": "1" }));
+          }
+          if (prevProps.allCaps) {
+            prevPropChildren.push(XMLBuilder.wSelf("caps", { "w:val": "1" }));
+          }
+        }
+
+        // Only add w:rPr if there are previous properties
+        if (prevPropChildren.length > 0) {
+          rPrChangeChildren.push({
+            name: 'w:rPr',
+            attributes: {},
+            children: prevPropChildren,
+          });
+        }
+
+        // Create w:rPrChange element with attributes
+        const rPrChange: XMLElement = {
+          name: 'w:rPrChange',
+          attributes: {
+            'w:id': this.propertyChangeRevision.id.toString(),
+            'w:author': this.propertyChangeRevision.author,
+            'w:date': this.propertyChangeRevision.date.toISOString(),
+          },
+          children: rPrChangeChildren,
+        };
+
+        // Add rPrChange to rPr children (must come last per ECMA-376)
+        if (rPrElement.children) {
+          rPrElement.children.push(rPrChange);
+        } else {
+          rPrElement.children = [rPrChange];
+        }
+      }
+
+      runChildren.push(rPrElement);
     }
 
     // Add run content elements (text, tabs, breaks, etc.) in order

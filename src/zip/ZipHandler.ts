@@ -11,8 +11,15 @@ import {
   LoadOptions,
   SaveOptions,
   AddFileOptions,
+  SizeLimitOptions,
+  DEFAULT_SIZE_LIMITS,
 } from './types';
-import { defaultLogger } from '../utils/logger';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
+
+// Create scoped logger for ZipHandler operations
+function getLogger(): ILogger {
+  return createScopedLogger(getGlobalLogger(), 'ZipHandler');
+}
 
 /**
  * Main class for handling ZIP archives (DOCX files)
@@ -28,37 +35,68 @@ export class ZipHandler {
     this.writer = new ZipWriter();
   }
 
+  // ==================== SIZE VALIDATION ====================
+
+  /**
+   * Validates document size against configured limits
+   * @param sizeMB - Size in megabytes
+   * @param limits - Size limit options (merged with defaults)
+   * @throws Error if size exceeds maximum
+   */
+  private validateDocumentSize(sizeMB: number, limits: Required<SizeLimitOptions>): void {
+    const logger = getLogger();
+    const { warningSizeMB, maxSizeMB } = limits;
+
+    // Check maximum size (if enabled)
+    if (maxSizeMB > 0 && sizeMB > maxSizeMB) {
+      logger.error('Document exceeds maximum size', { sizeMB: sizeMB.toFixed(1), maxSizeMB });
+      throw new Error(
+        `Document size (${sizeMB.toFixed(1)}MB) exceeds maximum supported size (${maxSizeMB}MB). ` +
+        `This would likely cause out-of-memory errors. Consider:\n` +
+        `- Compressing/optimizing images\n` +
+        `- Splitting into multiple documents\n` +
+        `- Processing on a machine with more memory\n` +
+        `- Increasing maxSizeMB via LoadOptions.sizeLimits (not recommended)`
+      );
+    }
+
+    // Warn on large files (if enabled)
+    if (warningSizeMB > 0 && sizeMB > warningSizeMB) {
+      logger.warn('Large document detected', { sizeMB: sizeMB.toFixed(1), warningSizeMB });
+    }
+  }
+
+  /**
+   * Gets merged size limits from options and defaults
+   * @param options - Load options that may contain size limits
+   * @returns Merged size limits with all values defined
+   */
+  private getSizeLimits(options: LoadOptions): Required<SizeLimitOptions> {
+    return {
+      ...DEFAULT_SIZE_LIMITS,
+      ...options.sizeLimits,
+    };
+  }
+
   // ==================== LOADING ====================
 
   /**
    * Loads a DOCX file from the filesystem
    * @param filePath - Path to the DOCX file
-   * @param options - Load options
+   * @param options - Load options (including configurable size limits)
    */
   async load(filePath: string, options: LoadOptions = {}): Promise<void> {
+    const logger = getLogger();
+    logger.info('Loading DOCX file', { path: filePath });
+
     // Check file size before loading
     const { promises: fs } = await import('fs');
     const stats = await fs.stat(filePath);
     const sizeMB = stats.size / (1024 * 1024);
 
-    // Warn on large files
-    const WARNING_SIZE_MB = 50;
-    const ERROR_SIZE_MB = 150;
-
-    if (sizeMB > ERROR_SIZE_MB) {
-      throw new Error(
-        `Document size (${sizeMB.toFixed(1)}MB) exceeds maximum supported size (${ERROR_SIZE_MB}MB). ` +
-        `This would likely cause out-of-memory errors. Consider:\n` +
-        `- Compressing/optimizing images\n` +
-        `- Splitting into multiple documents\n` +
-        `- Processing on a machine with more memory`
-      );
-    } else if (sizeMB > WARNING_SIZE_MB) {
-      defaultLogger.warn(
-        `DocXML Warning: Large document detected (${sizeMB.toFixed(1)}MB). ` +
-        `Loading may use significant memory. Consider optimizing document size.`
-      );
-    }
+    // Validate against configurable limits
+    const limits = this.getSizeLimits(options);
+    this.validateDocumentSize(sizeMB, limits);
 
     await this.reader.loadFromFile(filePath, options);
 
@@ -68,35 +106,24 @@ export class ZipHandler {
     this.writer.addFiles(files);
 
     this.mode = 'modify';
+    logger.info('DOCX file loaded', { fileCount: files.size, sizeMB: sizeMB.toFixed(2) });
   }
 
   /**
    * Loads a DOCX file from a buffer
    * @param buffer - Buffer containing the DOCX data
-   * @param options - Load options
+   * @param options - Load options (including configurable size limits)
    */
   async loadFromBuffer(buffer: Buffer, options: LoadOptions = {}): Promise<void> {
+    const logger = getLogger();
+    logger.info('Loading DOCX from buffer', { bufferSize: buffer.length });
+
     // Check buffer size before loading
     const sizeMB = buffer.length / (1024 * 1024);
 
-    // Warn on large files
-    const WARNING_SIZE_MB = 50;
-    const ERROR_SIZE_MB = 150;
-
-    if (sizeMB > ERROR_SIZE_MB) {
-      throw new Error(
-        `Document size (${sizeMB.toFixed(1)}MB) exceeds maximum supported size (${ERROR_SIZE_MB}MB). ` +
-        `This would likely cause out-of-memory errors. Consider:\n` +
-        `- Compressing/optimizing images\n` +
-        `- Splitting into multiple documents\n` +
-        `- Processing on a machine with more memory`
-      );
-    } else if (sizeMB > WARNING_SIZE_MB) {
-      defaultLogger.warn(
-        `DocXML Warning: Large document detected (${sizeMB.toFixed(1)}MB). ` +
-        `Loading may use significant memory. Consider optimizing document size.`
-      );
-    }
+    // Validate against configurable limits
+    const limits = this.getSizeLimits(options);
+    this.validateDocumentSize(sizeMB, limits);
 
     await this.reader.loadFromBuffer(buffer, options);
 
@@ -106,6 +133,7 @@ export class ZipHandler {
     this.writer.addFiles(files);
 
     this.mode = 'modify';
+    logger.info('DOCX buffer loaded', { fileCount: files.size, sizeMB: sizeMB.toFixed(2) });
   }
 
   // ==================== FILE OPERATIONS ====================
@@ -498,7 +526,10 @@ export class ZipHandler {
    * @param options - Save options
    */
   async save(filePath: string, options: SaveOptions = {}): Promise<void> {
+    const logger = getLogger();
+    logger.info('Saving DOCX file', { path: filePath, fileCount: this.getFileCount() });
     await this.writer.saveToFile(filePath, options);
+    logger.info('DOCX file saved', { path: filePath });
   }
 
   /**
@@ -507,7 +538,11 @@ export class ZipHandler {
    * @returns Buffer containing the ZIP archive
    */
   async toBuffer(options: SaveOptions = {}): Promise<Buffer> {
-    return await this.writer.toBuffer(options);
+    const logger = getLogger();
+    logger.info('Generating DOCX buffer', { fileCount: this.getFileCount() });
+    const buffer = await this.writer.toBuffer(options);
+    logger.info('DOCX buffer generated', { bufferSize: buffer.length });
+    return buffer;
   }
 
   // ==================== VALIDATION ====================
@@ -517,7 +552,10 @@ export class ZipHandler {
    * @throws {MissingRequiredFileError} If required files are missing
    */
   validate(): void {
+    const logger = getLogger();
+    logger.info('Validating DOCX structure');
     this.writer.validate();
+    logger.info('DOCX structure valid');
   }
 
   // ==================== UTILITY ====================
