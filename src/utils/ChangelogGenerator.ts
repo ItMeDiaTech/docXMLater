@@ -27,7 +27,12 @@ export type ChangeCategory =
   | 'formatting'   // Run/paragraph property changes
   | 'structural'   // Moves, section changes
   | 'table'        // Table structure changes
-  | 'hyperlink';   // Hyperlink URL, text, or formatting changes
+  | 'hyperlink'    // Hyperlink URL, text, or formatting changes
+  | 'image'        // Image insertion, deletion, or property changes
+  | 'field'        // Field insertion, deletion, or value changes
+  | 'comment'      // Comment changes
+  | 'bookmark'     // Bookmark changes
+  | 'contentControl'; // Content control (SDT) changes
 
 /**
  * Location of a change within the document.
@@ -364,6 +369,11 @@ export class ChangelogGenerator {
       structural: 0,
       table: 0,
       hyperlink: 0,
+      image: 0,
+      field: 0,
+      comment: 0,
+      bookmark: 0,
+      contentControl: 0,
     };
     const byType: Record<string, number> = {};
     const byAuthor: Record<string, number> = {};
@@ -567,6 +577,22 @@ export class ChangelogGenerator {
       case 'hyperlinkChange':
         return 'hyperlink';
 
+      // Rich content changes
+      case 'imageChange':
+        return 'image';
+
+      case 'fieldChange':
+        return 'field';
+
+      case 'commentChange':
+        return 'comment';
+
+      case 'bookmarkChange':
+        return 'bookmark';
+
+      case 'contentControlChange':
+        return 'contentControl';
+
       default:
         return 'content';
     }
@@ -637,6 +663,16 @@ export class ChangelogGenerator {
         return 'Changed list numbering';
       case 'hyperlinkChange':
         return this.describeHyperlinkChange(revision, maxLength);
+      case 'imageChange':
+        return this.describeImageChange(revision);
+      case 'fieldChange':
+        return this.describeFieldChange(revision);
+      case 'commentChange':
+        return this.describeCommentChange(revision);
+      case 'bookmarkChange':
+        return this.describeBookmarkChange(revision);
+      case 'contentControlChange':
+        return this.describeContentControlChange(revision);
       default:
         return `Changed (${type})`;
     }
@@ -665,6 +701,138 @@ export class ChangelogGenerator {
     }
 
     return `Changed hyperlink ${changes.join(' and ')}`;
+  }
+
+  /**
+   * Generate description for an image change revision.
+   */
+  private static describeImageChange(revision: Revision): string {
+    const prevProps = revision.getPreviousProperties() || {};
+    const newProps = revision.getNewProperties() || {};
+    const changes: string[] = [];
+
+    // Detect type of change
+    if (!prevProps.imageId && newProps.imageId) {
+      return `Inserted image${newProps.filename ? ` "${newProps.filename}"` : ''}`;
+    }
+    if (prevProps.imageId && !newProps.imageId) {
+      return `Deleted image${prevProps.filename ? ` "${prevProps.filename}"` : ''}`;
+    }
+
+    // Property changes
+    if (prevProps.width !== newProps.width || prevProps.height !== newProps.height) {
+      changes.push('size');
+    }
+    if (prevProps.position !== newProps.position) {
+      changes.push('position');
+    }
+    if (prevProps.wrapping !== newProps.wrapping) {
+      changes.push('wrapping');
+    }
+    if (prevProps.altText !== newProps.altText) {
+      changes.push('alt text');
+    }
+
+    if (changes.length === 0) {
+      return 'Updated image';
+    }
+
+    return `Changed image ${changes.join(' and ')}`;
+  }
+
+  /**
+   * Generate description for a field change revision.
+   */
+  private static describeFieldChange(revision: Revision): string {
+    const prevProps = revision.getPreviousProperties() || {};
+    const newProps = revision.getNewProperties() || {};
+
+    // Detect type of change
+    if (!prevProps.fieldType && newProps.fieldType) {
+      return `Inserted ${newProps.fieldType || 'field'}`;
+    }
+    if (prevProps.fieldType && !newProps.fieldType) {
+      return `Deleted ${prevProps.fieldType || 'field'}`;
+    }
+
+    // Value/formula changes
+    if (prevProps.value !== newProps.value) {
+      return `Updated ${newProps.fieldType || 'field'} value`;
+    }
+    if (prevProps.formula !== newProps.formula) {
+      return `Changed ${newProps.fieldType || 'field'} formula`;
+    }
+
+    return `Updated ${newProps.fieldType || 'field'}`;
+  }
+
+  /**
+   * Generate description for a comment change revision.
+   */
+  private static describeCommentChange(revision: Revision): string {
+    const prevProps = revision.getPreviousProperties() || {};
+    const newProps = revision.getNewProperties() || {};
+
+    // Detect type of change
+    if (!prevProps.commentId && newProps.commentId) {
+      return `Added comment${newProps.author ? ` by ${newProps.author}` : ''}`;
+    }
+    if (prevProps.commentId && !newProps.commentId) {
+      return `Deleted comment${prevProps.author ? ` by ${prevProps.author}` : ''}`;
+    }
+    if (prevProps.text !== newProps.text) {
+      return `Edited comment${newProps.author ? ` by ${newProps.author}` : ''}`;
+    }
+
+    return 'Updated comment';
+  }
+
+  /**
+   * Generate description for a bookmark change revision.
+   */
+  private static describeBookmarkChange(revision: Revision): string {
+    const prevProps = revision.getPreviousProperties() || {};
+    const newProps = revision.getNewProperties() || {};
+
+    // Detect type of change
+    if (!prevProps.bookmarkId && newProps.bookmarkId) {
+      return `Created bookmark "${newProps.name || 'unnamed'}"`;
+    }
+    if (prevProps.bookmarkId && !newProps.bookmarkId) {
+      return `Deleted bookmark "${prevProps.name || 'unnamed'}"`;
+    }
+    if (prevProps.name !== newProps.name) {
+      return `Renamed bookmark from "${prevProps.name}" to "${newProps.name}"`;
+    }
+    if (prevProps.rangeStart !== newProps.rangeStart || prevProps.rangeEnd !== newProps.rangeEnd) {
+      return `Changed bookmark "${newProps.name || 'unnamed'}" range`;
+    }
+
+    return `Updated bookmark "${newProps.name || prevProps.name || 'unnamed'}"`;
+  }
+
+  /**
+   * Generate description for a content control change revision.
+   */
+  private static describeContentControlChange(revision: Revision): string {
+    const prevProps = revision.getPreviousProperties() || {};
+    const newProps = revision.getNewProperties() || {};
+
+    // Detect type of change
+    if (!prevProps.sdtId && newProps.sdtId) {
+      return `Inserted content control${newProps.title ? ` "${newProps.title}"` : ''}`;
+    }
+    if (prevProps.sdtId && !newProps.sdtId) {
+      return `Deleted content control${prevProps.title ? ` "${prevProps.title}"` : ''}`;
+    }
+    if (prevProps.title !== newProps.title) {
+      return `Renamed content control to "${newProps.title}"`;
+    }
+    if (prevProps.content !== newProps.content) {
+      return `Changed content control${newProps.title ? ` "${newProps.title}"` : ''} content`;
+    }
+
+    return `Updated content control${newProps.title || prevProps.title ? ` "${newProps.title || prevProps.title}"` : ''}`;
   }
 
   /**
@@ -861,6 +1029,11 @@ export class ChangelogGenerator {
       structural: 'Structural Changes',
       table: 'Table Changes',
       hyperlink: 'Hyperlink Changes',
+      image: 'Image Changes',
+      field: 'Field Changes',
+      comment: 'Comment Changes',
+      bookmark: 'Bookmark Changes',
+      contentControl: 'Content Control Changes',
     };
 
     for (const [category, categoryEntries] of byCategory) {
@@ -1030,6 +1203,11 @@ export class ChangelogGenerator {
       structural: 'Structural Changes',
       table: 'Table Changes',
       hyperlink: 'Hyperlink Changes',
+      image: 'Image Changes',
+      field: 'Field Changes',
+      comment: 'Comment Changes',
+      bookmark: 'Bookmark Changes',
+      contentControl: 'Content Control Changes',
     };
 
     // Build HTML
