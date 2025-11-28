@@ -78,7 +78,8 @@ export class RevisionAcceptor {
     }
 
     // Step 1: Parse XML to object tree
-    const parsed = XMLParser.parseToObject(xml);
+    // IMPORTANT: trimValues: false preserves whitespace from xml:space="preserve" attributes
+    const parsed = XMLParser.parseToObject(xml, { trimValues: false });
 
     // Step 2: Process revisions using DOM walker
     const processed = RevisionWalker.processTree(parsed, {
@@ -467,6 +468,10 @@ export class RevisionAcceptor {
    */
   private objectToXml(obj: any): string {
     const buildXml = (o: any, name?: string): string => {
+      // Handle simple string/number with a tag name: <tagName>value</tagName>
+      if (name && (typeof o === 'string' || typeof o === 'number')) {
+        return `<${name}>${this.escapeXml(String(o))}</${name}>`;
+      }
       if (typeof o === 'string') return this.escapeXml(o);
       if (typeof o !== 'object' || o === null) return String(o ?? '');
 

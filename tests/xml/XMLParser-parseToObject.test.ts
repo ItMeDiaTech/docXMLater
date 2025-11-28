@@ -285,8 +285,9 @@ describe('XMLParser.parseToObject', () => {
       const xml = '<text>&lt;hello&gt; &amp; &quot;world&quot;</text>';
       const result: any = XMLParser.parseToObject(xml);
 
-      // Note: We don't unescape entities in parseToObject - raw content
-      expect(result.text).toBe('&lt;hello&gt; &amp; &quot;world&quot;');
+      // Entities are unescaped during parsing to support proper round-trip behavior
+      // This prevents double-escaping when objectToXml writes content back
+      expect(result.text).toBe('<hello> & "world"');
     });
 
     it('should handle numeric attribute values', () => {

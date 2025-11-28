@@ -5,6 +5,7 @@
  */
 
 import { getGlobalLogger, createScopedLogger, ILogger } from "../utils/logger";
+import { XMLBuilder } from "./XMLBuilder";
 
 // Create scoped logger for XMLParser operations
 function getLogger(): ILogger {
@@ -545,7 +546,8 @@ export class XMLParser {
         // No more tags - rest is text
         const text = content.substring(pos);
         if (text.trim()) {
-          textContent += text;
+          // Unescape XML entities in text content (e.g., &lt; -> <)
+          textContent += XMLBuilder.unescapeXml(text);
         }
         break;
       }
@@ -554,7 +556,8 @@ export class XMLParser {
       if (nextTag > pos) {
         const text = content.substring(pos, nextTag);
         if (text.trim()) {
-          textContent += text;
+          // Unescape XML entities in text content (e.g., &lt; -> <)
+          textContent += XMLBuilder.unescapeXml(text);
         }
       }
 
