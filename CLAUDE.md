@@ -615,6 +615,55 @@ Decision framework:
 
 **This is how the framework stays lean and maintainable.**
 
+## Debug Logging
+
+The framework includes configurable debug logging for troubleshooting.
+
+### Quick Reference
+
+**Enable via environment variables:**
+```bash
+# Standard logging (operations + validation)
+DOCXMLATER_LOG_LEVEL=info npm test
+
+# Debug logging (verbose)
+DOCXMLATER_LOG_LEVEL=debug npm test
+
+# Using DEBUG pattern
+DEBUG=docxmlater npm test
+```
+
+**Enable programmatically:**
+```typescript
+import { setGlobalLogger, ConsoleLogger, LogLevel } from 'docxmlater';
+
+setGlobalLogger(new ConsoleLogger(LogLevel.INFO));
+```
+
+### What Gets Logged
+
+| Component | INFO Level | DEBUG Level |
+|-----------|------------|-------------|
+| Document | Load/save operations | + detailed operations |
+| ZipHandler | File operations, validation | + file counts, sizes |
+| DocumentParser | Parse completion, warnings | + element counts |
+| DocumentGenerator | Generation steps | + XML sizes |
+| XMLParser | - | Parse operations |
+| RevisionManager | Clear, summary stats | + each registration |
+| ChangelogGenerator | Generation, consolidation | + filtering details |
+
+### Sample Output (INFO level)
+```
+12:34:56.789 [INFO ] [Document] Loading document from file path=input.docx
+12:34:56.795 [INFO ] [ZipHandler] DOCX file loaded fileCount=12 sizeMB=0.45
+12:34:56.855 [INFO ] [DocumentParser] Document parsed paragraphs=45 tables=3
+12:34:56.856 [INFO ] [Document] Document loaded paragraphs=45
+12:34:56.860 [INFO ] [RevisionManager] Revision summary total=8 ins=3 del=2 fmt=3 authors=2
+12:34:56.865 [INFO ] [ChangelogGenerator] Changelog entries processed entries=8 format=markdown
+```
+
+See `src/utils/CLAUDE.md` for complete logging documentation.
+
 ## Resources and References
 
 ### Official Specifications

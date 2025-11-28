@@ -11,6 +11,7 @@ import { ImageManager } from '../elements/ImageManager';
 import { DocumentProperties } from './Document';
 import { LIMITS } from '../constants/limits';
 import { defaultLogger } from '../utils/logger';
+import * as v8 from 'v8';
 
 /**
  * Memory validation options
@@ -241,12 +242,14 @@ export class DocumentValidator {
    * @throws {Error} If memory usage exceeds configured limits
    */
   checkMemoryThreshold(): void {
-    const { heapUsed, heapTotal, external, rss } = process.memoryUsage();
+    const { heapUsed, external, rss } = process.memoryUsage();
+    const heapStats = v8.getHeapStatistics();
+    const heapLimit = heapStats.heap_size_limit; // Actual max heap (typically 4GB on 64-bit)
 
-    // Calculate heap usage percentage
-    const heapPercent = (heapUsed / heapTotal) * 100;
+    // Calculate heap usage percentage against the actual limit, not currently allocated
+    const heapPercent = (heapUsed / heapLimit) * 100;
     const heapMB = heapUsed / (1024 * 1024);
-    const heapTotalMB = heapTotal / (1024 * 1024);
+    const heapLimitMB = heapLimit / (1024 * 1024);
 
     // Calculate RSS (Resident Set Size - actual memory used by process)
     const rssMB = rss / (1024 * 1024);
@@ -262,7 +265,7 @@ export class DocumentValidator {
     if (heapExceeded && rssExceeded) {
       throw new Error(
         `Memory usage critical:\n` +
-        `  Heap: ${heapMB.toFixed(0)}MB / ${heapTotalMB.toFixed(0)}MB (${heapPercent.toFixed(1)}%)\n` +
+        `  Heap: ${heapMB.toFixed(0)}MB / ${heapLimitMB.toFixed(0)}MB (${heapPercent.toFixed(1)}%)\n` +
         `  RSS: ${rssMB.toFixed(0)}MB (limit: ${this.maxRssMB}MB)\n` +
         `  External: ${externalMB.toFixed(0)}MB\n` +
         `Cannot process document safely. Consider:\n` +

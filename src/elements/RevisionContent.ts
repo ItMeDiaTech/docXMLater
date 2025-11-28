@@ -24,18 +24,31 @@ export type RevisionContent = Run | Hyperlink;
  * Type guard to check if content is a Run
  * @param content - The content to check
  * @returns true if content is a Run instance
+ *
+ * Note: Uses duck typing instead of constructor.name to handle minified builds.
+ * Run objects have getText() but NOT getUrl() or getAnchor() methods.
  */
 export function isRunContent(content: RevisionContent): content is Run {
-  // Use constructor name check to avoid circular imports
-  return content?.constructor?.name === 'Run';
+  if (!content || typeof content !== 'object') return false;
+
+  // Duck typing: Runs have getText but no getUrl
+  const hasGetText = typeof (content as any).getText === 'function';
+  const hasGetUrl = typeof (content as any).getUrl === 'function';
+
+  return hasGetText && !hasGetUrl;
 }
 
 /**
  * Type guard to check if content is a Hyperlink
  * @param content - The content to check
  * @returns true if content is a Hyperlink instance
+ *
+ * Note: Uses duck typing instead of constructor.name to handle minified builds.
+ * Hyperlink objects have getUrl() method which Runs don't have.
  */
 export function isHyperlinkContent(content: RevisionContent): content is Hyperlink {
-  // Use constructor name check to avoid circular imports
-  return content?.constructor?.name === 'Hyperlink';
+  if (!content || typeof content !== 'object') return false;
+
+  // Duck typing: Hyperlinks have getUrl method
+  return typeof (content as any).getUrl === 'function';
 }
