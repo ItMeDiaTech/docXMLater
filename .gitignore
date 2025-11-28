@@ -126,7 +126,6 @@ config/rag_settings.json
 /OPENXML_STRUCTURE_GUIDE.md
 /jest.config.js
 /testing
-/tests
 /tests/output
 
 # Analysis files
