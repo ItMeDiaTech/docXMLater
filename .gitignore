@@ -34,6 +34,7 @@ desktop.ini
 # Environment
 .env
 .env.local
+.mcp.json
 
 # Temporary files
 tmp/
@@ -231,3 +232,6 @@ toc-xml-sample.txt
 release.bat
 test.bat
 test-table-cells.bat
+CLAUDE.md
+mcp_server/chroma
+.gitignore

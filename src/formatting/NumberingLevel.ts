@@ -113,13 +113,6 @@ export class NumberingLevel {
   }
 
   /**
-   * Maximum recommended left indentation in twips.
-   * This is ~4 inches (5760 twips), leaving space for content on standard pages.
-   * Beyond this, text may overflow margins on narrow pages.
-   */
-  private static readonly MAX_RECOMMENDED_INDENT = 5760;
-
-  /**
    * Validates the level properties
    */
   private validate(): void {
@@ -139,16 +132,6 @@ export class NumberingLevel {
 
     if (this.properties.start < 0) {
       throw new Error("Start value must be non-negative");
-    }
-
-    // Warn if indentation is very large (could exceed right margin on narrow pages)
-    if (this.properties.leftIndent > NumberingLevel.MAX_RECOMMENDED_INDENT) {
-      console.warn(
-        `NumberingLevel: Left indentation (${this.properties.leftIndent} twips / ` +
-        `${(this.properties.leftIndent / 1440).toFixed(2)} inches) exceeds recommended maximum ` +
-        `(${NumberingLevel.MAX_RECOMMENDED_INDENT} twips / 4 inches). ` +
-        `This may cause content to overflow margins on narrow pages.`
-      );
     }
   }
 

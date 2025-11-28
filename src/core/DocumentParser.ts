@@ -3762,15 +3762,14 @@ export class DocumentParser {
       return instruction; // Already a complete sequence, keep as-is
     }
 
-    // Normalize to \o "1-N" format where N is the max level
-    // This ensures all heading levels from 1 to max are included
-    const normalizedMaxLevel = Math.max(maxLevel, 3); // Default to at least level 3
-    
+    // FIX: Use actual min/max levels from the \t switch, not hardcoded "1-N"
+    // If \t "Heading 2,2," was specified, output should be \o "2-2", not \o "1-3"
+
     // Remove all \t switches and replace with \o switch
     let normalized = instruction.replace(tSwitchPattern, "").trim();
-    
-    // Insert \o switch after "TOC"
-    normalized = normalized.replace(/^TOC\s*/, `TOC \\o "1-${normalizedMaxLevel}" `);
+
+    // Insert \o switch after "TOC" using the actual min/max levels
+    normalized = normalized.replace(/^TOC\s*/, `TOC \\o "${minLevel}-${maxLevel}" `);
 
     defaultLogger.debug(
       `[TOC Parser] Normalized field instruction from "${instruction}" to "${normalized}"`
