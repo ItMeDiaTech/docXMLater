@@ -18,6 +18,7 @@ import { Paragraph } from "../elements/Paragraph";
 import { RangeMarker } from "../elements/RangeMarker";
 import { Revision, RevisionType } from "../elements/Revision";
 import { RevisionManager } from "../elements/RevisionManager";
+import { RevisionLocation } from "../elements/PropertyChangeTypes";
 import { Run, RunFormatting } from "../elements/Run";
 import {
   RevisionValidator,
@@ -557,6 +558,50 @@ export class Document {
     // This enables XML preservation for unmodified documents
     this.stylesManager.resetModified();
     this.numberingManager.resetModified();
+
+    // Populate revision locations for changelog/tracking purposes
+    this.populateRevisionLocations();
+  }
+
+  /**
+   * Populates location information on all revisions in the document
+   * Called after parsing to set paragraph and run indices for each revision
+   * @private
+   */
+  private populateRevisionLocations(): void {
+    const paragraphs = this.getParagraphs();
+
+    for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex++) {
+      const paragraph = paragraphs[paragraphIndex];
+      if (!paragraph) continue;
+
+      // Get all revisions and runs from this paragraph
+      const revisions = paragraph.getRevisions?.() || [];
+      const runs = paragraph.getRuns();
+
+      // Track run position within paragraph
+      let runIndex = 0;
+
+      for (const revision of revisions) {
+        // Set location if not already set
+        if (!revision.getLocation()) {
+          const location: RevisionLocation = {
+            paragraphIndex,
+            runIndex,
+          };
+          revision.setLocation(location);
+        }
+        // Advance run index for next revision
+        runIndex++;
+      }
+
+      // Also check runs for embedded revisions (runs added after revisions)
+      // The actual run index may differ from revision position
+      for (let i = 0; i < runs.length; i++) {
+        // Runs don't contain revisions directly, but paragraphs track them
+        // This is already handled above via paragraph.getRevisions()
+      }
+    }
   }
 
   /**
@@ -7350,12 +7395,40 @@ export class Document {
   }
 
   /**
+   * Finds the index of a paragraph in the document body
+   * @param paragraph - The paragraph to find
+   * @returns The index (0-based), or -1 if not found
+   */
+  private findParagraphIndex(paragraph: Paragraph): number {
+    const paragraphs = this.getParagraphs();
+    return paragraphs.indexOf(paragraph);
+  }
+
+  /**
+   * Creates a RevisionLocation for a paragraph
+   * @param paragraph - The paragraph containing the revision
+   * @param runIndex - Optional run index within the paragraph
+   * @returns RevisionLocation with paragraph index, or undefined if not found
+   */
+  private createRevisionLocation(paragraph: Paragraph, runIndex?: number): RevisionLocation | undefined {
+    const paragraphIndex = this.findParagraphIndex(paragraph);
+    if (paragraphIndex === -1) {
+      return undefined; // Paragraph not found in document
+    }
+    const location: RevisionLocation = { paragraphIndex };
+    if (runIndex !== undefined) {
+      location.runIndex = runIndex;
+    }
+    return location;
+  }
+
+  /**
    * Adds a tracked insertion to a paragraph
    * @param paragraph - The paragraph to add the insertion to
    * @param author - Author who made the insertion
    * @param text - Inserted text
    * @param date - Optional date (defaults to now)
-   * @returns The created revision
+   * @returns The created revision with location set
    */
   trackInsertion(
     paragraph: Paragraph,
@@ -7364,6 +7437,15 @@ export class Document {
     date?: Date
   ): Revision {
     const revision = this.createRevisionFromText("insert", author, text, date);
+
+    // Set location for changelog/tracking purposes
+    const location = this.createRevisionLocation(paragraph);
+    if (location) {
+      // Run index will be the next run position in the paragraph
+      location.runIndex = paragraph.getRuns().length;
+      revision.setLocation(location);
+    }
+
     paragraph.addRevision(revision);
     return revision;
   }
@@ -7374,7 +7456,7 @@ export class Document {
    * @param author - Author who made the deletion
    * @param text - Deleted text
    * @param date - Optional date (defaults to now)
-   * @returns The created revision
+   * @returns The created revision with location set
    */
   trackDeletion(
     paragraph: Paragraph,
@@ -7383,6 +7465,15 @@ export class Document {
     date?: Date
   ): Revision {
     const revision = this.createRevisionFromText("delete", author, text, date);
+
+    // Set location for changelog/tracking purposes
+    const location = this.createRevisionLocation(paragraph);
+    if (location) {
+      // Run index will be the next run position in the paragraph
+      location.runIndex = paragraph.getRuns().length;
+      revision.setLocation(location);
+    }
+
     paragraph.addRevision(revision);
     return revision;
   }
@@ -7394,7 +7485,7 @@ export class Document {
    * @param author - Author who made the deletion
    * @param fieldInstruction - Deleted field instruction text (e.g., 'PAGE', 'DATE')
    * @param date - Optional date (defaults to now)
-   * @returns The created revision
+   * @returns The created revision with location set
    * @example
    * // Track deletion of a PAGE field
    * const para = doc.createParagraph();
@@ -7409,6 +7500,14 @@ export class Document {
     const run = new Run(fieldInstruction);
     const revision = Revision.createFieldInstructionDeletion(author, run, date);
     this.revisionManager.register(revision);
+
+    // Set location for changelog/tracking purposes
+    const location = this.createRevisionLocation(paragraph);
+    if (location) {
+      location.runIndex = paragraph.getRuns().length;
+      revision.setLocation(location);
+    }
+
     paragraph.addRevision(revision);
     return revision;
   }
