@@ -1,25 +1,36 @@
 import { ZipHandler } from '../zip/ZipHandler';
+import { XMLParser } from '../xml/XMLParser';
+import { RevisionWalker } from './RevisionWalker';
 
 /**
  * Accepts all tracked changes in a Word document per Microsoft's OpenXML SDK pattern
- * 
- * This implementation follows the official Microsoft approach:
+ *
+ * This implementation uses DOM-based tree walking for reliability:
  * 1. Insertions (<w:ins>): Keep content, remove wrapper tags
  * 2. Deletions (<w:del>): Remove entirely (content and tags)
  * 3. Move From (<w:moveFrom>): Remove entirely (source of move)
  * 4. Move To (<w:moveTo>): Keep content, remove wrapper (destination of move)
  * 5. Property changes: Remove all *Change elements
  * 6. Range markers: Remove all boundary markers
- * 
+ *
  * Also cleans up metadata in people.xml, settings.xml, and core.xml
- * 
+ *
  * @see https://learn.microsoft.com/en-us/office/open-xml/how-to-accept-all-revisions
  */
 export class RevisionAcceptor {
   private zipHandler: ZipHandler;
+  /** Feature flag for DOM-based processing (default: true) */
+  private useDomBasedProcessing: boolean = true;
 
   constructor(zipHandler: ZipHandler) {
     this.zipHandler = zipHandler;
+  }
+
+  /**
+   * Enable or disable DOM-based processing (for testing/migration)
+   */
+  setUseDomBasedProcessing(enabled: boolean): void {
+    this.useDomBasedProcessing = enabled;
   }
 
   /**
@@ -50,6 +61,49 @@ export class RevisionAcceptor {
    * Process a document part (document.xml, header, footer) to accept revisions
    */
   private async processDocumentPart(partPath: string): Promise<void> {
+    if (this.useDomBasedProcessing) {
+      return this.processDocumentPartDOM(partPath);
+    }
+    return this.processDocumentPartRegex(partPath);
+  }
+
+  /**
+   * DOM-based implementation of revision acceptance
+   * Uses XMLParser and RevisionWalker for reliable processing
+   */
+  private processDocumentPartDOM(partPath: string): void {
+    const xml = this.zipHandler.getFileAsString(partPath);
+    if (!xml) {
+      return;
+    }
+
+    // Step 1: Parse XML to object tree
+    const parsed = XMLParser.parseToObject(xml);
+
+    // Step 2: Process revisions using DOM walker
+    const processed = RevisionWalker.processTree(parsed, {
+      acceptInsertions: true,
+      acceptDeletions: true,
+      acceptMoves: true,
+      acceptPropertyChanges: true,
+    });
+
+    // Step 3: Handle image relationship ID remapping
+    this.remapImageRelationshipsInTree(processed);
+
+    // Step 4: Convert back to XML
+    const outputXml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      this.objectToXml(processed);
+
+    // Step 5: Update file
+    this.zipHandler.updateFile(partPath, outputXml);
+  }
+
+  /**
+   * Legacy RegEx-based implementation (kept as fallback)
+   */
+  private processDocumentPartRegex(partPath: string): void {
     const xml = this.zipHandler.getFileAsString(partPath);
     if (!xml) {
       return;
@@ -394,11 +448,208 @@ export class RevisionAcceptor {
 
     // Reset revision count to 1
     const content = coreXml.replace(
-      /<cp:revision>\d+<\/cp:revision>/g, 
+      /<cp:revision>\d+<\/cp:revision>/g,
       '<cp:revision>1</cp:revision>'
     );
 
     this.zipHandler.updateFile('docProps/core.xml', content);
+  }
+
+  // =========================================================================
+  // DOM-based processing helper methods
+  // =========================================================================
+
+  /**
+   * Convert parsed XML object back to XML string
+   * Preserves element order using _orderedChildren metadata
+   *
+   * Based on DocumentParser.objectToXml() implementation
+   */
+  private objectToXml(obj: any): string {
+    const buildXml = (o: any, name?: string): string => {
+      if (typeof o === 'string') return this.escapeXml(o);
+      if (typeof o !== 'object' || o === null) return String(o ?? '');
+
+      const keys = Object.keys(o);
+
+      // If a name is provided, we're building a specific element
+      // Don't return empty string for empty objects with a name - they become self-closing tags
+      if (keys.length === 0 && !name) return '';
+
+      const tagName = name || keys[0]!;
+      const element = name ? o : o[tagName];
+
+      let xml = `<${tagName}`;
+
+      // Add attributes (keys starting with @_)
+      if (element && typeof element === 'object') {
+        for (const key of Object.keys(element)) {
+          if (key.startsWith('@_')) {
+            const attrName = key.substring(2);
+            xml += ` ${attrName}="${this.escapeXml(String(element[key]))}"`;
+          }
+        }
+      }
+
+      // Check for children (non-attribute, non-text, non-metadata keys)
+      const hasChildren =
+        element &&
+        typeof element === 'object' &&
+        Object.keys(element).some(
+          (k) =>
+            !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren'
+        );
+
+      if (!hasChildren && (!element || !element['#text'])) {
+        xml += '/>';
+      } else {
+        xml += '>';
+
+        // Add text content
+        if (element && element['#text']) {
+          xml += this.escapeXml(String(element['#text']));
+        }
+
+        // Add child elements using _orderedChildren if available
+        if (element && typeof element === 'object') {
+          const orderedChildren = element['_orderedChildren'] as
+            | Array<{ type: string; index: number }>
+            | undefined;
+
+          if (orderedChildren && orderedChildren.length > 0) {
+            // Use _orderedChildren to preserve element order
+            for (const childInfo of orderedChildren) {
+              const childType = childInfo.type;
+              const childIndex = childInfo.index;
+
+              if (element[childType] !== undefined) {
+                const children = element[childType];
+
+                if (Array.isArray(children)) {
+                  if (childIndex < children.length) {
+                    const childXml = buildXml(children[childIndex], childType);
+                    xml += childXml;
+                  }
+                } else {
+                  // Single child element
+                  if (childIndex === 0) {
+                    const childXml = buildXml(children, childType);
+                    xml += childXml;
+                  }
+                }
+              }
+            }
+          } else {
+            // Fallback: iterate through keys if no _orderedChildren
+            for (const key of Object.keys(element)) {
+              if (
+                !key.startsWith('@_') &&
+                key !== '#text' &&
+                key !== '_orderedChildren'
+              ) {
+                const children = element[key];
+                if (Array.isArray(children)) {
+                  for (const child of children) {
+                    xml += buildXml(child, key);
+                  }
+                } else {
+                  xml += buildXml(children, key);
+                }
+              }
+            }
+          }
+        }
+
+        xml += `</${tagName}>`;
+      }
+
+      return xml;
+    };
+
+    return buildXml(obj);
+  }
+
+  /**
+   * Escape special XML characters
+   */
+  private escapeXml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  /**
+   * Remap image relationship IDs in the parsed tree to prevent duplicates
+   * Walks the tree looking for r:embed attributes and assigns unique IDs
+   */
+  private remapImageRelationshipsInTree(obj: any): void {
+    const relationships = this.parseRelationships();
+    const existingIds = new Set(relationships.keys());
+    const remappedIds = new Map<string, string>();
+
+    // Walk the tree and find all r:embed attributes
+    this.walkTreeForEmbeds(obj, (embedId: string, parent: any, key: string) => {
+      // Check if this ID has already been remapped
+      if (remappedIds.has(embedId)) {
+        parent[key] = remappedIds.get(embedId);
+        return;
+      }
+
+      // Check if this ID needs remapping (duplicate)
+      // For DOM-based processing, we check if we've seen this ID before in this pass
+      const target = relationships.get(embedId);
+      if (target) {
+        // Generate new unique ID
+        const newId = this.getNextRelationshipId(existingIds);
+        existingIds.add(newId);
+        remappedIds.set(embedId, newId);
+
+        // Add relationship with same target
+        this.addRelationship(
+          newId,
+          target,
+          'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
+        );
+
+        // Update the attribute
+        parent[key] = newId;
+      }
+    });
+  }
+
+  /**
+   * Walk the tree looking for r:embed attributes
+   */
+  private walkTreeForEmbeds(
+    obj: any,
+    callback: (embedId: string, parent: any, key: string) => void
+  ): void {
+    if (!obj || typeof obj !== 'object') {
+      return;
+    }
+
+    for (const key of Object.keys(obj)) {
+      // Check for r:embed attribute
+      if (key === '@_r:embed') {
+        callback(obj[key], obj, key);
+      } else if (
+        !key.startsWith('@_') &&
+        key !== '#text' &&
+        key !== '_orderedChildren'
+      ) {
+        const value = obj[key];
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            this.walkTreeForEmbeds(item, callback);
+          }
+        } else if (typeof value === 'object') {
+          this.walkTreeForEmbeds(value, callback);
+        }
+      }
+    }
   }
 }
 

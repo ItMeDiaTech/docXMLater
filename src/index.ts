@@ -382,6 +382,9 @@ export {
 // Error handling utilities
 export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandling';
 
+// Revision utilities
+export { RevisionWalker, RevisionWalkerOptions } from './utils/RevisionWalker';
+
 // Constants
 export { LIMITS } from './constants/limits';
 
