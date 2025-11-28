@@ -6,9 +6,14 @@
 // Increase timeout for async operations
 jest.setTimeout(30000);
 
-// Suppress console warnings during tests (optional)
-// You can enable this if you want quieter test output
-// console.warn = jest.fn();
+// Suppress console output during tests (optional - can be commented out for debugging)
+// global.console = {
+//   ...console,
+//   log: jest.fn(),
+//   debug: jest.fn(),
+//   info: jest.fn(),
+//   warn: jest.fn(),
+// };
 
 // Global test utilities
 beforeEach(() => {
@@ -17,4 +22,10 @@ beforeEach(() => {
 
 afterEach(() => {
   // Cleanup after each test if needed
+});
+
+// Clean up after all tests
+afterAll(() => {
+  // Ensure any async operations are cleaned up
+  jest.clearAllTimers();
 });
