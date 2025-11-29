@@ -7,6 +7,8 @@ import { Bookmark } from "../elements/Bookmark";
 import { BookmarkManager } from "../elements/BookmarkManager";
 import { Comment } from "../elements/Comment";
 import { CommentManager } from "../elements/CommentManager";
+import { EndnoteManager } from "../elements/EndnoteManager";
+import { FootnoteManager } from "../elements/FootnoteManager";
 import { Footer } from "../elements/Footer";
 import { Header } from "../elements/Header";
 import { HeaderFooterManager } from "../elements/HeaderFooterManager";
@@ -233,9 +235,9 @@ export class Document {
   private revisionManager: RevisionManager;
   private commentManager: CommentManager;
   private trackingContext: DocumentTrackingContext;
-  // Reserved for future implementation - placeholder properties
-  private _footnoteManager?: any;
-  private _endnoteManager?: any;
+  // Reserved for future implementation - using proper types from existing managers
+  private _footnoteManager?: FootnoteManager;
+  private _endnoteManager?: EndnoteManager;
 
   // Helper classes for parsing, generation, and validation
   private parser: DocumentParser;

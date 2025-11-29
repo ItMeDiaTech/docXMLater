@@ -403,6 +403,34 @@ export class Paragraph {
   }
 
   /**
+   * Creates an empty detached paragraph
+   * @returns New Paragraph instance
+   * @example
+   * const para = Paragraph.create();
+   * para.addText('Added later');
+   */
+  static create(): Paragraph;
+
+  /**
+   * Creates a detached paragraph with formatting
+   * @param formatting - Paragraph formatting options
+   * @returns New Paragraph instance
+   * @example
+   * const para = Paragraph.create({ alignment: 'center' });
+   */
+  static create(formatting: ParagraphFormatting): Paragraph;
+
+  /**
+   * Creates a detached paragraph with text and optional formatting
+   * @param text - Text content
+   * @param formatting - Optional paragraph formatting
+   * @returns New Paragraph instance
+   * @example
+   * const para = Paragraph.create('Hello World', { alignment: 'center' });
+   */
+  static create(text: string, formatting?: ParagraphFormatting): Paragraph;
+
+  /**
    * Creates a detached paragraph (not yet added to a document)
    * @param textOrFormatting - Optional text content or paragraph formatting
    * @param formatting - Optional paragraph formatting (only used if first param is text)
