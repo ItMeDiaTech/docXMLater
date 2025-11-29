@@ -193,7 +193,7 @@ export class CleanupHelper {
   private removeSDTs(): number {
     // Delegate to existing clearCustom() which removes SDTs and unwraps content
     const before = this.doc.getBodyElements().length;
-    (this.doc as any).clearCustom();
+    this.doc.clearCustom();
     const after = this.doc.getBodyElements().length;
     return Math.abs(after - before); // Approximate count of removed SDTs
   }
@@ -208,7 +208,7 @@ export class CleanupHelper {
 
   private cleanupNumbering(): number {
     const before = this.doc.getNumberingManager().getAllInstances().length;
-    (this.doc as any).cleanupUnusedNumbering();
+    this.doc.cleanupUnusedNumbering();
     const after = this.doc.getNumberingManager().getAllInstances().length;
     return before - after;
   }
@@ -253,7 +253,7 @@ export class CleanupHelper {
   }
 
   private removeCustomXML(): number {
-    const zipHandler = (this.doc as any).zipHandler;
+    const zipHandler = this.doc.getZipHandler();
     let removed = 0;
 
     // Remove customXML files
@@ -285,44 +285,44 @@ export class CleanupHelper {
   }
 
   private unlockFields(): number {
-    const zipHandler = (this.doc as any).zipHandler;
-    let count = 0;
+    const zipHandler = this.doc.getZipHandler();
     const docXml = zipHandler.getFileAsString('word/document.xml');
     if (!docXml) return 0;
 
+    // Count matches first, then replace (avoid regex re-execution)
+    const pattern = /w:fldLock="(1|true)"/g;
+    const matches = docXml.match(pattern) || [];
+    if (matches.length === 0) return 0;
+
     // Remove w:fldLock="1" or w:fldLock="true"
-    const updatedXml = docXml.replace(/w:fldLock="(1|true)"/g, '');
+    const updatedXml = docXml.replace(pattern, '');
+    zipHandler.updateFile('word/document.xml', updatedXml);
 
-    if (updatedXml !== docXml) {
-      zipHandler.updateFile('word/document.xml', updatedXml);
-      count = (docXml.match(/w:fldLock="(1|true)"/g) || []).length;
-    }
-
-    return count;
+    return matches.length;
   }
 
   private unlockFrames(): number {
-    const zipHandler = (this.doc as any).zipHandler;
-    let count = 0;
+    const zipHandler = this.doc.getZipHandler();
     const docXml = zipHandler.getFileAsString('word/document.xml');
     if (!docXml) return 0;
 
+    // Count matches first, then replace (avoid regex re-execution)
+    const pattern = /w:anchorLock="(1|true)"/g;
+    const matches = docXml.match(pattern) || [];
+    if (matches.length === 0) return 0;
+
     // Remove w:anchorLock="1" or w:anchorLock="true"
-    const updatedXml = docXml.replace(/w:anchorLock="(1|true)"/g, '');
+    const updatedXml = docXml.replace(pattern, '');
+    zipHandler.updateFile('word/document.xml', updatedXml);
 
-    if (updatedXml !== docXml) {
-      zipHandler.updateFile('word/document.xml', updatedXml);
-      count = (docXml.match(/w:anchorLock="(1|true)"/g) || []).length;
-    }
-
-    return count;
+    return matches.length;
   }
 
   private sanitizeTables(): number {
     const tables = this.doc.getAllTables();
     let processed = 0;
     for (const table of tables) {
-      (this.doc as any).sanitizeTableRowExceptions(table);
+      this.doc.sanitizeTableRowExceptions(table);
       processed++;
     }
     return processed;

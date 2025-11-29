@@ -93,9 +93,14 @@ export class DocumentTrackingContext implements TrackingContext {
 
   /**
    * Set the author for new revisions
+   * Flushes any pending changes before switching to prevent mixed authorship
    * @param author - Author name
    */
   setAuthor(author: string): void {
+    // Flush pending changes before switching authors to prevent mixed authorship
+    if (this.enabled && this.pendingChanges.size > 0) {
+      this.flushPendingChanges();
+    }
     this.author = author;
   }
 

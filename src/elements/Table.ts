@@ -1299,12 +1299,18 @@ export class Table {
     endRow: number,
     endCol: number
   ): this {
+    // Validate bounds
     if (
       startRow < 0 ||
       endRow >= this.rows.length ||
       startCol < 0 ||
       endCol < 0
     ) {
+      return this;
+    }
+
+    // Validate that end position is >= start position
+    if (endRow < startRow || endCol < startCol) {
       return this;
     }
 
