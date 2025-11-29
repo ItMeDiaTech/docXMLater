@@ -365,6 +365,7 @@ export {
   ParseToObjectOptions,
   ParsedXMLValue,
   ParsedXMLObject,
+  DEFAULT_MAX_NESTING_DEPTH,
 } from './xml/XMLParser';
 
 // Logging utilities
@@ -377,6 +378,10 @@ export {
   CollectingLogger,
   defaultLogger,
   createScopedLogger,
+  createComponentLogger,
+  getGlobalLogger,
+  setGlobalLogger,
+  resetGlobalLogger,
 } from './utils/logger';
 
 // Error handling utilities

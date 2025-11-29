@@ -13,6 +13,12 @@ function getLogger(): ILogger {
 }
 
 /**
+ * Default maximum nesting depth for XML parsing.
+ * Prevents stack overflow on deeply nested documents.
+ */
+export const DEFAULT_MAX_NESTING_DEPTH = 256;
+
+/**
  * Options for XML-to-object parsing
  */
 export interface ParseToObjectOptions {
@@ -36,6 +42,9 @@ export interface ParseToObjectOptions {
 
   /** Always return arrays for elements (default: false) */
   alwaysArray?: boolean;
+
+  /** Maximum nesting depth (default: 256). Prevents stack overflow on deeply nested documents. */
+  maxNestingDepth?: number;
 }
 
 /**
@@ -432,6 +441,7 @@ export class XMLParser {
       parseAttributeValue: options?.parseAttributeValue ?? true,
       trimValues: options?.trimValues ?? true,
       alwaysArray: options?.alwaysArray ?? false,
+      maxNestingDepth: options?.maxNestingDepth ?? DEFAULT_MAX_NESTING_DEPTH,
     };
 
     // Validate input size
@@ -444,8 +454,8 @@ export class XMLParser {
       return {};
     }
 
-    // Parse root element
-    const result = XMLParser.parseElementToObject(xml, 0, opts);
+    // Parse root element (start at depth 0)
+    const result = XMLParser.parseElementToObject(xml, 0, opts, 0);
     logger.debug('XML parsed to object');
     return result.value as ParsedXMLObject;
   }
@@ -457,8 +467,18 @@ export class XMLParser {
   private static parseElementToObject(
     xml: string,
     startPos: number,
-    options: Required<ParseToObjectOptions>
+    options: Required<ParseToObjectOptions>,
+    depth: number
   ): { value: ParsedXMLValue; endPos: number } {
+    // Check nesting depth to prevent stack overflow
+    if (depth > options.maxNestingDepth) {
+      throw new Error(
+        `XML nesting depth exceeds maximum of ${options.maxNestingDepth}. ` +
+        `This may indicate malformed XML or an attack attempt. ` +
+        `Use the maxNestingDepth option to increase the limit if needed.`
+      );
+    }
+
     // Find opening tag
     const openTagStart = xml.indexOf("<", startPos);
     if (openTagStart === -1) {
@@ -469,7 +489,7 @@ export class XMLParser {
     if (xml.substring(openTagStart, openTagStart + 4) === "<!--") {
       const commentEnd = xml.indexOf("-->", openTagStart + 4);
       if (commentEnd !== -1) {
-        return XMLParser.parseElementToObject(xml, commentEnd + 3, options);
+        return XMLParser.parseElementToObject(xml, commentEnd + 3, options, depth);
       }
       return { value: {}, endPos: xml.length };
     }
@@ -561,11 +581,12 @@ export class XMLParser {
         }
       }
 
-      // Parse child element
+      // Parse child element (increment depth for children)
       const childResult = XMLParser.parseElementToObject(
         content,
         nextTag,
-        options
+        options,
+        depth + 1
       );
       const childObj = childResult.value as ParsedXMLObject;
 

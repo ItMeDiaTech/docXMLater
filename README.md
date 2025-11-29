@@ -516,6 +516,63 @@ Key design principles:
 - Memory-efficient with explicit disposal pattern
 - Full ECMA-376 (OpenXML) compliance
 
+## Security
+
+docXMLater includes multiple security measures to protect against common attack vectors:
+
+### ReDoS Prevention
+
+The XML parser uses position-based parsing instead of regular expressions, preventing catastrophic backtracking attacks that can cause denial of service.
+
+### Input Validation
+
+**Size Limits:**
+- Default document size limit: 150 MB (configurable)
+- Warning threshold: 50 MB
+- XML content size validation before parsing
+
+```typescript
+// Configure size limits
+const doc = await Document.load("large.docx", {
+  sizeLimits: {
+    warningSizeMB: 100,
+    maxSizeMB: 500,
+  },
+});
+```
+
+**Nesting Depth:**
+- Maximum XML nesting depth: 256 (configurable)
+- Prevents stack overflow attacks
+
+```typescript
+import { XMLParser } from "docxmlater";
+
+// Parse with custom depth limit
+const obj = XMLParser.parseToObject(xml, {
+  maxNestingDepth: 512, // Increase if needed
+});
+```
+
+### Path Traversal Prevention
+
+File paths within DOCX archives are validated to prevent directory traversal attacks:
+- Blocks `../` path sequences
+- Blocks absolute paths
+- Validates URL-encoded path components
+
+### XML Injection Prevention
+
+All text content is properly escaped using:
+- `XMLBuilder.escapeXmlText()` for element content
+- `XMLBuilder.escapeXmlAttribute()` for attribute values
+
+This prevents injection of malicious XML elements through user-provided text content.
+
+### UTF-8 Encoding
+
+All text files are explicitly UTF-8 encoded per ECMA-376 specification, preventing encoding-related vulnerabilities.
+
 ## Requirements
 
 - Node.js 18.0.0 or higher
