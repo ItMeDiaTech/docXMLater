@@ -47,6 +47,18 @@ type BodyElement =
   | StructuredDocumentTag;
 
 /**
+ * Normalizes toXML() output to always return an array.
+ * Some elements (e.g., TableOfContentsElement) return XMLElement[], while others return XMLElement.
+ * This helper provides consistent array handling.
+ *
+ * @param xml - XMLElement or XMLElement[] from toXML()
+ * @returns XMLElement array
+ */
+function normalizeXmlOutput(xml: XMLElement | XMLElement[]): XMLElement[] {
+  return Array.isArray(xml) ? xml : [xml];
+}
+
+/**
  * DocumentGenerator handles all XML generation logic
  */
 export class DocumentGenerator {
@@ -95,16 +107,10 @@ export class DocumentGenerator {
     const bodyXmls: XMLElement[] = [];
 
     // Generate XML for each body element
-    // Note: TableOfContentsElement.toXML() returns an array
+    // Uses normalizeXmlOutput() to handle both single XMLElement and XMLElement[] returns
     for (const element of bodyElements) {
-      const xml = element.toXML();
-      if (Array.isArray(xml)) {
-        // TableOfContentsElement returns array of XMLElements
-        bodyXmls.push(...xml);
-      } else {
-        // Paragraph and Table return single XMLElement
-        bodyXmls.push(xml);
-      }
+      const xmlElements = normalizeXmlOutput(element.toXML());
+      bodyXmls.push(...xmlElements);
     }
 
     // Add section properties at the end

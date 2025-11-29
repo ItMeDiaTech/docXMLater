@@ -363,3 +363,29 @@ export function getGlobalLogger(): ILogger {
 export function resetGlobalLogger(): void {
   globalLogger = createLoggerFromEnv();
 }
+
+/**
+ * Creates a component-scoped logger using the global logger.
+ * This is a convenience function that combines getGlobalLogger() and createScopedLogger()
+ * into a single call, reducing boilerplate in component files.
+ *
+ * @param componentName - Name of the component (appears in log output)
+ * @returns Scoped logger instance
+ *
+ * @example
+ * ```typescript
+ * // Instead of:
+ * function getLogger(): ILogger {
+ *   return createScopedLogger(getGlobalLogger(), 'MyComponent');
+ * }
+ *
+ * // You can use:
+ * const logger = createComponentLogger('MyComponent');
+ *
+ * // Or for lazy initialization:
+ * const getLogger = () => createComponentLogger('MyComponent');
+ * ```
+ */
+export function createComponentLogger(componentName: string): ILogger {
+  return createScopedLogger(getGlobalLogger(), componentName);
+}

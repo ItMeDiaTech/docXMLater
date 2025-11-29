@@ -46,6 +46,23 @@ export class RevisionManager {
   private revisions: Revision[] = [];
   private nextId: number = 0;
 
+  // Performance caching for frequently accessed filtered results
+  private revisionsByTypeCache = new Map<RevisionType, Revision[]>();
+  private revisionsByAuthorCache = new Map<string, Revision[]>();
+  private revisionsByCategoryCache = new Map<RevisionCategory, Revision[]>();
+  private cacheValid: boolean = true;
+
+  /**
+   * Invalidates all caches. Called when revisions are added/removed.
+   * @private
+   */
+  private invalidateCache(): void {
+    this.revisionsByTypeCache.clear();
+    this.revisionsByAuthorCache.clear();
+    this.revisionsByCategoryCache.clear();
+    this.cacheValid = false;
+  }
+
   /**
    * Registers a revision with the manager
    * Assigns a unique ID
@@ -59,6 +76,7 @@ export class RevisionManager {
 
     // Store revision
     this.revisions.push(revision);
+    this.invalidateCache();
 
     logger.debug('Revision registered', {
       id: revision.getId(),
@@ -79,20 +97,38 @@ export class RevisionManager {
 
   /**
    * Gets revisions by type
+   * Uses caching for improved performance on repeated calls
    * @param type - Revision type to filter by
    * @returns Array of revisions of the specified type
    */
   getRevisionsByType(type: RevisionType): Revision[] {
-    return this.revisions.filter(rev => rev.getType() === type);
+    // Check cache first
+    if (this.revisionsByTypeCache.has(type)) {
+      return [...this.revisionsByTypeCache.get(type)!];
+    }
+
+    // Compute and cache
+    const result = this.revisions.filter(rev => rev.getType() === type);
+    this.revisionsByTypeCache.set(type, result);
+    return [...result];
   }
 
   /**
    * Gets revisions by author
+   * Uses caching for improved performance on repeated calls
    * @param author - Author name to filter by
    * @returns Array of revisions by the specified author
    */
   getRevisionsByAuthor(author: string): Revision[] {
-    return this.revisions.filter(rev => rev.getAuthor() === author);
+    // Check cache first
+    if (this.revisionsByAuthorCache.has(author)) {
+      return [...this.revisionsByAuthorCache.get(author)!];
+    }
+
+    // Compute and cache
+    const result = this.revisions.filter(rev => rev.getAuthor() === author);
+    this.revisionsByAuthorCache.set(author, result);
+    return [...result];
   }
 
   /**
@@ -138,6 +174,7 @@ export class RevisionManager {
     const count = this.revisions.length;
     this.revisions = [];
     this.nextId = 0;
+    this.invalidateCache();
     if (count > 0) {
       getLogger().info('Revisions cleared', { previousCount: count });
     }
@@ -429,7 +466,13 @@ export class RevisionManager {
    * @returns Array of revisions in the specified category
    */
   getByCategory(category: RevisionCategory): Revision[] {
-    return this.revisions.filter(rev => {
+    // Check cache first
+    if (this.revisionsByCategoryCache.has(category)) {
+      return [...this.revisionsByCategoryCache.get(category)!];
+    }
+
+    // Compute and cache
+    const result = this.revisions.filter(rev => {
       const type = rev.getType();
       switch (category) {
         case 'content':
@@ -458,6 +501,8 @@ export class RevisionManager {
           return false;
       }
     });
+    this.revisionsByCategoryCache.set(category, result);
+    return [...result];
   }
 
   /**
@@ -591,6 +636,7 @@ export class RevisionManager {
     if (index === -1) return false;
 
     this.revisions.splice(index, 1);
+    this.invalidateCache();
     return true;
   }
 
