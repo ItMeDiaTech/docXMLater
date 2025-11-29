@@ -8,6 +8,7 @@ import { BookmarkManager } from "../elements/BookmarkManager";
 import { Comment } from "../elements/Comment";
 import { CommentManager } from "../elements/CommentManager";
 import { EndnoteManager } from "../elements/EndnoteManager";
+import { Field } from "../elements/Field";
 import { FootnoteManager } from "../elements/FootnoteManager";
 import { Footer } from "../elements/Footer";
 import { Header } from "../elements/Header";
@@ -22,6 +23,8 @@ import { Revision, RevisionType } from "../elements/Revision";
 import { RevisionManager } from "../elements/RevisionManager";
 import { RevisionLocation } from "../elements/PropertyChangeTypes";
 import { Run, RunFormatting } from "../elements/Run";
+import { Shape } from "../elements/Shape";
+import { TextBox } from "../elements/TextBox";
 import {
   RevisionValidator,
   RevisionAutoFixer,
@@ -2763,9 +2766,9 @@ export class Document {
    * referenced by any paragraphs in the document. This prevents corruption
    * from orphaned numbering definitions.
    *
-   * @private
+   * @public
    */
-  private cleanupUnusedNumbering(): void {
+  cleanupUnusedNumbering(): void {
     // Collect all numIds currently used by paragraphs
     const usedNumIds = new Set<number>();
     const paragraphs = this.getAllParagraphs();
@@ -3795,7 +3798,7 @@ export class Document {
               // Check if all content items are empty
               for (const item of content) {
                 // Hyperlinks count as content
-                if ((item as any).constructor.name === "Hyperlink") {
+                if (item instanceof Hyperlink) {
                   return false;
                 }
                 // Images count as content (check for Image class when implemented)
@@ -5646,22 +5649,22 @@ export class Document {
     // Check all content items
     for (const item of content) {
       // Hyperlinks count as content
-      if ((item as any).constructor.name === "Hyperlink") {
+      if (item instanceof Hyperlink) {
         return false;
       }
 
       // Images/shapes count as content
-      if ((item as any).constructor.name === "Shape") {
+      if (item instanceof Shape) {
         return false;
       }
 
       // TextBox count as content
-      if ((item as any).constructor.name === "TextBox") {
+      if (item instanceof TextBox) {
         return false;
       }
 
       // Fields count as content
-      if ((item as any).constructor.name === "Field") {
+      if (item instanceof Field) {
         return false;
       }
 
@@ -8673,8 +8676,8 @@ export class Document {
             para.addRun(item);
           } else if (item instanceof Hyperlink) {
             para.addHyperlink(item);
-          } else if ((item as any).constructor.name === 'Field') {
-            para.addField(item as any);
+          } else if (item instanceof Field) {
+            para.addField(item as Field);
           }
         }
         
@@ -10899,11 +10902,11 @@ export class Document {
    * This is essential after unwrapping Google Docs SDT-wrapped tables where
    * header formatting (bold, center, shading) is defined via tblPrEx rather
    * than cell-level formatting.
-   * 
+   *
    * @param table - Table to sanitize
-   * @private
+   * @public
    */
-  private sanitizeTableRowExceptions(table: Table): void {
+  sanitizeTableRowExceptions(table: Table): void {
     const rows = table.getRows();
     
     for (const row of rows) {

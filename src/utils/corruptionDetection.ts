@@ -176,7 +176,7 @@ interface TextCorruptionResult {
  */
 export function detectCorruptionInText(text: string): TextCorruptionResult {
   if (!text || typeof text !== 'string') {
-    return { isCorrupted: false, type: 'mixed', suggestedFix: text };
+    return { isCorrupted: false, type: 'mixed', suggestedFix: String(text || '') };
   }
 
   let hasEscapedXml = false;
@@ -200,7 +200,8 @@ export function detectCorruptionInText(text: string): TextCorruptionResult {
   // Pattern 3: Escaped entities combined with Word XML attributes
   // ONLY flag if we see Word-specific patterns, not just any entities
   // This avoids false positives from legitimate escaped characters
-  const wordXmlAttributePattern = /(&lt;w:|xml:space=&quot;preserve&quot;)/i;
+  // Matches all OOXML namespaces: w: (word), a: (drawingML), pic: (picture), r: (relationships), wp: (word drawing)
+  const wordXmlAttributePattern = /(&lt;(?:w|a|r|pic|wp|m|mc|wpc|wps|wpg|c|dgm|o|v):|xml:space=&quot;preserve&quot;)/i;
   if (wordXmlAttributePattern.test(text)) {
     hasEntities = true;
   }

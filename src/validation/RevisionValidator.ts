@@ -336,24 +336,28 @@ export class RevisionValidator {
 
     if (revisions.length === 0) return issues;
 
-    const ids = revisions.map(r => r.getId()).sort((a, b) => a - b);
-    let isSequential = true;
-    const gaps: number[] = [];
+    // Use Set for O(n) lookup instead of sorting
+    const idSet = new Set(revisions.map(r => r.getId()));
+    const ids = Array.from(idSet);
 
-    for (let i = 1; i < ids.length; i++) {
-      const currentId = ids[i]!;
-      const prevId = ids[i - 1]!;
-      if (currentId !== prevId + 1) {
-        isSequential = false;
-        gaps.push(prevId);
+    if (ids.length === 0) return issues;
+
+    const minId = Math.min(...ids);
+    const maxId = Math.max(...ids);
+
+    // Find actual missing IDs in the range
+    const missingIds: number[] = [];
+    for (let i = minId; i <= maxId; i++) {
+      if (!idSet.has(i)) {
+        missingIds.push(i);
       }
     }
 
-    if (!isSequential) {
+    if (missingIds.length > 0) {
       issues.push(createIssueFromRule(
         REVISION_RULES.NON_SEQUENTIAL_IDS,
         undefined,
-        `Revision IDs are not sequential. Gaps after: ${gaps.join(', ')}`
+        `Revision IDs are not sequential. Missing IDs: ${missingIds.slice(0, 10).join(', ')}${missingIds.length > 10 ? ` (and ${missingIds.length - 10} more)` : ''}`
       ));
     }
 

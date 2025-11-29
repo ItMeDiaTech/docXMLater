@@ -4,6 +4,8 @@
  */
 
 import { ComplexField, Field } from "../elements/Field";
+import { Footer } from "../elements/Footer";
+import { Header } from "../elements/Header";
 import { Hyperlink } from "../elements/Hyperlink";
 import { ImageManager } from "../elements/ImageManager";
 import { ImageRun } from "../elements/ImageRun";
@@ -5767,9 +5769,8 @@ export class DocumentParser {
     zipHandler: ZipHandler,
     relationshipManager: RelationshipManager,
     imageManager: ImageManager
-  ): Promise<import("../elements/Header").Header | null> {
+  ): Promise<Header | null> {
     try {
-      const { Header } = require("../elements/Header");
       const header = new Header({ type });
 
       // Store raw XML for preservation when saving
@@ -5829,9 +5830,8 @@ export class DocumentParser {
     zipHandler: ZipHandler,
     relationshipManager: RelationshipManager,
     imageManager: ImageManager
-  ): Promise<import("../elements/Footer").Footer | null> {
+  ): Promise<Footer | null> {
     try {
-      const { Footer } = require("../elements/Footer");
       const footer = new Footer({ type });
 
       // Store raw XML for preservation when saving
