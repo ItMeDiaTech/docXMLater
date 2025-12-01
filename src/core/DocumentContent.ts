@@ -444,7 +444,7 @@ export class DocumentContent {
   clone(): DocumentContent {
     const cloned = new DocumentContent();
     cloned.bodyElements = [...this.bodyElements];
-    cloned.section = this.section; // TODO: Implement Section.clone()
+    cloned.section = this.section?.clone();
     return cloned;
   }
 
