@@ -3648,6 +3648,16 @@ export class Document {
           if (!h1Preserve.underline) {
             run.setUnderline(h1Config.run?.underline ? "single" : false);
           }
+          // Apply font, color, and size
+          if (h1Config.run?.font) {
+            run.setFont(h1Config.run.font);
+          }
+          if (h1Config.run?.color) {
+            run.setColor(h1Config.run.color);
+          }
+          if (h1Config.run?.size) {
+            run.setSize(h1Config.run.size);
+          }
         }
 
         // Update paragraph mark properties to match configuration
@@ -3673,6 +3683,16 @@ export class Document {
             markProps.underline
           ) {
             delete markProps.underline;
+          }
+          // Update paragraph mark font, color, size
+          if (h1Config.run?.font) {
+            markProps.font = h1Config.run.font;
+          }
+          if (h1Config.run?.color) {
+            markProps.color = h1Config.run.color;
+          }
+          if (h1Config.run?.size) {
+            markProps.size = h1Config.run.size;
           }
         }
 
@@ -3706,6 +3726,16 @@ export class Document {
           if (!h2Preserve.underline) {
             run.setUnderline(h2Config.run?.underline ? "single" : false);
           }
+          // Apply font, color, and size
+          if (h2Config.run?.font) {
+            run.setFont(h2Config.run.font);
+          }
+          if (h2Config.run?.color) {
+            run.setColor(h2Config.run.color);
+          }
+          if (h2Config.run?.size) {
+            run.setSize(h2Config.run.size);
+          }
         }
 
         // Update paragraph mark properties to match configuration
@@ -3731,6 +3761,16 @@ export class Document {
             markProps.underline
           ) {
             delete markProps.underline;
+          }
+          // Update paragraph mark font, color, size
+          if (h2Config.run?.font) {
+            markProps.font = h2Config.run.font;
+          }
+          if (h2Config.run?.color) {
+            markProps.color = h2Config.run.color;
+          }
+          if (h2Config.run?.size) {
+            markProps.size = h2Config.run.size;
           }
         }
 
@@ -3844,6 +3884,16 @@ export class Document {
           if (!h3Preserve.underline) {
             run.setUnderline(h3Config.run?.underline ? "single" : false);
           }
+          // Apply font, color, and size
+          if (h3Config.run?.font) {
+            run.setFont(h3Config.run.font);
+          }
+          if (h3Config.run?.color) {
+            run.setColor(h3Config.run.color);
+          }
+          if (h3Config.run?.size) {
+            run.setSize(h3Config.run.size);
+          }
         }
 
         // Update paragraph mark properties to match configuration
@@ -3869,6 +3919,16 @@ export class Document {
             markProps.underline
           ) {
             delete markProps.underline;
+          }
+          // Update paragraph mark font, color, size
+          if (h3Config.run?.font) {
+            markProps.font = h3Config.run.font;
+          }
+          if (h3Config.run?.color) {
+            markProps.color = h3Config.run.color;
+          }
+          if (h3Config.run?.size) {
+            markProps.size = h3Config.run.size;
           }
         }
 
@@ -3914,6 +3974,16 @@ export class Document {
           if (!listParaPreserve.underline) {
             run.setUnderline(listParaConfig.run?.underline ? "single" : false);
           }
+          // Apply font, color, and size
+          if (listParaConfig.run?.font) {
+            run.setFont(listParaConfig.run.font);
+          }
+          if (listParaConfig.run?.color) {
+            run.setColor(listParaConfig.run.color);
+          }
+          if (listParaConfig.run?.size) {
+            run.setSize(listParaConfig.run.size);
+          }
         }
 
         // Update paragraph mark properties to match configuration
@@ -3939,6 +4009,16 @@ export class Document {
             markProps.underline
           ) {
             delete markProps.underline;
+          }
+          // Update paragraph mark font, color, size
+          if (listParaConfig.run?.font) {
+            markProps.font = listParaConfig.run.font;
+          }
+          if (listParaConfig.run?.color) {
+            markProps.color = listParaConfig.run.color;
+          }
+          if (listParaConfig.run?.size) {
+            markProps.size = listParaConfig.run.size;
           }
         }
 
@@ -3984,6 +4064,16 @@ export class Document {
           if (!normalPreserve.underline) {
             run.setUnderline(normalConfig.run?.underline ? "single" : false);
           }
+          // Apply font, color, and size
+          if (normalConfig.run?.font) {
+            run.setFont(normalConfig.run.font);
+          }
+          if (normalConfig.run?.color) {
+            run.setColor(normalConfig.run.color);
+          }
+          if (normalConfig.run?.size) {
+            run.setSize(normalConfig.run.size);
+          }
         }
 
         // Update paragraph mark properties to match configuration
@@ -4009,6 +4099,16 @@ export class Document {
             markProps.underline
           ) {
             delete markProps.underline;
+          }
+          // Update paragraph mark font, color, size
+          if (normalConfig.run?.font) {
+            markProps.font = normalConfig.run.font;
+          }
+          if (normalConfig.run?.color) {
+            markProps.color = normalConfig.run.color;
+          }
+          if (normalConfig.run?.size) {
+            markProps.size = normalConfig.run.size;
           }
         }
 
