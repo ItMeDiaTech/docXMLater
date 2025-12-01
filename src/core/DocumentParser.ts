@@ -508,7 +508,13 @@ export class DocumentParser {
       }
 
       // Parse paragraph properties
-      this.parseParagraphPropertiesFromObject(pElement["w:pPr"], paragraph);
+      // DEBUG: Log paragraphs with Bullet in text
+      const pPr = pElement["w:pPr"];
+      if (paraXml.includes('Bullet 3') || paraXml.includes('Bullet 4') || paraXml.includes('Bullet 5')) {
+        console.log(`[DEBUG parseParagraphWithOrder] RAW XML: ${paraXml.substring(0, 400)}...`);
+        console.log(`[DEBUG parseParagraphWithOrder] pPr.w:numPr: ${JSON.stringify(pPr?.["w:numPr"])?.substring(0, 200)}`);
+      }
+      this.parseParagraphPropertiesFromObject(pPr, paragraph);
 
       // Parse w14:paraId if present
       const paraId = pElement["w14:paraId"];
@@ -1185,10 +1191,19 @@ export class DocumentParser {
     if (pPrObj["w:contextualSpacing"]) paragraph.setContextualSpacing(true);
 
     // Numbering
+    // Note: When track changes are present (w:pPrChange), XMLParser merges the
+    // current numPr and the old numPr from pPrChange into an array. The first
+    // element is always the current value per _orderedChildren ordering.
     if (pPrObj["w:numPr"]) {
-      const numPr = pPrObj["w:numPr"];
-      const numId = numPr["w:numId"]?.["@_w:val"];
-      const ilvl = numPr["w:ilvl"]?.["@_w:val"] || "0";
+      const numPrRaw = pPrObj["w:numPr"];
+      // Handle both single object and array (when pPrChange is present)
+      const numPr = Array.isArray(numPrRaw) ? numPrRaw[0] : numPrRaw;
+      const numId = numPr?.["w:numId"]?.["@_w:val"];
+      const ilvl = numPr?.["w:ilvl"]?.["@_w:val"] || "0";
+      // DEBUG
+      console.log('[DEBUG] numPrRaw:', JSON.stringify(numPrRaw).substring(0, 100));
+      console.log('[DEBUG] numPr:', JSON.stringify(numPr).substring(0, 100));
+      console.log('[DEBUG] numId:', numId, 'ilvl:', ilvl);
       if (numId) {
         paragraph.setNumbering(parseInt(numId, 10), parseInt(ilvl, 10));
       }
@@ -2709,6 +2724,11 @@ export class DocumentParser {
       // Extract row XMLs from raw table XML if available
       let rowXmls: string[] = [];
       if (rawTableXml) {
+        // DEBUG: Check rawTableXml for pPrChange before extraction
+        if (rawTableXml.includes('Bullet 3') && rawTableXml.includes('pPrChange')) {
+          const pPrChangeIdx = rawTableXml.indexOf('pPrChange');
+          console.log(`[DEBUG parseTableFromObject] rawTableXml around pPrChange:`, rawTableXml.substring(pPrChangeIdx - 100, pPrChangeIdx + 200));
+        }
         rowXmls = XMLParser.extractElements(rawTableXml, "w:tr");
       }
 
@@ -2863,6 +2883,11 @@ export class DocumentParser {
       // Extract cell XMLs from raw row XML if available
       let cellXmls: string[] = [];
       if (rawRowXml) {
+        // DEBUG: Check rawRowXml for pPrChange before extraction
+        if (rawRowXml.includes('Bullet 3') && rawRowXml.includes('pPrChange')) {
+          const pPrChangeIdx = rawRowXml.indexOf('pPrChange');
+          console.log(`[DEBUG parseTableRowFromObject] rawRowXml around pPrChange:`, rawRowXml.substring(pPrChangeIdx - 100, pPrChangeIdx + 200));
+        }
         cellXmls = XMLParser.extractElements(rawRowXml, "w:tc");
       }
 
@@ -3207,6 +3232,15 @@ export class DocumentParser {
     // Extract paragraph XMLs from raw cell XML if available
     let paraXmls: string[] = [];
     if (rawCellXml) {
+      // DEBUG: Check if rawCellXml itself is corrupted
+      if (rawCellXml.includes('Bullet 3')) {
+        console.log(`[DEBUG parseTableCellFromObject] rawCellXml FULL LENGTH for Bullet 3:`, rawCellXml.length);
+        // Check for pPrChange in rawCellXml
+        const pPrChangeIdx = rawCellXml.indexOf('w:pPrChange');
+        if (pPrChangeIdx !== -1) {
+          console.log(`[DEBUG parseTableCellFromObject] rawCellXml around pPrChange:`, rawCellXml.substring(pPrChangeIdx - 50, pPrChangeIdx + 200));
+        }
+      }
       paraXmls = XMLParser.extractElements(rawCellXml, "w:p");
     }
 
