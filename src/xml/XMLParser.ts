@@ -565,7 +565,9 @@ export class XMLParser {
       if (nextTag === -1) {
         // No more tags - rest is text
         const text = content.substring(pos);
-        if (text.trim()) {
+        // When trimValues is false, preserve whitespace-only text
+        // When trimValues is true, only include text that has non-whitespace content
+        if (text.length > 0 && (!options.trimValues || text.trim())) {
           // Unescape XML entities in text content (e.g., &lt; -> <)
           textContent += XMLBuilder.unescapeXml(text);
         }
@@ -575,7 +577,9 @@ export class XMLParser {
       // Collect text before next tag
       if (nextTag > pos) {
         const text = content.substring(pos, nextTag);
-        if (text.trim()) {
+        // When trimValues is false, preserve whitespace-only text
+        // When trimValues is true, only include text that has non-whitespace content
+        if (text.length > 0 && (!options.trimValues || text.trim())) {
           // Unescape XML entities in text content (e.g., &lt; -> <)
           textContent += XMLBuilder.unescapeXml(text);
         }
@@ -612,7 +616,9 @@ export class XMLParser {
     }
 
     // Add text content
-    if (textContent.trim()) {
+    // When trimValues is false, include whitespace-only text
+    // When trimValues is true, only include text with non-whitespace content
+    if (textContent.length > 0 && (!options.trimValues || textContent.trim())) {
       const text = options.trimValues ? textContent.trim() : textContent;
       if (typeof elementValue === "object" && !Array.isArray(elementValue)) {
         if (Object.keys(elementValue).length === 0) {
