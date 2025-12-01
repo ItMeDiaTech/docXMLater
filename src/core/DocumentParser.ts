@@ -296,6 +296,9 @@ export class DocumentParser {
       }
     }
 
+    // Assemble multi-paragraph complex fields (e.g., TOC fields spanning multiple paragraphs)
+    this.assembleMultiParagraphFields(bodyElements);
+
     // Validate that we didn't load an empty/corrupted document
     this.validateLoadedContent(bodyElements);
 
@@ -535,10 +538,9 @@ export class DocumentParser {
       imageManager
     );
 
-    // NEW: Assemble complex fields from run tokens
-    // DISABLED: ComplexField assembly causes parsing failures for multi-paragraph fields (e.g., TOC)
-    // TODO: Re-enable when multi-paragraph field support is added
-    // this.assembleComplexFields(paragraph);
+    // NOTE: Complex field assembly (both single and multi-paragraph) is now handled
+    // at the parseBodyElements level via assembleMultiParagraphFields(), which calls
+    // assembleComplexFields() for single-paragraph fields after processing multi-paragraph ones.
 
     // Diagnostic logging for paragraph
       const runs = paragraph.getRuns();
@@ -1550,6 +1552,233 @@ export class DocumentParser {
       `Assembled ${
         groupedContent.length - content.length
       } complex fields in paragraph`
+    );
+  }
+
+  /**
+   * Assembles complex fields that span multiple paragraphs (e.g., TOC fields)
+   *
+   * In Word documents, complex fields like TOC can have their begin/separate/end
+   * markers distributed across multiple paragraphs. This method:
+   * 1. Scans all paragraphs for field markers
+   * 2. When a field spans multiple paragraphs, creates a ComplexField marked as multiParagraph
+   * 3. Places the ComplexField in the first paragraph and removes field tokens from subsequent paragraphs
+   *
+   * For single-paragraph fields, delegates to assembleComplexFields for efficiency.
+   *
+   * @param bodyElements All parsed body elements (paragraphs, tables, SDTs)
+   */
+  private assembleMultiParagraphFields(bodyElements: BodyElement[]): void {
+    // Extract all paragraphs (including those nested in tables and SDTs)
+    const allParagraphs = this.collectAllParagraphs(bodyElements);
+
+    if (allParagraphs.length === 0) {
+      return;
+    }
+
+    // Track field state across paragraphs
+    interface FieldTracker {
+      startParagraphIndex: number;
+      startRunIndex: number;
+      fieldRuns: Array<{ paragraphIndex: number; runIndex: number; run: Run }>;
+      hasBegin: boolean;
+      hasSeparate: boolean;
+      hasEnd: boolean;
+    }
+
+    let currentField: FieldTracker | null = null;
+    const completedFields: FieldTracker[] = [];
+
+    // First pass: identify multi-paragraph fields
+    for (let pIdx = 0; pIdx < allParagraphs.length; pIdx++) {
+      const paragraph = allParagraphs[pIdx]!;
+      const content = paragraph.getContent();
+
+      for (let rIdx = 0; rIdx < content.length; rIdx++) {
+        const item = content[rIdx];
+
+        if (!(item instanceof Run)) {
+          continue;
+        }
+
+        const runContent = item.getContent();
+        const fieldChar = runContent.find((c: any) => c.type === "fieldChar");
+
+        if (fieldChar) {
+          switch (fieldChar.fieldCharType) {
+            case "begin":
+              // Start tracking a new field
+              currentField = {
+                startParagraphIndex: pIdx,
+                startRunIndex: rIdx,
+                fieldRuns: [{ paragraphIndex: pIdx, runIndex: rIdx, run: item }],
+                hasBegin: true,
+                hasSeparate: false,
+                hasEnd: false,
+              };
+              break;
+
+            case "separate":
+              if (currentField) {
+                currentField.hasSeparate = true;
+                currentField.fieldRuns.push({ paragraphIndex: pIdx, runIndex: rIdx, run: item });
+              }
+              break;
+
+            case "end":
+              if (currentField) {
+                currentField.hasEnd = true;
+                currentField.fieldRuns.push({ paragraphIndex: pIdx, runIndex: rIdx, run: item });
+
+                // Check if this field spans multiple paragraphs
+                const startPIdx = currentField.startParagraphIndex;
+                const endPIdx = pIdx;
+
+                if (endPIdx > startPIdx) {
+                  // Multi-paragraph field - add to completed list for processing
+                  completedFields.push(currentField);
+                }
+                // Single-paragraph fields will be handled by assembleComplexFields
+                currentField = null;
+              }
+              break;
+          }
+        } else {
+          // Check for instruction text or result text (part of field)
+          const hasFieldContent = runContent.some(
+            (c: any) => c.type === "instructionText"
+          );
+          if (hasFieldContent && currentField) {
+            currentField.fieldRuns.push({ paragraphIndex: pIdx, runIndex: rIdx, run: item });
+          } else if (currentField && runContent.some((c: any) => c.type === "text")) {
+            // Text between separate and end is result text
+            if (currentField.hasSeparate && !currentField.hasEnd) {
+              currentField.fieldRuns.push({ paragraphIndex: pIdx, runIndex: rIdx, run: item });
+            }
+          }
+        }
+      }
+    }
+
+    // Process completed multi-paragraph fields
+    for (const fieldTracker of completedFields) {
+      this.processMultiParagraphField(fieldTracker, allParagraphs);
+    }
+
+    // Now handle single-paragraph fields in remaining paragraphs
+    for (const paragraph of allParagraphs) {
+      this.assembleComplexFields(paragraph);
+    }
+
+    const multiFieldCount = completedFields.length;
+    if (multiFieldCount > 0) {
+      defaultLogger.info(
+        `Assembled ${multiFieldCount} multi-paragraph complex field(s)`
+      );
+    }
+  }
+
+  /**
+   * Collects all paragraphs from body elements, including those nested in tables and SDTs
+   */
+  private collectAllParagraphs(bodyElements: BodyElement[]): Paragraph[] {
+    const paragraphs: Paragraph[] = [];
+
+    for (const element of bodyElements) {
+      if (element instanceof Paragraph) {
+        paragraphs.push(element);
+      } else if (element instanceof Table) {
+        // Extract paragraphs from table cells
+        for (const row of element.getRows()) {
+          for (const cell of row.getCells()) {
+            paragraphs.push(...cell.getParagraphs());
+          }
+        }
+      } else if (element instanceof StructuredDocumentTag) {
+        // SDT content may contain paragraphs
+        const sdtContent = element.getContent();
+        for (const item of sdtContent) {
+          if (item instanceof Paragraph) {
+            paragraphs.push(item);
+          }
+        }
+      }
+    }
+
+    return paragraphs;
+  }
+
+  /**
+   * Processes a multi-paragraph field by:
+   * 1. Creating a ComplexField from the collected runs
+   * 2. Placing it in the first paragraph
+   * 3. Removing field-related runs from subsequent paragraphs
+   */
+  private processMultiParagraphField(
+    fieldTracker: {
+      startParagraphIndex: number;
+      fieldRuns: Array<{ paragraphIndex: number; runIndex: number; run: Run }>;
+    },
+    allParagraphs: Paragraph[]
+  ): void {
+    const runs = fieldTracker.fieldRuns.map((fr) => fr.run);
+
+    // Create the ComplexField
+    const complexField = this.createComplexFieldFromRuns(runs);
+    if (!complexField) {
+      defaultLogger.debug("Failed to create ComplexField from multi-paragraph runs");
+      return;
+    }
+
+    // Mark as multi-paragraph
+    complexField.setMultiParagraph(true);
+
+    // Group field runs by paragraph index
+    const runsByParagraph = new Map<number, Set<number>>();
+    for (const fr of fieldTracker.fieldRuns) {
+      if (!runsByParagraph.has(fr.paragraphIndex)) {
+        runsByParagraph.set(fr.paragraphIndex, new Set());
+      }
+      runsByParagraph.get(fr.paragraphIndex)!.add(fr.runIndex);
+    }
+
+    // Process each affected paragraph
+    const affectedParagraphIndices = Array.from(runsByParagraph.keys()).sort((a, b) => a - b);
+
+    for (let i = 0; i < affectedParagraphIndices.length; i++) {
+      const pIdx = affectedParagraphIndices[i]!;
+      const paragraph = allParagraphs[pIdx]!;
+      const runIndicesToRemove = runsByParagraph.get(pIdx)!;
+      const content = paragraph.getContent();
+
+      if (i === 0) {
+        // First paragraph: replace field runs with ComplexField
+        const newContent: ParagraphContent[] = [];
+        let fieldInserted = false;
+
+        for (let rIdx = 0; rIdx < content.length; rIdx++) {
+          if (runIndicesToRemove.has(rIdx)) {
+            // Insert ComplexField at position of first field run
+            if (!fieldInserted) {
+              newContent.push(complexField);
+              fieldInserted = true;
+            }
+            // Skip this run (it's part of the field)
+          } else {
+            newContent.push(content[rIdx]!);
+          }
+        }
+
+        paragraph.setContent(newContent);
+      } else {
+        // Subsequent paragraphs: remove field runs entirely
+        const newContent = content.filter((_: ParagraphContent, rIdx: number) => !runIndicesToRemove.has(rIdx));
+        paragraph.setContent(newContent);
+      }
+    }
+
+    defaultLogger.debug(
+      `Processed multi-paragraph field spanning paragraphs ${fieldTracker.startParagraphIndex} to ${affectedParagraphIndices[affectedParagraphIndices.length - 1]}`
     );
   }
 
