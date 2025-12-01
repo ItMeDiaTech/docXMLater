@@ -365,6 +365,85 @@ describe('Section', () => {
     });
   });
 
+  describe('clone()', () => {
+    it('should create an independent clone with all properties', () => {
+      const section = new Section({
+        pageSize: { width: 11906, height: 16838, orientation: 'landscape' },
+        margins: { top: 720, bottom: 720, left: 1080, right: 1080, header: 360, footer: 360, gutter: 144 },
+        columns: { count: 2, space: 480, equalWidth: true, separator: true },
+        type: 'continuous',
+        pageNumbering: { start: 5, format: 'upperRoman' },
+        headers: { default: 'rId1', first: 'rId2', even: 'rId3' },
+        footers: { default: 'rId4', first: 'rId5', even: 'rId6' },
+        titlePage: true,
+        verticalAlignment: 'center',
+        paperSource: { first: 1, other: 2 },
+        textDirection: 'rtl',
+      });
+
+      const cloned = section.clone();
+
+      // Verify cloned properties match
+      const originalProps = section.getProperties();
+      const clonedProps = cloned.getProperties();
+
+      expect(clonedProps.pageSize).toEqual(originalProps.pageSize);
+      expect(clonedProps.margins).toEqual(originalProps.margins);
+      expect(clonedProps.columns).toEqual(originalProps.columns);
+      expect(clonedProps.type).toBe(originalProps.type);
+      expect(clonedProps.pageNumbering).toEqual(originalProps.pageNumbering);
+      expect(clonedProps.headers).toEqual(originalProps.headers);
+      expect(clonedProps.footers).toEqual(originalProps.footers);
+      expect(clonedProps.titlePage).toBe(originalProps.titlePage);
+      expect(clonedProps.verticalAlignment).toBe(originalProps.verticalAlignment);
+      expect(clonedProps.paperSource).toEqual(originalProps.paperSource);
+      expect(clonedProps.textDirection).toBe(originalProps.textDirection);
+    });
+
+    it('should create independent objects (not references)', () => {
+      const section = new Section({
+        pageSize: { width: 12240, height: 15840 },
+        margins: { top: 1440, bottom: 1440, left: 1440, right: 1440 },
+        columns: { count: 2, columnWidths: [5000, 6000] },
+      });
+
+      const cloned = section.clone();
+
+      // Modify the clone
+      cloned.setPageSize(11906, 16838);
+      cloned.setMargins({ top: 720, bottom: 720, left: 720, right: 720 });
+      cloned.setColumnWidths([3000, 4000, 5000]);
+
+      // Original should be unchanged
+      const originalProps = section.getProperties();
+      expect(originalProps.pageSize?.width).toBe(12240);
+      expect(originalProps.margins?.top).toBe(1440);
+      expect(originalProps.columns?.columnWidths).toEqual([5000, 6000]);
+    });
+
+    it('should handle section with minimal properties', () => {
+      const section = new Section();
+      const cloned = section.clone();
+
+      expect(cloned).toBeInstanceOf(Section);
+      expect(cloned.getProperties().pageSize).toBeDefined();
+      expect(cloned.getProperties().margins).toBeDefined();
+    });
+
+    it('should deep clone columnWidths array', () => {
+      const section = new Section();
+      section.setColumnWidths([3000, 4000, 5000]);
+
+      const cloned = section.clone();
+
+      // Modify original's columnWidths
+      section.setColumnWidths([1000, 2000]);
+
+      // Clone should still have original values
+      expect(cloned.getProperties().columns?.columnWidths).toEqual([3000, 4000, 5000]);
+    });
+  });
+
   describe('Static factory methods', () => {
     it('should create section with default properties', () => {
       const section = Section.create();
