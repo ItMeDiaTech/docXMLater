@@ -234,6 +234,16 @@ export class RevisionWalker {
 
   /**
    * Unwrap all elements of a given type, promoting their children to parent
+   *
+   * This is the most complex operation in RevisionWalker. When we unwrap a
+   * revision element like w:ins, we need to:
+   * 1. Extract the children from inside w:ins
+   * 2. Insert them at the correct position in the parent's element arrays
+   * 3. Update _orderedChildren to reflect the new structure
+   *
+   * The key challenge is maintaining correct element order. For example:
+   *   Before: <w:tbl><w:tr>Row1</w:tr><w:ins><w:tr>Row2</w:tr></w:ins><w:tr>Row3</w:tr></w:tbl>
+   *   After:  <w:tbl><w:tr>Row1</w:tr><w:tr>Row2</w:tr><w:tr>Row3</w:tr></w:tbl>
    */
   private static unwrapAllElements(parent: any, key: string): void {
     const elements = parent[key];
@@ -241,45 +251,130 @@ export class RevisionWalker {
 
     const elementArray = Array.isArray(elements) ? elements : [elements];
 
-    // Collect all children from all elements to unwrap
-    const allPromotedChildren: Array<{
-      childKey: string;
-      childValue: any;
-      sourceOrderedChildren?: OrderedChildInfo[];
-    }> = [];
+    // Build a complete ordered list of child elements by walking _orderedChildren
+    // This captures the intended order before we modify anything
+    const orderedElements: Array<{ type: string; element: any }> = [];
 
-    for (const element of elementArray) {
-      if (!element || typeof element !== 'object') continue;
-
-      // Extract children from this element
-      const elementKeys = Object.keys(element).filter(
-        (k) => !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren'
-      );
-
-      for (const childKey of elementKeys) {
-        allPromotedChildren.push({
-          childKey,
-          childValue: element[childKey],
-          sourceOrderedChildren: element._orderedChildren,
-        });
-      }
-    }
-
-    // Update _orderedChildren before removing the element
     if (parent._orderedChildren) {
-      parent._orderedChildren = RevisionWalker.updateOrderedChildrenForUnwrap(
-        parent._orderedChildren,
-        key,
-        elementArray
-      );
+      // Track how many of each type we've seen to get correct array index
+      const typeCounters: Map<string, number> = new Map();
+      let unwrappedIndex = 0;
+
+      for (const entry of parent._orderedChildren) {
+        const { type } = entry;
+
+        if (type === key) {
+          // This is a revision element - extract its children in order
+          const revElement = elementArray[unwrappedIndex];
+          unwrappedIndex++;
+
+          if (revElement && typeof revElement === 'object') {
+            if (revElement._orderedChildren) {
+              // Use the revision element's _orderedChildren for correct order
+              const childCounters: Map<string, number> = new Map();
+              for (const childEntry of revElement._orderedChildren) {
+                const childType = childEntry.type;
+                const childIdx = childCounters.get(childType) || 0;
+                childCounters.set(childType, childIdx + 1);
+
+                const childElements = revElement[childType];
+                if (childElements) {
+                  const childArray = Array.isArray(childElements)
+                    ? childElements
+                    : [childElements];
+                  if (childIdx < childArray.length) {
+                    orderedElements.push({
+                      type: childType,
+                      element: childArray[childIdx],
+                    });
+                  }
+                }
+              }
+            } else {
+              // No _orderedChildren, extract children in object key order
+              const childKeys = Object.keys(revElement).filter(
+                (k) =>
+                  !k.startsWith('@_') &&
+                  k !== '#text' &&
+                  k !== '_orderedChildren'
+              );
+              for (const childKey of childKeys) {
+                const childValue = revElement[childKey];
+                const childArray = Array.isArray(childValue)
+                  ? childValue
+                  : [childValue];
+                for (const child of childArray) {
+                  orderedElements.push({ type: childKey, element: child });
+                }
+              }
+            }
+          }
+        } else {
+          // Regular element - get it from the parent
+          const idx = typeCounters.get(type) || 0;
+          typeCounters.set(type, idx + 1);
+
+          const parentElements = parent[type];
+          if (parentElements) {
+            const parentArray = Array.isArray(parentElements)
+              ? parentElements
+              : [parentElements];
+            if (idx < parentArray.length) {
+              orderedElements.push({ type, element: parentArray[idx] });
+            }
+          }
+        }
+      }
     }
 
     // Remove the revision wrapper
     delete parent[key];
 
-    // Promote children to parent level
-    for (const { childKey, childValue } of allPromotedChildren) {
-      RevisionWalker.mergeIntoParent(parent, childKey, childValue);
+    // If we have ordered elements, rebuild the arrays in correct order
+    if (orderedElements.length > 0) {
+      // Group elements by type
+      const rebuiltArrays: Map<string, any[]> = new Map();
+
+      for (const { type, element } of orderedElements) {
+        if (!rebuiltArrays.has(type)) {
+          rebuiltArrays.set(type, []);
+        }
+        rebuiltArrays.get(type)!.push(element);
+      }
+
+      // Update parent with rebuilt arrays
+      for (const [type, elements] of rebuiltArrays) {
+        if (elements.length === 1) {
+          parent[type] = elements[0];
+        } else {
+          parent[type] = elements;
+        }
+      }
+
+      // Rebuild _orderedChildren
+      const newOrderedChildren: OrderedChildInfo[] = [];
+      const typeCounters: Map<string, number> = new Map();
+
+      for (const { type } of orderedElements) {
+        const idx = typeCounters.get(type) || 0;
+        typeCounters.set(type, idx + 1);
+        newOrderedChildren.push({ type, index: idx });
+      }
+
+      parent._orderedChildren = newOrderedChildren;
+    } else {
+      // Fallback for when there's no _orderedChildren - just merge
+      for (const element of elementArray) {
+        if (!element || typeof element !== 'object') continue;
+
+        const elementKeys = Object.keys(element).filter(
+          (k) => !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren'
+        );
+
+        for (const childKey of elementKeys) {
+          RevisionWalker.mergeIntoParent(parent, childKey, element[childKey]);
+        }
+      }
     }
   }
 
@@ -324,61 +419,6 @@ export class RevisionWalker {
         parent[childKey] = [existing, ...incoming];
       }
     }
-  }
-
-  /**
-   * Update _orderedChildren when unwrapping elements
-   *
-   * When we unwrap w:ins, we need to:
-   * 1. Find where w:ins was in _orderedChildren
-   * 2. Replace it with the children's order info
-   * 3. Re-index all elements
-   */
-  private static updateOrderedChildrenForUnwrap(
-    orderedChildren: OrderedChildInfo[],
-    unwrappedType: string,
-    unwrappedElements: any[]
-  ): OrderedChildInfo[] {
-    const result: OrderedChildInfo[] = [];
-    let unwrappedIndex = 0;
-
-    for (const entry of orderedChildren) {
-      if (entry.type === unwrappedType) {
-        // Get the element being unwrapped
-        const element = unwrappedElements[unwrappedIndex];
-        unwrappedIndex++;
-
-        if (element && element._orderedChildren) {
-          // Insert the children's ordered children here
-          for (const childEntry of element._orderedChildren) {
-            result.push({ type: childEntry.type, index: childEntry.index });
-          }
-        } else if (element && typeof element === 'object') {
-          // No _orderedChildren, add children in object key order
-          const childKeys = Object.keys(element).filter(
-            (k) =>
-              !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren'
-          );
-          for (const childKey of childKeys) {
-            const children = element[childKey];
-            if (Array.isArray(children)) {
-              for (let i = 0; i < children.length; i++) {
-                result.push({ type: childKey, index: i });
-              }
-            } else {
-              result.push({ type: childKey, index: 0 });
-            }
-          }
-        }
-      } else {
-        result.push({ ...entry });
-      }
-    }
-
-    // Re-index to fix indices after merging
-    RevisionWalker.reindexOrderedChildren(result);
-
-    return result;
   }
 
   /**
