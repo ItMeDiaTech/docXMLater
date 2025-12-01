@@ -588,6 +588,62 @@ export class Section {
   }
 
   /**
+   * Creates a deep clone of this section
+   * @returns New Section instance with copied properties
+   */
+  clone(): Section {
+    // Deep clone all nested objects
+    const clonedProperties: SectionProperties = {};
+
+    if (this.properties.pageSize) {
+      clonedProperties.pageSize = { ...this.properties.pageSize };
+    }
+
+    if (this.properties.margins) {
+      clonedProperties.margins = { ...this.properties.margins };
+    }
+
+    if (this.properties.columns) {
+      clonedProperties.columns = {
+        ...this.properties.columns,
+        columnWidths: this.properties.columns.columnWidths
+          ? [...this.properties.columns.columnWidths]
+          : undefined,
+      };
+    }
+
+    if (this.properties.pageNumbering) {
+      clonedProperties.pageNumbering = { ...this.properties.pageNumbering };
+    }
+
+    if (this.properties.headers) {
+      clonedProperties.headers = { ...this.properties.headers };
+    }
+
+    if (this.properties.footers) {
+      clonedProperties.footers = { ...this.properties.footers };
+    }
+
+    if (this.properties.paperSource) {
+      clonedProperties.paperSource = { ...this.properties.paperSource };
+    }
+
+    if (this.properties.docGrid) {
+      clonedProperties.docGrid = { ...this.properties.docGrid };
+    }
+
+    // Copy primitive properties
+    clonedProperties.type = this.properties.type;
+    clonedProperties.titlePage = this.properties.titlePage;
+    clonedProperties.verticalAlignment = this.properties.verticalAlignment;
+    clonedProperties.textDirection = this.properties.textDirection;
+    clonedProperties.bidi = this.properties.bidi;
+    clonedProperties.rtlGutter = this.properties.rtlGutter;
+
+    return new Section(clonedProperties);
+  }
+
+  /**
    * Creates a section with default properties
    */
   static create(properties?: SectionProperties): Section {
