@@ -789,7 +789,15 @@ export class XMLParser {
           charAfter === "\n" ||
           charAfter === "\r"
         ) {
-          // This is a real opening tag
+          // This looks like a real opening tag - but check if it's self-closing
+          // Self-closing tags like <w:rPr/> should NOT increase depth
+          const tagEnd = xml.indexOf(">", candidateOpen);
+          if (tagEnd !== -1 && xml[tagEnd - 1] === "/") {
+            // Self-closing tag - skip it (don't affect depth)
+            searchPos = tagEnd + 1;
+            continue;
+          }
+          // This is a real opening tag (not self-closing)
           realOpenPos = candidateOpen;
           break;
         }

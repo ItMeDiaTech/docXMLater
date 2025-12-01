@@ -315,6 +315,23 @@ describe('XMLParser.parseToObject', () => {
       expect(result.list.item).toEqual(['1', '2', '3']);
     });
 
+    it('should correctly parse nested self-closing tags with same name (rPrChange bug fix)', () => {
+      // This tests the fix for the bug where w:rPr containing w:rPrChange (which itself contains self-closing w:rPr)
+      // was incorrectly parsed, causing w:b and w:bCs to be promoted to the wrong level
+      const xml = '<w:r><w:rPr><w:b/><w:bCs/><w:rPrChange w:id="1"><w:rPr/></w:rPrChange></w:rPr><w:t>Text</w:t></w:r>';
+      const result: any = XMLParser.parseToObject(xml, { trimValues: false });
+
+      // w:b and w:bCs should be inside w:rPr, not siblings of it
+      expect(result['w:r']['w:rPr']['w:b']).toEqual({});
+      expect(result['w:r']['w:rPr']['w:bCs']).toEqual({});
+      expect(result['w:r']['w:rPr']['w:rPrChange']).toBeDefined();
+      expect(result['w:r']['w:rPr']['w:rPrChange']['w:rPr']).toEqual({});
+
+      // w:b and w:bCs should NOT be at the w:r level
+      expect(result['w:r']['w:b']).toBeUndefined();
+      expect(result['w:r']['w:bCs']).toBeUndefined();
+    });
+
     it('should throw on oversized documents', () => {
       const hugeXml = '<root>' + 'x'.repeat(11 * 1024 * 1024) + '</root>';
 
