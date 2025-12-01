@@ -1442,7 +1442,70 @@ export class DocumentParser {
         change.author = String(changeObj["@_w:author"]);
       if (changeObj["@_w:date"]) change.date = String(changeObj["@_w:date"]);
       if (changeObj["@_w:id"]) change.id = String(changeObj["@_w:id"]);
-      // Note: Full implementation would parse child <w:pPr> for previousProperties
+
+      // Parse child w:pPr for previousProperties to preserve tracked change history
+      if (changeObj["w:pPr"]) {
+        const prevPPr = changeObj["w:pPr"];
+        const previousProperties: any = {};
+
+        // Parse previous style
+        if (prevPPr["w:pStyle"]?.["@_w:val"]) {
+          previousProperties.style = String(prevPPr["w:pStyle"]["@_w:val"]);
+        }
+
+        // Parse previous numbering
+        if (prevPPr["w:numPr"]) {
+          const numPr = prevPPr["w:numPr"];
+          previousProperties.numbering = {};
+          if (numPr["w:ilvl"]?.["@_w:val"] !== undefined) {
+            previousProperties.numbering.level = parseInt(numPr["w:ilvl"]["@_w:val"], 10);
+          }
+          if (numPr["w:numId"]?.["@_w:val"] !== undefined) {
+            previousProperties.numbering.numId = parseInt(numPr["w:numId"]["@_w:val"], 10);
+          }
+        }
+
+        // Parse previous indentation
+        if (prevPPr["w:ind"]) {
+          const ind = prevPPr["w:ind"];
+          previousProperties.indentation = {};
+          if (ind["@_w:left"] !== undefined) previousProperties.indentation.left = parseInt(ind["@_w:left"], 10);
+          if (ind["@_w:right"] !== undefined) previousProperties.indentation.right = parseInt(ind["@_w:right"], 10);
+          if (ind["@_w:firstLine"] !== undefined) previousProperties.indentation.firstLine = parseInt(ind["@_w:firstLine"], 10);
+          if (ind["@_w:hanging"] !== undefined) previousProperties.indentation.hanging = parseInt(ind["@_w:hanging"], 10);
+        }
+
+        // Parse previous alignment
+        if (prevPPr["w:jc"]?.["@_w:val"]) {
+          previousProperties.alignment = String(prevPPr["w:jc"]["@_w:val"]);
+        }
+
+        // Parse previous spacing
+        if (prevPPr["w:spacing"]) {
+          const spacing = prevPPr["w:spacing"];
+          previousProperties.spacing = {};
+          if (spacing["@_w:before"] !== undefined) previousProperties.spacing.before = parseInt(spacing["@_w:before"], 10);
+          if (spacing["@_w:after"] !== undefined) previousProperties.spacing.after = parseInt(spacing["@_w:after"], 10);
+          if (spacing["@_w:line"] !== undefined) previousProperties.spacing.line = parseInt(spacing["@_w:line"], 10);
+          if (spacing["@_w:lineRule"]) previousProperties.spacing.lineRule = String(spacing["@_w:lineRule"]);
+        }
+
+        // Parse previous keepNext/keepLines/pageBreakBefore
+        if (prevPPr["w:keepNext"]) {
+          previousProperties.keepNext = prevPPr["w:keepNext"]["@_w:val"] !== "0";
+        }
+        if (prevPPr["w:keepLines"]) {
+          previousProperties.keepLines = prevPPr["w:keepLines"]["@_w:val"] !== "0";
+        }
+        if (prevPPr["w:pageBreakBefore"]) {
+          previousProperties.pageBreakBefore = prevPPr["w:pageBreakBefore"]["@_w:val"] !== "0";
+        }
+
+        if (Object.keys(previousProperties).length > 0) {
+          change.previousProperties = previousProperties;
+        }
+      }
+
       if (Object.keys(change).length > 0) {
         paragraph.setParagraphPropertiesChange(change);
       }
