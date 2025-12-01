@@ -106,6 +106,7 @@ Converts XML from DOCX files into JavaScript object models.
 - **Hyperlink Defragmentation**: Merges consecutive hyperlinks with same URL
 - **Special Characters**: Converts `<w:tab/>`, `<w:br/>` to string equivalents
 - **Complex Fields**: Parses field instructions and content
+- **Multi-Paragraph Complex Fields**: Assembles fields (like TOC) that span multiple paragraphs into single `ComplexField` objects marked with `isMultiParagraph()`. Field tokens are removed from subsequent paragraphs after assembly.
 - **Content Controls**: Handles SDT (Structured Document Tags)
 - **Element Order Preservation**: Uses `_orderedChildren` from XMLParser for correct tab/break ordering
 - **Nested Element Handling**: Skips past closing tags when scanning to avoid counting nested runs
