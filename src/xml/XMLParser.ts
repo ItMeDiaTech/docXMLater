@@ -764,17 +764,23 @@ export class XMLParser {
     let pos = startPos;
 
     while (depth > 0 && pos < xml.length) {
-      const nextOpen = xml.indexOf(openTag, pos);
       const nextClose = xml.indexOf(closeTag, pos);
 
       if (nextClose === -1) {
         return -1; // No closing tag found
       }
 
-      // Verify nextOpen is a real opening tag (not part of another tag name)
-      let isRealOpen = false;
-      if (nextOpen !== -1 && nextOpen < nextClose) {
-        const charAfter = xml[nextOpen + openTag.length];
+      // Find the next REAL opening tag (not a prefix match like <w:pPrChange for <w:pPr)
+      // Must search for all potential matches and verify each one
+      let realOpenPos = -1;
+      let searchPos = pos;
+      while (searchPos < nextClose) {
+        const candidateOpen = xml.indexOf(openTag, searchPos);
+        if (candidateOpen === -1 || candidateOpen >= nextClose) {
+          break; // No more candidates before the closing tag
+        }
+
+        const charAfter = xml[candidateOpen + openTag.length];
         if (
           charAfter === ">" ||
           charAfter === " " ||
@@ -783,16 +789,22 @@ export class XMLParser {
           charAfter === "\n" ||
           charAfter === "\r"
         ) {
-          isRealOpen = true;
+          // This is a real opening tag
+          realOpenPos = candidateOpen;
+          break;
         }
+
+        // False positive (e.g., <w:pPrChange when looking for <w:pPr)
+        // Keep searching from after this position
+        searchPos = candidateOpen + openTag.length;
       }
 
-      // Issue #6 fix: Remove redundant `nextOpen < nextClose` check
-      // isRealOpen is only true when `nextOpen !== -1 && nextOpen < nextClose` (checked above)
-      if (isRealOpen) {
+      if (realOpenPos !== -1) {
+        // Found a real opening tag before the closing tag - increase depth
         depth++;
-        pos = nextOpen + openTag.length;
+        pos = realOpenPos + openTag.length;
       } else {
+        // No real opening tag before this closing tag - decrease depth
         depth--;
         if (depth === 0) {
           return nextClose;
