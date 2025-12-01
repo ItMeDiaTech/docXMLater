@@ -282,26 +282,62 @@ export class DocumentTrackingContext implements TrackingContext {
     // Apply pPrChange to each paragraph that has property changes
     for (const [paragraph, changes] of paragraphChanges) {
       // Build previous properties from all changes to this paragraph
-      const previousProperties: Record<string, any> = {};
+      const newPreviousProperties: Record<string, any> = {};
       let latestTimestamp = 0;
 
       for (const change of changes) {
         if (change.previousValue !== undefined) {
-          previousProperties[change.property] = change.previousValue;
+          newPreviousProperties[change.property] = change.previousValue;
         }
         if (change.timestamp > latestTimestamp) {
           latestTimestamp = change.timestamp;
         }
       }
 
-      // Set pPrChange on the paragraph (this is what generates w:pPrChange in XML)
-      const revisionId = this.revisionManager.peekNextId();
-      paragraph.formatting.pPrChange = {
-        author: this.author,
-        date: new Date(latestTimestamp).toISOString(),
-        id: String(revisionId),
-        previousProperties: Object.keys(previousProperties).length > 0 ? previousProperties : undefined,
-      };
+      // CRITICAL: Merge with existing pPrChange if present to avoid nested tracked changes
+      // When a document already has tracked changes, we need to preserve the original
+      // "previous" state for properties that aren't changing now, while updating
+      // properties that ARE changing now with their current (pre-change) values
+      const existingChange = paragraph.formatting.pPrChange;
+
+      if (existingChange) {
+        // Preserve the original pPrChange - this represents what accepting ALL changes would revert to
+        // We only update the previousProperties for properties we're NEWLY changing
+        const mergedPreviousProperties: Record<string, any> = {
+          // Start with existing previous properties (original state before any tracked changes)
+          ...(existingChange.previousProperties || {}),
+        };
+
+        // For properties we're changing NOW, the "previous" state is their current value
+        // (which may already reflect the original tracked change)
+        for (const [prop, value] of Object.entries(newPreviousProperties)) {
+          // Only update if this property wasn't already in the original pPrChange
+          // OR if we're changing the same property again (update the "before" state)
+          mergedPreviousProperties[prop] = value;
+        }
+
+        // Keep the original author/date/id - represents the first tracked change
+        // This ensures Word only requires ONE "Accept" to accept all changes
+        paragraph.formatting.pPrChange = {
+          author: existingChange.author,
+          date: existingChange.date,
+          id: existingChange.id,
+          previousProperties: Object.keys(mergedPreviousProperties).length > 0
+            ? mergedPreviousProperties
+            : undefined,
+        };
+      } else {
+        // No existing pPrChange - create a new one
+        const revisionId = this.revisionManager.peekNextId();
+        paragraph.formatting.pPrChange = {
+          author: this.author,
+          date: new Date(latestTimestamp).toISOString(),
+          id: String(revisionId),
+          previousProperties: Object.keys(newPreviousProperties).length > 0
+            ? newPreviousProperties
+            : undefined,
+        };
+      }
     }
 
     this.pendingChanges.clear();
