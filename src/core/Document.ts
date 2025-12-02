@@ -4843,34 +4843,31 @@ export class Document {
     }
 
     // Phase 9: Add blank after bullet/numbered list blocks
+    // Uses numId to distinguish between different lists - nested items with same numId
+    // are treated as part of the same list
     if (afterLists) {
-      let inListBlock = false;
-      let listBlockStartIndex = -1;
-      
       for (let i = 0; i < this.bodyElements.length; i++) {
         const element = this.bodyElements[i];
-        
+
         if (element instanceof Paragraph) {
           const numbering = element.getNumbering();
-          
+
           if (numbering) {
-            // This paragraph is part of a list
-            if (!inListBlock) {
-              // Start of a new list block
-              inListBlock = true;
-              listBlockStartIndex = i;
-            }
-            // Continue tracking the list block
-          } else {
-            // This paragraph is NOT part of a list
-            if (inListBlock) {
-              // End of list block detected - insert blank after previous paragraph
-              const listEndIndex = i - 1;
-              
-              // Check if next element is already blank
-              const nextElement = this.bodyElements[i];
-              
-              if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
+            // This is a list item - check if it's the last item of its list
+            const nextElement = this.bodyElements[i + 1];
+            const isListEnd =
+              !nextElement || // End of document
+              !(nextElement instanceof Paragraph) || // Next is not a paragraph
+              !nextElement.getNumbering() || // Next paragraph has no numbering
+              nextElement.getNumbering()!.numId !== numbering.numId; // Different list
+
+            if (isListEnd) {
+              // Check if there's already a blank paragraph after the list
+              const alreadyHasBlank =
+                nextElement instanceof Paragraph &&
+                this.isParagraphBlank(nextElement);
+
+              if (alreadyHasBlank) {
                 // Mark existing blank as preserved
                 nextElement.setStyle(style);
                 if (markAsPreserved && !nextElement.isPreserved()) {
@@ -4878,67 +4875,21 @@ export class Document {
                   totalExistingLinesMarked++;
                 }
               } else {
-                // Add blank paragraph after list block
+                // Add blank paragraph after list
                 const blankPara = Paragraph.create();
                 blankPara.setStyle(style);
                 blankPara.setSpaceAfter(spacingAfter);
                 blankPara.setPreserved(markAsPreserved);
-                this.bodyElements.splice(i, 0, blankPara);
+                this.bodyElements.splice(i + 1, 0, blankPara);
                 totalBlankLinesAdded++;
-                i++; // Skip the newly inserted blank paragraph
               }
-              
+
               totalListsProcessed++;
-              inListBlock = false;
-              listBlockStartIndex = -1;
+              // Skip the next element (either newly inserted or existing blank)
+              i++;
             }
-          }
-        } else {
-          // Non-paragraph element (table, TOC, etc.) - ends list block
-          if (inListBlock) {
-            // End of list block detected - insert blank before this element
-            const listEndIndex = i - 1;
-            
-            // Check if current element is already preceded by blank
-            if (i > 0) {
-              const prevElement = this.bodyElements[i - 1];
-              
-              if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
-                // Mark existing blank as preserved
-                prevElement.setStyle(style);
-                if (markAsPreserved && !prevElement.isPreserved()) {
-                  prevElement.setPreserved(true);
-                  totalExistingLinesMarked++;
-                }
-              } else {
-                // Add blank paragraph after list block
-                const blankPara = Paragraph.create();
-                blankPara.setStyle(style);
-                blankPara.setSpaceAfter(spacingAfter);
-                blankPara.setPreserved(markAsPreserved);
-                this.bodyElements.splice(i, 0, blankPara);
-                totalBlankLinesAdded++;
-                i++; // Skip the newly inserted blank paragraph
-              }
-            }
-            
-            totalListsProcessed++;
-            inListBlock = false;
-            listBlockStartIndex = -1;
           }
         }
-      }
-      
-      // Handle case where list block extends to end of document
-      if (inListBlock && this.bodyElements.length > 0) {
-        // Add blank paragraph at the end
-        const blankPara = Paragraph.create();
-        blankPara.setStyle(style);
-        blankPara.setSpaceAfter(spacingAfter);
-        blankPara.setPreserved(markAsPreserved);
-        this.bodyElements.push(blankPara);
-        totalBlankLinesAdded++;
-        totalListsProcessed++;
       }
     }
 
