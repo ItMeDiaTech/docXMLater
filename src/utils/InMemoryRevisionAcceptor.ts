@@ -142,6 +142,69 @@ export function acceptRevisionsInMemory(
     }
   }
 
+  // Process paragraphs in headers
+  const headerFooterManager = doc.getHeaderFooterManager();
+  if (headerFooterManager) {
+    const headers = headerFooterManager.getAllHeaders();
+    for (const headerEntry of headers) {
+      const elements = headerEntry.header.getElements();
+      for (const element of elements) {
+        // Element can be Paragraph or Table
+        if ('getContent' in element && typeof element.getContent === 'function') {
+          // It's a Paragraph
+          const paragraphResult = acceptRevisionsInParagraph(element as Paragraph, opts);
+          result.insertionsAccepted += paragraphResult.insertionsAccepted;
+          result.deletionsAccepted += paragraphResult.deletionsAccepted;
+          result.movesAccepted += paragraphResult.movesAccepted;
+          result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
+        } else if ('getRows' in element && typeof element.getRows === 'function') {
+          // It's a Table - process its cells
+          for (const row of (element as any).getRows()) {
+            for (const cell of row.getCells()) {
+              for (const paragraph of cell.getParagraphs()) {
+                const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+                result.insertionsAccepted += paragraphResult.insertionsAccepted;
+                result.deletionsAccepted += paragraphResult.deletionsAccepted;
+                result.movesAccepted += paragraphResult.movesAccepted;
+                result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Process paragraphs in footers
+    const footers = headerFooterManager.getAllFooters();
+    for (const footerEntry of footers) {
+      const elements = footerEntry.footer.getElements();
+      for (const element of elements) {
+        // Element can be Paragraph or Table
+        if ('getContent' in element && typeof element.getContent === 'function') {
+          // It's a Paragraph
+          const paragraphResult = acceptRevisionsInParagraph(element as Paragraph, opts);
+          result.insertionsAccepted += paragraphResult.insertionsAccepted;
+          result.deletionsAccepted += paragraphResult.deletionsAccepted;
+          result.movesAccepted += paragraphResult.movesAccepted;
+          result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
+        } else if ('getRows' in element && typeof element.getRows === 'function') {
+          // It's a Table - process its cells
+          for (const row of (element as any).getRows()) {
+            for (const cell of row.getCells()) {
+              for (const paragraph of cell.getParagraphs()) {
+                const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+                result.insertionsAccepted += paragraphResult.insertionsAccepted;
+                result.deletionsAccepted += paragraphResult.deletionsAccepted;
+                result.movesAccepted += paragraphResult.movesAccepted;
+                result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Clear revision manager
   const revisionManager = doc.getRevisionManager();
   if (revisionManager) {
@@ -274,6 +337,16 @@ function acceptRevisionsInParagraph(
 
   // Replace paragraph content with the transformed content
   paragraph.setContent(newContent);
+
+  // Clear paragraph property change tracking (pPrChange) if accepting property changes
+  // This removes the w:pPrChange element from the paragraph's formatting
+  if (options.acceptPropertyChanges) {
+    const formatting = paragraph.getFormatting();
+    if (formatting.pPrChange) {
+      paragraph.clearParagraphPropertiesChange();
+      result.propertyChangesAccepted++;
+    }
+  }
 
   return result;
 }
