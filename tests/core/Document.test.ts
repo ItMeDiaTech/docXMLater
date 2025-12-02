@@ -1483,5 +1483,57 @@ describe('Document', () => {
 
       doc.dispose();
     });
+
+    it('should remove blank line in MIDDLE of a list via addStructureBlankLines', () => {
+      const doc = Document.create();
+      const numId = doc.createNumberedList();
+
+      // Create list with blank in the middle (simulates Quest.docx scenario)
+      // Bullet 1, Bullet 2, [BLANK], Bullet 3, Bullet 4
+      const para1 = doc.createParagraph('Bullet 1');
+      para1.setNumbering(numId, 0);
+
+      const para2 = doc.createParagraph('Bullet 2');
+      para2.setNumbering(numId, 0);
+
+      // Blank paragraph in middle of list
+      doc.createParagraph('');
+
+      const para3 = doc.createParagraph('Bullet 3');
+      para3.setNumbering(numId, 0);
+
+      const para4 = doc.createParagraph('Bullet 4');
+      para4.setNumbering(numId, 0);
+
+      // Regular paragraph after list
+      doc.createParagraph('After list');
+
+      expect(doc.getBodyElements().length).toBe(6);
+
+      // Run addStructureBlankLines - should NOT preserve the blank in the middle
+      const result = doc.addStructureBlankLines({ afterLists: true });
+
+      // The blank in the middle should be removed by removeExtraBlankParagraphs
+      // (which runs at the start of addStructureBlankLines)
+      // Then a blank should be added after the list ends
+
+      // After processing:
+      // - Blank in middle removed (by cleanup)
+      // - Blank added after Bullet 4 (before "After list")
+      // So: Bullet1, Bullet2, Bullet3, Bullet4, [BLANK], After list = 6 elements
+      expect(doc.getBodyElements().length).toBe(6);
+
+      // Verify the blank is at the correct position (after Bullet 4, before "After list")
+      const bodyElements = doc.getBodyElements();
+      const bullet4 = bodyElements[3] as Paragraph;
+      const blankAfterList = bodyElements[4] as Paragraph;
+      const afterList = bodyElements[5] as Paragraph;
+
+      expect(bullet4.getText()).toBe('Bullet 4');
+      expect(blankAfterList.getText()).toBe('');
+      expect(afterList.getText()).toBe('After list');
+
+      doc.dispose();
+    });
   });
 });
