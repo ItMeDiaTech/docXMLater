@@ -2852,15 +2852,22 @@ export class Document {
             nextElement.getNumbering()!.numId !== numbering.numId; // Different list
 
           if (isListEnd) {
-            // Insert blank paragraph with Normal style after this list item
-            const blankPara = new Paragraph();
-            blankPara.setStyle("Normal");
+            // Check if there's already a blank paragraph after the list
+            const alreadyHasBlank =
+              nextElement instanceof Paragraph &&
+              this.isParagraphBlank(nextElement);
 
-            // Insert at position i+1 (after current element)
-            this.bodyElements.splice(i + 1, 0, blankPara);
-            insertedCount++;
+            if (!alreadyHasBlank) {
+              // Insert blank paragraph with Normal style after this list item
+              const blankPara = new Paragraph();
+              blankPara.setStyle("Normal");
 
-            // Skip the newly inserted paragraph
+              // Insert at position i+1 (after current element)
+              this.bodyElements.splice(i + 1, 0, blankPara);
+              insertedCount++;
+            }
+
+            // Skip the next element (either newly inserted or existing blank)
             i++;
           }
         }

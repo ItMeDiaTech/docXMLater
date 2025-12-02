@@ -1429,5 +1429,59 @@ describe('Document', () => {
 
       doc.dispose();
     });
+
+    it('should not add blank line if one already exists after list', () => {
+      const doc = Document.create();
+      const numId = doc.createNumberedList();
+
+      // Add numbered list items
+      const para1 = doc.createParagraph('Item 1');
+      para1.setNumbering(numId, 0);
+
+      const para2 = doc.createParagraph('Item 2');
+      para2.setNumbering(numId, 0);
+
+      // Add blank paragraph (already exists)
+      doc.createParagraph('');
+
+      // Add regular paragraph after blank
+      doc.createParagraph('Regular paragraph');
+
+      expect(doc.getBodyElements().length).toBe(4);
+
+      const insertedCount = doc.addBlankLineAfterLists();
+
+      // Should NOT insert because blank already exists
+      expect(insertedCount).toBe(0);
+      expect(doc.getBodyElements().length).toBe(4);
+
+      doc.dispose();
+    });
+
+    it('should be idempotent - calling twice should not add duplicate blanks', () => {
+      const doc = Document.create();
+      const numId = doc.createNumberedList();
+
+      // Add numbered list items
+      const para1 = doc.createParagraph('Item 1');
+      para1.setNumbering(numId, 0);
+
+      // Add regular paragraph
+      doc.createParagraph('Regular paragraph');
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      // First call - should insert
+      const firstCount = doc.addBlankLineAfterLists();
+      expect(firstCount).toBe(1);
+      expect(doc.getBodyElements().length).toBe(3);
+
+      // Second call - should NOT insert (blank already exists)
+      const secondCount = doc.addBlankLineAfterLists();
+      expect(secondCount).toBe(0);
+      expect(doc.getBodyElements().length).toBe(3);
+
+      doc.dispose();
+    });
   });
 });
