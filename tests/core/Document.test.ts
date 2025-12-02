@@ -1166,4 +1166,83 @@ describe('Document', () => {
       // Tests for obsolete keepOne and preserveHeader2BlankLines parameters have been removed
     });
   });
+
+  describe('Revision Registration', () => {
+    it('should register parsed revisions with RevisionManager after loading', async () => {
+      // Create a document with revisions
+      const doc = Document.create();
+      const para1 = doc.createParagraph('First paragraph');
+
+      // Add a revision to the paragraph
+      const { Revision } = await import('../../src/elements/Revision');
+      const { Run } = await import('../../src/elements/Run');
+
+      const insertedRun = new Run('inserted text');
+      const revision = new Revision({
+        type: 'insert',
+        author: 'Test Author',
+        content: insertedRun,
+        date: new Date()
+      });
+
+      para1.addRevision(revision);
+
+      // Save to buffer
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Reload the document with preserve mode
+      const reloadedDoc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+
+      // Verify revisions are registered with RevisionManager
+      const revisionManager = reloadedDoc.getRevisionManager();
+      const allRevisions = revisionManager.getAllRevisions();
+
+      expect(allRevisions.length).toBeGreaterThanOrEqual(1);
+
+      // Verify the revision has location info
+      const foundRevision = allRevisions.find(r => r.getAuthor() === 'Test Author');
+      expect(foundRevision).toBeDefined();
+
+      reloadedDoc.dispose();
+    });
+
+    it('should make ChangelogGenerator work with parsed revisions', async () => {
+      // Create a document with revisions
+      const doc = Document.create();
+      const para1 = doc.createParagraph('Some text');
+
+      const { Revision } = await import('../../src/elements/Revision');
+      const { Run } = await import('../../src/elements/Run');
+      const { ChangelogGenerator } = await import('../../src/utils/ChangelogGenerator');
+
+      const deletedRun = new Run('deleted content');
+      const deletion = new Revision({
+        type: 'delete',
+        author: 'Reviewer',
+        content: deletedRun,
+        date: new Date()
+      });
+
+      para1.addRevision(deletion);
+
+      // Save and reload
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      const reloadedDoc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+
+      // Use ChangelogGenerator to get changes
+      const entries = ChangelogGenerator.fromDocument(reloadedDoc);
+
+      expect(entries.length).toBeGreaterThanOrEqual(1);
+
+      // Find the deletion entry
+      const deletionEntry = entries.find(e => e.revisionType === 'delete');
+      expect(deletionEntry).toBeDefined();
+      expect(deletionEntry?.author).toBe('Reviewer');
+
+      reloadedDoc.dispose();
+    });
+  });
 });
