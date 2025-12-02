@@ -12,6 +12,8 @@ class MockDocument {
   private revisionManager: RevisionManager;
   private paragraphs: any[] = [];
   private zipHandler: any = null;
+  private _hasRawXmlRevisions: boolean = false;
+  private _preserveRawXmlCalled: boolean = false;
 
   constructor() {
     this.revisionManager = new RevisionManager();
@@ -29,6 +31,24 @@ class MockDocument {
     return this.zipHandler;
   }
 
+  // Mock for raw XML revision check
+  hasRawXmlRevisions(): boolean {
+    return this._hasRawXmlRevisions;
+  }
+
+  // Mock for preserving raw XML
+  preserveRawXml(): this {
+    this._preserveRawXmlCalled = true;
+    return this;
+  }
+
+  // Mock for accepting all revisions
+  async acceptAllRevisions(): Promise<this> {
+    // Clear all revisions from the manager (simulating acceptance)
+    this.revisionManager.clear();
+    return this;
+  }
+
   addRevision(type: RevisionType, author: string, text: string): Revision {
     const run = new Run(text);
     const revision = new Revision({
@@ -39,6 +59,11 @@ class MockDocument {
     });
     this.revisionManager.register(revision);
     return revision;
+  }
+
+  // Helper for tests to simulate raw XML revisions
+  setHasRawXmlRevisions(value: boolean): void {
+    this._hasRawXmlRevisions = value;
   }
 }
 

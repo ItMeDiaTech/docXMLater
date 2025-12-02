@@ -15,8 +15,6 @@ import type { Document } from '../core/Document';
 import { Revision, RevisionType } from '../elements/Revision';
 import { RevisionManager } from '../elements/RevisionManager';
 import { ChangeCategory, ChangeLocation } from './ChangelogGenerator';
-import { RevisionAcceptor } from './acceptRevisions';
-import { ZipHandler } from '../zip/ZipHandler';
 
 /**
  * Revision handling modes for document processing.
@@ -134,7 +132,12 @@ export class RevisionAwareProcessor {
 
     try {
       const revisionManager = doc.getRevisionManager();
-      if (!revisionManager || !revisionManager.hasRevisions()) {
+      const hasInMemoryRevisions = revisionManager?.hasRevisions() ?? false;
+      const hasRawXmlRevisions = doc.hasRawXmlRevisions();
+
+      // Check both in-memory model AND raw XML for revisions
+      // Raw XML may contain revisions that weren't fully parsed into memory
+      if (!hasInMemoryRevisions && !hasRawXmlRevisions) {
         addLog('complete', 'No revisions found in document');
         return {
           success: true,
@@ -146,8 +149,10 @@ export class RevisionAwareProcessor {
         };
       }
 
-      const allRevisions = revisionManager.getAllRevisions();
-      addLog('info', `Found ${allRevisions.length} revisions in document`);
+      const allRevisions = revisionManager?.getAllRevisions() ?? [];
+      const inMemoryCount = allRevisions.length;
+      const rawXmlNote = hasRawXmlRevisions ? ' (raw XML contains revision markup)' : '';
+      addLog('info', `Found ${inMemoryCount} parsed revisions in document${rawXmlNote}`);
 
       switch (options.mode) {
         case 'accept_all':
@@ -156,18 +161,22 @@ export class RevisionAwareProcessor {
           break;
 
         case 'preserve':
-          // Preserve all revisions
+          // Preserve all revisions by preventing document.xml regeneration
+          // This keeps the original XML with w:ins/w:del elements intact
           for (const rev of allRevisions) {
             preservedRevisions.push(rev.getId().toString());
           }
-          addLog('complete', `Preserved ${preservedRevisions.length} revisions`);
+          doc.preserveRawXml();
+          addLog('complete', `Preserved ${preservedRevisions.length} revisions (raw XML preservation enabled)`);
           break;
 
         case 'preserve_and_wrap':
           // Preserve all revisions, track for later wrapping
+          // Also enable raw XML preservation to keep existing revisions
           for (const rev of allRevisions) {
             preservedRevisions.push(rev.getId().toString());
           }
+          doc.preserveRawXml();
           addLog('info', `Will preserve and wrap conflicts for ${preservedRevisions.length} revisions`);
           addLog('info', `New revisions will be authored by: ${options.author || 'Unknown'}`);
           break;
@@ -210,7 +219,15 @@ export class RevisionAwareProcessor {
   }
 
   /**
-   * Accept all revisions in the document using RevisionAcceptor.
+   * Accept all revisions in the document using Document.acceptAllRevisions().
+   *
+   * This delegates to Document.acceptAllRevisions() which performs three critical steps:
+   * 1. Modifies raw XML in ZIP package (removes w:del, unwraps w:ins)
+   * 2. Clears Revision objects from in-memory document model
+   * 3. Sets skipDocumentXmlRegeneration flag to preserve cleaned XML on save
+   *
+   * Previously, this method only did step 1, causing the in-memory Revision objects
+   * to be re-serialized on save(), overwriting the cleaned XML.
    */
   private static async acceptAllRevisions(
     doc: Document,
@@ -220,21 +237,20 @@ export class RevisionAwareProcessor {
   ): Promise<void> {
     addLog('info', 'Accepting all revisions');
 
-    // Get the zip handler from the document
-    const zipHandler = doc.getZipHandler();
-    if (!zipHandler) {
-      addLog('error', 'No zip handler available');
-      return;
-    }
-
-    // Use the existing RevisionAcceptor
-    const acceptor = new RevisionAcceptor(zipHandler);
-    await acceptor.acceptAllRevisions();
-
-    // Track accepted revision IDs
+    // Track accepted revision IDs before acceptance (for logging)
     for (const rev of revisions) {
       acceptedIds.push(rev.getId().toString());
-      addLog('accept', `Accepted revision ${rev.getId()}`, rev.getId().toString());
+    }
+
+    // Use Document.acceptAllRevisions() which properly:
+    // 1. Cleans the raw XML in the ZIP package
+    // 2. Clears Revision objects from in-memory model
+    // 3. Sets skipDocumentXmlRegeneration to prevent re-serialization corruption
+    await doc.acceptAllRevisions();
+
+    // Log each accepted revision
+    for (const id of acceptedIds) {
+      addLog('accept', `Accepted revision ${id}`, id);
     }
 
     addLog('complete', `Accepted ${acceptedIds.length} revisions`);

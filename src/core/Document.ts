@@ -7694,6 +7694,50 @@ export class Document {
   }
 
   /**
+   * Checks if the document's raw XML contains revision markup.
+   *
+   * This method checks the actual XML content of the document for revision
+   * elements like `<w:ins>`, `<w:del>`, `<w:moveFrom>`, and `<w:moveTo>`.
+   * Unlike {@link hasTrackedChanges}, which only checks the in-memory model,
+   * this method detects revisions that may not have been fully parsed.
+   *
+   * Use this when you need to know if the document file contains any tracked
+   * changes, regardless of whether they were parsed into the object model.
+   *
+   * @returns True if the raw XML contains revision markup
+   *
+   * @example
+   * ```typescript
+   * const doc = await Document.load('document.docx');
+   *
+   * // Check raw XML for revisions (more reliable)
+   * if (doc.hasRawXmlRevisions()) {
+   *   console.log('Document XML contains tracked changes');
+   * }
+   *
+   * // Compare with in-memory check
+   * if (doc.hasTrackedChanges()) {
+   *   console.log('Document has parsed revisions in memory');
+   * }
+   * ```
+   */
+  hasRawXmlRevisions(): boolean {
+    const documentXml = this.zipHandler.getFileAsString('word/document.xml');
+    if (!documentXml) {
+      return false;
+    }
+    // Use precise patterns to avoid false matches like <w:insideH> (table borders)
+    // Revision elements are: <w:ins ...>, <w:del ...>, <w:moveFrom ...>, <w:moveTo ...>
+    // They either have attributes (<w:ins w:author=...) or just close (>)
+    return (
+      /<w:ins[\s>]/.test(documentXml) ||
+      /<w:del[\s>]/.test(documentXml) ||
+      /<w:moveFrom[\s>]/.test(documentXml) ||
+      /<w:moveTo[\s>]/.test(documentXml)
+    );
+  }
+
+  /**
    * Gets detailed statistics about tracked changes in the document
    *
    * Provides a comprehensive breakdown of all revisions including counts
@@ -8747,10 +8791,44 @@ export class Document {
     // This preserves the cleaned XML we just created, preventing corruption
     // from any remaining Revision references being re-serialized
     this.skipDocumentXmlRegeneration = true;
-    
+
     return this;
   }
-  
+
+  /**
+   * Preserves the raw XML in the document, preventing regeneration on save.
+   *
+   * Use this when you want to keep the original document.xml exactly as loaded,
+   * without any modifications from the in-memory model. This is useful for:
+   * - Preserving tracked changes that weren't fully parsed into memory
+   * - Round-tripping documents with features the framework doesn't support
+   * - Keeping original formatting that might be lost during regeneration
+   *
+   * **IMPORTANT**: After calling this method:
+   * - Changes made to paragraphs, runs, tables, etc. will NOT be saved
+   * - Only changes to other parts (styles, numbering, headers) will be saved
+   * - The document.xml will remain exactly as it was when loaded
+   *
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // Load a document with tracked changes
+   * const doc = await Document.load('document-with-revisions.docx');
+   *
+   * // Preserve the original XML (including tracked changes)
+   * doc.preserveRawXml();
+   *
+   * // Save - tracked changes will be preserved in output
+   * await doc.save('output.docx');
+   * ```
+   */
+  preserveRawXml(): this {
+    this.skipDocumentXmlRegeneration = true;
+    this.logger.info('Raw XML preservation enabled - document.xml will not be regenerated on save');
+    return this;
+  }
+
   /**
    * Clears all Revision objects from paragraph content throughout the document
    * This removes in-memory tracked change objects to prevent re-serialization
