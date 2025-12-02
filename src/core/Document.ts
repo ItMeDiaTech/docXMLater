@@ -53,7 +53,10 @@ import { defaultLogger, ILogger, getGlobalLogger, createScopedLogger } from "../
 function getLogger(): ILogger {
   return createScopedLogger(getGlobalLogger(), 'Document');
 }
+// Raw XML revision acceptance - used at load time BEFORE parsing
 import { acceptAllRevisions } from "../utils/acceptRevisions";
+// In-memory revision acceptance - used AFTER parsing, allows subsequent modifications
+import { acceptRevisionsInMemory, AcceptRevisionsResult } from "../utils/InMemoryRevisionAcceptor";
 import { stripTrackedChanges } from "../utils/stripTrackedChanges";
 import { XMLParser } from "../xml/XMLParser";
 import { DocumentTrackingContext } from "../tracking/DocumentTrackingContext";
@@ -8776,20 +8779,55 @@ export class Document {
    * @see https://learn.microsoft.com/en-us/office/open-xml/how-to-accept-all-revisions
    */
   async acceptAllRevisions(): Promise<this> {
-    const { acceptAllRevisions } = await import('../utils/acceptRevisions');
-    
+    // Use in-memory DOM transformation approach (industry standard)
+    // This transforms Revision objects in the in-memory model, allowing subsequent
+    // modifications to work correctly. Unlike the raw XML approach, this does NOT
+    // set skipDocumentXmlRegeneration, so save() will regenerate document.xml with
+    // all modifications including accepted revisions AND any subsequent changes.
+    //
+    // @see OpenXML PowerTools RevisionAccepter - https://github.com/OfficeDev/Open-Xml-PowerTools
+    // @see https://learn.microsoft.com/en-us/previous-versions/office/developer/office-2007/ee836138(v=office.12)
+
+    const result = acceptRevisionsInMemory(this);
+
+    this.logger.info('Accepted all revisions using in-memory transformation', {
+      insertions: result.insertionsAccepted,
+      deletions: result.deletionsAccepted,
+      moves: result.movesAccepted,
+      propertyChanges: result.propertyChangesAccepted,
+      total: result.totalAccepted,
+    });
+
+    return this;
+  }
+
+  /**
+   * Accept all revisions using raw XML modification (legacy approach).
+   *
+   * This method modifies the raw XML in the ZIP package directly, then sets
+   * `skipDocumentXmlRegeneration = true` to preserve the cleaned XML on save.
+   *
+   * **WARNING**: Using this method will prevent ANY subsequent in-memory modifications
+   * from being saved. Use the standard `acceptAllRevisions()` instead.
+   *
+   * Use cases for this method:
+   * - When you need to accept revisions and save immediately without further changes
+   * - When dealing with complex revision structures that the in-memory model doesn't fully capture
+   *
+   * @returns This document instance for method chaining
+   * @deprecated Prefer `acceptAllRevisions()` which uses in-memory transformation
+   */
+  async acceptAllRevisionsRawXml(): Promise<this> {
     // Step 1: Accept all revisions in the raw XML in ZIP package
+    // Uses the imported acceptAllRevisions function (raw XML approach)
     await acceptAllRevisions(this.zipHandler);
-    
+
     // Step 2: Clear Revision objects from in-memory object model
     // This prevents them from being re-serialized during save()
-    // The DocumentParser parses revision XML into Revision objects stored in paragraph.content
-    // Even after accepting the XML changes, these objects remain in memory and get regenerated
     this.clearRevisionsFromAllParagraphs();
-    
+
     // Step 3: Set flag to prevent document.xml regeneration on save()
     // This preserves the cleaned XML we just created, preventing corruption
-    // from any remaining Revision references being re-serialized
     this.skipDocumentXmlRegeneration = true;
 
     return this;
