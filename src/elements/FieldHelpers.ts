@@ -5,6 +5,168 @@
 import { ComplexField } from './Field';
 
 /**
+ * Parsed components of a HYPERLINK field instruction
+ */
+export interface ParsedHyperlinkInstruction {
+  /** Base URL (with encoded characters decoded) */
+  url: string;
+  /** Anchor/fragment from \l switch (decoded) */
+  anchor?: string;
+  /** Tooltip text from \o switch */
+  tooltip?: string;
+  /** Whether \h switch is present (creates hyperlink) */
+  hasHSwitch: boolean;
+  /** Combined full URL (url + "#" + anchor if both present) */
+  fullUrl: string;
+  /** Original raw instruction string */
+  rawInstruction: string;
+}
+
+/**
+ * Parses a HYPERLINK field instruction string into its components
+ *
+ * HYPERLINK field syntax per ECMA-376:
+ * - HYPERLINK "url" - basic external hyperlink
+ * - \l "anchor" - specifies a location (anchor/fragment) within the target
+ * - \o "tooltip" - specifies the tooltip/screentip text
+ * - \h - creates a hyperlink (always present for clickable links)
+ * - \n - opens link in new window
+ * - \t "target" - specifies target frame
+ *
+ * @param instruction The raw field instruction string (e.g., 'HYPERLINK "url" \l "anchor" \h')
+ * @returns Parsed components or null if not a valid HYPERLINK instruction
+ *
+ * @example
+ * ```typescript
+ * const result = parseHyperlinkInstruction('HYPERLINK "https://example.com/" \\l "section1" \\h');
+ * // result.url = "https://example.com/"
+ * // result.anchor = "section1"
+ * // result.fullUrl = "https://example.com/#section1"
+ * // result.hasHSwitch = true
+ * ```
+ */
+export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkInstruction | null {
+  if (!instruction) {
+    return null;
+  }
+
+  // Normalize whitespace and trim
+  const normalized = instruction.trim();
+
+  // Check if this is a HYPERLINK instruction
+  if (!normalized.toUpperCase().startsWith('HYPERLINK')) {
+    return null;
+  }
+
+  // Extract the URL (first quoted string after HYPERLINK)
+  const urlMatch = normalized.match(/HYPERLINK\s+"([^"]*)"/i);
+  if (!urlMatch || urlMatch[1] === undefined) {
+    return null;
+  }
+
+  let url: string = urlMatch[1];
+
+  // Decode URL-encoded characters
+  try {
+    url = decodeURIComponent(url);
+  } catch {
+    // If decoding fails, use the original URL
+  }
+
+  // Extract \l switch (anchor/fragment)
+  let anchor: string | undefined;
+  const anchorMatch = normalized.match(/\\l\s+"([^"]*)"/i);
+  if (anchorMatch && anchorMatch[1] !== undefined) {
+    anchor = anchorMatch[1];
+    // Decode anchor as well
+    try {
+      anchor = decodeURIComponent(anchor);
+    } catch {
+      // If decoding fails, use the original anchor
+    }
+  }
+
+  // Extract \o switch (tooltip)
+  let tooltip: string | undefined;
+  const tooltipMatch = normalized.match(/\\o\s+"([^"]*)"/i);
+  if (tooltipMatch && tooltipMatch[1] !== undefined) {
+    tooltip = tooltipMatch[1];
+  }
+
+  // Check for \h switch
+  const hasHSwitch = /\\h(?:\s|$)/i.test(normalized);
+
+  // Build full URL by combining base URL and anchor
+  let fullUrl: string = url;
+  if (anchor) {
+    // If URL already has a fragment, replace it; otherwise append
+    const hashIndex = url.indexOf('#');
+    if (hashIndex >= 0) {
+      fullUrl = url.substring(0, hashIndex) + '#' + anchor;
+    } else {
+      fullUrl = url + '#' + anchor;
+    }
+  }
+
+  return {
+    url,
+    anchor,
+    tooltip,
+    hasHSwitch,
+    fullUrl,
+    rawInstruction: instruction,
+  };
+}
+
+/**
+ * Creates a HYPERLINK field instruction string from components
+ *
+ * @param url The target URL
+ * @param anchor Optional anchor/fragment (will use \l switch)
+ * @param tooltip Optional tooltip text (will use \o switch)
+ * @returns Properly formatted HYPERLINK instruction string
+ *
+ * @example
+ * ```typescript
+ * const instr = buildHyperlinkInstruction('https://example.com/', 'section1', 'Click here');
+ * // Returns: 'HYPERLINK "https://example.com/" \\l "section1" \\o "Click here" \\h'
+ * ```
+ */
+export function buildHyperlinkInstruction(
+  url: string,
+  anchor?: string,
+  tooltip?: string
+): string {
+  let instruction = `HYPERLINK "${url}"`;
+
+  if (anchor) {
+    instruction += ` \\l "${anchor}"`;
+  }
+
+  if (tooltip) {
+    instruction += ` \\o "${tooltip}"`;
+  }
+
+  // Always add \h switch for clickable hyperlinks
+  instruction += ' \\h';
+
+  return instruction;
+}
+
+/**
+ * Checks if a field instruction is a HYPERLINK field
+ *
+ * @param instruction The field instruction to check
+ * @returns True if the instruction is a HYPERLINK field
+ */
+export function isHyperlinkInstruction(instruction: string): boolean {
+  if (!instruction) {
+    return false;
+  }
+  return instruction.trim().toUpperCase().startsWith('HYPERLINK');
+}
+
+/**
  * Creates a nested IF field containing a MERGEFIELD
  * This is a common pattern for conditional mail merge
  *

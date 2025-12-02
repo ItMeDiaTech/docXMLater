@@ -1522,6 +1522,7 @@ export class DocumentParser {
   /**
    * NEW: Assemble complex fields from run tokens
    * Groups begin→instr→sep→result→end sequences into ComplexField objects
+   * Also handles Revision objects (w:ins, w:del) that appear in the result section of complex fields
    *
    * @param paragraph The paragraph containing runs to process
    */
@@ -1529,6 +1530,7 @@ export class DocumentParser {
     const content = paragraph.getContent();
     const groupedContent: any[] = [];
     let fieldRuns: Run[] = [];
+    let fieldRevisions: Revision[] = []; // Track revisions inside field result section
     let fieldState:
       | "begin"
       | "instruction"
@@ -1568,11 +1570,21 @@ export class DocumentParser {
                     this.createComplexFieldFromRuns(fieldRuns);
                   if (complexField) {
                     groupedContent.push(complexField);
+                    // Add any revisions that were inside the field result section
+                    // These are tracked changes within the field's display content
+                    for (const revision of fieldRevisions) {
+                      groupedContent.push(revision);
+                    }
                   } else {
                     // If assembly failed, add individual runs
                     fieldRuns.forEach((run) => groupedContent.push(run));
+                    // Still add the revisions
+                    for (const revision of fieldRevisions) {
+                      groupedContent.push(revision);
+                    }
                   }
                   fieldRuns = [];
+                  fieldRevisions = [];
                   fieldState = null;
                 }
                 break;
@@ -1584,12 +1596,47 @@ export class DocumentParser {
             }
           }
         } else {
-          // Regular run - add it as-is
-          if (fieldRuns.length > 0) {
+          // Regular run - check if we're inside a field result section
+          if (fieldState === "separate" || fieldState === "result") {
+            // This run is part of the field result - collect it
+            fieldRuns.push(item);
+            fieldState = "result";
+          } else if (fieldRuns.length > 0) {
             // Incomplete field - add as individual runs
             fieldRuns.forEach((run) => groupedContent.push(run));
+            for (const revision of fieldRevisions) {
+              groupedContent.push(revision);
+            }
             fieldRuns = [];
+            fieldRevisions = [];
+            fieldState = null;
+            groupedContent.push(item);
+          } else {
+            groupedContent.push(item);
           }
+        }
+      } else if (item instanceof Revision) {
+        // Handle Revision objects (w:ins, w:del) that may appear inside field result sections
+        if (fieldState === "separate" || fieldState === "result") {
+          // This revision is inside the field result section - track it
+          fieldRevisions.push(item);
+          fieldState = "result";
+          defaultLogger.debug(
+            `Found revision inside complex field result: type=${item.getType()}, id=${item.getId()}`
+          );
+        } else if (fieldRuns.length > 0) {
+          // Revision appears in unexpected location during field assembly
+          // Add incomplete field runs and the revision
+          fieldRuns.forEach((run) => groupedContent.push(run));
+          for (const revision of fieldRevisions) {
+            groupedContent.push(revision);
+          }
+          fieldRuns = [];
+          fieldRevisions = [];
+          fieldState = null;
+          groupedContent.push(item);
+        } else {
+          // Normal revision outside of any field
           groupedContent.push(item);
         }
       } else {
@@ -1597,7 +1644,12 @@ export class DocumentParser {
         if (fieldRuns.length > 0) {
           // Incomplete field - add as individual runs
           fieldRuns.forEach((run) => groupedContent.push(run));
+          for (const revision of fieldRevisions) {
+            groupedContent.push(revision);
+          }
           fieldRuns = [];
+          fieldRevisions = [];
+          fieldState = null;
         }
         groupedContent.push(item);
       }
@@ -1606,6 +1658,9 @@ export class DocumentParser {
     // Handle any remaining incomplete field
     if (fieldRuns.length > 0) {
       fieldRuns.forEach((run) => groupedContent.push(run));
+      for (const revision of fieldRevisions) {
+        groupedContent.push(revision);
+      }
     }
 
     // Replace paragraph content with grouped content using setContent
@@ -2227,6 +2282,18 @@ export class DocumentParser {
           relationshipManager.getRelationship(relationshipId);
         if (relationship) {
           url = relationship.getTarget();
+          // Decode URL-encoded characters (e.g., %23 -> #, %20 -> space)
+          // This ensures proper handling of URLs with fragments and special characters
+          if (url) {
+            try {
+              url = decodeURIComponent(url);
+            } catch {
+              // If decoding fails, use the original URL
+              defaultLogger.debug(
+                `[DocumentParser] Failed to decode URL: ${url}`
+              );
+            }
+          }
         }
       }
 

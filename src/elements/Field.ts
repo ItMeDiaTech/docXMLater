@@ -7,6 +7,7 @@
 
 import { XMLElement } from '../xml/XMLBuilder';
 import { RunFormatting } from './Run';
+import { ParsedHyperlinkInstruction, parseHyperlinkInstruction, isHyperlinkInstruction } from './FieldHelpers';
 
 /**
  * Common field types
@@ -558,6 +559,9 @@ export interface ComplexFieldProperties {
 
   /** Whether field spans multiple paragraphs */
   multiParagraph?: boolean;
+
+  /** Parsed HYPERLINK instruction components (auto-populated if instruction is HYPERLINK) */
+  parsedHyperlink?: ParsedHyperlinkInstruction;
 }
 
 /**
@@ -579,6 +583,7 @@ export class ComplexField {
   private nestedFields: ComplexField[];
   private resultContent: XMLElement[];
   private multiParagraph: boolean;
+  private parsedHyperlink?: ParsedHyperlinkInstruction;
 
   /**
    * Creates a new complex field
@@ -592,6 +597,13 @@ export class ComplexField {
     this.nestedFields = properties.nestedFields || [];
     this.resultContent = properties.resultContent || [];
     this.multiParagraph = properties.multiParagraph || false;
+
+    // Auto-parse HYPERLINK instruction if provided or detected
+    if (properties.parsedHyperlink) {
+      this.parsedHyperlink = properties.parsedHyperlink;
+    } else if (isHyperlinkInstruction(this.instruction)) {
+      this.parsedHyperlink = parseHyperlinkInstruction(this.instruction) || undefined;
+    }
   }
 
   /**
@@ -638,6 +650,29 @@ export class ComplexField {
   setResultFormatting(formatting: RunFormatting): this {
     this.resultFormatting = formatting;
     return this;
+  }
+
+  /**
+   * Gets the parsed HYPERLINK instruction components
+   * Returns undefined if this is not a HYPERLINK field
+   */
+  getParsedHyperlink(): ParsedHyperlinkInstruction | undefined {
+    return this.parsedHyperlink;
+  }
+
+  /**
+   * Checks if this field is a HYPERLINK field
+   */
+  isHyperlinkField(): boolean {
+    return this.parsedHyperlink !== undefined;
+  }
+
+  /**
+   * Gets the full URL for HYPERLINK fields (combining base URL and anchor)
+   * Returns undefined if not a HYPERLINK field
+   */
+  getHyperlinkUrl(): string | undefined {
+    return this.parsedHyperlink?.fullUrl;
   }
 
   /**
