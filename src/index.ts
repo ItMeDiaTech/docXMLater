@@ -273,6 +273,10 @@ export {
   createRefField,
   createIFField,
   createNestedField,
+  parseHyperlinkInstruction,
+  buildHyperlinkInstruction,
+  isHyperlinkInstruction,
+  ParsedHyperlinkInstruction,
 } from './elements/FieldHelpers';
 export { Header, HeaderType, HeaderProperties } from './elements/Header';
 export { Footer, FooterType, FooterProperties } from './elements/Footer';
