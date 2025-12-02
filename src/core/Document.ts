@@ -4868,11 +4868,22 @@ export class Document {
                 this.isParagraphBlank(nextElement);
 
               if (alreadyHasBlank) {
-                // Mark existing blank as preserved
-                nextElement.setStyle(style);
-                if (markAsPreserved && !nextElement.isPreserved()) {
-                  nextElement.setPreserved(true);
-                  totalExistingLinesMarked++;
+                // Look PAST the blank to see if the list continues with the same numId
+                const elementAfterBlank = this.bodyElements[i + 2];
+                const listContinuesAfterBlank =
+                  elementAfterBlank instanceof Paragraph &&
+                  elementAfterBlank.getNumbering()?.numId === numbering.numId;
+
+                if (listContinuesAfterBlank) {
+                  // Blank is in the MIDDLE of a list - do NOT preserve it
+                  // It will be removed by removeExtraBlankParagraphs
+                } else {
+                  // Blank is at the END of a list - preserve it
+                  nextElement.setStyle(style);
+                  if (markAsPreserved && !nextElement.isPreserved()) {
+                    nextElement.setPreserved(true);
+                    totalExistingLinesMarked++;
+                  }
                 }
               } else {
                 // Add blank paragraph after list
