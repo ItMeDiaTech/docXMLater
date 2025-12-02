@@ -1245,4 +1245,189 @@ describe('Document', () => {
       reloadedDoc.dispose();
     });
   });
+
+  describe('addBlankLineAfterLists()', () => {
+    it('should add blank line after a simple numbered list', () => {
+      const doc = Document.create();
+      const numId = doc.createNumberedList();
+
+      // Add numbered list items
+      const para1 = doc.createParagraph('Item 1');
+      para1.setNumbering(numId, 0);
+
+      const para2 = doc.createParagraph('Item 2');
+      para2.setNumbering(numId, 0);
+
+      // Add regular paragraph after list
+      doc.createParagraph('Regular paragraph');
+
+      expect(doc.getBodyElements().length).toBe(3);
+
+      const insertedCount = doc.addBlankLineAfterLists();
+
+      expect(insertedCount).toBe(1);
+      expect(doc.getBodyElements().length).toBe(4);
+
+      // Check that blank paragraph was inserted at index 2 (after list items)
+      const bodyElements = doc.getBodyElements();
+      const blankPara = bodyElements[2] as Paragraph;
+      expect(blankPara.getText()).toBe('');
+      expect(blankPara.getStyle()).toBe('Normal');
+
+      doc.dispose();
+    });
+
+    it('should add blank line after a bullet list', () => {
+      const doc = Document.create();
+      const numId = doc.createBulletList();
+
+      // Add bullet list items
+      const para1 = doc.createParagraph('Bullet 1');
+      para1.setNumbering(numId, 0);
+
+      const para2 = doc.createParagraph('Bullet 2');
+      para2.setNumbering(numId, 0);
+
+      // Add regular paragraph after list
+      doc.createParagraph('Regular paragraph');
+
+      const insertedCount = doc.addBlankLineAfterLists();
+
+      expect(insertedCount).toBe(1);
+      expect(doc.getBodyElements().length).toBe(4);
+
+      doc.dispose();
+    });
+
+    it('should handle nested lists as one list (same numId)', () => {
+      const doc = Document.create();
+      const numId = doc.createNumberedList();
+
+      // Add list with nested items (same numId)
+      const para1 = doc.createParagraph('Level 0 item');
+      para1.setNumbering(numId, 0);
+
+      const para2 = doc.createParagraph('Level 1 nested');
+      para2.setNumbering(numId, 1);
+
+      const para3 = doc.createParagraph('Level 0 again');
+      para3.setNumbering(numId, 0);
+
+      // Add regular paragraph
+      doc.createParagraph('After list');
+
+      const insertedCount = doc.addBlankLineAfterLists();
+
+      // Should only add ONE blank line after the entire nested list
+      expect(insertedCount).toBe(1);
+      expect(doc.getBodyElements().length).toBe(5);
+
+      doc.dispose();
+    });
+
+    it('should add blank line after each separate list (different numIds)', () => {
+      const doc = Document.create();
+
+      // First list
+      const numId1 = doc.createNumberedList();
+      const para1 = doc.createParagraph('List 1 Item 1');
+      para1.setNumbering(numId1, 0);
+
+      // Second list (different numId)
+      const numId2 = doc.createBulletList();
+      const para2 = doc.createParagraph('List 2 Item 1');
+      para2.setNumbering(numId2, 0);
+
+      // Regular paragraph
+      doc.createParagraph('Regular paragraph');
+
+      expect(doc.getBodyElements().length).toBe(3);
+
+      const insertedCount = doc.addBlankLineAfterLists();
+
+      // Should add blank line after each list
+      expect(insertedCount).toBe(2);
+      expect(doc.getBodyElements().length).toBe(5);
+
+      doc.dispose();
+    });
+
+    it('should add blank line when list is at end of document', () => {
+      const doc = Document.create();
+      const numId = doc.createNumberedList();
+
+      // Add list at end of document
+      const para1 = doc.createParagraph('Last item');
+      para1.setNumbering(numId, 0);
+
+      expect(doc.getBodyElements().length).toBe(1);
+
+      const insertedCount = doc.addBlankLineAfterLists();
+
+      expect(insertedCount).toBe(1);
+      expect(doc.getBodyElements().length).toBe(2);
+
+      // Blank paragraph should be at the end
+      const bodyElements = doc.getBodyElements();
+      const lastElement = bodyElements[bodyElements.length - 1] as Paragraph;
+      expect(lastElement.getText()).toBe('');
+      expect(lastElement.getStyle()).toBe('Normal');
+
+      doc.dispose();
+    });
+
+    it('should add blank line between list and table', () => {
+      const doc = Document.create();
+      const numId = doc.createNumberedList();
+
+      // Add list
+      const para1 = doc.createParagraph('List item');
+      para1.setNumbering(numId, 0);
+
+      // Add table after list
+      doc.createTable(2, 2);
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      const insertedCount = doc.addBlankLineAfterLists();
+
+      expect(insertedCount).toBe(1);
+      expect(doc.getBodyElements().length).toBe(3);
+
+      // Blank should be between list item and table
+      const bodyElements = doc.getBodyElements();
+      expect(bodyElements[0]).toBeInstanceOf(Paragraph);
+      expect(bodyElements[1]).toBeInstanceOf(Paragraph);
+      expect((bodyElements[1] as Paragraph).getText()).toBe('');
+      expect(bodyElements[2]).toBeInstanceOf(Table);
+
+      doc.dispose();
+    });
+
+    it('should return 0 for document with no lists', () => {
+      const doc = Document.create();
+
+      // Add regular paragraphs (no numbering)
+      doc.createParagraph('Regular paragraph 1');
+      doc.createParagraph('Regular paragraph 2');
+
+      const insertedCount = doc.addBlankLineAfterLists();
+
+      expect(insertedCount).toBe(0);
+      expect(doc.getBodyElements().length).toBe(2);
+
+      doc.dispose();
+    });
+
+    it('should return 0 for empty document', () => {
+      const doc = Document.create();
+
+      const insertedCount = doc.addBlankLineAfterLists();
+
+      expect(insertedCount).toBe(0);
+      expect(doc.getBodyElements().length).toBe(0);
+
+      doc.dispose();
+    });
+  });
 });
