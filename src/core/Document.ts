@@ -7864,7 +7864,27 @@ export class Document {
     showInsertionsAndDeletions?: boolean;
     showFormatting?: boolean;
     showInkAnnotations?: boolean;
+    /**
+     * Whether to clear existing pPrChange elements before enabling tracking.
+     * Default: true
+     *
+     * When true, any existing paragraph property change tracking (w:pPrChange)
+     * is cleared before enabling fresh tracking. This prevents merge issues
+     * where Word requires multiple "Accept All" clicks.
+     *
+     * Set to false only if you specifically want to preserve and merge with
+     * existing pPrChange elements.
+     */
+    clearExistingPropertyChanges?: boolean;
   }): this {
+    // Clear existing pPrChange elements to prevent merge issues with Word
+    // This ensures Word's "Accept All Changes" works in a single click
+    // Can be disabled via options.clearExistingPropertyChanges = false
+    const shouldClear = options?.clearExistingPropertyChanges !== false;
+    if (shouldClear) {
+      this.clearAllParagraphPropertyChanges();
+    }
+
     this.trackChangesEnabled = true;
 
     if (options) {
@@ -9012,6 +9032,89 @@ export class Document {
     if (clearedCount > 0) {
       this.logger.info(`Cleared ${clearedCount} Revision object(s) from in-memory document model`);
     }
+  }
+
+  /**
+   * Clears all paragraph property change tracking (w:pPrChange) from all paragraphs.
+   *
+   * This method removes existing pPrChange elements from paragraphs without affecting
+   * other tracked changes (insertions, deletions, etc.). This is useful when:
+   * - Loading a document with existing tracked changes and then enabling fresh tracking
+   * - Preventing merge issues where old and new pPrChange elements conflict
+   * - Ensuring Word's "Accept All Changes" works in a single click
+   *
+   * Called automatically by enableTrackChanges() to prevent problematic merging of
+   * existing pPrChange with newly tracked property changes.
+   *
+   * @returns Number of paragraphs that had pPrChange cleared
+   *
+   * @example
+   * ```typescript
+   * // Manually clear before enabling tracking
+   * const cleared = doc.clearAllParagraphPropertyChanges();
+   * console.log(`Cleared pPrChange from ${cleared} paragraphs`);
+   * doc.enableTrackChanges({ author: 'DocHub' });
+   * ```
+   */
+  public clearAllParagraphPropertyChanges(): number {
+    let count = 0;
+
+    // Clear from body paragraphs
+    for (const para of this.getAllParagraphs()) {
+      if (para.getFormatting().pPrChange) {
+        para.clearParagraphPropertiesChange();
+        count++;
+      }
+    }
+
+    // Clear from table cells
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            if (para.getFormatting().pPrChange) {
+              para.clearParagraphPropertiesChange();
+              count++;
+            }
+          }
+        }
+      }
+    }
+
+    // Clear from headers and footers
+    if (this.headerFooterManager) {
+      const headers = this.headerFooterManager.getAllHeaders();
+      for (const { header } of headers) {
+        for (const element of header.getElements()) {
+          if ('getFormatting' in element && typeof (element as any).getFormatting === 'function') {
+            const para = element as Paragraph;
+            if (para.getFormatting().pPrChange) {
+              para.clearParagraphPropertiesChange();
+              count++;
+            }
+          }
+        }
+      }
+
+      const footers = this.headerFooterManager.getAllFooters();
+      for (const { footer } of footers) {
+        for (const element of footer.getElements()) {
+          if ('getFormatting' in element && typeof (element as any).getFormatting === 'function') {
+            const para = element as Paragraph;
+            if (para.getFormatting().pPrChange) {
+              para.clearParagraphPropertiesChange();
+              count++;
+            }
+          }
+        }
+      }
+    }
+
+    if (count > 0) {
+      this.logger.info(`Cleared pPrChange from ${count} paragraph(s)`);
+    }
+
+    return count;
   }
 
   /**
