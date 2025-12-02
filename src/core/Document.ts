@@ -579,19 +579,22 @@ export class Document {
 
   /**
    * Populates location information on all revisions in the document
-   * Called after parsing to set paragraph and run indices for each revision
+   * and registers them with the RevisionManager.
+   * Called after parsing to set paragraph and run indices for each revision.
    * @private
    */
   private populateRevisionLocations(): void {
     const paragraphs = this.getParagraphs();
 
+    // Track which revisions are already registered to avoid duplicates
+    const registeredRevisions = new Set(this.revisionManager.getAllRevisions());
+
     for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex++) {
       const paragraph = paragraphs[paragraphIndex];
       if (!paragraph) continue;
 
-      // Get all revisions and runs from this paragraph
+      // Get all revisions from this paragraph
       const revisions = paragraph.getRevisions?.() || [];
-      const runs = paragraph.getRuns();
 
       // Track run position within paragraph
       let runIndex = 0;
@@ -605,15 +608,17 @@ export class Document {
           };
           revision.setLocation(location);
         }
+
+        // Register revision with manager if not already registered
+        // This ensures parsed revisions from document XML are accessible via
+        // ChangelogGenerator.fromDocument() and revisionManager.getAllRevisions()
+        if (!registeredRevisions.has(revision)) {
+          this.revisionManager.register(revision);
+          registeredRevisions.add(revision);
+        }
+
         // Advance run index for next revision
         runIndex++;
-      }
-
-      // Also check runs for embedded revisions (runs added after revisions)
-      // The actual run index may differ from revision position
-      for (let i = 0; i < runs.length; i++) {
-        // Runs don't contain revisions directly, but paragraphs track them
-        // This is already handled above via paragraph.getRevisions()
       }
     }
   }
