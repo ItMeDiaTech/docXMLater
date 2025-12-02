@@ -2815,6 +2815,62 @@ export class Document {
   }
 
   /**
+   * Adds a blank paragraph with Normal style after each bullet/numbered list
+   *
+   * Processes the document and inserts a blank paragraph after every list ends.
+   * Lists are identified by their numbering ID - nested lists with the same ID
+   * are treated as part of the same list.
+   *
+   * @returns The number of blank paragraphs inserted
+   *
+   * @example
+   * ```typescript
+   * const doc = await Document.load('input.docx');
+   * const count = doc.addBlankLineAfterLists();
+   * console.log(`Added ${count} blank lines after lists`);
+   * await doc.save('output.docx');
+   * ```
+   */
+  addBlankLineAfterLists(): number {
+    let insertedCount = 0;
+
+    // Iterate through body elements - need index-based loop since we modify the array
+    for (let i = 0; i < this.bodyElements.length; i++) {
+      const element = this.bodyElements[i];
+
+      // Check if current element is a paragraph with numbering (list item)
+      if (element instanceof Paragraph) {
+        const numbering = element.getNumbering();
+
+        if (numbering) {
+          // This is a list item - check if it's the last item of its list
+          const nextElement = this.bodyElements[i + 1];
+          const isListEnd =
+            !nextElement || // End of document
+            !(nextElement instanceof Paragraph) || // Next is not a paragraph
+            !nextElement.getNumbering() || // Next paragraph has no numbering
+            nextElement.getNumbering()!.numId !== numbering.numId; // Different list
+
+          if (isListEnd) {
+            // Insert blank paragraph with Normal style after this list item
+            const blankPara = new Paragraph();
+            blankPara.setStyle("Normal");
+
+            // Insert at position i+1 (after current element)
+            this.bodyElements.splice(i + 1, 0, blankPara);
+            insertedCount++;
+
+            // Skip the newly inserted paragraph
+            i++;
+          }
+        }
+      }
+    }
+
+    return insertedCount;
+  }
+
+  /**
    * Removes all headers and footers from the document
    *
    * Clears all header and footer references including:
