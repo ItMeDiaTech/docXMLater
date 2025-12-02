@@ -6,7 +6,7 @@
  * tables in a document with configurable styles.
  *
  * This is particularly useful when:
- * 1. You want consistent spacing after Header 2 tables (1x1)
+ * 1. You want consistent spacing after Heading 2 tables (1x1)
  * 2. You want consistent spacing after multi-cell tables
  * 3. You're processing documents with Template_UI and want to preserve spacing
  * 4. You need to ensure blank lines won't be removed by "remove blank lines" operations
@@ -65,8 +65,8 @@ async function main() {
   doc.dispose();
 }
 
-// Example 2: Only process Header 2 tables with custom style
-async function processHeader2TablesOnly() {
+// Example 2: Only process Heading 2 tables with custom style
+async function processHeading2TablesOnly() {
   const doc = await Document.load("input.docx");
 
   const result = doc.ensureBlankLinesAfter1x1Tables({
@@ -75,7 +75,7 @@ async function processHeader2TablesOnly() {
       const cell = table.getCell(0, 0);
       if (!cell) return false;
 
-      // Check if cell contains a Header 2 paragraph
+      // Check if cell contains a Heading 2 paragraph
       return cell.getParagraphs().some((p) => {
         const style = p.getStyle();
         return (
@@ -86,7 +86,7 @@ async function processHeader2TablesOnly() {
   });
 
   console.log(
-    `Processed ${result.tablesProcessed} Header 2 tables with BodyText style`
+    `Processed ${result.tablesProcessed} Heading 2 tables with BodyText style`
   );
   await doc.save("output.docx");
   doc.dispose();
@@ -115,7 +115,7 @@ async function customStyleForMultiCellTables() {
 async function differentStylesForTableTypes() {
   const doc = await Document.load("input.docx");
 
-  // Use 'Normal' for 1x1 tables (Header 2 tables)
+  // Use 'Normal' for 1x1 tables (Heading 2 tables)
   const result1x1 = doc.ensureBlankLinesAfter1x1Tables({
     style: "Normal",
     spacingAfter: 120,

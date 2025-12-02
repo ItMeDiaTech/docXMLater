@@ -144,12 +144,12 @@ export interface ApplyStylesOptions {
   listParagraph?: StyleConfig;
 
   /**
-   * Whether to preserve blank lines added after 1x1 Header 2 tables.
-   * When true, blank paragraphs added after Header 2 tables are marked as preserved
+   * Whether to preserve blank lines added after 1x1 Heading 2 tables.
+   * When true, blank paragraphs added after Heading 2 tables are marked as preserved
    * to prevent accidental removal by document processing operations (e.g., removing extra blank lines).
    * @default true
    */
-  preserveBlankLinesAfterHeader2Tables?: boolean;
+  preserveBlankLinesAfterHeading2Tables?: boolean;
 }
 
 /**

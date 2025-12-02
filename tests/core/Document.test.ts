@@ -1053,8 +1053,8 @@ describe('Document', () => {
     });
   });
 
-  describe('Preserve Blank Lines After Header 2 Tables', () => {
-    describe('applyStyles with preserveBlankLinesAfterHeader2Tables', () => {
+  describe('Preserve Blank Lines After Heading 2 Tables', () => {
+    describe('applyStyles with preserveBlankLinesAfterHeading2Tables', () => {
       test('should mark blank lines as preserved when option is true', () => {
         const doc = Document.create();
 
@@ -1064,7 +1064,7 @@ describe('Document', () => {
 
         // Apply formatting with preserve option enabled
         doc.applyStyles({
-          preserveBlankLinesAfterHeader2Tables: true
+          preserveBlankLinesAfterHeading2Tables: true
         });
 
         // Get all paragraphs
@@ -1095,7 +1095,7 @@ describe('Document', () => {
 
         // Apply formatting with preserve option disabled
         doc.applyStyles({
-          preserveBlankLinesAfterHeader2Tables: false
+          preserveBlankLinesAfterHeading2Tables: false
         });
 
         // Get body elements
