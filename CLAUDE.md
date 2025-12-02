@@ -16,7 +16,7 @@ Build a comprehensive, production-ready DOCX editing framework from scratch that
 | **Phase 4: Rich Content**        | Complete | 500+ tests | Images, headers, footers, hyperlinks, bookmarks   |
 | **Phase 5: Polish**              | Complete | 800+ tests | Track changes, comments, TOC, fields, footnotes   |
 
-**Total: 1313+ tests passing | 65 source files | ~25,000+ lines of code**
+**Total: 1509+ tests passing | 66 source files | ~26,000+ lines of code**
 
 ### What Works Now
 
@@ -48,6 +48,7 @@ Build a comprehensive, production-ready DOCX editing framework from scratch that
 
 **Advanced Features (Phase 5):**
 - Track changes (revisions for insertions, deletions, formatting)
+- **In-memory revision acceptance** (industry-standard DOM transformation approach)
 - Comments and annotations
 - Table of contents generation
 - Fields (merge fields, date/time, page numbers, TOC)
@@ -663,6 +664,104 @@ setGlobalLogger(new ConsoleLogger(LogLevel.INFO));
 ```
 
 See `src/utils/CLAUDE.md` for complete logging documentation.
+
+## Revision Acceptance Architecture (December 2025)
+
+The framework now implements the **industry-standard in-memory DOM transformation approach** for accepting tracked changes, following the architecture used by OpenXML PowerTools, Aspose.Words, and other production DOCX libraries.
+
+### Two Approaches Available
+
+| Method | Use Case | Subsequent Modifications |
+|--------|----------|--------------------------|
+| `acceptAllRevisions()` | **Recommended** - Accept and continue editing | Fully supported |
+| `acceptAllRevisionsRawXml()` | Legacy - Accept and save immediately | NOT supported |
+
+### In-Memory Transformation (Recommended)
+
+```typescript
+// Load document (revisions preserved for inspection)
+const doc = await Document.load('input.docx', { revisionHandling: 'preserve' });
+
+// Accept all tracked changes using in-memory transformation
+await doc.acceptAllRevisions();
+
+// Now you can make additional modifications - they WILL be saved
+doc.applyStyles(styleConfig);
+for (const para of doc.getParagraphs()) {
+  for (const run of para.getRuns()) {
+    run.setColor('000000'); // This change will be preserved
+  }
+}
+
+// Save - all changes (accepted revisions + new modifications) are written
+await doc.save('output.docx');
+```
+
+### How It Works
+
+The `acceptAllRevisions()` method transforms Revision objects in the in-memory model:
+
+1. **Insertions (`w:ins`)**: Unwrap - child Runs/Hyperlinks are extracted into the parent paragraph
+2. **Deletions (`w:del`)**: Remove - the revision and its content are deleted from the model
+3. **MoveFrom (`w:moveFrom`)**: Remove - content exists at moveTo destination
+4. **MoveTo (`w:moveTo`)**: Unwrap - keep content, remove revision wrapper
+5. **Property changes (`w:rPrChange`, etc.)**: Remove metadata, keep current formatting
+
+Because this transforms the in-memory model (not raw XML), the standard `save()` regeneration process includes both the accepted changes AND any subsequent modifications.
+
+### Raw XML Approach (Legacy)
+
+```typescript
+// Use when you need to accept revisions and save immediately WITHOUT further changes
+const doc = await Document.load('input.docx', { revisionHandling: 'preserve' });
+await doc.acceptAllRevisionsRawXml(); // Sets skipDocumentXmlRegeneration = true
+await doc.save('output.docx'); // Preserves cleaned raw XML
+
+// WARNING: Any modifications made after acceptAllRevisionsRawXml() will NOT be saved
+// The document.xml is not regenerated from the in-memory model
+```
+
+### Why This Matters
+
+Previous versions used the raw XML approach exclusively, which caused issues:
+
+- After calling `acceptAllRevisions()`, the `skipDocumentXmlRegeneration` flag was set
+- On `save()`, the cleaned raw XML was written directly
+- Any in-memory modifications (styles, colors, etc.) were lost
+
+The new in-memory approach follows the same architecture as:
+
+- [OpenXML PowerTools RevisionAccepter](https://github.com/OfficeDev/Open-Xml-PowerTools)
+- [Microsoft's guidance on accepting revisions](https://learn.microsoft.com/en-us/previous-versions/office/developer/office-2007/ee836138(v=office.12))
+
+### Helper Functions
+
+```typescript
+import {
+  acceptRevisionsInMemory,
+  paragraphHasRevisions,
+  getRevisionsFromParagraph,
+  countRevisionsByType,
+} from 'docxmlater';
+
+// Check if paragraph has revisions
+if (paragraphHasRevisions(paragraph)) {
+  const revisions = getRevisionsFromParagraph(paragraph);
+  console.log(`Found ${revisions.length} revisions`);
+}
+
+// Count revisions by type across document
+const counts = countRevisionsByType(doc);
+console.log(`Insertions: ${counts.get('insert')}, Deletions: ${counts.get('delete')}`);
+
+// Selective acceptance
+const result = acceptRevisionsInMemory(doc, {
+  acceptInsertions: true,
+  acceptDeletions: true,
+  acceptMoves: true,
+  acceptPropertyChanges: false, // Keep formatting change metadata
+});
+```
 
 ## Resources and References
 

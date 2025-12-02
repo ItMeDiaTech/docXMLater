@@ -390,6 +390,16 @@ export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandl
 // Revision utilities
 export { RevisionWalker, RevisionWalkerOptions } from './utils/RevisionWalker';
 
+// In-memory revision acceptance (industry-standard approach)
+export {
+  acceptRevisionsInMemory,
+  AcceptRevisionsOptions,
+  AcceptRevisionsResult,
+  paragraphHasRevisions,
+  getRevisionsFromParagraph,
+  countRevisionsByType,
+} from './utils/InMemoryRevisionAcceptor';
+
 // Constants
 export { LIMITS } from './constants/limits';
 

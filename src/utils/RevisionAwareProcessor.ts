@@ -221,13 +221,21 @@ export class RevisionAwareProcessor {
   /**
    * Accept all revisions in the document using Document.acceptAllRevisions().
    *
-   * This delegates to Document.acceptAllRevisions() which performs three critical steps:
-   * 1. Modifies raw XML in ZIP package (removes w:del, unwraps w:ins)
-   * 2. Clears Revision objects from in-memory document model
-   * 3. Sets skipDocumentXmlRegeneration flag to preserve cleaned XML on save
+   * This delegates to Document.acceptAllRevisions() which uses in-memory DOM transformation
+   * (the industry-standard approach used by OpenXML PowerTools, Aspose.Words, etc.):
    *
-   * Previously, this method only did step 1, causing the in-memory Revision objects
-   * to be re-serialized on save(), overwriting the cleaned XML.
+   * 1. Transforms Revision objects in paragraph.content arrays
+   * 2. Insertions (w:ins): Unwraps content - keeps Runs/Hyperlinks, removes Revision wrapper
+   * 3. Deletions (w:del): Removes content entirely from the model
+   * 4. Move operations: moveFrom removed, moveTo unwrapped
+   * 5. Property changes: Removes change metadata, keeps current formatting
+   *
+   * This approach allows subsequent modifications to be saved correctly because the
+   * in-memory model is transformed (not raw XML), so save() regenerates document.xml
+   * with both the accepted changes AND any subsequent modifications.
+   *
+   * @see https://github.com/OfficeDev/Open-Xml-PowerTools - RevisionAccepter.cs
+   * @see https://learn.microsoft.com/en-us/previous-versions/office/developer/office-2007/ee836138
    */
   private static async acceptAllRevisions(
     doc: Document,
@@ -235,17 +243,15 @@ export class RevisionAwareProcessor {
     acceptedIds: string[],
     addLog: (action: string, details: string, revisionId?: string) => void
   ): Promise<void> {
-    addLog('info', 'Accepting all revisions');
+    addLog('info', 'Accepting all revisions using in-memory DOM transformation');
 
     // Track accepted revision IDs before acceptance (for logging)
     for (const rev of revisions) {
       acceptedIds.push(rev.getId().toString());
     }
 
-    // Use Document.acceptAllRevisions() which properly:
-    // 1. Cleans the raw XML in the ZIP package
-    // 2. Clears Revision objects from in-memory model
-    // 3. Sets skipDocumentXmlRegeneration to prevent re-serialization corruption
+    // Use Document.acceptAllRevisions() which uses in-memory transformation
+    // This allows subsequent modifications to be saved correctly
     await doc.acceptAllRevisions();
 
     // Log each accepted revision
@@ -253,7 +259,7 @@ export class RevisionAwareProcessor {
       addLog('accept', `Accepted revision ${id}`, id);
     }
 
-    addLog('complete', `Accepted ${acceptedIds.length} revisions`);
+    addLog('complete', `Accepted ${acceptedIds.length} revisions (in-memory transformation)`);
   }
 
   /**
