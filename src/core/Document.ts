@@ -3422,6 +3422,41 @@ export class Document {
   };
 
   /**
+   * Gets all Run instances from a paragraph, including those nested inside
+   * Revision, Hyperlink, and other container elements.
+   *
+   * This method recursively extracts runs from:
+   * - Direct Run children of the paragraph
+   * - Runs inside Revision elements (tracked changes)
+   * - Runs inside Hyperlink elements
+   *
+   * @param para - The paragraph to extract runs from
+   * @returns Array of all Run instances found in the paragraph
+   * @private
+   */
+  private getAllRunsFromParagraph(para: Paragraph): Run[] {
+    const runs: Run[] = [];
+    const content = para.getContent();
+
+    for (const item of content) {
+      if (item instanceof Run) {
+        // Direct run
+        runs.push(item);
+      } else if (item instanceof Revision) {
+        // Runs inside revision wrappers
+        const revisionRuns = item.getRuns();
+        runs.push(...revisionRuns);
+      } else if (item instanceof Hyperlink) {
+        // Run inside hyperlink (Hyperlink has a single run)
+        const hyperlinkRun = item.getRun();
+        runs.push(hyperlinkRun);
+      }
+    }
+
+    return runs;
+  }
+
+  /**
    * Applies styles to the document with custom formatting
    *
    * Modifies existing Heading1, Heading2, Heading3, Normal, and List Paragraph style definitions
@@ -3662,8 +3697,8 @@ export class Document {
       if (styleId === "Heading1" && heading1) {
         para.clearDirectFormattingConflicts(heading1);
 
-        // Apply formatting to all runs, respecting preserve flags
-        for (const run of para.getRuns()) {
+        // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
+        for (const run of this.getAllRunsFromParagraph(para)) {
           if (!h1Preserve.bold) {
             run.setBold(h1Config.run?.bold ?? false);
           }
@@ -3673,11 +3708,11 @@ export class Document {
           if (!h1Preserve.underline) {
             run.setUnderline(h1Config.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size
+          // Apply font, color, and size - always apply color to override any existing
           if (h1Config.run?.font) {
             run.setFont(h1Config.run.font);
           }
-          if (h1Config.run?.color) {
+          if (h1Config.run?.color !== undefined) {
             run.setColor(h1Config.run.color);
           }
           if (h1Config.run?.size) {
@@ -3727,8 +3762,7 @@ export class Document {
       // Process Heading2 paragraphs
       else if (styleId === "Heading2" && heading2) {
         // Check if paragraph has actual text content (skip empty paragraphs)
-        const hasContent = para
-          .getRuns()
+        const hasContent = this.getAllRunsFromParagraph(para)
           .some((run) => run.getText().trim().length > 0);
 
         if (!hasContent) {
@@ -3740,8 +3774,8 @@ export class Document {
         // Clear direct formatting first
         para.clearDirectFormattingConflicts(heading2);
 
-        // Apply formatting to all runs, respecting preserve flags
-        for (const run of para.getRuns()) {
+        // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
+        for (const run of this.getAllRunsFromParagraph(para)) {
           if (!h2Preserve.bold) {
             run.setBold(h2Config.run?.bold ?? false);
           }
@@ -3751,11 +3785,11 @@ export class Document {
           if (!h2Preserve.underline) {
             run.setUnderline(h2Config.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size
+          // Apply font, color, and size - always apply color to override any existing
           if (h2Config.run?.font) {
             run.setFont(h2Config.run.font);
           }
-          if (h2Config.run?.color) {
+          if (h2Config.run?.color !== undefined) {
             run.setColor(h2Config.run.color);
           }
           if (h2Config.run?.size) {
@@ -3898,8 +3932,8 @@ export class Document {
       else if (styleId === "Heading3" && heading3) {
         para.clearDirectFormattingConflicts(heading3);
 
-        // Apply formatting to all runs, respecting preserve flags
-        for (const run of para.getRuns()) {
+        // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
+        for (const run of this.getAllRunsFromParagraph(para)) {
           if (!h3Preserve.bold) {
             run.setBold(h3Config.run?.bold ?? false);
           }
@@ -3909,11 +3943,11 @@ export class Document {
           if (!h3Preserve.underline) {
             run.setUnderline(h3Config.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size
+          // Apply font, color, and size - always apply color to override any existing
           if (h3Config.run?.font) {
             run.setFont(h3Config.run.font);
           }
-          if (h3Config.run?.color) {
+          if (h3Config.run?.color !== undefined) {
             run.setColor(h3Config.run.color);
           }
           if (h3Config.run?.size) {
@@ -3963,7 +3997,8 @@ export class Document {
       // Process List Paragraph paragraphs
       else if (styleId === "ListParagraph" && listParagraph) {
         // Save formatting that should be preserved BEFORE clearing
-        const preservedFormatting = para.getRuns().map((run) => {
+        const allRuns = this.getAllRunsFromParagraph(para);
+        const preservedFormatting = allRuns.map((run) => {
           const fmt = run.getFormatting();
           return {
             run: run,
@@ -3988,8 +4023,8 @@ export class Document {
           }
         }
 
-        // Apply formatting to all runs, respecting preserve flags
-        for (const run of para.getRuns()) {
+        // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
+        for (const run of allRuns) {
           if (!listParaPreserve.bold) {
             run.setBold(listParaConfig.run?.bold ?? false);
           }
@@ -3999,11 +4034,11 @@ export class Document {
           if (!listParaPreserve.underline) {
             run.setUnderline(listParaConfig.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size
+          // Apply font, color, and size - always apply color to override any existing
           if (listParaConfig.run?.font) {
             run.setFont(listParaConfig.run.font);
           }
-          if (listParaConfig.run?.color) {
+          if (listParaConfig.run?.color !== undefined) {
             run.setColor(listParaConfig.run.color);
           }
           if (listParaConfig.run?.size) {
@@ -4053,7 +4088,8 @@ export class Document {
       // Process Normal paragraphs (including undefined style which defaults to Normal)
       else if ((styleId === "Normal" || styleId === undefined) && normal) {
         // Save formatting that should be preserved BEFORE clearing
-        const preservedFormatting = para.getRuns().map((run) => {
+        const allRuns = this.getAllRunsFromParagraph(para);
+        const preservedFormatting = allRuns.map((run) => {
           const fmt = run.getFormatting();
           return {
             run: run,
@@ -4078,8 +4114,8 @@ export class Document {
           }
         }
 
-        // Apply formatting to all runs, respecting preserve flags
-        for (const run of para.getRuns()) {
+        // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
+        for (const run of allRuns) {
           if (!normalPreserve.bold) {
             run.setBold(normalConfig.run?.bold ?? false);
           }
@@ -4089,11 +4125,11 @@ export class Document {
           if (!normalPreserve.underline) {
             run.setUnderline(normalConfig.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size
+          // Apply font, color, and size - always apply color to override any existing
           if (normalConfig.run?.font) {
             run.setFont(normalConfig.run.font);
           }
-          if (normalConfig.run?.color) {
+          if (normalConfig.run?.color !== undefined) {
             run.setColor(normalConfig.run.color);
           }
           if (normalConfig.run?.size) {
