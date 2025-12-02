@@ -54,7 +54,8 @@ function getLogger(): ILogger {
   return createScopedLogger(getGlobalLogger(), 'Document');
 }
 // Raw XML revision acceptance - used at load time BEFORE parsing
-import { acceptAllRevisions } from "../utils/acceptRevisions";
+// cleanupRevisionMetadata - cleanup metadata files after in-memory acceptance
+import { acceptAllRevisions, cleanupRevisionMetadata } from "../utils/acceptRevisions";
 // In-memory revision acceptance - used AFTER parsing, allows subsequent modifications
 import { acceptRevisionsInMemory, AcceptRevisionsResult } from "../utils/InMemoryRevisionAcceptor";
 import { stripTrackedChanges } from "../utils/stripTrackedChanges";
@@ -8855,6 +8856,11 @@ export class Document {
     // @see https://learn.microsoft.com/en-us/previous-versions/office/developer/office-2007/ee836138(v=office.12)
 
     const result = acceptRevisionsInMemory(this);
+
+    // Also cleanup metadata files (people.xml, settings.xml, core.xml)
+    // This removes author tracking info and track changes settings that would
+    // otherwise indicate the document had tracked changes
+    cleanupRevisionMetadata(this.zipHandler);
 
     this.logger.info('Accepted all revisions using in-memory transformation', {
       insertions: result.insertionsAccepted,

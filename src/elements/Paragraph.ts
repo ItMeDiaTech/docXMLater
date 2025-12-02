@@ -1971,6 +1971,16 @@ export class Paragraph {
   }
 
   /**
+   * Clears paragraph property change tracking information.
+   * Used when accepting revisions to remove the w:pPrChange element.
+   * @returns This paragraph for chaining
+   */
+  clearParagraphPropertiesChange(): this {
+    delete this.formatting.pPrChange;
+    return this;
+  }
+
+  /**
    * Sets run properties for the paragraph mark (¶ symbol)
    *
    * The paragraph mark is the invisible character at the end of every paragraph.

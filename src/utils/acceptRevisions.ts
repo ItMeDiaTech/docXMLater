@@ -381,8 +381,25 @@ export class RevisionAcceptor {
   }
 
   /**
+   * Clean up all revision metadata files (people.xml, settings.xml, core.xml).
+   *
+   * This removes:
+   * - All revision authors from people.xml
+   * - Track changes settings from settings.xml
+   * - Resets revision count in core.xml
+   *
+   * Called as part of acceptAllRevisions() but can also be called separately
+   * when using in-memory revision acceptance.
+   */
+  public cleanupMetadata(): void {
+    this.cleanupPeopleXml();
+    this.cleanupSettingsXml();
+    this.cleanupCorePropsXml();
+  }
+
+  /**
    * Clean up word/people.xml - remove all revision authors
-   * 
+   *
    * Handles both w: and w15: namespace variants
    */
   private cleanupPeopleXml(): void {
@@ -664,4 +681,22 @@ export class RevisionAcceptor {
 export async function acceptAllRevisions(zipHandler: ZipHandler): Promise<void> {
   const acceptor = new RevisionAcceptor(zipHandler);
   await acceptor.acceptAllRevisions();
+}
+
+/**
+ * Convenience function to clean up revision metadata files.
+ *
+ * This removes:
+ * - All revision authors from people.xml
+ * - Track changes settings from settings.xml
+ * - Resets revision count in core.xml
+ *
+ * Use this after in-memory revision acceptance to ensure metadata is also cleaned.
+ * The raw XML acceptAllRevisions() function calls this automatically.
+ *
+ * @param zipHandler - The ZipHandler containing the DOCX package
+ */
+export function cleanupRevisionMetadata(zipHandler: ZipHandler): void {
+  const acceptor = new RevisionAcceptor(zipHandler);
+  acceptor.cleanupMetadata();
 }

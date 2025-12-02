@@ -676,12 +676,9 @@ export class NumberingLevel {
     }
     const format = numFmtMatch[1] as NumberFormat;
 
-    // Extract level text (required)
-    const lvlTextMatch = xml.match(/<w:lvlText[^>]*w:val="([^"]+)"/);
-    if (!lvlTextMatch || !lvlTextMatch[1]) {
-      throw new Error("Missing required w:lvlText element");
-    }
-    const text = lvlTextMatch[1];
+    // Extract level text (optional - can be empty for placeholder levels)
+    const lvlTextMatch = xml.match(/<w:lvlText[^>]*w:val="([^"]*)"/);
+    const text = lvlTextMatch && lvlTextMatch[1] !== undefined ? lvlTextMatch[1] : "";
 
     // Extract alignment (optional, default: left)
     const lvlJcMatch = xml.match(/<w:lvlJc[^>]*w:val="([^"]+)"/);
