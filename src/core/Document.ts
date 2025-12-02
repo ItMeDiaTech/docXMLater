@@ -274,6 +274,11 @@ export class Document {
   // When true, save() and toBuffer() will preserve the manually cleaned XML
   private skipDocumentXmlRegeneration: boolean = false;
 
+  // Flag to accept all revisions before save
+  // When true, acceptAllRevisions() is called after flushPendingChanges() but before XML generation
+  // This ensures ALL revisions (including those created during save) are accepted
+  private acceptRevisionsBeforeSave: boolean = false;
+
   // Store original [Content_Types].xml entries to preserve during save
   // This ensures round-trip fidelity for documents with features the framework doesn't track
   // (VBA macros, custom UI, embedded objects, etc.)
@@ -1311,6 +1316,14 @@ export class Document {
         this.flushPendingChanges();
       }
 
+      // Accept all revisions if auto-accept is enabled
+      // This MUST happen after flushPendingChanges() to catch all revisions
+      // but BEFORE updateDocumentXml() so accepted changes are serialized correctly
+      if (this.acceptRevisionsBeforeSave) {
+        await this.acceptAllRevisions();
+        this.acceptRevisionsBeforeSave = false; // Reset flag after acceptance
+      }
+
       // Only regenerate document.xml if we haven't manually stripped tracked changes
       // Stripping sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
       if (!this.skipDocumentXmlRegeneration) {
@@ -1423,6 +1436,14 @@ export class Document {
       // Flush pending tracked changes to create Revision objects before XML generation
       if (this.trackChangesEnabled && this.trackingContext) {
         this.flushPendingChanges();
+      }
+
+      // Accept all revisions if auto-accept is enabled
+      // This MUST happen after flushPendingChanges() to catch all revisions
+      // but BEFORE updateDocumentXml() so accepted changes are serialized correctly
+      if (this.acceptRevisionsBeforeSave) {
+        await this.acceptAllRevisions();
+        this.acceptRevisionsBeforeSave = false; // Reset flag after acceptance
       }
 
       // Only regenerate document.xml if we haven't manually stripped tracked changes
@@ -3551,7 +3572,7 @@ export class Document {
 
     // Extract preserve blank lines option (defaults to true)
     const preserveBlankLines =
-      options?.preserveBlankLinesAfterHeader2Tables ?? true;
+      options?.preserveBlankLinesAfterHeading2Tables ?? true;
 
     // Modify Heading1 definition
     if (heading1 && h1Config.run && h1Config.paragraph) {
@@ -4240,7 +4261,7 @@ export class Document {
    * - Has no bookmarks or comments
    *
    * When `addStructureBlankLines` is enabled, blank paragraphs are added after:
-   * - Header 1 paragraphs
+   * - Heading 1 paragraphs
    * - Table of Contents elements
    * - Bullet/numbered list blocks
    * - "End of Document Warning" paragraph
@@ -4355,7 +4376,7 @@ export class Document {
   }
 
   /**
-   * Marks blank lines after 1x1 Header 2 tables as preserved
+   * Marks blank lines after 1x1 Heading 2 tables as preserved
    * @private
    */
   /**
@@ -4410,7 +4431,7 @@ export class Document {
    *   after1x1Tables: true,
    *   afterOtherTables: false,  // Only 1x1 tables
    *   filter1x1: (table, index) => {
-   *     // Only add blanks after Header 2 tables
+   *     // Only add blanks after Heading 2 tables
    *     const cell = table.getCell(0, 0);
    *     if (!cell) return false;
    *     return cell.getParagraphs().some(p => {
@@ -4446,8 +4467,8 @@ export class Document {
     aboveFirstTable?: boolean;
     /** Add blank line above "Top of Document" hyperlinks (default: true) */
     aboveTODHyperlinks?: boolean;
-    /** Add blank line below Header 1 paragraphs with text (default: true) */
-    belowHeader1Lines?: boolean;
+    /** Add blank line below Heading 1 paragraphs with text (default: true) */
+    belowHeading1Lines?: boolean;
     /** Add blank line below Table of Contents elements (default: true) */
     belowTOC?: boolean;
     /** Add blank line above warning message (default: true) */
@@ -4471,7 +4492,7 @@ export class Document {
     const filterOther = options?.filterOther;
     const aboveFirstTable = options?.aboveFirstTable ?? true;
     const aboveTODHyperlinks = options?.aboveTODHyperlinks ?? true;
-    const belowHeader1Lines = options?.belowHeader1Lines ?? true;
+    const belowHeading1Lines = options?.belowHeading1Lines ?? true;
     const belowTOC = options?.belowTOC ?? true;
     const aboveWarning = options?.aboveWarning ?? true;
     const afterLists = options?.afterLists ?? true;
@@ -4596,8 +4617,8 @@ export class Document {
       }
     }
 
-    // Phase 6: Add blank below Header 1 paragraphs with text
-    if (belowHeader1Lines) {
+    // Phase 6: Add blank below Heading 1 paragraphs with text
+    if (belowHeading1Lines) {
       const allParas = this.getAllParagraphs();
       
       for (const para of allParas) {
@@ -4619,7 +4640,7 @@ export class Document {
                 totalExistingLinesMarked++;
               }
             } else {
-              // Add blank paragraph after Header 1
+              // Add blank paragraph after Heading 1
               const blankPara = Paragraph.create();
               blankPara.setStyle(style);
               blankPara.setSpaceAfter(spacingAfter);
@@ -4845,7 +4866,7 @@ export class Document {
   }
 
 
-  private markHeader2BlankLinesAsPreserved(): void {
+  private markHeading2BlankLinesAsPreserved(): void {
     const tables = this.getAllTables();
 
     for (const table of tables) {
@@ -4857,12 +4878,12 @@ export class Document {
         continue;
       }
 
-      // Get the cell and check if it contains a Header 2 paragraph
+      // Get the cell and check if it contains a Heading 2 paragraph
       const cell = table.getCell(0, 0);
       if (!cell) continue;
 
       const cellParas = cell.getParagraphs();
-      let hasHeader2 = false;
+      let hasHeading2 = false;
 
       for (const para of cellParas) {
         const style = para.getStyle();
@@ -4872,14 +4893,14 @@ export class Document {
           style === "CustomHeader2" ||
           style === "Header2"
         ) {
-          hasHeader2 = true;
+          hasHeading2 = true;
           break;
         }
       }
 
-      if (!hasHeader2) continue;
+      if (!hasHeading2) continue;
 
-      // Found a 1x1 table with Header 2 - mark next paragraph as preserved if it's blank
+      // Found a 1x1 table with Heading 2 - mark next paragraph as preserved if it's blank
       const tableIndex = this.bodyElements.indexOf(table);
       if (tableIndex === -1) continue;
 
@@ -4894,7 +4915,7 @@ export class Document {
 
   /**
    * Ensures that all 1x1 tables have a blank line after them with optional preserve flag.
-   * This is useful for maintaining spacing after single-cell tables (e.g., Header 2 tables).
+   * This is useful for maintaining spacing after single-cell tables (e.g., Heading 2 tables).
    *
    * The method:
    * 1. Finds all 1x1 tables in the document
@@ -4930,7 +4951,7 @@ export class Document {
    * });
    *
    * @example
-   * // Only process tables with Header 2 paragraphs
+   * // Only process tables with Heading 2 paragraphs
    * doc.ensureBlankLinesAfter1x1Tables({
    *   filter: (table, index) => {
    *     const cell = table.getCell(0, 0);
@@ -6373,7 +6394,7 @@ export class Document {
     tocXml += "<w:sdtContent>";
 
     // Calculate minimum level for relative indentation
-    // If TOC shows only Header 2s, minLevel=2, so Header 2 gets 0" indent
+    // If TOC shows only Heading 2s, minLevel=2, so Heading 2 gets 0" indent
     const minLevel =
       headings.length > 0 ? Math.min(...headings.map((h) => h.level)) : 1;
 
@@ -7902,6 +7923,51 @@ export class Document {
    */
   flushPendingChanges(): Revision[] {
     return this.trackingContext.flushPendingChanges();
+  }
+
+  /**
+   * Enable automatic acceptance of all revisions before save.
+   *
+   * When enabled, acceptAllRevisions() is called after flushPendingChanges()
+   * but before XML generation during save(). This ensures ALL revisions
+   * (including those created during save) are accepted.
+   *
+   * This is useful when you want a clean document without visible tracked changes,
+   * but need to process the document first and capture changes for logging/UI display.
+   *
+   * @param accept - Whether to accept all revisions before save (default: false)
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // Enable track changes for processing
+   * doc.enableTrackChanges({ author: 'DocHub' });
+   *
+   * // Make modifications (automatically tracked)
+   * doc.createParagraph('New content');
+   *
+   * // Extract changes for UI display BEFORE accepting
+   * const changes = ChangelogGenerator.fromDocument(doc);
+   *
+   * // Enable auto-accept so document will be clean after save
+   * doc.setAcceptRevisionsBeforeSave(true);
+   * doc.disableTrackChanges();
+   *
+   * // Save - all revisions will be accepted, document will have no visible tracked changes
+   * await doc.save('output.docx');
+   * ```
+   */
+  setAcceptRevisionsBeforeSave(accept: boolean): this {
+    this.acceptRevisionsBeforeSave = accept;
+    return this;
+  }
+
+  /**
+   * Check if revisions will be automatically accepted before save.
+   * @returns True if revisions will be accepted before save
+   */
+  getAcceptRevisionsBeforeSave(): boolean {
+    return this.acceptRevisionsBeforeSave;
   }
 
   /**
