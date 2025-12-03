@@ -64,6 +64,10 @@ export class ImageManager {
    * Registers an image with the manager
    * @param image The image to register
    * @param relationshipId The relationship ID for this image
+   * @param originalFilename Optional original filename from the source document.
+   *   When provided (during parsing), preserves the original filename to maintain
+   *   consistency with relationship targets. When not provided (adding new images),
+   *   generates a new sequential filename.
    * @returns The filename assigned to this image
    * @throws {Error} If image limits are exceeded
    *
@@ -72,7 +76,7 @@ export class ImageManager {
    * However, each image occurrence gets its own entry to preserve dimensions
    * (Word allows same image file displayed at different sizes via wp:extent).
    */
-  registerImage(image: Image, relationshipId: string): string {
+  registerImage(image: Image, relationshipId: string, originalFilename?: string): string {
     // Check if already registered by object reference (exact same object)
     const existing = this.images.get(image);
     if (existing) {
@@ -82,9 +86,14 @@ export class ImageManager {
     // Issue #12 fix: Reuse FILENAME for same rId, but create separate entry
     // This prevents duplicate files in media folder while preserving dimensions
     const existingByRelId = this.imagesByRelId.get(relationshipId);
+
+    // Filename priority:
+    // 1. Existing filename for same rId (prevents duplicates)
+    // 2. Original filename from source document (preserves round-trip integrity)
+    // 3. Generate new sequential filename (for newly added images)
     const filename = existingByRelId
       ? existingByRelId.filename
-      : `image${this.nextImageNumber++}.${image.getExtension()}`;
+      : (originalFilename || `image${this.nextImageNumber++}.${image.getExtension()}`);
 
     // Validate image count limit
     if (this.images.size >= this.maxImageCount) {

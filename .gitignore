@@ -239,3 +239,24 @@ FONT_COLOR_QUICK_REFERENCE.md
 README_FONT_COLOR.md
 docs/API_REFACTOR_V4.md
 docs/API_REFACTOR_V4.md
+/tests/fixtures
+desktop.ini
+
+# ============================================================================
+# REORGANIZED TEST AND ANALYSIS DIRECTORIES
+# ============================================================================
+
+# Test analysis artifacts (moved from root)
+tests/temp-analysis/
+
+# Test script files in tests/scripts
+tests/scripts/*.js
+tests/scripts/*.ts
+
+# Test directories (moved from root)  
+tests/FULL_TEST/
+tests/Test_For_Review/
+tests/testing/
+
+# Logs folder
+logs/
