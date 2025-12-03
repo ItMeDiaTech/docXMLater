@@ -2718,7 +2718,12 @@ export class DocumentParser {
     }
 
     if (rPrObj["w:color"]) {
-      run.setColor(rPrObj["w:color"]["@_w:val"]);
+      const colorVal = rPrObj["w:color"]["@_w:val"];
+      // Skip special OOXML values like "auto" (automatic/inherit from style)
+      // "auto" is a valid OOXML color that means inherit - not a hex color
+      if (colorVal && colorVal !== "auto") {
+        run.setColor(colorVal);
+      }
     }
 
     if (rPrObj["w:highlight"]) {
@@ -2876,6 +2881,10 @@ export class DocumentParser {
         return null;
       }
 
+      // Extract original filename from relationship target (e.g., "media/image5.png" -> "image5.png")
+      // This preserves the original filename during round-trip to prevent relationship/file mismatches
+      const originalFilename = imageTarget.split("/").pop();
+
       // Detect image extension from path
       const extension = imagePath.split(".").pop()?.toLowerCase() || "png";
 
@@ -2895,8 +2904,8 @@ export class DocumentParser {
         effects,
       });
 
-      // Register image with ImageManager (reuse existing relationship)
-      imageManager.registerImage(image, relationshipId);
+      // Register image with ImageManager (preserve original filename for round-trip integrity)
+      imageManager.registerImage(image, relationshipId, originalFilename);
       image.setRelationshipId(relationshipId);
       
       // Preserve the original docPr ID to prevent corruption

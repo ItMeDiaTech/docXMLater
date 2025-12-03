@@ -5844,6 +5844,12 @@ export class Document {
         return false;
       }
 
+      // ImageRun (images embedded in runs) count as content
+      // IMPORTANT: Check ImageRun BEFORE Run since ImageRun extends Run
+      if (item instanceof ImageRun) {
+        return false;
+      }
+
       // Images/shapes count as content
       if (item instanceof Shape) {
         return false;
