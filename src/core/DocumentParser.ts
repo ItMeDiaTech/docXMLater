@@ -2297,14 +2297,33 @@ export class DocumentParser {
         }
       }
 
+      // Handle external hyperlinks with anchor fragments
+      // Microsoft Word can store URLs with the base in relationships and fragment in w:anchor
+      // Example: rels has "https://example.com/", anchor has "!/view?docid=abc-123"
+      // Combined: "https://example.com/#!/view?docid=abc-123"
+      // This is common for single-page applications with hash-based routing (theSource, etc.)
+      let finalAnchor = anchor;
+      let finalRelationshipId = relationshipId;
+      if (url && anchor) {
+        // Combine URL and anchor for external hyperlinks with fragments
+        url = url + '#' + anchor;
+        finalAnchor = undefined; // Clear anchor since it's now part of URL
+        // Clear relationshipId since the relationship points to the old base URL
+        // On save, a new relationship will be created with the combined URL
+        finalRelationshipId = undefined;
+        defaultLogger.debug(
+          `[DocumentParser] Combined external URL with anchor fragment: ${url}`
+        );
+      }
+
       // Create hyperlink with basic properties
       // NOTE: Do NOT use anchor (bookmark ID) as display text - it should only be used for navigation
       let displayText = text || url || "[Link]";
 
       // Warn if hyperlink has no display text (possible TOC corruption or malformed hyperlink)
-      if (!text && anchor) {
+      if (!text && finalAnchor) {
         defaultLogger.warn(
-          `[DocumentParser] Hyperlink to anchor "${anchor}" has no display text. ` +
+          `[DocumentParser] Hyperlink to anchor "${finalAnchor}" has no display text. ` +
             `Using placeholder "[Link]" to prevent bookmark ID from appearing as visible text. ` +
             `This may indicate a corrupted TOC or malformed hyperlink in the source document.`
         );
@@ -2312,11 +2331,11 @@ export class DocumentParser {
 
       const hyperlink = new Hyperlink({
         url,
-        anchor,
+        anchor: finalAnchor,
         text: displayText,
         formatting,
         tooltip,
-        relationshipId,
+        relationshipId: finalRelationshipId,
       });
 
       // If we successfully parsed a run with tabs/breaks, use it instead of the default run
