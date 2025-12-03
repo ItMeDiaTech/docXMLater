@@ -155,6 +155,43 @@ export class Hyperlink {
   }
 
   /**
+   * Gets the complete URL including any anchor fragment.
+   *
+   * For external links that also have an anchor (e.g., internal bookmark within external page),
+   * this returns the URL with the anchor appended as a fragment.
+   * For internal-only links (anchor without URL), returns undefined.
+   *
+   * Note: As of v7.2.0, DocumentParser automatically combines external URLs with anchors
+   * during parsing, so getUrl() typically returns the full URL. This method is provided
+   * for cases where URL and anchor are set separately via the API.
+   *
+   * @returns The complete URL with fragment, or undefined for internal-only links
+   *
+   * @example
+   * ```typescript
+   * // External link with anchor fragment
+   * const link = new Hyperlink({ url: 'https://example.com/', anchor: '!/view?id=123', text: 'Link' });
+   * link.getUrl();      // 'https://example.com/'
+   * link.getAnchor();   // '!/view?id=123'
+   * link.getFullUrl();  // 'https://example.com/#!/view?id=123'
+   *
+   * // External link without anchor
+   * const link2 = Hyperlink.createExternal('https://example.com/page', 'Link');
+   * link2.getFullUrl(); // 'https://example.com/page'
+   *
+   * // Internal link (bookmark reference)
+   * const link3 = Hyperlink.createInternal('Section1', 'Go to Section 1');
+   * link3.getFullUrl(); // undefined
+   * ```
+   */
+  getFullUrl(): string | undefined {
+    if (this.url && this.anchor) {
+      return this.url + '#' + this.anchor;
+    }
+    return this.url;
+  }
+
+  /**
    * Gets the anchor (for internal links)
    */
   getAnchor(): string | undefined {

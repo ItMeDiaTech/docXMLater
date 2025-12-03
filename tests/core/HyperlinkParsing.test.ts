@@ -523,6 +523,181 @@ describe('Hyperlink Parsing', () => {
     });
   });
 
+  describe('External URL + Anchor Fragment Combination', () => {
+    it('should combine external URL with anchor fragment during parsing', async () => {
+      // This tests the fix for Issue.docx where theSource URLs are split:
+      // - Base URL in relationships: https://thesource.cvshealth.com/nuxeo/thesource/
+      // - Fragment in w:anchor: !/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c
+      // Combined: https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c
+      const mockDocument = await createMockDocumentWithUrlAndAnchor({
+        relationshipId: 'rId5',
+        url: 'https://thesource.cvshealth.com/nuxeo/thesource/',
+        anchor: '!/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c',
+        text: 'View Document',
+      });
+
+      const doc = await Document.loadFromBuffer(mockDocument);
+      const paragraphs = doc.getParagraphs();
+      const hyperlink = paragraphs[0]!.getContent()[0] as Hyperlink;
+
+      // URL should be combined with anchor
+      expect(hyperlink.getUrl()).toBe('https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c');
+      // Anchor should be undefined since it's now part of URL
+      expect(hyperlink.getAnchor()).toBeUndefined();
+      // Should still be external
+      expect(hyperlink.isExternal()).toBe(true);
+      expect(hyperlink.isInternal()).toBe(false);
+      // Text should be preserved
+      expect(hyperlink.getText()).toBe('View Document');
+    });
+
+    it('should allow docid pattern to be extracted from combined URL', async () => {
+      // This verifies Template_UI regex will work after the fix
+      const mockDocument = await createMockDocumentWithUrlAndAnchor({
+        relationshipId: 'rId5',
+        url: 'https://thesource.cvshealth.com/nuxeo/thesource/',
+        anchor: '!/view?docid=abc-123-def',
+        text: 'Link',
+      });
+
+      const doc = await Document.loadFromBuffer(mockDocument);
+      const hyperlink = doc.getParagraphs()[0]!.getContent()[0] as Hyperlink;
+
+      const url = hyperlink.getUrl()!;
+      // Template_UI's regex pattern
+      const docIdPattern = /docid=([a-zA-Z0-9-]+)(?:[^a-zA-Z0-9-]|$)/i;
+      const match = url.match(docIdPattern);
+
+      expect(match).not.toBeNull();
+      expect(match![1]).toBe('abc-123-def');
+    });
+
+    it('should handle multiple hyperlinks with different URL+anchor combinations', async () => {
+      const zipHandler = new ZipHandler();
+
+      // Create multiple hyperlinks with different patterns
+      zipHandler.addFile('[Content_Types].xml', getContentTypesXml());
+      zipHandler.addFile('_rels/.rels', getRootRelsXml());
+      zipHandler.addFile('word/document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:hyperlink r:id="rId5" w:anchor="!/view?docid=doc-001">
+        <w:r><w:t>Doc 1</w:t></w:r>
+      </w:hyperlink>
+      <w:hyperlink r:id="rId6" w:anchor="!/view?docid=doc-002">
+        <w:r><w:t>Doc 2</w:t></w:r>
+      </w:hyperlink>
+      <w:hyperlink w:anchor="InternalSection">
+        <w:r><w:t>Internal</w:t></w:r>
+      </w:hyperlink>
+      <w:hyperlink r:id="rId7">
+        <w:r><w:t>External Only</w:t></w:r>
+      </w:hyperlink>
+    </w:p>
+  </w:body>
+</w:document>`);
+      zipHandler.addFile('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/base/" TargetMode="External"/>
+  <Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://other.com/path/" TargetMode="External"/>
+  <Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://noanchor.com/page" TargetMode="External"/>
+</Relationships>`);
+      zipHandler.addFile('word/styles.xml', getMinimalStylesXml());
+      zipHandler.addFile('docProps/core.xml', getMinimalCoreXml());
+      zipHandler.addFile('docProps/app.xml', getMinimalAppXml());
+
+      const buffer = await zipHandler.toBuffer();
+      const doc = await Document.loadFromBuffer(buffer);
+      const content = doc.getParagraphs()[0]!.getContent();
+
+      // External URL + anchor (combined)
+      const link1 = content[0] as Hyperlink;
+      expect(link1.getUrl()).toBe('https://example.com/base/#!/view?docid=doc-001');
+      expect(link1.getAnchor()).toBeUndefined();
+      expect(link1.getText()).toBe('Doc 1');
+
+      // Another external URL + anchor (combined)
+      const link2 = content[1] as Hyperlink;
+      expect(link2.getUrl()).toBe('https://other.com/path/#!/view?docid=doc-002');
+      expect(link2.getAnchor()).toBeUndefined();
+      expect(link2.getText()).toBe('Doc 2');
+
+      // Pure internal link (anchor only, no URL) - should remain unchanged
+      const link3 = content[2] as Hyperlink;
+      expect(link3.getUrl()).toBeUndefined();
+      expect(link3.getAnchor()).toBe('InternalSection');
+      expect(link3.isInternal()).toBe(true);
+      expect(link3.getText()).toBe('Internal');
+
+      // Pure external link (URL only, no anchor) - should remain unchanged
+      const link4 = content[3] as Hyperlink;
+      expect(link4.getUrl()).toBe('https://noanchor.com/page');
+      expect(link4.getAnchor()).toBeUndefined();
+      expect(link4.isExternal()).toBe(true);
+      expect(link4.getText()).toBe('External Only');
+    });
+
+    it('should preserve combined URL through round-trip save/load', async () => {
+      const mockDocument = await createMockDocumentWithUrlAndAnchor({
+        relationshipId: 'rId5',
+        url: 'https://example.com/',
+        anchor: '!/section?id=test-123',
+        text: 'Test Link',
+      });
+
+      // Load
+      const doc1 = await Document.loadFromBuffer(mockDocument);
+      const link1 = doc1.getParagraphs()[0]!.getContent()[0] as Hyperlink;
+      expect(link1.getUrl()).toBe('https://example.com/#!/section?id=test-123');
+
+      // Save
+      const buffer = await doc1.toBuffer();
+
+      // Load again
+      const doc2 = await Document.loadFromBuffer(buffer);
+      const link2 = doc2.getParagraphs()[0]!.getContent()[0] as Hyperlink;
+
+      // Should still have combined URL
+      expect(link2.getUrl()).toBe('https://example.com/#!/section?id=test-123');
+      expect(link2.getAnchor()).toBeUndefined();
+      expect(link2.getText()).toBe('Test Link');
+    });
+
+    it('should handle getFullUrl() for manually created hyperlinks with both url and anchor', () => {
+      // When creating hyperlinks via API with both url and anchor
+      const link = new Hyperlink({
+        url: 'https://example.com/',
+        anchor: '!/view?id=123',
+        text: 'Link',
+      });
+
+      // getUrl() returns just the url property
+      expect(link.getUrl()).toBe('https://example.com/');
+      // getAnchor() returns the anchor property
+      expect(link.getAnchor()).toBe('!/view?id=123');
+      // getFullUrl() combines them
+      expect(link.getFullUrl()).toBe('https://example.com/#!/view?id=123');
+    });
+
+    it('should return url from getFullUrl() when no anchor is set', () => {
+      const link = Hyperlink.createExternal('https://example.com/page', 'Link');
+
+      expect(link.getFullUrl()).toBe('https://example.com/page');
+      expect(link.getAnchor()).toBeUndefined();
+    });
+
+    it('should return undefined from getFullUrl() for internal-only links', () => {
+      const link = Hyperlink.createInternal('Section1', 'Go to Section 1');
+
+      expect(link.getFullUrl()).toBeUndefined();
+      expect(link.getUrl()).toBeUndefined();
+      expect(link.getAnchor()).toBe('Section1');
+    });
+  });
+
   describe('TOC Corruption Prevention (Anchor as Display Text Bug)', () => {
     it('should NOT use anchor bookmark ID as display text when text is empty', async () => {
       // This test prevents the TOC corruption bug where bookmark IDs like "HEADING=II.MNKE7E8NA385_"
@@ -777,4 +952,99 @@ async function createMockDocument(
   );
 
   return await zipHandler.toBuffer();
+}
+
+/**
+ * Helper function to create mock document with hyperlink that has BOTH URL and anchor
+ * This simulates the split URL structure found in Issue.docx
+ */
+async function createMockDocumentWithUrlAndAnchor(config: {
+  relationshipId: string;
+  url: string;
+  anchor: string;
+  text: string;
+}): Promise<Buffer> {
+  const zipHandler = new ZipHandler();
+
+  zipHandler.addFile('[Content_Types].xml', getContentTypesXml());
+  zipHandler.addFile('_rels/.rels', getRootRelsXml());
+
+  // Create document with hyperlink that has BOTH r:id AND w:anchor
+  zipHandler.addFile(
+    'word/document.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:hyperlink r:id="${config.relationshipId}" w:anchor="${XMLBuilder.escapeXmlText(config.anchor)}">
+        <w:r>
+          <w:t xml:space="preserve">${XMLBuilder.escapeXmlText(config.text)}</w:t>
+        </w:r>
+      </w:hyperlink>
+    </w:p>
+  </w:body>
+</w:document>`
+  );
+
+  // Create relationships with the base URL
+  zipHandler.addFile(
+    'word/_rels/document.xml.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="${config.relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${config.url}" TargetMode="External"/>
+</Relationships>`
+  );
+
+  zipHandler.addFile('word/styles.xml', getMinimalStylesXml());
+  zipHandler.addFile('docProps/core.xml', getMinimalCoreXml());
+  zipHandler.addFile('docProps/app.xml', getMinimalAppXml());
+
+  return await zipHandler.toBuffer();
+}
+
+// Helper functions to reduce duplication
+function getContentTypesXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`;
+}
+
+function getRootRelsXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`;
+}
+
+function getMinimalStylesXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults/>
+</w:styles>`;
+}
+
+function getMinimalCoreXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+                   xmlns:dc="http://purl.org/dc/elements/1.1/"
+                   xmlns:dcterms="http://purl.org/dc/terms/">
+  <dc:creator>Test</dc:creator>
+</cp:coreProperties>`;
+}
+
+function getMinimalAppXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+  <Application>Test</Application>
+</Properties>`;
 }
