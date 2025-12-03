@@ -1048,3 +1048,268 @@ function getMinimalAppXml(): string {
   <Application>Test</Application>
 </Properties>`;
 }
+
+/**
+ * Helper function to create mock document with hyperlink inside a table cell
+ * This tests the fix for hyperlinks in tables that have URL+anchor combinations
+ */
+async function createMockDocumentWithHyperlinkInTable(config: {
+  relationshipId: string;
+  url: string;
+  anchor?: string;
+  text: string;
+}): Promise<Buffer> {
+  const zipHandler = new ZipHandler();
+
+  zipHandler.addFile('[Content_Types].xml', getContentTypesXml());
+  zipHandler.addFile('_rels/.rels', getRootRelsXml());
+
+  // Create anchor attribute if present
+  const anchorAttr = config.anchor ? ` w:anchor="${XMLBuilder.escapeXmlText(config.anchor)}"` : '';
+
+  // Create document with hyperlink INSIDE a table cell
+  zipHandler.addFile(
+    'word/document.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:tbl>
+      <w:tblPr>
+        <w:tblStyle w:val="TableGrid"/>
+        <w:tblW w:w="0" w:type="auto"/>
+      </w:tblPr>
+      <w:tr>
+        <w:tc>
+          <w:tcPr>
+            <w:tcW w:w="4680" w:type="dxa"/>
+          </w:tcPr>
+          <w:p>
+            <w:hyperlink r:id="${config.relationshipId}"${anchorAttr}>
+              <w:r>
+                <w:t xml:space="preserve">${XMLBuilder.escapeXmlText(config.text)}</w:t>
+              </w:r>
+            </w:hyperlink>
+          </w:p>
+        </w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`
+  );
+
+  // Determine the target URL - if anchor is provided, just use base URL
+  const targetUrl = config.url;
+
+  // Create relationships with the URL
+  zipHandler.addFile(
+    'word/_rels/document.xml.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="${config.relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${targetUrl}" TargetMode="External"/>
+</Relationships>`
+  );
+
+  zipHandler.addFile('word/styles.xml', getMinimalStylesXml());
+  zipHandler.addFile('docProps/core.xml', getMinimalCoreXml());
+  zipHandler.addFile('docProps/app.xml', getMinimalAppXml());
+
+  return await zipHandler.toBuffer();
+}
+
+describe('Hyperlinks in Tables (processHyperlinks fix)', () => {
+  describe('External hyperlinks with URL+anchor in table cells', () => {
+    it('should preserve hyperlinks in table cells through round-trip save/load', async () => {
+      // This tests the fix for Issue #: hyperlinks inside table cells
+      // with URL+anchor combinations lost their relationship IDs
+      const mockDocument = await createMockDocumentWithHyperlinkInTable({
+        relationshipId: 'rId5',
+        url: 'https://thesource.cvshealth.com/nuxeo/thesource/',
+        anchor: '!/view?docid=test-doc-123',
+        text: 'View Document in Table',
+      });
+
+      // Load document
+      const doc1 = await Document.loadFromBuffer(mockDocument);
+
+      // Save to buffer (this is where the error would occur without the fix)
+      const buffer = await doc1.toBuffer();
+
+      // Load again to verify round-trip
+      const doc2 = await Document.loadFromBuffer(buffer);
+
+      // Find the hyperlink in the table - need to get tables
+      const paragraphs = doc2.getAllParagraphs();
+      expect(paragraphs.length).toBeGreaterThan(0);
+
+      // The first paragraph should contain the hyperlink from the table cell
+      const content = paragraphs[0]!.getContent();
+      expect(content).toHaveLength(1);
+      expect(content[0]).toBeInstanceOf(Hyperlink);
+
+      const hyperlink = content[0] as Hyperlink;
+      expect(hyperlink.getText()).toBe('View Document in Table');
+      // The URL should be the combined URL (base + anchor)
+      expect(hyperlink.getUrl()).toBe('https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=test-doc-123');
+      expect(hyperlink.isExternal()).toBe(true);
+    });
+
+    it('should handle hyperlinks in table cells without anchor (simple external URL)', async () => {
+      const mockDocument = await createMockDocumentWithHyperlinkInTable({
+        relationshipId: 'rId5',
+        url: 'https://example.com/page',
+        text: 'Simple Link in Table',
+      });
+
+      const doc1 = await Document.loadFromBuffer(mockDocument);
+      const buffer = await doc1.toBuffer();
+      const doc2 = await Document.loadFromBuffer(buffer);
+
+      const paragraphs = doc2.getAllParagraphs();
+      const hyperlink = paragraphs[0]!.getContent()[0] as Hyperlink;
+
+      expect(hyperlink.getText()).toBe('Simple Link in Table');
+      expect(hyperlink.getUrl()).toBe('https://example.com/page');
+      expect(hyperlink.getRelationshipId()).toBeDefined();
+    });
+
+    it('should register relationship IDs for hyperlinks created via API in table cells', async () => {
+      // Create document with table containing hyperlink
+      const doc = Document.create();
+      const table = doc.createTable(1, 1);
+      const cell = table.getCell(0, 0);
+
+      // Create a paragraph in the cell
+      const para = cell!.createParagraph();
+
+      // Add hyperlink to table cell
+      const hyperlink = Hyperlink.createExternal('https://example.com/test', 'Test Link');
+      para.addHyperlink(hyperlink);
+
+      // Save should NOT throw - the processHyperlinks should register the relationship
+      const buffer = await doc.toBuffer();
+
+      // Verify by loading
+      const doc2 = await Document.loadFromBuffer(buffer);
+      const hyperlinks = doc2.getHyperlinks();
+
+      // Should have at least 1 hyperlink (framework may create additional cell content)
+      expect(hyperlinks.length).toBeGreaterThanOrEqual(1);
+
+      // Find our specific hyperlink
+      const foundHyperlink = hyperlinks.find(h => h.hyperlink.getText() === 'Test Link');
+      expect(foundHyperlink).toBeDefined();
+      expect(foundHyperlink!.hyperlink.getUrl()).toBe('https://example.com/test');
+      expect(foundHyperlink!.hyperlink.getRelationshipId()).toBeDefined();
+    });
+  });
+
+  describe('Multiple hyperlinks in nested table structures', () => {
+    it('should handle multiple hyperlinks across multiple table cells', async () => {
+      // Create a more complex document with multiple hyperlinks in different cells
+      const zipHandler = new ZipHandler();
+
+      zipHandler.addFile('[Content_Types].xml', getContentTypesXml());
+      zipHandler.addFile('_rels/.rels', getRootRelsXml());
+
+      zipHandler.addFile(
+        'word/document.xml',
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:tbl>
+      <w:tblPr>
+        <w:tblStyle w:val="TableGrid"/>
+        <w:tblW w:w="0" w:type="auto"/>
+      </w:tblPr>
+      <w:tr>
+        <w:tc>
+          <w:p>
+            <w:hyperlink r:id="rId5" w:anchor="!/view?docid=doc-001">
+              <w:r><w:t>Link 1</w:t></w:r>
+            </w:hyperlink>
+          </w:p>
+        </w:tc>
+        <w:tc>
+          <w:p>
+            <w:hyperlink r:id="rId6" w:anchor="!/view?docid=doc-002">
+              <w:r><w:t>Link 2</w:t></w:r>
+            </w:hyperlink>
+          </w:p>
+        </w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc>
+          <w:p>
+            <w:hyperlink r:id="rId7">
+              <w:r><w:t>Link 3 (no anchor)</w:t></w:r>
+            </w:hyperlink>
+          </w:p>
+        </w:tc>
+        <w:tc>
+          <w:p>
+            <w:hyperlink w:anchor="InternalSection">
+              <w:r><w:t>Internal Link</w:t></w:r>
+            </w:hyperlink>
+          </w:p>
+        </w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`
+      );
+
+      zipHandler.addFile(
+        'word/_rels/document.xml.rels',
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/base1/" TargetMode="External"/>
+  <Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/base2/" TargetMode="External"/>
+  <Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/simple" TargetMode="External"/>
+</Relationships>`
+      );
+
+      zipHandler.addFile('word/styles.xml', getMinimalStylesXml());
+      zipHandler.addFile('docProps/core.xml', getMinimalCoreXml());
+      zipHandler.addFile('docProps/app.xml', getMinimalAppXml());
+
+      const buffer = await zipHandler.toBuffer();
+
+      // Load document
+      const doc1 = await Document.loadFromBuffer(buffer);
+
+      // Save and reload (this is the critical test - should not throw)
+      const savedBuffer = await doc1.toBuffer();
+      const doc2 = await Document.loadFromBuffer(savedBuffer);
+
+      // Get all hyperlinks from the document
+      const hyperlinks = doc2.getHyperlinks();
+
+      // Should have 4 hyperlinks - one in each cell
+      // Note: getHyperlinks() returns all hyperlinks in the document
+      expect(hyperlinks.length).toBeGreaterThanOrEqual(4);
+
+      // Verify we can find each hyperlink by text (getHyperlinks returns { hyperlink, paragraph })
+      const link1 = hyperlinks.find(h => h.hyperlink.getText() === 'Link 1');
+      const link2 = hyperlinks.find(h => h.hyperlink.getText() === 'Link 2');
+      const link3 = hyperlinks.find(h => h.hyperlink.getText() === 'Link 3 (no anchor)');
+      const link4 = hyperlinks.find(h => h.hyperlink.getText() === 'Internal Link');
+
+      expect(link1).toBeDefined();
+      expect(link1!.hyperlink.getUrl()).toBe('https://example.com/base1/#!/view?docid=doc-001');
+
+      expect(link2).toBeDefined();
+      expect(link2!.hyperlink.getUrl()).toBe('https://example.com/base2/#!/view?docid=doc-002');
+
+      expect(link3).toBeDefined();
+      expect(link3!.hyperlink.getUrl()).toBe('https://example.com/simple');
+
+      expect(link4).toBeDefined();
+      expect(link4!.hyperlink.isInternal()).toBe(true);
+      expect(link4!.hyperlink.getAnchor()).toBe('InternalSection');
+    });
+  });
+});
