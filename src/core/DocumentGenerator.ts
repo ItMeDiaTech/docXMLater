@@ -514,6 +514,16 @@ ${properties}
   /**
    * Processes all hyperlinks in paragraphs and registers them with RelationshipManager
    * Clears orphaned hyperlink relationships to prevent corruption while preserving valid ones
+   *
+   * **IMPORTANT:** This method recursively processes ALL element types including:
+   * - Top-level paragraphs
+   * - Tables (all cells)
+   * - StructuredDocumentTags (SDTs / content controls)
+   * - Headers and footers
+   *
+   * This ensures hyperlinks with URL+anchor combinations (like theSource links)
+   * that have their relationshipId cleared during parsing get new relationships
+   * registered before XML generation.
    */
   processHyperlinks(
     bodyElements: BodyElement[],
@@ -532,34 +542,56 @@ ${properties}
       relationshipManager
     );
 
-    // Get all paragraphs (from body and from headers/footers)
-    const paragraphs = bodyElements.filter(
-      (el): el is Paragraph => el instanceof Paragraph
-    );
+    // Helper to recursively process any element type for hyperlinks
+    // Mirrors the pattern in clearOrphanedHyperlinkRelationships() for consistency
+    const processElement = (element: BodyElement | Paragraph | Table | StructuredDocumentTag): void => {
+      if (element instanceof Paragraph) {
+        this.processHyperlinksInParagraph(element, relationshipManager);
+      }
+      else if (element instanceof Table) {
+        // Process all cells in the table
+        for (let row = 0; row < element.getRowCount(); row++) {
+          for (let col = 0; col < element.getColumnCount(); col++) {
+            const cell = element.getCell(row, col);
+            if (cell) {
+              // Scan each paragraph in the cell
+              const paragraphs = cell.getParagraphs();
+              for (const para of paragraphs) {
+                this.processHyperlinksInParagraph(para, relationshipManager);
+              }
+            }
+          }
+        }
+      }
+      else if (element instanceof StructuredDocumentTag) {
+        // Recursively process SDT content (can contain Paragraphs, Tables, or nested SDTs)
+        const content = element.getContent();
+        for (const item of content) {
+          processElement(item); // Recursive call handles nested structures
+        }
+      }
+      // TableOfContentsElement is for programmatic TOCs - real TOCs come as SDTs
+    };
 
-    // Also check headers and footers
+    // Process body elements (handles all nested structures)
+    for (const element of bodyElements) {
+      processElement(element);
+    }
+
+    // Process headers (including tables and SDTs in headers)
     const headers = headerFooterManager.getAllHeaders();
-    const footers = headerFooterManager.getAllFooters();
-
     for (const header of headers) {
       for (const element of header.header.getElements()) {
-        if (element instanceof Paragraph) {
-          this.processHyperlinksInParagraph(element, relationshipManager);
-        }
+        processElement(element);
       }
     }
 
+    // Process footers (including tables and SDTs in footers)
+    const footers = headerFooterManager.getAllFooters();
     for (const footer of footers) {
       for (const element of footer.footer.getElements()) {
-        if (element instanceof Paragraph) {
-          this.processHyperlinksInParagraph(element, relationshipManager);
-        }
+        processElement(element);
       }
-    }
-
-    // Process body paragraphs
-    for (const para of paragraphs) {
-      this.processHyperlinksInParagraph(para, relationshipManager);
     }
 
     logger.info('Hyperlinks processed');
