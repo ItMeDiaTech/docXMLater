@@ -26,7 +26,7 @@ interface ImageEntry {
  * Image manager options
  */
 export interface ImageManagerOptions {
-  /** Maximum number of images allowed. Default: 20 */
+  /** Maximum number of images allowed. Default: 1000 */
   maxImageCount?: number;
   /** Maximum total size of all images in MB. Default: 100 */
   maxTotalImageSizeMB?: number;
@@ -55,7 +55,8 @@ export class ImageManager {
     this.imagesByRelId = new Map(); // Issue #12 fix
     this.nextImageNumber = 1;
     this.nextDocPrId = 1;
-    this.maxImageCount = options.maxImageCount ?? 20;
+    // Increased from 20 to 1000 to support production documents with many images
+    this.maxImageCount = options.maxImageCount ?? 1000;
     this.maxTotalImageSizeBytes = (options.maxTotalImageSizeMB ?? 100) * 1024 * 1024;
     this.maxSingleImageSizeBytes = (options.maxSingleImageSizeMB ?? 20) * 1024 * 1024;
   }

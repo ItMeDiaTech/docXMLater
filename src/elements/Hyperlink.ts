@@ -50,6 +50,7 @@
 
 import { XMLElement } from "../xml/XMLBuilder";
 import { Run, RunFormatting } from "./Run";
+import { Revision } from "./Revision";
 import { validateRunText } from "../utils/validation";
 import { defaultLogger } from "../utils/logger";
 
@@ -84,6 +85,8 @@ export class Hyperlink {
   private formatting: RunFormatting;
   /** Tracking context for automatic change tracking */
   private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  /** Parent paragraph reference for automatic tracking */
+  private _parentParagraph?: import('./Paragraph').Paragraph;
 
   /**
    * Creates a new hyperlink
@@ -145,6 +148,23 @@ export class Hyperlink {
    */
   _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
     this.trackingContext = context;
+  }
+
+  /**
+   * Sets the parent paragraph reference for automatic tracking.
+   * Called by Paragraph when hyperlink is added.
+   * @internal
+   */
+  _setParentParagraph(paragraph: import('./Paragraph').Paragraph): void {
+    this._parentParagraph = paragraph;
+  }
+
+  /**
+   * Gets the parent paragraph reference.
+   * @internal
+   */
+  _getParentParagraph(): import('./Paragraph').Paragraph | undefined {
+    return this._parentParagraph;
   }
 
   /**
@@ -320,7 +340,36 @@ export class Hyperlink {
       return this;
     }
 
-    // Update URL
+    // If tracking enabled AND has parent paragraph, create revision pair
+    // OOXML has no w:hyperlinkChange element - Word tracks hyperlink changes as delete/insert pairs
+    if (this.trackingContext?.isEnabled() && this._parentParagraph) {
+      const author = this.trackingContext.getAuthor();
+
+      // Clone current state for deletion (before applying changes)
+      const oldHyperlink = this.clone();
+
+      // Apply the change to this hyperlink
+      this.url = url;
+      this.relationshipId = undefined;
+      if (this.run.getText() === oldUrl) {
+        this.text = url || this.anchor || "Link";
+        this.run.setText(this.text);
+      }
+
+      // Create delete/insert revision pair
+      const deletion = Revision.createDeletion(author, [oldHyperlink]);
+      const insertion = Revision.createInsertion(author, [this]);
+
+      // Replace this hyperlink with the revision pair in parent paragraph
+      this._parentParagraph.replaceContent(this, [deletion, insertion]);
+
+      // Clear parent reference since we're now inside a revision
+      this._parentParagraph = undefined;
+
+      return this;
+    }
+
+    // Non-tracking path (original behavior)
     this.url = url;
 
     // Clear the relationship ID so it will be re-registered during save
@@ -367,7 +416,43 @@ export class Hyperlink {
       return this;
     }
 
-    // Update anchor
+    // If tracking enabled AND has parent paragraph, create revision pair
+    // OOXML has no w:hyperlinkChange element - Word tracks hyperlink changes as delete/insert pairs
+    if (this.trackingContext?.isEnabled() && this._parentParagraph) {
+      const author = this.trackingContext.getAuthor();
+
+      // Clone current state for deletion (before applying changes)
+      const oldHyperlink = this.clone();
+
+      // Apply the change to this hyperlink
+      this.anchor = anchor;
+      if (anchor && this.url) {
+        defaultLogger.warn(
+          `DocXML Warning: Setting anchor "${anchor}" on hyperlink that has URL "${this.url}". ` +
+            `Clearing URL to make this an internal link. Use separate hyperlinks for external and internal links.`
+        );
+        this.url = undefined;
+        this.relationshipId = undefined;
+      }
+      if (this.run.getText() === oldAnchor) {
+        this.text = anchor || this.url || "Link";
+        this.run.setText(this.text);
+      }
+
+      // Create delete/insert revision pair
+      const deletion = Revision.createDeletion(author, [oldHyperlink]);
+      const insertion = Revision.createInsertion(author, [this]);
+
+      // Replace this hyperlink with the revision pair in parent paragraph
+      this._parentParagraph.replaceContent(this, [deletion, insertion]);
+
+      // Clear parent reference since we're now inside a revision
+      this._parentParagraph = undefined;
+
+      return this;
+    }
+
+    // Non-tracking path (original behavior)
     this.anchor = anchor;
 
     // If converting from external to internal, clear URL and relationship
@@ -399,11 +484,31 @@ export class Hyperlink {
 
   /**
    * Sets run formatting
+   *
+   * @param formatting - The formatting to apply
+   * @param options - Optional settings
+   * @param options.replace - If true, replaces ALL existing formatting instead of merging.
+   *                          Use this when you want to clear inherited styles like characterStyle.
+   *
+   * @example
+   * ```typescript
+   * // Merge mode (default): adds/updates properties while preserving others
+   * hyperlink.setFormatting({ bold: true });
+   *
+   * // Replace mode: clears all existing formatting and applies only the new properties
+   * hyperlink.setFormatting({ font: "Verdana", size: 12 }, { replace: true });
+   * ```
    */
-  setFormatting(formatting: RunFormatting): this {
+  setFormatting(formatting: RunFormatting, options?: { replace?: boolean }): this {
     // Update stored formatting
     const previousValue = { ...this.formatting };
-    this.formatting = { ...this.formatting, ...formatting };
+    if (options?.replace) {
+      // Replace mode: new formatting replaces ALL existing properties
+      this.formatting = { ...formatting };
+    } else {
+      // Merge mode (default, backwards-compatible): merge with existing
+      this.formatting = { ...this.formatting, ...formatting };
+    }
     // Create new run with updated formatting, preserving current text
     const currentText = this.run.getText();
     this.run = new Run(currentText, this.formatting);

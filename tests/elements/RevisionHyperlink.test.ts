@@ -381,4 +381,160 @@ describe('RevisionHyperlink Tests', () => {
       expect(cloned.getTooltip()).toBe('This is a tooltip');
     });
   });
+
+  describe('Automatic URL/Anchor tracking', () => {
+    it('should create delete/insert pair when setUrl() called with tracking enabled', () => {
+      // Create a mock tracking context
+      const mockTrackingContext = {
+        isEnabled: () => true,
+        getAuthor: () => 'TestAuthor',
+        trackHyperlinkChange: jest.fn(),
+      };
+
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({ url: 'https://old.com', text: 'Link' });
+      para.addHyperlink(hyperlink);
+
+      // Enable tracking
+      hyperlink._setTrackingContext(mockTrackingContext as any);
+
+      // Verify parent paragraph is set
+      expect(hyperlink._getParentParagraph()).toBe(para);
+
+      // Change URL
+      hyperlink.setUrl('https://new.com');
+
+      // Verify paragraph now has revision pair
+      const content = para.getContent();
+      expect(content).toHaveLength(2);
+
+      // First should be deletion
+      expect(content[0]).toBeInstanceOf(Revision);
+      const deletion = content[0] as Revision;
+      expect(deletion.getType()).toBe('delete');
+      const deletedHyperlinks = deletion.getHyperlinks();
+      expect(deletedHyperlinks).toHaveLength(1);
+      expect(deletedHyperlinks[0]!.getUrl()).toBe('https://old.com');
+
+      // Second should be insertion
+      expect(content[1]).toBeInstanceOf(Revision);
+      const insertion = content[1] as Revision;
+      expect(insertion.getType()).toBe('insert');
+      const insertedHyperlinks = insertion.getHyperlinks();
+      expect(insertedHyperlinks).toHaveLength(1);
+      expect(insertedHyperlinks[0]!.getUrl()).toBe('https://new.com');
+    });
+
+    it('should create delete/insert pair when setAnchor() called with tracking enabled', () => {
+      const mockTrackingContext = {
+        isEnabled: () => true,
+        getAuthor: () => 'TestAuthor',
+        trackHyperlinkChange: jest.fn(),
+      };
+
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({ anchor: 'oldBookmark', text: 'Link' });
+      para.addHyperlink(hyperlink);
+
+      hyperlink._setTrackingContext(mockTrackingContext as any);
+      hyperlink.setAnchor('newBookmark');
+
+      const content = para.getContent();
+      expect(content).toHaveLength(2);
+
+      const deletion = content[0] as Revision;
+      expect(deletion.getType()).toBe('delete');
+      const deletedHyperlinks = deletion.getHyperlinks();
+      expect(deletedHyperlinks).toHaveLength(1);
+      expect(deletedHyperlinks[0]!.getAnchor()).toBe('oldBookmark');
+
+      const insertion = content[1] as Revision;
+      expect(insertion.getType()).toBe('insert');
+      const insertedHyperlinks = insertion.getHyperlinks();
+      expect(insertedHyperlinks).toHaveLength(1);
+      expect(insertedHyperlinks[0]!.getAnchor()).toBe('newBookmark');
+    });
+
+    it('should not track when tracking is disabled', () => {
+      const mockTrackingContext = {
+        isEnabled: () => false,
+        getAuthor: () => 'TestAuthor',
+        trackHyperlinkChange: jest.fn(),
+      };
+
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({ url: 'https://old.com', text: 'Link' });
+      para.addHyperlink(hyperlink);
+
+      hyperlink._setTrackingContext(mockTrackingContext as any);
+      hyperlink.setUrl('https://new.com');
+
+      // Should still be just the hyperlink, no revisions
+      const content = para.getContent();
+      expect(content).toHaveLength(1);
+      expect(content[0]).toBeInstanceOf(Hyperlink);
+      expect((content[0] as Hyperlink).getUrl()).toBe('https://new.com');
+    });
+
+    it('should not track when no parent paragraph', () => {
+      const mockTrackingContext = {
+        isEnabled: () => true,
+        getAuthor: () => 'TestAuthor',
+        trackHyperlinkChange: jest.fn(),
+      };
+
+      const hyperlink = new Hyperlink({ url: 'https://old.com', text: 'Link' });
+      // Note: NOT added to paragraph, so no parent reference
+
+      hyperlink._setTrackingContext(mockTrackingContext as any);
+      hyperlink.setUrl('https://new.com');
+
+      // Should just update the URL without tracking (no parent to replace in)
+      expect(hyperlink.getUrl()).toBe('https://new.com');
+    });
+
+    it('should clear parent reference after tracking', () => {
+      const mockTrackingContext = {
+        isEnabled: () => true,
+        getAuthor: () => 'TestAuthor',
+        trackHyperlinkChange: jest.fn(),
+      };
+
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({ url: 'https://old.com', text: 'Link' });
+      para.addHyperlink(hyperlink);
+      hyperlink._setTrackingContext(mockTrackingContext as any);
+
+      // After setUrl(), the hyperlink is inside a revision, no longer has parent
+      hyperlink.setUrl('https://new.com');
+      expect(hyperlink._getParentParagraph()).toBeUndefined();
+    });
+
+    it('should set parent reference when added via addHyperlink()', () => {
+      const para = new Paragraph();
+
+      // Test string overload
+      const hyperlink1 = para.addHyperlink('https://example.com');
+      expect(hyperlink1._getParentParagraph()).toBe(para);
+
+      // Test Hyperlink object overload
+      const hyperlink2 = new Hyperlink({ url: 'https://other.com', text: 'Other' });
+      para.addHyperlink(hyperlink2);
+      expect(hyperlink2._getParentParagraph()).toBe(para);
+
+      // Test empty overload
+      const hyperlink3 = para.addHyperlink();
+      expect(hyperlink3._getParentParagraph()).toBe(para);
+    });
+
+    it('should set parent reference when using setContent()', () => {
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      const run = new Run('Some text');
+
+      para.setContent([run, hyperlink]);
+
+      expect(hyperlink._getParentParagraph()).toBe(para);
+    });
+  });
 });

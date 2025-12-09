@@ -204,6 +204,20 @@ export class Revision {
   }
 
   /**
+   * Gets the combined text content from all Runs and Hyperlinks in this revision.
+   * This is used by isParagraphBlank() to detect text inside revision elements.
+   * @returns Combined text string from all content items
+   */
+  getText(): string {
+    return this.content
+      .filter((item): item is Run | import('./Hyperlink').Hyperlink =>
+        isRunContent(item) || isHyperlinkContent(item)
+      )
+      .map((item) => item.getText())
+      .join('');
+  }
+
+  /**
    * Gets the previous properties (for property change revisions)
    */
   getPreviousProperties(): Record<string, any> | undefined {
@@ -329,8 +343,25 @@ export class Revision {
         return 'w:cellMerge';
       case 'numberingChange':
         return 'w:numberingChange';
+      // Internal tracking types - no OOXML element equivalent
+      // These are used for changelog generation and internal tracking,
+      // not for XML serialization. OOXML tracks these as insert/delete pairs.
+      case 'hyperlinkChange':
+      case 'imageChange':
+      case 'fieldChange':
+      case 'commentChange':
+      case 'bookmarkChange':
+      case 'contentControlChange':
+        throw new Error(
+          `Revision type '${this.type}' is an internal tracking type and cannot be serialized to OOXML XML. ` +
+          `OOXML does not have a native element for this type. ` +
+          `Use insert/delete revision pairs for tracking changes to ${this.type.replace('Change', '')}s.`
+        );
       default:
-        return 'w:ins'; // Fallback to insert
+        // TypeScript exhaustiveness check - this should never be reached
+        // if all RevisionType values are handled above
+        const _exhaustiveCheck: never = this.type;
+        throw new Error(`Unknown revision type: ${_exhaustiveCheck}`);
     }
   }
 

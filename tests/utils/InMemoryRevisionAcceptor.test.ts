@@ -13,12 +13,15 @@ import { Document } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';
 import { Revision } from '../../src/elements/Revision';
+import { ImageRun } from '../../src/elements/ImageRun';
+import { Image } from '../../src/elements/Image';
 import {
   acceptRevisionsInMemory,
   paragraphHasRevisions,
   getRevisionsFromParagraph,
   countRevisionsByType,
 } from '../../src/utils/InMemoryRevisionAcceptor';
+import { isImageRunContent, isRunContent } from '../../src/elements/RevisionContent';
 
 describe('InMemoryRevisionAcceptor', () => {
   describe('acceptRevisionsInMemory', () => {
@@ -344,6 +347,212 @@ describe('InMemoryRevisionAcceptor', () => {
         const counts = countRevisionsByType(doc);
         expect(counts.get('insert')).toBe(2);
         expect(counts.get('delete')).toBe(1);
+      });
+    });
+  });
+
+  describe('ImageRun handling in revisions', () => {
+    /**
+     * Helper to create a test image buffer (1x1 PNG)
+     */
+    function createTestImageBuffer(): Buffer {
+      // 1x1 transparent PNG
+      return Buffer.from([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+      ]);
+    }
+
+    /**
+     * Helper to create a mock Image for testing (async)
+     */
+    async function createMockImage(): Promise<Image> {
+      return await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    }
+
+    describe('type guard isImageRunContent', () => {
+      it('should correctly identify ImageRun objects', async () => {
+        const image = await createMockImage();
+        const imageRun = new ImageRun(image);
+
+        expect(isImageRunContent(imageRun)).toBe(true);
+      });
+
+      it('should return false for regular Run objects', () => {
+        const run = new Run('text');
+
+        expect(isImageRunContent(run)).toBe(false);
+      });
+
+      it('should return false for null/undefined', () => {
+        expect(isImageRunContent(null as any)).toBe(false);
+        expect(isImageRunContent(undefined as any)).toBe(false);
+      });
+    });
+
+    describe('isRunContent with ImageRun', () => {
+      it('should return true for ImageRun (since ImageRun extends Run)', async () => {
+        const image = await createMockImage();
+        const imageRun = new ImageRun(image);
+
+        // ImageRun extends Run, so isRunContent should return true
+        // This test ensures backward compatibility
+        expect(isRunContent(imageRun)).toBe(true);
+      });
+    });
+
+    describe('accepting insertions with ImageRun', () => {
+      it('should preserve ImageRun when accepting insertion revision', async () => {
+        const doc = Document.create();
+        const para = doc.createParagraph();
+
+        // Add regular text
+        para.addRun(new Run('Before image. '));
+
+        // Add insertion revision containing an ImageRun
+        const image = await createMockImage();
+        const imageRun = new ImageRun(image);
+        const insertionRevision = Revision.createInsertion('Test Author', imageRun);
+        para.addRevision(insertionRevision);
+
+        // Add more text
+        para.addRun(new Run(' After image.'));
+
+        // Verify revision exists before acceptance
+        expect(paragraphHasRevisions(para)).toBe(true);
+
+        // Accept revisions
+        const result = acceptRevisionsInMemory(doc);
+
+        // Verify insertion was accepted
+        expect(result.insertionsAccepted).toBe(1);
+
+        // Verify ImageRun was preserved (unwrapped from revision)
+        expect(paragraphHasRevisions(para)).toBe(false);
+        const content = para.getContent();
+
+        // Should have: Run, ImageRun, Run
+        expect(content.length).toBe(3);
+
+        // Verify the middle item is the ImageRun
+        const middleItem = content[1]!;
+        expect(isImageRunContent(middleItem as any)).toBe(true);
+        expect((middleItem as ImageRun).getImageElement()).toBeDefined();
+      });
+
+      it('should preserve mixed content (text + images) in insertion revision', async () => {
+        const doc = Document.create();
+        const para = doc.createParagraph();
+
+        // Create mixed content: text run + image run
+        const textRun = new Run('Inserted text. ');
+        const image = await createMockImage();
+        const imageRun = new ImageRun(image);
+
+        // Add insertion revision with both text and image
+        const insertionRevision = new Revision({
+          type: 'insert',
+          author: 'Test Author',
+          content: [textRun, imageRun],
+        });
+        para.addRevision(insertionRevision);
+
+        // Accept revisions
+        const result = acceptRevisionsInMemory(doc);
+
+        // Verify both items were preserved
+        expect(result.insertionsAccepted).toBe(1);
+        const content = para.getContent();
+        expect(content.length).toBe(2);
+
+        // First item should be text run
+        expect(isRunContent(content[0]! as any)).toBe(true);
+        expect((content[0] as Run).getText()).toBe('Inserted text. ');
+
+        // Second item should be ImageRun
+        expect(isImageRunContent(content[1]! as any)).toBe(true);
+      });
+    });
+
+    describe('accepting deletions with ImageRun', () => {
+      it('should remove ImageRun when accepting deletion revision', async () => {
+        const doc = Document.create();
+        const para = doc.createParagraph();
+
+        // Add regular text
+        para.addRun(new Run('Keep this. '));
+
+        // Add deletion revision containing an ImageRun
+        const image = await createMockImage();
+        const imageRun = new ImageRun(image);
+        const deletionRevision = Revision.createDeletion('Test Author', imageRun);
+        para.addRevision(deletionRevision);
+
+        // Add more text
+        para.addRun(new Run(' And this.'));
+
+        // Accept revisions
+        const result = acceptRevisionsInMemory(doc);
+
+        // Verify deletion was accepted
+        expect(result.deletionsAccepted).toBe(1);
+
+        // Verify ImageRun was removed
+        const content = para.getContent();
+        expect(content.length).toBe(2); // Only the two text runs remain
+        expect(content.every(item => !isImageRunContent(item as any))).toBe(true);
+      });
+    });
+
+    describe('accepting moveTo with ImageRun', () => {
+      it('should preserve ImageRun when accepting moveTo revision', async () => {
+        const doc = Document.create();
+        const para = doc.createParagraph();
+
+        // Add moveTo revision with ImageRun
+        const image = await createMockImage();
+        const imageRun = new ImageRun(image);
+        const moveToRevision = Revision.createMoveTo('Test Author', imageRun, 'move-1');
+        para.addRevision(moveToRevision);
+
+        // Accept revisions
+        const result = acceptRevisionsInMemory(doc);
+
+        // Verify move was accepted
+        expect(result.movesAccepted).toBe(1);
+
+        // Verify ImageRun was preserved
+        const content = para.getContent();
+        expect(content.length).toBe(1);
+        expect(isImageRunContent(content[0]! as any)).toBe(true);
+      });
+    });
+
+    describe('accepting moveFrom with ImageRun', () => {
+      it('should remove ImageRun when accepting moveFrom revision', async () => {
+        const doc = Document.create();
+        const para = doc.createParagraph();
+
+        // Add moveFrom revision with ImageRun (source location - should be removed)
+        const image = await createMockImage();
+        const imageRun = new ImageRun(image);
+        const moveFromRevision = Revision.createMoveFrom('Test Author', imageRun, 'move-1');
+        para.addRevision(moveFromRevision);
+
+        // Accept revisions
+        const result = acceptRevisionsInMemory(doc);
+
+        // Verify move was accepted (content removed)
+        expect(result.movesAccepted).toBe(1);
+        const content = para.getContent();
+        expect(content.length).toBe(0);
       });
     });
   });

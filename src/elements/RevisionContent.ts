@@ -3,6 +3,7 @@
  *
  * Per ECMA-376, w:ins and w:del elements can contain:
  * - w:r (runs) - Text with formatting
+ * - w:r with w:drawing (image runs) - Images embedded in runs
  * - w:hyperlink - Hyperlinks with nested runs
  *
  * This module provides the type definitions and type guards for revision content.
@@ -10,15 +11,17 @@
 
 import type { Run } from './Run';
 import type { Hyperlink } from './Hyperlink';
+import type { ImageRun } from './ImageRun';
 
 /**
  * Content types valid within a revision (tracked change)
  *
  * Per ECMA-376 Part 1 section 17.13.5, revision elements can contain:
  * - Run elements (w:r) - the most common case
+ * - ImageRun elements (w:r with w:drawing) - for tracked image changes
  * - Hyperlink elements (w:hyperlink) - for tracked hyperlink changes
  */
-export type RevisionContent = Run | Hyperlink;
+export type RevisionContent = Run | ImageRun | Hyperlink;
 
 /**
  * Type guard to check if content is a Run
@@ -51,4 +54,20 @@ export function isHyperlinkContent(content: RevisionContent): content is Hyperli
 
   // Duck typing: Hyperlinks have getUrl method
   return typeof (content as any).getUrl === 'function';
+}
+
+/**
+ * Type guard to check if content is an ImageRun
+ * @param content - The content to check
+ * @returns true if content is an ImageRun instance
+ *
+ * Note: Uses duck typing instead of constructor.name to handle minified builds.
+ * ImageRun objects have getImageElement() method which regular Runs don't have.
+ * This check should be performed BEFORE isRunContent() since ImageRun extends Run.
+ */
+export function isImageRunContent(content: RevisionContent): content is ImageRun {
+  if (!content || typeof content !== 'object') return false;
+
+  // Duck typing: ImageRun has getImageElement method which regular Run doesn't have
+  return typeof (content as any).getImageElement === 'function';
 }

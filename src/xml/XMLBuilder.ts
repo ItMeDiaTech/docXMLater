@@ -11,6 +11,8 @@ export interface XMLElement {
   attributes?: Record<string, string | number | boolean | undefined>;
   children?: (XMLElement | string)[];
   selfClosing?: boolean;
+  /** Raw XML content to include without escaping (used for VML passthrough) */
+  rawXml?: string;
 }
 
 /**
@@ -138,6 +140,12 @@ export class XMLBuilder {
    * Converts a single element to XML string
    */
   private elementToString(element: XMLElement): string {
+    // Special case: raw XML passthrough (no wrapper element)
+    // Used for VML and other legacy content that must be preserved exactly
+    if (element.name === "__rawXml" && element.rawXml) {
+      return element.rawXml;
+    }
+
     let xml = `<${element.name}`;
 
     // Add attributes
@@ -164,6 +172,11 @@ export class XMLBuilder {
     }
 
     xml += ">";
+
+    // Add raw XML content if present (for VML passthrough)
+    if (element.rawXml) {
+      xml += element.rawXml;
+    }
 
     // Add children
     if (element.children && element.children.length > 0) {

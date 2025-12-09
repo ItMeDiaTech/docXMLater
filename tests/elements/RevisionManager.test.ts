@@ -284,6 +284,51 @@ describe('RevisionManager', () => {
       const table = manager.getByCategory('table');
       expect(table).toHaveLength(1);
     });
+
+    it('should include internal tracking types in content category', () => {
+      // Register internal tracking types (for changelog generation)
+      manager.register(new Revision({
+        author: 'A',
+        type: 'imageChange',
+        content: new Run('image'),
+      }));
+      manager.register(new Revision({
+        author: 'A',
+        type: 'fieldChange',
+        content: new Run('field'),
+      }));
+      manager.register(new Revision({
+        author: 'A',
+        type: 'commentChange',
+        content: new Run('comment'),
+      }));
+      manager.register(new Revision({
+        author: 'A',
+        type: 'contentControlChange',
+        content: new Run('sdt'),
+      }));
+      manager.register(new Revision({
+        author: 'A',
+        type: 'hyperlinkChange',
+        content: new Run('link'),
+      }));
+
+      const content = manager.getByCategory('content');
+      // Original 2 (insert, delete) + 5 new internal types
+      expect(content).toHaveLength(7);
+    });
+
+    it('should include bookmarkChange in structural category', () => {
+      manager.register(new Revision({
+        author: 'A',
+        type: 'bookmarkChange',
+        content: new Run('bookmark'),
+      }));
+
+      const structural = manager.getByCategory('structural');
+      // Original 2 (moveFrom, moveTo) + 1 bookmarkChange
+      expect(structural).toHaveLength(3);
+    });
   });
 
   describe('Move Operations', () => {

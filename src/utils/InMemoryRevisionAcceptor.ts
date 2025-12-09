@@ -15,11 +15,14 @@
  */
 
 import type { Document } from '../core/Document';
-import type { Paragraph, ParagraphContent } from '../elements/Paragraph';
+import { Paragraph } from '../elements/Paragraph';
+import type { ParagraphContent } from '../elements/Paragraph';
 import { Revision, RevisionType } from '../elements/Revision';
 import type { Run } from '../elements/Run';
 import type { Hyperlink } from '../elements/Hyperlink';
-import { isRunContent, isHyperlinkContent } from '../elements/RevisionContent';
+import { isRunContent, isHyperlinkContent, isImageRunContent } from '../elements/RevisionContent';
+import type { ImageRun } from '../elements/ImageRun';
+import { Table } from '../elements/Table';
 import { getGlobalLogger, createScopedLogger, ILogger } from './logger';
 
 /**
@@ -116,6 +119,31 @@ export function acceptRevisionsInMemory(
 
   logger.info('Accepting revisions in-memory', { options: opts });
 
+  // Validate move pairs before accepting if moves are being accepted
+  // Orphaned moves could result in content loss (moveFrom without moveTo = content deleted)
+  if (opts.acceptMoves) {
+    const revisionManager = doc.getRevisionManager();
+    if (revisionManager) {
+      const movePairValidation = revisionManager.validateMovePairs();
+      if (!movePairValidation.valid) {
+        if (movePairValidation.orphanedMoveFrom.length > 0) {
+          logger.warn(
+            'Orphaned moveFrom revisions detected - accepting these will DELETE content permanently ' +
+            '(content was moved from here but no moveTo destination exists)',
+            { orphanedMoveIds: movePairValidation.orphanedMoveFrom }
+          );
+        }
+        if (movePairValidation.orphanedMoveTo.length > 0) {
+          logger.warn(
+            'Orphaned moveTo revisions detected - content may be duplicated ' +
+            '(content moved to here but no moveFrom source exists)',
+            { orphanedMoveIds: movePairValidation.orphanedMoveTo }
+          );
+        }
+      }
+    }
+  }
+
   // Process all paragraphs in the document body
   const paragraphs = doc.getAllParagraphs();
   for (const paragraph of paragraphs) {
@@ -149,17 +177,16 @@ export function acceptRevisionsInMemory(
     for (const headerEntry of headers) {
       const elements = headerEntry.header.getElements();
       for (const element of elements) {
-        // Element can be Paragraph or Table
-        if ('getContent' in element && typeof element.getContent === 'function') {
-          // It's a Paragraph
-          const paragraphResult = acceptRevisionsInParagraph(element as Paragraph, opts);
+        // Element can be Paragraph or Table - use instanceof for type safety
+        if (element instanceof Paragraph) {
+          const paragraphResult = acceptRevisionsInParagraph(element, opts);
           result.insertionsAccepted += paragraphResult.insertionsAccepted;
           result.deletionsAccepted += paragraphResult.deletionsAccepted;
           result.movesAccepted += paragraphResult.movesAccepted;
           result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
-        } else if ('getRows' in element && typeof element.getRows === 'function') {
+        } else if (element instanceof Table) {
           // It's a Table - process its cells
-          for (const row of (element as any).getRows()) {
+          for (const row of element.getRows()) {
             for (const cell of row.getCells()) {
               for (const paragraph of cell.getParagraphs()) {
                 const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
@@ -179,17 +206,16 @@ export function acceptRevisionsInMemory(
     for (const footerEntry of footers) {
       const elements = footerEntry.footer.getElements();
       for (const element of elements) {
-        // Element can be Paragraph or Table
-        if ('getContent' in element && typeof element.getContent === 'function') {
-          // It's a Paragraph
-          const paragraphResult = acceptRevisionsInParagraph(element as Paragraph, opts);
+        // Element can be Paragraph or Table - use instanceof for type safety
+        if (element instanceof Paragraph) {
+          const paragraphResult = acceptRevisionsInParagraph(element, opts);
           result.insertionsAccepted += paragraphResult.insertionsAccepted;
           result.deletionsAccepted += paragraphResult.deletionsAccepted;
           result.movesAccepted += paragraphResult.movesAccepted;
           result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
-        } else if ('getRows' in element && typeof element.getRows === 'function') {
+        } else if (element instanceof Table) {
           // It's a Table - process its cells
-          for (const row of (element as any).getRows()) {
+          for (const row of element.getRows()) {
             for (const cell of row.getCells()) {
               for (const paragraph of cell.getParagraphs()) {
                 const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
@@ -269,7 +295,10 @@ function acceptRevisionsInParagraph(
         // Unwrap: Extract child content into parent position
         const childContent = item.getContent();
         for (const child of childContent) {
-          if (isRunContent(child)) {
+          // Check ImageRun FIRST since ImageRun extends Run
+          if (isImageRunContent(child)) {
+            newContent.push(child as ImageRun);
+          } else if (isRunContent(child)) {
             newContent.push(child as Run);
           } else if (isHyperlinkContent(child)) {
             newContent.push(child as Hyperlink);
@@ -298,7 +327,10 @@ function acceptRevisionsInParagraph(
         // Unwrap: Keep content, remove wrapper
         const childContent = item.getContent();
         for (const child of childContent) {
-          if (isRunContent(child)) {
+          // Check ImageRun FIRST since ImageRun extends Run
+          if (isImageRunContent(child)) {
+            newContent.push(child as ImageRun);
+          } else if (isRunContent(child)) {
             newContent.push(child as Run);
           } else if (isHyperlinkContent(child)) {
             newContent.push(child as Hyperlink);
@@ -316,7 +348,10 @@ function acceptRevisionsInParagraph(
         // The content inside should be preserved
         const childContent = item.getContent();
         for (const child of childContent) {
-          if (isRunContent(child)) {
+          // Check ImageRun FIRST since ImageRun extends Run
+          if (isImageRunContent(child)) {
+            newContent.push(child as ImageRun);
+          } else if (isRunContent(child)) {
             newContent.push(child as Run);
           } else if (isHyperlinkContent(child)) {
             newContent.push(child as Hyperlink);

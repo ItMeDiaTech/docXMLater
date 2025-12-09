@@ -14,6 +14,8 @@ import {
   BorderDefinition,
 } from "./CommonTypes";
 import type { RunPropertyChange } from "./PropertyChangeTypes";
+// Type-only import to avoid circular dependency (Revision imports Run)
+import type { Revision as RevisionType } from "./Revision";
 
 /**
  * Run content element types
@@ -27,7 +29,8 @@ export type RunContentType =
   | "softHyphen" // <w:softHyphen/> - Optional hyphen
   | "noBreakHyphen" // <w:noBreakHyphen/> - Non-breaking hyphen
   | "instructionText" // <w:instrText> - Field instruction text
-  | "fieldChar"; // <w:fldChar/> - Field character markers
+  | "fieldChar" // <w:fldChar/> - Field character markers
+  | "vml"; // <w:pict> - VML/legacy graphics (preserved as raw XML)
 
 /**
  * Break type for <w:br> elements
@@ -52,6 +55,8 @@ export interface RunContent {
   fieldCharDirty?: boolean;
   /** Whether the field char is locked */
   fieldCharLocked?: boolean;
+  /** Raw XML content (for 'vml' type - preserves w:pict elements as-is) */
+  rawXml?: string;
 }
 
 /**
@@ -231,6 +236,8 @@ export class Run {
   private formatting: RunFormatting;
   private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
   private propertyChangeRevision?: RunPropertyChange;
+  /** Parent paragraph reference for automatic tracking */
+  private _parentParagraph?: import('./Paragraph').Paragraph;
 
   /**
    * Creates a new Run
@@ -419,6 +426,9 @@ export class Run {
    * ```
    */
   setText(text: string): void {
+    // Capture old text for tracking before any changes
+    const oldText = this.getText();
+
     // Warn about undefined/null text to help catch data quality issues
     if (text === undefined || text === null) {
       defaultLogger.warn(
@@ -449,6 +459,37 @@ export class Run {
 
     // Parse text to extract special characters into separate content elements
     this.content = this.parseTextWithSpecialCharacters(normalizedText);
+
+    // Track text change if tracking is enabled and text actually changed
+    if (this.trackingContext?.isEnabled() && this._parentParagraph && oldText !== normalizedText && oldText) {
+      // Lazy load Revision to avoid circular dependency
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { Revision } = require('./Revision');
+
+      // Create a clone of this run with the OLD text for the delete revision
+      const deleteRun = this.clone();
+      deleteRun.content = this.parseTextWithSpecialCharacters(oldText);
+
+      // Create delete revision for old text
+      const deleteRev = Revision.createDeletion(
+        this.trackingContext.getAuthor(),
+        deleteRun,
+        new Date()
+      );
+      this.trackingContext.getRevisionManager().register(deleteRev);
+
+      // Create insert revision for new text (this run with updated content)
+      const insertRev = Revision.createInsertion(
+        this.trackingContext.getAuthor(),
+        this,
+        new Date()
+      );
+      this.trackingContext.getRevisionManager().register(insertRev);
+
+      // Replace this run in parent's content with [delete, insert] revisions
+      // Note: replaceContent does its own indexOf check on this.content (not a copy)
+      this._parentParagraph.replaceContent(this, [deleteRev, insertRev]);
+    }
   }
 
   /**
@@ -539,6 +580,22 @@ export class Run {
    */
   _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
     this.trackingContext = context;
+  }
+
+  /**
+   * Sets the parent paragraph reference for this run
+   * @internal Used for content tracking
+   */
+  _setParentParagraph(paragraph: import('./Paragraph').Paragraph): void {
+    this._parentParagraph = paragraph;
+  }
+
+  /**
+   * Gets the parent paragraph reference
+   * @internal Used for content tracking
+   */
+  _getParentParagraph(): import('./Paragraph').Paragraph | undefined {
+    return this._parentParagraph;
   }
 
   /**
@@ -1401,6 +1458,18 @@ export class Run {
           );
           break;
         }
+
+        case "vml":
+          // VML graphics (w:pict) - include raw XML without modification
+          // This preserves legacy Word graphics like icons and symbols
+          if (contentElement.rawXml) {
+            // Use special __rawXml element name for passthrough (no wrapper element)
+            runChildren.push({
+              name: "__rawXml",
+              rawXml: contentElement.rawXml,
+            });
+          }
+          break;
       }
     }
 

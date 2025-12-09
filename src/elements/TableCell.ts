@@ -10,6 +10,7 @@ import {
   FourSidedBorders,
   CellVerticalAlignment as CommonCellVerticalAlignment,
   ShadingConfig,
+  ShadingPattern,
   WidthType,
 } from "./CommonTypes";
 
@@ -51,6 +52,7 @@ export interface CellBorders {
 export interface CellShading {
   fill?: string; // Background color in hex
   color?: string; // Foreground/pattern color in hex
+  pattern?: ShadingPattern; // Pattern type (pct12, solid, horzStripe, etc.)
 }
 
 /**
@@ -160,6 +162,24 @@ export class TableCell {
     }
     this.paragraphs.splice(index, 1);
     return true;
+  }
+
+  /**
+   * Adds a paragraph at the specified index
+   * @param index - Index to insert at
+   * @param paragraph - Paragraph to add
+   * @returns This cell for chaining
+   */
+  addParagraphAt(index: number, paragraph: Paragraph): this {
+    if (index < 0) {
+      index = 0;
+    }
+    if (index >= this.paragraphs.length) {
+      this.paragraphs.push(paragraph);
+    } else {
+      this.paragraphs.splice(index, 0, paragraph);
+    }
+    return this;
   }
 
   /**
@@ -295,6 +315,14 @@ export class TableCell {
   setColumnSpan(span: number): this {
     this.formatting.columnSpan = span;
     return this;
+  }
+
+  /**
+   * Gets the number of columns this cell spans (gridSpan)
+   * @returns Column span, defaults to 1 if not set
+   */
+  getColumnSpan(): number {
+    return this.formatting.columnSpan || 1;
   }
 
   /**
@@ -505,10 +533,11 @@ export class TableCell {
 
     // Add shading
     if (this.formatting.shading) {
-      const shadingAttrs: Record<string, string> = {
-        "w:val": "clear",
-      };
+      const shadingAttrs: Record<string, string> = {};
 
+      if (this.formatting.shading.pattern) {
+        shadingAttrs["w:val"] = this.formatting.shading.pattern;
+      }
       if (this.formatting.shading.fill) {
         shadingAttrs["w:fill"] = this.formatting.shading.fill;
       }
@@ -516,7 +545,9 @@ export class TableCell {
         shadingAttrs["w:color"] = this.formatting.shading.color;
       }
 
-      tcPrChildren.push(XMLBuilder.wSelf("shd", shadingAttrs));
+      if (Object.keys(shadingAttrs).length > 0) {
+        tcPrChildren.push(XMLBuilder.wSelf("shd", shadingAttrs));
+      }
     }
 
     // Add cell margins (tcMar) per ECMA-376 Part 1 §17.4.43
