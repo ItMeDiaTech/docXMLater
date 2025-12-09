@@ -101,14 +101,19 @@ describe('NumberingLevel', () => {
       })).toThrow('Level must be between 0 and 8');
     });
 
-    it('should throw error for negative indentation', () => {
-      expect(() => new NumberingLevel({
+    it('should allow negative left indent (outdent into margin)', () => {
+      // Negative left indent is valid per ECMA-376 for outdents
+      const level = new NumberingLevel({
         level: 0,
         format: 'decimal',
         text: '%1.',
-        leftIndent: -100,
-      })).toThrow('Left indent must be non-negative');
+        leftIndent: -1472,  // Outdent into margin
+      });
+      expect(level.getProperties().leftIndent).toBe(-1472);
+    });
 
+    it('should throw error for negative hanging indent', () => {
+      // Hanging indent should still be non-negative
       expect(() => new NumberingLevel({
         level: 0,
         format: 'decimal',
@@ -172,14 +177,24 @@ describe('NumberingLevel', () => {
       expect(level.getProperties().alignment).toBe('center');
     });
 
-    it('should throw error for negative indents in setters', () => {
+    it('should allow negative left indent in setter (outdent)', () => {
       const level = new NumberingLevel({
         level: 0,
         format: 'decimal',
         text: '%1.',
       });
 
-      expect(() => level.setLeftIndent(-100)).toThrow('Left indent must be non-negative');
+      level.setLeftIndent(-1472);  // Outdent into margin
+      expect(level.getProperties().leftIndent).toBe(-1472);
+    });
+
+    it('should throw error for negative hanging indent in setter', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+      });
+
       expect(() => level.setHangingIndent(-100)).toThrow('Hanging indent must be non-negative');
     });
   });
@@ -297,6 +312,42 @@ describe('NumberingLevel', () => {
       const xml = level.toXML();
       const isLgl = filterXMLElements(xml.children).find(c => c.name === 'w:isLgl');
       expect(isLgl).toBeDefined();
+    });
+
+    it('should generate XML with negative left indent (outdent)', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'bullet',
+        text: '•',
+        leftIndent: -1472,  // Outdent into margin
+        hangingIndent: 360,
+      });
+
+      const xml = level.toXML();
+      const pPr = filterXMLElements(xml.children).find(c => c.name === 'w:pPr');
+      expect(pPr).toBeDefined();
+
+      const ind = filterXMLElements(pPr?.children).find(c => c.name === 'w:ind');
+      expect(ind?.attributes?.['w:left']).toBe('-1472');
+      expect(ind?.attributes?.['w:hanging']).toBe('360');
+    });
+  });
+
+  describe('XML parsing', () => {
+    it('should parse XML with negative left indent (outdent)', () => {
+      const xml = `<w:lvl w:ilvl="0">
+        <w:start w:val="1"/>
+        <w:numFmt w:val="bullet"/>
+        <w:lvlText w:val="•"/>
+        <w:lvlJc w:val="left"/>
+        <w:pPr>
+          <w:ind w:left="-1472" w:hanging="360"/>
+        </w:pPr>
+      </w:lvl>`;
+
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getProperties().leftIndent).toBe(-1472);
+      expect(level.getProperties().hangingIndent).toBe(360);
     });
   });
 
@@ -718,6 +769,178 @@ describe('NumberingManager', () => {
     it('should create manager with static method', () => {
       const manager = NumberingManager.create();
       expect(manager).toBeInstanceOf(NumberingManager);
+    });
+  });
+});
+
+describe('Numbering Parsing Fixes', () => {
+  describe('AbstractNumbering.fromXML multiLevelType parsing', () => {
+    it('should correctly parse singleLevel multiLevelType', () => {
+      const xml = `
+        <w:abstractNum w:abstractNumId="1">
+          <w:multiLevelType w:val="singleLevel"/>
+          <w:lvl w:ilvl="0">
+            <w:numFmt w:val="decimal"/>
+            <w:lvlText w:val="%1."/>
+          </w:lvl>
+        </w:abstractNum>
+      `;
+      const abstractNum = AbstractNumbering.fromXML(xml);
+      // Generate XML and verify multiLevelType is preserved
+      const generatedXml = abstractNum.toXML();
+      // The multiLevelType child should contain "singleLevel"
+      const children = generatedXml.children || [];
+      const multiLevelTypeChild = children.find(
+        (c) => typeof c !== 'string' && c.name === 'w:multiLevelType'
+      );
+      expect(multiLevelTypeChild).toBeDefined();
+      expect(
+        typeof multiLevelTypeChild !== 'string' && multiLevelTypeChild?.attributes?.['w:val']
+      ).toBe('singleLevel');
+    });
+
+    it('should correctly parse multilevel multiLevelType', () => {
+      const xml = `
+        <w:abstractNum w:abstractNumId="2">
+          <w:multiLevelType w:val="multilevel"/>
+          <w:lvl w:ilvl="0">
+            <w:numFmt w:val="decimal"/>
+            <w:lvlText w:val="%1."/>
+          </w:lvl>
+        </w:abstractNum>
+      `;
+      const abstractNum = AbstractNumbering.fromXML(xml);
+      const generatedXml = abstractNum.toXML();
+      const children = generatedXml.children || [];
+      const multiLevelTypeChild = children.find(
+        (c) => typeof c !== 'string' && c.name === 'w:multiLevelType'
+      );
+      expect(multiLevelTypeChild).toBeDefined();
+      expect(
+        typeof multiLevelTypeChild !== 'string' && multiLevelTypeChild?.attributes?.['w:val']
+      ).toBe('multilevel');
+    });
+
+    it('should correctly parse hybridMultilevel multiLevelType', () => {
+      const xml = `
+        <w:abstractNum w:abstractNumId="3">
+          <w:multiLevelType w:val="hybridMultilevel"/>
+          <w:lvl w:ilvl="0">
+            <w:numFmt w:val="lowerLetter"/>
+            <w:lvlText w:val="%1."/>
+          </w:lvl>
+        </w:abstractNum>
+      `;
+      const abstractNum = AbstractNumbering.fromXML(xml);
+      const generatedXml = abstractNum.toXML();
+      const children = generatedXml.children || [];
+      const multiLevelTypeChild = children.find(
+        (c) => typeof c !== 'string' && c.name === 'w:multiLevelType'
+      );
+      expect(multiLevelTypeChild).toBeDefined();
+      expect(
+        typeof multiLevelTypeChild !== 'string' && multiLevelTypeChild?.attributes?.['w:val']
+      ).toBe('hybridMultilevel');
+    });
+  });
+
+  describe('NumberingLevel.fromXML bold property parsing', () => {
+    it('should parse bold=true from self-closing w:b element', () => {
+      const xml = `
+        <w:lvl w:ilvl="0">
+          <w:numFmt w:val="bullet"/>
+          <w:lvlText w:val="•"/>
+          <w:rPr>
+            <w:b/>
+          </w:rPr>
+        </w:lvl>
+      `;
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getProperties().bold).toBe(true);
+    });
+
+    it('should parse bold=false from w:b w:val="0"', () => {
+      const xml = `
+        <w:lvl w:ilvl="0">
+          <w:numFmt w:val="lowerLetter"/>
+          <w:lvlText w:val="%1."/>
+          <w:rPr>
+            <w:b w:val="0"/>
+          </w:rPr>
+        </w:lvl>
+      `;
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getProperties().bold).toBe(false);
+    });
+
+    it('should default bold to true when no w:b element present', () => {
+      const xml = `
+        <w:lvl w:ilvl="0">
+          <w:numFmt w:val="decimal"/>
+          <w:lvlText w:val="%1."/>
+          <w:rPr>
+            <w:rFonts w:ascii="Arial"/>
+          </w:rPr>
+        </w:lvl>
+      `;
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getProperties().bold).toBe(true);
+    });
+
+    it('should parse color from w:color element', () => {
+      const xml = `
+        <w:lvl w:ilvl="0">
+          <w:numFmt w:val="decimal"/>
+          <w:lvlText w:val="%1."/>
+          <w:rPr>
+            <w:color w:val="FF0000"/>
+          </w:rPr>
+        </w:lvl>
+      `;
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getProperties().color).toBe('FF0000');
+    });
+  });
+
+  describe('NumberingLevel.setFormat', () => {
+    it('should change format from lowerLetter to decimal', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'lowerLetter',
+        text: '%1.',
+      });
+
+      expect(level.getFormat()).toBe('lowerLetter');
+
+      level.setFormat('decimal');
+
+      expect(level.getFormat()).toBe('decimal');
+    });
+
+    it('should change format from bullet to decimal', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'bullet',
+        text: '•',
+      });
+
+      level.setFormat('decimal');
+
+      expect(level.getFormat()).toBe('decimal');
+    });
+
+    it('should be chainable', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+      });
+
+      const result = level.setFormat('lowerRoman').setText('%1)');
+
+      expect(result).toBe(level);
+      expect(level.getFormat()).toBe('lowerRoman');
+      expect(level.getProperties().text).toBe('%1)');
     });
   });
 });

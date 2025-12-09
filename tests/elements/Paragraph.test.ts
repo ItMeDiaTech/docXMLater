@@ -5,6 +5,7 @@
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';
 import { Hyperlink } from '../../src/elements/Hyperlink';
+import { Revision } from '../../src/elements/Revision';
 import { XMLBuilder } from '../../src/xml/XMLBuilder';
 
 describe('Run', () => {
@@ -827,6 +828,75 @@ describe('Paragraph', () => {
         const formatting = para.getFormatting();
         expect(formatting.keepNext).toBe(true);
         expect(formatting.pageBreakBefore).toBe(false);
+      });
+    });
+
+    describe('getRuns with nested content', () => {
+      test('should return runs from inside revisions', () => {
+        const para = new Paragraph();
+        const run = new Run('Inserted text', { bold: true });
+
+        // Create an insertion revision containing the run
+        const revision = Revision.createInsertion('Test Author', run);
+        para.addRevision(revision);
+
+        // getRuns should find the run inside the revision
+        const runs = para.getRuns();
+        expect(runs.length).toBe(1);
+        expect(runs[0]!.getText()).toBe('Inserted text');
+        expect(runs[0]!.getFormatting().bold).toBe(true);
+      });
+
+      test('should return runs from inside hyperlinks', () => {
+        const para = new Paragraph();
+        para.addHyperlink('https://example.com').setText('Click here');
+
+        // getRuns should find the run inside the hyperlink
+        const runs = para.getRuns();
+        expect(runs.length).toBe(1);
+        expect(runs[0]!.getText()).toBe('Click here');
+      });
+
+      test('should allow formatting runs inside revisions', () => {
+        const para = new Paragraph();
+        const run = new Run('Test text');
+        const revision = Revision.createInsertion('Test Author', run);
+        para.addRevision(revision);
+
+        // Get the run and modify its formatting
+        const runs = para.getRuns();
+        expect(runs.length).toBe(1);
+
+        runs[0]!.setFont('Verdana');
+        runs[0]!.setSize(8);
+        runs[0]!.setBold(true);
+
+        // Verify formatting was applied
+        expect(runs[0]!.getFormatting().font).toBe('Verdana');
+        expect(runs[0]!.getFormatting().size).toBe(8);
+        expect(runs[0]!.getFormatting().bold).toBe(true);
+      });
+
+      test('should combine direct runs, revision runs, and hyperlink runs', () => {
+        const para = new Paragraph();
+
+        // Add a direct run
+        para.addText('Direct run');
+
+        // Add a revision containing a run
+        const revisionRun = new Run('Revision run');
+        const revision = Revision.createInsertion('Author', revisionRun);
+        para.addRevision(revision);
+
+        // Add a hyperlink (contains a run)
+        para.addHyperlink('https://example.com').setText('Link text');
+
+        // getRuns should return all 3 runs
+        const runs = para.getRuns();
+        expect(runs.length).toBe(3);
+        expect(runs[0]!.getText()).toBe('Direct run');
+        expect(runs[1]!.getText()).toBe('Revision run');
+        expect(runs[2]!.getText()).toBe('Link text');
       });
     });
   });

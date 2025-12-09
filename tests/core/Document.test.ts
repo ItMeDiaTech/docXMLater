@@ -1163,6 +1163,43 @@ describe('Document', () => {
         expect(blank1.isPreserved()).toBe(true);
       });
 
+      test('should not remove paragraphs with text inside revisions', async () => {
+        const doc = Document.create();
+        const { Revision } = await import('../../src/elements/Revision');
+        const { Run } = await import('../../src/elements/Run');
+
+        // Create a paragraph with text inside a revision (track change insertion)
+        const para = doc.createParagraph();
+        const insertedRun = new Run('This is substantive text that should NOT be deleted');
+        const revision = new Revision({
+          type: 'insert',
+          author: 'Test Author',
+          content: insertedRun,
+          date: new Date()
+        });
+        para.addRevision(revision);
+
+        // Add another paragraph for comparison
+        doc.createParagraph('Normal paragraph');
+
+        // Verify initial state
+        expect(doc.getAllParagraphs().length).toBe(2);
+
+        // Remove extra blank paragraphs
+        const result = doc.removeExtraBlankParagraphs();
+
+        // Paragraph with revision content should NOT be removed
+        expect(result.removed).toBe(0);
+        expect(doc.getAllParagraphs().length).toBe(2);
+
+        // Verify the text is accessible via revision.getText()
+        const paragraphs = doc.getAllParagraphs();
+        const revisionPara = paragraphs[0];
+        const content = revisionPara?.getContent();
+        const revisionItem = content?.find(item => item instanceof Revision) as any;
+        expect(revisionItem?.getText()).toBe('This is substantive text that should NOT be deleted');
+      });
+
       // Tests for obsolete keepOne and preserveHeader2BlankLines parameters have been removed
     });
   });

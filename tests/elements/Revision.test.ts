@@ -362,4 +362,58 @@ describe('Revision', () => {
       expect(revision.getId()).toBe(42);
     });
   });
+
+  describe('Internal Tracking Types', () => {
+    // These types are used internally for changelog generation and tracking,
+    // but have no OOXML element equivalent - they should throw when serialized
+    const internalTypes: RevisionType[] = [
+      'hyperlinkChange',
+      'imageChange',
+      'fieldChange',
+      'commentChange',
+      'bookmarkChange',
+      'contentControlChange',
+    ];
+
+    it('should throw when attempting to serialize internal tracking types to XML', () => {
+      for (const type of internalTypes) {
+        const revision = new Revision({
+          author: 'Test',
+          type,
+          content: new Run('text'),
+        });
+
+        expect(() => revision.toXML()).toThrow(
+          `Revision type '${type}' is an internal tracking type and cannot be serialized to OOXML XML`
+        );
+      }
+    });
+
+    it('should include helpful error message suggesting insert/delete pairs', () => {
+      const revision = new Revision({
+        author: 'Test',
+        type: 'hyperlinkChange',
+        content: new Run('text'),
+      });
+
+      expect(() => revision.toXML()).toThrow(
+        /Use insert\/delete revision pairs for tracking changes to hyperlinks/
+      );
+    });
+
+    it('should allow creating internal tracking type revisions for metadata purposes', () => {
+      // These can be created for tracking/changelog purposes, just not serialized
+      const revision = new Revision({
+        author: 'Test',
+        type: 'hyperlinkChange',
+        content: new Run('text'),
+        previousProperties: { url: 'http://old.example.com' },
+        newProperties: { url: 'http://new.example.com' },
+      });
+
+      expect(revision.getType()).toBe('hyperlinkChange');
+      expect(revision.getAuthor()).toBe('Test');
+      expect(revision.getPreviousProperties()?.url).toBe('http://old.example.com');
+    });
+  });
 });

@@ -414,3 +414,36 @@ export {
   EmphasisType,
   ListPrefix,
 } from './types/formatting';
+
+// List normalization
+export {
+  ListNormalizer,
+  analyzeCellLists,
+  analyzeTableLists,
+  normalizeListsInCell,
+  normalizeListsInTable,
+  stripTypedPrefix,
+} from './core/ListNormalizer';
+
+export {
+  detectTypedPrefix,
+  detectListType,
+  inferLevelFromIndentation,
+  getParagraphIndentation,
+  validateListSequence,
+  getListCategoryFromFormat,
+  getLevelFromFormat,
+  TYPED_LIST_PATTERNS,
+  PATTERN_TO_CATEGORY,
+  FORMAT_TO_LEVEL,
+} from './utils/list-detection';
+
+export {
+  ListCategory,
+  NumberFormat as ListNumberFormat,
+  BulletFormat,
+  ListDetectionResult,
+  ListAnalysis,
+  ListNormalizationOptions,
+  ListNormalizationReport,
+} from './types/list-types';

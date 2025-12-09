@@ -904,6 +904,12 @@ export class Style {
       }
     }
 
+    // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
+    // Removes spacing between paragraphs of the same style
+    if (formatting.contextualSpacing) {
+      pPrChildren.push(XMLBuilder.wSelf("contextualSpacing", { "w:val": "1" }));
+    }
+
     // Add other properties
     if (formatting.keepNext) {
       pPrChildren.push(XMLBuilder.wSelf("keepNext"));

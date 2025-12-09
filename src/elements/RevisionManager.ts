@@ -457,9 +457,9 @@ export class RevisionManager {
    * Get revisions by semantic category.
    *
    * Categories:
-   * - content: insert, delete
+   * - content: insert, delete, imageChange, fieldChange, commentChange, contentControlChange, hyperlinkChange
    * - formatting: runPropertiesChange, paragraphPropertiesChange, numberingChange
-   * - structural: moveFrom, moveTo, sectionPropertiesChange
+   * - structural: moveFrom, moveTo, sectionPropertiesChange, bookmarkChange
    * - table: tablePropertiesChange, tableCellInsert, tableCellDelete, tableCellMerge, etc.
    *
    * @param category - Semantic category to filter by
@@ -476,7 +476,14 @@ export class RevisionManager {
       const type = rev.getType();
       switch (category) {
         case 'content':
-          return type === 'insert' || type === 'delete';
+          return type === 'insert' ||
+                 type === 'delete' ||
+                 // Internal tracking types for rich content changes
+                 type === 'imageChange' ||
+                 type === 'fieldChange' ||
+                 type === 'commentChange' ||
+                 type === 'contentControlChange' ||
+                 type === 'hyperlinkChange';
 
         case 'formatting':
           return type === 'runPropertiesChange' ||
@@ -486,7 +493,9 @@ export class RevisionManager {
         case 'structural':
           return type === 'moveFrom' ||
                  type === 'moveTo' ||
-                 type === 'sectionPropertiesChange';
+                 type === 'sectionPropertiesChange' ||
+                 // Bookmarks are structural markers
+                 type === 'bookmarkChange';
 
         case 'table':
           return type === 'tablePropertiesChange' ||

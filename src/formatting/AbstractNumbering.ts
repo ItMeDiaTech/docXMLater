@@ -446,13 +446,17 @@ export class AbstractNumbering {
     const name = nameMatch && nameMatch[1] ? nameMatch[1] : undefined;
 
     // Extract multiLevelType (optional)
+    // Values: "singleLevel" = 0, "multilevel" = 1, "hybridMultilevel" = 2
     const multiLevelTypeMatch = xml.match(
       /<w:multiLevelType[^>]*w:val="([^"]+)"/
     );
-    const multiLevelType =
-      multiLevelTypeMatch && multiLevelTypeMatch[1]
-        ? parseInt(multiLevelTypeMatch[1], 10)
-        : 1;
+    let multiLevelType = 1; // default to multilevel
+    if (multiLevelTypeMatch && multiLevelTypeMatch[1]) {
+      const value = multiLevelTypeMatch[1];
+      if (value === "singleLevel") multiLevelType = 0;
+      else if (value === "multilevel") multiLevelType = 1;
+      else if (value === "hybridMultilevel") multiLevelType = 2;
+    }
 
     // Create abstract numbering
     const abstractNum = new AbstractNumbering({

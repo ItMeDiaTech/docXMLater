@@ -40,6 +40,13 @@ desktop.ini
 tmp/
 temp/
 *.tmp
+Example*
+temp*
+Missing*
+Original*
+Images/*
+Test_Code*
+Errors*
 
 # Claude AI files and development notes (not for public repo)
 CLAUDE.md
@@ -61,6 +68,10 @@ REFACTORING_LOCATIONS.md
 API_METHODS_INVENTORY.md
 CLEAN_SUMMARY.md
 docxmlater-functions-and-structure.md
+DocHub_Error_Examples/
+Errors_Icons.zip
+Test_Code.docx
+Spacing/
 
 # Personal status files
 *_STATUS.md

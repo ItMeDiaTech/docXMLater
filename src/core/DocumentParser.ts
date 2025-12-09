@@ -4,6 +4,7 @@
  */
 
 import { ComplexField, Field } from "../elements/Field";
+import { isHyperlinkInstruction, parseHyperlinkInstruction } from "../elements/FieldHelpers";
 import { Footer } from "../elements/Footer";
 import { Header } from "../elements/Header";
 import { Hyperlink } from "../elements/Hyperlink";
@@ -712,6 +713,34 @@ export class DocumentParser {
     const moveFromXmls = XMLParser.extractElements(paraContent, "w:moveFrom");
     const moveToXmls = XMLParser.extractElements(paraContent, "w:moveTo");
 
+    // Helper to extract raw run XML from paraContent using position
+    const extractRunXmlAtPosition = (pos: number): string | null => {
+      // Find the end of this run element
+      const closeTag = "</w:r>";
+      let depth = 1;
+      let searchPos = paraContent.indexOf(">", pos) + 1;
+      while (depth > 0 && searchPos < paraContent.length) {
+        const nextOpen = paraContent.indexOf("<w:r", searchPos);
+        const nextClose = paraContent.indexOf(closeTag, searchPos);
+        if (nextClose === -1) break;
+        if (nextOpen !== -1 && nextOpen < nextClose) {
+          // Check if it's actually <w:r> not <w:rPr> etc
+          const charAfter = paraContent[nextOpen + 4];
+          if (charAfter === ">" || charAfter === " " || charAfter === "/") {
+            depth++;
+          }
+          searchPos = nextOpen + 4;
+        } else {
+          depth--;
+          if (depth === 0) {
+            return paraContent.substring(pos, nextClose + closeTag.length);
+          }
+          searchPos = nextClose + closeTag.length;
+        }
+      }
+      return null;
+    };
+
     // Now process children in the order they were found
     for (const child of children) {
       if (child.type === "w:r") {
@@ -729,6 +758,19 @@ export class DocumentParser {
               );
               if (imageRun) {
                 paragraph.addRun(imageRun);
+              }
+            }
+          } else if (runObj["w:pict"]) {
+            // VML graphics - preserve as raw XML for passthrough
+            // Extract the raw run XML using position to get the exact w:pict content
+            const runXml = extractRunXmlAtPosition(child.pos);
+            if (runXml) {
+              const pictXmls = XMLParser.extractElements(runXml, "w:pict");
+              if (pictXmls.length > 0 && pictXmls[0]) {
+                const run = Run.createFromContent([{ type: "vml", rawXml: pictXmls[0] }]);
+                // Apply any run properties (formatting) to the VML run
+                this.parseRunPropertiesFromObject(runObj["w:rPr"], run);
+                paragraph.addRun(run);
               }
             }
           } else {
@@ -1566,6 +1608,87 @@ export class DocumentParser {
 
                 // Complete field assembly
                 if (fieldState === "end" && fieldRuns.length > 0) {
+                  // Extract instruction to determine field type
+                  let instruction = "";
+                  let resultText = "";
+                  let resultFormatting: RunFormatting | undefined;
+                  let hasSeparate = false;
+
+                  for (const run of fieldRuns) {
+                    const runContent = run.getContent();
+                    const instrText = runContent.find((c: any) => c.type === "instructionText");
+                    if (instrText) {
+                      instruction += instrText.value || "";
+                    }
+                    const fieldCharToken = runContent.find((c: any) => c.type === "fieldChar");
+                    if (fieldCharToken?.fieldCharType === "separate") {
+                      hasSeparate = true;
+                    }
+                    const textContent = runContent.find((c: any) => c.type === "text");
+                    if (textContent && hasSeparate) {
+                      resultText += textContent.value || "";
+                      resultFormatting = run.getFormatting();
+                    }
+                  }
+
+                  instruction = instruction.trim();
+
+                  // Check if this is a HYPERLINK field code - convert to Hyperlink element
+                  if (isHyperlinkInstruction(instruction)) {
+                    const parsed = parseHyperlinkInstruction(instruction);
+                    if (parsed && resultText) {
+                      let hyperlink: Hyperlink;
+                      if (parsed.url && parsed.url.trim() !== "") {
+                        // External hyperlink (or combined external + anchor)
+                        hyperlink = Hyperlink.createExternal(parsed.fullUrl, resultText, {
+                          ...resultFormatting,
+                          color: resultFormatting?.color || "0000FF",
+                          underline: resultFormatting?.underline || "single",
+                        });
+                      } else if (parsed.anchor) {
+                        // Internal hyperlink (anchor only)
+                        hyperlink = Hyperlink.createInternal(parsed.anchor, resultText, {
+                          ...resultFormatting,
+                          color: resultFormatting?.color || "0000FF",
+                          underline: resultFormatting?.underline || "single",
+                        });
+                      } else {
+                        // Fallback to ComplexField if we can't determine link type
+                        const complexField = this.createComplexFieldFromRuns(fieldRuns);
+                        if (complexField) {
+                          groupedContent.push(complexField);
+                        } else {
+                          fieldRuns.forEach((run) => groupedContent.push(run));
+                        }
+                        for (const revision of fieldRevisions) {
+                          groupedContent.push(revision);
+                        }
+                        fieldRuns = [];
+                        fieldRevisions = [];
+                        fieldState = null;
+                        break;
+                      }
+
+                      // Set tooltip if present
+                      if (parsed.tooltip) {
+                        hyperlink.setTooltip(parsed.tooltip);
+                      }
+
+                      groupedContent.push(hyperlink);
+                      for (const revision of fieldRevisions) {
+                        groupedContent.push(revision);
+                      }
+                      defaultLogger.debug(
+                        `Converted single-paragraph HYPERLINK field to Hyperlink element`
+                      );
+                      fieldRuns = [];
+                      fieldRevisions = [];
+                      fieldState = null;
+                      break;
+                    }
+                  }
+
+                  // Non-HYPERLINK field: create ComplexField as usual
                   const complexField =
                     this.createComplexFieldFromRuns(fieldRuns);
                   if (complexField) {
@@ -1841,6 +1964,147 @@ export class DocumentParser {
   ): void {
     const runs = fieldTracker.fieldRuns.map((fr) => fr.run);
 
+    // Extract field instruction and result text to determine field type
+    let instruction = "";
+    let resultText = "";
+    let resultFormatting: RunFormatting | undefined;
+    let hasSeparate = false;
+    let resultParagraphIndex: number | undefined;
+
+    for (let i = 0; i < fieldTracker.fieldRuns.length; i++) {
+      const fr = fieldTracker.fieldRuns[i]!;
+      const runContent = fr.run.getContent();
+
+      // Check for fieldChar tokens
+      const fieldCharToken = runContent.find((c: any) => c.type === "fieldChar");
+      if (fieldCharToken) {
+        if (fieldCharToken.fieldCharType === "separate") {
+          hasSeparate = true;
+        }
+      }
+
+      // Check for instruction text
+      const instrText = runContent.find((c: any) => c.type === "instructionText");
+      if (instrText) {
+        instruction += instrText.value || "";
+      }
+
+      // Check for result text (between separate and end)
+      const textContent = runContent.find((c: any) => c.type === "text");
+      if (textContent && hasSeparate) {
+        resultText += textContent.value || "";
+        resultFormatting = fr.run.getFormatting();
+        resultParagraphIndex = fr.paragraphIndex;
+      }
+    }
+
+    instruction = instruction.trim();
+
+    // Check if this is a HYPERLINK field code - convert to Hyperlink element
+    if (isHyperlinkInstruction(instruction)) {
+      const parsed = parseHyperlinkInstruction(instruction);
+      if (parsed && resultText) {
+        // Determine target paragraph: where result text resides (not first paragraph)
+        const targetParagraphIndex = resultParagraphIndex ?? fieldTracker.startParagraphIndex;
+        const targetParagraph = allParagraphs[targetParagraphIndex];
+
+        if (targetParagraph) {
+          // Create Hyperlink element with proper styling
+          // If there's a URL, it's external; if only anchor, it's internal
+          let hyperlink: Hyperlink;
+          if (parsed.url && parsed.url.trim() !== "") {
+            // External hyperlink (or combined external + anchor)
+            hyperlink = Hyperlink.createExternal(parsed.fullUrl, resultText, {
+              ...resultFormatting,
+              // Ensure hyperlink styling if not already present
+              color: resultFormatting?.color || "0000FF",
+              underline: resultFormatting?.underline || "single",
+            });
+          } else if (parsed.anchor) {
+            // Internal hyperlink (anchor only)
+            hyperlink = Hyperlink.createInternal(parsed.anchor, resultText, {
+              ...resultFormatting,
+              color: resultFormatting?.color || "0000FF",
+              underline: resultFormatting?.underline || "single",
+            });
+          } else {
+            // Fallback: create as ComplexField if we can't determine the link type
+            defaultLogger.debug("HYPERLINK field missing URL and anchor, falling back to ComplexField");
+            this.processMultiParagraphFieldAsComplexField(fieldTracker, allParagraphs, runs);
+            return;
+          }
+
+          // Set tooltip if present
+          if (parsed.tooltip) {
+            hyperlink.setTooltip(parsed.tooltip);
+          }
+
+          // Group field runs by paragraph index
+          const runsByParagraph = new Map<number, Set<number>>();
+          for (const fr of fieldTracker.fieldRuns) {
+            if (!runsByParagraph.has(fr.paragraphIndex)) {
+              runsByParagraph.set(fr.paragraphIndex, new Set());
+            }
+            runsByParagraph.get(fr.paragraphIndex)!.add(fr.runIndex);
+          }
+
+          // Process each affected paragraph
+          const affectedParagraphIndices = Array.from(runsByParagraph.keys()).sort((a, b) => a - b);
+
+          for (const pIdx of affectedParagraphIndices) {
+            const paragraph = allParagraphs[pIdx]!;
+            const runIndicesToRemove = runsByParagraph.get(pIdx)!;
+            const content = paragraph.getContent();
+
+            if (pIdx === targetParagraphIndex) {
+              // Target paragraph: replace field runs with Hyperlink
+              const newContent: ParagraphContent[] = [];
+              let hyperlinkInserted = false;
+
+              for (let rIdx = 0; rIdx < content.length; rIdx++) {
+                if (runIndicesToRemove.has(rIdx)) {
+                  // Insert Hyperlink at position of first field run in this paragraph
+                  if (!hyperlinkInserted) {
+                    newContent.push(hyperlink);
+                    hyperlinkInserted = true;
+                  }
+                  // Skip this run (it's part of the field)
+                } else {
+                  newContent.push(content[rIdx]!);
+                }
+              }
+
+              paragraph.setContent(newContent);
+            } else {
+              // Other paragraphs: remove field runs entirely
+              const newContent = content.filter((_: ParagraphContent, rIdx: number) => !runIndicesToRemove.has(rIdx));
+              paragraph.setContent(newContent);
+            }
+          }
+
+          defaultLogger.debug(
+            `Converted multi-paragraph HYPERLINK field to Hyperlink element in paragraph ${targetParagraphIndex}`
+          );
+          return;
+        }
+      }
+    }
+
+    // For non-HYPERLINK fields (or if HYPERLINK conversion failed), use standard ComplexField handling
+    this.processMultiParagraphFieldAsComplexField(fieldTracker, allParagraphs, runs);
+  }
+
+  /**
+   * Process a multi-paragraph field as a ComplexField (standard behavior for non-HYPERLINK fields)
+   */
+  private processMultiParagraphFieldAsComplexField(
+    fieldTracker: {
+      startParagraphIndex: number;
+      fieldRuns: Array<{ paragraphIndex: number; runIndex: number; run: Run }>;
+    },
+    allParagraphs: Paragraph[],
+    runs: Run[]
+  ): void {
     // Create the ComplexField
     const complexField = this.createComplexFieldFromRuns(runs);
     if (!complexField) {
@@ -2848,6 +3112,21 @@ export class DocumentParser {
       // Parse effects (effects are children of a:blip)
       const effects = this.parseImageEffects(blipObj);
 
+      // Parse border from pic:spPr (shape properties)
+      // Border is stored as a:ln element inside pic:spPr
+      const spPrObj = picPicObj["pic:spPr"];
+      let border: { width: number } | undefined = undefined;
+      if (spPrObj) {
+        const lnObj = spPrObj["a:ln"];
+        if (lnObj) {
+          // Width is in EMUs, convert to points (1 point = 12700 EMUs)
+          const widthEmu = parseInt(lnObj["@_w"] || "0", 10);
+          if (widthEmu > 0) {
+            border = { width: widthEmu / 12700 };
+          }
+        }
+      }
+
       // Extract relationship ID (r:embed)
       const relationshipId = blipObj["@_r:embed"];
       if (!relationshipId) {
@@ -2902,6 +3181,7 @@ export class DocumentParser {
         anchor,
         crop,
         effects,
+        border,
       });
 
       // Register image with ImageManager (preserve original filename for round-trip integrity)
@@ -3524,6 +3804,7 @@ export class DocumentParser {
         if (tcPr["w:shd"]) {
           const shd = tcPr["w:shd"];
           const shading: any = {};
+          if (shd["@_w:val"]) shading.pattern = shd["@_w:val"];
           if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
           if (shd["@_w:color"]) shading.color = shd["@_w:color"];
           if (Object.keys(shading).length > 0) {
@@ -5005,15 +5286,39 @@ export class DocumentParser {
       return null; // Invalid style, missing required attributes
     }
 
-    // Extract style name
-    const nameElement = XMLParser.extractBetweenTags(
+    // Extract style name (handles both self-closing and non-self-closing tags)
+    // First try self-closing tag: <w:name w:val="List Paragraph"/>
+    let name: string = styleId;
+    const selfClosingNameAttrs = XMLParser.extractSelfClosingTag(
       styleXml,
-      "<w:name",
-      "</w:name>"
+      "w:name"
     );
-    const name = nameElement
-      ? XMLParser.extractAttribute(`<w:name${nameElement}`, "w:val") || styleId
-      : styleId;
+    if (selfClosingNameAttrs) {
+      // Got attributes like: ' w:val="List Paragraph"'
+      const extractedName = XMLParser.extractAttribute(
+        `<w:name${selfClosingNameAttrs}/>`,
+        "w:val"
+      );
+      if (extractedName) {
+        name = extractedName;
+      }
+    } else {
+      // Try non-self-closing: <w:name w:val="..."></w:name>
+      const nameElement = XMLParser.extractBetweenTags(
+        styleXml,
+        "<w:name",
+        "</w:name>"
+      );
+      if (nameElement) {
+        const extractedName = XMLParser.extractAttribute(
+          `<w:name${nameElement}`,
+          "w:val"
+        );
+        if (extractedName) {
+          name = extractedName;
+        }
+      }
+    }
 
     // Extract basedOn
     const basedOnElement = XMLParser.extractBetweenTags(
@@ -5262,6 +5567,15 @@ export class DocumentParser {
       pPrXml.includes("<w:pageBreakBefore ")
     ) {
       formatting.pageBreakBefore = true;
+    }
+
+    // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
+    // "Don't add space between paragraphs of the same style"
+    if (
+      pPrXml.includes("<w:contextualSpacing/>") ||
+      pPrXml.includes("<w:contextualSpacing ")
+    ) {
+      formatting.contextualSpacing = true;
     }
 
     return formatting;

@@ -531,7 +531,21 @@ export class Paragraph {
    * ```
    */
   addRun(run: Run): this {
-    this.content.push(run);
+    // Set parent reference for setText tracking
+    run._setParentParagraph(this);
+
+    if (this.trackingContext?.isEnabled()) {
+      // Wrap the run in an insert revision when tracking is enabled
+      const revision = Revision.createInsertion(
+        this.trackingContext.getAuthor(),
+        run,
+        new Date()
+      );
+      this.trackingContext.getRevisionManager().register(revision);
+      this.content.push(revision);
+    } else {
+      this.content.push(run);
+    }
     return this;
   }
 
@@ -541,7 +555,13 @@ export class Paragraph {
    * @returns This paragraph for chaining
    */
   addField(field: FieldLike): this {
-    this.content.push(field);
+    if (this.trackingContext?.isEnabled()) {
+      // Fields need special handling - wrap in revision if the field has runs
+      // For now, just add directly as complex fields have their own structure
+      this.content.push(field);
+    } else {
+      this.content.push(field);
+    }
     return this;
   }
 
@@ -589,16 +609,49 @@ export class Paragraph {
     if (typeof urlOrHyperlink === 'string') {
       // New fluent API: create hyperlink from URL
       const hyperlink = new Hyperlink({ url: urlOrHyperlink, text: urlOrHyperlink });
-      this.content.push(hyperlink);
+      hyperlink._setParentParagraph(this);
+      if (this.trackingContext?.isEnabled()) {
+        const revision = Revision.createInsertion(
+          this.trackingContext.getAuthor(),
+          hyperlink,
+          new Date()
+        );
+        this.trackingContext.getRevisionManager().register(revision);
+        this.content.push(revision);
+      } else {
+        this.content.push(hyperlink);
+      }
       return hyperlink;
     } else if (urlOrHyperlink instanceof Hyperlink) {
       // Legacy API: add existing hyperlink
-      this.content.push(urlOrHyperlink);
+      urlOrHyperlink._setParentParagraph(this);
+      if (this.trackingContext?.isEnabled()) {
+        const revision = Revision.createInsertion(
+          this.trackingContext.getAuthor(),
+          urlOrHyperlink,
+          new Date()
+        );
+        this.trackingContext.getRevisionManager().register(revision);
+        this.content.push(revision);
+      } else {
+        this.content.push(urlOrHyperlink);
+      }
       return this;
     } else {
       // No argument: create empty hyperlink for fluent building
       const hyperlink = new Hyperlink({ text: 'Link' });
-      this.content.push(hyperlink);
+      hyperlink._setParentParagraph(this);
+      if (this.trackingContext?.isEnabled()) {
+        const revision = Revision.createInsertion(
+          this.trackingContext.getAuthor(),
+          hyperlink,
+          new Date()
+        );
+        this.trackingContext.getRevisionManager().register(revision);
+        this.content.push(revision);
+      } else {
+        this.content.push(hyperlink);
+      }
       return hyperlink;
     }
   }
@@ -849,7 +902,22 @@ export class Paragraph {
    * ```
    */
   addText(text: string, formatting?: RunFormatting): this {
-    this.content.push(new Run(text, formatting));
+    const run = new Run(text, formatting);
+    // Set parent reference for setText tracking
+    run._setParentParagraph(this);
+
+    if (this.trackingContext?.isEnabled()) {
+      // Wrap the run in an insert revision when tracking is enabled
+      const revision = Revision.createInsertion(
+        this.trackingContext.getAuthor(),
+        run,
+        new Date()
+      );
+      this.trackingContext.getRevisionManager().register(revision);
+      this.content.push(revision);
+    } else {
+      this.content.push(run);
+    }
     return this;
   }
 
@@ -896,7 +964,19 @@ export class Paragraph {
    * ```
    */
   getRuns(): Run[] {
-    return this.content.filter((item): item is Run => item instanceof Run);
+    const runs: Run[] = [];
+    for (const item of this.content) {
+      if (item instanceof Run) {
+        runs.push(item);
+      } else if (item instanceof Revision) {
+        // Extract runs from inside revisions (track changes)
+        runs.push(...item.getRuns());
+      } else if (item instanceof Hyperlink) {
+        // Extract run from inside hyperlink
+        runs.push(item.getRun());
+      }
+    }
+    return runs;
   }
 
   /**
@@ -960,7 +1040,31 @@ export class Paragraph {
    * ```
    */
   clearContent(): this {
-    this.content = [];
+    if (this.trackingContext?.isEnabled() && this.content.length > 0) {
+      // Wrap all existing content in delete revisions instead of removing
+      const deletedContent: ParagraphContent[] = [];
+      for (const item of this.content) {
+        // Skip items that are already revisions (don't double-wrap)
+        if (item instanceof Revision) {
+          deletedContent.push(item);
+        } else if (item instanceof Run || item instanceof Hyperlink) {
+          const revision = Revision.createDeletion(
+            this.trackingContext.getAuthor(),
+            item,
+            new Date()
+          );
+          this.trackingContext.getRevisionManager().register(revision);
+          deletedContent.push(revision);
+        } else {
+          // For other content types (fields, etc.), just keep them
+          // as they may have complex structures
+          deletedContent.push(item);
+        }
+      }
+      this.content = deletedContent;
+    } else {
+      this.content = [];
+    }
     return this;
   }
 
@@ -1009,7 +1113,80 @@ export class Paragraph {
    * ```
    */
   setContent(content: ParagraphContent[]): void {
-    this.content = [...content];
+    // If tracking is enabled and we have existing content, create delete revisions
+    if (this.trackingContext?.isEnabled() && this.content.length > 0) {
+      const deletedContent: ParagraphContent[] = [];
+      for (const item of this.content) {
+        if (item instanceof Revision) {
+          deletedContent.push(item);
+        } else if (item instanceof Run || item instanceof Hyperlink) {
+          const revision = Revision.createDeletion(
+            this.trackingContext.getAuthor(),
+            item,
+            new Date()
+          );
+          this.trackingContext.getRevisionManager().register(revision);
+          deletedContent.push(revision);
+        }
+      }
+      // New content array starts with deleted items followed by new items
+      // But actually, for setContent we probably want to just replace
+      // Keep the deletion revisions and add new content
+      this.content = [...deletedContent, ...content];
+    } else {
+      this.content = [...content];
+    }
+    // Set parent reference for runs and hyperlinks in the content
+    for (const item of this.content) {
+      if (item instanceof Hyperlink) {
+        item._setParentParagraph(this);
+      } else if (item instanceof Run) {
+        item._setParentParagraph(this);
+      }
+    }
+  }
+
+  /**
+   * Removes a content item at the specified index
+   *
+   * When track changes is enabled, wraps the removed item in a delete revision
+   * instead of actually removing it.
+   *
+   * @param index - Index of the item to remove
+   * @returns The removed item, or undefined if index is out of bounds
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * para.addText('First');
+   * para.addText('Second');
+   * para.removeContentAt(0); // Removes 'First'
+   * ```
+   */
+  removeContentAt(index: number): ParagraphContent | undefined {
+    if (index < 0 || index >= this.content.length) {
+      return undefined;
+    }
+
+    const item = this.content[index];
+
+    if (this.trackingContext?.isEnabled()) {
+      // Wrap the item in a delete revision instead of removing
+      if (item instanceof Run || item instanceof Hyperlink) {
+        const revision = Revision.createDeletion(
+          this.trackingContext.getAuthor(),
+          item,
+          new Date()
+        );
+        this.trackingContext.getRevisionManager().register(revision);
+        this.content[index] = revision;
+      }
+      // For revisions and other types, leave them as-is
+    } else {
+      this.content.splice(index, 1);
+    }
+
+    return item;
   }
 
   /**

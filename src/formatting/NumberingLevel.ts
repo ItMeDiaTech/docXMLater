@@ -49,7 +49,7 @@ export interface NumberingLevelProperties {
   /** Starting value (for numeric formats, default: 1) */
   start?: number;
 
-  /** Left indentation in twips */
+  /** Left indentation in twips (can be negative for outdents into margin) */
   leftIndent?: number;
 
   /** Hanging indentation in twips (for the text after the number) */
@@ -122,9 +122,8 @@ export class NumberingLevel {
       );
     }
 
-    if (this.properties.leftIndent < 0) {
-      throw new Error("Left indent must be non-negative");
-    }
+    // Note: leftIndent CAN be negative (outdent into margin) per ECMA-376
+    // This is valid and used for hanging indents where bullets appear in margin
 
     if (this.properties.hangingIndent < 0) {
       throw new Error("Hanging indent must be non-negative");
@@ -215,9 +214,7 @@ export class NumberingLevel {
    * @param twips Indentation in twips
    */
   setLeftIndent(twips: number): this {
-    if (twips < 0) {
-      throw new Error("Left indent must be non-negative");
-    }
+    // Note: Negative values are valid (outdent into margin) per ECMA-376
     this.properties.leftIndent = twips;
     return this;
   }
@@ -285,6 +282,15 @@ export class NumberingLevel {
    */
   setBold(bold: boolean): this {
     this.properties.bold = bold;
+    return this;
+  }
+
+  /**
+   * Sets the numbering format (decimal, lowerLetter, bullet, etc.)
+   * @param format The numbering format
+   */
+  setFormat(format: NumberFormat): this {
+    this.properties.format = format;
     return this;
   }
 
@@ -725,6 +731,25 @@ export class NumberingLevel {
     const szMatch = xml.match(/<w:sz[^>]*w:val="([^"]+)"/);
     if (szMatch && szMatch[1]) fontSize = parseInt(szMatch[1], 10);
 
+    // Extract bold from <w:rPr>
+    // <w:b/> or <w:b w:val="1"/> means bold
+    // <w:b w:val="0"/> or <w:b w:val="false"/> means NOT bold
+    // No <w:b> element defaults to true (per docxmlater convention)
+    let bold = true; // default
+    const bMatch = xml.match(/<w:b(?:\s+w:val="([^"]+)")?(?:\s*\/>|>)/);
+    if (bMatch) {
+      const val = bMatch[1];
+      // If val is "0" or "false", not bold. Otherwise (undefined, "1", "true"), bold.
+      bold = val !== "0" && val !== "false";
+    }
+
+    // Extract color from <w:rPr>
+    let color: string | undefined;
+    const colorMatch = xml.match(/<w:color[^>]*w:val="([^"]+)"/);
+    if (colorMatch && colorMatch[1]) {
+      color = colorMatch[1];
+    }
+
     return new NumberingLevel({
       level,
       format,
@@ -736,6 +761,8 @@ export class NumberingLevel {
       font,
       fontSize,
       suffix,
+      bold,
+      color,
     });
   }
 }

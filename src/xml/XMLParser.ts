@@ -228,7 +228,10 @@ export class XMLParser {
     const valueEnd = xml.indexOf('"', valueStart);
     if (valueEnd === -1) return undefined;
 
-    return xml.substring(valueStart, valueEnd);
+    const rawValue = xml.substring(valueStart, valueEnd);
+    // Unescape XML entities to get the actual value
+    // This prevents double-escaping when the value is later re-serialized
+    return XMLBuilder.unescapeXml(rawValue);
   }
 
   /**

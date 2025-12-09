@@ -1056,10 +1056,13 @@ export class Table {
 
     // Add table grid (column definitions)
     // Use custom tableGrid if specified, otherwise auto-generate
+    // CRITICAL: Use getTotalGridSpan() instead of getCellCount() to account for
+    // cells with gridSpan (column span). A row with 2 cells where one spans 4 columns
+    // should generate 5 grid columns, not 2.
     const gridWidths = this.formatting.tableGrid;
     const maxColumns = gridWidths
       ? gridWidths.length
-      : Math.max(...this.rows.map((row) => row.getCellCount()), 0);
+      : Math.max(...this.rows.map((row) => row.getTotalGridSpan()), 0);
 
     if (maxColumns > 0) {
       const tblGridChildren: XMLElement[] = [];

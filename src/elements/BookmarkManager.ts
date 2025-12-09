@@ -92,31 +92,38 @@ export class BookmarkManager {
 
   /**
    * Gets a unique bookmark name by adding a suffix if needed
+   * Ensures the returned name is always within the 40-character limit
    * @param baseName - Base name for the bookmark
-   * @returns A unique bookmark name
+   * @returns A unique bookmark name (max 40 characters)
    */
   getUniqueName(baseName: string): string {
+    const maxLength = 40;
+
     if (!this.hasBookmark(baseName)) {
       return baseName;
     }
 
     // Try adding numbers until we find a unique name
     let counter = 1;
-    let uniqueName = `${baseName}_${counter}`;
+    while (counter <= 1000) {
+      const suffix = `_${counter}`;
 
-    while (this.hasBookmark(uniqueName)) {
-      counter++;
-      uniqueName = `${baseName}_${counter}`;
+      // Truncate base name to leave room for suffix within 40-char limit
+      const maxBase = maxLength - suffix.length;
+      const truncatedBase =
+        baseName.length > maxBase ? baseName.substring(0, maxBase) : baseName;
 
-      // Safety limit
-      if (counter > 1000) {
-        throw new Error(
-          `Could not generate unique bookmark name from base "${baseName}"`
-        );
+      const uniqueName = `${truncatedBase}${suffix}`;
+
+      if (!this.hasBookmark(uniqueName)) {
+        return uniqueName;
       }
+      counter++;
     }
 
-    return uniqueName;
+    throw new Error(
+      `Could not generate unique bookmark name from base "${baseName}"`
+    );
   }
 
   /**

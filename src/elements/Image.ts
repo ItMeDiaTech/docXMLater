@@ -179,6 +179,8 @@ export interface ImageProperties {
   crop?: ImageCrop;
   /** Visual effects */
   effects?: ImageEffects;
+  /** Border settings (width in points) */
+  border?: { width: number };
 }
 
 /**
@@ -305,6 +307,7 @@ export class Image {
     this.anchor = properties.anchor;
     this.crop = properties.crop;
     this.effects = properties.effects;
+    this.border = properties.border;
 
     // Set default DPI
     this.dpi = 96;
@@ -913,14 +916,27 @@ export class Image {
    * @param thicknessPt Border thickness in points (default: 2pt)
    * @returns This image for chaining
    *
-   * Note: effectExtent is NOT set for borders because it causes Word to
-   * increase the visual size of the image. effectExtent is meant for
-   * effects like shadows and glows that need additional space, not borders.
-   * The border is rendered within the image's existing bounds.
+   * Note: effectExtent is set to accommodate the border width so it renders
+   * properly without being clipped. The border is drawn centered on the image
+   * edge, so half the border width extends outside the image bounds.
    */
   setBorder(thicknessPt: number = 2): this {
     this.border = { width: thicknessPt };
-    // Note: Do NOT set effectExtent for borders - it causes image size increase
+
+    // Calculate space needed for border (half-width on each side)
+    // 1 point = 12700 EMUs - border is drawn centered on the edge
+    const borderEmu = thicknessPt * 12700;
+    const halfBorderEmu = Math.ceil(borderEmu / 2);
+
+    // Ensure effectExtent has at least enough space for the border
+    if (!this.effectExtent) {
+      this.effectExtent = { left: 0, top: 0, right: 0, bottom: 0 };
+    }
+    this.effectExtent.left = Math.max(this.effectExtent.left, halfBorderEmu);
+    this.effectExtent.top = Math.max(this.effectExtent.top, halfBorderEmu);
+    this.effectExtent.right = Math.max(this.effectExtent.right, halfBorderEmu);
+    this.effectExtent.bottom = Math.max(this.effectExtent.bottom, halfBorderEmu);
+
     return this;
   }
 

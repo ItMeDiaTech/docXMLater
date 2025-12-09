@@ -43,10 +43,15 @@ import { Style, StyleProperties } from "../formatting/Style";
 import { StylesManager } from "../formatting/StylesManager";
 import { FormatOptions, StyleApplyOptions } from "../types/formatting";
 import {
+  ListNormalizationOptions,
+  ListNormalizationReport,
+} from "../types/list-types";
+import {
   ApplyStylesOptions,
   Heading2Config,
   StyleConfig,
 } from "../types/styleConfig";
+import { ListNormalizer } from "./ListNormalizer";
 import { defaultLogger, ILogger, getGlobalLogger, createScopedLogger } from "../utils/logger";
 
 // Create scoped logger for Document operations
@@ -128,7 +133,7 @@ export interface DocumentOptions {
   useAbsoluteMemoryLimit?: boolean;
   /** Strict parsing mode - throw errors instead of collecting warnings. Default: false */
   strictParsing?: boolean;
-  /** Maximum number of images allowed in document. Default: 20 */
+  /** Maximum number of images allowed in document. Default: 1000 */
   maxImageCount?: number;
   /** Maximum total size of all images in MB. Default: 100 */
   maxTotalImageSizeMB?: number;
@@ -759,6 +764,12 @@ export class Document {
    */
   createParagraph(text?: string): Paragraph {
     const para = new Paragraph();
+
+    // If track changes is enabled, bind tracking context to the new paragraph
+    if (this.trackChangesEnabled && this.trackingContext.isEnabled()) {
+      para._setTrackingContext(this.trackingContext);
+    }
+
     if (text) {
       para.addText(text);
     }
@@ -968,6 +979,37 @@ export class Document {
     }
 
     return result;
+  }
+
+  /**
+   * Normalizes typed list prefixes in all tables to proper Word list formatting.
+   *
+   * This method detects manually-typed list prefixes like "1. ", "a. ", "• ", etc.
+   * and converts them to proper Word list formatting using <w:numPr>.
+   * Within each table cell, lists are normalized to the majority type (numbered or bullet).
+   *
+   * @param options - Optional configuration for normalization
+   * @returns Report with counts of normalized/skipped items and any errors
+   *
+   * @example
+   * ```typescript
+   * // Normalize all typed lists in tables
+   * const report = doc.normalizeTableLists();
+   * console.log(`Normalized ${report.normalized} list items`);
+   *
+   * // With custom numIds
+   * const report = doc.normalizeTableLists({
+   *   numberedStyleNumId: 5,
+   *   bulletStyleNumId: 8,
+   * });
+   * ```
+   */
+  normalizeTableLists(
+    options?: ListNormalizationOptions
+  ): ListNormalizationReport {
+    const normalizer = new ListNormalizer(this.numberingManager);
+    const tables = this.getAllTables();
+    return normalizer.normalizeAllTables(tables, options);
   }
 
   /**
@@ -2479,22 +2521,22 @@ export class Document {
   }
 
   /**
-   * Centers all images greater than specified pixel size
+   * Centers all images where either dimension exceeds the specified pixel size
    *
    * Actually centers the paragraph containing the image, since images
    * themselves don't have alignment properties in Word.
    *
-   * Conversion: 100 pixels ≈ 952,500 EMUs (at 96 DPI)
+   * Conversion: 96 pixels = 1 inch = 914,400 EMUs (at 96 DPI)
    *
-   * @param minPixels Minimum size in pixels for both width and height (default: 100)
+   * @param minPixels Minimum size in pixels - if either width OR height exceeds this, image is centered (default: 96 = 1 inch)
    * @returns Number of images centered
    * @example
    * ```typescript
-   * const count = doc.centerLargeImages(100);
+   * const count = doc.centerLargeImages(96);  // Center images > 1 inch
    * console.log(`Centered ${count} large images`);
    * ```
    */
-  centerLargeImages(minPixels: number = 100): number {
+  centerLargeImages(minPixels: number = 96): number {
     let count = 0;
 
     // Convert pixels to EMUs (914400 EMUs per inch, 96 DPI)
@@ -2512,8 +2554,8 @@ export class Document {
       const width = image.getWidth();
       const height = image.getHeight();
 
-      // Check if both dimensions meet minimum
-      if (width >= minEmus && height >= minEmus) {
+      // Check if either dimension meets minimum (width OR height >= threshold)
+      if (width >= minEmus || height >= minEmus) {
         // Track this image's relationship ID
         const relId = image.getRelationshipId();
         if (relId) {
@@ -2547,84 +2589,96 @@ export class Document {
   }
 
   /**
-   * Applies border and centers all images greater than specified pixel size
+   * Applies border and centers all images where either dimension exceeds the specified pixel size
    *
    * This helper combines two operations:
-   * 1. Applies a border to the image (with auto-calculated effectExtent)
+   * 1. Applies a border to the image
    * 2. Centers the paragraph containing the image
    *
-   * Only processes images where BOTH width AND height exceed the minimum size.
-   * The border is applied using Image.setBorder() which automatically calculates
-   * and sets the effectExtent to ensure proper rendering in Microsoft Word.
+   * Processes images where EITHER width OR height exceeds the minimum size.
+   * Border defaults to 2pt with black color.
    *
-   * Conversion: 50 pixels = 476,250 EMUs (at 96 DPI)
-   * Border defaults to 2pt with black color
+   * Conversion: 96 pixels = 1 inch = 914,400 EMUs (at 96 DPI)
    *
-   * @param minPixels Minimum size in pixels for both width and height (default: 50)
+   * @param minPixels Minimum size in pixels - if either width OR height exceeds this, image is processed (default: 96 = 1 inch)
    * @param borderThicknessPt Border thickness in points (default: 2)
    * @returns Number of images processed (bordered and centered)
    * @example
    * ```typescript
-   * // Apply 2pt border and center all images > 50x50 pixels
+   * // Apply 2pt border and center all images > 1 inch
    * const count = doc.borderAndCenterLargeImages();
    * console.log(`Processed ${count} large images`);
    * ```
    * @example
    * ```typescript
    * // Custom threshold and border thickness
-   * const count = doc.borderAndCenterLargeImages(100, 3);
-   * console.log(`Applied 3pt borders to ${count} images > 100x100`);
+   * const count = doc.borderAndCenterLargeImages(96, 3);
+   * console.log(`Applied 3pt borders to ${count} images > 1 inch`);
    * ```
    */
-  public borderAndCenterLargeImages(minPixels: number = 50, borderThicknessPt: number = 2): number {
+  public borderAndCenterLargeImages(minPixels: number = 96, borderThicknessPt: number = 2): number {
     let count = 0;
 
     // Convert pixels to EMUs (914400 EMUs per inch, 96 DPI)
     // Formula: pixels * (914400 / 96) = pixels * 9525
     const minEmus = Math.round(minPixels * 9525);
 
-    // Get all images with metadata
-    const images = this.imageManager.getAllImages();
+    // Helper to check if an item is an ImageRun with large dimensions
+    // Returns true if a large image was found and processed
+    const processImageRun = (item: unknown): boolean => {
+      if (item instanceof ImageRun) {
+        const image = item.getImageElement();
+        const width = image.getWidth();
+        const height = image.getHeight();
 
-    // Create a Set of image IDs that meet size criteria
-    const largeImageIds = new Set<string>();
-
-    for (const entry of images) {
-      const image = entry.image;
-      const width = image.getWidth();
-      const height = image.getHeight();
-
-      // Check if both dimensions meet minimum
-      if (width >= minEmus && height >= minEmus) {
-        // Apply border (automatically sets effectExtent)
-        image.setBorder(borderThicknessPt);
-
-        // Track this image's relationship ID
-        const relId = image.getRelationshipId();
-        if (relId) {
-          largeImageIds.add(relId);
+        // Check if either dimension meets minimum (width OR height >= threshold)
+        if (width >= minEmus || height >= minEmus) {
+          // Apply border to the image
+          image.setBorder(borderThicknessPt);
+          return true;
         }
       }
-    }
+      return false;
+    };
 
-    // Find paragraphs containing these large images and center them
-    // Note: Images are embedded in paragraphs as ImageRun elements
+    // Helper to check revision content for images
+    const processRevision = (revision: Revision): boolean => {
+      let found = false;
+      const revisionContent = revision.getContent();
+      for (const item of revisionContent) {
+        // ImageRun extends Run, so check instanceof ImageRun
+        if (processImageRun(item)) {
+          found = true;
+        }
+      }
+      return found;
+    };
+
+    // Directly iterate all paragraphs and find images
+    // This approach bypasses ImageManager and works with images wherever they are
     for (const paragraph of this.getAllParagraphs()) {
       const content = paragraph.getContent();
+      let hasLargeImage = false;
 
       for (const item of content) {
-        // Check if this is an ImageRun (subclass of Run)
-        if (item instanceof ImageRun) {
-          const image = item.getImageElement();
-          const relId = image.getRelationshipId();
-
-          if (relId && largeImageIds.has(relId)) {
-            // Center this paragraph
-            paragraph.setAlignment("center");
-            count++;
-            break; // Only count paragraph once
+        // Check direct ImageRun content
+        if (processImageRun(item)) {
+          hasLargeImage = true;
+        }
+        // Check images inside Revisions (tracked changes like w:ins, w:del)
+        else if (item instanceof Revision) {
+          if (processRevision(item)) {
+            hasLargeImage = true;
           }
         }
+        // Note: Hyperlinks typically contain text, not images
+        // Image hyperlinks would be a separate ImageRun with link styling
+      }
+
+      // If paragraph has a large image, center it
+      if (hasLargeImage) {
+        paragraph.setAlignment("center");
+        count++;
       }
     }
 
@@ -4390,7 +4444,7 @@ export class Document {
     /**
      * Whether to re-insert Normal-style blank paragraphs after structural elements.
      * When true, adds spacing after headers, TOCs, lists, tables, and special hyperlinks.
-     * @default false
+     * @default true
      */
     addStructureBlankLines?: boolean;
   }): {
@@ -4398,7 +4452,7 @@ export class Document {
     added: number;
     total: number;
   } {
-    const addStructureBlankLines = options?.addStructureBlankLines ?? false;
+    const addStructureBlankLines = options?.addStructureBlankLines ?? true;
     let removed = 0;
     let added = 0;
 
@@ -4439,6 +4493,28 @@ export class Document {
       if (index !== undefined) {
         this.bodyElements.splice(index, 1);
         removed++;
+      }
+    }
+
+    // PASS 1.5: Remove blank paragraphs inside table cells
+    for (const table of this.getAllTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          // Get fresh count each iteration since we're modifying the cell
+          let cellParaCount = cell.getParagraphs().length;
+          // Remove blank paragraphs from cell (in reverse to maintain indices)
+          // Keep at least one paragraph in the cell (Word requires it)
+          for (let i = cellParaCount - 1; i >= 0; i--) {
+            // Don't remove the last paragraph in a cell
+            if (cell.getParagraphs().length <= 1) break;
+
+            const para = cell.getParagraphs()[i];
+            if (para && !para.isPreserved() && this.isParagraphBlank(para)) {
+              cell.removeParagraph(i);
+              removed++;
+            }
+          }
+        }
       }
     }
 
@@ -4580,6 +4656,8 @@ export class Document {
     aboveWarning?: boolean;
     /** Add blank line after bullet/numbered list blocks (default: true) */
     afterLists?: boolean;
+    /** Add blank lines around images larger than 100x100 pixels (default: true) */
+    aroundImages?: boolean;
   }): {
     tablesProcessed: number;
     blankLinesAdded: number;
@@ -4601,6 +4679,7 @@ export class Document {
     const belowTOC = options?.belowTOC ?? true;
     const aboveWarning = options?.aboveWarning ?? true;
     const afterLists = options?.afterLists ?? true;
+    const aroundImages = options?.aroundImages ?? true;
 
     // Aggregated statistics
     let totalTablesProcessed = 0;
@@ -4610,7 +4689,8 @@ export class Document {
     let totalListsProcessed = 0;
 
     // Phase 1: Remove duplicate blank paragraphs (always execute)
-    const cleanupResult = this.removeExtraBlankParagraphs();
+    // Note: Pass false to avoid recursive loop since addStructureBlankLines defaults to true
+    const cleanupResult = this.removeExtraBlankParagraphs({ addStructureBlankLines: false });
     blankLinesRemoved = cleanupResult.removed;
 
     // Phase 2: Add blanks after 1×1 tables
@@ -4762,14 +4842,15 @@ export class Document {
 
     // Phase 7: Add blank below Table of Contents elements
     if (belowTOC) {
+      // Part A: Handle TableOfContentsElement instances (programmatically created TOCs)
       const tocElements = this.getTableOfContentsElements();
-      
+
       for (const toc of tocElements) {
         const tocIndex = this.bodyElements.indexOf(toc);
-        
+
         if (tocIndex !== -1 && tocIndex < this.bodyElements.length - 1) {
           const nextElement = this.bodyElements[tocIndex + 1];
-          
+
           // Check if next element is already blank
           if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
             // Mark existing blank as preserved
@@ -4789,6 +4870,71 @@ export class Document {
             this.bodyElements.splice(tocIndex + 1, 0, blankPara);
             totalBlankLinesAdded++;
           }
+        }
+      }
+
+      // Part B: Handle TOC paragraphs by style (parsed documents without SDT wrapper)
+      // Find the last paragraph in each TOC block (consecutive TOC-styled paragraphs)
+      let inTocBlock = false;
+      let lastTocParaIndex = -1;
+
+      for (let idx = 0; idx < this.bodyElements.length; idx++) {
+        const element = this.bodyElements[idx];
+
+        if (element instanceof Paragraph && this.isTocParagraph(element)) {
+          inTocBlock = true;
+          lastTocParaIndex = idx;
+        } else if (inTocBlock) {
+          // End of TOC block - add blank after the last TOC paragraph
+          inTocBlock = false;
+
+          if (lastTocParaIndex !== -1 && lastTocParaIndex < this.bodyElements.length - 1) {
+            const nextElement = this.bodyElements[lastTocParaIndex + 1];
+
+            // Check if next element is already blank
+            if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
+              // Mark existing blank as preserved
+              nextElement.setStyle(style);
+              if (markAsPreserved && !nextElement.isPreserved()) {
+                nextElement.setPreserved(true);
+                totalExistingLinesMarked++;
+              }
+            } else {
+              // Add blank paragraph after TOC block
+              const blankPara = Paragraph.create();
+              blankPara.setStyle(style);
+              blankPara.setSpaceAfter(spacingAfter);
+              if (markAsPreserved) {
+                blankPara.setPreserved(true);
+              }
+              this.bodyElements.splice(lastTocParaIndex + 1, 0, blankPara);
+              totalBlankLinesAdded++;
+              idx++; // Account for inserted element
+            }
+          }
+          lastTocParaIndex = -1;
+        }
+      }
+
+      // Handle case where TOC block is at the end of the document
+      if (inTocBlock && lastTocParaIndex !== -1 && lastTocParaIndex < this.bodyElements.length - 1) {
+        const nextElement = this.bodyElements[lastTocParaIndex + 1];
+
+        if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
+          nextElement.setStyle(style);
+          if (markAsPreserved && !nextElement.isPreserved()) {
+            nextElement.setPreserved(true);
+            totalExistingLinesMarked++;
+          }
+        } else {
+          const blankPara = Paragraph.create();
+          blankPara.setStyle(style);
+          blankPara.setSpaceAfter(spacingAfter);
+          if (markAsPreserved) {
+            blankPara.setPreserved(true);
+          }
+          this.bodyElements.splice(lastTocParaIndex + 1, 0, blankPara);
+          totalBlankLinesAdded++;
         }
       }
     }
@@ -4902,14 +5048,209 @@ export class Document {
           }
         }
       }
+
+      // Phase 9b: Handle lists inside table cells
+      // Add blank after list blocks in table cells, but NOT if list is last in cell
+      for (const table of this.getAllTables()) {
+        for (const row of table.getRows()) {
+          for (const cell of row.getCells()) {
+            // Get fresh paragraph list each iteration since we may modify it
+            let cellParaCount = cell.getParagraphs().length;
+
+            for (let ci = 0; ci < cellParaCount; ci++) {
+              const cellParas = cell.getParagraphs(); // Get fresh copy
+              const para = cellParas[ci];
+              if (!para) continue;
+
+              const numbering = para.getNumbering();
+              if (!numbering) continue;
+
+              // This is a list item - check if it's the last item of its list in this cell
+              const nextParaInCell = cellParas[ci + 1];
+              const isListEndInCell =
+                !nextParaInCell || // End of cell
+                !nextParaInCell.getNumbering() || // Next has no numbering
+                nextParaInCell.getNumbering()!.numId !== numbering.numId; // Different list
+
+              if (isListEndInCell) {
+                // Check if this is the last paragraph in the cell - don't add blank
+                const isLastInCell = ci === cellParas.length - 1;
+                if (isLastInCell) {
+                  // List ends at cell boundary - no blank needed
+                  continue;
+                }
+
+                // List ends but more content follows in cell
+                // Check if next is already blank
+                if (nextParaInCell && this.isParagraphBlank(nextParaInCell)) {
+                  // Mark existing blank as preserved
+                  nextParaInCell.setStyle(style);
+                  if (markAsPreserved && !nextParaInCell.isPreserved()) {
+                    nextParaInCell.setPreserved(true);
+                    totalExistingLinesMarked++;
+                  }
+                } else {
+                  // Add blank paragraph after list in cell
+                  const blankPara = Paragraph.create();
+                  blankPara.setStyle(style);
+                  blankPara.setSpaceAfter(spacingAfter);
+                  blankPara.setPreserved(markAsPreserved);
+                  cell.addParagraphAt(ci + 1, blankPara);
+                  totalBlankLinesAdded++;
+                  ci++; // Skip the newly inserted blank
+                  cellParaCount++; // Account for added paragraph
+                }
+                totalListsProcessed++;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Phase 10: Add blank lines around images (larger than 100x100 pixels)
+    if (aroundImages) {
+      // Process body-level image paragraphs
+      for (let imgIdx = 0; imgIdx < this.bodyElements.length; imgIdx++) {
+        const element = this.bodyElements[imgIdx];
+
+        if (!(element instanceof Paragraph)) continue;
+
+        const imageRun = this.getImageRunFromParagraph(element);
+        if (!imageRun) continue;
+
+        const image = imageRun.getImageElement();
+
+        // Skip small images (both dimensions < 100px)
+        if (this.isImageSmall(image)) continue;
+
+        // Add blank BEFORE image (if not at start of document and prev is not blank)
+        if (imgIdx > 0) {
+          const prevElement = this.bodyElements[imgIdx - 1];
+          if (!(prevElement instanceof Paragraph && this.isParagraphBlank(prevElement))) {
+            const blankBefore = Paragraph.create();
+            blankBefore.setStyle(style);
+            blankBefore.setSpaceAfter(spacingAfter);
+            if (markAsPreserved) blankBefore.setPreserved(true);
+            this.bodyElements.splice(imgIdx, 0, blankBefore);
+            totalBlankLinesAdded++;
+            imgIdx++; // Account for inserted element
+          }
+        }
+
+        // Add blank AFTER image (if not at end and next is not blank)
+        if (imgIdx < this.bodyElements.length - 1) {
+          const nextElement = this.bodyElements[imgIdx + 1];
+          if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
+            // Mark existing blank as preserved
+            nextElement.setStyle(style);
+            if (markAsPreserved && !nextElement.isPreserved()) {
+              nextElement.setPreserved(true);
+              totalExistingLinesMarked++;
+            }
+          } else {
+            const blankAfter = Paragraph.create();
+            blankAfter.setStyle(style);
+            blankAfter.setSpaceAfter(spacingAfter);
+            if (markAsPreserved) blankAfter.setPreserved(true);
+            this.bodyElements.splice(imgIdx + 1, 0, blankAfter);
+            totalBlankLinesAdded++;
+            imgIdx++; // Skip the inserted blank
+          }
+        }
+      }
+
+      // Process images inside table cells
+      for (const table of this.getAllTables()) {
+        for (const row of table.getRows()) {
+          for (const cell of row.getCells()) {
+            let cellParaCount = cell.getParagraphs().length;
+
+            for (let ci = 0; ci < cellParaCount; ci++) {
+              const cellParas = cell.getParagraphs();
+              const para = cellParas[ci];
+              if (!para) continue;
+
+              const imageRun = this.getImageRunFromParagraph(para);
+              if (!imageRun) continue;
+
+              const image = imageRun.getImageElement();
+
+              // Skip small images
+              if (this.isImageSmall(image)) continue;
+
+              // Add blank BEFORE image (if not at start of cell)
+              if (ci > 0) {
+                const prevPara = cellParas[ci - 1];
+                if (prevPara && !this.isParagraphBlank(prevPara)) {
+                  const blankBefore = Paragraph.create();
+                  blankBefore.setStyle(style);
+                  blankBefore.setSpaceAfter(spacingAfter);
+                  if (markAsPreserved) blankBefore.setPreserved(true);
+                  cell.addParagraphAt(ci, blankBefore);
+                  totalBlankLinesAdded++;
+                  ci++;
+                  cellParaCount++;
+                }
+              }
+
+              // Add blank AFTER image (if not last in cell)
+              const isLastInCell = ci === cell.getParagraphs().length - 1;
+              if (!isLastInCell) {
+                const nextPara = cell.getParagraphs()[ci + 1];
+                if (nextPara && this.isParagraphBlank(nextPara)) {
+                  // Mark existing blank as preserved
+                  nextPara.setStyle(style);
+                  if (markAsPreserved && !nextPara.isPreserved()) {
+                    nextPara.setPreserved(true);
+                    totalExistingLinesMarked++;
+                  }
+                } else {
+                  const blankAfter = Paragraph.create();
+                  blankAfter.setStyle(style);
+                  blankAfter.setSpaceAfter(spacingAfter);
+                  if (markAsPreserved) blankAfter.setPreserved(true);
+                  cell.addParagraphAt(ci + 1, blankAfter);
+                  totalBlankLinesAdded++;
+                  ci++;
+                  cellParaCount++;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Final Phase: Remove consecutive blank paragraphs to prevent double blanks
+    // This handles edge cases where multiple phases add adjacent blanks
+    let duplicateBlanksRemoved = 0;
+    let i = 0;
+    while (i < this.bodyElements.length - 1) {
+      const current = this.bodyElements[i];
+      const next = this.bodyElements[i + 1];
+
+      if (
+        current instanceof Paragraph &&
+        this.isParagraphBlank(current) &&
+        next instanceof Paragraph &&
+        this.isParagraphBlank(next)
+      ) {
+        // Keep first blank, remove second
+        this.bodyElements.splice(i + 1, 1);
+        duplicateBlanksRemoved++;
+        // Don't increment - check same position again in case there are 3+ blanks
+      } else {
+        i++;
+      }
     }
 
     // Return aggregated statistics
     return {
       tablesProcessed: totalTablesProcessed,
-      blankLinesAdded: totalBlankLinesAdded,
+      blankLinesAdded: totalBlankLinesAdded - duplicateBlanksRemoved,
       existingLinesMarked: totalExistingLinesMarked,
-      blankLinesRemoved,
+      blankLinesRemoved: blankLinesRemoved + duplicateBlanksRemoved,
       listsProcessed: totalListsProcessed,
     };
   }
@@ -4920,13 +5261,20 @@ export class Document {
    * @returns Number of blank paragraphs added
    */
   private addStructureBlankLinesAfterElements(): number {
-    // Use the public method with default options
+    // Use the public method with all structure options enabled
     const result = this.addStructureBlankLines({
       spacingAfter: 120,
       markAsPreserved: true,
       style: 'Normal',
       after1x1Tables: true,
       afterOtherTables: true,
+      aboveFirstTable: true,
+      aboveTODHyperlinks: true,
+      belowHeading1Lines: true,
+      belowTOC: true,
+      aboveWarning: true,
+      afterLists: true,
+      aroundImages: true,
     });
 
     return result.blankLinesAdded;
@@ -5865,6 +6213,15 @@ export class Document {
         return false;
       }
 
+      // Revisions (track changes) - check nested content for text
+      if (item instanceof Revision) {
+        const revisionText = item.getText().trim();
+        if (revisionText !== '') {
+          return false;
+        }
+        continue; // Already checked, move to next item
+      }
+
       // Check runs for non-whitespace text
       if ((item as any).getText) {
         const text = (item as any).getText().trim();
@@ -5883,6 +6240,46 @@ export class Document {
     }
 
     return true;
+  }
+
+  /**
+   * Checks if a paragraph is a Table of Contents entry based on its style
+   * @param para The paragraph to check
+   * @returns True if the paragraph uses a TOC style
+   * @private
+   */
+  private isTocParagraph(para: Paragraph): boolean {
+    const styleId = para.getStyle()?.toLowerCase() || '';
+    // Match TOC styles: toc1, toc2, toc 1, toc 2, TOC1, TOC2, etc.
+    return /^toc\s?\d$/i.test(styleId) || styleId.startsWith('toc');
+  }
+
+  /**
+   * Checks if an image is small (both dimensions < 100 pixels)
+   * @param image The image to check
+   * @returns True if both width and height are < 100 pixels
+   * @private
+   */
+  private isImageSmall(image: Image): boolean {
+    const EMU_PER_PIXEL = 9525; // at 96 DPI (914400 EMUs/inch / 96 pixels/inch)
+    const widthPx = image.getWidth() / EMU_PER_PIXEL;
+    const heightPx = image.getHeight() / EMU_PER_PIXEL;
+    return widthPx < 100 && heightPx < 100;
+  }
+
+  /**
+   * Gets the first ImageRun from a paragraph if it contains one
+   * @param para The paragraph to check
+   * @returns The ImageRun if found, null otherwise
+   * @private
+   */
+  private getImageRunFromParagraph(para: Paragraph): ImageRun | null {
+    for (const item of para.getContent()) {
+      if (item instanceof ImageRun) {
+        return item;
+      }
+    }
+    return null;
   }
 
   /**
