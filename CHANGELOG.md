@@ -5,6 +5,130 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.1.0] - 2025-12-25
+
+### Added
+
+- **Document Search & Query Methods**
+  - `findParagraphsByText(pattern)` - Search paragraphs by text or regex pattern
+  - `getRunsByFont(fontName)` - Find all runs using a specific font
+  - `getRunsByColor(color)` - Find all runs with a specific color
+  - `getParagraphsByStyle(styleId)` - Get paragraphs with a specific style
+
+- **Document Bulk Formatting Methods**
+  - `setAllRunsFont(fontName)` - Apply font to all text in document
+  - `setAllRunsSize(size)` - Apply font size to all text in document
+  - `setAllRunsColor(color)` - Apply color to all text in document
+  - `getFormattingReport()` - Get comprehensive formatting statistics
+
+- **Document Convenience Methods**
+  - `setAuthor(author)` - Alias for setCreator
+
+- **Section Line Numbering** (ECMA-376 w:lnNumType)
+  - `setLineNumbering(options)` - Enable line numbering with customizable options
+  - `getLineNumbering()` - Get current line numbering settings
+  - `clearLineNumbering()` - Remove line numbering
+  - Supports countBy, start, distance, and restart options
+  - Exported `LineNumbering` and `LineNumberingRestart` types
+
+- **Comment Resolution** (ECMA-376 w:done attribute)
+  - `Comment.resolve()` - Mark comment as resolved
+  - `Comment.unresolve()` - Mark comment as unresolved
+  - `Comment.isResolved()` - Check resolution status
+  - `CommentManager.getResolvedComments()` - Get all resolved comments
+  - `CommentManager.getUnresolvedComments()` - Get all unresolved comments
+  - Updated `getStats()` to include resolved/unresolved counts
+
+- **TableCell Convenience Methods**
+  - `setTextAlignment(alignment)` - Set alignment for all paragraphs in cell
+  - `setAllParagraphsStyle(styleId)` - Apply style to all paragraphs in cell
+  - `setAllRunsFont(fontName)` - Apply font to all runs in cell
+  - `setAllRunsSize(size)` - Apply font size to all runs in cell
+  - `setAllRunsColor(color)` - Apply color to all runs in cell
+
+- **Table Sorting**
+  - `sortRows(columnIndex, options?)` - Sort table rows by column content
+  - Options: ascending/descending, numeric/string comparison, skip header row
+
+- **Style Methods**
+  - `Style.reset()` - Reset style to minimal state (keeps id, name, type, basedOn)
+
+### Changed
+
+- Updated `API_METHODS_INVENTORY.md` with comprehensive documentation of all new methods
+
+---
+
+## [8.0.0] - 2025-12-24
+
+### Added
+
+- **Parsing Helpers (`src/utils/parsingHelpers.ts`)**: New utility functions for safe OOXML attribute parsing
+  - `safeParseInt()` - Integer parsing with NaN handling and default values
+  - `parseOoxmlBoolean()` - OOXML boolean parsing per ECMA-376 spec (handles self-closing tags, val="1", val="true")
+  - `isExplicitlySet()` - Zero-value safe existence checking
+  - `parseNumericAttribute()` - Numeric attribute parsing with zero-value handling
+  - `parseOnOffAttribute()` - ST_OnOff type attribute parsing
+  - All helpers exported from main index.ts
+
+- **Run Property Change Parsing**: DocumentParser now parses `w:rPrChange` elements
+  - Previous run formatting properties are preserved in Revision objects
+  - Enables changelog generation for formatting changes
+
+### Fixed
+
+- **Zero-Value Handling Bug**: Fixed multiple locations in DocumentParser where values of 0 were incorrectly treated as falsy
+  - Affected: spacing values, indentation, table grid widths, frame properties
+  - Solution: Use `isExplicitlySet()` instead of truthy checks
+
+- **Boolean Property Parsing**: Unified boolean parsing across DocumentParser
+  - Now correctly handles all OOXML formats: self-closing tags, val="1", val="true", val="on"
+  - Uses `parseOoxmlBoolean()` helper consistently
+
+- **Revision Serialization**: Internal tracking types now return null from `toXML()` instead of throwing
+  - Affected types: hyperlinkChange, imageChange, fieldChange, commentChange, bookmarkChange, contentControlChange
+  - Prevents document save failures when internal tracking types are present
+
+### Changed
+
+- **Revision.toXML() Return Type**: Changed from `XMLElement` to `XMLElement | null`
+  - Internal tracking types now gracefully return null
+  - Paragraph serialization updated to skip null revisions
+
+### Documentation
+
+- **Nested Tables**: Added comprehensive documentation for nested table handling
+  - Design philosophy (raw XML passthrough for round-trip fidelity)
+  - Limitations and ECMA-376 compliance notes
+
+- **Parsing Helpers**
+  - Zero-value bug pattern explanation
+  - OOXML boolean parsing rules
+  - Usage examples from DocumentParser
+
+### Tests
+
+- **Nested Table Tests**: Added deep nesting and edge case test scenarios
+  - 5-level deep nesting verification
+  - Nested tables with revision markers (w:ins, w:del)
+  - Multiple nested tables at different positions in same cell
+  - SDT containing nested table
+  - Performance validation for large structures (10 tables, 50 rows)
+  - Edge cases: minimal structure, merged cells, complex borders, hyperlinks/bookmarks
+
+---
+
+## [5.1.0] - [7.6.8] - 2025-11-19 to 2025-12-10
+
+### Note
+
+For detailed changes between v5.1.0 and v7.6.8, see:
+
+- Git commit history: `git log v5.0.0..v7.6.8`
+- GitHub releases: <https://github.com/ItMeDiaTech/docXMLater/releases>
+
+---
+
 ## [5.0.0] - 2025-11-19
 
 ### Added

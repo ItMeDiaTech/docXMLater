@@ -43,6 +43,27 @@ describe('HYPERLINK Field Instruction Parsing', () => {
       expect(result!.hasHSwitch).toBe(true);
     });
 
+    it('should parse anchor-only HYPERLINK (no URL)', () => {
+      // This is common for "Top of the Document" links: HYPERLINK \l "_top"
+      const result = parseHyperlinkInstruction('HYPERLINK \\l "_top" \\h');
+
+      expect(result).not.toBeNull();
+      expect(result!.url).toBe('');
+      expect(result!.anchor).toBe('_top');
+      expect(result!.fullUrl).toBe('#_top');
+      expect(result!.hasHSwitch).toBe(true);
+    });
+
+    it('should parse anchor-only HYPERLINK with extra spaces', () => {
+      // Word sometimes adds extra spaces in field codes
+      const result = parseHyperlinkInstruction('HYPERLINK  \\l "_top"');
+
+      expect(result).not.toBeNull();
+      expect(result!.url).toBe('');
+      expect(result!.anchor).toBe('_top');
+      expect(result!.fullUrl).toBe('#_top');
+    });
+
     it('should parse HYPERLINK with \\o tooltip switch', () => {
       const result = parseHyperlinkInstruction(
         'HYPERLINK "https://example.com/" \\o "Click here for more info"'

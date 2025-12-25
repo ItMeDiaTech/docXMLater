@@ -414,12 +414,28 @@ export class Revision {
    * - Content revisions (insert/delete/move): Contain w:r elements with text runs
    * - Property revisions (rPrChange/pPrChange): Contain previous property elements (w:rPr, w:pPr)
    *
-   * @returns XMLElement representing the revision in OOXML format
+   * @returns XMLElement representing the revision in OOXML format, or null for internal-only types
    * @see ECMA-376 Part 1 §17.13.5 (Revision Identifiers for Paragraph Content)
    * @see ECMA-376 Part 1 §17.13.5.15 (Inserted Paragraph)
    * @see ECMA-376 Part 1 §17.13.5.14 (Deleted Paragraph)
    */
-  toXML(): XMLElement {
+  toXML(): XMLElement | null {
+    // Internal tracking types have no OOXML equivalent and cannot be serialized
+    // They are used for changelog generation and internal tracking only
+    const INTERNAL_TRACKING_TYPES: RevisionType[] = [
+      'hyperlinkChange',
+      'imageChange',
+      'fieldChange',
+      'commentChange',
+      'bookmarkChange',
+      'contentControlChange',
+    ];
+
+    if (INTERNAL_TRACKING_TYPES.includes(this.type)) {
+      // Return null for internal types - callers should skip these
+      return null;
+    }
+
     const attributes: Record<string, string> = {
       'w:id': this.id.toString(),
       'w:author': this.author,

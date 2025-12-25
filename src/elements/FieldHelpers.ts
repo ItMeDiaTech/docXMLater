@@ -27,6 +27,7 @@ export interface ParsedHyperlinkInstruction {
  *
  * HYPERLINK field syntax per ECMA-376:
  * - HYPERLINK "url" - basic external hyperlink
+ * - HYPERLINK \l "anchor" - anchor-only internal hyperlink (no URL)
  * - \l "anchor" - specifies a location (anchor/fragment) within the target
  * - \o "tooltip" - specifies the tooltip/screentip text
  * - \h - creates a hyperlink (always present for clickable links)
@@ -38,11 +39,17 @@ export interface ParsedHyperlinkInstruction {
  *
  * @example
  * ```typescript
+ * // External hyperlink with anchor
  * const result = parseHyperlinkInstruction('HYPERLINK "https://example.com/" \\l "section1" \\h');
  * // result.url = "https://example.com/"
  * // result.anchor = "section1"
  * // result.fullUrl = "https://example.com/#section1"
- * // result.hasHSwitch = true
+ *
+ * // Anchor-only internal hyperlink (e.g., "Top of the Document")
+ * const result2 = parseHyperlinkInstruction('HYPERLINK \\l "_top" \\h');
+ * // result2.url = ""
+ * // result2.anchor = "_top"
+ * // result2.fullUrl = "#_top"
  * ```
  */
 export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkInstruction | null {
@@ -58,19 +65,18 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
     return null;
   }
 
-  // Extract the URL (first quoted string after HYPERLINK)
+  // Extract the URL (first quoted string after HYPERLINK, before any switches)
+  // URL is optional - anchor-only hyperlinks like 'HYPERLINK \l "_top"' are valid
+  let url: string = '';
   const urlMatch = normalized.match(/HYPERLINK\s+"([^"]*)"/i);
-  if (!urlMatch || urlMatch[1] === undefined) {
-    return null;
-  }
-
-  let url: string = urlMatch[1];
-
-  // Decode URL-encoded characters
-  try {
-    url = decodeURIComponent(url);
-  } catch {
-    // If decoding fails, use the original URL
+  if (urlMatch && urlMatch[1] !== undefined) {
+    url = urlMatch[1];
+    // Decode URL-encoded characters
+    try {
+      url = decodeURIComponent(url);
+    } catch {
+      // If decoding fails, use the original URL
+    }
   }
 
   // Extract \l switch (anchor/fragment)
@@ -84,6 +90,11 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
     } catch {
       // If decoding fails, use the original anchor
     }
+  }
+
+  // Must have either URL or anchor to be valid
+  if (!url && !anchor) {
+    return null;
   }
 
   // Extract \o switch (tooltip)
@@ -103,8 +114,11 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
     const hashIndex = url.indexOf('#');
     if (hashIndex >= 0) {
       fullUrl = url.substring(0, hashIndex) + '#' + anchor;
-    } else {
+    } else if (url) {
       fullUrl = url + '#' + anchor;
+    } else {
+      // Anchor-only: just use #anchor
+      fullUrl = '#' + anchor;
     }
   }
 

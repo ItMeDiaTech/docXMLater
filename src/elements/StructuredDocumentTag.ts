@@ -567,31 +567,31 @@ export class StructuredDocumentTag {
           if (this.properties.checkbox) {
             const checkboxChildren: XMLElement[] = [];
 
-            // Add checked state
+            // Add checked state - use w14 namespace per OOXML spec
             if (this.properties.checkbox.checked !== undefined) {
               checkboxChildren.push(
-                XMLBuilder.wSelf("checked", {
-                  "w:val": this.properties.checkbox.checked ? "1" : "0",
+                XMLBuilder.w14Self("checked", {
+                  "w14:val": this.properties.checkbox.checked ? "1" : "0",
                 })
               );
             }
 
-            // Add checked state symbol
+            // Add checked state symbol - use w14 namespace per OOXML spec
             if (this.properties.checkbox.checkedState) {
               checkboxChildren.push(
-                XMLBuilder.wSelf("checkedState", {
-                  "w:val": this.properties.checkbox.checkedState,
-                  "w:font": "MS Gothic",
+                XMLBuilder.w14Self("checkedState", {
+                  "w14:val": this.properties.checkbox.checkedState,
+                  "w14:font": "MS Gothic",
                 })
               );
             }
 
-            // Add unchecked state symbol
+            // Add unchecked state symbol - use w14 namespace per OOXML spec
             if (this.properties.checkbox.uncheckedState) {
               checkboxChildren.push(
-                XMLBuilder.wSelf("uncheckedState", {
-                  "w:val": this.properties.checkbox.uncheckedState,
-                  "w:font": "MS Gothic",
+                XMLBuilder.w14Self("uncheckedState", {
+                  "w14:val": this.properties.checkbox.uncheckedState,
+                  "w14:font": "MS Gothic",
                 })
               );
             }

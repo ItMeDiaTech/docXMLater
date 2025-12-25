@@ -16,6 +16,8 @@
  */
 
 import { Document } from "../core/Document";
+import { Field, ComplexField } from "../elements/Field";
+import { Hyperlink } from "../elements/Hyperlink";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 
 export interface CleanupOptions {
@@ -43,6 +45,10 @@ export interface CleanupOptions {
   unlockFrames?: boolean;
   /** Sanitize table property exceptions (tblPrEx) */
   sanitizeTables?: boolean;
+  /** Format internal anchor hyperlinks with standard styling (Verdana 12pt blue underlined) */
+  formatInternalHyperlinks?: boolean;
+  /** Format ALL hyperlinks (internal, external, and HYPERLINK fields) with standard styling (Verdana 12pt #0000FF underlined) */
+  formatAllHyperlinks?: boolean;
 }
 
 export interface CleanupReport {
@@ -57,6 +63,8 @@ export interface CleanupReport {
   fieldsUnlocked: number;
   framesUnlocked: number;
   tablesProcessed: number;
+  internalHyperlinksFormatted: number;
+  allHyperlinksFormatted: number;
   warnings: string[];
 }
 
@@ -85,6 +93,7 @@ export class CleanupHelper {
       unlockFields: true,
       unlockFrames: true,
       sanitizeTables: true,
+      formatAllHyperlinks: true,
     });
   }
 
@@ -106,6 +115,8 @@ export class CleanupHelper {
       fieldsUnlocked: 0,
       framesUnlocked: 0,
       tablesProcessed: 0,
+      internalHyperlinksFormatted: 0,
+      allHyperlinksFormatted: 0,
       warnings: [],
     };
 
@@ -153,6 +164,14 @@ export class CleanupHelper {
 
     if (options.sanitizeTables) {
       report.tablesProcessed = this.sanitizeTables();
+    }
+
+    if (options.formatInternalHyperlinks) {
+      report.internalHyperlinksFormatted = this.formatInternalHyperlinks();
+    }
+
+    if (options.formatAllHyperlinks) {
+      report.allHyperlinksFormatted = this.formatAllHyperlinks();
     }
 
     return report;
@@ -328,6 +347,103 @@ export class CleanupHelper {
     return processed;
   }
 
+  private formatInternalHyperlinks(): number {
+    let count = 0;
+    const formatting = {
+      font: "Verdana",
+      size: 12,
+      color: "0000FF",
+      underline: "single" as const,
+    };
+
+    // Process body paragraphs
+    for (const paragraph of this.doc.getAllParagraphs()) {
+      for (const item of paragraph.getContent()) {
+        if (item instanceof Hyperlink && item.isInternal()) {
+          item.setFormatting(formatting, { replace: true });
+          count++;
+        }
+      }
+    }
+
+    // Process table paragraphs
+    for (const table of this.doc.getAllTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            for (const item of para.getContent()) {
+              if (item instanceof Hyperlink && item.isInternal()) {
+                item.setFormatting(formatting, { replace: true });
+                count++;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Formats ALL hyperlinks in the document with standard styling
+   * This includes:
+   * - Internal w:hyperlink elements (bookmarks)
+   * - External w:hyperlink elements (URLs)
+   * - HYPERLINK fields (both simple w:fldSimple and complex fields)
+   *
+   * Standard formatting: Verdana 12pt, #0000FF blue, single underline
+   * @returns Number of hyperlinks formatted
+   */
+  private formatAllHyperlinks(): number {
+    let count = 0;
+    const formatting = {
+      font: "Verdana",
+      size: 12,
+      color: "0000FF",
+      underline: "single" as const,
+    };
+
+    // Helper to process paragraph content
+    const processParagraph = (paragraph: any): void => {
+      for (const item of paragraph.getContent()) {
+        // Process all Hyperlink instances (both internal AND external)
+        if (item instanceof Hyperlink) {
+          item.setFormatting(formatting, { replace: true });
+          count++;
+        }
+        // Process simple HYPERLINK fields
+        if (item instanceof Field && item.isHyperlinkField()) {
+          item.setFormatting(formatting);
+          count++;
+        }
+        // Process complex HYPERLINK fields
+        if (item instanceof ComplexField && item.isHyperlinkField()) {
+          item.setResultFormatting(formatting);
+          count++;
+        }
+      }
+    };
+
+    // Process body paragraphs
+    for (const paragraph of this.doc.getAllParagraphs()) {
+      processParagraph(paragraph);
+    }
+
+    // Process table paragraphs
+    for (const table of this.doc.getAllTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            processParagraph(para);
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
   /**
    * Preset: Google Docs cleanup
    */
@@ -360,6 +476,7 @@ export class CleanupHelper {
       unlockFields: true,
       unlockFrames: true,
       sanitizeTables: true,
+      formatAllHyperlinks: true,
     };
   }
 

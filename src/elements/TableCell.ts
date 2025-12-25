@@ -105,11 +105,23 @@ export interface CellFormatting {
 }
 
 /**
+ * Raw nested content stored as XML to preserve nested tables/SDTs
+ * Position indicates after which paragraph index the content appears
+ */
+export interface RawNestedContent {
+  position: number; // Content appears after this paragraph index
+  xml: string; // Raw XML content
+  type: "table" | "sdt"; // Type of nested content
+}
+
+/**
  * Represents a table cell
  */
 export class TableCell {
   private paragraphs: Paragraph[] = [];
   private formatting: CellFormatting;
+  /** Raw nested content (tables, SDTs) stored as XML for passthrough */
+  private rawNestedContent: RawNestedContent[] = [];
 
   /**
    * Creates a new TableCell
@@ -477,12 +489,205 @@ export class TableCell {
     return this;
   }
 
+  // ============================================================================
+  // CONVENIENCE METHODS (for easier paragraph manipulation)
+  // ============================================================================
+
+  /**
+   * Sets text alignment for all paragraphs in the cell
+   *
+   * Applies the specified horizontal alignment to every paragraph
+   * in this cell.
+   *
+   * @param alignment - Paragraph alignment (left, center, right, both)
+   * @returns This cell for chaining
+   *
+   * @example
+   * ```typescript
+   * cell.setTextAlignment('center');
+   * ```
+   */
+  setTextAlignment(alignment: import('./Paragraph').ParagraphAlignment): this {
+    for (const para of this.paragraphs) {
+      para.setAlignment(alignment);
+    }
+    return this;
+  }
+
+  /**
+   * Sets the style for all paragraphs in the cell
+   *
+   * Applies the specified style ID to every paragraph in this cell.
+   *
+   * @param styleId - Style ID to apply
+   * @returns This cell for chaining
+   *
+   * @example
+   * ```typescript
+   * cell.setAllParagraphsStyle('TableContent');
+   * ```
+   */
+  setAllParagraphsStyle(styleId: string): this {
+    for (const para of this.paragraphs) {
+      para.setStyle(styleId);
+    }
+    return this;
+  }
+
+  /**
+   * Sets font for all runs in the cell
+   *
+   * Applies the specified font to every text run in every paragraph
+   * in this cell.
+   *
+   * @param fontName - Font name to apply
+   * @returns Number of runs modified
+   *
+   * @example
+   * ```typescript
+   * const count = cell.setAllRunsFont('Arial');
+   * ```
+   */
+  setAllRunsFont(fontName: string): number {
+    let count = 0;
+    for (const para of this.paragraphs) {
+      for (const run of para.getRuns()) {
+        run.setFont(fontName);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Sets font size for all runs in the cell
+   *
+   * Applies the specified font size to every text run in every paragraph
+   * in this cell.
+   *
+   * @param size - Font size in half-points (e.g., 24 = 12pt)
+   * @returns Number of runs modified
+   *
+   * @example
+   * ```typescript
+   * const count = cell.setAllRunsSize(22); // 11pt
+   * ```
+   */
+  setAllRunsSize(size: number): number {
+    let count = 0;
+    for (const para of this.paragraphs) {
+      for (const run of para.getRuns()) {
+        run.setSize(size);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Sets color for all runs in the cell
+   *
+   * Applies the specified color to every text run in every paragraph
+   * in this cell.
+   *
+   * @param color - Hex color code (e.g., 'FF0000', '#0000FF')
+   * @returns Number of runs modified
+   *
+   * @example
+   * ```typescript
+   * const count = cell.setAllRunsColor('000000'); // Black
+   * ```
+   */
+  setAllRunsColor(color: string): number {
+    let count = 0;
+    for (const para of this.paragraphs) {
+      for (const run of para.getRuns()) {
+        run.setColor(color);
+        count++;
+      }
+    }
+    return count;
+  }
+
   /**
    * Gets the cell formatting
    * @returns Cell formatting
    */
   getFormatting(): CellFormatting {
     return { ...this.formatting };
+  }
+
+  // ============================================================================
+  // RAW NESTED CONTENT (Tables, SDTs preserved as XML)
+  // ============================================================================
+
+  /**
+   * Adds raw nested content (table or SDT) to the cell
+   * Used during parsing to preserve nested tables that cannot be fully modeled
+   * @param position - Paragraph index after which this content appears (0 = before first paragraph)
+   * @param xml - Raw XML content
+   * @param type - Type of content ('table' or 'sdt')
+   * @returns This cell for chaining
+   */
+  addRawNestedContent(
+    position: number,
+    xml: string,
+    type: "table" | "sdt" = "table"
+  ): this {
+    this.rawNestedContent.push({ position, xml, type });
+    return this;
+  }
+
+  /**
+   * Gets all raw nested content in this cell
+   * @returns Array of raw nested content items
+   */
+  getRawNestedContent(): RawNestedContent[] {
+    return [...this.rawNestedContent];
+  }
+
+  /**
+   * Checks if this cell has any nested tables
+   * @returns True if cell contains nested tables stored as raw XML
+   */
+  hasNestedTables(): boolean {
+    return this.rawNestedContent.some((c) => c.type === "table");
+  }
+
+  /**
+   * Checks if this cell has any raw nested content (tables or SDTs)
+   * @returns True if cell contains any raw nested content
+   */
+  hasRawNestedContent(): boolean {
+    return this.rawNestedContent.length > 0;
+  }
+
+  /**
+   * Clears all raw nested content from this cell
+   * @returns This cell for chaining
+   */
+  clearRawNestedContent(): this {
+    this.rawNestedContent = [];
+    return this;
+  }
+
+  /**
+   * Updates raw nested content at a specific index
+   * Used for revision acceptance in nested tables
+   * @param index - Index in the rawNestedContent array
+   * @param xml - New XML content
+   * @returns True if updated, false if index out of bounds
+   */
+  updateRawNestedContent(index: number, xml: string): boolean {
+    if (index < 0 || index >= this.rawNestedContent.length) {
+      return false;
+    }
+    const item = this.rawNestedContent[index];
+    if (item) {
+      item.xml = xml;
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -651,10 +856,49 @@ export class TableCell {
       cellChildren.push(XMLBuilder.w("tcPr", undefined, tcPrChildren));
     }
 
-    // Add paragraphs (at least one required)
-    if (this.paragraphs.length > 0) {
-      for (const para of this.paragraphs) {
-        cellChildren.push(para.toXML());
+    // Add paragraphs and raw nested content in correct order
+    // Raw nested content (tables, SDTs) are interspersed with paragraphs
+    if (this.paragraphs.length > 0 || this.rawNestedContent.length > 0) {
+      // Sort raw content by position
+      const sortedRaw = [...this.rawNestedContent].sort(
+        (a, b) => a.position - b.position
+      );
+      let rawIndex = 0;
+
+      for (let i = 0; i < this.paragraphs.length; i++) {
+        // Insert any raw content that comes before this paragraph (position <= i)
+        let rawItem = sortedRaw[rawIndex];
+        while (rawIndex < sortedRaw.length && rawItem && rawItem.position <= i) {
+          // Use __rawXml element for passthrough (supported by XMLBuilder)
+          cellChildren.push({
+            name: "__rawXml",
+            rawXml: rawItem.xml,
+          });
+          rawIndex++;
+          rawItem = sortedRaw[rawIndex];
+        }
+        const para = this.paragraphs[i];
+        if (para) {
+          cellChildren.push(para.toXML());
+        }
+      }
+
+      // Insert any remaining raw content after all paragraphs
+      while (rawIndex < sortedRaw.length) {
+        const rawItem = sortedRaw[rawIndex];
+        if (rawItem) {
+          cellChildren.push({
+            name: "__rawXml",
+            rawXml: rawItem.xml,
+          });
+        }
+        rawIndex++;
+      }
+
+      // If we only have raw content and no paragraphs, we need at least one empty paragraph
+      // per ECMA-376 (table cell must contain at least one block-level element)
+      if (this.paragraphs.length === 0) {
+        cellChildren.push(new Paragraph().toXML());
       }
     } else {
       // Empty cell needs at least one empty paragraph

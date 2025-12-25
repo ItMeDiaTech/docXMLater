@@ -3,6 +3,9 @@
  * Extracts content from ZIP archives and converts XML to structured data
  */
 
+import { Bookmark } from "../elements/Bookmark";
+import { BookmarkManager } from "../elements/BookmarkManager";
+import { Comment } from "../elements/Comment";
 import { ComplexField, Field } from "../elements/Field";
 import { isHyperlinkInstruction, parseHyperlinkInstruction } from "../elements/FieldHelpers";
 import { Footer } from "../elements/Footer";
@@ -34,6 +37,7 @@ import {
   logTextDirection,
 } from "../utils/diagnostics";
 import { getGlobalLogger, createScopedLogger, ILogger, defaultLogger } from "../utils/logger";
+import { safeParseInt, isExplicitlySet, parseOoxmlBoolean } from "../utils/parsingHelpers";
 
 // Create scoped logger for DocumentParser operations
 function getLogger(): ILogger {
@@ -69,6 +73,7 @@ type BodyElement =
 export class DocumentParser {
   private parseErrors: ParseError[] = [];
   private strictParsing: boolean;
+  private bookmarkManager: BookmarkManager | null = null;
 
   constructor(strictParsing: boolean = false) {
     this.strictParsing = strictParsing;
@@ -98,7 +103,8 @@ export class DocumentParser {
   async parseDocument(
     zipHandler: ZipHandler,
     relationshipManager: RelationshipManager,
-    imageManager: ImageManager
+    imageManager: ImageManager,
+    bookmarkManager?: BookmarkManager
   ): Promise<{
     bodyElements: BodyElement[];
     properties: DocumentProperties;
@@ -111,6 +117,9 @@ export class DocumentParser {
   }> {
     const logger = getLogger();
     logger.info('Parsing document');
+
+    // Store bookmarkManager for use in parsing methods
+    this.bookmarkManager = bookmarkManager || null;
 
     // Verify the document exists
     const docXml = zipHandler.getFileAsString(DOCX_PATHS.DOCUMENT);
@@ -225,6 +234,54 @@ export class DocumentParser {
       const next = candidates[0];
 
       if (next) {
+        // Check for body-level bookmarkEnd elements BEFORE this element
+        // These appear between the previous element and this one
+        if (bodyElements.length > 0 && next.pos > pos) {
+          const bookmarkEnds = this.extractBodyLevelBookmarkEnds(
+            bodyContent,
+            pos,
+            next.pos
+          );
+          if (bookmarkEnds.length > 0) {
+            // Attach to the previous element
+            const prevElement = bodyElements[bodyElements.length - 1];
+            if (prevElement instanceof Paragraph) {
+              for (const bookmark of bookmarkEnds) {
+                prevElement.addBookmarkEnd(bookmark);
+              }
+            } else if (prevElement instanceof Table) {
+              // For tables, attach to the last paragraph in the last cell
+              const rows = prevElement.getRows();
+              const lastRow = rows[rows.length - 1];
+              if (lastRow) {
+                const cells = lastRow.getCells();
+                const lastCell = cells[cells.length - 1];
+                if (lastCell) {
+                  const cellParas = lastCell.getParagraphs();
+                  const lastPara = cellParas[cellParas.length - 1];
+                  if (lastPara) {
+                    for (const bookmark of bookmarkEnds) {
+                      lastPara.addBookmarkEnd(bookmark);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Check if this element is inside a w:del block (deleted via Track Changes)
+        // If so, skip the entire w:del block including all its content
+        if (this.isPositionInsideDel(bodyContent, next.pos)) {
+          const delEndPos = this.findDelEndPosition(bodyContent, next.pos);
+          if (delEndPos > 0) {
+            pos = delEndPos;
+          } else {
+            pos = next.pos + 1;
+          }
+          continue;
+        }
+
         if (next.type === "p") {
           const elementXml = this.extractSingleElement(
             bodyContent,
@@ -297,6 +354,39 @@ export class DocumentParser {
       }
     }
 
+    // Check for any trailing body-level bookmarkEnd elements after the last element
+    if (bodyElements.length > 0 && pos < bodyContent.length) {
+      const trailingBookmarkEnds = this.extractBodyLevelBookmarkEnds(
+        bodyContent,
+        pos,
+        -1
+      );
+      if (trailingBookmarkEnds.length > 0) {
+        const lastElement = bodyElements[bodyElements.length - 1];
+        if (lastElement instanceof Paragraph) {
+          for (const bookmark of trailingBookmarkEnds) {
+            lastElement.addBookmarkEnd(bookmark);
+          }
+        } else if (lastElement instanceof Table) {
+          const rows = lastElement.getRows();
+          const lastRow = rows[rows.length - 1];
+          if (lastRow) {
+            const cells = lastRow.getCells();
+            const lastCell = cells[cells.length - 1];
+            if (lastCell) {
+              const cellParas = lastCell.getParagraphs();
+              const lastPara = cellParas[cellParas.length - 1];
+              if (lastPara) {
+                for (const bookmark of trailingBookmarkEnds) {
+                  lastPara.addBookmarkEnd(bookmark);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Assemble multi-paragraph complex fields (e.g., TOC fields spanning multiple paragraphs)
     this.assembleMultiParagraphFields(bodyElements);
 
@@ -304,6 +394,75 @@ export class DocumentParser {
     this.validateLoadedContent(bodyElements);
 
     return bodyElements;
+  }
+
+  /**
+   * Extracts body-level bookmarkEnd elements between two positions in the content.
+   * These are bookmarkEnd elements that appear outside of paragraphs/tables.
+   * @param content - The body content XML
+   * @param startPos - Start position to search from
+   * @param endPos - End position to search to (or end of content if -1)
+   * @returns Array of Bookmark objects for the bookmarkEnd elements
+   */
+  private extractBodyLevelBookmarkEnds(
+    content: string,
+    startPos: number,
+    endPos: number
+  ): Bookmark[] {
+    const bookmarks: Bookmark[] = [];
+    const searchContent = endPos === -1
+      ? content.slice(startPos)
+      : content.slice(startPos, endPos);
+
+    // Find all w:bookmarkEnd elements in the region
+    const bookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id="(\d+)"[^>]*\/?>/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = bookmarkEndRegex.exec(searchContent)) !== null) {
+      const idStr = match[1];
+      if (idStr) {
+        const id = parseInt(idStr, 10);
+        if (!isNaN(id)) {
+          const bookmark = new Bookmark({
+            name: `_end_${id}`,
+            id: id,
+            skipNormalization: true,
+          });
+          bookmarks.push(bookmark);
+        }
+      }
+    }
+
+    return bookmarks;
+  }
+
+  /**
+   * Extracts bookmarkEnd elements from any XML content string.
+   * Used for extracting bookmarkEnds between table rows, cells, etc.
+   * @param content - The XML content to search
+   * @returns Array of Bookmark objects for the bookmarkEnd elements
+   */
+  private extractBookmarkEndsFromContent(content: string): Bookmark[] {
+    const bookmarks: Bookmark[] = [];
+    const bookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id="(\d+)"[^>]*\/?>/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = bookmarkEndRegex.exec(content)) !== null) {
+      const idStr = match[1];
+      if (idStr) {
+        const id = parseInt(idStr, 10);
+        if (!isNaN(id)) {
+          const bookmark = new Bookmark({
+            name: `_end_${id}`,
+            id: id,
+            skipNormalization: true,
+          });
+          bookmarks.push(bookmark);
+        }
+      }
+    }
+
+    return bookmarks;
   }
 
   /**
@@ -389,6 +548,103 @@ export class DocumentParser {
 
     // If there are more open tags than close tags, we're inside a table
     return openTableTags > closeTableTags;
+  }
+
+  /**
+   * Checks if a position in the content is inside a BODY-LEVEL w:del element
+   * This is used to skip body-level elements that were deleted via Track Changes.
+   *
+   * IMPORTANT: This only detects body-level deletions (direct children of w:body).
+   * Paragraph-level deletions (w:del inside w:p wrapping w:r runs) are NOT detected
+   * because those are handled separately during run parsing.
+   *
+   * @param content - The body content XML
+   * @param position - Position to check
+   * @returns true if the position is inside a body-level <w:del> element
+   */
+  private isPositionInsideDel(content: string, position: number): boolean {
+    // Look backward to find the most recent <w:del opening tag
+    const beforeContent = content.substring(0, position);
+    const lastDelOpen = beforeContent.lastIndexOf("<w:del");
+
+    if (lastDelOpen === -1) return false;
+
+    // Check if there's a </w:del> between the <w:del and our position
+    const betweenContent = content.substring(lastDelOpen, position);
+    if (betweenContent.includes("</w:del>")) return false;
+
+    // Check if this <w:del is a self-closing tag (no content to skip)
+    // Self-closing format: <w:del ... />
+    const tagEnd = content.indexOf(">", lastDelOpen);
+    if (tagEnd !== -1 && content.charAt(tagEnd - 1) === "/") return false;
+
+    // Now check if this <w:del is BODY-LEVEL (not inside a w:p or w:tbl)
+    // If the <w:del is inside a paragraph or table, it's NOT body-level
+    const contentBeforeDel = content.substring(0, lastDelOpen);
+
+    // Count unclosed <w:p> tags before this <w:del
+    const pOpens = (contentBeforeDel.match(/<w:p[\s>]/g) || []).length;
+    const pCloses = (contentBeforeDel.match(/<\/w:p>/g) || []).length;
+    const insideParagraph = pOpens > pCloses;
+
+    // If we're inside a paragraph, this is NOT a body-level deletion
+    if (insideParagraph) return false;
+
+    // Also check if inside a table (cells can have deletions too)
+    const tblOpens = (contentBeforeDel.match(/<w:tbl[\s>]/g) || []).length;
+    const tblCloses = (contentBeforeDel.match(/<\/w:tbl>/g) || []).length;
+    const insideTable = tblOpens > tblCloses;
+
+    if (insideTable) return false;
+
+    // Also check if inside an SDT (structured document tag)
+    const sdtOpens = (contentBeforeDel.match(/<w:sdt[\s>]/g) || []).length;
+    const sdtCloses = (contentBeforeDel.match(/<\/w:sdt>/g) || []).length;
+    const insideSdt = sdtOpens > sdtCloses;
+
+    if (insideSdt) return false;
+
+    return true; // This is a body-level <w:del>
+  }
+
+  /**
+   * Finds the end position of the w:del element that contains the given position
+   * Returns the position after the closing </w:del> tag
+   * @param content - The body content XML
+   * @param startPos - Position inside the w:del element
+   * @returns Position after the </w:del> tag, or -1 if not found
+   */
+  private findDelEndPosition(content: string, startPos: number): number {
+    // Find the closing </w:del> tag after startPos
+    // We need to handle nested w:del elements correctly
+    let depth = 1;
+    let pos = startPos;
+
+    while (pos < content.length && depth > 0) {
+      const nextOpen = content.indexOf("<w:del", pos);
+      const nextClose = content.indexOf("</w:del>", pos);
+
+      if (nextClose === -1) {
+        // No closing tag found - malformed XML
+        return -1;
+      }
+
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        // Found another opening tag before the close
+        depth++;
+        pos = nextOpen + 6; // Move past "<w:del"
+      } else {
+        // Found a closing tag
+        depth--;
+        if (depth === 0) {
+          // This is our closing tag
+          return nextClose + "</w:del>".length;
+        }
+        pos = nextClose + "</w:del>".length;
+      }
+    }
+
+    return -1;
   }
 
   /**
@@ -512,12 +768,7 @@ export class DocumentParser {
       }
 
       // Parse paragraph properties
-      // DEBUG: Log paragraphs with Bullet in text
       const pPr = pElement["w:pPr"];
-      if (paraXml.includes('Bullet 3') || paraXml.includes('Bullet 4') || paraXml.includes('Bullet 5')) {
-        console.log(`[DEBUG parseParagraphWithOrder] RAW XML: ${paraXml.substring(0, 400)}...`);
-        console.log(`[DEBUG parseParagraphWithOrder] pPr.w:numPr: ${JSON.stringify(pPr?.["w:numPr"])?.substring(0, 200)}`);
-      }
       this.parseParagraphPropertiesFromObject(pPr, paragraph);
 
       // Parse w14:paraId if present
@@ -608,7 +859,7 @@ export class DocumentParser {
 
     // Track children by scanning XML for opening tags
     interface ChildMarker {
-      type: "w:r" | "w:hyperlink" | "w:fldSimple" | "w:ins" | "w:del" | "w:moveFrom" | "w:moveTo";
+      type: "w:r" | "w:hyperlink" | "w:fldSimple" | "w:ins" | "w:del" | "w:moveFrom" | "w:moveTo" | "w:bookmarkStart" | "w:bookmarkEnd";
       pos: number;
       index: number;
     }
@@ -621,6 +872,8 @@ export class DocumentParser {
     let delIndex = 0;
     let moveFromIndex = 0;
     let moveToIndex = 0;
+    let bookmarkStartIndex = 0;
+    let bookmarkEndIndex = 0;
 
     // Helper to find closing tag position for a given tag name starting from position
     const findClosingTagEnd = (content: string, tagName: string, startPos: number): number => {
@@ -702,6 +955,22 @@ export class DocumentParser {
         });
         // Skip past closing tag
         searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "w:moveTo", tagEnd);
+      } else if (tagName === "w:bookmarkStart") {
+        // Bookmark start markers - always self-closing
+        children.push({
+          type: "w:bookmarkStart",
+          pos: tagStart,
+          index: bookmarkStartIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "w:bookmarkEnd") {
+        // Bookmark end markers - always self-closing
+        children.push({
+          type: "w:bookmarkEnd",
+          pos: tagStart,
+          index: bookmarkEndIndex++,
+        });
+        searchPos = tagEnd + 1;
       } else {
         searchPos = tagEnd + 1;
       }
@@ -712,6 +981,8 @@ export class DocumentParser {
     const delXmls = XMLParser.extractElements(paraContent, "w:del");
     const moveFromXmls = XMLParser.extractElements(paraContent, "w:moveFrom");
     const moveToXmls = XMLParser.extractElements(paraContent, "w:moveTo");
+    const bookmarkStartXmls = XMLParser.extractElements(paraContent, "w:bookmarkStart");
+    const bookmarkEndXmls = XMLParser.extractElements(paraContent, "w:bookmarkEnd");
 
     // Helper to extract raw run XML from paraContent using position
     const extractRunXmlAtPosition = (pos: number): string | null => {
@@ -788,12 +1059,19 @@ export class DocumentParser {
           ? [hyperlinks]
           : [];
         if (child.index < hyperlinkArray.length) {
-          const hyperlink = this.parseHyperlinkFromObject(
+          const result = this.parseHyperlinkFromObject(
             hyperlinkArray[child.index],
             relationshipManager
           );
-          if (hyperlink) {
-            paragraph.addHyperlink(hyperlink);
+          if (result.hyperlink) {
+            paragraph.addHyperlink(result.hyperlink);
+          }
+          // Add any bookmarks found inside the hyperlink
+          for (const bookmark of result.bookmarkStarts) {
+            paragraph.addBookmarkStart(bookmark);
+          }
+          for (const bookmark of result.bookmarkEnds) {
+            paragraph.addBookmarkEnd(bookmark);
           }
         }
       } else if (child.type === "w:fldSimple") {
@@ -872,6 +1150,28 @@ export class DocumentParser {
             );
             if (revision) {
               paragraph.addRevision(revision);
+            }
+          }
+        }
+      } else if (child.type === "w:bookmarkStart") {
+        // Parse bookmark start element
+        if (child.index < bookmarkStartXmls.length) {
+          const bookmarkXml = bookmarkStartXmls[child.index];
+          if (bookmarkXml) {
+            const bookmark = this.parseBookmarkStart(bookmarkXml);
+            if (bookmark) {
+              paragraph.addBookmarkStart(bookmark);
+            }
+          }
+        }
+      } else if (child.type === "w:bookmarkEnd") {
+        // Parse bookmark end element
+        if (child.index < bookmarkEndXmls.length) {
+          const bookmarkXml = bookmarkEndXmls[child.index];
+          if (bookmarkXml) {
+            const bookmark = this.parseBookmarkEnd(bookmarkXml);
+            if (bookmark) {
+              paragraph.addBookmarkEnd(bookmark);
             }
           }
         }
@@ -968,17 +1268,24 @@ export class DocumentParser {
       // Parse hyperlinks inside revision (for tracked hyperlink changes)
       for (const hyperlinkXml of hyperlinkXmls) {
         const hyperlinkObj = XMLParser.parseToObject(hyperlinkXml, { trimValues: false });
-        const hyperlink = this.parseHyperlinkFromObject(
+        const result = this.parseHyperlinkFromObject(
           hyperlinkObj["w:hyperlink"],
           relationshipManager
         );
-        if (hyperlink) {
-          content.push(hyperlink);
+        if (result.hyperlink) {
+          content.push(result.hyperlink);
         }
+        // Note: bookmarks inside revisions are not attached to paragraphs
+        // They would need special handling if needed
       }
 
       if (content.length === 0) {
-        return null; // No content in revision
+        // Log debug info for empty revisions (may indicate malformed XML)
+        defaultLogger.debug(
+          "[DocumentParser] Empty revision content skipped",
+          { tagName, id: idAttr, author }
+        );
+        return null;
       }
 
       // Create Revision instance
@@ -997,6 +1304,174 @@ export class DocumentParser {
         "[DocumentParser] Failed to parse revision:",
         error instanceof Error
           ? { message: error.message, stack: error.stack }
+          : { error: String(error) }
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Parses comments from word/comments.xml
+   * @param commentsXml - Raw XML content of comments.xml
+   * @returns Array of parsed Comment objects
+   */
+  parseCommentsXml(commentsXml: string): Comment[] {
+    const comments: Comment[] = [];
+
+    // Extract all w:comment elements
+    const commentXmls = XMLParser.extractElements(commentsXml, "w:comment");
+
+    for (const commentXml of commentXmls) {
+      const comment = this.parseCommentFromXml(commentXml);
+      if (comment) {
+        comments.push(comment);
+      }
+    }
+
+    return comments;
+  }
+
+  /**
+   * Parses a single comment element from XML
+   * @param commentXml - XML string for one w:comment element
+   * @returns Parsed Comment or null
+   */
+  private parseCommentFromXml(commentXml: string): Comment | null {
+    try {
+      // Extract attributes
+      const idAttr = XMLParser.extractAttribute(commentXml, "w:id");
+      const author = XMLParser.extractAttribute(commentXml, "w:author") || "Unknown";
+      const dateAttr = XMLParser.extractAttribute(commentXml, "w:date");
+      const initials = XMLParser.extractAttribute(commentXml, "w:initials");
+      const parentIdAttr = XMLParser.extractAttribute(commentXml, "w:parentId");
+      const doneAttr = XMLParser.extractAttribute(commentXml, "w:done");
+
+      if (!idAttr) {
+        return null; // ID is required
+      }
+
+      const id = parseInt(idAttr, 10);
+      const date = dateAttr ? new Date(dateAttr) : new Date();
+      const parentId = parentIdAttr ? parseInt(parentIdAttr, 10) : undefined;
+      // Per ECMA-376, w:done="1" or "true" indicates resolved
+      const done = doneAttr === "1" || doneAttr === "true";
+
+      // Parse content (runs from paragraphs within the comment)
+      const runs: Run[] = [];
+      const runXmls = XMLParser.extractElements(commentXml, "w:r");
+
+      for (const runXml of runXmls) {
+        const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const run = this.parseRunFromObject(runObj["w:r"] as any);
+        if (run) {
+          runs.push(run);
+        }
+      }
+
+      // Create comment with parsed data
+      const comment = new Comment({
+        id,
+        author,
+        initials: initials || undefined,
+        date,
+        content: runs.length > 0 ? runs : "",
+        parentId,
+        done,
+      });
+
+      return comment;
+    } catch (error) {
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse comment:",
+        error instanceof Error
+          ? { message: error.message }
+          : { error: String(error) }
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Parses a bookmark start element from XML
+   * @param bookmarkXml - Raw XML of the w:bookmarkStart element
+   * @returns Bookmark instance or null
+   */
+  private parseBookmarkStart(bookmarkXml: string): Bookmark | null {
+    try {
+      const idAttr = XMLParser.extractAttribute(bookmarkXml, "w:id");
+      const nameAttr = XMLParser.extractAttribute(bookmarkXml, "w:name");
+
+      if (!idAttr || !nameAttr) {
+        return null; // Required attributes missing
+      }
+
+      const id = parseInt(idAttr, 10);
+
+      // Create bookmark with skipNormalization to preserve original name exactly
+      // (Word allows special characters like = and . in bookmark names)
+      const bookmark = new Bookmark({
+        name: nameAttr,
+        id: id,
+        skipNormalization: true,
+      });
+
+      // Register with BookmarkManager to enable hasBookmark() checks
+      // This prevents duplicate bookmarks when Template_UI adds bookmarks
+      if (this.bookmarkManager) {
+        try {
+          this.bookmarkManager.registerExisting(bookmark);
+        } catch (e) {
+          // Bookmark might already be registered (duplicate in source doc)
+          // Just log debug, don't fail - the bookmark is still valid for output
+          defaultLogger.debug(
+            "[DocumentParser] Bookmark already registered:",
+            { name: nameAttr, id: id }
+          );
+        }
+      }
+
+      return bookmark;
+    } catch (error) {
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse bookmark start:",
+        error instanceof Error
+          ? { message: error.message }
+          : { error: String(error) }
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Parses a bookmark end element from XML
+   * @param bookmarkXml - Raw XML of the w:bookmarkEnd element
+   * @returns Bookmark instance or null
+   */
+  private parseBookmarkEnd(bookmarkXml: string): Bookmark | null {
+    try {
+      const idAttr = XMLParser.extractAttribute(bookmarkXml, "w:id");
+
+      if (!idAttr) {
+        return null; // Required attribute missing
+      }
+
+      const id = parseInt(idAttr, 10);
+
+      // Create a placeholder bookmark for the end marker
+      // The name doesn't matter for bookmarkEnd as it only uses the ID
+      const bookmark = new Bookmark({
+        name: `_end_${id}`,
+        id: id,
+        skipNormalization: true,
+      });
+
+      return bookmark;
+    } catch (error) {
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse bookmark end:",
+        error instanceof Error
+          ? { message: error.message }
           : { error: String(error) }
       );
       return null;
@@ -1064,12 +1539,19 @@ export class DocumentParser {
               ? [hyperlinks]
               : [];
             if (elementIndex < hyperlinkArray.length) {
-              const hyperlink = this.parseHyperlinkFromObject(
+              const result = this.parseHyperlinkFromObject(
                 hyperlinkArray[elementIndex],
                 relationshipManager
               );
-              if (hyperlink) {
-                paragraph.addHyperlink(hyperlink);
+              if (result.hyperlink) {
+                paragraph.addHyperlink(result.hyperlink);
+              }
+              // Add any bookmarks found inside the hyperlink
+              for (const bookmark of result.bookmarkStarts) {
+                paragraph.addBookmarkStart(bookmark);
+              }
+              for (const bookmark of result.bookmarkEnds) {
+                paragraph.addBookmarkEnd(bookmark);
               }
             }
           } else if (elementType === "w:fldSimple") {
@@ -1127,12 +1609,19 @@ export class DocumentParser {
           : [];
 
         for (const hyperlinkObj of hyperlinkChildren) {
-          const hyperlink = this.parseHyperlinkFromObject(
+          const result = this.parseHyperlinkFromObject(
             hyperlinkObj,
             relationshipManager
           );
-          if (hyperlink) {
-            paragraph.addHyperlink(hyperlink);
+          if (result.hyperlink) {
+            paragraph.addHyperlink(result.hyperlink);
+          }
+          // Add any bookmarks found inside the hyperlink
+          for (const bookmark of result.bookmarkStarts) {
+            paragraph.addBookmarkStart(bookmark);
+          }
+          for (const bookmark of result.bookmarkEnds) {
+            paragraph.addBookmarkEnd(bookmark);
           }
         }
 
@@ -1197,26 +1686,30 @@ export class DocumentParser {
     }
 
     // Indentation
+    // Note: XMLParser converts numeric strings to numbers, so "0" becomes 0 (falsy)
+    // Must use !== undefined check instead of truthy check to handle left="0"
     if (pPrObj["w:ind"]) {
       const ind = pPrObj["w:ind"];
-      if (ind["@_w:left"])
-        paragraph.setLeftIndent(parseInt(ind["@_w:left"], 10));
-      if (ind["@_w:right"])
-        paragraph.setRightIndent(parseInt(ind["@_w:right"], 10));
-      if (ind["@_w:firstLine"])
-        paragraph.setFirstLineIndent(parseInt(ind["@_w:firstLine"], 10));
+      // Use isExplicitlySet and safeParseInt for robust zero-value handling
+      if (isExplicitlySet(ind["@_w:left"]))
+        paragraph.setLeftIndent(safeParseInt(ind["@_w:left"]));
+      if (isExplicitlySet(ind["@_w:right"]))
+        paragraph.setRightIndent(safeParseInt(ind["@_w:right"]));
+      if (isExplicitlySet(ind["@_w:firstLine"]))
+        paragraph.setFirstLineIndent(safeParseInt(ind["@_w:firstLine"]));
     }
 
     // Spacing
     if (pPrObj["w:spacing"]) {
       const spacing = pPrObj["w:spacing"];
-      if (spacing["@_w:before"])
-        paragraph.setSpaceBefore(parseInt(spacing["@_w:before"], 10));
-      if (spacing["@_w:after"])
-        paragraph.setSpaceAfter(parseInt(spacing["@_w:after"], 10));
-      if (spacing["@_w:line"]) {
+      // Use isExplicitlySet to properly handle 0 values (0 spacing is valid)
+      if (isExplicitlySet(spacing["@_w:before"]))
+        paragraph.setSpaceBefore(safeParseInt(spacing["@_w:before"]));
+      if (isExplicitlySet(spacing["@_w:after"]))
+        paragraph.setSpaceAfter(safeParseInt(spacing["@_w:after"]));
+      if (isExplicitlySet(spacing["@_w:line"])) {
         paragraph.setLineSpacing(
-          parseInt(spacing["@_w:line"], 10),
+          safeParseInt(spacing["@_w:line"]),
           spacing["@_w:lineRule"]
         );
       }
@@ -1244,10 +1737,6 @@ export class DocumentParser {
       const numPr = Array.isArray(numPrRaw) ? numPrRaw[0] : numPrRaw;
       const numId = numPr?.["w:numId"]?.["@_w:val"];
       const ilvl = numPr?.["w:ilvl"]?.["@_w:val"] || "0";
-      // DEBUG
-      console.log('[DEBUG] numPrRaw:', JSON.stringify(numPrRaw).substring(0, 100));
-      console.log('[DEBUG] numPr:', JSON.stringify(numPr).substring(0, 100));
-      console.log('[DEBUG] numId:', numId, 'ilvl:', ilvl);
       if (numId) {
         paragraph.setNumbering(parseInt(numId, 10), parseInt(ilvl, 10));
       }
@@ -1409,30 +1898,28 @@ export class DocumentParser {
     if (pPrObj["w:framePr"]) {
       const framePr = pPrObj["w:framePr"];
       const frameProps: any = {};
-      if (framePr["@_w:w"]) frameProps.w = parseInt(framePr["@_w:w"], 10);
-      if (framePr["@_w:h"]) frameProps.h = parseInt(framePr["@_w:h"], 10);
+      // Use isExplicitlySet for numeric values to properly handle 0
+      if (isExplicitlySet(framePr["@_w:w"])) frameProps.w = safeParseInt(framePr["@_w:w"]);
+      if (isExplicitlySet(framePr["@_w:h"])) frameProps.h = safeParseInt(framePr["@_w:h"]);
       if (framePr["@_w:hRule"]) frameProps.hRule = framePr["@_w:hRule"];
-      if (framePr["@_w:x"]) frameProps.x = parseInt(framePr["@_w:x"], 10);
-      if (framePr["@_w:y"]) frameProps.y = parseInt(framePr["@_w:y"], 10);
+      if (isExplicitlySet(framePr["@_w:x"])) frameProps.x = safeParseInt(framePr["@_w:x"]);
+      if (isExplicitlySet(framePr["@_w:y"])) frameProps.y = safeParseInt(framePr["@_w:y"]);
       if (framePr["@_w:xAlign"]) frameProps.xAlign = framePr["@_w:xAlign"];
       if (framePr["@_w:yAlign"]) frameProps.yAlign = framePr["@_w:yAlign"];
       if (framePr["@_w:hAnchor"]) frameProps.hAnchor = framePr["@_w:hAnchor"];
       if (framePr["@_w:vAnchor"]) frameProps.vAnchor = framePr["@_w:vAnchor"];
-      if (framePr["@_w:hSpace"])
-        frameProps.hSpace = parseInt(framePr["@_w:hSpace"], 10);
-      if (framePr["@_w:vSpace"])
-        frameProps.vSpace = parseInt(framePr["@_w:vSpace"], 10);
+      if (isExplicitlySet(framePr["@_w:hSpace"]))
+        frameProps.hSpace = safeParseInt(framePr["@_w:hSpace"]);
+      if (isExplicitlySet(framePr["@_w:vSpace"]))
+        frameProps.vSpace = safeParseInt(framePr["@_w:vSpace"]);
       if (framePr["@_w:wrap"]) frameProps.wrap = framePr["@_w:wrap"];
       if (framePr["@_w:dropCap"]) frameProps.dropCap = framePr["@_w:dropCap"];
-      if (framePr["@_w:lines"])
-        frameProps.lines = parseInt(framePr["@_w:lines"], 10);
-      if (framePr["@_w:anchorLock"] !== undefined) {
-        const anchorLockVal = framePr["@_w:anchorLock"];
-        frameProps.anchorLock =
-          anchorLockVal === "1" ||
-          anchorLockVal === "true" ||
-          anchorLockVal === true ||
-          anchorLockVal === 1;
+      if (isExplicitlySet(framePr["@_w:lines"]))
+        frameProps.lines = safeParseInt(framePr["@_w:lines"]);
+      if (isExplicitlySet(framePr["@_w:anchorLock"])) {
+        // Use parseOoxmlBoolean-style check for attribute value
+        const val = framePr["@_w:anchorLock"];
+        frameProps.anchorLock = val === "1" || val === 1 || val === "true" || val === true || val === "on";
       }
       if (Object.keys(frameProps).length > 0) {
         paragraph.setFrameProperties(frameProps);
@@ -1541,6 +2028,128 @@ export class DocumentParser {
         }
         if (prevPPr["w:pageBreakBefore"]) {
           previousProperties.pageBreakBefore = prevPPr["w:pageBreakBefore"]["@_w:val"] !== "0";
+        }
+
+        // === Extended paragraph property parsing per ECMA-376 Part 1 §17.3.1 ===
+
+        // Parse widowControl (w:widowControl) - orphan/widow control
+        if (prevPPr["w:widowControl"]) {
+          previousProperties.widowControl = prevPPr["w:widowControl"]["@_w:val"] !== "0";
+        }
+
+        // Parse suppressAutoHyphens (w:suppressAutoHyphens)
+        if (prevPPr["w:suppressAutoHyphens"]) {
+          previousProperties.suppressAutoHyphens = prevPPr["w:suppressAutoHyphens"]["@_w:val"] !== "0";
+        }
+
+        // Parse contextualSpacing (w:contextualSpacing)
+        if (prevPPr["w:contextualSpacing"]) {
+          previousProperties.contextualSpacing = prevPPr["w:contextualSpacing"]["@_w:val"] !== "0";
+        }
+
+        // Parse mirrorIndents (w:mirrorIndents)
+        if (prevPPr["w:mirrorIndents"]) {
+          previousProperties.mirrorIndents = prevPPr["w:mirrorIndents"]["@_w:val"] !== "0";
+        }
+
+        // Parse outlineLevel (w:outlineLvl @w:val)
+        if (prevPPr["w:outlineLvl"]?.["@_w:val"] !== undefined) {
+          previousProperties.outlineLevel = parseInt(prevPPr["w:outlineLvl"]["@_w:val"], 10);
+        }
+
+        // Parse bidi (w:bidi) - right-to-left paragraph
+        if (prevPPr["w:bidi"]) {
+          previousProperties.bidi = prevPPr["w:bidi"]["@_w:val"] !== "0";
+        }
+
+        // Parse suppressLineNumbers (w:suppressLineNumbers)
+        if (prevPPr["w:suppressLineNumbers"]) {
+          previousProperties.suppressLineNumbers = prevPPr["w:suppressLineNumbers"]["@_w:val"] !== "0";
+        }
+
+        // Parse adjustRightInd (w:adjustRightInd)
+        if (prevPPr["w:adjustRightInd"]) {
+          previousProperties.adjustRightInd = prevPPr["w:adjustRightInd"]["@_w:val"] !== "0";
+        }
+
+        // Parse snapToGrid (w:snapToGrid)
+        if (prevPPr["w:snapToGrid"]) {
+          previousProperties.snapToGrid = prevPPr["w:snapToGrid"]["@_w:val"] !== "0";
+        }
+
+        // Parse wordWrap (w:wordWrap)
+        if (prevPPr["w:wordWrap"]) {
+          previousProperties.wordWrap = prevPPr["w:wordWrap"]["@_w:val"] !== "0";
+        }
+
+        // Parse autoSpaceDE (w:autoSpaceDE) - East Asian/numeric spacing
+        if (prevPPr["w:autoSpaceDE"]) {
+          previousProperties.autoSpaceDE = prevPPr["w:autoSpaceDE"]["@_w:val"] !== "0";
+        }
+
+        // Parse autoSpaceDN (w:autoSpaceDN) - East Asian/Western spacing
+        if (prevPPr["w:autoSpaceDN"]) {
+          previousProperties.autoSpaceDN = prevPPr["w:autoSpaceDN"]["@_w:val"] !== "0";
+        }
+
+        // Parse textDirection (w:textDirection @w:val)
+        if (prevPPr["w:textDirection"]?.["@_w:val"]) {
+          previousProperties.textDirection = String(prevPPr["w:textDirection"]["@_w:val"]);
+        }
+
+        // Parse paragraph borders (w:pBdr) per ECMA-376 Part 1 §17.3.1.24
+        if (prevPPr["w:pBdr"]) {
+          const pBdr = prevPPr["w:pBdr"];
+          previousProperties.borders = {};
+
+          const parseBorder = (borderObj: any) => {
+            if (!borderObj) return undefined;
+            return {
+              val: borderObj["@_w:val"],
+              sz: borderObj["@_w:sz"] !== undefined ? parseInt(borderObj["@_w:sz"], 10) : undefined,
+              space: borderObj["@_w:space"] !== undefined ? parseInt(borderObj["@_w:space"], 10) : undefined,
+              color: borderObj["@_w:color"],
+              themeColor: borderObj["@_w:themeColor"],
+            };
+          };
+
+          if (pBdr["w:top"]) previousProperties.borders.top = parseBorder(pBdr["w:top"]);
+          if (pBdr["w:bottom"]) previousProperties.borders.bottom = parseBorder(pBdr["w:bottom"]);
+          if (pBdr["w:left"]) previousProperties.borders.left = parseBorder(pBdr["w:left"]);
+          if (pBdr["w:right"]) previousProperties.borders.right = parseBorder(pBdr["w:right"]);
+          if (pBdr["w:between"]) previousProperties.borders.between = parseBorder(pBdr["w:between"]);
+          if (pBdr["w:bar"]) previousProperties.borders.bar = parseBorder(pBdr["w:bar"]);
+
+          // Clean up empty borders object
+          if (Object.keys(previousProperties.borders).length === 0) {
+            delete previousProperties.borders;
+          }
+        }
+
+        // Parse paragraph shading (w:shd) per ECMA-376 Part 1 §17.3.1.32
+        if (prevPPr["w:shd"]) {
+          const shd = prevPPr["w:shd"];
+          previousProperties.shading = {
+            fill: shd["@_w:fill"],
+            color: shd["@_w:color"],
+            val: shd["@_w:val"],
+            themeFill: shd["@_w:themeFill"],
+            themeColor: shd["@_w:themeColor"],
+          };
+        }
+
+        // Parse tab stops (w:tabs) per ECMA-376 Part 1 §17.3.1.38
+        if (prevPPr["w:tabs"]) {
+          const tabsObj = prevPPr["w:tabs"];
+          const tabArray = tabsObj["w:tab"];
+          if (tabArray) {
+            const tabs = Array.isArray(tabArray) ? tabArray : [tabArray];
+            previousProperties.tabs = tabs.map((tab: any) => ({
+              val: tab["@_w:val"],
+              pos: tab["@_w:pos"] !== undefined ? parseInt(tab["@_w:pos"], 10) : undefined,
+              leader: tab["@_w:leader"],
+            }));
+          }
         }
 
         if (Object.keys(previousProperties).length > 0) {
@@ -1724,6 +2333,11 @@ export class DocumentParser {
             // This run is part of the field result - collect it
             fieldRuns.push(item);
             fieldState = "result";
+          } else if (fieldState === "begin" || fieldState === "instruction") {
+            // We're in the middle of parsing field instruction
+            // Empty runs between begin and separate should be preserved as part of the field
+            // (Word sometimes inserts empty formatting runs in field code sections)
+            fieldRuns.push(item);
           } else if (fieldRuns.length > 0) {
             // Incomplete field - add as individual runs
             fieldRuns.forEach((run) => groupedContent.push(run));
@@ -2329,6 +2943,14 @@ export class DocumentParser {
           switch (elementType) {
             case "w:t": {
               const textElements = toArray(runObj["w:t"]);
+              // Bounds check with debug logging for malformed documents
+              if (elementIndex >= textElements.length) {
+                defaultLogger.debug(
+                  "[DocumentParser] Invalid _orderedChildren index for w:t",
+                  { index: elementIndex, arrayLength: textElements.length }
+                );
+                break;
+              }
               const te = textElements[elementIndex];
               if (te !== undefined && te !== null) {
                 const text = extractTextValue(te);
@@ -2341,6 +2963,14 @@ export class DocumentParser {
 
             case "w:instrText": {
               const instrElements = toArray(runObj["w:instrText"]);
+              // Bounds check with debug logging for malformed documents
+              if (elementIndex >= instrElements.length) {
+                defaultLogger.debug(
+                  "[DocumentParser] Invalid _orderedChildren index for w:instrText",
+                  { index: elementIndex, arrayLength: instrElements.length }
+                );
+                break;
+              }
               const instr = instrElements[elementIndex];
               if (instr !== undefined && instr !== null) {
                 const text = extractTextValue(instr);
@@ -2351,6 +2981,14 @@ export class DocumentParser {
 
             case "w:fldChar": {
               const fldChars = toArray(runObj["w:fldChar"]);
+              // Bounds check with debug logging for malformed documents
+              if (elementIndex >= fldChars.length) {
+                defaultLogger.debug(
+                  "[DocumentParser] Invalid _orderedChildren index for w:fldChar",
+                  { index: elementIndex, arrayLength: fldChars.length }
+                );
+                break;
+              }
               const fldChar = fldChars[elementIndex];
               if (fldChar && typeof fldChar === "object") {
                 const charType = (fldChar["@_w:fldCharType"] ||
@@ -2406,6 +3044,7 @@ export class DocumentParser {
         }
       } else {
         // Fallback: No _orderedChildren (older parser or simple run with single text)
+        console.warn('[DocumentParser] _orderedChildren missing - using fallback element ordering which may affect tab/break positions');
         // Extract text elements (can be array if multiple <w:t> in one run)
         const textElement = runObj["w:t"];
         if (textElement !== undefined && textElement !== null) {
@@ -2503,8 +3142,63 @@ export class DocumentParser {
   private parseHyperlinkFromObject(
     hyperlinkObj: any,
     relationshipManager: RelationshipManager
-  ): Hyperlink | null {
+  ): {
+    hyperlink: Hyperlink | null;
+    bookmarkStarts: Bookmark[];
+    bookmarkEnds: Bookmark[];
+  } {
+    const result: {
+      hyperlink: Hyperlink | null;
+      bookmarkStarts: Bookmark[];
+      bookmarkEnds: Bookmark[];
+    } = { hyperlink: null, bookmarkStarts: [], bookmarkEnds: [] };
+
     try {
+      // Extract bookmark elements inside the hyperlink
+      // These need to be added to the containing paragraph
+      if (hyperlinkObj["w:bookmarkStart"]) {
+        const bookmarkStarts = Array.isArray(hyperlinkObj["w:bookmarkStart"])
+          ? hyperlinkObj["w:bookmarkStart"]
+          : [hyperlinkObj["w:bookmarkStart"]];
+        for (const bs of bookmarkStarts) {
+          const id = bs["@_w:id"];
+          const name = bs["@_w:name"];
+          if (id !== undefined && name) {
+            const bookmark = new Bookmark({
+              name: name,
+              id: typeof id === "number" ? id : parseInt(id, 10),
+              skipNormalization: true,
+            });
+            result.bookmarkStarts.push(bookmark);
+            // Also register with BookmarkManager
+            if (this.bookmarkManager) {
+              try {
+                this.bookmarkManager.registerExisting(bookmark);
+              } catch {
+                // Already registered
+              }
+            }
+          }
+        }
+      }
+
+      if (hyperlinkObj["w:bookmarkEnd"]) {
+        const bookmarkEnds = Array.isArray(hyperlinkObj["w:bookmarkEnd"])
+          ? hyperlinkObj["w:bookmarkEnd"]
+          : [hyperlinkObj["w:bookmarkEnd"]];
+        for (const be of bookmarkEnds) {
+          const id = be["@_w:id"];
+          if (id !== undefined) {
+            const bookmark = new Bookmark({
+              name: `_end_${id}`,
+              id: typeof id === "number" ? id : parseInt(id, 10),
+              skipNormalization: true,
+            });
+            result.bookmarkEnds.push(bookmark);
+          }
+        }
+      }
+
       // Extract hyperlink attributes
       const relationshipId = hyperlinkObj["@_r:id"];
       const anchor = hyperlinkObj["@_w:anchor"];
@@ -2608,7 +3302,8 @@ export class DocumentParser {
         hyperlink.setRun(parsedRun);
       }
 
-      return hyperlink;
+      result.hyperlink = hyperlink;
+      return result;
     } catch (error) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse hyperlink:",
@@ -2616,14 +3311,17 @@ export class DocumentParser {
           ? { message: error.message, stack: error.stack }
           : { error: String(error) }
       );
-      return null;
+      return result;
     }
   }
 
   /**
-   * Merges hyperlinks with the same URL into a single hyperlink (handles fragmentation)
+   * Merges TRULY consecutive hyperlinks with the same URL into a single hyperlink
    * This handles Google Docs-style hyperlinks that are split by formatting changes
-   * Now enhanced to merge non-consecutive hyperlinks with the same URL
+   *
+   * IMPORTANT: Only merges hyperlinks that are IMMEDIATELY adjacent (no content between them).
+   * Hyperlinks with the same URL but with intervening text/runs are NOT merged.
+   *
    * @param paragraph - Paragraph containing hyperlinks to merge
    * @param resetFormatting - Whether to reset hyperlinks to standard formatting
    * @private
@@ -2635,65 +3333,42 @@ export class DocumentParser {
     const content = paragraph.getContent();
     if (!content || content.length < 2) return;
 
-    // First pass: Group all hyperlinks by URL/anchor
-    const hyperlinkGroups = new Map<string, any[]>();
-    const nonHyperlinkItems: { item: any; index: number }[] = [];
-    const hyperlinkIndices = new Map<any, number>();
-
-    for (let i = 0; i < content.length; i++) {
-      const item = content[i];
-
-      if (item instanceof Hyperlink) {
-        const url = item.getUrl() || "";
-        const anchor = item.getAnchor() || "";
-        const key = `${url}|${anchor}`; // Unique key for URL+anchor combination
-
-        if (!hyperlinkGroups.has(key)) {
-          hyperlinkGroups.set(key, []);
-        }
-        hyperlinkGroups.get(key)!.push(item);
-        hyperlinkIndices.set(item, i);
-      } else {
-        nonHyperlinkItems.push({ item, index: i });
-      }
-    }
-
-    // Check if any merging is needed
-    let needsMerge = false;
-    for (const group of hyperlinkGroups.values()) {
-      if (group.length > 1) {
-        needsMerge = true;
-        break;
-      }
-    }
-
-    if (!needsMerge && !resetFormatting) {
-      return; // Nothing to do
-    }
-
-    // Second pass: Build merged content preserving original order
     const mergedContent: any[] = [];
-    const processedIndices = new Set<number>();
+    let i = 0;
+    let contentChanged = false;
 
-    for (let i = 0; i < content.length; i++) {
-      if (processedIndices.has(i)) {
-        continue; // Skip already processed items
-      }
-
+    while (i < content.length) {
       const item = content[i];
 
       if (item instanceof Hyperlink) {
+        // Look ahead to find CONSECUTIVE hyperlinks with the same URL/anchor
         const url = item.getUrl() || "";
         const anchor = item.getAnchor() || "";
-        const key = `${url}|${anchor}`;
-        const group = hyperlinkGroups.get(key)!;
+        const consecutiveHyperlinks: Hyperlink[] = [item];
+        let j = i + 1;
 
-        if (group.length > 1 && group[0] === item) {
-          // This is the first hyperlink in a group that needs merging
-          // Collect all text from the group
-          const mergedText = group.map((h) => h.getText()).join("");
+        // Only merge if IMMEDIATELY adjacent (next item is also a hyperlink with same URL)
+        while (j < content.length) {
+          const nextItem = content[j];
+          if (
+            nextItem instanceof Hyperlink &&
+            (nextItem.getUrl() || "") === url &&
+            (nextItem.getAnchor() || "") === anchor
+          ) {
+            consecutiveHyperlinks.push(nextItem);
+            j++;
+          } else {
+            // Stop at first non-matching item (including non-hyperlink items)
+            break;
+          }
+        }
 
-          // Create merged hyperlink using first hyperlink's properties
+        if (consecutiveHyperlinks.length > 1) {
+          // Merge consecutive hyperlinks
+          const mergedText = consecutiveHyperlinks
+            .map((h) => h.getText())
+            .join("");
+
           const mergedHyperlink = new Hyperlink({
             url: item.getUrl(),
             anchor: item.getAnchor(),
@@ -2704,15 +3379,10 @@ export class DocumentParser {
             tooltip: item.getTooltip(),
             relationshipId: item.getRelationshipId(),
           });
-
-          // Mark all group members as processed
-          for (const h of group) {
-            processedIndices.add(hyperlinkIndices.get(h)!);
-          }
-
           mergedContent.push(mergedHyperlink);
-        } else if (group.length === 1) {
-          // Single hyperlink, possibly reset formatting
+          contentChanged = true;
+        } else {
+          // Single hyperlink (no consecutive ones to merge)
           if (resetFormatting) {
             const resetHyperlink = new Hyperlink({
               url: item.getUrl(),
@@ -2723,20 +3393,21 @@ export class DocumentParser {
               relationshipId: item.getRelationshipId(),
             });
             mergedContent.push(resetHyperlink);
+            contentChanged = true;
           } else {
             mergedContent.push(item);
           }
-          processedIndices.add(i);
         }
+        i = j;
       } else {
         // Not a hyperlink, keep as-is
         mergedContent.push(item);
-        processedIndices.add(i);
+        i++;
       }
     }
 
-    // Update paragraph content if we changed anything
-    if (needsMerge || resetFormatting) {
+    // Update paragraph content only if we actually changed something
+    if (contentChanged) {
       // Clear current content
       paragraph.clearContent();
 
@@ -2754,12 +3425,11 @@ export class DocumentParser {
   }
 
   /**
-   * Get standard hyperlink formatting (Calibri, blue, underline)
+   * Get standard hyperlink formatting (blue, underline)
    * @private
    */
   private getStandardHyperlinkFormatting(): any {
     return {
-      font: "Verdana",
       color: "0000FF", // Standard hyperlink blue
       underline: "single",
     };
@@ -2877,30 +3547,20 @@ export class DocumentParser {
     // Parse special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
     if (rPrObj["w:specVanish"]) run.setSpecVanish(true);
 
-    // Boolean properties - check w:val attribute
+    // Boolean properties - use parseOoxmlBoolean helper
     // Per ECMA-376: <w:b/> or <w:b w:val="1"/> or <w:b w:val="true"/> means true
     // <w:b w:val="0"/> or <w:b w:val="false"/> means false (omit from document)
-    const checkBooleanProp = (prop: any): boolean => {
-      if (!prop) return false;
-      const val = prop["@_w:val"];
-      // If no w:val attribute, self-closing tag means true
-      if (val === undefined) return true;
-      // Check for explicit true/false values (string or number)
-      // Note: XMLParser converts "1" to number 1, "0" to number 0
-      return val === "1" || val === 1 || val === "true" || val === true;
-    };
 
     // Parse RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
-    // FIX: Use checkBooleanProp to correctly handle w:val="0" (LTR) vs w:val="1" (RTL)
-    if (checkBooleanProp(rPrObj["w:rtl"])) run.setRTL(true);
+    if (parseOoxmlBoolean(rPrObj["w:rtl"])) run.setRTL(true);
 
-    if (checkBooleanProp(rPrObj["w:b"])) run.setBold(true);
-    if (checkBooleanProp(rPrObj["w:bCs"])) run.setComplexScriptBold(true);
-    if (checkBooleanProp(rPrObj["w:i"])) run.setItalic(true);
-    if (checkBooleanProp(rPrObj["w:iCs"])) run.setComplexScriptItalic(true);
-    if (checkBooleanProp(rPrObj["w:strike"])) run.setStrike(true);
-    if (checkBooleanProp(rPrObj["w:smallCaps"])) run.setSmallCaps(true);
-    if (checkBooleanProp(rPrObj["w:caps"])) run.setAllCaps(true);
+    if (parseOoxmlBoolean(rPrObj["w:b"])) run.setBold(true);
+    if (parseOoxmlBoolean(rPrObj["w:bCs"])) run.setComplexScriptBold(true);
+    if (parseOoxmlBoolean(rPrObj["w:i"])) run.setItalic(true);
+    if (parseOoxmlBoolean(rPrObj["w:iCs"])) run.setComplexScriptItalic(true);
+    if (parseOoxmlBoolean(rPrObj["w:strike"])) run.setStrike(true);
+    if (parseOoxmlBoolean(rPrObj["w:smallCaps"])) run.setSmallCaps(true);
+    if (parseOoxmlBoolean(rPrObj["w:caps"])) run.setAllCaps(true);
 
     if (rPrObj["w:u"]) {
       // XMLParser adds @_ prefix to attributes
@@ -2992,6 +3652,244 @@ export class DocumentParser {
 
     if (rPrObj["w:highlight"]) {
       run.setHighlight(rPrObj["w:highlight"]["@_w:val"]);
+    }
+
+    // Parse run property change tracking (w:rPrChange) per ECMA-376 Part 1 §17.13.5.30
+    // This records what the run formatting was BEFORE a change was made
+    if (rPrObj["w:rPrChange"]) {
+      const changeObj = rPrObj["w:rPrChange"];
+      const propChange: import("../elements/PropertyChangeTypes").RunPropertyChange = {
+        id: changeObj["@_w:id"] !== undefined ? parseInt(String(changeObj["@_w:id"]), 10) : 0,
+        author: changeObj["@_w:author"] ? String(changeObj["@_w:author"]) : "",
+        date: changeObj["@_w:date"] ? new Date(String(changeObj["@_w:date"])) : new Date(),
+        previousProperties: {},
+      };
+
+      // Parse previous run properties from child w:rPr element
+      if (changeObj["w:rPr"]) {
+        const prevRPr = changeObj["w:rPr"];
+        const prevProps: Partial<import("../elements/Run").RunFormatting> = {};
+
+        // Parse previous bold
+        if (prevRPr["w:b"]) {
+          prevProps.bold = parseOoxmlBoolean(prevRPr["w:b"]);
+        }
+
+        // Parse previous italic
+        if (prevRPr["w:i"]) {
+          prevProps.italic = parseOoxmlBoolean(prevRPr["w:i"]);
+        }
+
+        // Parse previous underline
+        if (prevRPr["w:u"]) {
+          const uVal = prevRPr["w:u"]["@_w:val"];
+          prevProps.underline = uVal || true;
+        }
+
+        // Parse previous strikethrough
+        if (prevRPr["w:strike"]) {
+          prevProps.strike = parseOoxmlBoolean(prevRPr["w:strike"]);
+        }
+
+        // Parse previous font
+        if (prevRPr["w:rFonts"]) {
+          prevProps.font = prevRPr["w:rFonts"]["@_w:ascii"];
+        }
+
+        // Parse previous size (half-points to points)
+        if (prevRPr["w:sz"]) {
+          prevProps.size = safeParseInt(prevRPr["w:sz"]["@_w:val"]) / 2;
+        }
+
+        // Parse previous color
+        if (prevRPr["w:color"]) {
+          const colorVal = prevRPr["w:color"]["@_w:val"];
+          if (colorVal && colorVal !== "auto") {
+            prevProps.color = colorVal;
+          }
+        }
+
+        // Parse previous highlight
+        if (prevRPr["w:highlight"]) {
+          prevProps.highlight = prevRPr["w:highlight"]["@_w:val"];
+        }
+
+        // Parse previous subscript/superscript
+        if (prevRPr["w:vertAlign"]) {
+          const val = prevRPr["w:vertAlign"]["@_w:val"];
+          if (val === "subscript") prevProps.subscript = true;
+          if (val === "superscript") prevProps.superscript = true;
+        }
+
+        // Parse previous smallCaps/allCaps
+        if (prevRPr["w:smallCaps"]) {
+          prevProps.smallCaps = parseOoxmlBoolean(prevRPr["w:smallCaps"]);
+        }
+        if (prevRPr["w:caps"]) {
+          prevProps.allCaps = parseOoxmlBoolean(prevRPr["w:caps"]);
+        }
+
+        // === Extended run property parsing per ECMA-376 Part 1 §17.3.2 ===
+
+        // Parse double strikethrough (w:dstrike)
+        if (prevRPr["w:dstrike"]) {
+          prevProps.dstrike = parseOoxmlBoolean(prevRPr["w:dstrike"]);
+        }
+
+        // Parse text effects (w:outline, w:shadow, w:emboss, w:imprint)
+        if (prevRPr["w:outline"]) {
+          prevProps.outline = parseOoxmlBoolean(prevRPr["w:outline"]);
+        }
+        if (prevRPr["w:shadow"]) {
+          prevProps.shadow = parseOoxmlBoolean(prevRPr["w:shadow"]);
+        }
+        if (prevRPr["w:emboss"]) {
+          prevProps.emboss = parseOoxmlBoolean(prevRPr["w:emboss"]);
+        }
+        if (prevRPr["w:imprint"]) {
+          prevProps.imprint = parseOoxmlBoolean(prevRPr["w:imprint"]);
+        }
+
+        // Parse vanish/hidden text (w:vanish, w:specVanish)
+        if (prevRPr["w:vanish"]) {
+          prevProps.vanish = parseOoxmlBoolean(prevRPr["w:vanish"]);
+        }
+        if (prevRPr["w:specVanish"]) {
+          prevProps.specVanish = parseOoxmlBoolean(prevRPr["w:specVanish"]);
+        }
+
+        // Parse RTL and no-proofing (w:rtl, w:noProof)
+        if (prevRPr["w:rtl"]) {
+          prevProps.rtl = parseOoxmlBoolean(prevRPr["w:rtl"]);
+        }
+        if (prevRPr["w:noProof"]) {
+          prevProps.noProof = parseOoxmlBoolean(prevRPr["w:noProof"]);
+        }
+
+        // Parse snap to grid (w:snapToGrid)
+        if (prevRPr["w:snapToGrid"]) {
+          prevProps.snapToGrid = parseOoxmlBoolean(prevRPr["w:snapToGrid"]);
+        }
+
+        // Parse complex script bold/italic (w:bCs, w:iCs)
+        if (prevRPr["w:bCs"]) {
+          prevProps.complexScriptBold = parseOoxmlBoolean(prevRPr["w:bCs"]);
+        }
+        if (prevRPr["w:iCs"]) {
+          prevProps.complexScriptItalic = parseOoxmlBoolean(prevRPr["w:iCs"]);
+        }
+
+        // Parse character spacing (w:spacing @w:val in twips)
+        if (prevRPr["w:spacing"]) {
+          const spacingVal = prevRPr["w:spacing"]["@_w:val"];
+          if (spacingVal !== undefined) {
+            prevProps.characterSpacing = safeParseInt(spacingVal);
+          }
+        }
+
+        // Parse horizontal scaling (w:w @w:val as percentage)
+        if (prevRPr["w:w"]) {
+          const scaleVal = prevRPr["w:w"]["@_w:val"];
+          if (scaleVal !== undefined) {
+            prevProps.scaling = safeParseInt(scaleVal);
+          }
+        }
+
+        // Parse vertical position (w:position @w:val in half-points)
+        if (prevRPr["w:position"]) {
+          const posVal = prevRPr["w:position"]["@_w:val"];
+          if (posVal !== undefined) {
+            prevProps.position = safeParseInt(posVal);
+          }
+        }
+
+        // Parse kerning threshold (w:kern @w:val in half-points)
+        if (prevRPr["w:kern"]) {
+          const kernVal = prevRPr["w:kern"]["@_w:val"];
+          if (kernVal !== undefined) {
+            prevProps.kerning = safeParseInt(kernVal);
+          }
+        }
+
+        // Parse language (w:lang @w:val)
+        if (prevRPr["w:lang"]) {
+          const langVal = prevRPr["w:lang"]["@_w:val"];
+          if (langVal) {
+            prevProps.language = String(langVal);
+          }
+        }
+
+        // Parse character style reference (w:rStyle @w:val)
+        if (prevRPr["w:rStyle"]) {
+          const styleVal = prevRPr["w:rStyle"]["@_w:val"];
+          if (styleVal) {
+            prevProps.characterStyle = String(styleVal);
+          }
+        }
+
+        // Parse text effect/animation (w:effect @w:val)
+        if (prevRPr["w:effect"]) {
+          const effectVal = prevRPr["w:effect"]["@_w:val"];
+          if (effectVal) {
+            prevProps.effect = effectVal as RunFormatting["effect"];
+          }
+        }
+
+        // Parse fit text width (w:fitText @w:val in twips)
+        if (prevRPr["w:fitText"]) {
+          const fitVal = prevRPr["w:fitText"]["@_w:val"];
+          if (fitVal !== undefined) {
+            prevProps.fitText = safeParseInt(fitVal);
+          }
+        }
+
+        // Parse emphasis mark (w:em @w:val)
+        if (prevRPr["w:em"]) {
+          const emVal = prevRPr["w:em"]["@_w:val"];
+          if (emVal) {
+            prevProps.emphasis = emVal as RunFormatting["emphasis"];
+          }
+        }
+
+        // Parse text border (w:bdr) per ECMA-376 Part 1 §17.3.2.4
+        // Maps to TextBorder interface: style, size, color, space
+        if (prevRPr["w:bdr"]) {
+          const bdrObj = prevRPr["w:bdr"];
+          prevProps.border = {
+            style: bdrObj["@_w:val"] as import("../elements/Run").TextBorderStyle,
+            size: bdrObj["@_w:sz"] !== undefined ? safeParseInt(bdrObj["@_w:sz"]) : undefined,
+            space: bdrObj["@_w:space"] !== undefined ? safeParseInt(bdrObj["@_w:space"]) : undefined,
+            color: bdrObj["@_w:color"],
+          };
+        }
+
+        // Parse character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
+        // Maps to CharacterShading interface: fill, color, val
+        if (prevRPr["w:shd"]) {
+          const shdObj = prevRPr["w:shd"];
+          prevProps.shading = {
+            fill: shdObj["@_w:fill"],
+            color: shdObj["@_w:color"],
+            val: shdObj["@_w:val"] as import("../elements/Run").ShadingPattern,
+          };
+        }
+
+        // Parse East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
+        if (prevRPr["w:eastAsianLayout"]) {
+          const eaObj = prevRPr["w:eastAsianLayout"];
+          prevProps.eastAsianLayout = {
+            id: eaObj["@_w:id"] !== undefined ? safeParseInt(eaObj["@_w:id"]) : undefined,
+            combine: eaObj["@_w:combine"] ? parseOoxmlBoolean({ "@_w:val": eaObj["@_w:combine"] }) : undefined,
+            combineBrackets: eaObj["@_w:combineBrackets"],
+            vert: eaObj["@_w:vert"] ? parseOoxmlBoolean({ "@_w:val": eaObj["@_w:vert"] }) : undefined,
+            vertCompress: eaObj["@_w:vertCompress"] ? parseOoxmlBoolean({ "@_w:val": eaObj["@_w:vertCompress"] }) : undefined,
+          };
+        }
+
+        propChange.previousProperties = prevProps;
+      }
+
+      run.setPropertyChangeRevision(propChange);
     }
   }
 
@@ -3377,7 +4275,8 @@ export class DocumentParser {
         const gridColArray = Array.isArray(gridCols) ? gridCols : [gridCols];
         const widths = gridColArray.map((col: any) => {
           const w = col["@_w:w"];
-          return w ? parseInt(w, 10) : 2880; // default to 2 inches
+          // Use isExplicitlySet to properly handle 0 values
+          return isExplicitlySet(w) ? safeParseInt(w, 2880) : 2880; // default to 2 inches
         });
         if (widths.length > 0) {
           table.setTableGrid(widths);
@@ -3391,18 +4290,29 @@ export class DocumentParser {
       // Extract row XMLs from raw table XML if available
       let rowXmls: string[] = [];
       if (rawTableXml) {
-        // DEBUG: Check rawTableXml for pPrChange before extraction
-        if (rawTableXml.includes('Bullet 3') && rawTableXml.includes('pPrChange')) {
-          const pPrChangeIdx = rawTableXml.indexOf('pPrChange');
-          console.log(`[DEBUG parseTableFromObject] rawTableXml around pPrChange:`, rawTableXml.substring(pPrChangeIdx - 100, pPrChangeIdx + 200));
-        }
         rowXmls = XMLParser.extractElements(rawTableXml, "w:tr");
+      }
+
+      // Track row positions in raw XML for bookmarkEnd extraction between rows
+      const rowPositions: { start: number; end: number }[] = [];
+      if (rawTableXml) {
+        let searchPos = 0;
+        for (const rowXml of rowXmls) {
+          const rowStart = rawTableXml.indexOf(rowXml, searchPos);
+          if (rowStart !== -1) {
+            rowPositions.push({
+              start: rowStart,
+              end: rowStart + rowXml.length,
+            });
+            searchPos = rowStart + rowXml.length;
+          }
+        }
       }
 
       for (let i = 0; i < rowChildren.length; i++) {
         const rowObj = rowChildren[i];
         const rawRowXml = i < rowXmls.length ? rowXmls[i] : undefined;
-        
+
         const row = await this.parseTableRowFromObject(
           rowObj,
           relationshipManager,
@@ -3412,6 +4322,39 @@ export class DocumentParser {
         );
         if (row) {
           table.addRow(row);
+
+          // Check for bookmarkEnd elements AFTER this row (between rows)
+          if (rawTableXml && i < rowPositions.length) {
+            const currentRowEnd = rowPositions[i]?.end || 0;
+            const nextRowStart =
+              i + 1 < rowPositions.length
+                ? rowPositions[i + 1]?.start
+                : rawTableXml.length;
+
+            if (nextRowStart && currentRowEnd < nextRowStart) {
+              const betweenContent = rawTableXml.slice(
+                currentRowEnd,
+                nextRowStart
+              );
+              const bookmarkEnds =
+                this.extractBookmarkEndsFromContent(betweenContent);
+
+              if (bookmarkEnds.length > 0) {
+                // Attach to last paragraph in last cell of this row
+                const cells = row.getCells();
+                const lastCell = cells[cells.length - 1];
+                if (lastCell) {
+                  const cellParas = lastCell.getParagraphs();
+                  const lastPara = cellParas[cellParas.length - 1];
+                  if (lastPara) {
+                    for (const bookmark of bookmarkEnds) {
+                      lastPara.addBookmarkEnd(bookmark);
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
 
@@ -3550,11 +4493,6 @@ export class DocumentParser {
       // Extract cell XMLs from raw row XML if available
       let cellXmls: string[] = [];
       if (rawRowXml) {
-        // DEBUG: Check rawRowXml for pPrChange before extraction
-        if (rawRowXml.includes('Bullet 3') && rawRowXml.includes('pPrChange')) {
-          const pPrChangeIdx = rawRowXml.indexOf('pPrChange');
-          console.log(`[DEBUG parseTableRowFromObject] rawRowXml around pPrChange:`, rawRowXml.substring(pPrChangeIdx - 100, pPrChangeIdx + 200));
-        }
         cellXmls = XMLParser.extractElements(rawRowXml, "w:tc");
       }
 
@@ -3889,54 +4827,61 @@ export class DocumentParser {
         }
       }
 
-    // Parse paragraphs in cell (w:p)
-    const paragraphs = cellObj["w:p"];
-    const paraChildren = Array.isArray(paragraphs)
-      ? paragraphs
-      : paragraphs
-      ? [paragraphs]
-      : [];
-
-    // Extract paragraph XMLs from raw cell XML if available
-    let paraXmls: string[] = [];
+    // Parse cell content - use order-preserving extraction if raw XML available
+    // This is critical for preserving nested tables and SDTs
     if (rawCellXml) {
-      // DEBUG: Check if rawCellXml itself is corrupted
-      if (rawCellXml.includes('Bullet 3')) {
-        console.log(`[DEBUG parseTableCellFromObject] rawCellXml FULL LENGTH for Bullet 3:`, rawCellXml.length);
-        // Check for pPrChange in rawCellXml
-        const pPrChangeIdx = rawCellXml.indexOf('w:pPrChange');
-        if (pPrChangeIdx !== -1) {
-          console.log(`[DEBUG parseTableCellFromObject] rawCellXml around pPrChange:`, rawCellXml.substring(pPrChangeIdx - 50, pPrChangeIdx + 200));
+      // Extract all cell content in order (paragraphs, nested tables, SDTs, bookmarkEnds)
+      const cellContent = this.extractCellContentInOrder(rawCellXml);
+      let paragraphIndex = 0;
+      let lastParagraph: Paragraph | null = null;
+
+      for (const item of cellContent) {
+        if (item.type === "paragraph") {
+          // Parse paragraph using raw XML to preserve revisions
+          const paragraph = await this.parseParagraphWithOrder(
+            item.xml,
+            relationshipManager,
+            zipHandler,
+            imageManager
+          );
+          if (paragraph) {
+            cell.addParagraph(paragraph);
+            lastParagraph = paragraph;
+            paragraphIndex++;
+          }
+        } else if (item.type === "table" || item.type === "sdt") {
+          // Store nested tables and SDTs as raw XML for passthrough
+          // These are preserved exactly as-is to avoid any modifications
+          cell.addRawNestedContent(paragraphIndex, item.xml, item.type);
+        } else if (item.type === "bookmarkEnd") {
+          // BookmarkEnd between paragraphs in cell - attach to previous paragraph
+          if (lastParagraph) {
+            const bookmarkEnds = this.extractBookmarkEndsFromContent(item.xml);
+            for (const bookmark of bookmarkEnds) {
+              lastParagraph.addBookmarkEnd(bookmark);
+            }
+          }
         }
       }
-      paraXmls = XMLParser.extractElements(rawCellXml, "w:p");
-    }
+    } else {
+      // Fallback: Parse paragraphs from object (no raw XML available)
+      const paragraphs = cellObj["w:p"];
+      const paraChildren = Array.isArray(paragraphs)
+        ? paragraphs
+        : paragraphs
+          ? [paragraphs]
+          : [];
 
-    for (let i = 0; i < paraChildren.length; i++) {
-      const paraObj = paraChildren[i];
-      const rawParaXml = i < paraXmls.length ? paraXmls[i] : undefined;
-      
-      // CRITICAL FIX: Use parseParagraphWithOrder to preserve revisions in table cells
-      // parseParagraphFromObject doesn't scan for revisions, causing 62+ revisions to be lost
-      let paragraph;
-      if (rawParaXml) {
-        paragraph = await this.parseParagraphWithOrder(
-          rawParaXml,
-          relationshipManager,
-          zipHandler,
-          imageManager
-        );
-      } else {
-        paragraph = await this.parseParagraphFromObject(
+      for (const paraObj of paraChildren) {
+        const paragraph = await this.parseParagraphFromObject(
           paraObj,
           relationshipManager,
           zipHandler,
           imageManager
         );
-      }
-      
-      if (paragraph) {
-        cell.addParagraph(paragraph);
+        if (paragraph) {
+          cell.addParagraph(paragraph);
+        }
       }
     }
 
@@ -3950,6 +4895,175 @@ export class DocumentParser {
       );
       return null;
     }
+  }
+
+  /**
+   * Extracts cell content elements in order, preserving sequence of paragraphs, nested tables, and SDTs
+   * Used to properly handle nested tables in table cells
+   * @param cellXml - Raw XML of the cell (w:tc element)
+   * @returns Array of content items with type and XML
+   */
+  private extractCellContentInOrder(
+    cellXml: string
+  ): { type: "paragraph" | "table" | "sdt" | "bookmarkEnd"; xml: string }[] {
+    const result: {
+      type: "paragraph" | "table" | "sdt" | "bookmarkEnd";
+      xml: string;
+    }[] = [];
+
+    // Find the start of cell content (after w:tcPr if present)
+    let contentStart = 0;
+    const tcPrStart = cellXml.indexOf("<w:tcPr");
+    if (tcPrStart !== -1) {
+      // Skip past the tcPr element
+      const tcPrEnd = this.findClosingTag(cellXml, "w:tcPr", tcPrStart);
+      if (tcPrEnd !== -1) {
+        contentStart = tcPrEnd;
+      }
+    }
+
+    // Find end of cell (before closing </w:tc>)
+    const contentEnd = cellXml.lastIndexOf("</w:tc>");
+    if (contentEnd === -1) return result;
+
+    const content = cellXml.substring(contentStart, contentEnd);
+
+    // Scan for w:p, w:tbl, w:sdt, and w:bookmarkEnd elements at the current level
+    let pos = 0;
+    while (pos < content.length) {
+      // Find next element start
+      const pStart = content.indexOf("<w:p", pos);
+      const tblStart = content.indexOf("<w:tbl", pos);
+      const sdtStart = content.indexOf("<w:sdt", pos);
+      const bookmarkEndStart = content.indexOf("<w:bookmarkEnd", pos);
+
+      // Find which comes first
+      let nextStart = -1;
+      let nextType: "paragraph" | "table" | "sdt" | "bookmarkEnd" | null = null;
+      let nextTag = "";
+
+      if (
+        pStart !== -1 &&
+        this.isExactTag(content, pStart, "w:p") &&
+        (nextStart === -1 || pStart < nextStart)
+      ) {
+        nextStart = pStart;
+        nextType = "paragraph";
+        nextTag = "w:p";
+      }
+      if (
+        tblStart !== -1 &&
+        this.isExactTag(content, tblStart, "w:tbl") &&
+        (nextStart === -1 || tblStart < nextStart)
+      ) {
+        nextStart = tblStart;
+        nextType = "table";
+        nextTag = "w:tbl";
+      }
+      if (
+        sdtStart !== -1 &&
+        this.isExactTag(content, sdtStart, "w:sdt") &&
+        (nextStart === -1 || sdtStart < nextStart)
+      ) {
+        nextStart = sdtStart;
+        nextType = "sdt";
+        nextTag = "w:sdt";
+      }
+      if (
+        bookmarkEndStart !== -1 &&
+        (nextStart === -1 || bookmarkEndStart < nextStart)
+      ) {
+        nextStart = bookmarkEndStart;
+        nextType = "bookmarkEnd";
+        nextTag = "w:bookmarkEnd";
+      }
+
+      if (nextStart === -1 || nextType === null) break;
+
+      // Extract the complete element
+      if (nextType === "bookmarkEnd") {
+        // Self-closing tag - find the end of this element
+        const elementEnd = content.indexOf(">", nextStart) + 1;
+        if (elementEnd === 0) {
+          pos = nextStart + 1;
+          continue;
+        }
+        const elementXml = content.substring(nextStart, elementEnd);
+        result.push({ type: nextType, xml: elementXml });
+        pos = elementEnd;
+      } else {
+        const elementEnd = this.findClosingTag(content, nextTag, nextStart);
+        if (elementEnd === -1) {
+          pos = nextStart + 1;
+          continue;
+        }
+        const elementXml = content.substring(nextStart, elementEnd);
+        result.push({ type: nextType, xml: elementXml });
+        pos = elementEnd;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Checks if a tag at the given position is an exact match (not a prefix like w:pPr for w:p)
+   */
+  private isExactTag(
+    content: string,
+    position: number,
+    tagName: string
+  ): boolean {
+    const afterTag = content[position + 1 + tagName.length];
+    return (
+      afterTag === ">" ||
+      afterTag === "/" ||
+      afterTag === " " ||
+      afterTag === "\t" ||
+      afterTag === "\n" ||
+      afterTag === "\r"
+    );
+  }
+
+  /**
+   * Finds the closing tag for an element, handling nested elements of the same type
+   */
+  private findClosingTag(
+    content: string,
+    tagName: string,
+    startPos: number
+  ): number {
+    const openTag = `<${tagName}`;
+    const closeTag = `</${tagName}>`;
+
+    // Check for self-closing tag first
+    const openTagEnd = content.indexOf(">", startPos);
+    if (openTagEnd !== -1 && content[openTagEnd - 1] === "/") {
+      return openTagEnd + 1;
+    }
+
+    let depth = 1;
+    let pos = openTagEnd + 1;
+
+    while (pos < content.length && depth > 0) {
+      const nextOpen = content.indexOf(openTag, pos);
+      const nextClose = content.indexOf(closeTag, pos);
+
+      if (nextClose === -1) break;
+
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        // Check if it's an exact tag match
+        if (this.isExactTag(content, nextOpen, tagName)) {
+          depth++;
+        }
+        pos = nextOpen + openTag.length;
+      } else {
+        depth--;
+        pos = nextClose + closeTag.length;
+      }
+    }
+
+    return depth === 0 ? pos : -1;
   }
 
   private async parseSDTFromObject(
@@ -4012,24 +5126,25 @@ export class DocumentParser {
         } else if (sdtPr["w:date"]) {
           properties.controlType = "datePicker";
           const dateElement = sdtPr["w:date"];
+          // Date properties can be either attributes on w:date or nested elements
           properties.datePicker = {
-            dateFormat: dateElement?.["w:dateFormat"]?.["@_w:val"],
-            fullDate: dateElement?.["w:fullDate"]?.["@_w:val"]
-              ? new Date(dateElement["w:fullDate"]["@_w:val"])
+            // Check attribute first, then nested element
+            dateFormat: dateElement?.["@_w:dateFormat"] || dateElement?.["w:dateFormat"]?.["@_w:val"],
+            fullDate: (dateElement?.["@_w:fullDate"] || dateElement?.["w:fullDate"]?.["@_w:val"])
+              ? new Date(dateElement["@_w:fullDate"] || dateElement["w:fullDate"]["@_w:val"])
               : undefined,
-            lid: dateElement?.["w:lid"]?.["@_w:val"],
-            calendar: dateElement?.["w:calendar"]?.["@_w:val"],
+            lid: dateElement?.["@_w:lid"] || dateElement?.["w:lid"]?.["@_w:val"],
+            calendar: dateElement?.["@_w:calendar"] || dateElement?.["w:calendar"]?.["@_w:val"],
           };
         } else if (sdtPr["w14:checkbox"]) {
           properties.controlType = "checkbox";
           const checkboxElement = sdtPr["w14:checkbox"];
+          // Handle both string and numeric values from XML parser
+          const checkedVal = checkboxElement?.["w14:checked"]?.["@_w14:val"];
           properties.checkbox = {
-            checked:
-              checkboxElement?.["w14:checked"]?.["@_w14:val"] === "1" ||
-              checkboxElement?.["w14:checked"]?.["@_w14:val"] === "true",
-            checkedState: checkboxElement?.["w14:checkedState"]?.["@_w14:val"],
-            uncheckedState:
-              checkboxElement?.["w14:uncheckedState"]?.["@_w14:val"],
+            checked: checkedVal === 1 || checkedVal === "1" || checkedVal === true || checkedVal === "true",
+            checkedState: String(checkboxElement?.["w14:checkedState"]?.["@_w14:val"] ?? ""),
+            uncheckedState: String(checkboxElement?.["w14:uncheckedState"]?.["@_w14:val"] ?? ""),
           };
         } else if (sdtPr["w:picture"]) {
           properties.controlType = "picture";
@@ -5615,14 +6730,16 @@ export class DocumentParser {
         uVal === "double" ||
         uVal === "thick" ||
         uVal === "dotted" ||
-        uVal === "dash"
+        uVal === "dash" ||
+        uVal === "none"
       ) {
         formatting.underline = uVal as
           | "single"
           | "double"
           | "thick"
           | "dotted"
-          | "dash";
+          | "dash"
+          | "none";
       } else {
         formatting.underline = true;
       }

@@ -2,9 +2,24 @@
  * BookmarkManager - Manages bookmarks in a document
  *
  * Tracks all bookmarks, assigns unique IDs, and ensures name uniqueness.
+ *
+ * Per ECMA-376, bookmark IDs must be unique across ALL annotation types
+ * in a document. Use setIdProvider() to connect to a centralized ID allocator.
  */
 
 import { Bookmark } from './Bookmark';
+
+/**
+ * Type for the centralized ID provider callback.
+ * Returns the next available annotation ID from a shared counter.
+ */
+export type IdProviderCallback = () => number;
+
+/**
+ * Type for callback to notify of existing IDs (for synchronization).
+ * Called when registering an existing bookmark to keep the central counter in sync.
+ */
+export type IdExistsCallback = (existingId: number) => void;
 
 /**
  * Manages document bookmarks
@@ -12,6 +27,21 @@ import { Bookmark } from './Bookmark';
 export class BookmarkManager {
   private bookmarks: Map<string, Bookmark> = new Map();
   private nextId: number = 0;
+  private idProvider: IdProviderCallback | null = null;
+  private idExistsNotifier: IdExistsCallback | null = null;
+
+  /**
+   * Sets the centralized ID provider callback.
+   * When set, IDs will be allocated from the centralized DocumentIdManager
+   * instead of the local nextId counter.
+   *
+   * @param provider - Callback that returns the next available ID
+   * @param existsNotifier - Optional callback to notify when existing IDs are found
+   */
+  setIdProvider(provider: IdProviderCallback, existsNotifier?: IdExistsCallback): void {
+    this.idProvider = provider;
+    this.idExistsNotifier = existsNotifier || null;
+  }
 
   /**
    * Registers a bookmark with the manager
@@ -30,10 +60,45 @@ export class BookmarkManager {
       );
     }
 
-    // Assign unique ID
-    bookmark.setId(this.nextId++);
+    // Assign unique ID - use centralized provider if available
+    const id = this.idProvider ? this.idProvider() : this.nextId++;
+    bookmark.setId(id);
 
     // Store bookmark
+    this.bookmarks.set(name, bookmark);
+
+    return bookmark;
+  }
+
+  /**
+   * Registers an existing bookmark, preserving its ID
+   * Used when loading documents to preserve original bookmark IDs and avoid collisions
+   * @param bookmark - Bookmark with existing ID to register
+   * @returns The registered bookmark (same instance)
+   * @throws Error if a bookmark with the same name already exists
+   */
+  registerExisting(bookmark: Bookmark): Bookmark {
+    const name = bookmark.getName();
+    const existingId = bookmark.getId();
+
+    // Check for duplicate names
+    if (this.bookmarks.has(name)) {
+      throw new Error(
+        `Bookmark with name "${name}" already exists. Bookmark names must be unique within a document.`
+      );
+    }
+
+    // Notify centralized ID manager about this existing ID
+    if (this.idExistsNotifier) {
+      this.idExistsNotifier(existingId);
+    }
+
+    // Also update local nextId to avoid collisions (for fallback)
+    if (existingId >= this.nextId) {
+      this.nextId = existingId + 1;
+    }
+
+    // Store bookmark (keep its existing ID)
     this.bookmarks.set(name, bookmark);
 
     return bookmark;
@@ -88,6 +153,15 @@ export class BookmarkManager {
   clear(): void {
     this.bookmarks.clear();
     this.nextId = 0;
+  }
+
+  /**
+   * Sets the next ID to be assigned
+   * Used when loading documents to avoid ID collisions with existing bookmarks
+   * @param id - The next ID value to use
+   */
+  setNextId(id: number): void {
+    this.nextId = id;
   }
 
   /**

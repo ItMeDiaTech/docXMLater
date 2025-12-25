@@ -3,6 +3,8 @@
  * Provides a simple fluent API for generating WordprocessingML XML
  */
 
+import { removeInvalidXmlChars } from "../utils/xmlSanitization";
+
 /**
  * Represents an XML element with attributes and children
  */
@@ -41,8 +43,11 @@ export class XMLBuilder {
     "w:pPr",
     "w:rPr",
     "w:sectPr",
-    "w:bookmarkStart",
-    "w:bookmarkEnd",
+    "w:del", // Deletion revisions - container element, must have closing tag
+    "w:ins", // Insertion revisions - container element, must have closing tag
+    "w:moveFrom", // Move source markers - container element
+    "w:moveTo", // Move destination markers - container element
+    // Note: w:bookmarkStart and w:bookmarkEnd MUST be self-closing per ECMA-376
   ];
 
   /**
@@ -200,22 +205,33 @@ export class XMLBuilder {
 
   /**
    * Escapes XML text content (element text nodes)
-   * Only escapes: & < >
+   * Removes invalid XML 1.0 control characters and escapes: & < >
+   *
+   * Per XML 1.0 spec, control chars 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F are invalid.
+   * Tab (0x09), newline (0x0A), and CR (0x0D) are preserved.
+   *
    * @param text Text to escape
    * @returns Escaped text safe for XML content
    */
   static escapeXmlText(text: string): string {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return removeInvalidXmlChars(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
   /**
    * Escapes XML attribute values
-   * Escapes: & < > " '
+   * Removes invalid XML 1.0 control characters and escapes: & < > " '
+   *
+   * Per XML 1.0 spec, control chars 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F are invalid.
+   * Tab (0x09), newline (0x0A), and CR (0x0D) are preserved.
+   *
    * @param value Attribute value to escape
    * @returns Escaped value safe for XML attributes
    */
   static escapeXmlAttribute(value: string): string {
-    return value
+    return removeInvalidXmlChars(value)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
@@ -242,6 +258,9 @@ export class XMLBuilder {
    * Removes control characters, null bytes, and escapes special XML characters
    * Use this for user-provided content that may contain unsafe characters
    *
+   * Per XML 1.0 spec, control chars 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F are invalid.
+   * Tab (0x09), newline (0x0A), and CR (0x0D) are preserved.
+   *
    * @param text Text to sanitize and escape
    * @returns Sanitized text safe for XML content
    *
@@ -249,9 +268,7 @@ export class XMLBuilder {
    */
   static sanitizeXmlContent(text: string): string {
     return (
-      text
-        // Remove control characters (except tab, newline, carriage return which are allowed in XML)
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+      removeInvalidXmlChars(text)
         // Escape CDATA end marker to prevent CDATA injection
         .replace(/\]\]>/g, "]]&gt;")
         // Standard XML escaping (& must be first to avoid double-escaping)

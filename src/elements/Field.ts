@@ -140,6 +140,28 @@ export class Field {
   }
 
   /**
+   * Checks if this field is a HYPERLINK field
+   * @returns True if the field type is HYPERLINK or instruction starts with HYPERLINK
+   */
+  isHyperlinkField(): boolean {
+    return this.type === 'HYPERLINK' ||
+           this.instruction.trim().toUpperCase().startsWith('HYPERLINK');
+  }
+
+  /**
+   * Sets text color for the field
+   * @param color Color in hex format (e.g., '0000FF')
+   * @returns This field for chaining
+   */
+  setColor(color: string): this {
+    if (!this.formatting) {
+      this.formatting = {};
+    }
+    this.formatting.color = color.replace('#', '');
+    return this;
+  }
+
+  /**
    * Generates XML for the field
    * Uses fldSimple for simplicity
    */

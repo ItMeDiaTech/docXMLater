@@ -44,6 +44,8 @@ export interface AcceptRevisionsOptions {
   acceptMoves?: boolean;
   /** Accept property change revisions (rPrChange, pPrChange, etc.) - default: true */
   acceptPropertyChanges?: boolean;
+  /** Remove empty tables after revision acceptance - default: true */
+  cleanupEmptyTables?: boolean;
 }
 
 /**
@@ -60,6 +62,8 @@ export interface AcceptRevisionsResult {
   propertyChangesAccepted: number;
   /** Total revisions processed */
   totalAccepted: number;
+  /** Number of empty tables removed during cleanup */
+  emptyTablesRemoved: number;
 }
 
 /**
@@ -87,6 +91,89 @@ const PROPERTY_REVISION_TYPES: RevisionType[] = [
 ];
 
 /**
+ * Strip revision markup from raw XML string.
+ * Used for nested tables stored as raw XML that cannot be processed via the in-memory model.
+ *
+ * Follows the same rules as the main revision acceptor:
+ * - Insertions: Keep content, remove wrapper tags
+ * - Deletions: Remove entirely (content and tags)
+ * - MoveFrom: Remove entirely (source of move)
+ * - MoveTo: Keep content, remove wrapper
+ * - Property changes: Remove change tracking elements
+ * - Range markers: Remove boundary markers
+ *
+ * @param xml - Raw XML string containing revision markup
+ * @returns Cleaned XML with revisions accepted
+ */
+export function stripRevisionsFromXml(xml: string): string {
+  let result = xml;
+
+  // Step 1: Remove range markers (must be done first)
+  const rangePatterns = [
+    /<w:moveFromRangeStart[^>]*(?:\/>|>.*?<\/w:moveFromRangeStart>)/gs,
+    /<w:moveFromRangeEnd[^>]*(?:\/>|>.*?<\/w:moveFromRangeEnd>)/gs,
+    /<w:moveToRangeStart[^>]*(?:\/>|>.*?<\/w:moveToRangeStart>)/gs,
+    /<w:moveToRangeEnd[^>]*(?:\/>|>.*?<\/w:moveToRangeEnd>)/gs,
+    /<w:customXmlInsRangeStart[^>]*(?:\/>|>.*?<\/w:customXmlInsRangeStart>)/gs,
+    /<w:customXmlInsRangeEnd[^>]*(?:\/>|>.*?<\/w:customXmlInsRangeEnd>)/gs,
+    /<w:customXmlDelRangeStart[^>]*(?:\/>|>.*?<\/w:customXmlDelRangeStart>)/gs,
+    /<w:customXmlDelRangeEnd[^>]*(?:\/>|>.*?<\/w:customXmlDelRangeEnd>)/gs,
+  ];
+  for (const pattern of rangePatterns) {
+    result = result.replace(pattern, '');
+  }
+
+  // Step 2: Remove property change elements
+  const propChangePatterns = [
+    /<w:rPrChange[^>]*>[\s\S]*?<\/w:rPrChange>/g,
+    /<w:pPrChange[^>]*>[\s\S]*?<\/w:pPrChange>/g,
+    /<w:tblPrChange[^>]*>[\s\S]*?<\/w:tblPrChange>/g,
+    /<w:tblPrExChange[^>]*>[\s\S]*?<\/w:tblPrExChange>/g,
+    /<w:tcPrChange[^>]*>[\s\S]*?<\/w:tcPrChange>/g,
+    /<w:trPrChange[^>]*>[\s\S]*?<\/w:trPrChange>/g,
+    /<w:sectPrChange[^>]*>[\s\S]*?<\/w:sectPrChange>/g,
+    /<w:tblGridChange[^>]*>[\s\S]*?<\/w:tblGridChange>/g,
+    /<w:numberingChange[^>]*>[\s\S]*?<\/w:numberingChange>/g,
+  ];
+  for (const pattern of propChangePatterns) {
+    result = result.replace(pattern, '');
+  }
+
+  // Step 3: Remove deletions entirely (including content)
+  // Iterate until no more deletions (handles nested cases)
+  let prevLen = 0;
+  while (result.length !== prevLen) {
+    prevLen = result.length;
+    result = result.replace(/<w:del\b[^>]*>[\s\S]*?<\/w:del>/g, '');
+  }
+  result = result.replace(/<w:del\b[^>]*\/>/g, '');
+
+  // Step 4: Remove moveFrom entirely (source of moved content)
+  prevLen = 0;
+  while (result.length !== prevLen) {
+    prevLen = result.length;
+    result = result.replace(/<w:moveFrom\b[^>]*>[\s\S]*?<\/w:moveFrom>/g, '');
+  }
+  result = result.replace(/<w:moveFrom\b[^>]*\/>/g, '');
+
+  // Step 5: Unwrap moveTo (keep content, remove wrapper)
+  result = result.replace(/<\/w:moveTo>/g, '');
+  result = result.replace(/<w:moveTo\b[^>]*>/g, '');
+
+  // Step 6: Unwrap insertions (keep content, remove wrapper)
+  result = result.replace(/<\/w:ins>/g, '');
+  result = result.replace(/<w:ins\b[^>]*>/g, '');
+
+  // Step 7: Clean up orphaned tags
+  result = result.replace(/<w:ins\b[^>]*\/>/g, '');
+  result = result.replace(/<w:del\b[^>]*\/>/g, '');
+  result = result.replace(/<w:moveFrom\b[^>]*\/>/g, '');
+  result = result.replace(/<w:moveTo\b[^>]*\/>/g, '');
+
+  return result;
+}
+
+/**
  * Accept all revisions in the document by transforming the in-memory model.
  *
  * This is the industry-standard approach used by OpenXML PowerTools, Aspose.Words,
@@ -107,6 +194,7 @@ export function acceptRevisionsInMemory(
     acceptDeletions: options.acceptDeletions ?? true,
     acceptMoves: options.acceptMoves ?? true,
     acceptPropertyChanges: options.acceptPropertyChanges ?? true,
+    cleanupEmptyTables: options.cleanupEmptyTables ?? true,
   };
 
   const result: AcceptRevisionsResult = {
@@ -115,6 +203,7 @@ export function acceptRevisionsInMemory(
     movesAccepted: 0,
     propertyChangesAccepted: 0,
     totalAccepted: 0,
+    emptyTablesRemoved: 0,
   };
 
   logger.info('Accepting revisions in-memory', { options: opts });
@@ -159,12 +248,37 @@ export function acceptRevisionsInMemory(
   for (const table of tables) {
     for (const row of table.getRows()) {
       for (const cell of row.getCells()) {
+        // Process paragraphs in the cell
         for (const paragraph of cell.getParagraphs()) {
           const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
           result.insertionsAccepted += paragraphResult.insertionsAccepted;
           result.deletionsAccepted += paragraphResult.deletionsAccepted;
           result.movesAccepted += paragraphResult.movesAccepted;
           result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
+        }
+
+        // Process raw nested content (nested tables stored as XML)
+        // These cannot be processed via the in-memory model, so we use XML-based stripping
+        if (cell.hasRawNestedContent()) {
+          const rawContent = cell.getRawNestedContent();
+          for (let i = 0; i < rawContent.length; i++) {
+            const item = rawContent[i];
+            if (item) {
+              const cleanedXml = stripRevisionsFromXml(item.xml);
+              if (cleanedXml !== item.xml) {
+                cell.updateRawNestedContent(i, cleanedXml);
+                // Count revisions stripped from nested content
+                // We can't distinguish types in raw XML, so count as property changes
+                result.propertyChangesAccepted++;
+                logger.debug('Stripped revisions from nested content', {
+                  type: item.type,
+                  position: item.position,
+                  originalLength: item.xml.length,
+                  cleanedLength: cleanedXml.length,
+                });
+              }
+            }
+          }
         }
       }
     }
@@ -195,6 +309,20 @@ export function acceptRevisionsInMemory(
                 result.movesAccepted += paragraphResult.movesAccepted;
                 result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
               }
+              // Process raw nested content in header tables
+              if (cell.hasRawNestedContent()) {
+                const rawContent = cell.getRawNestedContent();
+                for (let i = 0; i < rawContent.length; i++) {
+                  const item = rawContent[i];
+                  if (item) {
+                    const cleanedXml = stripRevisionsFromXml(item.xml);
+                    if (cleanedXml !== item.xml) {
+                      cell.updateRawNestedContent(i, cleanedXml);
+                      result.propertyChangesAccepted++;
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -224,6 +352,20 @@ export function acceptRevisionsInMemory(
                 result.movesAccepted += paragraphResult.movesAccepted;
                 result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
               }
+              // Process raw nested content in footer tables
+              if (cell.hasRawNestedContent()) {
+                const rawContent = cell.getRawNestedContent();
+                for (let i = 0; i < rawContent.length; i++) {
+                  const item = rawContent[i];
+                  if (item) {
+                    const cleanedXml = stripRevisionsFromXml(item.xml);
+                    if (cleanedXml !== item.xml) {
+                      cell.updateRawNestedContent(i, cleanedXml);
+                      result.propertyChangesAccepted++;
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -240,6 +382,13 @@ export function acceptRevisionsInMemory(
   // Disable track changes setting
   doc.disableTrackChanges();
 
+  // Cleanup empty tables if enabled
+  // This removes tables that have no visible content after revision acceptance
+  // (e.g., tables where all content was deleted via tracked changes)
+  if (opts.cleanupEmptyTables) {
+    result.emptyTablesRemoved = cleanupEmptyTables(doc, logger);
+  }
+
   result.totalAccepted =
     result.insertionsAccepted +
     result.deletionsAccepted +
@@ -252,6 +401,7 @@ export function acceptRevisionsInMemory(
     moves: result.movesAccepted,
     propertyChanges: result.propertyChangesAccepted,
     total: result.totalAccepted,
+    emptyTablesRemoved: result.emptyTablesRemoved,
   });
 
   return result;
@@ -281,6 +431,7 @@ function acceptRevisionsInParagraph(
     movesAccepted: 0,
     propertyChangesAccepted: 0,
     totalAccepted: 0,
+    emptyTablesRemoved: 0,
   };
 
   const content = paragraph.getContent();
@@ -418,4 +569,66 @@ export function countRevisionsByType(doc: Document): Map<RevisionType, number> {
   }
 
   return counts;
+}
+
+/**
+ * Remove tables that have no visible content after revision acceptance.
+ *
+ * A table is considered empty if ALL cells in ALL rows have no text content.
+ * This handles cases where all table content was deleted via tracked changes -
+ * the deletion markers are stripped but the empty table structure remains.
+ *
+ * @param doc - Document to clean up
+ * @param logger - Logger instance for debug output
+ * @returns Number of empty tables removed
+ */
+function cleanupEmptyTables(doc: Document, logger: ILogger): number {
+  const tables = doc.getTables();
+  let removedCount = 0;
+  const tablesToRemove: number[] = [];
+
+  for (let tableIndex = 0; tableIndex < tables.length; tableIndex++) {
+    const table = tables[tableIndex];
+    if (!table) continue;
+
+    let hasContent = false;
+    const rows = table.getRows();
+
+    for (const row of rows) {
+      const cells = row.getCells();
+      for (const cell of cells) {
+        const paragraphs = cell.getParagraphs();
+        for (const para of paragraphs) {
+          const text = para.getText().trim();
+          if (text.length > 0) {
+            hasContent = true;
+            break;
+          }
+        }
+        if (hasContent) break;
+      }
+      if (hasContent) break;
+    }
+
+    if (!hasContent) {
+      // Mark this table for removal (store index)
+      tablesToRemove.push(tableIndex);
+      logger.debug('Found empty table for removal', { tableIndex });
+    }
+  }
+
+  // Remove tables in reverse order to preserve indices
+  for (let i = tablesToRemove.length - 1; i >= 0; i--) {
+    const tableIndex = tablesToRemove[i];
+    if (tableIndex !== undefined && doc.removeTable(tableIndex)) {
+      removedCount++;
+      logger.debug('Removed empty table', { tableIndex });
+    }
+  }
+
+  if (removedCount > 0) {
+    logger.info('Empty table cleanup complete', { tablesRemoved: removedCount });
+  }
+
+  return removedCount;
 }

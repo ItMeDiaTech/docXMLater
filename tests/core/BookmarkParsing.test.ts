@@ -9,7 +9,7 @@ import { Field } from '../../src/elements/Field';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 import { XMLParser } from '../../src/xml/XMLParser';
 
-describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
+describe('Bookmark Parsing', () => {
   describe('Basic Bookmark Parsing', () => {
     it('should parse bookmarks from document.xml', async () => {
       // Create a document with bookmarks
@@ -17,9 +17,12 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
       const para1 = doc.createParagraph('First paragraph');
       const para2 = doc.createParagraph('Second paragraph');
 
-      // Add bookmarks
+      // Add bookmarks - must be associated with paragraphs
       const bookmark1 = doc.getBookmarkManager().createBookmark('Introduction');
+      para1.addBookmark(bookmark1);
+
       const bookmark2 = doc.getBookmarkManager().createBookmark('Chapter1');
+      para2.addBookmark(bookmark2);
 
       // Save and reload
       const buffer = await doc.toBuffer();
@@ -39,7 +42,7 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
 
     it('should preserve bookmark IDs and names', async () => {
       const doc = Document.create();
-      doc.createParagraph('Content');
+      const para = doc.createParagraph('Content');
 
       // Create bookmark with specific properties
       const bookmark = new Bookmark({
@@ -49,6 +52,7 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
       });
 
       doc.getBookmarkManager().register(bookmark);
+      para.addBookmark(bookmark);
 
       // Round-trip
       const buffer = await doc.toBuffer();
@@ -62,7 +66,7 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
 
     it('should handle bookmark name normalization', async () => {
       const doc = Document.create();
-      doc.createParagraph('Test');
+      const para = doc.createParagraph('Test');
 
       // Add bookmark with special characters (should be normalized)
       const bookmark = new Bookmark({
@@ -71,6 +75,7 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
       });
 
       doc.getBookmarkManager().register(bookmark);
+      para.addBookmark(bookmark);
 
       // The name should be normalized
       const normalizedName = bookmark.getName();
@@ -88,7 +93,7 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
 
     it('should preserve exact bookmark names when loading', async () => {
       const doc = Document.create();
-      doc.createParagraph('Content');
+      const para = doc.createParagraph('Content');
 
       // When loading from existing documents, preserve exact names
       const bookmark = new Bookmark({
@@ -97,6 +102,7 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
       });
 
       doc.getBookmarkManager().register(bookmark);
+      para.addBookmark(bookmark);
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
@@ -114,6 +120,7 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
       // Add content with bookmark
       const headingPara = doc.createParagraph('Chapter 1: Introduction');
       const bookmark = doc.getBookmarkManager().createBookmark('ChapterOne');
+      headingPara.addBookmark(bookmark);
 
       // Add REF field pointing to bookmark
       const refPara = doc.createParagraph('See ');
@@ -138,10 +145,11 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
 
     it('should handle duplicate bookmark names gracefully', async () => {
       const doc = Document.create();
-      doc.createParagraph('Test');
+      const para = doc.createParagraph('Test');
 
       // Add first bookmark
       const bookmark1 = doc.getBookmarkManager().createBookmark('MyBookmark');
+      para.addBookmark(bookmark1);
 
       // Try to add duplicate (should handle gracefully)
       let duplicateError = false;
@@ -169,6 +177,11 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
       const bookmark2 = doc.getBookmarkManager().createBookmark('Middle');
       const bookmark3 = doc.getBookmarkManager().createBookmark('End');
 
+      // Add all bookmarks to the paragraph
+      para.addBookmark(bookmark1);
+      para.addBookmark(bookmark2);
+      para.addBookmark(bookmark3);
+
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
@@ -185,14 +198,17 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
       const doc = Document.create();
 
       // Add bookmarks in specific order
-      doc.createParagraph('First');
-      doc.getBookmarkManager().createBookmark('BookmarkA');
+      const para1 = doc.createParagraph('First');
+      const bookmark1 = doc.getBookmarkManager().createBookmark('BookmarkA');
+      para1.addBookmark(bookmark1);
 
-      doc.createParagraph('Second');
-      doc.getBookmarkManager().createBookmark('BookmarkB');
+      const para2 = doc.createParagraph('Second');
+      const bookmark2 = doc.getBookmarkManager().createBookmark('BookmarkB');
+      para2.addBookmark(bookmark2);
 
-      doc.createParagraph('Third');
-      doc.getBookmarkManager().createBookmark('BookmarkC');
+      const para3 = doc.createParagraph('Third');
+      const bookmark3 = doc.getBookmarkManager().createBookmark('BookmarkC');
+      para3.addBookmark(bookmark3);
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
@@ -218,18 +234,24 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
     it('should handle bookmarks spanning multiple paragraphs', async () => {
       const doc = Document.create();
 
-      // Start bookmark
-      doc.getBookmarkManager().createBookmark('SpanningBookmark');
-      doc.createParagraph('First paragraph in bookmark');
+      // Create bookmark
+      const bookmark = doc.getBookmarkManager().createBookmark('SpanningBookmark');
+
+      // Start bookmark in first paragraph
+      const para1 = doc.createParagraph('First paragraph in bookmark');
+      para1.addBookmarkStart(bookmark);
+
       doc.createParagraph('Second paragraph in bookmark');
-      doc.createParagraph('Third paragraph in bookmark');
-      // End would be marked separately in Word
+
+      // End bookmark in last paragraph
+      const para3 = doc.createParagraph('Third paragraph in bookmark');
+      para3.addBookmarkEnd(bookmark);
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const bookmark = loadedDoc.getBookmarkManager().getBookmark('SpanningBookmark');
-      expect(bookmark).toBeDefined();
+      const loadedBookmark = loadedDoc.getBookmarkManager().getBookmark('SpanningBookmark');
+      expect(loadedBookmark).toBeDefined();
     });
   });
 
@@ -237,7 +259,9 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
     it('should get unique bookmark names', async () => {
       const doc = Document.create();
 
-      doc.getBookmarkManager().createBookmark('TestName');
+      const bookmark1 = doc.getBookmarkManager().createBookmark('TestName');
+      const para1 = doc.createParagraph('Para 1');
+      para1.addBookmark(bookmark1);
 
       // Manager should generate unique name
       const uniqueName = doc.getBookmarkManager().getUniqueName('TestName');
@@ -245,7 +269,9 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
       expect(uniqueName).toContain('TestName');
 
       // Add the unique one
-      doc.getBookmarkManager().createBookmark(uniqueName);
+      const bookmark2 = doc.getBookmarkManager().createBookmark(uniqueName);
+      const para2 = doc.createParagraph('Para 2');
+      para2.addBookmark(bookmark2);
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
@@ -260,9 +286,15 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
 
       const initialCount = doc.getBookmarkManager().getCount();
 
-      doc.getBookmarkManager().createBookmark('First');
-      doc.getBookmarkManager().createBookmark('Second');
-      doc.getBookmarkManager().createBookmark('Third');
+      const bookmark1 = doc.getBookmarkManager().createBookmark('First');
+      const bookmark2 = doc.getBookmarkManager().createBookmark('Second');
+      const bookmark3 = doc.getBookmarkManager().createBookmark('Third');
+
+      // Add all bookmarks to paragraphs
+      const para = doc.createParagraph('Content');
+      para.addBookmark(bookmark1);
+      para.addBookmark(bookmark2);
+      para.addBookmark(bookmark3);
 
       const afterCount = doc.getBookmarkManager().getCount();
       expect(afterCount).toBe(initialCount + 3);
@@ -278,7 +310,10 @@ describe.skip('Bookmark Parsing - Feature not fully implemented yet', () => {
 
       expect(doc.getBookmarkManager().hasBookmark('NonExistent')).toBe(false);
 
-      doc.getBookmarkManager().createBookmark('ExistingBookmark');
+      const bookmark = doc.getBookmarkManager().createBookmark('ExistingBookmark');
+      const para = doc.createParagraph('Content');
+      para.addBookmark(bookmark);
+
       expect(doc.getBookmarkManager().hasBookmark('ExistingBookmark')).toBe(true);
 
       const buffer = await doc.toBuffer();

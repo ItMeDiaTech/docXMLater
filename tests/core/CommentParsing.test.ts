@@ -11,7 +11,7 @@ import { XMLParser } from '../../src/xml/XMLParser';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe.skip('Comment Parsing - Feature not fully implemented yet', () => {
+describe('Comment Parsing', () => {
   describe('Basic Comment Parsing', () => {
     it('should parse comments from comments.xml', async () => {
       // Create a document with comments
