@@ -246,11 +246,12 @@ describe('Revision', () => {
       revision.setId(0);
       const xml = revision.toXML();
 
-      expect(xml.name).toBe('w:ins');
-      expect(xml.attributes?.['w:id']).toBe('0');
-      expect(xml.attributes?.['w:author']).toBe('TestAuthor');
-      expect(xml.attributes?.['w:date']).toBeDefined();
-      expect(xml.children).toHaveLength(1);
+      expect(xml).not.toBeNull();
+      expect(xml!.name).toBe('w:ins');
+      expect(xml!.attributes?.['w:id']).toBe('0');
+      expect(xml!.attributes?.['w:author']).toBe('TestAuthor');
+      expect(xml!.attributes?.['w:date']).toBeDefined();
+      expect(xml!.children).toHaveLength(1);
     });
 
     it('should generate valid XML for deletion', () => {
@@ -258,11 +259,12 @@ describe('Revision', () => {
       revision.setId(1);
       const xml = revision.toXML();
 
-      expect(xml.name).toBe('w:del');
-      expect(xml.attributes?.['w:id']).toBe('1');
+      expect(xml).not.toBeNull();
+      expect(xml!.name).toBe('w:del');
+      expect(xml!.attributes?.['w:id']).toBe('1');
 
       // Check that the run uses w:delText instead of w:t
-      const runXml = xml.children?.[0] as any;
+      const runXml = xml!.children?.[0] as any;
       const textChild = runXml?.children?.find((c: any) => c.name === 'w:delText');
       expect(textChild).toBeDefined();
     });
@@ -273,8 +275,9 @@ describe('Revision', () => {
       revision.setId(5);
       const xml = revision.toXML();
 
-      expect(xml.name).toBe('w:moveFrom');
-      expect(xml.attributes?.['w:moveId']).toBe('move-123');
+      expect(xml).not.toBeNull();
+      expect(xml!.name).toBe('w:moveFrom');
+      expect(xml!.attributes?.['w:moveId']).toBe('move-123');
     });
 
     it('should generate correct element names for all types', () => {
@@ -303,7 +306,8 @@ describe('Revision', () => {
           content: new Run('text'),
         });
         const xml = revision.toXML();
-        expect(xml.name).toBe(expectedName);
+        expect(xml).not.toBeNull();
+        expect(xml!.name).toBe(expectedName);
       }
     });
 
@@ -316,9 +320,10 @@ describe('Revision', () => {
       revision.setId(0);
       const xml = revision.toXML();
 
-      expect(xml.name).toBe('w:rPrChange');
+      expect(xml).not.toBeNull();
+      expect(xml!.name).toBe('w:rPrChange');
       // Should contain w:rPr child with previous properties
-      const rPrChild = xml.children?.find((c: any) => c.name === 'w:rPr');
+      const rPrChild = xml!.children?.find((c: any) => c.name === 'w:rPr');
       expect(rPrChild).toBeDefined();
     });
 
@@ -327,7 +332,29 @@ describe('Revision', () => {
       revision.setId(0);
       const xml = revision.toXML();
 
-      expect(xml.attributes?.['w:date']).toBe('2025-06-15T12:30:45.000Z');
+      expect(xml).not.toBeNull();
+      expect(xml!.attributes?.['w:date']).toBe('2025-06-15T12:30:45.000Z');
+    });
+
+    it('should return null for internal tracking types', () => {
+      const internalTypes: RevisionType[] = [
+        'hyperlinkChange',
+        'imageChange',
+        'fieldChange',
+        'commentChange',
+        'bookmarkChange',
+        'contentControlChange',
+      ];
+
+      for (const type of internalTypes) {
+        const revision = new Revision({
+          author: 'Test',
+          type,
+          content: new Run('text'),
+        });
+        const xml = revision.toXML();
+        expect(xml).toBeNull();
+      }
     });
   });
 
@@ -365,41 +392,7 @@ describe('Revision', () => {
 
   describe('Internal Tracking Types', () => {
     // These types are used internally for changelog generation and tracking,
-    // but have no OOXML element equivalent - they should throw when serialized
-    const internalTypes: RevisionType[] = [
-      'hyperlinkChange',
-      'imageChange',
-      'fieldChange',
-      'commentChange',
-      'bookmarkChange',
-      'contentControlChange',
-    ];
-
-    it('should throw when attempting to serialize internal tracking types to XML', () => {
-      for (const type of internalTypes) {
-        const revision = new Revision({
-          author: 'Test',
-          type,
-          content: new Run('text'),
-        });
-
-        expect(() => revision.toXML()).toThrow(
-          `Revision type '${type}' is an internal tracking type and cannot be serialized to OOXML XML`
-        );
-      }
-    });
-
-    it('should include helpful error message suggesting insert/delete pairs', () => {
-      const revision = new Revision({
-        author: 'Test',
-        type: 'hyperlinkChange',
-        content: new Run('text'),
-      });
-
-      expect(() => revision.toXML()).toThrow(
-        /Use insert\/delete revision pairs for tracking changes to hyperlinks/
-      );
-    });
+    // but have no OOXML element equivalent - toXML() returns null for graceful handling
 
     it('should allow creating internal tracking type revisions for metadata purposes', () => {
       // These can be created for tracking/changelog purposes, just not serialized

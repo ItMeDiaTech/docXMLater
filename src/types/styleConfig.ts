@@ -124,6 +124,20 @@ export interface Heading2Config extends StyleConfig {
 }
 
 /**
+ * Extended configuration for Normal style with alignment preservation options
+ */
+export interface NormalConfig extends StyleConfig {
+  /**
+   * Whether to preserve center alignment during style application.
+   * When true, paragraphs that are center-aligned will retain their center alignment
+   * instead of being changed to the Normal style's alignment (typically 'left').
+   * This is useful for preserving intentional centering like image captions or table headers.
+   * @default false
+   */
+  preserveCenterAlignment?: boolean;
+}
+
+/**
  * Complete configuration for applyStyles()
  * All properties are optional - defaults will be used if not provided
  */
@@ -137,8 +151,8 @@ export interface ApplyStylesOptions {
   /** Heading3 style configuration */
   heading3?: StyleConfig;
 
-  /** Normal style configuration */
-  normal?: StyleConfig;
+  /** Normal style configuration with alignment preservation options */
+  normal?: NormalConfig;
 
   /** List Paragraph style configuration */
   listParagraph?: StyleConfig;
@@ -150,6 +164,14 @@ export interface ApplyStylesOptions {
    * @default true
    */
   preserveBlankLinesAfterHeading2Tables?: boolean;
+
+  /**
+   * Whether to preserve white font (FFFFFF) color during style application.
+   * When true, runs with white color will not have their color changed.
+   * This is useful for preserving hidden text like ID tags or overlay text.
+   * @default false
+   */
+  preserveWhiteFont?: boolean;
 }
 
 /**

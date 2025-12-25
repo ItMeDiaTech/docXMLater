@@ -20,6 +20,7 @@ import {
   paragraphHasRevisions,
   getRevisionsFromParagraph,
   countRevisionsByType,
+  stripRevisionsFromXml,
 } from '../../src/utils/InMemoryRevisionAcceptor';
 import { isImageRunContent, isRunContent } from '../../src/elements/RevisionContent';
 
@@ -554,6 +555,260 @@ describe('InMemoryRevisionAcceptor', () => {
         const content = para.getContent();
         expect(content.length).toBe(0);
       });
+    });
+  });
+
+  describe('stripRevisionsFromXml', () => {
+    it('should unwrap insertion tags keeping content', () => {
+      const xml = '<w:tbl><w:tr><w:tc><w:p><w:ins w:author="Test"><w:r><w:t>Inserted</w:t></w:r></w:ins></w:p></w:tc></w:tr></w:tbl>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).not.toContain('<w:ins');
+      expect(result).not.toContain('</w:ins>');
+      expect(result).toContain('<w:r><w:t>Inserted</w:t></w:r>');
+    });
+
+    it('should remove deletion tags including content', () => {
+      const xml = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Keep</w:t></w:r><w:del w:author="Test"><w:r><w:t>Delete</w:t></w:r></w:del></w:p></w:tc></w:tr></w:tbl>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).not.toContain('<w:del');
+      expect(result).not.toContain('Delete');
+      expect(result).toContain('Keep');
+    });
+
+    it('should remove moveFrom tags including content', () => {
+      const xml = '<w:p><w:moveFrom w:author="Test" w:id="0"><w:r><w:t>Moved</w:t></w:r></w:moveFrom></w:p>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).not.toContain('<w:moveFrom');
+      expect(result).not.toContain('Moved');
+    });
+
+    it('should unwrap moveTo tags keeping content', () => {
+      const xml = '<w:p><w:moveTo w:author="Test" w:id="0"><w:r><w:t>Moved</w:t></w:r></w:moveTo></w:p>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).not.toContain('<w:moveTo');
+      expect(result).not.toContain('</w:moveTo>');
+      expect(result).toContain('<w:r><w:t>Moved</w:t></w:r>');
+    });
+
+    it('should remove property change elements', () => {
+      const xml = '<w:p><w:pPr><w:pPrChange w:author="Test"><w:pPr><w:jc w:val="left"/></w:pPr></w:pPrChange></w:pPr></w:p>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).not.toContain('<w:pPrChange');
+      expect(result).not.toContain('</w:pPrChange>');
+    });
+
+    it('should remove run property change elements', () => {
+      const xml = '<w:r><w:rPr><w:b/><w:rPrChange w:author="Test"><w:rPr></w:rPr></w:rPrChange></w:rPr><w:t>Text</w:t></w:r>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).not.toContain('<w:rPrChange');
+      expect(result).toContain('<w:b/>');
+      expect(result).toContain('Text');
+    });
+
+    it('should remove range markers', () => {
+      const xml = '<w:p><w:moveFromRangeStart w:id="0"/><w:r><w:t>Text</w:t></w:r><w:moveFromRangeEnd w:id="0"/></w:p>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).not.toContain('moveFromRangeStart');
+      expect(result).not.toContain('moveFromRangeEnd');
+      expect(result).toContain('Text');
+    });
+
+    it('should handle nested revisions', () => {
+      const xml = '<w:p><w:ins><w:del><w:r><w:t>Nested</w:t></w:r></w:del></w:ins></w:p>';
+      const result = stripRevisionsFromXml(xml);
+
+      // Deletion inside insertion - both should be processed
+      // Del removes content, ins unwraps - net result: content removed
+      expect(result).not.toContain('<w:ins');
+      expect(result).not.toContain('<w:del');
+    });
+
+    it('should handle XML with no revisions', () => {
+      const xml = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>No revisions</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).toBe(xml);
+    });
+
+    it('should handle table property changes', () => {
+      const xml = '<w:tbl><w:tblPr><w:tblPrChange w:author="Test"><w:tblPr/></w:tblPrChange></w:tblPr></w:tbl>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).not.toContain('<w:tblPrChange');
+    });
+
+    it('should handle cell property changes', () => {
+      const xml = '<w:tc><w:tcPr><w:tcPrChange w:author="Test"><w:tcPr/></w:tcPrChange></w:tcPr></w:tc>';
+      const result = stripRevisionsFromXml(xml);
+
+      expect(result).not.toContain('<w:tcPrChange');
+    });
+  });
+
+  describe('empty table cleanup', () => {
+    it('should remove tables with no text content after revision acceptance', () => {
+      const doc = Document.create();
+
+      // Create a paragraph with content
+      const para1 = doc.createParagraph();
+      para1.addRun(new Run('Regular content before table'));
+
+      // Create a table with only deletion revisions (all content deleted)
+      const table = doc.createTable(2, 2);
+      const rows = table.getRows();
+      const cell = rows[0]?.getCells()[0];
+      if (cell) {
+        const cellParagraphs = cell.getParagraphs();
+        if (cellParagraphs[0]) {
+          // Add deletion revision (content will be removed on acceptance)
+          cellParagraphs[0].addRevision(
+            Revision.createDeletion('Author', new Run('Deleted content'))
+          );
+        }
+      }
+
+      // Create another paragraph after the table
+      const para2 = doc.createParagraph();
+      para2.addRun(new Run('Regular content after table'));
+
+      // Verify we have 1 table before acceptance
+      expect(doc.getTables().length).toBe(1);
+
+      // Accept revisions with cleanup enabled
+      const result = acceptRevisionsInMemory(doc, { cleanupEmptyTables: true });
+
+      // Verify table was removed (it's now empty)
+      expect(result.emptyTablesRemoved).toBe(1);
+      expect(doc.getTables().length).toBe(0);
+
+      // Verify paragraphs still exist
+      const paragraphs = doc.getParagraphs();
+      expect(paragraphs.length).toBe(2);
+      expect(paragraphs[0]?.getText()).toBe('Regular content before table');
+      expect(paragraphs[1]?.getText()).toBe('Regular content after table');
+    });
+
+    it('should preserve tables with text content', () => {
+      const doc = Document.create();
+
+      // Create a table with actual content
+      const table = doc.createTable(2, 2);
+      const rows = table.getRows();
+      const cell = rows[0]?.getCells()[0];
+      if (cell) {
+        // Use createParagraph with text - this is the proper way to add content
+        cell.createParagraph('Cell content');
+      }
+
+      // Verify content was added
+      const cellText = table.getRows()[0]?.getCells()[0]?.getParagraphs()[0]?.getText();
+      expect(cellText).toBe('Cell content');
+
+      // Accept revisions with cleanup enabled
+      const result = acceptRevisionsInMemory(doc, { cleanupEmptyTables: true });
+
+      // Table should NOT be removed (it has content)
+      expect(result.emptyTablesRemoved).toBe(0);
+      expect(doc.getTables().length).toBe(1);
+    });
+
+    it('should not remove empty tables when cleanup is disabled', () => {
+      const doc = Document.create();
+
+      // Create an empty table
+      const table = doc.createTable(1, 1);
+
+      // Accept revisions with cleanup DISABLED
+      const result = acceptRevisionsInMemory(doc, { cleanupEmptyTables: false });
+
+      // Table should NOT be removed (cleanup disabled)
+      expect(result.emptyTablesRemoved).toBe(0);
+      expect(doc.getTables().length).toBe(1);
+    });
+
+    it('should handle multiple empty tables', () => {
+      const doc = Document.create();
+
+      // Create two empty tables with deletion revisions
+      for (let i = 0; i < 2; i++) {
+        doc.createParagraph().addRun(new Run(`Before table ${i + 1}`));
+        const table = doc.createTable(1, 1);
+        const cell = table.getRows()[0]?.getCells()[0];
+        if (cell) {
+          const cellParagraphs = cell.getParagraphs();
+          if (cellParagraphs[0]) {
+            cellParagraphs[0].addRevision(
+              Revision.createDeletion('Author', new Run('Deleted'))
+            );
+          }
+        }
+      }
+
+      // Verify we have 2 tables before acceptance
+      expect(doc.getTables().length).toBe(2);
+
+      // Accept revisions
+      const result = acceptRevisionsInMemory(doc);
+
+      // Both empty tables should be removed
+      expect(result.emptyTablesRemoved).toBe(2);
+      expect(doc.getTables().length).toBe(0);
+    });
+
+    it('should handle mix of empty and non-empty tables', () => {
+      const doc = Document.create();
+
+      // Create table with content - use createParagraph with text
+      const table1 = doc.createTable(1, 1);
+      const cell1 = table1.getRows()[0]?.getCells()[0];
+      if (cell1) {
+        cell1.createParagraph('Has content');
+      }
+
+      // Create empty table (only deletion revision in an empty paragraph)
+      const table2 = doc.createTable(1, 1);
+      const cell2 = table2.getRows()[0]?.getCells()[0];
+      if (cell2) {
+        const para = cell2.createParagraph();
+        para.addRevision(
+          Revision.createDeletion('Author', new Run('Will be deleted'))
+        );
+      }
+
+      // Create another table with content - use createParagraph with text
+      const table3 = doc.createTable(1, 1);
+      const cell3 = table3.getRows()[0]?.getCells()[0];
+      if (cell3) {
+        cell3.createParagraph('Also has content');
+      }
+
+      // Verify 3 tables before
+      expect(doc.getTables().length).toBe(3);
+
+      // Accept revisions
+      const result = acceptRevisionsInMemory(doc);
+
+      // Only one empty table should be removed
+      expect(result.emptyTablesRemoved).toBe(1);
+      expect(doc.getTables().length).toBe(2);
+    });
+
+    it('should include emptyTablesRemoved in result even when zero', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+      para.addRevision(Revision.createInsertion('Author', new Run('Text')));
+
+      const result = acceptRevisionsInMemory(doc);
+
+      // emptyTablesRemoved should be 0, not undefined
+      expect(result.emptyTablesRemoved).toBe(0);
     });
   });
 });

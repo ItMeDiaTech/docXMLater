@@ -24,6 +24,8 @@ export interface CommentProperties {
   content: string | Run | Run[];
   /** Parent comment ID (for replies) */
   parentId?: number;
+  /** Whether the comment is resolved/done (w:done attribute per ECMA-376) */
+  done?: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export class Comment {
   private date: Date;
   private runs: Run[];
   private parentId?: number;
+  private done: boolean;
 
   /**
    * Creates a new Comment
@@ -47,6 +50,7 @@ export class Comment {
     this.initials = properties.initials || this.generateInitials(properties.author);
     this.date = properties.date || new Date();
     this.parentId = properties.parentId;
+    this.done = properties.done ?? false;
 
     // Convert content to runs
     if (typeof properties.content === 'string') {
@@ -148,6 +152,32 @@ export class Comment {
   }
 
   /**
+   * Checks if the comment is resolved/done
+   * Per ECMA-376 Part 1, Section 17.13.4.2 (w:done attribute)
+   */
+  isResolved(): boolean {
+    return this.done;
+  }
+
+  /**
+   * Marks the comment as resolved/done
+   * Sets w:done="1" in the XML output
+   */
+  resolve(): this {
+    this.done = true;
+    return this;
+  }
+
+  /**
+   * Marks the comment as unresolved
+   * Removes w:done attribute from XML output
+   */
+  unresolve(): this {
+    this.done = false;
+    return this;
+  }
+
+  /**
    * Gets the runs in this comment
    */
   getRuns(): Run[] {
@@ -245,6 +275,11 @@ export class Comment {
     // Add parent ID for replies
     if (this.parentId !== undefined) {
       attributes['w:parentId'] = this.parentId.toString();
+    }
+
+    // Add done attribute for resolved comments (per ECMA-376)
+    if (this.done) {
+      attributes['w:done'] = '1';
     }
 
     // Create paragraph containing the comment content

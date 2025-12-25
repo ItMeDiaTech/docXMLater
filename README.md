@@ -55,6 +55,7 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - Complete XML generation and parsing (ReDoS-safe, position-based parser)
 - 40+ unit conversion functions (twips, EMUs, points, pixels, inches, cm)
 - Validation utilities and corruption detection
+- Safe OOXML parsing helpers (zero-value handling, boolean parsing)
 - Full TypeScript support with comprehensive type definitions
 - Error handling utilities
 - Logging infrastructure with multiple log levels
@@ -244,7 +245,7 @@ const doc = await Document.load('document.docx', {
   // OR
   revisionHandling: 'strip'   // Remove all revision markup
   // OR
-  revisionHandling: 'preserve' // Keep tracked changes (may cause corruption)
+  revisionHandling: 'preserve' // Keep tracked changes (may cause corruption, but should not do so - report errors if found)
 });
 ```
 
@@ -268,6 +269,17 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 
 - `findText(pattern)` - Find text matches
 - `replaceText(pattern, replacement)` - Replace text
+- `findParagraphsByText(pattern)` - Find paragraphs containing text/regex
+- `getParagraphsByStyle(styleId)` - Get paragraphs with specific style
+- `getRunsByFont(fontName)` - Get runs using a specific font
+- `getRunsByColor(color)` - Get runs with a specific color
+
+**Bulk Formatting:**
+
+- `setAllRunsFont(fontName)` - Apply font to all text
+- `setAllRunsSize(size)` - Apply font size to all text
+- `setAllRunsColor(color)` - Apply color to all text
+- `getFormattingReport()` - Get document formatting statistics
 
 **Hyperlinks:**
 
@@ -378,6 +390,43 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `setHorizontalMerge(mergeType)` - Horizontal merge
 - `setVerticalMerge(mergeType)` - Vertical merge
 
+**Convenience Methods:**
+
+- `setTextAlignment(alignment)` - Set alignment for all paragraphs
+- `setAllParagraphsStyle(styleId)` - Apply style to all paragraphs
+- `setAllRunsFont(fontName)` - Apply font to all runs
+- `setAllRunsSize(size)` - Apply font size to all runs
+- `setAllRunsColor(color)` - Apply color to all runs
+
+### Table Class
+
+**Sorting:**
+
+- `sortRows(columnIndex, options?)` - Sort table rows by column
+
+### Section Class
+
+**Line Numbering:**
+
+- `setLineNumbering(options)` - Enable line numbering
+- `getLineNumbering()` - Get line numbering settings
+- `clearLineNumbering()` - Disable line numbering
+
+### Comment Class
+
+**Resolution:**
+
+- `resolve()` - Mark comment as resolved
+- `unresolve()` - Mark comment as unresolved
+- `isResolved()` - Check if comment is resolved
+
+### CommentManager Class
+
+**Filtering:**
+
+- `getResolvedComments()` - Get all resolved comments
+- `getUnresolvedComments()` - Get all unresolved comments
+
 ### Utilities
 
 **Unit Conversions:**
@@ -452,26 +501,15 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 5.0.0**
+**Current Version: 8.1.0**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
-
-## RAG-CLI Integration (Development Only)
-
-This project includes MCP (Model Context Protocol) configuration to allow Claude Code to access docXMLater documentation from Documentation_Hub during development.
-
-**Note:** RAG-CLI uses `python-docx` for DOCX indexing, not docXMLater. These are complementary tools:
-
-- **RAG-CLI**: Index DOCX files for search/retrieval (read-only)
-- **docXMLater**: Create, modify, format DOCX files (read-write)
-
-The `.mcp.json` configuration is for development assistance only and does not represent a runtime integration between the two projects.
 
 ## Testing
 
 The framework includes comprehensive test coverage:
 
-- **2073+ test cases** across 59 test files
+- **1891+ test cases** across 60+ test files
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks
@@ -599,7 +637,6 @@ Contributions welcome! Please:
 ## Support
 
 - GitHub Issues: https://github.com/ItMeDiaTech/docXMLater/issues
-- Documentation: See CLAUDE.md for detailed implementation notes
 
 ## Acknowledgments
 

@@ -17,7 +17,7 @@ import { Hyperlink } from "../elements/Hyperlink";
 import { Image } from "../elements/Image";
 import { ImageManager } from "../elements/ImageManager";
 import { ImageRun } from "../elements/ImageRun";
-import { Paragraph } from "../elements/Paragraph";
+import { Paragraph, ParagraphContent, FieldLike } from "../elements/Paragraph";
 import { RangeMarker } from "../elements/RangeMarker";
 import { Revision, RevisionType } from "../elements/Revision";
 import { RevisionManager } from "../elements/RevisionManager";
@@ -70,6 +70,7 @@ import type { TrackingContext } from "../tracking/TrackingContext";
 import { ZipHandler } from "../zip/ZipHandler";
 import { DOCX_PATHS } from "../zip/types";
 import { DocumentGenerator } from "./DocumentGenerator";
+import { DocumentIdManager } from "./DocumentIdManager";
 import { DocumentParser } from "./DocumentParser";
 import { DocumentValidator } from "./DocumentValidator";
 import { RelationshipManager } from "./RelationshipManager";
@@ -186,6 +187,37 @@ export interface DocumentLoadOptions extends DocumentOptions {
    * ```
    */
   revisionHandling?: 'preserve' | 'accept' | 'strip';
+
+  /**
+   * Accept all tracked changes after parsing using in-memory transformation.
+   *
+   * Unlike `revisionHandling: 'accept'` which uses raw XML transformation before parsing,
+   * this option parses the document first (so revisions are available for inspection),
+   * then accepts them using in-memory DOM transformation.
+   *
+   * Key difference: This allows subsequent document modifications to be saved correctly,
+   * whereas raw XML acceptance may cause modifications to be lost.
+   *
+   * When `true`:
+   * - Document is loaded with revisions preserved
+   * - Revisions are parsed into the model (available for ChangelogGenerator)
+   * - After parsing, `acceptAllRevisions()` is called automatically
+   * - Document is clean and ready for modifications
+   *
+   * Recommended for Template_UI workflow when auto-accept is enabled.
+   *
+   * @default false
+   *
+   * @example
+   * ```typescript
+   * // Load and accept revisions (clean document, modifications work)
+   * const doc = await Document.load('file.docx', { acceptRevisions: true });
+   * doc.enableTrackChanges({ author: 'Doc Hub' });
+   * // ... make modifications ...
+   * await doc.save('output.docx'); // Modifications are saved correctly
+   * ```
+   */
+  acceptRevisions?: boolean;
 }
 
 /**
@@ -215,6 +247,23 @@ export class Document {
     this.bookmarkManager = BookmarkManager.create();
     this.revisionManager = RevisionManager.create();
     this.commentManager = CommentManager.create();
+    this.documentIdManager = DocumentIdManager.create();
+
+    // Wire up centralized ID allocation for all annotation managers
+    // This ensures bookmark, revision, and comment IDs are globally unique (ECMA-376 requirement)
+    this.bookmarkManager.setIdProvider(
+      () => this.documentIdManager.getNextId(),
+      (existingId) => this.documentIdManager.ensureNextIdAbove(existingId)
+    );
+    this.revisionManager.setIdProvider(
+      () => this.documentIdManager.getNextId(),
+      (existingId) => this.documentIdManager.ensureNextIdAbove(existingId)
+    );
+    this.commentManager.setIdProvider(
+      () => this.documentIdManager.getNextId(),
+      (existingId) => this.documentIdManager.ensureNextIdAbove(existingId)
+    );
+
     this.trackingContext = new DocumentTrackingContext(this.revisionManager);
     this.parser = new DocumentParser();
     this.generator = new DocumentGenerator();
@@ -246,6 +295,7 @@ export class Document {
   private bookmarkManager: BookmarkManager;
   private revisionManager: RevisionManager;
   private commentManager: CommentManager;
+  private documentIdManager: DocumentIdManager;
   private trackingContext: DocumentTrackingContext;
   // Reserved for future implementation - using proper types from existing managers
   private _footnoteManager?: FootnoteManager;
@@ -391,21 +441,29 @@ export class Document {
     const zipHandler = new ZipHandler();
     await zipHandler.load(filePath);
 
-    // Handle tracked changes BEFORE parsing
-    const revisionHandling = options?.revisionHandling ?? 'accept'; // Default to accept
+    // Determine revision handling strategy
+    // If acceptRevisions is true, we need to preserve revisions during parsing
+    // so they can be accepted using in-memory transformation after parsing
+    const useInMemoryAccept = options?.acceptRevisions === true;
+    const revisionHandling = useInMemoryAccept
+      ? 'preserve'  // Force preserve so revisions are parsed into model
+      : (options?.revisionHandling ?? 'accept'); // Default to accept
 
+    // Handle tracked changes BEFORE parsing (unless using in-memory accept)
     if (revisionHandling === 'accept') {
-      // Accept all tracked changes to prevent corruption
+      // Accept all tracked changes to prevent corruption (raw XML approach)
       await acceptAllRevisions(zipHandler);
     } else if (revisionHandling === 'strip') {
       // Strip all tracked changes completely
       await stripTrackedChanges(zipHandler);
     } else if (revisionHandling === 'preserve') {
-      // Check if document has tracked changes and warn
-      const documentXml = zipHandler.getFileAsString('word/document.xml');
-      if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
-          documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
-        logger.warn('Document contains tracked changes in preserve mode');
+      // Check if document has tracked changes and warn (unless intentionally accepting later)
+      if (!useInMemoryAccept) {
+        const documentXml = zipHandler.getFileAsString('word/document.xml');
+        if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
+            documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
+          logger.warn('Document contains tracked changes in preserve mode');
+        }
       }
     }
 
@@ -430,6 +488,16 @@ export class Document {
     }
 
     await doc.parseDocument();
+
+    // If acceptRevisions option was set, accept revisions using in-memory transformation
+    // This happens AFTER parsing so revisions were available for inspection (e.g., ChangelogGenerator)
+    // and allows subsequent document modifications to be saved correctly
+    if (useInMemoryAccept) {
+      logger.info('Accepting revisions using in-memory transformation');
+      await doc.acceptAllRevisions();
+      logger.info('Revisions accepted', { paragraphs: doc.getParagraphCount() });
+    }
+
     logger.info('Document loaded', { paragraphs: doc.getParagraphCount() });
 
     return doc;
@@ -473,21 +541,29 @@ export class Document {
     const zipHandler = new ZipHandler();
     await zipHandler.loadFromBuffer(buffer);
 
-    // Handle tracked changes BEFORE parsing
-    const revisionHandling = options?.revisionHandling ?? 'accept'; // Default to accept
+    // Determine revision handling strategy
+    // If acceptRevisions is true, we need to preserve revisions during parsing
+    // so they can be accepted using in-memory transformation after parsing
+    const useInMemoryAccept = options?.acceptRevisions === true;
+    const revisionHandling = useInMemoryAccept
+      ? 'preserve'  // Force preserve so revisions are parsed into model
+      : (options?.revisionHandling ?? 'accept'); // Default to accept
 
+    // Handle tracked changes BEFORE parsing (unless using in-memory accept)
     if (revisionHandling === 'accept') {
-      // Accept all tracked changes to prevent corruption
+      // Accept all tracked changes to prevent corruption (raw XML approach)
       await acceptAllRevisions(zipHandler);
     } else if (revisionHandling === 'strip') {
       // Strip all tracked changes completely
       await stripTrackedChanges(zipHandler);
     } else if (revisionHandling === 'preserve') {
-      // Check if document has tracked changes and warn
-      const documentXml = zipHandler.getFileAsString('word/document.xml');
-      if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
-          documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
-        logger.warn('Document contains tracked changes in preserve mode');
+      // Check if document has tracked changes and warn (unless intentionally accepting later)
+      if (!useInMemoryAccept) {
+        const documentXml = zipHandler.getFileAsString('word/document.xml');
+        if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
+            documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
+          logger.warn('Document contains tracked changes in preserve mode');
+        }
       }
     }
 
@@ -512,6 +588,16 @@ export class Document {
     }
 
     await doc.parseDocument();
+
+    // If acceptRevisions option was set, accept revisions using in-memory transformation
+    // This happens AFTER parsing so revisions were available for inspection (e.g., ChangelogGenerator)
+    // and allows subsequent document modifications to be saved correctly
+    if (useInMemoryAccept) {
+      logger.info('Accepting revisions using in-memory transformation');
+      await doc.acceptAllRevisions();
+      logger.info('Revisions accepted', { paragraphs: doc.getParagraphCount() });
+    }
+
     logger.info('Document loaded from buffer', { paragraphs: doc.getParagraphCount() });
 
     return doc;
@@ -528,7 +614,8 @@ export class Document {
     const result = await this.parser.parseDocument(
       this.zipHandler,
       this.relationshipManager,
-      this.imageManager
+      this.imageManager,
+      this.bookmarkManager
     );
 
     // Populate document properties from parser results
@@ -578,8 +665,71 @@ export class Document {
     this.stylesManager.resetModified();
     this.numberingManager.resetModified();
 
+    // Initialize ALL annotation managers with a unified global ID to avoid collisions
+    // Per ECMA-376, w:id must be unique across ALL annotation types (bookmarks, revisions, comments)
+    // Must be called BEFORE populateRevisionLocations() which registers revisions
+    this.initializeGlobalAnnotationIds();
+
+    // Parse and register comments from comments.xml
+    // Must be called AFTER initializeGlobalAnnotationIds() to properly handle ID synchronization
+    this.parseAndRegisterComments();
+
     // Populate revision locations for changelog/tracking purposes
     this.populateRevisionLocations();
+
+    // Initialize image manager with existing images to avoid filename collisions
+    this.imageManager.initializeFromLoadedImages();
+  }
+
+  /**
+   * Scans the raw document XML for ALL existing annotation IDs and initializes
+   * ALL managers (BookmarkManager, RevisionManager, CommentManager) to use IDs
+   * starting from the global maximum + 1.
+   *
+   * Per ECMA-376, w:id attributes must be UNIQUE across ALL annotation types:
+   * - w:bookmarkStart / w:bookmarkEnd
+   * - w:ins / w:del (revisions)
+   * - w:pPrChange / w:rPrChange / w:tblPrChange (property changes)
+   * - w:moveFrom / w:moveTo
+   * - w:commentRangeStart / w:commentRangeEnd
+   * - w:comment
+   *
+   * This unified approach prevents ID collisions between different annotation types
+   * that were causing document corruption.
+   *
+   * @private
+   */
+  private initializeGlobalAnnotationIds(): void {
+    const documentXml = this.zipHandler.getFileAsString('word/document.xml');
+    const commentsXml = this.zipHandler.getFileAsString('word/comments.xml');
+
+    // Initialize the centralized DocumentIdManager from document XML
+    // This scans ALL w:id attributes and sets nextId to globalMax + 1
+    // All managers (Bookmark, Revision, Comment) use this shared counter via callbacks
+    this.documentIdManager.initializeFromDocument(documentXml || undefined, commentsXml || undefined);
+  }
+
+  /**
+   * Parses comments from word/comments.xml and registers them with the CommentManager.
+   * This enables round-trip preservation of comments in loaded documents.
+   * @private
+   */
+  private parseAndRegisterComments(): void {
+    const commentsXml = this.zipHandler.getFileAsString('word/comments.xml');
+    if (!commentsXml) {
+      return; // No comments.xml file, nothing to parse
+    }
+
+    const parser = new DocumentParser();
+    const comments = parser.parseCommentsXml(commentsXml);
+
+    // Register each comment with its existing ID
+    for (const comment of comments) {
+      this.commentManager.registerExisting(comment);
+    }
+
+    // Link replies to their parent comments
+    this.commentManager.linkReplies();
   }
 
   /**
@@ -1169,6 +1319,20 @@ export class Document {
   setCreator(creator: string): this {
     this.properties.creator = creator;
     return this;
+  }
+
+  /**
+   * Sets the document author (alias for setCreator)
+   * @param author - Document author name
+   * @returns This document for chaining
+   *
+   * @example
+   * ```typescript
+   * doc.setAuthor('John Smith');
+   * ```
+   */
+  setAuthor(author: string): this {
+    return this.setCreator(author);
   }
 
   /**
@@ -2472,14 +2636,26 @@ export class Document {
           // Always apply margins
           cell.setMargins(cellMargins);
 
-          // Apply shading and formatting to cells with existing color (not white)
+          // Apply shading and formatting to cells with existing shading
+          // Shading can be either a hex fill color OR a pattern (like pct10)
           const currentShading = cell.getFormatting().shading;
           const currentColor = currentShading?.fill?.toUpperCase();
+          const currentPattern = currentShading?.pattern?.toLowerCase();
 
           // Check if color is a valid 6-character hex code (not 'auto' or other special values)
           const isValidHexColor = /^[0-9A-F]{6}$/i.test(currentColor || "");
+          const hasHexFillShading =
+            currentColor && currentColor !== "FFFFFF" && isValidHexColor;
 
-          if (currentColor && currentColor !== "FFFFFF" && isValidHexColor) {
+          // Check if cell has pattern-based shading (like pct10, pct20, etc.)
+          // Patterns like 'clear' or 'nil' don't count as shading
+          const hasPatternShading =
+            currentPattern &&
+            currentPattern !== "clear" &&
+            currentPattern !== "nil" &&
+            currentPattern !== "auto";
+
+          if (hasHexFillShading || hasPatternShading) {
             // Apply the color passed to the method
             cell.setShading({ fill: headerRowShading });
             cellsRecolored++;
@@ -3817,10 +3993,18 @@ export class Document {
 
       // Process Heading1 paragraphs
       if (styleId === "Heading1" && heading1) {
+        // Save white font status BEFORE clearing (clearDirectFormattingConflicts clears color)
+        const allRuns = this.getAllRunsFromParagraph(para);
+        const whiteFontRuns = new Set(
+          options?.preserveWhiteFont
+            ? allRuns.filter(run => run.getFormatting().color?.toUpperCase() === 'FFFFFF')
+            : []
+        );
+
         para.clearDirectFormattingConflicts(heading1);
 
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
-        for (const run of this.getAllRunsFromParagraph(para)) {
+        for (const run of allRuns) {
           if (!h1Preserve.bold) {
             run.setBold(h1Config.run?.bold ?? false);
           }
@@ -3830,12 +4014,17 @@ export class Document {
           if (!h1Preserve.underline) {
             run.setUnderline(h1Config.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size - always apply color to override any existing
+          // Apply font, color, and size - skip color if run was white font
           if (h1Config.run?.font) {
             run.setFont(h1Config.run.font);
           }
           if (h1Config.run?.color !== undefined) {
-            run.setColor(h1Config.run.color);
+            if (whiteFontRuns.has(run)) {
+              // Restore white font
+              run.setColor('FFFFFF');
+            } else {
+              run.setColor(h1Config.run.color);
+            }
           }
           if (h1Config.run?.size) {
             run.setSize(h1Config.run.size);
@@ -3893,11 +4082,59 @@ export class Document {
           continue;
         }
 
-        // Clear direct formatting first
+        // Check if paragraph is in a table FIRST (need this info for alignment preservation)
+        const { inTable, cell } = this.isParagraphInTable(para);
+
+        // Preserve alignment for shaded cells in multi-cell tables
+        // Centering should not be cleared by clearDirectFormattingConflicts()
+        let preservedAlignment: typeof para.formatting.alignment = undefined;
+
+        if (inTable && cell) {
+          // Find the table to check if it's > 1x1
+          const table = this.getAllTables().find((t) => {
+            for (const row of t.getRows()) {
+              for (const c of row.getCells()) {
+                if (c === cell) return true;
+              }
+            }
+            return false;
+          });
+
+          // Preserve alignment for shaded cells in multi-cell tables
+          if (table) {
+            const rowCount = table.getRowCount();
+            const colCount = table.getColumnCount();
+            const isMultiCellTable = !(rowCount === 1 && colCount === 1);
+            const cellFormatting = cell.getFormatting();
+            const cellHasShading = !!(
+              cellFormatting?.shading?.fill ||
+              cellFormatting?.shading?.pattern
+            );
+
+            if (isMultiCellTable && cellHasShading && para.formatting.alignment) {
+              preservedAlignment = para.formatting.alignment;
+            }
+          }
+        }
+
+        // Save white font status BEFORE clearing (clearDirectFormattingConflicts clears color)
+        const allRuns = this.getAllRunsFromParagraph(para);
+        const whiteFontRuns = new Set(
+          options?.preserveWhiteFont
+            ? allRuns.filter(run => run.getFormatting().color?.toUpperCase() === 'FFFFFF')
+            : []
+        );
+
+        // Clear direct formatting
         para.clearDirectFormattingConflicts(heading2);
 
+        // Restore preserved alignment
+        if (preservedAlignment) {
+          para.setAlignment(preservedAlignment);
+        }
+
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
-        for (const run of this.getAllRunsFromParagraph(para)) {
+        for (const run of allRuns) {
           if (!h2Preserve.bold) {
             run.setBold(h2Config.run?.bold ?? false);
           }
@@ -3907,12 +4144,17 @@ export class Document {
           if (!h2Preserve.underline) {
             run.setUnderline(h2Config.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size - always apply color to override any existing
+          // Apply font, color, and size - skip color if run was white font
           if (h2Config.run?.font) {
             run.setFont(h2Config.run.font);
           }
           if (h2Config.run?.color !== undefined) {
-            run.setColor(h2Config.run.color);
+            if (whiteFontRuns.has(run)) {
+              // Restore white font
+              run.setColor('FFFFFF');
+            } else {
+              run.setColor(h2Config.run.color);
+            }
           }
           if (h2Config.run?.size) {
             run.setSize(h2Config.run.size);
@@ -3954,9 +4196,6 @@ export class Document {
             markProps.size = h2Config.run.size;
           }
         }
-
-        // Check if paragraph is in a table
-        const { inTable, cell } = this.isParagraphInTable(para);
 
         if (inTable && cell) {
           // Paragraph is already in a table - apply cell formatting using config
@@ -4052,10 +4291,18 @@ export class Document {
 
       // Process Heading3 paragraphs
       else if (styleId === "Heading3" && heading3) {
+        // Save white font status BEFORE clearing (clearDirectFormattingConflicts clears color)
+        const allRuns = this.getAllRunsFromParagraph(para);
+        const whiteFontRuns = new Set(
+          options?.preserveWhiteFont
+            ? allRuns.filter(run => run.getFormatting().color?.toUpperCase() === 'FFFFFF')
+            : []
+        );
+
         para.clearDirectFormattingConflicts(heading3);
 
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
-        for (const run of this.getAllRunsFromParagraph(para)) {
+        for (const run of allRuns) {
           if (!h3Preserve.bold) {
             run.setBold(h3Config.run?.bold ?? false);
           }
@@ -4065,12 +4312,17 @@ export class Document {
           if (!h3Preserve.underline) {
             run.setUnderline(h3Config.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size - always apply color to override any existing
+          // Apply font, color, and size - skip color if run was white font
           if (h3Config.run?.font) {
             run.setFont(h3Config.run.font);
           }
           if (h3Config.run?.color !== undefined) {
-            run.setColor(h3Config.run.color);
+            if (whiteFontRuns.has(run)) {
+              // Restore white font
+              run.setColor('FFFFFF');
+            } else {
+              run.setColor(h3Config.run.color);
+            }
           }
           if (h3Config.run?.size) {
             run.setSize(h3Config.run.size);
@@ -4118,6 +4370,57 @@ export class Document {
 
       // Process List Paragraph paragraphs
       else if (styleId === "ListParagraph" && listParagraph) {
+        // Check for mis-styled paragraphs: ListParagraph + left:0 + no numbering
+        // These are not actual list items - change them to Normal style
+        const paraIndentation = para.getFormatting().indentation;
+        const hasNumbering = para.getNumbering();
+        if (paraIndentation?.left === 0 && !hasNumbering) {
+          // This paragraph has ListParagraph style but explicitly overrides indent to 0
+          // and has no numbering - it should be Normal style, not ListParagraph
+          para.setStyle("Normal");
+
+          // Preserve existing bold formatting and white font before applying Normal style
+          const allRuns = this.getAllRunsFromParagraph(para);
+          const preservedBold = allRuns.map((run) => ({
+            run,
+            bold: run.getFormatting().bold,
+            isWhiteFont: options?.preserveWhiteFont && run.getFormatting().color?.toUpperCase() === 'FFFFFF',
+          }));
+
+          // Process as Normal style - skip ListParagraph processing
+          if (normal) {
+            para.clearDirectFormattingConflicts(normal);
+            for (const saved of preservedBold) {
+              const run = saved.run;
+              // Apply Normal style formatting
+              if (normalConfig.run?.font) {
+                run.setFont(normalConfig.run.font);
+              }
+              if (normalConfig.run?.color !== undefined) {
+                if (saved.isWhiteFont) {
+                  // Restore white font
+                  run.setColor('FFFFFF');
+                } else {
+                  run.setColor(normalConfig.run.color);
+                }
+              }
+              if (normalConfig.run?.size && normalConfig.run?.font) {
+                run.setFont(normalConfig.run.font, normalConfig.run.size);
+              }
+            }
+          }
+
+          // Restore bold formatting that was present before conversion
+          for (const saved of preservedBold) {
+            if (saved.bold) {
+              saved.run.setBold(true);
+            }
+          }
+
+          processedParagraphs.add(para);
+          continue;
+        }
+
         // Save formatting that should be preserved BEFORE clearing
         const allRuns = this.getAllRunsFromParagraph(para);
         const preservedFormatting = allRuns.map((run) => {
@@ -4127,6 +4430,7 @@ export class Document {
             bold: listParaPreserve.bold ? fmt.bold : undefined,
             italic: listParaPreserve.italic ? fmt.italic : undefined,
             underline: listParaPreserve.underline ? fmt.underline : undefined,
+            isWhiteFont: options?.preserveWhiteFont && fmt.color?.toUpperCase() === 'FFFFFF',
           };
         });
 
@@ -4146,7 +4450,8 @@ export class Document {
         }
 
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
-        for (const run of allRuns) {
+        for (const saved of preservedFormatting) {
+          const run = saved.run;
           if (!listParaPreserve.bold) {
             run.setBold(listParaConfig.run?.bold ?? false);
           }
@@ -4156,12 +4461,17 @@ export class Document {
           if (!listParaPreserve.underline) {
             run.setUnderline(listParaConfig.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size - always apply color to override any existing
+          // Apply font, color, and size - skip color if run was white font
           if (listParaConfig.run?.font) {
             run.setFont(listParaConfig.run.font);
           }
           if (listParaConfig.run?.color !== undefined) {
-            run.setColor(listParaConfig.run.color);
+            if (saved.isWhiteFont) {
+              // Restore white font
+              run.setColor('FFFFFF');
+            } else {
+              run.setColor(listParaConfig.run.color);
+            }
           }
           if (listParaConfig.run?.size) {
             run.setSize(listParaConfig.run.size);
@@ -4218,10 +4528,20 @@ export class Document {
             bold: normalPreserve.bold ? fmt.bold : undefined,
             italic: normalPreserve.italic ? fmt.italic : undefined,
             underline: normalPreserve.underline ? fmt.underline : undefined,
+            isWhiteFont: options?.preserveWhiteFont && fmt.color?.toUpperCase() === 'FFFFFF',
           };
         });
 
+        // Save center alignment BEFORE clearing if preserveCenterAlignment is set
+        const savedCenterAlignment = options?.normal?.preserveCenterAlignment &&
+          para.getFormatting().alignment === 'center';
+
         para.clearDirectFormattingConflicts(normal);
+
+        // Restore center alignment if it was saved
+        if (savedCenterAlignment) {
+          para.setAlignment('center');
+        }
 
         // Restore preserved formatting AFTER clearing
         for (const saved of preservedFormatting) {
@@ -4237,7 +4557,8 @@ export class Document {
         }
 
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
-        for (const run of allRuns) {
+        for (const saved of preservedFormatting) {
+          const run = saved.run;
           if (!normalPreserve.bold) {
             run.setBold(normalConfig.run?.bold ?? false);
           }
@@ -4247,12 +4568,18 @@ export class Document {
           if (!normalPreserve.underline) {
             run.setUnderline(normalConfig.run?.underline ? "single" : false);
           }
-          // Apply font, color, and size - always apply color to override any existing
+          // Apply font, color, and size - skip color if run was white font
           if (normalConfig.run?.font) {
             run.setFont(normalConfig.run.font);
           }
           if (normalConfig.run?.color !== undefined) {
-            run.setColor(normalConfig.run.color);
+            // Use saved isWhiteFont flag since color was cleared by clearDirectFormattingConflicts
+            if (!saved.isWhiteFont) {
+              run.setColor(normalConfig.run.color);
+            } else {
+              // Restore white font
+              run.setColor('FFFFFF');
+            }
           }
           if (normalConfig.run?.size) {
             run.setSize(normalConfig.run.size);
@@ -4658,6 +4985,8 @@ export class Document {
     afterLists?: boolean;
     /** Add blank lines around images larger than 100x100 pixels (default: true) */
     aroundImages?: boolean;
+    /** Add blank line above paragraphs starting with bold text followed by colon (default: true) */
+    aboveBoldColon?: boolean;
   }): {
     tablesProcessed: number;
     blankLinesAdded: number;
@@ -4680,6 +5009,7 @@ export class Document {
     const aboveWarning = options?.aboveWarning ?? true;
     const afterLists = options?.afterLists ?? true;
     const aroundImages = options?.aroundImages ?? true;
+    const aboveBoldColon = options?.aboveBoldColon ?? true;
 
     // Aggregated statistics
     let totalTablesProcessed = 0;
@@ -5221,6 +5551,172 @@ export class Document {
         }
       }
     }
+
+    // Phase 11: Add blank above paragraphs starting with bold text followed by colon
+    if (aboveBoldColon) {
+      for (let i = 1; i < this.bodyElements.length; i++) {
+        const element = this.bodyElements[i];
+        if (!(element instanceof Paragraph)) continue;
+
+        // Skip blank paragraphs
+        if (this.isParagraphBlank(element)) continue;
+
+        if (this.startsWithBoldColon(element)) {
+          // Skip list items - they shouldn't get blank lines above them for bold+colon
+          const numbering = element.getNumbering();
+          if (numbering) continue;
+
+          // Skip indented paragraphs - don't add blank lines above indented bold+colon
+          const indentation = element.getFormatting().indentation;
+          if (indentation && indentation.left && indentation.left > 0) continue;
+
+          const prevElement = this.bodyElements[i - 1];
+
+          if (
+            prevElement instanceof Paragraph &&
+            this.isParagraphBlank(prevElement)
+          ) {
+            // Mark existing blank as preserved
+            prevElement.setStyle(style);
+            if (markAsPreserved && !prevElement.isPreserved()) {
+              prevElement.setPreserved(true);
+              totalExistingLinesMarked++;
+            }
+          } else {
+            // Add blank paragraph before bold+colon line
+            const blankPara = Paragraph.create();
+            blankPara.setStyle(style);
+            blankPara.setSpaceAfter(spacingAfter);
+            if (markAsPreserved) {
+              blankPara.setPreserved(true);
+            }
+            this.bodyElements.splice(i, 0, blankPara);
+            totalBlankLinesAdded++;
+            i++; // Skip the inserted blank
+          }
+        }
+      }
+    }
+
+    // Phase 11b: Handle bold+colon paragraphs inside table cells
+    if (aboveBoldColon) {
+      for (const table of this.getAllTables()) {
+        for (const row of table.getRows()) {
+          for (const cell of row.getCells()) {
+            let cellParas = cell.getParagraphs();
+            let cellParaCount = cellParas.length;
+
+            for (let ci = 0; ci < cellParaCount; ci++) {
+              cellParas = cell.getParagraphs(); // Refresh after potential insertion
+              const para = cellParas[ci];
+              if (!para) continue;
+
+              // Skip blank paragraphs
+              if (this.isParagraphBlank(para)) continue;
+
+              // Skip list items
+              if (para.getNumbering()) continue;
+
+              // Check bold+colon condition
+              if (!this.startsWithBoldColon(para)) continue;
+
+              // Skip indented paragraphs - don't add blank lines above indented bold+colon
+              const indentation = para.getFormatting().indentation;
+              if (indentation && indentation.left && indentation.left > 0) continue;
+
+              // Skip if first element in cell
+              if (ci === 0) continue;
+
+              const prevPara = cellParas[ci - 1];
+
+              if (prevPara && this.isParagraphBlank(prevPara)) {
+                // Mark existing blank as preserved
+                prevPara.setStyle(style);
+                if (markAsPreserved && !prevPara.isPreserved()) {
+                  prevPara.setPreserved(true);
+                  totalExistingLinesMarked++;
+                }
+              } else {
+                // Add blank paragraph before bold+colon line
+                const blankPara = Paragraph.create();
+                blankPara.setStyle(style);
+                blankPara.setSpaceAfter(spacingAfter);
+                if (markAsPreserved) {
+                  blankPara.setPreserved(true);
+                }
+                cell.addParagraphAt(ci, blankPara);
+                totalBlankLinesAdded++;
+                ci++; // Skip the inserted blank
+                cellParaCount++; // Account for inserted paragraph
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Phase 12: Remove blank lines between consecutive list items
+    // List normalization may create different numIds for sub-lists (restart behavior),
+    // which causes Phase 9b to see them as "different lists" and add blanks between them.
+    // This cleanup removes blanks that are directly between two list items.
+    let listItemBlanksRemoved = 0;
+
+    // Body-level cleanup
+    for (let bi = 1; bi < this.bodyElements.length - 1; bi++) {
+      const prev = this.bodyElements[bi - 1];
+      const current = this.bodyElements[bi];
+      const next = this.bodyElements[bi + 1];
+
+      // Skip if current is not a blank paragraph
+      if (!(current instanceof Paragraph) || !this.isParagraphBlank(current)) continue;
+
+      // Skip if prev or next is a table (don't cross table boundaries)
+      if (prev instanceof Table || next instanceof Table) continue;
+
+      // Check if prev and next are both list items
+      if (prev instanceof Paragraph && next instanceof Paragraph) {
+        const prevNumbering = prev.getNumbering();
+        const nextNumbering = next.getNumbering();
+
+        if (prevNumbering && nextNumbering && prevNumbering.numId === nextNumbering.numId) {
+          // Both are items of the SAME list - remove the blank between them
+          // Keep blanks between DIFFERENT lists (e.g., bullet list followed by numbered list)
+          this.bodyElements.splice(bi, 1);
+          bi--; // Adjust index after removal
+          listItemBlanksRemoved++;
+        }
+      }
+    }
+
+    // Table cell cleanup - remove blanks between list items within each cell
+    for (const table of this.getAllTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          let cellParas = cell.getParagraphs();
+          for (let ci = 1; ci < cellParas.length - 1; ci++) {
+            const prev = cellParas[ci - 1];
+            const current = cellParas[ci];
+            const next = cellParas[ci + 1];
+
+            if (!current || !this.isParagraphBlank(current)) continue;
+
+            const prevNumbering = prev?.getNumbering();
+            const nextNumbering = next?.getNumbering();
+
+            if (prevNumbering && nextNumbering && prevNumbering.numId === nextNumbering.numId) {
+              // Both are items of the SAME list - remove the blank between them
+              // Keep blanks between DIFFERENT lists (e.g., bullet list followed by numbered list)
+              cell.removeParagraph(ci);
+              ci--; // Adjust index after removal
+              listItemBlanksRemoved++;
+              cellParas = cell.getParagraphs(); // Refresh after removal
+            }
+          }
+        }
+      }
+    }
+
+    blankLinesRemoved += listItemBlanksRemoved;
 
     // Final Phase: Remove consecutive blank paragraphs to prevent double blanks
     // This handles edge cases where multiple phases add adjacent blanks
@@ -6240,6 +6736,35 @@ export class Document {
     }
 
     return true;
+  }
+
+  /**
+   * Checks if a paragraph starts with bold text and has a colon within the first 55 characters.
+   * Examples: "Note:", "Warning:", "Note: This can include the following:"
+   * @param para The paragraph to check
+   * @returns True if the paragraph starts with bold and has colon within first 55 chars
+   * @private
+   */
+  private startsWithBoldColon(para: Paragraph): boolean {
+    const content = para.getContent();
+    if (!content || content.length === 0) return false;
+
+    // Get first content item that is a Run (skip any non-Run items at start)
+    const firstRun = content.find((item) => item instanceof Run) as
+      | Run
+      | undefined;
+    if (!firstRun) return false;
+
+    // Check if first run is bold
+    const formatting = firstRun.getFormatting();
+    if (!formatting.bold) return false;
+
+    // Check if colon exists within first 55 characters of paragraph text
+    const fullText = para.getText();
+    if (!fullText) return false;
+
+    const first55 = fullText.substring(0, 55);
+    return first55.includes(':');
   }
 
   /**
@@ -9058,6 +9583,84 @@ export class Document {
   }
 
   /**
+   * Gets comments by author
+   * @param author - Author name to filter by
+   * @returns Array of comments by the specified author
+   */
+  getCommentsByAuthor(author: string): Comment[] {
+    return this.commentManager.getCommentsByAuthor(author);
+  }
+
+  /**
+   * Gets comments within a date range
+   * @param startDate - Start of date range
+   * @param endDate - End of date range
+   * @returns Array of comments within the date range
+   */
+  getCommentsByDateRange(startDate: Date, endDate: Date): Comment[] {
+    return this.commentManager.getCommentsByDateRange(startDate, endDate);
+  }
+
+  /**
+   * Gets all comments including replies
+   * @returns Array of all comments (top-level and replies)
+   */
+  getAllCommentsWithReplies(): Comment[] {
+    return this.commentManager.getAllCommentsWithReplies();
+  }
+
+  /**
+   * Gets the total number of comments (including replies)
+   * @returns Number of comments
+   */
+  getCommentCount(): number {
+    return this.commentManager.getCount();
+  }
+
+  /**
+   * Gets the number of top-level comments (excluding replies)
+   * @returns Number of top-level comments
+   */
+  getTopLevelCommentCount(): number {
+    return this.commentManager.getTopLevelCount();
+  }
+
+  /**
+   * Gets all unique authors who have made comments
+   * @returns Array of unique author names
+   */
+  getCommentAuthors(): string[] {
+    return this.commentManager.getAuthors();
+  }
+
+  /**
+   * Gets replies to a comment
+   * @param commentId - ID of the parent comment
+   * @returns Array of reply comments
+   */
+  getReplies(commentId: number): Comment[] {
+    return this.commentManager.getReplies(commentId);
+  }
+
+  /**
+   * Checks if a comment has replies
+   * @param commentId - ID of the comment
+   * @returns True if the comment has replies
+   */
+  hasReplies(commentId: number): boolean {
+    return this.commentManager.hasReplies(commentId);
+  }
+
+  /**
+   * Removes a comment (also removes all its replies)
+   * @param id - Comment ID
+   * @returns True if the comment was removed
+   */
+  removeComment(id: number): boolean {
+    return this.commentManager.removeComment(id);
+  }
+
+  /**
    * Checks if there are any revisions in the document
    * @returns True if there are no revisions
    */
@@ -10404,6 +11007,321 @@ export class Document {
   }
 
   /**
+   * Finds paragraphs containing text matching a pattern
+   *
+   * Supports both plain string and regex patterns. Returns an array of
+   * paragraphs with match details for each occurrence.
+   *
+   * @param pattern - String or RegExp to search for
+   * @returns Array of paragraphs with their matches
+   *
+   * @example
+   * ```typescript
+   * // Find with string
+   * const results = doc.findParagraphsByText('error');
+   *
+   * // Find with regex
+   * const results = doc.findParagraphsByText(/\berror\b/gi);
+   * for (const { paragraph, matches } of results) {
+   *   console.log(`Found ${matches.length} matches in paragraph`);
+   * }
+   * ```
+   */
+  findParagraphsByText(
+    pattern: string | RegExp
+  ): Array<{ paragraph: Paragraph; matches: string[] }> {
+    const results: Array<{ paragraph: Paragraph; matches: string[] }> = [];
+    const regex =
+      typeof pattern === "string" ? new RegExp(pattern, "gi") : pattern;
+
+    for (const paragraph of this.getAllParagraphs()) {
+      const text = paragraph.getText();
+      const matches = text.match(regex);
+      if (matches && matches.length > 0) {
+        results.push({ paragraph, matches: [...matches] });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Gets all runs that use a specific font
+   *
+   * Searches through all paragraphs (including tables) and returns runs
+   * that have the specified font applied.
+   *
+   * @param fontName - Font name to search for (case-insensitive)
+   * @returns Array of runs using the specified font
+   *
+   * @example
+   * ```typescript
+   * const arialRuns = doc.getRunsByFont('Arial');
+   * console.log(`Found ${arialRuns.length} runs using Arial`);
+   * ```
+   */
+  getRunsByFont(fontName: string): Run[] {
+    const results: Run[] = [];
+    const lowerFontName = fontName.toLowerCase();
+
+    for (const paragraph of this.getAllParagraphs()) {
+      for (const run of paragraph.getRuns()) {
+        const formatting = run.getFormatting();
+        if (formatting.font && formatting.font.toLowerCase() === lowerFontName) {
+          results.push(run);
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Gets all runs that use a specific color
+   *
+   * Searches through all paragraphs (including tables) and returns runs
+   * that have the specified color applied.
+   *
+   * @param color - Hex color code to search for (with or without #)
+   * @returns Array of runs using the specified color
+   *
+   * @example
+   * ```typescript
+   * const redRuns = doc.getRunsByColor('FF0000');
+   * const blueRuns = doc.getRunsByColor('#0000FF');
+   * ```
+   */
+  getRunsByColor(color: string): Run[] {
+    const results: Run[] = [];
+    // Normalize color - remove # and convert to uppercase
+    const normalizedColor = color.replace(/^#/, "").toUpperCase();
+
+    for (const paragraph of this.getAllParagraphs()) {
+      for (const run of paragraph.getRuns()) {
+        const formatting = run.getFormatting();
+        if (formatting.color) {
+          const runColor = formatting.color.replace(/^#/, "").toUpperCase();
+          if (runColor === normalizedColor) {
+            results.push(run);
+          }
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Gets all paragraphs that use a specific style
+   *
+   * @param styleId - Style ID to filter by
+   * @returns Array of paragraphs using the specified style
+   *
+   * @example
+   * ```typescript
+   * const headings = doc.getParagraphsByStyle('Heading1');
+   * console.log(`Found ${headings.length} Heading 1 paragraphs`);
+   * ```
+   */
+  getParagraphsByStyle(styleId: string): Paragraph[] {
+    return this.getAllParagraphs().filter((para) => para.getStyle() === styleId);
+  }
+
+  /**
+   * Sets the font for all runs in the document
+   *
+   * Applies the specified font to every text run in the document,
+   * including runs in tables.
+   *
+   * @param fontName - The font name to apply (e.g., 'Arial', 'Times New Roman')
+   * @returns Number of runs modified
+   *
+   * @example
+   * ```typescript
+   * const count = doc.setAllRunsFont('Calibri');
+   * console.log(`Changed font on ${count} runs`);
+   * ```
+   */
+  setAllRunsFont(fontName: string): number {
+    let count = 0;
+    for (const run of this.getAllRuns()) {
+      run.setFont(fontName);
+      count++;
+    }
+    return count;
+  }
+
+  /**
+   * Sets the font size for all runs in the document
+   *
+   * Applies the specified font size to every text run in the document,
+   * including runs in tables.
+   *
+   * @param size - Font size in half-points (e.g., 24 = 12pt, 22 = 11pt)
+   * @returns Number of runs modified
+   *
+   * @example
+   * ```typescript
+   * const count = doc.setAllRunsSize(24); // Set to 12pt
+   * console.log(`Changed size on ${count} runs`);
+   * ```
+   */
+  setAllRunsSize(size: number): number {
+    let count = 0;
+    for (const run of this.getAllRuns()) {
+      run.setSize(size);
+      count++;
+    }
+    return count;
+  }
+
+  /**
+   * Sets the color for all runs in the document
+   *
+   * Applies the specified color to every text run in the document,
+   * including runs in tables.
+   *
+   * @param color - Hex color code (e.g., 'FF0000', '#0000FF')
+   * @returns Number of runs modified
+   *
+   * @example
+   * ```typescript
+   * const count = doc.setAllRunsColor('000000'); // Set to black
+   * console.log(`Changed color on ${count} runs`);
+   * ```
+   */
+  setAllRunsColor(color: string): number {
+    let count = 0;
+    for (const run of this.getAllRuns()) {
+      run.setColor(color);
+      count++;
+    }
+    return count;
+  }
+
+  /**
+   * Formatting report interface
+   */
+  static FormattingReport: {
+    fonts: Map<string, number>;
+    sizes: Map<number, number>;
+    colors: Map<string, number>;
+    styles: Map<string, number>;
+    uniqueFonts: string[];
+    uniqueColors: string[];
+    uniqueStyles: string[];
+    mostUsedFont?: string;
+    mostUsedSize?: number;
+    mostUsedColor?: string;
+    totalRuns: number;
+    totalParagraphs: number;
+  };
+
+  /**
+   * Generates a formatting report for the document
+   *
+   * Analyzes all runs and paragraphs to provide statistics about
+   * formatting usage throughout the document.
+   *
+   * @returns Object with formatting statistics
+   *
+   * @example
+   * ```typescript
+   * const report = doc.getFormattingReport();
+   * console.log(`Unique fonts: ${report.uniqueFonts.join(', ')}`);
+   * console.log(`Most used font: ${report.mostUsedFont}`);
+   * console.log(`Most used size: ${report.mostUsedSize / 2}pt`);
+   * ```
+   */
+  getFormattingReport(): {
+    fonts: Map<string, number>;
+    sizes: Map<number, number>;
+    colors: Map<string, number>;
+    styles: Map<string, number>;
+    uniqueFonts: string[];
+    uniqueColors: string[];
+    uniqueStyles: string[];
+    mostUsedFont?: string;
+    mostUsedSize?: number;
+    mostUsedColor?: string;
+    totalRuns: number;
+    totalParagraphs: number;
+  } {
+    const fonts = new Map<string, number>();
+    const sizes = new Map<number, number>();
+    const colors = new Map<string, number>();
+    const styles = new Map<string, number>();
+    let totalRuns = 0;
+
+    const paragraphs = this.getAllParagraphs();
+
+    for (const para of paragraphs) {
+      // Track paragraph styles
+      const style = para.getStyle();
+      if (style) {
+        styles.set(style, (styles.get(style) || 0) + 1);
+      }
+
+      // Track run formatting
+      for (const run of para.getRuns()) {
+        totalRuns++;
+        const formatting = run.getFormatting();
+
+        if (formatting.font) {
+          fonts.set(formatting.font, (fonts.get(formatting.font) || 0) + 1);
+        }
+        if (formatting.size !== undefined) {
+          sizes.set(formatting.size, (sizes.get(formatting.size) || 0) + 1);
+        }
+        if (formatting.color) {
+          const normalizedColor = formatting.color.toUpperCase().replace(/^#/, "");
+          colors.set(normalizedColor, (colors.get(normalizedColor) || 0) + 1);
+        }
+      }
+    }
+
+    // Find most used entries
+    let mostUsedFont: string | undefined;
+    let maxFontCount = 0;
+    for (const [font, count] of fonts.entries()) {
+      if (count > maxFontCount) {
+        maxFontCount = count;
+        mostUsedFont = font;
+      }
+    }
+
+    let mostUsedSize: number | undefined;
+    let maxSizeCount = 0;
+    for (const [size, count] of sizes.entries()) {
+      if (count > maxSizeCount) {
+        maxSizeCount = count;
+        mostUsedSize = size;
+      }
+    }
+
+    let mostUsedColor: string | undefined;
+    let maxColorCount = 0;
+    for (const [color, count] of colors.entries()) {
+      if (count > maxColorCount) {
+        maxColorCount = count;
+        mostUsedColor = color;
+      }
+    }
+
+    return {
+      fonts,
+      sizes,
+      colors,
+      styles,
+      uniqueFonts: Array.from(fonts.keys()),
+      uniqueColors: Array.from(colors.keys()),
+      uniqueStyles: Array.from(styles.keys()),
+      mostUsedFont,
+      mostUsedSize,
+      mostUsedColor,
+      totalRuns,
+      totalParagraphs: paragraphs.length,
+    };
+  }
+
+  /**
    * Replaces all occurrences of text in the document
    *
    * Searches through all paragraphs (including those in tables) and replaces
@@ -11124,12 +12042,25 @@ export class Document {
     const hyperlinks: Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> =
       [];
 
-    for (const paragraph of this.getAllParagraphs()) {
-      for (const content of paragraph.getContent()) {
+    // Helper function to extract hyperlinks from paragraph content,
+    // including those inside Revision elements (w:ins, w:del, etc.)
+    const extractHyperlinksFromParagraph = (para: Paragraph): void => {
+      for (const content of para.getContent()) {
         if (content instanceof Hyperlink) {
-          hyperlinks.push({ hyperlink: content, paragraph });
+          hyperlinks.push({ hyperlink: content, paragraph: para });
+        } else if (content instanceof Revision) {
+          // Check inside revision elements for hyperlinks
+          for (const revContent of content.getContent()) {
+            if (revContent instanceof Hyperlink) {
+              hyperlinks.push({ hyperlink: revContent, paragraph: para });
+            }
+          }
         }
       }
+    };
+
+    for (const paragraph of this.getAllParagraphs()) {
+      extractHyperlinksFromParagraph(paragraph);
     }
 
     // Also check in tables
@@ -11140,11 +12071,7 @@ export class Document {
           const cellParagraphs =
             cell instanceof TableCell ? cell.getParagraphs() : [];
           for (const para of cellParagraphs) {
-            for (const content of para.getContent()) {
-              if (content instanceof Hyperlink) {
-                hyperlinks.push({ hyperlink: content, paragraph: para });
-              }
-            }
+            extractHyperlinksFromParagraph(para);
           }
         }
       }
@@ -11277,6 +12204,67 @@ export class Document {
   }
 
   /**
+   * Gets all fields in the document with their parent context
+   *
+   * Returns all Field and ComplexField instances from:
+   * - All body paragraphs
+   * - All paragraphs inside table cells
+   *
+   * @returns Array of objects containing field, paragraph, and optionally table
+   *
+   * @example
+   * ```typescript
+   * // Get all fields
+   * const fields = doc.getFields();
+   * console.log(`Document has ${fields.length} fields`);
+   *
+   * for (const { field, paragraph, table } of fields) {
+   *   console.log(`Field: ${field.getType()} - ${field.getInstruction()}`);
+   *   if (table) {
+   *     console.log('  (inside table)');
+   *   }
+   * }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Find all merge fields
+   * const fields = doc.getFields();
+   * const mergeFields = fields.filter(({ field }) =>
+   *   field.getType() === 'MERGEFIELD'
+   * );
+   * console.log(`Found ${mergeFields.length} merge fields`);
+   * ```
+   */
+  getFields(): Array<{ field: FieldLike; paragraph: Paragraph; table?: Table }> {
+    const results: Array<{ field: FieldLike; paragraph: Paragraph; table?: Table }> = [];
+
+    // Get fields from all body paragraphs
+    for (const paragraph of this.getAllParagraphs()) {
+      for (const field of paragraph.getFields()) {
+        results.push({ field, paragraph });
+      }
+    }
+
+    // Get fields from paragraphs inside table cells
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          const cellParagraphs =
+            cell instanceof TableCell ? cell.getParagraphs() : [];
+          for (const para of cellParagraphs) {
+            for (const field of para.getFields()) {
+              results.push({ field, paragraph: para, table });
+            }
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
    * Gets all images in the document with metadata
    *
    * Returns all Image instances registered in the document along with
@@ -11347,6 +12335,127 @@ export class Document {
     }
 
     return runs;
+  }
+
+  /**
+   * Automatically converts email addresses in text to mailto: hyperlinks
+   *
+   * Scans all paragraphs (including those in tables, headers, and footers)
+   * for email addresses and converts them to clickable mailto: hyperlinks
+   * with standard hyperlink formatting.
+   *
+   * @param options - Optional formatting and behavior options
+   * @param options.formatting - Custom formatting for the hyperlinks (defaults to Verdana 12pt, underline, blue)
+   * @returns Statistics about emails converted
+   *
+   * @example
+   * ```typescript
+   * // Auto-link all email addresses with default formatting
+   * const result = doc.hyperlinkEmails();
+   * console.log(`Linked ${result.emailsLinked} emails in ${result.paragraphsModified} paragraphs`);
+   *
+   * // With custom formatting
+   * doc.hyperlinkEmails({
+   *   formatting: {
+   *     font: 'Arial',
+   *     size: 22, // 11pt in half-points
+   *     underline: 'single',
+   *     bold: false,
+   *     color: '0000FF',
+   *   }
+   * });
+   * ```
+   */
+  hyperlinkEmails(options?: {
+    formatting?: RunFormatting;
+  }): { emailsLinked: number; paragraphsModified: number } {
+    // Default formatting: Verdana 12pt, Underline, no bold, #0000FF
+    const defaultFormatting: RunFormatting = {
+      font: 'Verdana',
+      size: 12, // 12pt
+      underline: 'single',
+      bold: false,
+      color: '0000FF',
+    };
+
+    const formatting = options?.formatting ?? defaultFormatting;
+
+    // RFC 5322 simplified email regex (handles most common patterns)
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+    let emailsLinked = 0;
+    let paragraphsModified = 0;
+
+    // Get all paragraphs (including in tables, headers, footers)
+    const paragraphs = this.getAllParagraphs();
+
+    for (const para of paragraphs) {
+      let modified = false;
+      const content = [...para.getContent()]; // Clone to avoid modification during iteration
+
+      for (const item of content) {
+        if (item instanceof Run) {
+          const text = item.getText();
+          const matches = [...text.matchAll(emailRegex)];
+
+          if (matches.length > 0) {
+            // Split run into segments with hyperlinks
+            const newContent = this.splitRunWithEmails(item, matches, formatting);
+
+            // Replace original run with new content
+            para.replaceContent(item, newContent);
+
+            emailsLinked += matches.length;
+            modified = true;
+          }
+        }
+      }
+
+      if (modified) paragraphsModified++;
+    }
+
+    return { emailsLinked, paragraphsModified };
+  }
+
+  /**
+   * Splits a run containing email addresses into text runs and hyperlinks
+   * @private
+   */
+  private splitRunWithEmails(
+    run: Run,
+    matches: RegExpMatchArray[],
+    formatting: RunFormatting
+  ): ParagraphContent[] {
+    const text = run.getText();
+    const originalFormatting = run.getFormatting();
+    const result: ParagraphContent[] = [];
+
+    let lastIndex = 0;
+
+    for (const match of matches) {
+      const email = match[0];
+      const startIndex = match.index!;
+
+      // Add text before email (if any)
+      if (startIndex > lastIndex) {
+        const beforeText = text.slice(lastIndex, startIndex);
+        result.push(new Run(beforeText, originalFormatting));
+      }
+
+      // Add email as hyperlink
+      const hyperlink = Hyperlink.createEmail(email, email, formatting);
+      result.push(hyperlink);
+
+      lastIndex = startIndex + email.length;
+    }
+
+    // Add remaining text after last email (if any)
+    if (lastIndex < text.length) {
+      const afterText = text.slice(lastIndex);
+      result.push(new Run(afterText, originalFormatting));
+    }
+
+    return result;
   }
 
   /**

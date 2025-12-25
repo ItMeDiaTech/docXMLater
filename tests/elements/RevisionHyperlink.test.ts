@@ -239,11 +239,12 @@ describe('RevisionHyperlink Tests', () => {
       const revision = Revision.createInsertion('TestAuthor', [hyperlink]);
       const xml = revision.toXML();
 
-      expect(xml.name).toBe('w:ins');
-      expect(xml.attributes?.['w:author']).toBe('TestAuthor');
-      expect(xml.children).toBeDefined();
+      expect(xml).not.toBeNull();
+      expect(xml!.name).toBe('w:ins');
+      expect(xml!.attributes?.['w:author']).toBe('TestAuthor');
+      expect(xml!.children).toBeDefined();
       // Should contain the hyperlink
-      const hyperlinkChild = xml.children?.find(
+      const hyperlinkChild = xml!.children?.find(
         (c) => typeof c === 'object' && c.name === 'w:hyperlink'
       );
       expect(hyperlinkChild).toBeDefined();
@@ -259,9 +260,10 @@ describe('RevisionHyperlink Tests', () => {
       const revision = Revision.createDeletion('TestAuthor', [hyperlink]);
       const xml = revision.toXML();
 
-      expect(xml.name).toBe('w:del');
+      expect(xml).not.toBeNull();
+      expect(xml!.name).toBe('w:del');
       // The hyperlink should be transformed to use w:delText
-      const hyperlinkChild = xml.children?.find(
+      const hyperlinkChild = xml!.children?.find(
         (c) => typeof c === 'object' && c.name === 'w:hyperlink'
       ) as any;
       expect(hyperlinkChild).toBeDefined();

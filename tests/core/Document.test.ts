@@ -1572,5 +1572,377 @@ describe('Document', () => {
 
       doc.dispose();
     });
+
+    it('should add blank line above paragraph starting with bold text and colon', () => {
+      const doc = Document.create();
+
+      // Create paragraph before
+      doc.createParagraph('Regular paragraph before');
+
+      // Create paragraph starting with bold text and colon
+      const boldColonPara = doc.createParagraph('');
+      boldColonPara.addText('Note:', { bold: true });
+      boldColonPara.addText(' This is important information');
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      // Run addStructureBlankLines
+      const result = doc.addStructureBlankLines({ aboveBoldColon: true });
+
+      // Should have added a blank above the bold+colon paragraph
+      expect(doc.getBodyElements().length).toBe(3);
+      expect(result.blankLinesAdded).toBeGreaterThanOrEqual(1);
+
+      const bodyElements = doc.getBodyElements();
+      const blankPara = bodyElements[1] as Paragraph;
+      const boldPara = bodyElements[2] as Paragraph;
+
+      expect(blankPara.getText()).toBe('');
+      expect(boldPara.getText()).toBe('Note: This is important information');
+
+      doc.dispose();
+    });
+
+    it('should add blank line above paragraph with bold date followed by colon', () => {
+      const doc = Document.create();
+
+      doc.createParagraph('Previous content');
+
+      // Create paragraph like "12.10.25:" (bold date followed by colon)
+      const datePara = doc.createParagraph('');
+      datePara.addText('12.10.25:', { bold: true });
+      datePara.addText(' Event details here');
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      const result = doc.addStructureBlankLines({ aboveBoldColon: true });
+
+      expect(doc.getBodyElements().length).toBe(3);
+      expect(result.blankLinesAdded).toBeGreaterThanOrEqual(1);
+
+      doc.dispose();
+    });
+
+    it('should NOT add blank line above non-bold text with colon', () => {
+      const doc = Document.create();
+
+      doc.createParagraph('Previous content');
+
+      // Create paragraph with non-bold text containing colon
+      doc.createParagraph('Note: This is not bold');
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      const result = doc.addStructureBlankLines({ aboveBoldColon: true });
+
+      // Should NOT have added a blank (text is not bold)
+      expect(doc.getBodyElements().length).toBe(2);
+
+      doc.dispose();
+    });
+
+    it('should NOT add blank line above bold text without colon', () => {
+      const doc = Document.create();
+
+      doc.createParagraph('Previous content');
+
+      // Create paragraph with bold text but no colon
+      const boldNocolonPara = doc.createParagraph('');
+      boldNocolonPara.addText('Important', { bold: true });
+      boldNocolonPara.addText(' This has no colon');
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      const result = doc.addStructureBlankLines({ aboveBoldColon: true });
+
+      // Should NOT have added a blank (no colon after bold)
+      expect(doc.getBodyElements().length).toBe(2);
+
+      doc.dispose();
+    });
+
+    it('should mark existing blank as preserved when blank already exists above bold+colon', () => {
+      const doc = Document.create();
+
+      doc.createParagraph('Previous content');
+      // Create a truly blank paragraph (no runs)
+      const existingBlank = Paragraph.create();
+      doc.addParagraph(existingBlank);
+
+      const boldColonPara = doc.createParagraph('');
+      boldColonPara.addText('Warning:', { bold: true });
+      boldColonPara.addText(' Be careful');
+
+      expect(doc.getBodyElements().length).toBe(3);
+
+      const result = doc.addStructureBlankLines({ aboveBoldColon: true });
+
+      // Should NOT add another blank (one already exists)
+      expect(doc.getBodyElements().length).toBe(3);
+
+      // The existing blank should be marked as preserved and have Normal style
+      const blankPara = doc.getBodyElements()[1] as Paragraph;
+      expect(blankPara.isPreserved()).toBe(true);
+      expect(blankPara.getStyle()).toBe('Normal');
+
+      doc.dispose();
+    });
+
+    it('should respect aboveBoldColon: false option', () => {
+      const doc = Document.create();
+
+      doc.createParagraph('Previous content');
+
+      const boldColonPara = doc.createParagraph('');
+      boldColonPara.addText('Note:', { bold: true });
+      boldColonPara.addText(' This should not get a blank above');
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      // Explicitly disable the feature
+      const result = doc.addStructureBlankLines({ aboveBoldColon: false });
+
+      // Should NOT have added a blank (feature disabled)
+      expect(doc.getBodyElements().length).toBe(2);
+
+      doc.dispose();
+    });
+
+    it('should detect colon anywhere in first 55 characters', () => {
+      const doc = Document.create();
+
+      doc.createParagraph('Previous content');
+
+      // Create paragraph with bold start and colon later in text (within 55 chars)
+      // "Note This can include the following:" - "following:" is at char 30
+      const boldColonPara = doc.createParagraph('');
+      boldColonPara.addText('Note', { bold: true });
+      boldColonPara.addText(' This can include:'); // Colon at position 18
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      const result = doc.addStructureBlankLines({ aboveBoldColon: true });
+
+      // Should have added a blank above (colon within first 55 chars)
+      expect(doc.getBodyElements().length).toBe(3);
+      expect(result.blankLinesAdded).toBeGreaterThanOrEqual(1);
+
+      doc.dispose();
+    });
+
+    it('should NOT detect colon beyond first 55 characters', () => {
+      const doc = Document.create();
+
+      doc.createParagraph('Previous content');
+
+      // Create paragraph with bold start and colon beyond 55 chars
+      // Need more than 55 chars before the colon
+      const boldColonPara = doc.createParagraph('');
+      boldColonPara.addText('Note', { bold: true });
+      boldColonPara.addText(' This is a very long sentence without a colon until here:'); // Colon at position ~60
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      const result = doc.addStructureBlankLines({ aboveBoldColon: true });
+
+      // Should NOT have added a blank (colon beyond 55 chars)
+      expect(doc.getBodyElements().length).toBe(2);
+
+      doc.dispose();
+    });
+
+    it('should add blank above bold+colon paragraph in table cell', () => {
+      const doc = Document.create();
+
+      // Create a table with a cell containing multiple paragraphs
+      const table = doc.createTable(1, 1);
+      const cell = table.getRows()[0]?.getCells()[0];
+      expect(cell).toBeDefined();
+
+      // First paragraph in cell (no blank should be added above this)
+      const firstPara = Paragraph.create();
+      firstPara.addText('Some content before');
+      cell!.addParagraph(firstPara);
+
+      // Second paragraph with bold+colon (should get blank above)
+      const boldColonPara = Paragraph.create();
+      boldColonPara.addText('Note:', { bold: true });
+      boldColonPara.addText(' This is important');
+      cell!.addParagraph(boldColonPara);
+
+      // Cell should have 2 paragraphs initially (plus default empty one = 3)
+      const initialParas = cell!.getParagraphs();
+      expect(initialParas.length).toBeGreaterThanOrEqual(2);
+
+      const result = doc.addStructureBlankLines({ aboveBoldColon: true });
+
+      // Should have added a blank above the bold+colon paragraph
+      const finalParas = cell!.getParagraphs();
+      expect(finalParas.length).toBeGreaterThan(initialParas.length);
+      expect(result.blankLinesAdded).toBeGreaterThanOrEqual(1);
+
+      doc.dispose();
+    });
+
+    it('should NOT add blank above bold+colon paragraph if first in table cell', () => {
+      const doc = Document.create();
+
+      // Create a table with a cell containing bold+colon as first paragraph
+      const table = doc.createTable(1, 1);
+      const cell = table.getRows()[0]?.getCells()[0];
+      expect(cell).toBeDefined();
+
+      // Clear any default paragraphs and add bold+colon as first
+      const cellParas = cell!.getParagraphs();
+      const firstPara = cellParas[0];
+      if (firstPara) {
+        firstPara.addText('Note:', { bold: true });
+        firstPara.addText(' This is first in cell');
+      }
+
+      const initialCount = cell!.getParagraphs().length;
+
+      const result = doc.addStructureBlankLines({ aboveBoldColon: true });
+
+      // Should NOT have added a blank (bold+colon is first in cell)
+      expect(cell!.getParagraphs().length).toBe(initialCount);
+
+      doc.dispose();
+    });
+  });
+
+  describe('acceptRevisions load option', () => {
+    it('should accept all revisions when acceptRevisions: true', async () => {
+      // Create a document with tracked changes
+      const doc = Document.create();
+      doc.enableTrackChanges({ author: 'Test Author' });
+
+      const para = doc.createParagraph('Original text');
+      const runs = para.getRuns();
+      if (runs.length > 0 && runs[0]) {
+        runs[0].setText('Modified text'); // This creates insert/delete revisions
+      }
+
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Load with acceptRevisions: true
+      const loadedDoc = await Document.loadFromBuffer(buffer, { acceptRevisions: true });
+
+      // No revisions should exist after load
+      const revisions = loadedDoc.getRevisionManager().getAllRevisions();
+      expect(revisions.length).toBe(0);
+
+      // Content should be clean (final state)
+      const paragraphs = loadedDoc.getParagraphs();
+      expect(paragraphs.length).toBe(1);
+      expect(paragraphs[0]?.getText()).toBe('Modified text');
+
+      loadedDoc.dispose();
+    });
+
+    it('should preserve revisions when acceptRevisions: false or unset', async () => {
+      // Create a document with tracked changes
+      const doc = Document.create();
+      doc.enableTrackChanges({ author: 'Test Author' });
+
+      const para = doc.createParagraph('Original text');
+      const runs = para.getRuns();
+      if (runs.length > 0 && runs[0]) {
+        runs[0].setText('Modified text');
+      }
+
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Load without acceptRevisions (default)
+      const loadedDoc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+
+      // Revisions should still exist
+      const revisions = loadedDoc.getRevisionManager().getAllRevisions();
+      expect(revisions.length).toBeGreaterThan(0);
+
+      loadedDoc.dispose();
+    });
+
+    it('should allow subsequent modifications after acceptRevisions: true', async () => {
+      // Create a document with tracked changes
+      const doc = Document.create();
+      doc.enableTrackChanges({ author: 'Initial Author' });
+
+      doc.createParagraph('Tracked content');
+
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Load with acceptRevisions: true
+      const loadedDoc = await Document.loadFromBuffer(buffer, { acceptRevisions: true });
+
+      // Enable track changes again for new modifications
+      loadedDoc.enableTrackChanges({ author: 'New Author' });
+
+      // Make a new modification
+      loadedDoc.createParagraph('New content after accept');
+
+      // Save and reload to verify modifications are preserved
+      // Use acceptRevisions: true to get clean text
+      const newBuffer = await loadedDoc.toBuffer();
+      loadedDoc.dispose();
+
+      // Reload and accept to verify the content was saved correctly
+      const reloadedDoc = await Document.loadFromBuffer(newBuffer, { acceptRevisions: true });
+
+      const paragraphs = reloadedDoc.getParagraphs();
+      expect(paragraphs.length).toBe(2);
+      expect(paragraphs[0]?.getText()).toBe('Tracked content');
+      expect(paragraphs[1]?.getText()).toBe('New content after accept');
+
+      reloadedDoc.dispose();
+    });
+
+    it('should handle documents without revisions when acceptRevisions: true', async () => {
+      // Create a document without tracked changes
+      const doc = Document.create();
+      doc.createParagraph('Plain content');
+
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Load with acceptRevisions: true (should work fine with no revisions)
+      const loadedDoc = await Document.loadFromBuffer(buffer, { acceptRevisions: true });
+
+      const paragraphs = loadedDoc.getParagraphs();
+      expect(paragraphs.length).toBe(1);
+      expect(paragraphs[0]?.getText()).toBe('Plain content');
+
+      // No revisions should exist
+      const revisions = loadedDoc.getRevisionManager().getAllRevisions();
+      expect(revisions.length).toBe(0);
+
+      loadedDoc.dispose();
+    });
+
+    it('acceptRevisions: true should take precedence over revisionHandling: preserve', async () => {
+      // Create a document with tracked changes
+      const doc = Document.create();
+      doc.enableTrackChanges({ author: 'Test Author' });
+
+      doc.createParagraph('Tracked content');
+
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Load with both options - acceptRevisions should win
+      const loadedDoc = await Document.loadFromBuffer(buffer, {
+        acceptRevisions: true,
+        revisionHandling: 'preserve' // This should be ignored when acceptRevisions is true
+      });
+
+      // Revisions should be accepted (acceptRevisions takes precedence)
+      const revisions = loadedDoc.getRevisionManager().getAllRevisions();
+      expect(revisions.length).toBe(0);
+
+      loadedDoc.dispose();
+    });
   });
 });

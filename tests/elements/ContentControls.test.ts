@@ -240,13 +240,14 @@ describe('ContentControls - Checkbox', () => {
       expect(checkboxElement).toBeDefined();
 
       if (checkboxElement && typeof checkboxElement !== 'string') {
+        // Per OOXML spec, checkbox children use w14 namespace
         const checkedElement = checkboxElement.children!.find(
-          (child) => typeof child !== 'string' && child.name === 'w:checked'
+          (child) => typeof child !== 'string' && child.name === 'w14:checked'
         );
         expect(checkedElement).toBeDefined();
 
         if (checkedElement && typeof checkedElement !== 'string') {
-          expect(checkedElement.attributes!['w:val']).toBe('1');
+          expect(checkedElement.attributes!['w14:val']).toBe('1');
         }
       }
     }

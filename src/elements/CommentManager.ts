@@ -3,11 +3,26 @@
  *
  * Tracks all comments, assigns unique IDs, handles replies,
  * and generates the comments.xml file.
+ *
+ * Per ECMA-376, comment IDs must be unique across ALL annotation types
+ * in a document. Use setIdProvider() to connect to a centralized ID allocator.
  */
 
 import { Comment } from './Comment';
 import { Run } from './Run';
 import { XMLBuilder } from '../xml/XMLBuilder';
+
+/**
+ * Type for the centralized ID provider callback.
+ * Returns the next available annotation ID from a shared counter.
+ */
+export type IdProviderCallback = () => number;
+
+/**
+ * Type for callback to notify of existing IDs (for synchronization).
+ * Called when registering existing comments to keep the central counter in sync.
+ */
+export type IdExistsCallback = (existingId: number) => void;
 
 /**
  * Comment entry stored by the manager
@@ -24,6 +39,21 @@ interface CommentEntry {
 export class CommentManager {
   private comments: Map<number, CommentEntry> = new Map();
   private nextId: number = 0;
+  private idProvider: IdProviderCallback | null = null;
+  private idExistsNotifier: IdExistsCallback | null = null;
+
+  /**
+   * Sets the centralized ID provider callback.
+   * When set, IDs will be allocated from the centralized DocumentIdManager
+   * instead of the local nextId counter.
+   *
+   * @param provider - Callback that returns the next available ID
+   * @param existsNotifier - Optional callback to notify when existing IDs are found
+   */
+  setIdProvider(provider: IdProviderCallback, existsNotifier?: IdExistsCallback): void {
+    this.idProvider = provider;
+    this.idExistsNotifier = existsNotifier || null;
+  }
 
   /**
    * Registers a comment with the manager
@@ -32,8 +62,9 @@ export class CommentManager {
    * @returns The registered comment (same instance)
    */
   register(comment: Comment): Comment {
-    // Assign unique ID
-    comment.setId(this.nextId++);
+    // Assign unique ID - use centralized provider if available
+    const id = this.idProvider ? this.idProvider() : this.nextId++;
+    comment.setId(id);
 
     // Store comment
     const entry: CommentEntry = {
@@ -51,6 +82,50 @@ export class CommentManager {
     }
 
     return comment;
+  }
+
+  /**
+   * Registers an existing comment (from parsing) with its pre-assigned ID.
+   * Unlike register(), this does NOT assign a new ID - the comment must already have one.
+   * Used when loading comments from an existing document.
+   * @param comment - Comment with ID already set
+   */
+  registerExisting(comment: Comment): void {
+    const id = comment.getId();
+
+    // Notify centralized ID manager if connected
+    if (this.idExistsNotifier) {
+      this.idExistsNotifier(id);
+    }
+
+    // Store comment
+    const entry: CommentEntry = {
+      comment,
+      replies: [],
+    };
+    this.comments.set(id, entry);
+
+    // Update local nextId if needed
+    if (id >= this.nextId) {
+      this.nextId = id + 1;
+    }
+  }
+
+  /**
+   * Links reply comments to their parents after all comments are parsed.
+   * Must be called after all comments are registered via registerExisting().
+   * This builds the reply arrays for each parent comment.
+   */
+  linkReplies(): void {
+    for (const entry of this.comments.values()) {
+      const comment = entry.comment;
+      if (comment.isReply() && comment.getParentId() !== undefined) {
+        const parentEntry = this.comments.get(comment.getParentId()!);
+        if (parentEntry) {
+          parentEntry.replies.push(comment);
+        }
+      }
+    }
   }
 
   /**
@@ -184,6 +259,15 @@ export class CommentManager {
   }
 
   /**
+   * Sets the next ID to be assigned.
+   * Used when loading documents to avoid ID collisions with existing comments.
+   * @param id - The next ID value to use
+   */
+  setNextId(id: number): void {
+    this.nextId = id;
+  }
+
+  /**
    * Creates and registers a new comment
    * @param author - Comment author
    * @param content - Comment content (text or runs)
@@ -262,6 +346,26 @@ export class CommentManager {
   }
 
   /**
+   * Gets all resolved/done comments
+   * @returns Array of resolved comments
+   */
+  getResolvedComments(): Comment[] {
+    return Array.from(this.comments.values())
+      .map(entry => entry.comment)
+      .filter(comment => comment.isResolved());
+  }
+
+  /**
+   * Gets all unresolved comments
+   * @returns Array of unresolved comments
+   */
+  getUnresolvedComments(): Comment[] {
+    return Array.from(this.comments.values())
+      .map(entry => entry.comment)
+      .filter(comment => !comment.isResolved());
+  }
+
+  /**
    * Gets the most recent comments
    * @param count - Number of recent comments to return
    * @returns Array of most recent comments
@@ -281,14 +385,19 @@ export class CommentManager {
     total: number;
     topLevel: number;
     replies: number;
+    resolved: number;
+    unresolved: number;
     authors: string[];
     nextId: number;
   } {
     const topLevel = this.getTopLevelCount();
+    const resolved = this.getResolvedComments().length;
     return {
       total: this.comments.size,
       topLevel,
       replies: this.comments.size - topLevel,
+      resolved,
+      unresolved: this.comments.size - resolved,
       authors: this.getAuthors(),
       nextId: this.nextId,
     };
@@ -335,6 +444,11 @@ export class CommentManager {
 
     if (comment.isReply() && comment.getParentId() !== undefined) {
       xml += ` w:parentId="${comment.getParentId()}"`;
+    }
+
+    // Add done attribute for resolved comments (per ECMA-376)
+    if (comment.isResolved()) {
+      xml += ` w:done="1"`;
     }
 
     xml += '>\n';

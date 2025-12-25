@@ -98,6 +98,11 @@ export function inferLevelFromIndentation(indentTwips: number): number {
 /**
  * Detect typed list prefix in text.
  * Returns the matched prefix and format type.
+ *
+ * Special handling for abbreviations:
+ * - Single letter prefixes (A., B., P.) are NOT treated as list markers
+ *   if the remaining text also starts with a letter+period pattern,
+ *   indicating an abbreviation like "P.O. Box", "U.S. Army", etc.
  */
 export function detectTypedPrefix(text: string): {
   prefix: string | null;
@@ -107,6 +112,17 @@ export function detectTypedPrefix(text: string): {
   for (const [format, regex] of Object.entries(TYPED_LIST_PATTERNS)) {
     const match = text.match(regex);
     if (match) {
+      // Special check for single-letter patterns (lowerLetter, upperLetter)
+      // to avoid false positives on abbreviations like "P.O. Box", "U.S.", "A.M."
+      if (format === "lowerLetter" || format === "upperLetter") {
+        const remaining = text.substring(match[0].length);
+        // If remaining text starts with another letter followed by period,
+        // this is likely an abbreviation, not a list marker
+        if (/^[A-Za-z]\./.test(remaining)) {
+          continue; // Skip this pattern, try others
+        }
+      }
+
       return {
         prefix: match[0],
         format: format as NumberFormat | BulletFormat,

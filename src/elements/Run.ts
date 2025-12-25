@@ -148,8 +148,8 @@ export interface RunFormatting {
   kerning?: number;
   /** Language code (e.g., 'en-US', 'fr-FR', 'es-ES') */
   language?: string;
-  /** Underline text */
-  underline?: boolean | "single" | "double" | "thick" | "dotted" | "dash";
+  /** Underline text. Use "none" to explicitly override style underline. */
+  underline?: boolean | "single" | "double" | "thick" | "dotted" | "dash" | "none";
   /** Strikethrough text */
   strike?: boolean;
   /** Double strikethrough */

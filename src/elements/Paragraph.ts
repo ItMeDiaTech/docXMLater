@@ -2702,20 +2702,23 @@ export class Paragraph {
       }
 
       // Create w:pPrChange element with child w:pPr
-      const pPrChangeChildren: XMLElement[] = [];
+      // Per ECMA-376 Part 1 §17.13.5.29, w:pPrChange MUST contain a w:pPr child element.
+      // Only output pPrChange if we have properties to include in w:pPr.
+      // Empty pPrChange elements cause Word to report "unreadable content" corruption.
       if (prevPPrChildren.length > 0) {
-        pPrChangeChildren.push({
+        const pPrChangeChildren: XMLElement[] = [{
           name: "w:pPr",
           attributes: {},
           children: prevPPrChildren,
+        }];
+
+        pPrChildren.push({
+          name: "w:pPrChange",
+          attributes: attrs,
+          children: pPrChangeChildren,
         });
       }
-
-      pPrChildren.push({
-        name: "w:pPrChange",
-        attributes: attrs,
-        children: pPrChangeChildren,
-      });
+      // If no previous properties to record, skip w:pPrChange entirely to avoid corruption
     }
 
     // 20. Section properties per ECMA-376 Part 1 §17.3.1.30
@@ -2764,7 +2767,11 @@ export class Paragraph {
         paragraphChildren.push(item.toXML());
       } else if (item instanceof Revision) {
         // Revisions (track changes) are their own element
-        paragraphChildren.push(item.toXML());
+        // Note: toXML() returns null for internal-only revision types (e.g., hyperlinkChange)
+        const revisionXml = item.toXML();
+        if (revisionXml) {
+          paragraphChildren.push(revisionXml);
+        }
       } else if (item instanceof RangeMarker) {
         // Range markers are their own element (mark boundaries of moves, etc.)
         paragraphChildren.push(item.toXML());
@@ -3385,9 +3392,28 @@ export class Paragraph {
         continue;
       }
 
-      // Handle complex objects (indentation, spacing, etc.)
+      // Special handling for indentation - preserve intentional overrides
+      // A left indent of 0 is an explicit override to cancel style indentation
+      if (propKey === "indentation") {
+        const paraIndent = this.formatting.indentation;
+        const styleIndent = styleParagraphFormatting.indentation as typeof paraIndent;
+
+        // Preserve intentional zero-indent overrides
+        // When style has left indent > 0 and paragraph explicitly sets left to 0,
+        // this is an intentional override to remove the indent - preserve it
+        if (paraIndent?.left === 0 && styleIndent?.left && styleIndent.left > 0) {
+          continue; // Preserve this override, don't clear it
+        }
+
+        // Only clear if it matches the style exactly (redundant formatting)
+        if (JSON.stringify(paraIndent) === JSON.stringify(styleIndent)) {
+          conflictingParaProps.push(propKey);
+        }
+        continue;
+      }
+
+      // Handle complex objects (spacing, borders, etc.)
       if (
-        propKey === "indentation" ||
         propKey === "spacing" ||
         propKey === "borders" ||
         propKey === "shading" ||

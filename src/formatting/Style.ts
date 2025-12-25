@@ -1629,6 +1629,31 @@ export class Style {
   }
 
   /**
+   * Resets the style to its minimal state
+   * Clears all paragraph and run formatting while preserving the style identity
+   * @returns This style for chaining
+   * @example
+   * ```typescript
+   * const style = Style.createHeadingStyle(1);
+   * style.reset();  // Clears all formatting, keeps styleId and name
+   * ```
+   */
+  reset(): this {
+    // Preserve identity properties
+    const { styleId, name, type, basedOn } = this.properties;
+
+    // Reset to minimal properties
+    this.properties = {
+      styleId,
+      name,
+      type,
+      basedOn,
+    };
+
+    return this;
+  }
+
+  /**
    * Merges properties from another style into this one
    * @param otherStyle - Style to merge from
    * @returns This style for chaining

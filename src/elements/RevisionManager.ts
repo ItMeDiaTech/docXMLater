@@ -14,6 +14,18 @@ function getLogger(): ILogger {
 }
 
 /**
+ * Type for the centralized ID provider callback.
+ * Returns the next available annotation ID from a shared counter.
+ */
+export type IdProviderCallback = () => number;
+
+/**
+ * Type for callback to notify of existing IDs (for synchronization).
+ * Called when registering existing revisions to keep the central counter in sync.
+ */
+export type IdExistsCallback = (existingId: number) => void;
+
+/**
  * Semantic category for grouping revisions.
  */
 export type RevisionCategory =
@@ -41,10 +53,15 @@ export interface RevisionSummary {
 
 /**
  * Manages document revisions (track changes)
+ *
+ * Per ECMA-376, revision IDs must be unique across ALL annotation types
+ * in a document. Use setIdProvider() to connect to a centralized ID allocator.
  */
 export class RevisionManager {
   private revisions: Revision[] = [];
   private nextId: number = 0;
+  private idProvider: IdProviderCallback | null = null;
+  private idExistsNotifier: IdExistsCallback | null = null;
 
   // Performance caching for frequently accessed filtered results
   private revisionsByTypeCache = new Map<RevisionType, Revision[]>();
@@ -64,6 +81,19 @@ export class RevisionManager {
   }
 
   /**
+   * Sets the centralized ID provider callback.
+   * When set, IDs will be allocated from the centralized DocumentIdManager
+   * instead of the local nextId counter.
+   *
+   * @param provider - Callback that returns the next available ID
+   * @param existsNotifier - Optional callback to notify when existing IDs are found
+   */
+  setIdProvider(provider: IdProviderCallback, existsNotifier?: IdExistsCallback): void {
+    this.idProvider = provider;
+    this.idExistsNotifier = existsNotifier || null;
+  }
+
+  /**
    * Registers a revision with the manager
    * Assigns a unique ID
    * @param revision - Revision to register
@@ -71,8 +101,9 @@ export class RevisionManager {
    */
   register(revision: Revision): Revision {
     const logger = getLogger();
-    // Assign unique ID
-    revision.setId(this.nextId++);
+    // Assign unique ID - use centralized provider if available
+    const id = this.idProvider ? this.idProvider() : this.nextId++;
+    revision.setId(id);
 
     // Store revision
     this.revisions.push(revision);
@@ -419,6 +450,8 @@ export class RevisionManager {
    * that won't be registered through register(). The ID is reserved
    * and won't be reused by subsequent register() calls.
    *
+   * When a centralized ID provider is set, IDs come from the shared counter.
+   *
    * @returns The consumed revision ID
    *
    * @example
@@ -430,7 +463,17 @@ export class RevisionManager {
    * ```
    */
   consumeNextId(): number {
-    return this.nextId++;
+    // Use centralized provider if available
+    return this.idProvider ? this.idProvider() : this.nextId++;
+  }
+
+  /**
+   * Sets the next ID to be assigned.
+   * Used when loading documents to avoid ID collisions with existing revisions.
+   * @param id - The next ID value to use
+   */
+  setNextId(id: number): void {
+    this.nextId = id;
   }
 
   /**

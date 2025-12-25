@@ -10,7 +10,7 @@ import { Table } from '../../src/elements/Table';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 import { XMLParser } from '../../src/xml/XMLParser';
 
-describe.skip('SDT (Structured Document Tag) Parsing - Advanced features not yet implemented', () => {
+describe('SDT (Structured Document Tag) Parsing', () => {
   describe('SDT Control Types', () => {
     it('should parse richText content controls', async () => {
       const doc = Document.create();

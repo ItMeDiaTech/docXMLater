@@ -119,6 +119,7 @@ export { RelationshipManager } from './core/RelationshipManager';
 export { DocumentParser, ParseError } from './core/DocumentParser';
 export { DocumentGenerator, IZipHandlerReader } from './core/DocumentGenerator';
 export { DocumentValidator, SizeEstimate, MemoryOptions } from './core/DocumentValidator';
+export { DocumentIdManager } from './core/DocumentIdManager';
 
 // Document subsystem classes (Phase 7 refactoring)
 export { DocumentMetadata, DocumentProperties as MetadataProperties } from './core/DocumentMetadata';
@@ -209,6 +210,7 @@ export {
   ParagraphAlignment,
   ParagraphFormatting,
   ParagraphContent,
+  FieldLike,
   // Type guards for ParagraphContent
   isRun,
   isField,
@@ -231,6 +233,8 @@ export {
   Columns,
   PageNumbering,
   SectionProperties,
+  LineNumbering,
+  LineNumberingRestart,
 } from './elements/Section';
 export {
   Table,
@@ -295,6 +299,11 @@ export {
   RunPropertyChange,
   ParagraphPropertyChange,
   ParagraphFormattingPartial,
+  ParagraphBorderDef,
+  ParagraphBorders,
+  ParagraphShading,
+  TabStopDef,
+  PropertyChangeBase,
   TablePropertyChange,
   TablePropertyChangeType,
   SectionPropertyChange,
@@ -372,6 +381,14 @@ export {
   DEFAULT_MAX_NESTING_DEPTH,
 } from './xml/XMLParser';
 
+// XML Sanitization (XML 1.0 compliance)
+export {
+  removeInvalidXmlChars,
+  findInvalidXmlChars,
+  hasInvalidXmlChars,
+  XML_CONTROL_CHARS,
+} from './utils/xmlSanitization';
+
 // Logging utilities
 export {
   ILogger,
@@ -391,6 +408,15 @@ export {
 // Error handling utilities
 export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandling';
 
+// Parsing utilities
+export {
+  safeParseInt,
+  parseOoxmlBoolean,
+  isExplicitlySet,
+  parseNumericAttribute,
+  parseOnOffAttribute,
+} from './utils/parsingHelpers';
+
 // Revision utilities
 export { RevisionWalker, RevisionWalkerOptions } from './utils/RevisionWalker';
 
@@ -402,6 +428,7 @@ export {
   paragraphHasRevisions,
   getRevisionsFromParagraph,
   countRevisionsByType,
+  stripRevisionsFromXml,
 } from './utils/InMemoryRevisionAcceptor';
 
 // Constants
@@ -422,6 +449,8 @@ export {
   analyzeTableLists,
   normalizeListsInCell,
   normalizeListsInTable,
+  normalizeOrphanListLevelsInCell,
+  normalizeOrphanListLevelsInTable,
   stripTypedPrefix,
 } from './core/ListNormalizer';
 

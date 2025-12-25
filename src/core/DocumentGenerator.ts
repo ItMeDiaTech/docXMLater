@@ -313,7 +313,9 @@ ${properties}
     }
 
     // Check for embedded .ttf fonts from original document
+    // Also create a Set for efficient file existence checks
     const files = zipHandler.getFilePaths?.() || [];
+    const filesInArchive = new Set(files);
     const hasTtfFonts = files.some((f: string) => f.endsWith(".ttf"));
     if (hasTtfFonts) {
       generatedDefaults.add('ttf|application/x-font-ttf');
@@ -327,14 +329,22 @@ ${properties}
     generatedOverrides.add('/word/settings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml');
     generatedOverrides.add('/word/theme/theme1.xml|application/vnd.openxmlformats-officedocument.theme+xml');
 
-    // Headers
+    // Headers - only add if file actually exists in archive
+    // This prevents corruption when HeaderFooterManager has stale entries for removed headers
     for (const entry of headers) {
-      generatedOverrides.add(`/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml`);
+      const filePath = `word/${entry.filename}`;
+      if (filesInArchive.has(filePath)) {
+        generatedOverrides.add(`/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml`);
+      }
     }
 
-    // Footers
+    // Footers - only add if file actually exists in archive
+    // This prevents corruption when HeaderFooterManager has stale entries for removed footers
     for (const entry of footers) {
-      generatedOverrides.add(`/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml`);
+      const filePath = `word/${entry.filename}`;
+      if (filesInArchive.has(filePath)) {
+        generatedOverrides.add(`/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml`);
+      }
     }
 
     // Comments
@@ -363,15 +373,32 @@ ${properties}
       generatedOverrides.add('/customXML/itemProps1.xml|application/vnd.openxmlformats-officedocument.customXmlProperties+xml');
     }
 
-    // Merge with original entries (preserves ALL entries from original document)
+    // Merge with original entries, but ONLY keep overrides for files that actually exist
+    // This prevents corruption when headers/footers are removed but their Content_Types entries
+    // from the original document would otherwise be preserved
     const allDefaults = new Set([
       ...generatedDefaults,
       ...(originalContentTypes?.defaults || [])
     ]);
 
+    // filesInArchive was created earlier (line 318) for header/footer validation
+    // Reuse it here to filter original overrides as well
+
+    // Filter original overrides to only include files that exist in the archive
+    const filteredOriginalOverrides: string[] = [];
+    for (const entry of (originalContentTypes?.overrides || [])) {
+      const parts = entry.split('|');
+      const partName = parts[0] || '';
+      // Convert /word/footer1.xml to word/footer1.xml for comparison
+      const normalizedPath = partName.startsWith('/') ? partName.slice(1) : partName;
+      if (filesInArchive.has(normalizedPath)) {
+        filteredOriginalOverrides.push(entry);
+      }
+    }
+
     const allOverrides = new Set([
       ...generatedOverrides,
-      ...(originalContentTypes?.overrides || [])
+      ...filteredOriginalOverrides
     ]);
 
     // Build XML from merged sets

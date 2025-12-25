@@ -318,25 +318,35 @@ export class DocumentTrackingContext implements TrackingContext {
 
         // Keep the original author/date/id - represents the first tracked change
         // This ensures Word only requires ONE "Accept" to accept all changes
-        paragraph.formatting.pPrChange = {
-          author: existingChange.author,
-          date: existingChange.date,
-          id: existingChange.id,
-          previousProperties: Object.keys(mergedPreviousProperties).length > 0
-            ? mergedPreviousProperties
-            : undefined,
-        };
+        // Per ECMA-376 Part 1 §17.13.5.29, w:pPrChange MUST contain a w:pPr child element.
+        // Only keep pPrChange if there are properties to track.
+        if (Object.keys(mergedPreviousProperties).length > 0) {
+          paragraph.formatting.pPrChange = {
+            author: existingChange.author,
+            date: existingChange.date,
+            id: existingChange.id,
+            previousProperties: mergedPreviousProperties,
+          };
+        } else {
+          // No properties to track - remove the pPrChange to avoid empty element corruption
+          delete paragraph.formatting.pPrChange;
+        }
       } else {
-        // No existing pPrChange - create a new one
-        const revisionId = this.revisionManager.peekNextId();
-        paragraph.formatting.pPrChange = {
-          author: this.author,
-          date: new Date(latestTimestamp).toISOString(),
-          id: String(revisionId),
-          previousProperties: Object.keys(newPreviousProperties).length > 0
-            ? newPreviousProperties
-            : undefined,
-        };
+        // No existing pPrChange - create a new one ONLY if there are previous properties to record
+        // Per ECMA-376 Part 1 §17.13.5.29, w:pPrChange MUST contain a w:pPr child element.
+        // Creating pPrChange without previousProperties results in empty <w:pPrChange/> which
+        // causes Word to report "unreadable content" corruption.
+        if (Object.keys(newPreviousProperties).length > 0) {
+          // Use consumeNextId() to ensure unique IDs - peekNextId() was causing duplicate IDs
+          const revisionId = this.revisionManager.consumeNextId();
+          paragraph.formatting.pPrChange = {
+            author: this.author,
+            date: new Date(latestTimestamp).toISOString(),
+            id: String(revisionId),
+            previousProperties: newPreviousProperties,
+          };
+        }
+        // If no previous properties, don't create pPrChange at all
       }
     }
 

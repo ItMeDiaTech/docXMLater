@@ -119,6 +119,26 @@ export interface DocumentGrid {
 }
 
 /**
+ * Line numbering restart mode
+ */
+export type LineNumberingRestart = 'newPage' | 'newSection' | 'continuous';
+
+/**
+ * Line numbering properties
+ * Per ECMA-376 Part 1, Section 17.6.8 (w:lnNumType element)
+ */
+export interface LineNumbering {
+  /** Display line number every N lines (countBy attribute) */
+  countBy?: number;
+  /** Starting line number */
+  start?: number;
+  /** Distance from text margin in twips */
+  distance?: number;
+  /** When to restart line numbering */
+  restart?: LineNumberingRestart;
+}
+
+/**
  * Section properties
  */
 export interface SectionProperties {
@@ -158,6 +178,8 @@ export interface SectionProperties {
   rtlGutter?: boolean;
   /** Document grid for snapping text to grid */
   docGrid?: DocumentGrid;
+  /** Line numbering configuration */
+  lineNumbering?: LineNumbering;
 }
 
 /**
@@ -378,6 +400,32 @@ export class Section {
   }
 
   /**
+   * Sets line numbering for the section
+   * Per ECMA-376 Part 1, Section 17.6.8 (w:lnNumType)
+   * @param options Line numbering configuration
+   */
+  setLineNumbering(options: LineNumbering): this {
+    this.properties.lineNumbering = { ...options };
+    return this;
+  }
+
+  /**
+   * Gets line numbering configuration
+   * @returns Line numbering settings or undefined if not set
+   */
+  getLineNumbering(): LineNumbering | undefined {
+    return this.properties.lineNumbering ? { ...this.properties.lineNumbering } : undefined;
+  }
+
+  /**
+   * Clears line numbering for the section
+   */
+  clearLineNumbering(): this {
+    this.properties.lineNumbering = undefined;
+    return this;
+  }
+
+  /**
    * Generates WordprocessingML XML for section properties
    */
   toXML(): XMLElement {
@@ -567,6 +615,26 @@ export class Section {
       children.push(XMLBuilder.wSelf('rtlGutter'));
     }
 
+    // Line numbering (w:lnNumType)
+    if (this.properties.lineNumbering) {
+      const attrs: Record<string, string> = {};
+      if (this.properties.lineNumbering.countBy !== undefined) {
+        attrs['w:countBy'] = this.properties.lineNumbering.countBy.toString();
+      }
+      if (this.properties.lineNumbering.start !== undefined) {
+        attrs['w:start'] = this.properties.lineNumbering.start.toString();
+      }
+      if (this.properties.lineNumbering.distance !== undefined) {
+        attrs['w:distance'] = this.properties.lineNumbering.distance.toString();
+      }
+      if (this.properties.lineNumbering.restart) {
+        attrs['w:restart'] = this.properties.lineNumbering.restart;
+      }
+      if (Object.keys(attrs).length > 0) {
+        children.push(XMLBuilder.wSelf('lnNumType', attrs));
+      }
+    }
+
     // Document grid
     if (this.properties.docGrid) {
       const attrs: Record<string, string> = {};
@@ -630,6 +698,10 @@ export class Section {
 
     if (this.properties.docGrid) {
       clonedProperties.docGrid = { ...this.properties.docGrid };
+    }
+
+    if (this.properties.lineNumbering) {
+      clonedProperties.lineNumbering = { ...this.properties.lineNumbering };
     }
 
     // Copy primitive properties

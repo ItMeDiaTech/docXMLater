@@ -147,10 +147,13 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
       const doc = Document.create();
       const para = new Paragraph();
       para.addText('Paragraph with tracked changes');
+      // Per ECMA-376 §17.13.5.29, pPrChange MUST contain previousProperties (child w:pPr element)
+      // Empty pPrChange without previousProperties causes Word "unreadable content" corruption
       para.setParagraphPropertiesChange({
         author: 'John Doe',
         date: '2025-10-23T12:00:00Z',
-        id: '1'
+        id: '1',
+        previousProperties: { alignment: 'justify' }  // Required for valid OOXML
       });
 
       doc.addParagraph(para);
@@ -221,10 +224,12 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
       para.addText('Complex paragraph with all properties');
       para.setConditionalFormatting('110000000000');
       para.setSectionProperties({ type: 'nextPage' });
+      // Per ECMA-376 §17.13.5.29, pPrChange MUST contain previousProperties (child w:pPr element)
       para.setParagraphPropertiesChange({
         author: 'Test User',
         date: '2025-10-23T16:00:00Z',
-        id: '3'
+        id: '3',
+        previousProperties: { alignment: 'left' }  // Required for valid OOXML
       });
 
       doc.addParagraph(para);
@@ -247,10 +252,12 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
       const para = new Paragraph();
       para.addText('Multi-cycle test');
       para.setConditionalFormatting('101010101010');
+      // Per ECMA-376 §17.13.5.29, pPrChange MUST contain previousProperties (child w:pPr element)
       para.setParagraphPropertiesChange({
         author: 'Cycle Tester',
         date: '2025-10-23T18:00:00Z',
-        id: '99'
+        id: '99',
+        previousProperties: { alignment: 'center' }  // Required for valid OOXML
       });
 
       doc.addParagraph(para);

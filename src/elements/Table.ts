@@ -1516,6 +1516,73 @@ export class Table {
   }
 
   /**
+   * Sorts table rows by the content of a specified column
+   *
+   * Sorts all rows based on the text content of cells in the given column.
+   * By default, excludes the first row (header row) from sorting.
+   *
+   * @param columnIndex - Column to sort by (0-based)
+   * @param options - Sort options
+   * @param options.ascending - Sort ascending (default: true)
+   * @param options.numeric - Treat values as numbers (default: false, string sort)
+   * @param options.skipHeaderRow - Skip first row from sorting (default: true)
+   * @returns This table for chaining
+   *
+   * @example
+   * ```typescript
+   * // Sort by first column alphabetically
+   * table.sortRows(0);
+   *
+   * // Sort by third column numerically, descending
+   * table.sortRows(2, { numeric: true, ascending: false });
+   *
+   * // Sort all rows including header
+   * table.sortRows(0, { skipHeaderRow: false });
+   * ```
+   */
+  sortRows(
+    columnIndex: number,
+    options?: { ascending?: boolean; numeric?: boolean; skipHeaderRow?: boolean }
+  ): this {
+    const ascending = options?.ascending ?? true;
+    const numeric = options?.numeric ?? false;
+    const skipHeaderRow = options?.skipHeaderRow ?? true;
+
+    if (this.rows.length <= 1) {
+      return this; // Nothing to sort
+    }
+
+    // Determine which rows to sort
+    const headerRow = skipHeaderRow ? this.rows.shift() : null;
+    const rowsToSort = [...this.rows];
+
+    // Sort the rows
+    rowsToSort.sort((a, b) => {
+      const cellA = a.getCell(columnIndex);
+      const cellB = b.getCell(columnIndex);
+
+      const textA = cellA?.getText().trim() || "";
+      const textB = cellB?.getText().trim() || "";
+
+      let comparison: number;
+      if (numeric) {
+        const numA = parseFloat(textA) || 0;
+        const numB = parseFloat(textB) || 0;
+        comparison = numA - numB;
+      } else {
+        comparison = textA.localeCompare(textB);
+      }
+
+      return ascending ? comparison : -comparison;
+    });
+
+    // Reconstruct rows array
+    this.rows = headerRow ? [headerRow, ...rowsToSort] : rowsToSort;
+
+    return this;
+  }
+
+  /**
    * Creates a deep clone of this table
    *
    * Creates a new Table with copies of all rows, cells, content, and formatting.

@@ -53,8 +53,77 @@ export interface RunPropertyChange extends PropertyChangeBase {
 }
 
 /**
+ * Border definition for paragraph borders
+ * Per ECMA-376 Part 1 Section 17.3.1.24
+ */
+export interface ParagraphBorderDef {
+  /** Border style (single, double, dotted, dashed, etc.) */
+  val?: string;
+  /** Border width in eighths of a point */
+  sz?: number;
+  /** Space between border and content in points */
+  space?: number;
+  /** Border color (hex RGB without #) */
+  color?: string;
+  /** Theme color reference */
+  themeColor?: string;
+}
+
+/**
+ * Paragraph borders (w:pBdr)
+ * Per ECMA-376 Part 1 Section 17.3.1.24
+ */
+export interface ParagraphBorders {
+  /** Top border */
+  top?: ParagraphBorderDef;
+  /** Bottom border */
+  bottom?: ParagraphBorderDef;
+  /** Left border */
+  left?: ParagraphBorderDef;
+  /** Right border */
+  right?: ParagraphBorderDef;
+  /** Border between paragraphs with same borders */
+  between?: ParagraphBorderDef;
+  /** Bar border (vertical line) */
+  bar?: ParagraphBorderDef;
+}
+
+/**
+ * Paragraph shading (w:shd)
+ * Per ECMA-376 Part 1 Section 17.3.1.32
+ */
+export interface ParagraphShading {
+  /** Fill color (hex RGB without #) */
+  fill?: string;
+  /** Pattern color (hex RGB without #) */
+  color?: string;
+  /** Shading pattern value (clear, solid, pct10, etc.) */
+  val?: string;
+  /** Theme fill color reference */
+  themeFill?: string;
+  /** Theme color reference */
+  themeColor?: string;
+}
+
+/**
+ * Tab stop definition
+ * Per ECMA-376 Part 1 Section 17.3.1.38
+ */
+export interface TabStopDef {
+  /** Tab stop type (left, right, center, decimal, bar, clear) */
+  val?: string;
+  /** Tab position in twips */
+  pos?: number;
+  /** Leader character (none, dot, hyphen, underscore, middleDot) */
+  leader?: string;
+}
+
+/**
  * Paragraph formatting options (subset for type safety)
  * Full ParagraphFormatting is in Paragraph.ts but we need a partial here
+ *
+ * Per ECMA-376 Part 1 Section 17.3.1, this covers all paragraph properties
+ * that can be tracked in w:pPrChange revision elements.
  */
 export interface ParagraphFormattingPartial {
   /** Text alignment: left, center, right, justify */
@@ -100,6 +169,67 @@ export interface ParagraphFormattingPartial {
     numId?: number;
     level?: number;
   };
+
+  // === Extended properties for full ECMA-376 compliance ===
+
+  /**
+   * Paragraph borders (w:pBdr)
+   * Per ECMA-376 Part 1 Section 17.3.1.24
+   */
+  borders?: ParagraphBorders;
+
+  /**
+   * Paragraph shading/background (w:shd)
+   * Per ECMA-376 Part 1 Section 17.3.1.32
+   */
+  shading?: ParagraphShading;
+
+  /**
+   * Custom tab stops (w:tabs)
+   * Per ECMA-376 Part 1 Section 17.3.1.38
+   */
+  tabs?: TabStopDef[];
+
+  /**
+   * Text direction (w:textDirection)
+   * Per ECMA-376 Part 1 Section 17.3.1.40
+   * Values: lrTb, tbRl, btLr, lrTbV, tbRlV, tbLrV
+   */
+  textDirection?: string;
+
+  /**
+   * Suppress line numbers (w:suppressLineNumbers)
+   * Per ECMA-376 Part 1 Section 17.3.1.35
+   */
+  suppressLineNumbers?: boolean;
+
+  /**
+   * Adjust right indent (w:adjustRightInd)
+   * Per ECMA-376 Part 1 Section 17.3.1.1
+   */
+  adjustRightInd?: boolean;
+
+  /**
+   * Snap to grid (w:snapToGrid)
+   * Per ECMA-376 Part 1 Section 17.3.1.33
+   */
+  snapToGrid?: boolean;
+
+  /**
+   * Word wrap (w:wordWrap)
+   * Per ECMA-376 Part 1 Section 17.3.1.44
+   */
+  wordWrap?: boolean;
+
+  /**
+   * Auto space between East Asian and numeric (w:autoSpaceDE)
+   */
+  autoSpaceDE?: boolean;
+
+  /**
+   * Auto space between East Asian and Western (w:autoSpaceDN)
+   */
+  autoSpaceDN?: boolean;
 }
 
 /**

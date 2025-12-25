@@ -239,11 +239,67 @@ export function normalizeListsInCell(
     return report;
   }
 
-  // Track numId per level to ensure proper sequencing
+  // Calculate level shifts PER LIST GROUP, not globally
+  // A "list group" is a contiguous sequence of list items separated by non-list items
+  // Each group gets its own minimum level calculation
+  // If no list items exist before the current one in the group, default to level 0
+  // This fixes cases where a cell has "a., b." at the top and "1., 2., 3." at the bottom
+  const levelShiftByIndex = new Map<number, number>();
+  let currentGroupStart = -1;
+  let currentGroupMinLevel = Infinity;
+
+  for (let i = 0; i < analysis.paragraphs.length; i++) {
+    const item = analysis.paragraphs[i]!;
+
+    if (item.detection.category !== "none") {
+      // This is a list item
+      if (currentGroupStart === -1) {
+        currentGroupStart = i; // Start new group
+        currentGroupMinLevel = Infinity;
+      }
+      // Track minimum level in current group
+      currentGroupMinLevel = Math.min(currentGroupMinLevel, item.detection.inferredLevel);
+    } else {
+      // Non-list item - end current group if any
+      if (currentGroupStart !== -1) {
+        // Apply the group's level shift to all items in the group
+        const shift = currentGroupMinLevel === Infinity ? 0 : currentGroupMinLevel;
+        for (let j = currentGroupStart; j < i; j++) {
+          levelShiftByIndex.set(j, shift);
+        }
+        currentGroupStart = -1;
+        currentGroupMinLevel = Infinity;
+      }
+    }
+  }
+
+  // Handle last group if cell ends with list items
+  if (currentGroupStart !== -1) {
+    const shift = currentGroupMinLevel === Infinity ? 0 : currentGroupMinLevel;
+    for (let j = currentGroupStart; j < analysis.paragraphs.length; j++) {
+      levelShiftByIndex.set(j, shift);
+    }
+  }
+
+  // Track numId per level - will be reset when parent level appears
   const numIdByLevel = new Map<number, number>();
+  let lastProcessedLevel = -1;
 
   // Helper to get/create numId for a level
+  // Standard Word behavior: when a higher-level item appears (lower number),
+  // all lower-level items (higher numbers) should restart numbering.
+  // E.g., after level 0 ("1."), level 1 ("a.") restarts from "a" not continues.
   const getNumId = (level: number): number => {
+    if (level < lastProcessedLevel) {
+      // Parent level appeared - clear all child level numIds to force restart
+      for (const existingLevel of numIdByLevel.keys()) {
+        if (existingLevel > level) {
+          numIdByLevel.delete(existingLevel);
+        }
+      }
+    }
+    lastProcessedLevel = level;
+
     if (!numIdByLevel.has(level)) {
       const numId =
         majorityCategory === "numbered"
@@ -255,7 +311,8 @@ export function normalizeListsInCell(
   };
 
   // Process each paragraph
-  for (const item of analysis.paragraphs) {
+  for (let index = 0; index < analysis.paragraphs.length; index++) {
+    const item = analysis.paragraphs[index]!;
     const { paragraph, text, detection } = item;
     const para = paragraph as Paragraph;
 
@@ -276,12 +333,16 @@ export function normalizeListsInCell(
       const hasTypedPrefix = !!detection.typedPrefix;
       const isWordList = detection.isWordList;
 
+      // Get the level shift for this paragraph's list group
+      const levelShift = levelShiftByIndex.get(index) ?? 0;
+
       // Calculate target level
       // - Use format-based level from detection (decimal=0, letter=1, roman=2)
-      // - Word bullets being converted get level 1
-      let targetLevel = detection.inferredLevel;
+      // - Apply level shift to normalize lists without parent levels
+      // - Word bullets being converted get level 1 (before shift)
+      let targetLevel = detection.inferredLevel - levelShift;
       if (needsConversion && isWordList) {
-        targetLevel = 1; // Word bullets → numbered level 1 (a., b., c.)
+        targetLevel = Math.max(0, 1 - levelShift); // Word bullets → level 1, shifted
       }
 
       // Process based on what type of item this is
@@ -305,12 +366,16 @@ export function normalizeListsInCell(
           reason: `Word ${detection.category} → ${majorityCategory} level ${targetLevel}`,
         });
       } else if (isWordList) {
-        // Word list already matches majority - skip
-        report.skipped++;
+        // CRITICAL FIX (Round 5): Word lists matching majority ALSO need numId update!
+        // Without this, items keep their old numId while converted items get new numId,
+        // causing Word to restart numbering when it sees different numIds.
+        // ALL list items in a cell must share the SAME numId per level.
+        para.setNumbering(getNumId(targetLevel), targetLevel);
+        report.normalized++;
         report.details.push({
           originalText: text.substring(0, 50),
-          action: "skipped",
-          reason: "Word list already matches majority type",
+          action: "normalized",
+          reason: `Updated numId for consistent numbering at level ${targetLevel}`,
         });
       }
     } catch (err) {
@@ -359,6 +424,75 @@ export function normalizeListsInTable(
   }
 
   return aggregateReport;
+}
+
+/**
+ * Normalize orphan Level 1+ list items in a table cell.
+ *
+ * Detects when a cell's first list item starts at Level 1 or higher (e.g., open circles)
+ * without a preceding Level 0 item (e.g., filled circles). This is common when content
+ * is extracted from a larger document where the Level 0 parent existed elsewhere.
+ *
+ * The function shifts all list items down by the minimum level found, so they start at Level 0.
+ *
+ * @param cell - The table cell to normalize
+ * @returns Number of paragraphs that were adjusted
+ *
+ * @example
+ * // Before: Cell has Level 1 bullets (○ Name, ○ Address, ○ Phone)
+ * const count = normalizeOrphanListLevelsInCell(cell);
+ * // After: Cell has Level 0 bullets (● Name, ● Address, ● Phone)
+ */
+export function normalizeOrphanListLevelsInCell(cell: TableCell): number {
+  const paragraphs = cell.getParagraphs();
+
+  // Find minimum level among all list items in the cell
+  let minLevel = Infinity;
+  let hasListItems = false;
+
+  for (const para of paragraphs) {
+    const numbering = para.getNumbering();
+    if (numbering) {
+      hasListItems = true;
+      minLevel = Math.min(minLevel, numbering.level);
+    }
+  }
+
+  // If no list items or already at Level 0, nothing to fix
+  if (!hasListItems || minLevel === 0 || minLevel === Infinity) {
+    return 0;
+  }
+
+  // Shift all list items down by minLevel
+  let normalizedCount = 0;
+  for (const para of paragraphs) {
+    const numbering = para.getNumbering();
+    if (numbering) {
+      const newLevel = numbering.level - minLevel;
+      para.setNumbering(numbering.numId, newLevel);
+      normalizedCount++;
+    }
+  }
+
+  return normalizedCount;
+}
+
+/**
+ * Normalize orphan Level 1+ list items across all cells in a table.
+ *
+ * @param table - The table to normalize
+ * @returns Total number of paragraphs adjusted across all cells
+ */
+export function normalizeOrphanListLevelsInTable(table: Table): number {
+  let totalNormalized = 0;
+
+  for (const row of table.getRows()) {
+    for (const cell of row.getCells()) {
+      totalNormalized += normalizeOrphanListLevelsInCell(cell);
+    }
+  }
+
+  return totalNormalized;
 }
 
 // =============================================================================
