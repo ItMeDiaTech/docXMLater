@@ -145,6 +145,8 @@ export {
   NumberFormat,
   NumberAlignment,
   NumberingLevelProperties,
+  WORD_NATIVE_BULLETS,
+  WordNativeBullet,
 } from './formatting/NumberingLevel';
 export {
   AbstractNumbering,

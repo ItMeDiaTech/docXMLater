@@ -29,6 +29,8 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - Tables with formatting, borders, shading
 - Cell spanning (merge cells horizontally and vertically)
 - Advanced table properties (margins, widths, alignment)
+- Table style shading updates (modify styles.xml colors)
+- Cell content management (trailing blank removal with structure preservation)
 
 ### Rich Content
 
@@ -397,6 +399,20 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `setAllRunsFont(fontName)` - Apply font to all runs
 - `setAllRunsSize(size)` - Apply font size to all runs
 - `setAllRunsColor(color)` - Apply color to all runs
+
+**Content Management:**
+
+- `removeTrailingBlankParagraphs(options?)` - Remove trailing blank paragraphs from cell
+- `removeParagraph(index)` - Remove paragraph at index (updates nested content positions)
+- `addParagraphAt(index, paragraph)` - Insert paragraph at index (updates nested content positions)
+
+### Document Class
+
+**Table Style Shading:**
+
+- `updateTableStyleShading(oldColor, newColor)` - Update shading colors in styles.xml
+- `updateTableStyleShadingBulk(settings)` - Bulk update table style shading
+- `removeTrailingBlanksInTableCells(options?)` - Remove trailing blanks from all table cells
 
 ### Table Class
 
