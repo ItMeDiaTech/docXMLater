@@ -286,7 +286,7 @@ export class AbstractNumbering {
   static createBulletList(
     abstractNumId: number,
     levels: number = 9,
-    bullets: string[] = ["•", "○"] // Alternates: even levels=closed, odd levels=open
+    bullets?: string[] // Optional: custom bullets. If not provided, uses Word-native encoding
   ): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
       abstractNumId,
@@ -295,8 +295,14 @@ export class AbstractNumbering {
     });
 
     for (let i = 0; i < levels && i < 9; i++) {
-      const bullet = bullets[i % bullets.length] || "•";
-      abstractNum.addLevel(NumberingLevel.createBulletLevel(i, bullet));
+      if (bullets && bullets.length > 0) {
+        // Custom bullets provided - use them with default font
+        const bullet = bullets[i % bullets.length] || "•";
+        abstractNum.addLevel(NumberingLevel.createBulletLevel(i, bullet));
+      } else {
+        // No custom bullets - use Word-native encoding (correct font per level)
+        abstractNum.addLevel(NumberingLevel.createBulletLevel(i));
+      }
     }
 
     return abstractNum;

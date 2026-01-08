@@ -242,7 +242,7 @@ export class Document {
     this.numberingManager = NumberingManager.create();
     this.section = new Section();
     this.imageManager = ImageManager.create();
-    this.relationshipManager = RelationshipManager.create();
+    this.relationshipManager = RelationshipManager.createForDocument();
     this.headerFooterManager = HeaderFooterManager.create();
     this.bookmarkManager = BookmarkManager.create();
     this.revisionManager = RevisionManager.create();
@@ -629,6 +629,13 @@ export class Document {
       this.stylesManager.addStyle(style);
     }
 
+    // Inject StylesManager into parsed tables for conditional formatting resolution
+    for (const element of this.bodyElements) {
+      if (element instanceof Table) {
+        element._setStylesManager(this.stylesManager);
+      }
+    }
+
     // Populate numbering manager
     for (const abstractNum of result.abstractNumberings) {
       this.numberingManager.addAbstractNumbering(abstractNum);
@@ -884,6 +891,7 @@ export class Document {
    * ```
    */
   addParagraph(paragraph: Paragraph): this {
+    paragraph._setStylesManager(this.stylesManager);
     this.bodyElements.push(paragraph);
     return this;
   }
@@ -915,6 +923,9 @@ export class Document {
   createParagraph(text?: string): Paragraph {
     const para = new Paragraph();
 
+    // Inject StylesManager for style resolution
+    para._setStylesManager(this.stylesManager);
+
     // If track changes is enabled, bind tracking context to the new paragraph
     if (this.trackChangesEnabled && this.trackingContext.isEnabled()) {
       para._setTrackingContext(this.trackingContext);
@@ -944,6 +955,7 @@ export class Document {
    * ```
    */
   addTable(table: Table): this {
+    table._setStylesManager(this.stylesManager);
     this.bodyElements.push(table);
     return this;
   }
@@ -999,6 +1011,7 @@ export class Document {
    */
   createTable(rows: number, columns: number): Table {
     const table = new Table(rows, columns);
+    table._setStylesManager(this.stylesManager);
     this.bodyElements.push(table);
     return table;
   }
@@ -2620,7 +2633,11 @@ export class Document {
             for (const run of para.getRuns()) {
               if (headerRowFormatting.bold) run.setBold(true);
               run.setFont(headerRowFormatting.font, headerRowFormatting.size);
-              run.setColor(headerRowFormatting.color);
+              // Preserve white font - don't change color if run is white (FFFFFF)
+              const currentColor = run.getFormatting().color?.toUpperCase();
+              if (currentColor !== 'FFFFFF') {
+                run.setColor(headerRowFormatting.color);
+              }
             }
           }
         }
@@ -2678,7 +2695,11 @@ export class Document {
               for (const run of para.getRuns()) {
                 run.setBold(true);
                 run.setFont("Verdana", 12);
-                run.setColor("000000");
+                // Preserve white font - don't change color if run is white (FFFFFF)
+                const currentColor = run.getFormatting().color?.toUpperCase();
+                if (currentColor !== 'FFFFFF') {
+                  run.setColor("000000");
+                }
               }
             }
           }
@@ -4774,12 +4795,25 @@ export class Document {
      * @default true
      */
     addStructureBlankLines?: boolean;
+    /**
+     * Stop adding bold+colon blank lines after this heading text is found in a 1x1 table.
+     * This option is passed through to addStructureBlankLines().
+     */
+    stopBoldColonAfterHeading?: string;
+    /**
+     * Whether to remove trailing blank paragraphs from table cells.
+     * A trailing blank is a blank paragraph at the END of a cell, after content.
+     * This removes blanks after images, text, or nested tables in cells.
+     * @default true
+     */
+    removeTrailingCellBlanks?: boolean;
   }): {
     removed: number;
     added: number;
     total: number;
   } {
     const addStructureBlankLines = options?.addStructureBlankLines ?? true;
+    const removeTrailingCellBlanks = options?.removeTrailingCellBlanks ?? true;
     let removed = 0;
     let added = 0;
 
@@ -4847,7 +4881,18 @@ export class Document {
 
     // PASS 2: If requested, re-insert structure blank lines
     if (addStructureBlankLines) {
-      added = this.addStructureBlankLinesAfterElements();
+      added = this.addStructureBlankLinesAfterElements({
+        stopBoldColonAfterHeading: options?.stopBoldColonAfterHeading,
+      });
+    }
+
+    // PASS 3: Remove trailing blank paragraphs from table cells
+    // This removes blanks at the END of cells, after images/text/nested content
+    if (removeTrailingCellBlanks) {
+      const trailingRemoved = this.removeTrailingBlanksInTableCells({
+        ignorePreserveFlag: true, // Always remove trailing cell blanks
+      });
+      removed += trailingRemoved;
     }
 
     return {
@@ -4855,6 +4900,175 @@ export class Document {
       added,
       total: removed,
     };
+  }
+
+  /**
+   * Removes trailing blank paragraphs from all table cells in the document.
+   * A trailing blank is a blank paragraph at the END of a cell, after all content (images, text, nested tables).
+   * This is useful for removing unnecessary whitespace in table cells.
+   *
+   * This method respects the ECMA-376 requirement that each table cell must have at least one paragraph.
+   *
+   * @param options.ignorePreserveFlag - If true, removes trailing blanks even if marked preserved (default: true)
+   * @returns Total number of paragraphs removed across all cells
+   *
+   * @example
+   * ```typescript
+   * // Remove all trailing blanks in table cells (ignoring preserve flags)
+   * const removed = doc.removeTrailingBlanksInTableCells();
+   * console.log(`Removed ${removed} trailing blank paragraphs from cells`);
+   *
+   * // Remove trailing blanks but respect preserve flags
+   * const removed = doc.removeTrailingBlanksInTableCells({ ignorePreserveFlag: false });
+   * ```
+   */
+  public removeTrailingBlanksInTableCells(options?: {
+    ignorePreserveFlag?: boolean;
+  }): number {
+    let totalRemoved = 0;
+    const ignorePreserve = options?.ignorePreserveFlag ?? true;
+
+    for (const table of this.getAllTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          totalRemoved += cell.removeTrailingBlankParagraphs({
+            ignorePreserveFlag: ignorePreserve,
+          });
+        }
+      }
+    }
+
+    return totalRemoved;
+  }
+
+  /**
+   * Updates shading colors in table style definitions in styles.xml.
+   *
+   * Table styles (e.g., GridTable4-Accent3) often have conditional formatting with
+   * hardcoded shading values. When applying table uniformity with different shading
+   * colors, the table style definitions should also be updated to match.
+   *
+   * This method finds all occurrences of `oldColor` in shading elements (`w:shd`)
+   * within table styles and replaces them with `newColor`.
+   *
+   * @param oldColor - Hex color to find (e.g., "A5A5A5", without #)
+   * @param newColor - Hex color to replace with (e.g., "DFDFDF", without #)
+   * @returns Number of shading elements updated
+   *
+   * @example
+   * ```typescript
+   * // Update table style shading from gray to light gray
+   * const updated = doc.updateTableStyleShading("A5A5A5", "DFDFDF");
+   * console.log(`Updated ${updated} shading definitions in styles.xml`);
+   * ```
+   */
+  public updateTableStyleShading(oldColor: string, newColor: string): number {
+    // Normalize colors (uppercase, no #)
+    const normalizedOld = oldColor.replace("#", "").toUpperCase();
+    const normalizedNew = newColor.replace("#", "").toUpperCase();
+
+    if (normalizedOld === normalizedNew) {
+      return 0; // No change needed
+    }
+
+    // Get current styles.xml
+    let stylesXml = this.getStylesXml();
+    if (!stylesXml) {
+      return 0;
+    }
+
+    let updateCount = 0;
+
+    // Pattern to match shading elements with fill attribute containing the old color
+    // Matches: w:fill="A5A5A5" (case-insensitive)
+    const fillPattern = new RegExp(
+      `(w:fill=["'])${normalizedOld}(["'])`,
+      "gi"
+    );
+
+    // Replace all occurrences
+    stylesXml = stylesXml.replace(fillPattern, (match, prefix, suffix) => {
+      updateCount++;
+      return `${prefix}${normalizedNew}${suffix}`;
+    });
+
+    // Also handle color attribute in shading elements
+    // Matches: w:color="A5A5A5" within shd elements
+    const colorPattern = new RegExp(
+      `(<w:shd[^>]*w:color=["'])${normalizedOld}(["'])`,
+      "gi"
+    );
+
+    stylesXml = stylesXml.replace(colorPattern, (match, prefix, suffix) => {
+      updateCount++;
+      return `${prefix}${normalizedNew}${suffix}`;
+    });
+
+    // Only update if changes were made
+    if (updateCount > 0) {
+      this.setStylesXml(stylesXml);
+    }
+
+    return updateCount;
+  }
+
+  /**
+   * Updates all table style conditional formatting shading to match given settings.
+   *
+   * This is a convenience method that updates common table style shading patterns.
+   * It's useful when applying table uniformity to ensure table styles in styles.xml
+   * match the shading colors being applied to individual cells.
+   *
+   * @param settings - Shading configuration
+   * @param settings.headerShading - Shading color for header/accent cells (e.g., "BFBFBF")
+   * @param settings.dataShading - Shading color for data cells (e.g., "DFDFDF")
+   * @param settings.replaceColors - Optional array of old colors to replace (defaults to common grays)
+   * @returns Total number of shading elements updated
+   *
+   * @example
+   * ```typescript
+   * // Update table styles to use consistent shading
+   * const updated = doc.updateTableStyleShadingBulk({
+   *   headerShading: "BFBFBF",
+   *   dataShading: "DFDFDF",
+   *   replaceColors: ["A5A5A5", "C0C0C0", "D9D9D9"]
+   * });
+   * ```
+   */
+  public updateTableStyleShadingBulk(settings: {
+    headerShading?: string;
+    dataShading?: string;
+    replaceColors?: string[];
+  }): number {
+    let totalUpdated = 0;
+
+    // Default colors commonly used in table styles
+    const defaultReplaceColors = ["A5A5A5", "C0C0C0", "D9D9D9", "E7E6E6"];
+    const colorsToReplace = settings.replaceColors || defaultReplaceColors;
+
+    // Replace header-type colors with header shading
+    if (settings.headerShading) {
+      for (const oldColor of colorsToReplace) {
+        totalUpdated += this.updateTableStyleShading(
+          oldColor,
+          settings.headerShading
+        );
+      }
+    }
+
+    // If data shading differs from header, apply it to lighter colors
+    if (settings.dataShading && settings.dataShading !== settings.headerShading) {
+      // Typically data cells use lighter shading
+      const dataColors = ["D9D9D9", "E7E6E6", "F2F2F2"];
+      for (const oldColor of dataColors) {
+        totalUpdated += this.updateTableStyleShading(
+          oldColor,
+          settings.dataShading
+        );
+      }
+    }
+
+    return totalUpdated;
   }
 
   /**
@@ -4987,6 +5201,8 @@ export class Document {
     aroundImages?: boolean;
     /** Add blank line above paragraphs starting with bold text followed by colon (default: true) */
     aboveBoldColon?: boolean;
+    /** Stop adding bold+colon blank lines after this heading text is found in a 1x1 table (default: undefined - process all) */
+    stopBoldColonAfterHeading?: string;
   }): {
     tablesProcessed: number;
     blankLinesAdded: number;
@@ -5010,6 +5226,7 @@ export class Document {
     const afterLists = options?.afterLists ?? true;
     const aroundImages = options?.aroundImages ?? true;
     const aboveBoldColon = options?.aboveBoldColon ?? true;
+    const stopBoldColonAfterHeading = options?.stopBoldColonAfterHeading?.toLowerCase();
 
     // Aggregated statistics
     let totalTablesProcessed = 0;
@@ -5554,8 +5771,34 @@ export class Document {
 
     // Phase 11: Add blank above paragraphs starting with bold text followed by colon
     if (aboveBoldColon) {
+      let foundStopHeading = false;
+
       for (let i = 1; i < this.bodyElements.length; i++) {
         const element = this.bodyElements[i];
+
+        // Check if this element is a 1x1 table containing the stop heading
+        if (stopBoldColonAfterHeading && !foundStopHeading && element instanceof Table) {
+          const rowCount = element.getRowCount();
+          const colCount = element.getColumnCount();
+          if (rowCount === 1 && colCount === 1) {
+            const cell = element.getCell(0, 0);
+            if (cell) {
+              const cellText = cell
+                .getParagraphs()
+                .map((p) => p.getText())
+                .join(" ")
+                .toLowerCase();
+              if (cellText.includes(stopBoldColonAfterHeading)) {
+                foundStopHeading = true;
+                continue;
+              }
+            }
+          }
+        }
+
+        // Skip bold+colon processing after stop heading is found
+        if (foundStopHeading) continue;
+
         if (!(element instanceof Paragraph)) continue;
 
         // Skip blank paragraphs
@@ -5600,7 +5843,32 @@ export class Document {
 
     // Phase 11b: Handle bold+colon paragraphs inside table cells
     if (aboveBoldColon) {
+      let foundStopHeadingInTable = false;
+
       for (const table of this.getAllTables()) {
+        // Check if this is a 1x1 table containing the stop heading
+        if (stopBoldColonAfterHeading && !foundStopHeadingInTable) {
+          const rowCount = table.getRowCount();
+          const colCount = table.getColumnCount();
+          if (rowCount === 1 && colCount === 1) {
+            const cell = table.getCell(0, 0);
+            if (cell) {
+              const cellText = cell
+                .getParagraphs()
+                .map((p) => p.getText())
+                .join(" ")
+                .toLowerCase();
+              if (cellText.includes(stopBoldColonAfterHeading)) {
+                foundStopHeadingInTable = true;
+                continue; // Skip this table and all subsequent tables
+              }
+            }
+          }
+        }
+
+        // Skip all tables after the stop heading table is found
+        if (foundStopHeadingInTable) continue;
+
         for (const row of table.getRows()) {
           for (const cell of row.getCells()) {
             let cellParas = cell.getParagraphs();
@@ -5754,9 +6022,13 @@ export class Document {
   /**
    * Helper method called by removeExtraBlankParagraphs to re-insert structural blank lines
    * @private
+   * @param options Optional configuration
+   * @param options.stopBoldColonAfterHeading Stop adding bold+colon blank lines after this heading
    * @returns Number of blank paragraphs added
    */
-  private addStructureBlankLinesAfterElements(): number {
+  private addStructureBlankLinesAfterElements(options?: {
+    stopBoldColonAfterHeading?: string;
+  }): number {
     // Use the public method with all structure options enabled
     const result = this.addStructureBlankLines({
       spacingAfter: 120,
@@ -5771,6 +6043,7 @@ export class Document {
       aboveWarning: true,
       afterLists: true,
       aroundImages: true,
+      stopBoldColonAfterHeading: options?.stopBoldColonAfterHeading,
     });
 
     return result.blankLinesAdded;
@@ -13100,6 +13373,152 @@ export class Document {
     }
     
     return results;
+  }
+
+  /**
+   * Normalizes all table borders to a uniform style
+   *
+   * Applies consistent border styling to all tables in the document.
+   * This is useful for fixing documents with inconsistent borders
+   * (e.g., thick bottom borders on some tables).
+   *
+   * @param options - Border styling options
+   * @param options.style - Border style (default: 'single')
+   * @param options.size - Border size in eighths of a point (default: 4 = 0.5pt)
+   * @param options.color - Border color in hex without # (default: '000000')
+   * @returns Number of tables updated
+   *
+   * @example
+   * ```typescript
+   * // Apply default thin black borders to all tables
+   * const count = doc.normalizeTableBorders();
+   * console.log(`Normalized borders on ${count} tables`);
+   *
+   * // Custom border styling
+   * doc.normalizeTableBorders({
+   *   style: 'single',
+   *   size: 8,  // 1pt border
+   *   color: '333333'  // Dark gray
+   * });
+   * ```
+   */
+  normalizeTableBorders(options?: {
+    style?: "single" | "double" | "dotted" | "dashed" | "thick" | "none";
+    size?: number;
+    color?: string;
+  }): number {
+    const border: TableBorder = {
+      style: options?.style ?? "single",
+      size: options?.size ?? 4,
+      color: options?.color ?? "000000",
+    };
+
+    return this.applyBordersToAllTables(border);
+  }
+
+  /**
+   * Replaces text in runs with optional formatting constraints
+   *
+   * Searches for text patterns and replaces them while optionally
+   * constraining matches to runs with specific formatting (e.g., bold only).
+   * Formatting is preserved after replacement.
+   *
+   * @param find - Text to find (string or regex)
+   * @param replace - Replacement text
+   * @param options - Search options
+   * @param options.matchBold - Only match text in bold runs (default: false)
+   * @param options.matchItalic - Only match text in italic runs (default: false)
+   * @param options.matchCase - Case-sensitive search (default: false)
+   * @returns Number of replacements made
+   *
+   * @example
+   * ```typescript
+   * // Replace "Parent SOP:" with "Parent Document:" only in bold text
+   * const count = doc.replaceFormattedText('Parent SOP:', 'Parent Document:', {
+   *   matchBold: true
+   * });
+   * console.log(`Replaced ${count} occurrences`);
+   *
+   * // Case-sensitive replacement
+   * doc.replaceFormattedText('OLD_VALUE', 'NEW_VALUE', {
+   *   matchCase: true
+   * });
+   * ```
+   */
+  replaceFormattedText(
+    find: string,
+    replace: string,
+    options?: {
+      matchBold?: boolean;
+      matchItalic?: boolean;
+      matchCase?: boolean;
+    }
+  ): number {
+    let replacedCount = 0;
+    const matchBold = options?.matchBold ?? false;
+    const matchItalic = options?.matchItalic ?? false;
+    const matchCase = options?.matchCase ?? false;
+
+    // Create regex pattern
+    const pattern = matchCase
+      ? new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")
+      : new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+
+    // Process body paragraphs
+    for (const para of this.getAllParagraphs()) {
+      for (const run of para.getRuns()) {
+        const text = run.getText();
+        if (!text) continue;
+
+        // Check formatting constraints
+        const formatting = run.getFormatting();
+        if (matchBold && !formatting.bold) continue;
+        if (matchItalic && !formatting.italic) continue;
+
+        // Perform replacement
+        if (pattern.test(text)) {
+          const newText = text.replace(pattern, replace);
+          if (newText !== text) {
+            run.setText(newText);
+            replacedCount++;
+          }
+        }
+        // Reset regex lastIndex for next iteration
+        pattern.lastIndex = 0;
+      }
+    }
+
+    // Process paragraphs inside table cells
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            for (const run of para.getRuns()) {
+              const text = run.getText();
+              if (!text) continue;
+
+              // Check formatting constraints
+              const runFormatting = run.getFormatting();
+              if (matchBold && !runFormatting.bold) continue;
+              if (matchItalic && !runFormatting.italic) continue;
+
+              // Perform replacement
+              if (pattern.test(text)) {
+                const newText = text.replace(pattern, replace);
+                if (newText !== text) {
+                  run.setText(newText);
+                  replacedCount++;
+                }
+              }
+              // Reset regex lastIndex for next iteration
+              pattern.lastIndex = 0;
+            }
+          }
+        }
+      }
+    }
+
+    return replacedCount;
   }
 
   /**

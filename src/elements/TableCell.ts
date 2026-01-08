@@ -122,6 +122,8 @@ export class TableCell {
   private formatting: CellFormatting;
   /** Raw nested content (tables, SDTs) stored as XML for passthrough */
   private rawNestedContent: RawNestedContent[] = [];
+  /** Parent row reference (if cell is inside a table row) */
+  private _parentRow?: import('./TableRow').TableRow;
 
   /**
    * Creates a new TableCell
@@ -138,6 +140,12 @@ export class TableCell {
    */
   addParagraph(paragraph: Paragraph): this {
     this.paragraphs.push(paragraph);
+    paragraph._setParentCell(this);
+    // Propagate StylesManager from table if available
+    const stylesManager = this._parentRow?._getParentTable()?._getStylesManager();
+    if (stylesManager) {
+      paragraph._setStylesManager(stylesManager);
+    }
     return this;
   }
 
@@ -152,6 +160,12 @@ export class TableCell {
       para.addText(text);
     }
     this.paragraphs.push(para);
+    para._setParentCell(this);
+    // Propagate StylesManager from table if available
+    const stylesManager = this._parentRow?._getParentTable()?._getStylesManager();
+    if (stylesManager) {
+      para._setStylesManager(stylesManager);
+    }
     return para;
   }
 
@@ -172,7 +186,21 @@ export class TableCell {
     if (index < 0 || index >= this.paragraphs.length) {
       return false;
     }
-    this.paragraphs.splice(index, 1);
+    const removed = this.paragraphs.splice(index, 1);
+    const removedPara = removed[0];
+    if (removedPara) {
+      removedPara._setParentCell(undefined);
+    }
+
+    // Update raw nested content positions
+    // Any nested content positioned AFTER the removed paragraph needs its position decremented
+    // This maintains correct relative positioning for nested tables, SDTs, etc.
+    for (const item of this.rawNestedContent) {
+      if (item.position > index) {
+        item.position--;
+      }
+    }
+
     return true;
   }
 
@@ -186,10 +214,30 @@ export class TableCell {
     if (index < 0) {
       index = 0;
     }
+
+    // Determine actual insertion index
+    const actualIndex = index >= this.paragraphs.length ? this.paragraphs.length : index;
+
     if (index >= this.paragraphs.length) {
       this.paragraphs.push(paragraph);
     } else {
       this.paragraphs.splice(index, 0, paragraph);
+    }
+
+    // Update raw nested content positions
+    // Any nested content positioned AT OR AFTER the insertion point needs its position incremented
+    // This maintains correct relative positioning for nested tables, SDTs, etc.
+    for (const item of this.rawNestedContent) {
+      if (item.position >= actualIndex) {
+        item.position++;
+      }
+    }
+
+    paragraph._setParentCell(this);
+    // Propagate StylesManager from table if available
+    const stylesManager = this._parentRow?._getParentTable()?._getStylesManager();
+    if (stylesManager) {
+      paragraph._setStylesManager(stylesManager);
     }
     return this;
   }
@@ -688,6 +736,180 @@ export class TableCell {
       return true;
     }
     return false;
+  }
+
+  // ============================================================================
+  // TRAILING BLANK PARAGRAPH REMOVAL
+  // ============================================================================
+
+  /**
+   * Removes trailing blank paragraphs from this cell.
+   * A trailing blank is a blank paragraph at the end of the cell, after all content.
+   * This respects ECMA-376 requirement of at least one paragraph per cell.
+   *
+   * @param options.ignorePreserveFlag - If true, removes trailing blanks even if marked preserved (default: false)
+   * @returns Number of paragraphs removed
+   *
+   * @example
+   * ```typescript
+   * // Remove trailing blanks, respecting preserve flags
+   * const removed = cell.removeTrailingBlankParagraphs();
+   *
+   * // Remove all trailing blanks, ignoring preserve flags
+   * const removed = cell.removeTrailingBlankParagraphs({ ignorePreserveFlag: true });
+   * ```
+   */
+  removeTrailingBlankParagraphs(options?: { ignorePreserveFlag?: boolean }): number {
+    let removed = 0;
+    const ignorePreserve = options?.ignorePreserveFlag ?? false;
+
+    // Work backwards from end of paragraphs array
+    while (this.paragraphs.length > 1) {
+      const lastIndex = this.paragraphs.length - 1;
+      const lastPara = this.paragraphs[lastIndex];
+
+      if (!lastPara) break;
+
+      // Check if this is a blank paragraph
+      const isBlank = this.isParaBlank(lastPara);
+
+      // Stop if not blank
+      if (!isBlank) break;
+
+      // Stop if preserved and we're respecting preserve flags
+      if (!ignorePreserve && lastPara.isPreserved()) break;
+
+      // Check if there's raw nested content positioned after this paragraph
+      // If so, we should NOT remove this trailing blank as it maintains structure
+      const hasContentAfter = this.rawNestedContent.some(
+        (item) => item.position >= lastIndex
+      );
+      if (hasContentAfter) break;
+
+      this.removeParagraph(lastIndex);
+      removed++;
+    }
+
+    return removed;
+  }
+
+  /**
+   * Checks if a paragraph is blank (no meaningful content).
+   * A paragraph is considered blank if it has no text, images, shapes, hyperlinks, fields,
+   * cnfStyle (conditional formatting), or other structural elements.
+   *
+   * IMPORTANT: cnfStyle preservation is critical! When a paragraph with cnfStyle is removed,
+   * Word may apply default table style conditional formatting to the cell, causing unexpected
+   * shading changes. A paragraph with cnfStyle="000000000000" (no conditionals) keeps the cell
+   * from matching table style conditionals like firstRow or band1Horz.
+   *
+   * @private
+   */
+  private isParaBlank(para: Paragraph): boolean {
+    // Check for text content
+    const text = para.getText().trim();
+    if (text !== "") return false;
+
+    // Check for cnfStyle (conditional formatting) - critical for shading preservation
+    // Even a "blank" cnfStyle like "000000000000" is meaningful as it prevents
+    // the cell from inheriting table style conditional formatting
+    const cnfStyle = para.getTableConditionalStyle();
+    if (cnfStyle && cnfStyle !== "") {
+      return false;
+    }
+
+    // Check all content items for non-text elements
+    const content = para.getContent();
+    for (const item of content) {
+      // Cast to unknown first for safe duck-typing checks
+      const itemAny = item as unknown as Record<string, unknown>;
+
+      // ImageRun check - ImageRun has getImageElement method
+      if (item && typeof itemAny.getImageElement === "function") {
+        return false;
+      }
+
+      // Shape check - Shape has getShapeType method
+      if (item && typeof itemAny.getShapeType === "function") {
+        return false;
+      }
+
+      // TextBox check - TextBox has getTextContent method
+      if (item && typeof itemAny.getTextContent === "function") {
+        return false;
+      }
+
+      // Hyperlink check - Hyperlink has getTarget method
+      if (item && typeof itemAny.getTarget === "function") {
+        return false;
+      }
+
+      // Field check - Field has getInstruction method
+      if (item && typeof itemAny.getInstruction === "function") {
+        return false;
+      }
+
+      // Revision check - check if revision contains meaningful content
+      if (item && typeof itemAny.getText === "function") {
+        const itemText = (itemAny.getText as () => string)().trim();
+        if (itemText !== "") return false;
+      }
+    }
+
+    // Check for bookmarks (they count as content)
+    if (
+      para.getBookmarksStart().length > 0 ||
+      para.getBookmarksEnd().length > 0
+    ) {
+      return false;
+    }
+
+    // Check for comments (start/end markers)
+    if (typeof para.getCommentsStart === "function") {
+      const commentsStart = para.getCommentsStart();
+      if (commentsStart && commentsStart.length > 0) {
+        return false;
+      }
+    }
+    if (typeof para.getCommentsEnd === "function") {
+      const commentsEnd = para.getCommentsEnd();
+      if (commentsEnd && commentsEnd.length > 0) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Sets the parent row reference for this cell.
+   * Called by TableRow when adding cells.
+   * @internal
+   */
+  _setParentRow(row: import('./TableRow').TableRow | undefined): void {
+    this._parentRow = row;
+  }
+
+  /**
+   * Gets the parent row reference for this cell.
+   * @internal
+   */
+  _getParentRow(): import('./TableRow').TableRow | undefined {
+    return this._parentRow;
+  }
+
+  /**
+   * Gets the table style ID by traversing up the parent chain.
+   * @returns Table style ID or undefined if not in a table or no style set
+   */
+  getTableStyleId(): string | undefined {
+    const row = this._parentRow;
+    if (!row) return undefined;
+
+    const table = row._getParentTable();
+    if (!table) return undefined;
+
+    return table.getFormatting().style;
   }
 
   /**

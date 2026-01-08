@@ -811,4 +811,102 @@ describe('InMemoryRevisionAcceptor', () => {
       expect(result.emptyTablesRemoved).toBe(0);
     });
   });
+
+  describe('Hyperlink handling in revisions', () => {
+    it('should preserve hyperlinks when accepting insertion revisions', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+
+      // Create a hyperlink with proper properties object
+      const { Hyperlink } = require('../../src/elements/Hyperlink');
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Example Link' });
+
+      // Add insertion revision containing a hyperlink
+      const insertionRevision = Revision.createInsertion('Test Author', hyperlink);
+      para.addRevision(insertionRevision);
+
+      // Verify revision exists before acceptance
+      expect(paragraphHasRevisions(para)).toBe(true);
+
+      // Accept revisions
+      const result = acceptRevisionsInMemory(doc);
+
+      // Verify insertion was accepted
+      expect(result.insertionsAccepted).toBe(1);
+
+      // Verify hyperlink was preserved (unwrapped from revision)
+      expect(paragraphHasRevisions(para)).toBe(false);
+      const content = para.getContent();
+
+      // Should have the hyperlink
+      expect(content.length).toBe(1);
+
+      // Verify the item is a hyperlink (has getUrl method)
+      const item = content[0]!;
+      expect(typeof (item as any).getUrl).toBe('function');
+      expect((item as any).getUrl()).toBe('https://example.com');
+      expect((item as any).getText()).toBe('Example Link');
+    });
+
+    it('should remove hyperlinks when accepting deletion revisions', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+
+      // Add regular text
+      para.addRun(new Run('Keep this. '));
+
+      // Create a hyperlink for deletion with proper properties object
+      const { Hyperlink } = require('../../src/elements/Hyperlink');
+      const hyperlink = new Hyperlink({ url: 'https://delete-me.com', text: 'Delete Link' });
+
+      // Add deletion revision containing the hyperlink
+      const deletionRevision = Revision.createDeletion('Test Author', hyperlink);
+      para.addRevision(deletionRevision);
+
+      // Accept revisions
+      const result = acceptRevisionsInMemory(doc);
+
+      // Verify deletion was accepted
+      expect(result.deletionsAccepted).toBe(1);
+
+      // Verify hyperlink was removed
+      expect(para.getText()).toBe('Keep this. ');
+    });
+
+    it('should preserve mixed content (runs and hyperlinks) in insertion revision', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+
+      // Create mixed content with proper properties object
+      const run1 = new Run('Before link. ');
+      const { Hyperlink } = require('../../src/elements/Hyperlink');
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      const run2 = new Run(' After link.');
+
+      // Add insertion revision with mixed content
+      const insertionRevision = new Revision({
+        type: 'insert',
+        author: 'Test Author',
+        content: [run1, hyperlink, run2],
+      });
+      para.addRevision(insertionRevision);
+
+      // Accept revisions
+      const result = acceptRevisionsInMemory(doc);
+
+      // Verify all items were preserved
+      expect(result.insertionsAccepted).toBe(1);
+      const content = para.getContent();
+      expect(content.length).toBe(3);
+
+      // First item should be run
+      expect((content[0] as Run).getText()).toBe('Before link. ');
+
+      // Second item should be hyperlink
+      expect(typeof (content[1] as any).getUrl).toBe('function');
+
+      // Third item should be run
+      expect((content[2] as Run).getText()).toBe(' After link.');
+    });
+  });
 });

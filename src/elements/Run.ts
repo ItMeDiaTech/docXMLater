@@ -7,6 +7,7 @@ import { deepClone } from "../utils/deepClone";
 import { logSerialization, logTextDirection } from "../utils/diagnostics";
 import { defaultLogger } from "../utils/logger";
 import { normalizeColor, validateRunText } from "../utils/validation";
+import { getActiveConditionalsInPriorityOrder } from "../utils/cnfStyleDecoder";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import {
   ShadingPattern as CommonShadingPattern,
@@ -511,6 +512,165 @@ export class Run {
    */
   getFormatting(): RunFormatting {
     return { ...this.formatting };
+  }
+
+  /**
+   * Gets effective bold formatting, resolving from:
+   * 1. Direct formatting on this run
+   * 2. Table conditional formatting (if in a table cell)
+   *
+   * @returns True if text should render bold, undefined if not determinable
+   *
+   * @example
+   * ```typescript
+   * // Check effective bold (considers table conditional formatting)
+   * const isBold = run.getEffectiveBold();
+   * if (isBold) {
+   *   console.log('Text appears bold (direct or via table style)');
+   * }
+   * ```
+   */
+  getEffectiveBold(): boolean | undefined {
+    // Direct formatting takes highest precedence
+    if (this.formatting.bold !== undefined) {
+      return this.formatting.bold;
+    }
+
+    // Check table conditional formatting
+    return this.getConditionalFormattingProperty("bold") as boolean | undefined;
+  }
+
+  /**
+   * Gets effective italic formatting, resolving from:
+   * 1. Direct formatting on this run
+   * 2. Table conditional formatting (if in a table cell)
+   *
+   * @returns True if text should render italic, undefined if not determinable
+   */
+  getEffectiveItalic(): boolean | undefined {
+    if (this.formatting.italic !== undefined) {
+      return this.formatting.italic;
+    }
+    return this.getConditionalFormattingProperty("italic") as boolean | undefined;
+  }
+
+  /**
+   * Gets effective color formatting, resolving from:
+   * 1. Direct formatting on this run
+   * 2. Table conditional formatting (if in a table cell)
+   *
+   * @returns Hex color string or undefined
+   */
+  getEffectiveColor(): string | undefined {
+    if (this.formatting.color !== undefined) {
+      return this.formatting.color;
+    }
+    return this.getConditionalFormattingProperty("color") as string | undefined;
+  }
+
+  /**
+   * Gets effective font formatting, resolving from:
+   * 1. Direct formatting on this run
+   * 2. Table conditional formatting (if in a table cell)
+   *
+   * @returns Font name or undefined
+   */
+  getEffectiveFont(): string | undefined {
+    if (this.formatting.font !== undefined) {
+      return this.formatting.font;
+    }
+    return this.getConditionalFormattingProperty("font") as string | undefined;
+  }
+
+  /**
+   * Gets effective font size formatting, resolving from:
+   * 1. Direct formatting on this run
+   * 2. Table conditional formatting (if in a table cell)
+   *
+   * @returns Font size in points or undefined
+   */
+  getEffectiveSize(): number | undefined {
+    if (this.formatting.size !== undefined) {
+      return this.formatting.size;
+    }
+    return this.getConditionalFormattingProperty("size") as number | undefined;
+  }
+
+  /**
+   * Gets a specific property from table conditional formatting.
+   * Traverses the parent chain to find conditional formatting from table styles.
+   * @internal
+   */
+  private getConditionalFormattingProperty<K extends keyof RunFormatting>(
+    property: K
+  ): RunFormatting[K] | undefined {
+    // Need parent paragraph to access cell context
+    const para = this._parentParagraph;
+    if (!para) return undefined;
+
+    // Check if paragraph is in a table cell
+    const cell = para._getParentCell();
+    if (!cell) return undefined;
+
+    // Get the cnfStyle (which conditionals apply)
+    const cnfStyle = para.getTableConditionalStyle();
+    if (!cnfStyle) return undefined;
+
+    // Decode cnfStyle to find active conditionals
+    const activeConditionals = getActiveConditionalsInPriorityOrder(cnfStyle);
+
+    // Try explicit table style first
+    const tableStyleId = cell.getTableStyleId();
+    const stylesManager = para._getStylesManager();
+
+    if (tableStyleId && stylesManager) {
+      const style = stylesManager.getStyle(tableStyleId);
+      if (style) {
+        const tableStyleProps = style.getProperties().tableStyle;
+        if (tableStyleProps?.conditionalFormatting) {
+          // Check active conditionals in priority order (corners > edges > banding)
+          for (const conditionalType of activeConditionals) {
+            const conditional = tableStyleProps.conditionalFormatting.find(
+              (cf) => cf.type === conditionalType
+            );
+            if (conditional?.runFormatting?.[property] !== undefined) {
+              return conditional.runFormatting[property];
+            }
+          }
+
+          // Fallback: check wholeTable conditional (applies to all cells)
+          const wholeTable = tableStyleProps.conditionalFormatting.find(
+            (cf) => cf.type === "wholeTable"
+          );
+          if (wholeTable?.runFormatting?.[property] !== undefined) {
+            return wholeTable.runFormatting[property];
+          }
+        }
+      }
+    }
+
+    // Apply Word's default formatting when no explicit style
+    // Per Word behavior: firstRow, firstCol, lastRow, lastCol get bold by default
+    if (property === "bold" && activeConditionals.length > 0) {
+      const table = cell._getParentRow()?._getParentTable();
+      if (table) {
+        const tblLookFlags = table.getTblLookFlags();
+
+        // Check if cell's conditional matches enabled tblLook flags
+        for (const conditionalType of activeConditionals) {
+          if (conditionalType === "firstRow" && tblLookFlags.firstRow)
+            return true as RunFormatting[K];
+          if (conditionalType === "lastRow" && tblLookFlags.lastRow)
+            return true as RunFormatting[K];
+          if (conditionalType === "firstCol" && tblLookFlags.firstColumn)
+            return true as RunFormatting[K];
+          if (conditionalType === "lastCol" && tblLookFlags.lastColumn)
+            return true as RunFormatting[K];
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /**

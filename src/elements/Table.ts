@@ -162,6 +162,8 @@ export interface FirstRowFormattingOptions {
 export class Table {
   private rows: TableRow[] = [];
   private formatting: TableFormatting;
+  /** StylesManager reference for conditional formatting resolution */
+  private _stylesManager?: import("../formatting/StylesManager").StylesManager;
 
   /**
    * Creates a new Table
@@ -190,7 +192,9 @@ export class Table {
       columns > 0
     ) {
       for (let i = 0; i < rows; i++) {
-        this.rows.push(new TableRow(columns));
+        const row = new TableRow(columns);
+        row._setParentTable(this);
+        this.rows.push(row);
       }
     }
   }
@@ -212,6 +216,7 @@ export class Table {
    */
   addRow(row: TableRow): this {
     this.rows.push(row);
+    row._setParentTable(this);
     return this;
   }
 
@@ -234,6 +239,7 @@ export class Table {
   createRow(cellCount?: number, formatting?: RowFormatting): TableRow {
     const row = new TableRow(cellCount, formatting);
     this.rows.push(row);
+    row._setParentTable(this);
     return row;
   }
 
@@ -581,6 +587,32 @@ export class Table {
   }
 
   /**
+   * Decodes tblLook hex string into boolean flags
+   * Per ECMA-376 Part 1 Section 17.4.56
+   * @returns Object with boolean flags for each tblLook property
+   */
+  getTblLookFlags(): {
+    firstRow: boolean;
+    lastRow: boolean;
+    firstColumn: boolean;
+    lastColumn: boolean;
+    noHBand: boolean;
+    noVBand: boolean;
+  } {
+    const hex = this.formatting.tblLook || "0000";
+    const value = parseInt(hex, 16) || 0;
+
+    return {
+      firstRow: (value & 0x0020) !== 0,
+      lastRow: (value & 0x0040) !== 0,
+      firstColumn: (value & 0x0080) !== 0,
+      lastColumn: (value & 0x0100) !== 0,
+      noHBand: (value & 0x0200) !== 0,
+      noVBand: (value & 0x0400) !== 0,
+    };
+  }
+
+  /**
    * Applies conditional formatting to table cells based on rules
    *
    * Enables advanced table formatting including:
@@ -890,6 +922,35 @@ export class Table {
   }
 
   /**
+   * Sets the StylesManager reference for conditional formatting resolution.
+   * Propagates to all paragraphs in all cells.
+   * @internal
+   */
+  _setStylesManager(
+    manager: import("../formatting/StylesManager").StylesManager
+  ): void {
+    this._stylesManager = manager;
+    // Propagate to all paragraphs in all cells
+    for (const row of this.rows) {
+      for (const cell of row.getCells()) {
+        for (const para of cell.getParagraphs()) {
+          para._setStylesManager(manager);
+        }
+      }
+    }
+  }
+
+  /**
+   * Gets the StylesManager reference for conditional formatting resolution.
+   * @internal
+   */
+  _getStylesManager():
+    | import("../formatting/StylesManager").StylesManager
+    | undefined {
+    return this._stylesManager;
+  }
+
+  /**
    * Converts the table to WordprocessingML XML element
    * @returns XMLElement representing the table
    */
@@ -1055,6 +1116,7 @@ export class Table {
     tableChildren.push(XMLBuilder.w("tblPr", undefined, tblPrChildren));
 
     // Add table grid (column definitions)
+    // Per ECMA-376 Part 1 §17.4.49, w:tblGrid MUST be present in w:tbl
     // Use custom tableGrid if specified, otherwise auto-generate
     // CRITICAL: Use getTotalGridSpan() instead of getCellCount() to account for
     // cells with gridSpan (column span). A row with 2 cells where one spans 4 columns
@@ -1064,22 +1126,22 @@ export class Table {
       ? gridWidths.length
       : Math.max(...this.rows.map((row) => row.getTotalGridSpan()), 0);
 
-    if (maxColumns > 0) {
-      const tblGridChildren: XMLElement[] = [];
+    // Always generate tblGrid - use at least 1 column for empty tables
+    const gridColumnCount = maxColumns > 0 ? maxColumns : 1;
+    const tblGridChildren: XMLElement[] = [];
 
-      for (let i = 0; i < maxColumns; i++) {
-        if (gridWidths && gridWidths[i] !== undefined) {
-          // Use specified grid width
-          tblGridChildren.push(
-            XMLBuilder.wSelf("gridCol", { "w:w": gridWidths[i] })
-          );
-        } else {
-          // Auto width (default to 2880 twips = 2 inches)
-          tblGridChildren.push(XMLBuilder.wSelf("gridCol", { "w:w": 2880 }));
-        }
+    for (let i = 0; i < gridColumnCount; i++) {
+      if (gridWidths && gridWidths[i] !== undefined) {
+        // Use specified grid width
+        tblGridChildren.push(
+          XMLBuilder.wSelf("gridCol", { "w:w": gridWidths[i] })
+        );
+      } else {
+        // Auto width (default to 2880 twips = 2 inches)
+        tblGridChildren.push(XMLBuilder.wSelf("gridCol", { "w:w": 2880 }));
       }
-      tableChildren.push(XMLBuilder.w("tblGrid", undefined, tblGridChildren));
     }
+    tableChildren.push(XMLBuilder.w("tblGrid", undefined, tblGridChildren));
 
     // Add rows
     for (const row of this.rows) {

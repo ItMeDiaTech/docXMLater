@@ -352,17 +352,30 @@ describe('NumberingLevel', () => {
   });
 
   describe('Static factory methods', () => {
-    it('should create bullet level', () => {
+    it('should create bullet level with custom bullet', () => {
+      // When providing custom bullet, font defaults to Word-native for that level
       const level = NumberingLevel.createBulletLevel(0, '◦');
       const props = level.getProperties();
       expect(props.format).toBe('bullet');
       expect(props.text).toBe('◦');
-      expect(props.font).toBe('Calibri');
+      expect(props.font).toBe('Symbol'); // Word-native font for level 0
     });
 
-    it('should use default bullet', () => {
-      const level = NumberingLevel.createBulletLevel(1);
-      expect(level.getProperties().text).toBe('•');
+    it('should use Word-native defaults when no parameters provided', () => {
+      // Level 0: Filled bullet (Symbol font, U+F0B7)
+      const level0 = NumberingLevel.createBulletLevel(0);
+      expect(level0.getProperties().text).toBe('\uF0B7');
+      expect(level0.getProperties().font).toBe('Symbol');
+
+      // Level 1: Open circle (Courier New, U+006F)
+      const level1 = NumberingLevel.createBulletLevel(1);
+      expect(level1.getProperties().text).toBe('\u006F');
+      expect(level1.getProperties().font).toBe('Courier New');
+
+      // Level 2: Filled square (Wingdings, U+F0A7)
+      const level2 = NumberingLevel.createBulletLevel(2);
+      expect(level2.getProperties().text).toBe('\uF0A7');
+      expect(level2.getProperties().font).toBe('Wingdings');
     });
 
     it('should create decimal level', () => {

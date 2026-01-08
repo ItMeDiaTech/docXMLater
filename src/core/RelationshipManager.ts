@@ -334,12 +334,15 @@ export class RelationshipManager {
 
   /**
    * Creates a new relationship manager with common document relationships
-   * @returns RelationshipManager with styles and numbering relationships
+   * @returns RelationshipManager with styles, numbering, fontTable, settings, and theme relationships
    */
   static createForDocument(): RelationshipManager {
     const manager = new RelationshipManager();
     manager.addStyles();
     manager.addNumbering();
+    manager.addFontTable();
+    manager.addSettings();
+    manager.addTheme();
     return manager;
   }
 

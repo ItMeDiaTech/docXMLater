@@ -384,6 +384,10 @@ export class Paragraph {
   private _isPreserved: boolean = false;
   /** Tracking context for automatic change tracking */
   private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  /** Parent table cell reference (if paragraph is inside a table cell) */
+  private _parentCell?: import('./TableCell').TableCell;
+  /** StylesManager reference for conditional formatting resolution */
+  private _stylesManager?: import("../formatting/StylesManager").StylesManager;
 
   /**
    * Creates a new Paragraph
@@ -400,6 +404,69 @@ export class Paragraph {
    */
   _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
     this.trackingContext = context;
+  }
+
+  /**
+   * Sets the parent cell reference for this paragraph.
+   * Called by TableCell when adding paragraphs.
+   * @internal
+   */
+  _setParentCell(cell: import('./TableCell').TableCell | undefined): void {
+    this._parentCell = cell;
+  }
+
+  /**
+   * Gets the parent cell reference for this paragraph.
+   * @internal
+   */
+  _getParentCell(): import('./TableCell').TableCell | undefined {
+    return this._parentCell;
+  }
+
+  /**
+   * Checks if this paragraph is inside a table cell.
+   * @returns True if paragraph has a parent cell
+   */
+  isInTableCell(): boolean {
+    return this._parentCell !== undefined;
+  }
+
+  /**
+   * Gets the table's cnfStyle (conditional formatting flags) for this paragraph.
+   * Returns the cell's cnfStyle if in a table, or the paragraph's own cnfStyle.
+   * @returns The cnfStyle string or undefined
+   */
+  getTableConditionalStyle(): string | undefined {
+    // Cell cnfStyle takes precedence
+    if (this._parentCell) {
+      const cellFormatting = this._parentCell.getFormatting();
+      if (cellFormatting.cnfStyle) {
+        return cellFormatting.cnfStyle;
+      }
+    }
+    // Fall back to paragraph's own cnfStyle
+    return this.formatting.cnfStyle;
+  }
+
+  /**
+   * Sets the StylesManager reference for conditional formatting resolution.
+   * Called by Document/Table when adding paragraphs.
+   * @internal
+   */
+  _setStylesManager(
+    manager: import("../formatting/StylesManager").StylesManager
+  ): void {
+    this._stylesManager = manager;
+  }
+
+  /**
+   * Gets the StylesManager reference for conditional formatting resolution.
+   * @internal
+   */
+  _getStylesManager():
+    | import("../formatting/StylesManager").StylesManager
+    | undefined {
+    return this._stylesManager;
   }
 
   /**
@@ -2698,6 +2765,134 @@ export class Paragraph {
           if (numPrChildren.length > 0) {
             prevPPrChildren.push(XMLBuilder.w("numPr", undefined, numPrChildren));
           }
+        }
+
+        // Additional properties per ECMA-376 Part 1 §17.3.1
+
+        // widowControl per §17.3.1.44
+        if (prev.widowControl !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("widowControl", {
+              "w:val": prev.widowControl ? "1" : "0",
+            })
+          );
+        }
+
+        // suppressLineNumbers per §17.3.1.34
+        if (prev.suppressLineNumbers !== undefined) {
+          if (prev.suppressLineNumbers) {
+            prevPPrChildren.push(XMLBuilder.wSelf("suppressLineNumbers"));
+          }
+        }
+
+        // suppressAutoHyphens per §17.3.1.33
+        if (prev.suppressAutoHyphens !== undefined) {
+          if (prev.suppressAutoHyphens) {
+            prevPPrChildren.push(
+              XMLBuilder.wSelf("suppressAutoHyphens", { "w:val": "1" })
+            );
+          }
+        }
+
+        // contextualSpacing per §17.3.1.9
+        if (prev.contextualSpacing !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("contextualSpacing", {
+              "w:val": prev.contextualSpacing ? "1" : "0",
+            })
+          );
+        }
+
+        // mirrorIndents per §17.3.1.18
+        if (prev.mirrorIndents !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("mirrorIndents", {
+              "w:val": prev.mirrorIndents ? "1" : "0",
+            })
+          );
+        }
+
+        // pBdr (paragraph borders) per §17.3.1.24
+        if (prev.borders) {
+          const borderChildren: XMLElement[] = [];
+          const borderSides = ["top", "left", "bottom", "right", "between", "bar"] as const;
+          for (const side of borderSides) {
+            const border = prev.borders[side];
+            if (border) {
+              const attrs: Record<string, string> = {};
+              if (border.style) attrs["w:val"] = border.style;
+              if (border.size !== undefined) attrs["w:sz"] = border.size.toString();
+              if (border.color) attrs["w:color"] = border.color;
+              if (border.space !== undefined) attrs["w:space"] = border.space.toString();
+              if (Object.keys(attrs).length > 0) {
+                borderChildren.push(XMLBuilder.wSelf(side, attrs));
+              }
+            }
+          }
+          if (borderChildren.length > 0) {
+            prevPPrChildren.push(XMLBuilder.w("pBdr", undefined, borderChildren));
+          }
+        }
+
+        // shd (paragraph shading) per §17.3.1.31
+        if (prev.shading) {
+          const shdAttrs: Record<string, string> = {};
+          if (prev.shading.fill) shdAttrs["w:fill"] = prev.shading.fill;
+          if (prev.shading.color) shdAttrs["w:color"] = prev.shading.color;
+          if (prev.shading.val) shdAttrs["w:val"] = prev.shading.val;
+          if (Object.keys(shdAttrs).length > 0) {
+            prevPPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
+          }
+        }
+
+        // tabs per §17.3.1.38
+        if (prev.tabs && prev.tabs.length > 0) {
+          const tabChildren: XMLElement[] = prev.tabs.map((tab) => {
+            const tabAttrs: Record<string, string> = {
+              "w:pos": tab.position.toString(),
+            };
+            if (tab.val) tabAttrs["w:val"] = tab.val;
+            if (tab.leader) tabAttrs["w:leader"] = tab.leader;
+            return XMLBuilder.wSelf("tab", tabAttrs);
+          });
+          prevPPrChildren.push(XMLBuilder.w("tabs", undefined, tabChildren));
+        }
+
+        // bidi per §17.3.1.6
+        if (prev.bidi !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("bidi", { "w:val": prev.bidi ? "1" : "0" })
+          );
+        }
+
+        // adjustRightInd per §17.3.1.1
+        if (prev.adjustRightInd !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("adjustRightInd", {
+              "w:val": prev.adjustRightInd ? "1" : "0",
+            })
+          );
+        }
+
+        // textAlignment per §17.3.1.39
+        if (prev.textAlignment) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("textAlignment", { "w:val": prev.textAlignment })
+          );
+        }
+
+        // textDirection per §17.3.1.40
+        if (prev.textDirection) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("textDirection", { "w:val": prev.textDirection })
+          );
+        }
+
+        // outlineLvl per §17.3.1.20
+        if (prev.outlineLevel !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("outlineLvl", { "w:val": prev.outlineLevel.toString() })
+          );
         }
       }
 

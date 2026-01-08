@@ -81,6 +81,8 @@ export interface RowFormatting {
 export class TableRow {
   private cells: TableCell[] = [];
   private formatting: RowFormatting;
+  /** Parent table reference (if row is inside a table) */
+  private _parentTable?: import('./Table').Table;
 
   /**
    * Creates a new TableRow
@@ -92,7 +94,9 @@ export class TableRow {
 
     if (cellCount !== undefined && cellCount > 0) {
       for (let i = 0; i < cellCount; i++) {
-        this.cells.push(new TableCell());
+        const cell = new TableCell();
+        cell._setParentRow(this);
+        this.cells.push(cell);
       }
     }
   }
@@ -104,6 +108,7 @@ export class TableRow {
    */
   addCell(cell: TableCell): this {
     this.cells.push(cell);
+    cell._setParentRow(this);
     return this;
   }
 
@@ -118,6 +123,7 @@ export class TableRow {
       cell.createParagraph(text);
     }
     this.cells.push(cell);
+    cell._setParentRow(this);
     return cell;
   }
 
@@ -354,6 +360,23 @@ export class TableRow {
    */
   getFormatting(): RowFormatting {
     return { ...this.formatting };
+  }
+
+  /**
+   * Sets the parent table reference for this row.
+   * Called by Table when adding rows.
+   * @internal
+   */
+  _setParentTable(table: import('./Table').Table | undefined): void {
+    this._parentTable = table;
+  }
+
+  /**
+   * Gets the parent table reference for this row.
+   * @internal
+   */
+  _getParentTable(): import('./Table').Table | undefined {
+    return this._parentTable;
   }
 
   /**

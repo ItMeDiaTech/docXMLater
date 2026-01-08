@@ -1230,13 +1230,23 @@ export class DocumentParser {
       const date = dateAttr ? new Date(dateAttr) : new Date();
 
       // Extract content from revision element (runs and hyperlinks)
-      const runXmls = XMLParser.extractElements(revisionXml, "w:r");
+      // IMPORTANT: Extract hyperlinks FIRST, then extract runs from content
+      // that is NOT inside hyperlinks to avoid duplicate content
       const hyperlinkXmls = XMLParser.extractElements(revisionXml, "w:hyperlink");
+
+      // Create a version of the XML with hyperlinks removed to extract standalone runs
+      let xmlWithoutHyperlinks = revisionXml;
+      for (const hyperlinkXml of hyperlinkXmls) {
+        xmlWithoutHyperlinks = xmlWithoutHyperlinks.replace(hyperlinkXml, '');
+      }
+
+      // Extract runs from the XML without hyperlinks (these are standalone runs)
+      const runXmls = XMLParser.extractElements(xmlWithoutHyperlinks, "w:r");
 
       // Use RevisionContent to hold both Run and Hyperlink objects
       const content: import('../elements/RevisionContent').RevisionContent[] = [];
 
-      // Parse runs
+      // Parse standalone runs (not inside hyperlinks)
       for (const runXml of runXmls) {
         // Parse the run object
         const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
@@ -4358,6 +4368,8 @@ export class DocumentParser {
         }
       }
 
+      // Note: StylesManager is injected by Document.parseDocument() after styles are loaded
+
       return table;
     } catch (error) {
       defaultLogger.warn(
@@ -4375,6 +4387,35 @@ export class DocumentParser {
    */
   private parseTablePropertiesFromObject(tblPrObj: any, table: Table): void {
     if (!tblPrObj) return;
+
+    // Parse table style reference (w:tblStyle)
+    if (tblPrObj["w:tblStyle"]) {
+      const styleId = tblPrObj["w:tblStyle"]["@_w:val"];
+      if (styleId) {
+        table.setStyle(styleId);
+      }
+    }
+
+    // Parse table look flags (w:tblLook) - for conditional formatting
+    // Supports both hex string format (w:val="04A0") and individual attributes
+    if (tblPrObj["w:tblLook"]) {
+      const look = tblPrObj["w:tblLook"];
+      if (look["@_w:val"]) {
+        // Hex string format
+        table.setTblLook(look["@_w:val"]);
+      } else {
+        // Individual attribute format - construct hex value
+        // Per ECMA-376: bit 0=firstRow, 1=lastRow, 2=firstCol, 3=lastCol, 4=noHBand, 5=noVBand
+        let value = 0;
+        if (look["@_w:firstRow"] === "1") value |= 0x0020;
+        if (look["@_w:lastRow"] === "1") value |= 0x0040;
+        if (look["@_w:firstColumn"] === "1") value |= 0x0080;
+        if (look["@_w:lastColumn"] === "1") value |= 0x0100;
+        if (look["@_w:noHBand"] === "1") value |= 0x0200;
+        if (look["@_w:noVBand"] === "1") value |= 0x0400;
+        table.setTblLook(value.toString(16).toUpperCase().padStart(4, "0"));
+      }
+    }
 
     // Parse table positioning (tblpPr) - for floating tables
     if (tblPrObj["w:tblpPr"]) {

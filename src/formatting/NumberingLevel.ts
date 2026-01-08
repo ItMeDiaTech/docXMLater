@@ -9,6 +9,30 @@
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 
 /**
+ * Word-native bullet character mappings
+ *
+ * Microsoft Word uses specific fonts with Private Use Area (PUA) characters
+ * for bullet points. These mappings ensure 100% compatibility with Word's
+ * native bullet rendering.
+ *
+ * Pattern: Levels 0,3,6 = filled bullet; 1,4,7 = open circle; 2,5,8 = filled square
+ */
+export const WORD_NATIVE_BULLETS = {
+  /** Filled bullet (levels 0, 3, 6) - Symbol font U+F0B7 */
+  FILLED_BULLET: { char: "\uF0B7", font: "Symbol" },
+  /** Open circle (levels 1, 4, 7) - Courier New U+006F (lowercase 'o') */
+  OPEN_CIRCLE: { char: "\u006F", font: "Courier New" },
+  /** Filled square (levels 2, 5, 8) - Wingdings U+F0A7 */
+  FILLED_SQUARE: { char: "\uF0A7", font: "Wingdings" },
+} as const;
+
+/**
+ * Type for Word-native bullet definition
+ */
+export type WordNativeBullet =
+  (typeof WORD_NATIVE_BULLETS)[keyof typeof WORD_NATIVE_BULLETS];
+
+/**
  * Numbering format types supported by Word
  */
 export type NumberFormat =
@@ -387,24 +411,58 @@ export class NumberingLevel {
   /**
    * Gets the recommended bullet symbol and font for a given level
    * @param level The level index (0-8)
-   * @param style Optional bullet style ('standard', 'circle', 'square', 'arrow', 'check')
+   * @param style Optional bullet style ('standard', 'circle', 'square', 'arrow', 'check', 'word-native')
    * @returns Object with symbol and font properties
    */
   static getBulletSymbolWithFont(
     level: number,
-    style: "standard" | "circle" | "square" | "arrow" | "check" = "standard"
+    style:
+      | "standard"
+      | "circle"
+      | "square"
+      | "arrow"
+      | "check"
+      | "word-native" = "standard"
   ): { symbol: string; font: string } {
     const bulletSets = {
+      // Standard style now uses Word-native encoding for maximum compatibility
       standard: [
-        { symbol: "•", font: "Calibri" }, // Level 0: Filled circle
-        { symbol: "○", font: "Calibri" }, // Level 1: Empty circle
-        { symbol: "▪", font: "Calibri" }, // Level 2: Small filled square
-        { symbol: "•", font: "Calibri" }, // Level 3: Filled circle
-        { symbol: "○", font: "Calibri" }, // Level 4: Empty circle
-        { symbol: "▪", font: "Calibri" }, // Level 5: Small filled square
-        { symbol: "•", font: "Calibri" }, // Level 6: Filled circle
-        { symbol: "○", font: "Calibri" }, // Level 7: Empty circle
-        { symbol: "▪", font: "Calibri" }, // Level 8: Small filled square
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_BULLET.char,
+          font: WORD_NATIVE_BULLETS.FILLED_BULLET.font,
+        }, // Level 0: Filled bullet (Symbol U+F0B7)
+        {
+          symbol: WORD_NATIVE_BULLETS.OPEN_CIRCLE.char,
+          font: WORD_NATIVE_BULLETS.OPEN_CIRCLE.font,
+        }, // Level 1: Open circle (Courier New U+006F)
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_SQUARE.char,
+          font: WORD_NATIVE_BULLETS.FILLED_SQUARE.font,
+        }, // Level 2: Filled square (Wingdings U+F0A7)
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_BULLET.char,
+          font: WORD_NATIVE_BULLETS.FILLED_BULLET.font,
+        }, // Level 3: Filled bullet
+        {
+          symbol: WORD_NATIVE_BULLETS.OPEN_CIRCLE.char,
+          font: WORD_NATIVE_BULLETS.OPEN_CIRCLE.font,
+        }, // Level 4: Open circle
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_SQUARE.char,
+          font: WORD_NATIVE_BULLETS.FILLED_SQUARE.font,
+        }, // Level 5: Filled square
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_BULLET.char,
+          font: WORD_NATIVE_BULLETS.FILLED_BULLET.font,
+        }, // Level 6: Filled bullet
+        {
+          symbol: WORD_NATIVE_BULLETS.OPEN_CIRCLE.char,
+          font: WORD_NATIVE_BULLETS.OPEN_CIRCLE.font,
+        }, // Level 7: Open circle
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_SQUARE.char,
+          font: WORD_NATIVE_BULLETS.FILLED_SQUARE.font,
+        }, // Level 8: Filled square
       ],
       circle: [
         { symbol: "●", font: "Calibri" }, // Level 0: Filled circle (bold)
@@ -449,6 +507,45 @@ export class NumberingLevel {
         { symbol: "✓", font: "Calibri" }, // Level 6: Check mark
         { symbol: "✔", font: "Calibri" }, // Level 7: Heavy check mark
         { symbol: "☑", font: "Calibri" }, // Level 8: Checked box
+      ],
+      "word-native": [
+        // Word-native bullets using PUA characters with Symbol/Wingdings fonts
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_BULLET.char,
+          font: WORD_NATIVE_BULLETS.FILLED_BULLET.font,
+        }, // Level 0: Filled bullet (Symbol U+F0B7)
+        {
+          symbol: WORD_NATIVE_BULLETS.OPEN_CIRCLE.char,
+          font: WORD_NATIVE_BULLETS.OPEN_CIRCLE.font,
+        }, // Level 1: Open circle (Courier New U+006F)
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_SQUARE.char,
+          font: WORD_NATIVE_BULLETS.FILLED_SQUARE.font,
+        }, // Level 2: Filled square (Wingdings U+F0A7)
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_BULLET.char,
+          font: WORD_NATIVE_BULLETS.FILLED_BULLET.font,
+        }, // Level 3: Filled bullet
+        {
+          symbol: WORD_NATIVE_BULLETS.OPEN_CIRCLE.char,
+          font: WORD_NATIVE_BULLETS.OPEN_CIRCLE.font,
+        }, // Level 4: Open circle
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_SQUARE.char,
+          font: WORD_NATIVE_BULLETS.FILLED_SQUARE.font,
+        }, // Level 5: Filled square
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_BULLET.char,
+          font: WORD_NATIVE_BULLETS.FILLED_BULLET.font,
+        }, // Level 6: Filled bullet
+        {
+          symbol: WORD_NATIVE_BULLETS.OPEN_CIRCLE.char,
+          font: WORD_NATIVE_BULLETS.OPEN_CIRCLE.font,
+        }, // Level 7: Open circle
+        {
+          symbol: WORD_NATIVE_BULLETS.FILLED_SQUARE.char,
+          font: WORD_NATIVE_BULLETS.FILLED_SQUARE.font,
+        }, // Level 8: Filled square
       ],
     };
 
@@ -515,22 +612,32 @@ export class NumberingLevel {
 
   /**
    * Creates a bullet list level
+   *
+   * When called without parameters, uses Word-native encoding for the level:
+   * - Levels 0, 3, 6: Filled bullet (Symbol font, U+F0B7)
+   * - Levels 1, 4, 7: Open circle (Courier New, U+006F)
+   * - Levels 2, 5, 8: Filled square (Wingdings, U+F0A7)
+   *
    * @param level The level index (0-8)
-   * @param bullet The bullet character (default: '•')
-   * @param font The font to use for the bullet (default: 'Calibri')
-   *             Use 'Symbol' or 'Wingdings' for special bullet symbols
+   * @param bullet Optional bullet character (defaults to Word-native for level)
+   * @param font Optional font to use for the bullet (defaults to Word-native for level)
    */
   static createBulletLevel(
     level: number,
-    bullet: string = "•",
-    font: string = "Calibri"
+    bullet?: string,
+    font?: string
   ): NumberingLevel {
+    // Use Word-native defaults when not specified
+    const defaults = NumberingLevel.getBulletSymbolWithFont(level, "standard");
+    const actualBullet = bullet ?? defaults.symbol;
+    const actualFont = font ?? defaults.font;
+
     return new NumberingLevel({
       level,
       format: "bullet",
-      text: bullet,
+      text: actualBullet,
       alignment: "left",
-      font,
+      font: actualFont,
       fontSize: 24, // 12pt
       bold: true,
       color: "000000",
