@@ -1566,7 +1566,6 @@ export class Style {
       runFormatting: {
         font: "Verdana",
         size: 12,
-        bold: true,
         color: "000000",
       },
     });
