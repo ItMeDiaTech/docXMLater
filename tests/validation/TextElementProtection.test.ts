@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { XMLBuilder, XMLElement } from '../../src/xml/XMLBuilder';
 import { Run } from '../../src/elements/Run';
 import { Document } from '../../src/core/Document';
+import { setGlobalLogger, ConsoleLogger, LogLevel, SilentLogger } from '../../src/utils/logger';
 import * as fs from 'fs';
 import * as os from 'os';
 import path from 'path';
@@ -50,6 +51,8 @@ describe('Text Element Protection (from Error Analysis Report)', () => {
 
   describe('Issue #2: Run Text Validation', () => {
     it('should warn when creating run with undefined text', () => {
+      // Enable console logging for this test
+      setGlobalLogger(new ConsoleLogger(LogLevel.WARN));
       const spy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       try {
@@ -63,10 +66,13 @@ describe('Text Element Protection (from Error Analysis Report)', () => {
         )).toBe(true);
       } finally {
         spy.mockRestore();
+        setGlobalLogger(new SilentLogger());
       }
     });
 
     it('should warn when creating run with null text', () => {
+      // Enable console logging for this test
+      setGlobalLogger(new ConsoleLogger(LogLevel.WARN));
       const spy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       try {
@@ -80,6 +86,7 @@ describe('Text Element Protection (from Error Analysis Report)', () => {
         )).toBe(true);
       } finally {
         spy.mockRestore();
+        setGlobalLogger(new SilentLogger());
       }
     });
 

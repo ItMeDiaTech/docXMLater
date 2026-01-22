@@ -50,6 +50,8 @@ import {
   ApplyStylesOptions,
   Heading2Config,
   StyleConfig,
+  StyleRunFormatting,
+  StyleParagraphFormatting,
 } from "../types/styleConfig";
 import { ListNormalizer } from "./ListNormalizer";
 import { defaultLogger, ILogger, getGlobalLogger, createScopedLogger } from "../utils/logger";
@@ -64,6 +66,7 @@ import { acceptAllRevisions, cleanupRevisionMetadata } from "../utils/acceptRevi
 // In-memory revision acceptance - used AFTER parsing, allows subsequent modifications
 import { acceptRevisionsInMemory, AcceptRevisionsResult } from "../utils/InMemoryRevisionAcceptor";
 import { stripTrackedChanges } from "../utils/stripTrackedChanges";
+import { XMLBuilder } from "../xml/XMLBuilder";
 import { XMLParser } from "../xml/XMLParser";
 import { DocumentTrackingContext } from "../tracking/DocumentTrackingContext";
 import type { TrackingContext } from "../tracking/TrackingContext";
@@ -1469,6 +1472,35 @@ export class Document {
   }
 
   /**
+   * Enables or disables automatic TOC population during save
+   *
+   * When enabled, the save() and toBuffer() methods will automatically
+   * populate Table of Contents fields with hyperlinked entries based on
+   * the document's heading structure.
+   *
+   * This is critical for documents where the in-memory model doesn't preserve
+   * the complete TOC field structure. When save() regenerates document.xml,
+   * the TOC field markers (begin/separate/end) may be lost. Enabling this
+   * option ensures the TOC is rebuilt with proper field structure after
+   * XML regeneration.
+   *
+   * @param enabled - Whether to auto-populate TOCs (default: false)
+   * @returns This document instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * const doc = await Document.load('input.docx');
+   * doc.setAutoPopulateTOCs(true);
+   * await doc.save('output.docx');
+   * // TOC will have proper field structure with working "Update Field" in Word
+   * ```
+   */
+  setAutoPopulateTOCs(enabled: boolean): this {
+    this.autoPopulateTOCs = enabled;
+    return this;
+  }
+
+  /**
    * Saves the document to a file path
    *
    * Generates all required XML parts, processes images and relationships, validates
@@ -1742,16 +1774,79 @@ export class Document {
 
   /**
    * Updates the styles.xml file with current styles
-   * Preserves original XML if styles haven't been modified (formatting preservation)
+   * Uses merge strategy to preserve unmodified styles from original document
    */
   private updateStylesXml(): void {
-    // Preserve original if styles weren't modified
-    if (this._originalStylesXml && !this.stylesManager.isModified()) {
-      this.zipHandler.updateFile(DOCX_PATHS.STYLES, this._originalStylesXml);
+    if (this._originalStylesXml) {
+      // Merge modified styles with original - preserves all unmodified styles
+      const mergedXml = this.mergeStylesWithOriginal();
+      this.zipHandler.updateFile(DOCX_PATHS.STYLES, mergedXml);
     } else {
+      // New document - generate from scratch
       const xml = this.stylesManager.generateStylesXml();
       this.zipHandler.updateFile(DOCX_PATHS.STYLES, xml);
     }
+  }
+
+  /**
+   * Merges modified styles with the original styles.xml
+   *
+   * This preserves all styles from the original document while only updating
+   * styles that have been explicitly modified via addStyle().
+   *
+   * @returns Merged XML string with original styles + modified styles
+   * @private
+   */
+  private mergeStylesWithOriginal(): string {
+    if (!this._originalStylesXml) {
+      return this.stylesManager.generateStylesXml();
+    }
+
+    const modifiedStyleIds = this.stylesManager.getModifiedStyleIds();
+
+    // If nothing was modified, return original as-is
+    if (modifiedStyleIds.size === 0) {
+      return this._originalStylesXml;
+    }
+
+    // Get modified styles from StylesManager
+    const modifiedStyles = new Map<string, Style>();
+    for (const styleId of modifiedStyleIds) {
+      const style = this.stylesManager.getStyle(styleId);
+      if (style) {
+        modifiedStyles.set(styleId, style);
+      }
+    }
+
+    // Strategy: Use regex to replace style definitions in original XML
+    // This preserves structure, whitespace, and any elements we don't parse
+    let resultXml = this._originalStylesXml;
+
+    for (const [styleId, style] of modifiedStyles) {
+      // Generate the new style XML as a string
+      const newStyleXml = XMLBuilder.elementToString(style.toXML());
+
+      // Pattern to match existing style with this ID (handles various attribute orders)
+      // Matches: <w:style w:type="..." w:styleId="StyleId">...</w:style>
+      // or: <w:style w:styleId="StyleId" w:type="...">...</w:style>
+      const escapedStyleId = styleId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const stylePattern = new RegExp(
+        `<w:style[^>]*\\sw:styleId="${escapedStyleId}"[^>]*>[\\s\\S]*?</w:style>`
+      );
+
+      if (stylePattern.test(resultXml)) {
+        // Replace existing style
+        resultXml = resultXml.replace(stylePattern, newStyleXml);
+      } else {
+        // Style doesn't exist in original - append before </w:styles>
+        resultXml = resultXml.replace(
+          '</w:styles>',
+          `${newStyleXml}\n</w:styles>`
+        );
+      }
+    }
+
+    return resultXml;
   }
 
   /**
@@ -3934,6 +4029,8 @@ export class Document {
       if (h1Config.run) heading1.setRunFormatting(h1Config.run);
       if (h1Config.paragraph)
         heading1.setParagraphFormatting(h1Config.paragraph);
+      // Mark style as modified so it gets included in mergeStylesWithOriginal()
+      this.addStyle(heading1);
       results.heading1 = true;
     }
 
@@ -3942,6 +4039,8 @@ export class Document {
       if (h2Config.run) heading2.setRunFormatting(h2Config.run);
       if (h2Config.paragraph)
         heading2.setParagraphFormatting(h2Config.paragraph);
+      // Mark style as modified so it gets included in mergeStylesWithOriginal()
+      this.addStyle(heading2);
       results.heading2 = true;
     }
 
@@ -3950,6 +4049,8 @@ export class Document {
       if (h3Config.run) heading3.setRunFormatting(h3Config.run);
       if (h3Config.paragraph)
         heading3.setParagraphFormatting(h3Config.paragraph);
+      // Mark style as modified so it gets included in mergeStylesWithOriginal()
+      this.addStyle(heading3);
       results.heading3 = true;
     }
 
@@ -3958,6 +4059,24 @@ export class Document {
       if (normalConfig.run) normal.setRunFormatting(normalConfig.run);
       if (normalConfig.paragraph)
         normal.setParagraphFormatting(normalConfig.paragraph);
+      // Mark style as modified so it gets included in mergeStylesWithOriginal()
+      this.addStyle(normal);
+
+      // Link NormalWeb to Normal (if enabled and NormalWeb exists)
+      // Default is true - changes to Normal automatically apply to NormalWeb
+      const shouldLinkNormalWeb = options?.linkNormalWebToNormal !== false;
+      if (shouldLinkNormalWeb) {
+        const normalWeb = this.stylesManager.getStyle("NormalWeb");
+        if (normalWeb) {
+          // Apply same formatting to NormalWeb
+          if (normalConfig.run) normalWeb.setRunFormatting(normalConfig.run);
+          if (normalConfig.paragraph)
+            normalWeb.setParagraphFormatting(normalConfig.paragraph);
+          // Mark as modified for selective merging during save
+          this.addStyle(normalWeb);
+        }
+      }
+
       results.normal = true;
     }
 
@@ -3967,6 +4086,8 @@ export class Document {
         listParagraph.setRunFormatting(listParaConfig.run);
       if (listParaConfig.paragraph)
         listParagraph.setParagraphFormatting(listParaConfig.paragraph);
+      // Mark style as modified so it gets included in mergeStylesWithOriginal()
+      this.addStyle(listParagraph);
       results.listParagraph = true;
     }
 
@@ -4651,6 +4772,78 @@ export class Document {
   }
 
   /**
+   * Formats all TOC (Table of Contents) entry styles with the specified formatting.
+   * Creates TOC 1-9 styles if they don't exist in the document.
+   *
+   * When Word updates a TOC field, it looks for these styles in styles.xml and
+   * applies them to the generated entries. This method allows you to pre-define
+   * how TOC entries will appear.
+   *
+   * @param options - Formatting options for TOC entries
+   * @param options.run - Run (character) formatting to apply
+   * @param options.paragraph - Paragraph formatting to apply
+   * @param options.levels - Which TOC levels to format (default: 1-9)
+   * @returns Object indicating which levels were formatted
+   *
+   * @example
+   * ```typescript
+   * // Format all TOC entries with consistent styling
+   * doc.formatTOCStyles({
+   *   run: {
+   *     font: 'Verdana',
+   *     size: 12,
+   *     color: '0000FF',      // Blue
+   *     underline: true,
+   *     bold: false,
+   *     italic: false
+   *   },
+   *   paragraph: {
+   *     spacing: { before: 0, after: 0 }  // 0pt spacing
+   *   }
+   * });
+   *
+   * // Format only first 3 levels
+   * doc.formatTOCStyles({
+   *   run: { font: 'Arial', size: 11 },
+   *   levels: [1, 2, 3]
+   * });
+   * ```
+   */
+  formatTOCStyles(options: {
+    run?: StyleRunFormatting;
+    paragraph?: StyleParagraphFormatting;
+    levels?: number[];
+  }): { formatted: number[] } {
+    const levels = options.levels ?? [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const formatted: number[] = [];
+
+    for (const level of levels) {
+      if (level < 1 || level > 9) continue;
+
+      const styleId = `TOC${level}`;
+      let tocStyle = this.stylesManager.getStyle(styleId);
+
+      if (!tocStyle) {
+        // Create TOC style if it doesn't exist
+        tocStyle = Style.createTOCStyle(level, {
+          run: options.run,
+          paragraph: options.paragraph,
+        });
+        this.addStyle(tocStyle);
+      } else {
+        // Update existing style
+        if (options.run) tocStyle.setRunFormatting(options.run);
+        if (options.paragraph) tocStyle.setParagraphFormatting(options.paragraph);
+        this.addStyle(tocStyle); // Mark as modified
+      }
+
+      formatted.push(level);
+    }
+
+    return { formatted };
+  }
+
+  /**
    * Helper function to apply formatting from Style objects
    *
    * This is a convenience wrapper that accepts Style objects, extracts their properties,
@@ -4807,19 +5000,35 @@ export class Document {
      * @default true
      */
     removeTrailingCellBlanks?: boolean;
+    /**
+     * Whether to preserve single blank lines (non-consecutive).
+     * When true, only consecutive duplicate blanks (2+) are removed, keeping one.
+     * Single blank lines between content are preserved.
+     * @default false
+     */
+    preserveSingleBlanks?: boolean;
   }): {
     removed: number;
     added: number;
     total: number;
+    preserved: number;
   } {
     const addStructureBlankLines = options?.addStructureBlankLines ?? true;
     const removeTrailingCellBlanks = options?.removeTrailingCellBlanks ?? true;
+    const preserveSingleBlanks = options?.preserveSingleBlanks ?? false;
     let removed = 0;
     let added = 0;
+    let preserved = 0;
 
     // OPTIONAL PASS: Remove SDT wrappers if addStructureBlankLines is enabled
     if (addStructureBlankLines) {
       this.clearCustom();
+    }
+
+    // OPTIONAL PASS: Mark single blanks as preserved if option enabled
+    // This ensures only consecutive duplicates (2+) are removed, keeping one
+    if (preserveSingleBlanks) {
+      preserved = this.markSingleBlanksAsPreserved();
     }
 
     // PASS 1: Remove blank paragraphs (respecting preserve flag)
@@ -4899,6 +5108,7 @@ export class Document {
       removed,
       added,
       total: removed,
+      preserved,
     };
   }
 
@@ -6982,11 +7192,17 @@ export class Document {
         return false;
       }
 
-      // Revisions (track changes) - check nested content for text
+      // Revisions (track changes) - check nested content for text and hyperlinks
       if (item instanceof Revision) {
         const revisionText = item.getText().trim();
         if (revisionText !== '') {
           return false;
+        }
+        // Also check if revision contains hyperlinks (may have empty display text)
+        for (const revContent of item.getContent()) {
+          if (revContent instanceof Hyperlink) {
+            return false;
+          }
         }
         continue; // Already checked, move to next item
       }
@@ -7009,6 +7225,49 @@ export class Document {
     }
 
     return true;
+  }
+
+  /**
+   * Mark single blank paragraphs as preserved.
+   * Single blanks are blank paragraphs that are NOT followed by another blank.
+   * This allows consecutive duplicate blanks (2+) to be removed while keeping
+   * intentional single blanks.
+   *
+   * Logic: For consecutive blanks [blank1, blank2], only blank2 is marked (last in series).
+   * This means blank1 will be removed, blank2 kept - reducing duplicates to 1.
+   *
+   * @returns Number of paragraphs marked as preserved
+   * @private
+   */
+  private markSingleBlanksAsPreserved(): number {
+    let markedCount = 0;
+    const paragraphs = this.getAllParagraphs();
+
+    for (let i = 0; i < paragraphs.length; i++) {
+      const para = paragraphs[i];
+
+      // Skip undefined paragraphs
+      if (!para) continue;
+
+      // Skip if already preserved
+      if (para.isPreserved()) continue;
+
+      // Check if this paragraph is blank
+      if (!this.isParagraphBlank(para)) continue;
+
+      // Check if next paragraph is also blank
+      const nextPara = paragraphs[i + 1];
+      const nextIsBlank = nextPara && this.isParagraphBlank(nextPara);
+
+      // If this is a single blank (not followed by another blank), mark as preserved
+      // This marks the LAST blank in any consecutive series
+      if (!nextIsBlank) {
+        para.setPreserved(true);
+        markedCount++;
+      }
+    }
+
+    return markedCount;
   }
 
   /**
@@ -7236,36 +7495,41 @@ export class Document {
    */
   private syncTOCFieldInstructions(documentXml: string): string {
     try {
-      // Find all TOC SDT elements
-      const tocRegex = /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
-      const tocMatches = Array.from(documentXml.matchAll(tocRegex));
+      let modifiedXml = documentXml;
+      let syncedCount = 0;
 
-      if (tocMatches.length === 0) {
-        return documentXml; // No TOCs to sync
+      // Strategy 1: Find TOC in SDT elements (modern Word format)
+      const sdtTocRegex =
+        /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
+      const sdtMatches = Array.from(documentXml.matchAll(sdtTocRegex));
+
+      for (const match of sdtMatches) {
+        if (!match) continue;
+        const result = this.syncTOCInstructionInXml(match[0]);
+        if (result.changed) {
+          modifiedXml = modifiedXml.replace(match[0], result.xml);
+          syncedCount++;
+        }
       }
 
-      let modifiedXml = documentXml;
+      // Strategy 2: Find field-based TOC (older format without SDT wrapper)
+      // Pattern: instrText containing "TOC" with field switches
+      const instrRegex = /<w:instrText[^>]*>([^<]*TOC[^<]*)<\/w:instrText>/g;
+      const instrMatches = Array.from(modifiedXml.matchAll(instrRegex));
 
-      for (const match of tocMatches) {
-        if (!match) continue;
-        const tocXml = match[0];
-
-        // Extract field instruction
-        const instrMatch = tocXml.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
-        if (!instrMatch?.[1]) {
-          continue; // No instruction text found
-        }
+      for (const match of instrMatches) {
+        if (!match || !match[1]) continue;
 
         // Decode XML entities in instruction
-        let fieldInstruction = instrMatch[1]
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
+        let fieldInstruction = match[1]
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
           .replace(/&quot;/g, '"')
           .replace(/&apos;/g, "'");
 
         // Check if instruction contains \t switches (style-specific TOC)
-        if (!fieldInstruction.includes('\\t')) {
+        if (!fieldInstruction.includes("\\t")) {
           continue; // Outline-based TOC, no style names to sync
         }
 
@@ -7276,38 +7540,86 @@ export class Document {
         if (updatedInstruction !== fieldInstruction) {
           // Re-encode for XML
           const encodedInstruction = updatedInstruction
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&apos;');
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&apos;");
 
-          // Replace the instruction in the TOC XML
-          const updatedTocXml = tocXml.replace(
-            /<w:instrText[^>]*>[\s\S]*?<\/w:instrText>/,
-            `<w:instrText xml:space="preserve">${encodedInstruction}</w:instrText>`
-          );
-
-          // Replace in document
-          modifiedXml = modifiedXml.replace(tocXml, updatedTocXml);
+          // Replace the instruction
+          const updatedInstrXml = `<w:instrText xml:space="preserve">${encodedInstruction}</w:instrText>`;
+          modifiedXml = modifiedXml.replace(match[0], updatedInstrXml);
 
           this.logger.info(
             `Synced TOC field instruction: "${fieldInstruction.substring(0, 50)}..." → "${updatedInstruction.substring(0, 50)}..."`
           );
+          syncedCount++;
         }
+      }
+
+      if (syncedCount > 0) {
+        this.logger.info(`Synced ${syncedCount} TOC field instruction(s)`);
       }
 
       return modifiedXml;
     } catch (error) {
       // Log error but don't fail the save
       this.logger.error(
-        'Error syncing TOC field instructions - document will save with original instructions',
+        "Error syncing TOC field instructions - document will save with original instructions",
         error instanceof Error
           ? { message: error.message, stack: error.stack }
           : { error: String(error) }
       );
       return documentXml; // Return original on error
     }
+  }
+
+  /**
+   * Helper to sync TOC instruction within an XML fragment
+   * @private
+   */
+  private syncTOCInstructionInXml(
+    xml: string
+  ): { xml: string; changed: boolean } {
+    const instrMatch = xml.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
+    if (!instrMatch?.[1]) {
+      return { xml, changed: false };
+    }
+
+    // Decode XML entities in instruction
+    let fieldInstruction = instrMatch[1]
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'");
+
+    // Check if instruction contains \t switches (style-specific TOC)
+    if (!fieldInstruction.includes("\\t")) {
+      return { xml, changed: false };
+    }
+
+    // Parse and update \t switches
+    const updatedInstruction = this.updateTOCStyleNames(fieldInstruction);
+
+    if (updatedInstruction === fieldInstruction) {
+      return { xml, changed: false };
+    }
+
+    // Re-encode for XML
+    const encodedInstruction = updatedInstruction
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+
+    const updatedXml = xml.replace(
+      /<w:instrText[^>]*>[\s\S]*?<\/w:instrText>/,
+      `<w:instrText xml:space="preserve">${encodedInstruction}</w:instrText>`
+    );
+
+    return { xml: updatedXml, changed: true };
   }
 
   /**
@@ -7387,7 +7699,24 @@ export class Document {
    * @private
    */
   private resolveStyleNameForTOC(tocStyleName: string): string | undefined {
-    // Strategy 1: Direct name match (exact)
+    // Strategy 1: For standard heading references (Heading 1, Heading 2, etc.),
+    // find the actual style being used for that outline level FIRST.
+    // This handles cases where heading styles have been renamed (e.g., "Heading 2" -> "Header 2")
+    // and ensures we return the style that paragraphs actually use.
+    const headingLevelMatch = tocStyleName.match(/^Heading\s*(\d+)$/i);
+    if (headingLevelMatch && headingLevelMatch[1]) {
+      const level = parseInt(headingLevelMatch[1]);
+      const usedStyles = this.findHeadingStylesUsedByParagraphs();
+      const actualStyleName = usedStyles.get(level);
+      if (actualStyleName) {
+        this.logger.info(
+          `TOC style "${tocStyleName}" resolved to actual used style "${actualStyleName}" for level ${level}`
+        );
+        return actualStyleName;
+      }
+    }
+
+    // Strategy 2: Direct name match (exact)
     const allStyles = this.stylesManager.getAllStyles();
     for (const style of allStyles) {
       if (style.getName() === tocStyleName) {
@@ -7395,7 +7724,7 @@ export class Document {
       }
     }
 
-    // Strategy 2: Match by styleId pattern
+    // Strategy 3: Match by styleId pattern
     // "Heading 2" → styleId="Heading2" → get actual name
     // "List Paragraph" → styleId="ListParagraph" → get actual name
     const normalizedId = tocStyleName.replace(/\s+/g, '');
@@ -7404,7 +7733,7 @@ export class Document {
       return styleById.getName();
     }
 
-    // Strategy 3: Fuzzy match (case-insensitive search)
+    // Strategy 4: Fuzzy match (case-insensitive search)
     const fuzzyResults = this.stylesManager.searchByName(tocStyleName);
     if (fuzzyResults.length > 0 && fuzzyResults[0]) {
       return fuzzyResults[0].getName();
@@ -7412,6 +7741,60 @@ export class Document {
 
     // Style not found
     return undefined;
+  }
+
+  /**
+   * Finds heading styles actually used by paragraphs in the document.
+   * Returns a map of outline level -> style name for styles in use.
+   *
+   * This is used by resolveStyleNameForTOC to find the actual styles being used
+   * when the TOC references standard heading styles that may have been renamed.
+   *
+   * @returns Map<outlineLevel, styleName> where outlineLevel is 1-indexed
+   * @private
+   */
+  private findHeadingStylesUsedByParagraphs(): Map<number, string> {
+    const usedStyles = new Map<number, string>();
+
+    const processElement = (element: BodyElement) => {
+      if (element instanceof Paragraph) {
+        const styleId = element.getStyle();
+        if (styleId) {
+          const style = this.stylesManager.getStyle(styleId);
+          if (style) {
+            const outlineLevel = style.getParagraphFormatting()?.outlineLevel;
+            if (outlineLevel !== undefined && outlineLevel >= 0) {
+              const level = outlineLevel + 1; // Convert to 1-indexed
+              const name = style.getName() || styleId;
+              if (!usedStyles.has(level)) {
+                usedStyles.set(level, name);
+              }
+            }
+          }
+        }
+      } else if (element instanceof Table) {
+        // Check table cells for paragraphs
+        for (let row = 0; row < element.getRowCount(); row++) {
+          const rowObj = element.getRow(row);
+          if (rowObj) {
+            for (let col = 0; col < rowObj.getCellCount(); col++) {
+              const cell = rowObj.getCell(col);
+              if (cell) {
+                for (const para of cell.getParagraphs()) {
+                  processElement(para);
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    for (const element of this.bodyElements) {
+      processElement(element);
+    }
+
+    return usedStyles;
   }
 
   /**
@@ -7830,57 +8213,180 @@ export class Document {
    * @private
    */
   private populateAllTOCsInXML(docXml: string): string {
-    const tocRegex =
-      /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
-    const tocMatches = Array.from(docXml.matchAll(tocRegex));
-
-    if (tocMatches.length === 0) return docXml;
-
     let modifiedXml = docXml;
 
-    for (const match of tocMatches) {
-      try {
-        const tocXml = match[0];
+    // Strategy 1: Try SDT-wrapped TOCs first (modern Word format)
+    const sdtTocRegex =
+      /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
+    const sdtMatches = Array.from(docXml.matchAll(sdtTocRegex));
 
-        // Extract field instruction
-        const instrMatch = tocXml.match(
-          /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/
-        );
-        if (!instrMatch?.[1]) continue;
+    if (sdtMatches.length > 0) {
+      for (const match of sdtMatches) {
+        try {
+          const tocXml = match[0];
+          const instrMatch = tocXml.match(
+            /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/
+          );
+          if (!instrMatch?.[1]) continue;
 
-        // Decode XML entities
-        let fieldInstruction = instrMatch[1]
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"')
-          .replace(/&apos;/g, "'");
+          let fieldInstruction = instrMatch[1]
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'");
 
-        // Parse levels and find headings
-        const levels = this.parseTOCFieldInstruction(fieldInstruction);
-        const headings = this.findHeadingsForTOCFromXML(docXml, levels);
+          const levels = this.parseTOCFieldInstruction(fieldInstruction);
+          const headings = this.findHeadingsForTOCFromXML(docXml, levels);
+          if (headings.length === 0) continue;
 
-        if (headings.length === 0) continue;
+          const newTocXml = this.generateTOCXML(headings, fieldInstruction);
+          modifiedXml = modifiedXml.replace(tocXml, newTocXml);
+        } catch (error) {
+          this.logger.error(
+            "Error populating SDT TOC",
+            error instanceof Error
+              ? { message: error.message, stack: error.stack }
+              : { error: String(error) }
+          );
+          continue;
+        }
+      }
+      return modifiedXml;
+    }
 
-        // Generate populated TOC
-        const newTocXml = this.generateTOCXML(headings, fieldInstruction);
-        modifiedXml = modifiedXml.replace(tocXml, newTocXml);
-      } catch (error) {
-        // Skip this TOC on error
-        this.logger.error(
-          "Error populating TOC",
-          error instanceof Error
-            ? {
-                message: error.message,
-                stack: error.stack,
-              }
-            : { error: String(error) }
-        );
-        continue;
+    // Strategy 2: Handle simple complex field TOCs (no SDT wrapper)
+    // These have the structure: fldChar begin → instrText → fldChar separate → entries → fldChar end
+    // Match pattern: paragraph containing fldChar begin followed by instrText with TOC
+    const simpleTocRegex =
+      /<w:p[^>]*>[\s\S]*?<w:fldChar[^>]*w:fldCharType="begin"[^>]*\/>[\s\S]*?<w:instrText[^>]*>([^<]*TOC[^<]*)<\/w:instrText>/g;
+    const simpleMatches = Array.from(docXml.matchAll(simpleTocRegex));
+
+    if (simpleMatches.length > 0) {
+      for (const match of simpleMatches) {
+        try {
+          const instrText = match[1];
+          if (!instrText) continue;
+
+          let fieldInstruction = instrText
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'");
+
+          const levels = this.parseTOCFieldInstruction(fieldInstruction);
+          const headings = this.findHeadingsForTOCFromXML(modifiedXml, levels);
+          if (headings.length === 0) continue;
+
+          // For simple TOCs, we need to find and replace the entire field structure
+          // Find from fldChar begin to fldChar end
+          const tocStartMatch = modifiedXml.match(
+            new RegExp(
+              `(<w:p[^>]*>[\\s\\S]*?<w:fldChar[^>]*w:fldCharType="begin"[^>]*/>)([\\s\\S]*?<w:instrText[^>]*>${instrText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}<\\/w:instrText>)`,
+              'g'
+            )
+          );
+
+          if (!tocStartMatch) continue;
+
+          // Find the end marker - look for fldChar end after this TOC instruction
+          // The TOC field spans multiple paragraphs, ending at fldChar end
+          const tocFieldPattern = new RegExp(
+            `(<w:p[^>]*>[\\s\\S]*?<w:fldChar[^>]*w:fldCharType="begin"[^>]*\\/>[\\s\\S]*?<w:instrText[^>]*>${instrText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}<\\/w:instrText>[\\s\\S]*?<w:fldChar[^>]*w:fldCharType="separate"[^>]*\\/>)([\\s\\S]*?)(<w:r[^>]*>[\\s\\S]*?<w:fldChar[^>]*w:fldCharType="end"[^>]*\\/>[\\s\\S]*?<\\/w:r>)`,
+            'g'
+          );
+
+          const fullMatch = modifiedXml.match(tocFieldPattern);
+          if (!fullMatch || fullMatch.length === 0) continue;
+
+          const fullTocXml = fullMatch[0];
+
+          // Generate new TOC XML preserving the complex field structure
+          const newTocXml = this.generateSimpleTOCXML(headings, fieldInstruction);
+          modifiedXml = modifiedXml.replace(fullTocXml, newTocXml);
+
+          this.logger.info(
+            `Populated simple TOC with ${headings.length} heading entries`
+          );
+        } catch (error) {
+          this.logger.error(
+            "Error populating simple TOC",
+            error instanceof Error
+              ? { message: error.message, stack: error.stack }
+              : { error: String(error) }
+          );
+          continue;
+        }
       }
     }
 
     return modifiedXml;
+  }
+
+  /**
+   * Generates XML for a simple complex field TOC (without SDT wrapper)
+   * Preserves the fldChar begin → instrText → fldChar separate → entries → fldChar end structure
+   *
+   * @param headings Array of heading info objects
+   * @param fieldInstruction The TOC field instruction string
+   * @returns XML string for the TOC field
+   * @private
+   */
+  private generateSimpleTOCXML(
+    headings: Array<{ text: string; level: number; bookmark: string }>,
+    fieldInstruction: string
+  ): string {
+    // Build the TOC entries
+    const entries: string[] = [];
+
+    for (const heading of headings) {
+      // Calculate TOC style based on heading level (TOC1, TOC2, etc.)
+      const tocStyle = `TOC${heading.level}`;
+
+      // Escape text for XML
+      const escapedText = heading.text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+      // Create hyperlinked TOC entry paragraph
+      entries.push(
+        `<w:p>` +
+        `<w:pPr><w:pStyle w:val="${tocStyle}"/></w:pPr>` +
+        `<w:hyperlink w:anchor="${heading.bookmark}" w:history="1">` +
+        `<w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr>` +
+        `<w:t>${escapedText}</w:t></w:r>` +
+        `</w:hyperlink>` +
+        `</w:p>`
+      );
+    }
+
+    // Escape field instruction for XML
+    const escapedInstruction = fieldInstruction
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+    // Build the complete TOC field structure
+    return (
+      // First paragraph: fldChar begin + instrText + fldChar separate
+      `<w:p>` +
+      `<w:pPr><w:pStyle w:val="TOC2"/></w:pPr>` +
+      `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+      `<w:r><w:instrText xml:space="preserve">${escapedInstruction}</w:instrText></w:r>` +
+      `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+      `</w:p>` +
+      // TOC entry paragraphs (between separate and end)
+      entries.join("") +
+      // Last paragraph: fldChar end
+      `<w:p>` +
+      `<w:pPr><w:pStyle w:val="TOC2"/></w:pPr>` +
+      `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+      `</w:p>`
+    );
   }
 
   /**
@@ -12378,6 +12884,19 @@ export class Document {
   }): number {
     const { resetFormatting = false, cleanupRelationships = false } =
       options || {};
+
+    // Guard: Skip when track changes is enabled - prevents field structure corruption
+    // The mergeConsecutiveHyperlinks() method uses clearContent() + addHyperlink()
+    // which creates new revisions at the END of the content array, placing them
+    // OUTSIDE field boundaries when field codes are present
+    if (this.trackChangesEnabled) {
+      defaultLogger.warn(
+        'defragmentHyperlinks skipped: track changes is enabled. ' +
+        'Call defragmentHyperlinks before enableTrackChanges() to avoid field corruption.'
+      );
+      return 0;
+    }
+
     let mergedCount = 0;
 
     // Get the DocumentParser instance to use its merging method

@@ -34,6 +34,9 @@ export class StylesManager {
   // Track if styles have been modified (for XML preservation)
   private _modified: boolean = false;
 
+  // Track which specific styles have been modified (for selective merging)
+  private _modifiedStyleIds: Set<string> = new Set();
+
   /**
    * Registry of built-in style factory functions
    * Maps style ID to factory function for lazy loading
@@ -52,6 +55,15 @@ export class StylesManager {
     ["Heading7", () => Style.createHeadingStyle(7)],
     ["Heading8", () => Style.createHeadingStyle(8)],
     ["Heading9", () => Style.createHeadingStyle(9)],
+    ["Heading1Char", () => Style.createHeadingCharStyle(1)],
+    ["Heading2Char", () => Style.createHeadingCharStyle(2)],
+    ["Heading3Char", () => Style.createHeadingCharStyle(3)],
+    ["Heading4Char", () => Style.createHeadingCharStyle(4)],
+    ["Heading5Char", () => Style.createHeadingCharStyle(5)],
+    ["Heading6Char", () => Style.createHeadingCharStyle(6)],
+    ["Heading7Char", () => Style.createHeadingCharStyle(7)],
+    ["Heading8Char", () => Style.createHeadingCharStyle(8)],
+    ["Heading9Char", () => Style.createHeadingCharStyle(9)],
     ["Title", () => Style.createTitleStyle()],
     ["Subtitle", () => Style.createSubtitleStyle()],
     ["ListParagraph", () => Style.createListParagraphStyle()],
@@ -103,6 +115,7 @@ export class StylesManager {
    */
   addStyle(style: Style): this {
     this.styles.set(style.getStyleId(), style);
+    this._modifiedStyleIds.add(style.getStyleId());
     this._modified = true;
     return this;
   }
@@ -169,6 +182,16 @@ export class StylesManager {
    */
   resetModified(): void {
     this._modified = false;
+    this._modifiedStyleIds.clear();
+  }
+
+  /**
+   * Gets the IDs of styles that have been modified since loading
+   * Used for selective merging with original styles.xml
+   * @returns Set of modified style IDs
+   */
+  getModifiedStyleIds(): Set<string> {
+    return this._modifiedStyleIds;
   }
 
   /**

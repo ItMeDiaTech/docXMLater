@@ -4,6 +4,7 @@
 
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { Paragraph, TextDirection } from "./Paragraph";
+import { Revision } from "./Revision";
 import {
   BorderStyle as CommonBorderStyle,
   BorderDefinition,
@@ -124,6 +125,8 @@ export class TableCell {
   private rawNestedContent: RawNestedContent[] = [];
   /** Parent row reference (if cell is inside a table row) */
   private _parentRow?: import('./TableRow').TableRow;
+  /** Table cell revision (w:cellIns, w:cellDel, w:cellMerge) per ECMA-376 Part 1 §17.13.5.4-5.6 */
+  private cellRevision?: Revision;
 
   /**
    * Creates a new TableCell
@@ -538,6 +541,75 @@ export class TableCell {
   }
 
   // ============================================================================
+  // CELL REVISIONS (w:cellIns, w:cellDel, w:cellMerge)
+  // ============================================================================
+
+  /**
+   * Sets the revision marker for this cell
+   * Per ECMA-376 Part 1 §17.13.5.4-5.6
+   *
+   * Table cell revisions track structural changes to table cells:
+   * - tableCellInsert (w:cellIns): Cell was inserted
+   * - tableCellDelete (w:cellDel): Cell was deleted
+   * - tableCellMerge (w:cellMerge): Cell merge/split operation
+   *
+   * @param revision - Revision marker for this cell
+   * @returns This cell for chaining
+   *
+   * @example
+   * ```typescript
+   * const revision = new Revision({
+   *   id: 1,
+   *   author: 'Alice',
+   *   date: new Date(),
+   *   type: 'tableCellInsert',
+   *   content: [],
+   * });
+   * cell.setCellRevision(revision);
+   * ```
+   */
+  setCellRevision(revision: Revision): this {
+    this.cellRevision = revision;
+    return this;
+  }
+
+  /**
+   * Gets the revision marker for this cell
+   *
+   * @returns The cell revision if present, undefined otherwise
+   *
+   * @example
+   * ```typescript
+   * const revision = cell.getCellRevision();
+   * if (revision) {
+   *   console.log(`Cell ${revision.getType()} by ${revision.getAuthor()}`);
+   * }
+   * ```
+   */
+  getCellRevision(): Revision | undefined {
+    return this.cellRevision;
+  }
+
+  /**
+   * Checks if this cell has a revision marker
+   *
+   * @returns True if cell has a revision (insert, delete, or merge)
+   */
+  hasCellRevision(): boolean {
+    return this.cellRevision !== undefined;
+  }
+
+  /**
+   * Clears the revision marker for this cell
+   *
+   * @returns This cell for chaining
+   */
+  clearCellRevision(): this {
+    this.cellRevision = undefined;
+    return this;
+  }
+
+  // ============================================================================
   // CONVENIENCE METHODS (for easier paragraph manipulation)
   // ============================================================================
 
@@ -839,8 +911,8 @@ export class TableCell {
         return false;
       }
 
-      // Hyperlink check - Hyperlink has getTarget method
-      if (item && typeof itemAny.getTarget === "function") {
+      // Hyperlink check - Hyperlink has getUrl method
+      if (item && typeof itemAny.getUrl === "function") {
         return false;
       }
 
@@ -853,6 +925,17 @@ export class TableCell {
       if (item && typeof itemAny.getText === "function") {
         const itemText = (itemAny.getText as () => string)().trim();
         if (itemText !== "") return false;
+
+        // Also check if revision contains hyperlinks (may have empty display text)
+        if (typeof itemAny.getContent === "function") {
+          const revContent = (itemAny.getContent as () => unknown[])();
+          for (const content of revContent) {
+            // Check if revision content is a Hyperlink using duck typing (getUrl method)
+            if (content && typeof (content as Record<string, unknown>).getUrl === "function") {
+              return false; // Revision contains hyperlink - not blank
+            }
+          }
+        }
       }
     }
 
@@ -1067,6 +1150,32 @@ export class TableCell {
       } else {
         // 'continue' uses empty element (no val attribute)
         tcPrChildren.push(XMLBuilder.wSelf("vMerge"));
+      }
+    }
+
+    // Add cell revision markers (w:cellIns, w:cellDel, w:cellMerge) per ECMA-376 Part 1 §17.13.5.4-5.6
+    if (this.cellRevision) {
+      const revType = this.cellRevision.getType();
+      const attrs: Record<string, string | number> = {
+        "w:id": this.cellRevision.getId(),
+        "w:author": this.cellRevision.getAuthor(),
+        "w:date": this.cellRevision.getDate().toISOString(),
+      };
+
+      if (revType === "tableCellInsert") {
+        tcPrChildren.push(XMLBuilder.wSelf("cellIns", attrs));
+      } else if (revType === "tableCellDelete") {
+        tcPrChildren.push(XMLBuilder.wSelf("cellDel", attrs));
+      } else if (revType === "tableCellMerge") {
+        // Add vMerge and vMergeOrig attributes if present
+        const prevProps = this.cellRevision.getPreviousProperties();
+        if (prevProps?.vMerge) {
+          attrs["w:vMerge"] = prevProps.vMerge;
+        }
+        if (prevProps?.vMergeOrig) {
+          attrs["w:vMergeOrig"] = prevProps.vMergeOrig;
+        }
+        tcPrChildren.push(XMLBuilder.wSelf("cellMerge", attrs));
       }
     }
 

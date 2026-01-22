@@ -172,6 +172,15 @@ export interface ApplyStylesOptions {
    * @default false
    */
   preserveWhiteFont?: boolean;
+
+  /**
+   * Whether to apply Normal style changes to NormalWeb (Normal (Web)) style as well.
+   * When true (default), if NormalWeb style exists in the document,
+   * it will receive the same formatting changes applied to Normal.
+   * This ensures consistency between Normal and Normal (Web) styles.
+   * @default true
+   */
+  linkNormalWebToNormal?: boolean;
 }
 
 /**

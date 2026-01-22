@@ -8,6 +8,7 @@ import { Paragraph } from '../../src/elements/Paragraph';
 import { Table } from '../../src/elements/Table';
 import { TableOfContentsElement } from '../../src/elements/TableOfContentsElement';
 import { TableOfContents } from '../../src/elements/TableOfContents';
+import { setGlobalLogger, ConsoleLogger, LogLevel, SilentLogger } from '../../src/utils/logger';
 
 describe('Document Insert Validation', () => {
   describe('insertParagraphAt()', () => {
@@ -86,38 +87,48 @@ describe('Document Insert Validation', () => {
     });
 
     it('should warn about missing styles', () => {
-      const doc = Document.create();
-      const para = new Paragraph();
-      para.addText('Styled text');
-      para.setStyle('NonExistentStyle');
-
+      // Enable console logging for this test
+      setGlobalLogger(new ConsoleLogger(LogLevel.WARN));
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-      doc.insertParagraphAt(0, para);
+      try {
+        const doc = Document.create();
+        const para = new Paragraph();
+        para.addText('Styled text');
+        para.setStyle('NonExistentStyle');
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Style "NonExistentStyle" not found')
-      );
+        doc.insertParagraphAt(0, para);
 
-      consoleSpy.mockRestore();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Style "NonExistentStyle" not found')
+        );
+      } finally {
+        consoleSpy.mockRestore();
+        setGlobalLogger(new SilentLogger());
+      }
     });
 
     it('should warn about missing numbering', () => {
-      const doc = Document.create();
-      const para = new Paragraph();
-      para.addText('List item');
-      // Set invalid numbering ID
-      (para as any).formatting.numbering = { numId: 999, level: 0 };
-
+      // Enable console logging for this test
+      setGlobalLogger(new ConsoleLogger(LogLevel.WARN));
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-      doc.insertParagraphAt(0, para);
+      try {
+        const doc = Document.create();
+        const para = new Paragraph();
+        para.addText('List item');
+        // Set invalid numbering ID
+        (para as any).formatting.numbering = { numId: 999, level: 0 };
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Numbering ID 999 not found')
-      );
+        doc.insertParagraphAt(0, para);
 
-      consoleSpy.mockRestore();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Numbering ID 999 not found')
+        );
+      } finally {
+        consoleSpy.mockRestore();
+        setGlobalLogger(new SilentLogger());
+      }
     });
 
     it('should normalize negative index to 0', () => {
@@ -194,19 +205,24 @@ describe('Document Insert Validation', () => {
     });
 
     it('should warn about missing table styles', () => {
-      const doc = Document.create();
-      const table = new Table(2, 2);
-      table.setStyle('NonExistentTableStyle');
-
+      // Enable console logging for this test
+      setGlobalLogger(new ConsoleLogger(LogLevel.WARN));
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-      doc.insertTableAt(0, table);
+      try {
+        const doc = Document.create();
+        const table = new Table(2, 2);
+        table.setStyle('NonExistentTableStyle');
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Table style "NonExistentTableStyle" not found')
-      );
+        doc.insertTableAt(0, table);
 
-      consoleSpy.mockRestore();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Table style "NonExistentTableStyle" not found')
+        );
+      } finally {
+        consoleSpy.mockRestore();
+        setGlobalLogger(new SilentLogger());
+      }
     });
 
     it('should normalize negative index to 0', () => {

@@ -13,6 +13,7 @@
 import { Document } from '../../src/core/Document';
 import { Image } from '../../src/elements/Image';
 import { ImageRun } from '../../src/elements/ImageRun';
+import { Table } from '../../src/elements/Table';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
@@ -541,5 +542,150 @@ describe('Image Properties - Inline vs Floating', () => {
     const doc2 = await Document.loadFromBuffer(buffer);
 
     expect(doc2.getImages()[0]?.image.isFloating()).toBe(true);
+  });
+});
+
+describe('Image Properties - Rotation', () => {
+  it('should preserve rotation through save/load cycle', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+
+    // Set rotation to 90 degrees
+    image.rotate(90);
+    expect(image.getRotation()).toBe(90);
+
+    // Add image to document
+    doc.addImage(image);
+
+    // Save and reload
+    const buffer = await doc.toBuffer();
+    await fs.writeFile(join(OUTPUT_DIR, 'test-image-rotation.docx'), buffer);
+
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const images = doc2.getImages();
+
+    expect(images.length).toBe(1);
+    expect(images[0]?.image.getRotation()).toBe(90);
+  });
+
+  it('should preserve 180 degree rotation', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+
+    image.rotate(180);
+
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const images = doc2.getImages();
+
+    expect(images[0]?.image.getRotation()).toBe(180);
+  });
+
+  it('should preserve 270 degree rotation', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+
+    image.rotate(270);
+
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const images = doc2.getImages();
+
+    expect(images[0]?.image.getRotation()).toBe(270);
+  });
+
+  it('should handle zero rotation (no attribute)', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+
+    // Don't set rotation - should remain 0
+    expect(image.getRotation()).toBe(0);
+
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const images = doc2.getImages();
+
+    expect(images[0]?.image.getRotation()).toBe(0);
+  });
+});
+
+describe('Image Properties - Edge Cases', () => {
+  it('should handle images with fractional rotation', async () => {
+    // Test that fractional rotation values (e.g., 45 degrees) work correctly
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 457200, 457200);
+
+    // Set a non-90-degree rotation
+    image.rotate(45);
+    expect(image.getRotation()).toBe(45);
+
+    doc.addImage(image);
+
+    // Save and reload
+    const buffer = await doc.toBuffer();
+    await fs.writeFile(join(OUTPUT_DIR, 'test-image-rotation-45.docx'), buffer);
+
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const images = doc2.getImages();
+
+    // Rotation should be preserved
+    expect(images.length).toBe(1);
+    expect(images[0]?.image.getRotation()).toBe(45);
+  });
+
+  it('should handle multiple images with different properties', async () => {
+    const doc = Document.create();
+
+    // Image 1: inline with effect extent
+    const image1 = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image1.setEffectExtent(25400, 25400, 25400, 25400);
+    doc.addImage(image1);
+
+    // Image 2: rotated
+    const image2 = await Image.fromBuffer(createTestImageBuffer(), 'png', 457200, 457200);
+    image2.rotate(45);
+    doc.addImage(image2);
+
+    // Image 3: floating with wrap
+    const image3 = await Image.fromBuffer(createTestImageBuffer(), 'png', 685800, 685800);
+    image3.setWrap('square', 'bothSides');
+    image3.setAnchor({
+      behindDoc: false,
+      locked: false,
+      layoutInCell: true,
+      allowOverlap: false,
+      relativeHeight: 251658240,
+    });
+    image3.setPosition(
+      { anchor: 'page', offset: 914400 },
+      { anchor: 'page', offset: 914400 }
+    );
+    doc.addImage(image3);
+
+    // Save and reload
+    const buffer = await doc.toBuffer();
+    await fs.writeFile(join(OUTPUT_DIR, 'test-multiple-images.docx'), buffer);
+
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const images = doc2.getImages();
+
+    expect(images.length).toBe(3);
+
+    // Verify image 1 effect extent
+    const extent1 = images[0]?.image.getEffectExtent();
+    expect(extent1?.left).toBe(25400);
+
+    // Verify image 2 rotation
+    expect(images[1]?.image.getRotation()).toBe(45);
+
+    // Verify image 3 wrap
+    const wrap3 = images[2]?.image.getWrap();
+    expect(wrap3?.type).toBe('square');
   });
 });

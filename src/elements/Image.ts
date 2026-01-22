@@ -181,6 +181,8 @@ export interface ImageProperties {
   effects?: ImageEffects;
   /** Border settings (width in points) */
   border?: { width: number };
+  /** Rotation angle in degrees (0-360) */
+  rotation?: number;
 }
 
 /**
@@ -308,6 +310,10 @@ export class Image {
     this.crop = properties.crop;
     this.effects = properties.effects;
     this.border = properties.border;
+    // Apply rotation if provided (normalize to 0-360)
+    if (properties.rotation !== undefined && properties.rotation !== 0) {
+      this.rotation = ((properties.rotation % 360) + 360) % 360;
+    }
 
     // Set default DPI
     this.dpi = 96;
@@ -989,7 +995,9 @@ export class Image {
       : XMLBuilder.a('blip', { 'r:embed': this.relationshipId, cstate: 'none' });
 
     // Transform element with offset and extent (required by Word)
-    const xfrm = XMLBuilder.a('xfrm', undefined, [
+    // Rotation is stored as 60000ths of a degree in OOXML (ECMA-376 §20.1.7.6)
+    const xfrmAttrs = this.rotation > 0 ? { rot: Math.round(this.rotation * 60000).toString() } : undefined;
+    const xfrm = XMLBuilder.a('xfrm', xfrmAttrs, [
       XMLBuilder.a('off', { x: '0', y: '0' }),
       XMLBuilder.a('ext', { cx: this.width.toString(), cy: this.height.toString() })
     ]);

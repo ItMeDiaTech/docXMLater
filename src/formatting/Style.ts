@@ -921,6 +921,13 @@ export class Style {
       pPrChildren.push(XMLBuilder.wSelf("pageBreakBefore"));
     }
 
+    // Add outline level for TOC support (Heading 1 = 0, Heading 2 = 1, etc.)
+    if (formatting.outlineLevel !== undefined) {
+      pPrChildren.push(
+        XMLBuilder.wSelf("outlineLvl", { "w:val": formatting.outlineLevel.toString() })
+      );
+    }
+
     return XMLBuilder.w("pPr", undefined, pPrChildren);
   }
 
@@ -1381,6 +1388,8 @@ export class Style {
       type: "paragraph",
       isDefault: true,
       next: "Normal",
+      qFormat: true,
+      uiPriority: 0,
       paragraphFormatting: {
         alignment: "left",
         spacing: {
@@ -1425,6 +1434,9 @@ export class Style {
       type: "paragraph",
       basedOn: "Normal",
       next: "Normal",
+      link: `Heading${level}Char`,
+      qFormat: true,
+      uiPriority: 9,
       paragraphFormatting: {
         alignment: "left",
         spacing: {
@@ -1435,7 +1447,37 @@ export class Style {
         },
         keepNext: true,
         keepLines: true,
+        outlineLevel: level - 1, // Heading 1 = 0, Heading 2 = 1, etc. Required for TOC
       },
+      runFormatting: {
+        font: "Verdana",
+        size: sizes[level - 1],
+        bold: true,
+        color: "000000",
+      },
+    });
+  }
+
+  /**
+   * Creates a Heading character style (linked to paragraph style)
+   * @param level - Heading level (1-9)
+   * @returns Heading character style
+   */
+  static createHeadingCharStyle(level: number): Style {
+    if (level < 1 || level > 9) {
+      throw new Error("Heading level must be between 1 and 9");
+    }
+
+    // Font sizes: H1=18pt, H2=14pt, H3=12pt, H4-9=12pt
+    const sizes = [18, 14, 12, 12, 12, 12, 12, 12, 12];
+
+    return new Style({
+      styleId: `Heading${level}Char`,
+      name: `Heading ${level} Char`,
+      type: "character",
+      link: `Heading${level}`,
+      qFormat: true,
+      uiPriority: 9,
       runFormatting: {
         font: "Verdana",
         size: sizes[level - 1],
@@ -1505,6 +1547,8 @@ export class Style {
       type: "paragraph",
       basedOn: "Normal",
       next: "ListParagraph",
+      qFormat: true,
+      uiPriority: 34,
       paragraphFormatting: {
         alignment: "left",
         indentation: {
@@ -1550,6 +1594,45 @@ export class Style {
           before: 480, // Larger spacing before TOC
           after: 240,
         },
+      },
+    });
+  }
+
+  /**
+   * Creates a TOC entry style for a specific level (1-9).
+   * TOC 1-9 are built-in Word styles for Table of Contents entries.
+   * When Word updates a TOC field, it applies these styles to the generated entries.
+   *
+   * @param level - TOC level (1-9)
+   * @param formatting - Optional run and paragraph formatting overrides
+   * @returns TOC style for the specified level
+   */
+  static createTOCStyle(
+    level: number,
+    formatting?: {
+      run?: RunFormatting;
+      paragraph?: ParagraphFormatting;
+    }
+  ): Style {
+    if (level < 1 || level > 9) {
+      throw new Error("TOC level must be between 1 and 9");
+    }
+
+    // Default indentation: 220 twips per level (11pt)
+    const defaultLeftIndent = (level - 1) * 220;
+
+    return Style.create({
+      styleId: `TOC${level}`,
+      name: `toc ${level}`,
+      type: "paragraph",
+      basedOn: "Normal",
+      uiPriority: 39,
+      semiHidden: true,
+      unhideWhenUsed: true,
+      runFormatting: formatting?.run,
+      paragraphFormatting: {
+        indentation: { left: defaultLeftIndent },
+        ...formatting?.paragraph,
       },
     });
   }

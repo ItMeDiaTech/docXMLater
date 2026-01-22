@@ -9,6 +9,7 @@ import { Document } from '../../src/core/Document';
 import { Hyperlink } from '../../src/elements/Hyperlink';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 import { XMLBuilder } from '../../src/xml/XMLBuilder';
+import { setGlobalLogger, ConsoleLogger, LogLevel, SilentLogger } from '../../src/utils/logger';
 
 describe('Hyperlink Parsing', () => {
   describe('External Hyperlinks', () => {
@@ -215,6 +216,75 @@ describe('Hyperlink Parsing', () => {
 
       expect(hyperlink.getText()).toBe('Link & "Special" <Characters>');
     });
+
+    it('should skip blank hyperlinks (no URL and no anchor) during parsing', async () => {
+      // Create hyperlink with no relationship ID and no anchor (completely blank)
+      const mockDocument = await createMockDocument([
+        {
+          type: 'hyperlink',
+          // No relationshipId - hyperlink will have no URL
+          // No anchor
+          text: '', // Empty text
+          skipRelationship: true,
+        },
+      ]);
+
+      const doc = await Document.loadFromBuffer(mockDocument);
+      const paragraphs = doc.getParagraphs();
+      const content = paragraphs[0]!.getContent();
+
+      // Blank hyperlink should be skipped during parsing
+      // No hyperlink in paragraph content
+      const hyperlinks = content.filter((item) => item instanceof Hyperlink);
+      expect(hyperlinks).toHaveLength(0);
+
+      // Document should save without error
+      const buffer = await doc.toBuffer();
+      expect(buffer).toBeDefined();
+      expect(buffer.length).toBeGreaterThan(0);
+    });
+
+    it('should skip blank hyperlinks but preserve valid ones in same paragraph', async () => {
+      const mockDocument = await createMockDocument([
+        {
+          type: 'hyperlink',
+          relationshipId: 'rId5',
+          text: 'Valid Link',
+          url: 'https://example.com',
+        },
+        {
+          type: 'hyperlink',
+          // No relationshipId, no anchor - blank hyperlink
+          text: '',
+          skipRelationship: true,
+        },
+        {
+          type: 'hyperlink',
+          anchor: 'Section1',
+          text: 'Internal Link',
+        },
+      ]);
+
+      const doc = await Document.loadFromBuffer(mockDocument);
+      const paragraphs = doc.getParagraphs();
+      const content = paragraphs[0]!.getContent();
+
+      // Should have 2 hyperlinks (blank one skipped)
+      const hyperlinks = content.filter((item) => item instanceof Hyperlink) as Hyperlink[];
+      expect(hyperlinks).toHaveLength(2);
+
+      // First should be external link
+      expect(hyperlinks[0]!.getText()).toBe('Valid Link');
+      expect(hyperlinks[0]!.getUrl()).toBe('https://example.com');
+
+      // Second should be internal link
+      expect(hyperlinks[1]!.getText()).toBe('Internal Link');
+      expect(hyperlinks[1]!.getAnchor()).toBe('Section1');
+
+      // Document should save without error
+      const buffer = await doc.toBuffer();
+      expect(buffer).toBeDefined();
+    });
   });
 
   describe('Round-Trip Fidelity', () => {
@@ -305,19 +375,24 @@ describe('Hyperlink Parsing', () => {
     });
 
     it('should warn when hyperlink has both url and anchor (hybrid link)', () => {
+      // Enable console logging for this test
+      setGlobalLogger(new ConsoleLogger(LogLevel.WARN));
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-      // Creating hybrid link should log warning
-      new Hyperlink({ url: 'https://example.com', anchor: 'Section1', text: 'Hybrid' });
+      try {
+        // Creating hybrid link should log warning
+        new Hyperlink({ url: 'https://example.com', anchor: 'Section1', text: 'Hybrid' });
 
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('DocXML Warning: Hyperlink has both URL')
-      );
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('ambiguous per ECMA-376 spec')
-      );
-
-      consoleWarnSpy.mockRestore();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('DocXML Warning: Hyperlink has both URL')
+        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('ambiguous per ECMA-376 spec')
+        );
+      } finally {
+        consoleWarnSpy.mockRestore();
+        setGlobalLogger(new SilentLogger());
+      }
     });
 
     it('should properly escape special characters in tooltip attribute', async () => {
