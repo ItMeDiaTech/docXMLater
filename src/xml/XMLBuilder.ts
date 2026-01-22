@@ -311,6 +311,20 @@ export class XMLBuilder {
   }
 
   /**
+   * Converts a single XMLElement to its XML string representation
+   * Useful for merging elements into existing XML
+   *
+   * @param element - The XMLElement to convert
+   * @returns XML string representation of the element
+   */
+  static elementToString(element: XMLElement): string {
+    const builder = new XMLBuilder();
+    // Use the private elementToString via the elements array + build
+    (builder as any).elements.push(element);
+    return builder.build();
+  }
+
+  /**
    * Helper method to create a WordprocessingML element
    * @param name - Element name (without 'w:' prefix)
    * @param attributes - Element attributes

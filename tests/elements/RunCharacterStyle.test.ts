@@ -6,8 +6,19 @@
 import { Document } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';
+import { XMLBuilder } from '../../src/xml/XMLBuilder';
 import path from 'path';
 import fs from 'fs';
+
+/**
+ * Helper to convert Run's XMLElement to string for testing
+ */
+function runToXmlString(run: Run): string {
+  const xml = run.toXML();
+  const builder = new XMLBuilder();
+  builder.element(xml.name, xml.attributes, xml.children);
+  return builder.build();
+}
 
 describe('Run Character Style Reference - Round Trip Tests', () => {
   const testOutputDir = path.join(__dirname, '../output');
@@ -102,6 +113,149 @@ describe('Run Character Style Reference - Round Trip Tests', () => {
       expect(runs?.[1]?.getFormatting().characterStyle).toBe('Emphasis');
       expect(runs?.[2]?.getFormatting().characterStyle).toBeUndefined();
       expect(runs?.[3]?.getFormatting().characterStyle).toBe('Strong');
+    });
+  });
+
+  describe('Underline with Character Style', () => {
+    it('should output w:u val=none when underline is false and characterStyle is set', () => {
+      // When a character style (like Hyperlink) has underline defined,
+      // setting underline=false should output <w:u w:val="none"/> to override the style
+      const run = new Run('Not underlined', {
+        characterStyle: 'Hyperlink',
+        underline: false,
+      });
+
+      const xmlStr = runToXmlString(run);
+
+      // Should have rStyle
+      expect(xmlStr).toContain('w:rStyle');
+      expect(xmlStr).toContain('Hyperlink');
+
+      // Should have w:u with val="none" to override style's underline
+      expect(xmlStr).toContain('<w:u w:val="none"/>');
+    });
+
+    it('should not output w:u when underline is false and no characterStyle', () => {
+      // Without a character style, no need for explicit "none" override
+      const run = new Run('Normal text', {
+        underline: false,
+      });
+
+      const xmlStr = runToXmlString(run);
+
+      // Should NOT have w:u at all
+      expect(xmlStr).not.toContain('w:u');
+    });
+
+    it('should output w:u with style value when underline is set to a style', () => {
+      const run = new Run('Underlined text', {
+        characterStyle: 'Hyperlink',
+        underline: 'single',
+      });
+
+      const xmlStr = runToXmlString(run);
+
+      // Should have rStyle
+      expect(xmlStr).toContain('w:rStyle');
+      expect(xmlStr).toContain('Hyperlink');
+
+      // Should have w:u with val="single"
+      expect(xmlStr).toContain('<w:u w:val="single"/>');
+    });
+
+    it('should output w:u val=none when underline is explicitly "none"', () => {
+      const run = new Run('Not underlined', {
+        characterStyle: 'Hyperlink',
+        underline: 'none',
+      });
+
+      const xmlStr = runToXmlString(run);
+
+      // Should have w:u with val="none"
+      expect(xmlStr).toContain('<w:u w:val="none"/>');
+    });
+
+    it('should preserve underline=false with characterStyle through round-trip', async () => {
+      const doc = Document.create();
+      const para = new Paragraph();
+
+      const run = new Run('Text after hyperlink', {
+        characterStyle: 'Hyperlink',
+        underline: false,
+        color: '000000',
+      });
+      para.addRun(run);
+
+      doc.addParagraph(para);
+
+      const buffer = await doc.toBuffer();
+      const loadedDoc = await Document.loadFromBuffer(buffer);
+      const loadedRuns = loadedDoc.getParagraphs()[0]?.getRuns();
+
+      expect(loadedRuns).toHaveLength(1);
+      const loadedRun = loadedRuns?.[0];
+      expect(loadedRun?.getFormatting().characterStyle).toBe('Hyperlink');
+      // After round-trip, underline should be "none" (parsed from w:u val="none")
+      expect(loadedRun?.getFormatting().underline).toBe('none');
+    });
+  });
+
+  describe('isHyperlinkStyled() Helper Method', () => {
+    it('should return true for runs with Hyperlink character style', () => {
+      const run = new Run('Click here', { characterStyle: 'Hyperlink' });
+      expect(run.isHyperlinkStyled()).toBe(true);
+    });
+
+    it('should return false for runs without Hyperlink character style', () => {
+      const run = new Run('Normal text');
+      expect(run.isHyperlinkStyled()).toBe(false);
+    });
+
+    it('should return false for runs with other character styles', () => {
+      const run = new Run('Emphasized text', { characterStyle: 'Emphasis' });
+      expect(run.isHyperlinkStyled()).toBe(false);
+    });
+
+    it('should return false for runs with Strong character style', () => {
+      const run = new Run('Strong text', { characterStyle: 'Strong' });
+      expect(run.isHyperlinkStyled()).toBe(false);
+    });
+
+    it('should allow skipping hyperlink-styled runs when applying bulk styles', () => {
+      const doc = Document.create();
+      const para = new Paragraph();
+
+      // Add normal run and hyperlink-styled run
+      para.addRun(new Run('Normal text', { color: 'FF0000' }));
+      para.addRun(new Run('Hyperlink text', { characterStyle: 'Hyperlink', color: '0000FF' }));
+      para.addRun(new Run('More normal text', { color: 'FF0000' }));
+
+      doc.addParagraph(para);
+
+      // Apply black color to all runs EXCEPT hyperlink-styled ones
+      const runs = para.getRuns();
+      for (const run of runs) {
+        if (run.isHyperlinkStyled()) {
+          continue; // Skip hyperlink runs
+        }
+        run.setColor('000000');
+      }
+
+      // Verify: normal runs changed to black, hyperlink run unchanged
+      expect(runs[0]?.getFormatting().color).toBe('000000');
+      expect(runs[1]?.getFormatting().color).toBe('0000FF'); // Preserved
+      expect(runs[2]?.getFormatting().color).toBe('000000');
+    });
+
+    it('should work with setCharacterStyle method', () => {
+      const run = new Run('Text');
+      expect(run.isHyperlinkStyled()).toBe(false);
+
+      run.setCharacterStyle('Hyperlink');
+      expect(run.isHyperlinkStyled()).toBe(true);
+
+      run.setCharacterStyle('Emphasis');
+      expect(run.isHyperlinkStyled()).toBe(false);
     });
   });
 });

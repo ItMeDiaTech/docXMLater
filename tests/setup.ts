@@ -3,17 +3,15 @@
  * Configures the test environment and global utilities
  */
 
+import { setGlobalLogger, SilentLogger } from '../src/utils/logger';
+
 // Increase timeout for async operations
 jest.setTimeout(30000);
 
-// Suppress console output during tests (optional - can be commented out for debugging)
-// global.console = {
-//   ...console,
-//   log: jest.fn(),
-//   debug: jest.fn(),
-//   info: jest.fn(),
-//   warn: jest.fn(),
-// };
+// Suppress library warnings during tests (set DOCXMLATER_LOG_LEVEL=warn to enable)
+if (!process.env.DOCXMLATER_LOG_LEVEL) {
+  setGlobalLogger(new SilentLogger());
+}
 
 // Global test utilities
 beforeEach(() => {

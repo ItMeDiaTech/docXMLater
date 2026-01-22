@@ -96,13 +96,22 @@ export interface NumberingLevelProperties {
 
   /** Whether the numbering text is bold */
   bold?: boolean;
+
+  /**
+   * Level at which numbering should restart (w:lvlRestart per ECMA-376 Part 1 §17.9.11)
+   * Specifies when to restart this level's numbering based on a higher-level change:
+   * - 0: Never restart (continues throughout document)
+   * - 1-8: Restart when the specified level changes
+   * - undefined (default): Restart when level-1 changes (standard behavior)
+   */
+  lvlRestart?: number;
 }
 
 /**
  * Represents a single level in a numbering definition
  */
 export class NumberingLevel {
-  private properties: Required<NumberingLevelProperties>;
+  private properties: Required<Omit<NumberingLevelProperties, 'lvlRestart'>> & Pick<NumberingLevelProperties, 'lvlRestart'>;
 
   /**
    * Creates a new numbering level
@@ -131,6 +140,7 @@ export class NumberingLevel {
       suffix: properties.suffix || "tab",
       color: properties.color || "000000",
       bold: properties.bold !== undefined ? properties.bold : false,
+      lvlRestart: properties.lvlRestart, // undefined means default behavior (restart on level-1 change)
     };
 
     this.validate();
@@ -229,7 +239,7 @@ export class NumberingLevel {
   /**
    * Gets the level properties
    */
-  getProperties(): Required<NumberingLevelProperties> {
+  getProperties(): Required<Omit<NumberingLevelProperties, 'lvlRestart'>> & Pick<NumberingLevelProperties, 'lvlRestart'> {
     return { ...this.properties };
   }
 
@@ -310,6 +320,38 @@ export class NumberingLevel {
   }
 
   /**
+   * Sets the level restart behavior (w:lvlRestart per ECMA-376 Part 1 §17.9.11)
+   *
+   * Controls when this level's numbering restarts based on higher-level changes:
+   * - 0: Never restart (continues throughout document)
+   * - 1-8: Restart when the specified level changes
+   * - undefined: Restart when level-1 changes (standard/default behavior)
+   *
+   * @param level The level that triggers restart (0-8), or undefined for default
+   * @example
+   * // Level 1 that never restarts (continuous across document)
+   * level1.setLvlRestart(0);
+   *
+   * // Level 2 that restarts when level 0 changes (not level 1)
+   * level2.setLvlRestart(0);
+   */
+  setLvlRestart(level: number | undefined): this {
+    if (level !== undefined && (level < 0 || level > 8)) {
+      throw new Error(`lvlRestart must be between 0 and 8, got ${level}`);
+    }
+    this.properties.lvlRestart = level;
+    return this;
+  }
+
+  /**
+   * Gets the level restart value
+   * @returns The level that triggers restart, or undefined for default behavior
+   */
+  getLvlRestart(): number | undefined {
+    return this.properties.lvlRestart;
+  }
+
+  /**
    * Sets the numbering format (decimal, lowerLetter, bullet, etc.)
    * @param format The numbering format
    */
@@ -333,6 +375,14 @@ export class NumberingLevel {
     children.push(
       XMLBuilder.wSelf("numFmt", { "w:val": this.properties.format })
     );
+
+    // Level restart (w:lvlRestart per ECMA-376 Part 1 §17.9.11)
+    // Only output if explicitly set (undefined = default behavior)
+    if (this.properties.lvlRestart !== undefined) {
+      children.push(
+        XMLBuilder.wSelf("lvlRestart", { "w:val": this.properties.lvlRestart.toString() })
+      );
+    }
 
     // Level text (e.g., "%1." or "•")
     children.push(
@@ -810,6 +860,13 @@ export class NumberingLevel {
         ? (suffixMatch[1] as "tab" | "space" | "nothing")
         : "tab";
 
+    // Extract level restart (w:lvlRestart per ECMA-376 Part 1 §17.9.11)
+    let lvlRestart: number | undefined;
+    const lvlRestartMatch = xml.match(/<w:lvlRestart[^>]*w:val="([^"]+)"/);
+    if (lvlRestartMatch && lvlRestartMatch[1]) {
+      lvlRestart = parseInt(lvlRestartMatch[1], 10);
+    }
+
     // Extract indentation from <w:pPr><w:ind>
     let leftIndent = 720 + level * 360; // default
     let hangingIndent = 360; // default
@@ -870,6 +927,7 @@ export class NumberingLevel {
       suffix,
       bold,
       color,
+      lvlRestart,
     });
   }
 }

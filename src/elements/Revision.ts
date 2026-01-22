@@ -45,6 +45,19 @@ export type RevisionType =
   | 'contentControlChange'; // Content control insertion, deletion, or property change
 
 /**
+ * Field context for revisions inside complex fields
+ * Provides information about the parent field when a revision appears in a field result
+ */
+export interface FieldContext {
+  /** Reference to the parent ComplexField (if revision is in field result) */
+  field?: import('./Field').ComplexField;
+  /** Field instruction (e.g., "HYPERLINK", "TOC", "MERGEFIELD") */
+  instruction?: string;
+  /** Position within field: 'instruction' or 'result' */
+  position: 'instruction' | 'result';
+}
+
+/**
  * Revision properties
  */
 export interface RevisionProperties {
@@ -68,6 +81,8 @@ export interface RevisionProperties {
   moveLocation?: string;
   /** Location of this revision within the document structure */
   location?: RevisionLocation;
+  /** Field context if revision is inside a complex field */
+  fieldContext?: FieldContext;
 }
 
 /**
@@ -85,6 +100,7 @@ export class Revision {
   private moveLocation?: string;
   private isFieldInstruction: boolean = false;
   private location?: RevisionLocation;
+  private fieldContext?: FieldContext;
 
   /**
    * Creates a new Revision
@@ -101,6 +117,7 @@ export class Revision {
     this.moveId = properties.moveId;
     this.moveLocation = properties.moveLocation;
     this.location = properties.location;
+    this.fieldContext = properties.fieldContext;
   }
 
   /**
@@ -261,6 +278,56 @@ export class Revision {
   setLocation(location: RevisionLocation): this {
     this.location = location;
     return this;
+  }
+
+  /**
+   * Gets the field context if this revision is inside a complex field
+   * @returns Field context information or undefined if not inside a field
+   */
+  getFieldContext(): FieldContext | undefined {
+    return this.fieldContext;
+  }
+
+  /**
+   * Sets the field context for this revision
+   * @param context - Field context information
+   * @returns This revision for chaining
+   */
+  setFieldContext(context: FieldContext): this {
+    this.fieldContext = context;
+    return this;
+  }
+
+  /**
+   * Checks if this revision is inside a complex field
+   * @returns True if the revision is inside a field result or instruction section
+   */
+  isInsideField(): boolean {
+    return this.fieldContext !== undefined;
+  }
+
+  /**
+   * Checks if this revision is inside a field result section
+   * @returns True if the revision is in the result section of a complex field
+   */
+  isInsideFieldResult(): boolean {
+    return this.fieldContext?.position === 'result';
+  }
+
+  /**
+   * Checks if this revision is inside a field instruction section
+   * @returns True if the revision is in the instruction section of a complex field
+   */
+  isInsideFieldInstruction(): boolean {
+    return this.fieldContext?.position === 'instruction';
+  }
+
+  /**
+   * Gets the parent field if this revision is inside a complex field
+   * @returns The parent ComplexField or undefined
+   */
+  getParentField(): import('./Field').ComplexField | undefined {
+    return this.fieldContext?.field;
   }
 
   /**
@@ -674,15 +741,26 @@ export class Revision {
     // w:delInstrText for field instructions, w:delText for regular text
     const deletedTextElement = this.isFieldInstruction ? 'w:delInstrText' : 'w:delText';
 
-    // We need to replace w:t elements with w:delText or w:delInstrText
+    // We need to replace text elements with their deleted counterparts:
+    // - w:t -> w:delText (or w:delInstrText if isFieldInstruction)
+    // - w:instrText -> w:delInstrText (always, regardless of isFieldInstruction flag)
     if (runXml.children) {
       const modifiedChildren = runXml.children.map(child => {
-        if (typeof child === 'object' && child.name === 'w:t') {
-          // Replace w:t with appropriate deleted text element
-          return {
-            ...child,
-            name: deletedTextElement,
-          };
+        if (typeof child === 'object') {
+          if (child.name === 'w:t') {
+            // Replace w:t with appropriate deleted text element
+            return {
+              ...child,
+              name: deletedTextElement,
+            };
+          } else if (child.name === 'w:instrText') {
+            // Replace w:instrText with w:delInstrText
+            // Per ECMA-376 §22.1.2.26, deleted field instructions must use w:delInstrText
+            return {
+              ...child,
+              name: 'w:delInstrText',
+            };
+          }
         }
         return child;
       });

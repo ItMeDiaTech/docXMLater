@@ -388,6 +388,13 @@ export class Paragraph {
   private _parentCell?: import('./TableCell').TableCell;
   /** StylesManager reference for conditional formatting resolution */
   private _stylesManager?: import("../formatting/StylesManager").StylesManager;
+  /**
+   * Internal flag to mark paragraph as part of a multi-paragraph field (e.g., TOC)
+   * When true, assembleComplexFields() will skip processing this paragraph
+   * to preserve the original field structure across paragraphs.
+   * @internal
+   */
+  _isPartOfMultiParagraphField?: boolean;
 
   /**
    * Creates a new Paragraph
@@ -1619,6 +1626,46 @@ export class Paragraph {
     this.formatting.indentation.firstLine = twips;
     if (this.trackingContext?.isEnabled() && previousValue !== twips) {
       this.trackingContext.trackParagraphPropertyChange(this, 'indentation.firstLine', previousValue, twips);
+    }
+    return this;
+  }
+
+  /**
+   * Sets hanging indentation
+   *
+   * Creates a hanging indent where the first line starts at the left margin
+   * and subsequent lines are indented. Common for bulleted/numbered lists
+   * and bibliographies.
+   *
+   * WARNING: If this paragraph has numbering (is part of a list), setting
+   * hanging indentation manually will be ignored as numbering controls indentation.
+   *
+   * @param twips - Indentation in twips (must be non-negative)
+   * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * // Create hanging indent of 0.5 inch (720 twips)
+   * paragraph.setHangingIndent(720);
+   * ```
+   */
+  setHangingIndent(twips: number): this {
+    if (twips < 0) {
+      throw new Error('Hanging indent must be non-negative');
+    }
+    if (this.formatting.numbering) {
+      defaultLogger.warn(
+        "Setting hanging indentation on a numbered paragraph has no effect. " +
+          "Numbering controls indentation."
+      );
+    }
+    const previousValue = this.formatting.indentation?.hanging;
+    if (!this.formatting.indentation) {
+      this.formatting.indentation = {};
+    }
+    this.formatting.indentation.hanging = twips;
+    if (this.trackingContext?.isEnabled() && previousValue !== twips) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'indentation.hanging', previousValue, twips);
     }
     return this;
   }

@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Document } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';
+import { setGlobalLogger, ConsoleLogger, LogLevel, SilentLogger } from '../../src/utils/logger';
 import path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -154,6 +155,8 @@ describe('Text Preservation', () => {
   });
 
   it('should warn when loading corrupted documents', async () => {
+    // Enable console logging for this test
+    setGlobalLogger(new ConsoleLogger(LogLevel.WARN));
     const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
@@ -184,10 +187,13 @@ describe('Text Preservation', () => {
       }
     } finally {
       consoleWarnSpy.mockRestore();
+      setGlobalLogger(new SilentLogger());
     }
   });
 
   it('should warn when saving documents with mostly empty content', async () => {
+    // Enable console logging for this test
+    setGlobalLogger(new ConsoleLogger(LogLevel.WARN));
     const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const testPath = path.join(tempDir, 'test-empty-save.docx');
 
@@ -215,6 +221,7 @@ describe('Text Preservation', () => {
       expect(hasEmptyWarning).toBe(true);
     } finally {
       consoleWarnSpy.mockRestore();
+      setGlobalLogger(new SilentLogger());
     }
   });
 

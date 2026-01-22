@@ -250,9 +250,22 @@ export class CollectingLogger implements ILogger {
 
 /**
  * Default logger instance
- * Uses console output with WARN minimum level
+ * Delegates to the global logger, respecting setGlobalLogger() and environment variables
  */
-export const defaultLogger = new ConsoleLogger(LogLevel.WARN);
+export const defaultLogger: ILogger = {
+  debug(message: string, context?: Record<string, any>): void {
+    getGlobalLogger().debug(message, context);
+  },
+  info(message: string, context?: Record<string, any>): void {
+    getGlobalLogger().info(message, context);
+  },
+  warn(message: string, context?: Record<string, any>): void {
+    getGlobalLogger().warn(message, context);
+  },
+  error(message: string, context?: Record<string, any>): void {
+    getGlobalLogger().error(message, context);
+  },
+};
 
 /**
  * Creates a scoped logger that adds source information

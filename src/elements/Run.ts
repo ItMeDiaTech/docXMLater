@@ -58,6 +58,12 @@ export interface RunContent {
   fieldCharLocked?: boolean;
   /** Raw XML content (for 'vml' type - preserves w:pict elements as-is) */
   rawXml?: string;
+  /**
+   * Whether this content came from a deleted section (w:delText or w:delInstrText)
+   * Per ECMA-376 Part 1 §22.1.2.26-27, deleted content uses special elements
+   * This flag helps with proper serialization back to w:delText/w:delInstrText
+   */
+  isDeleted?: boolean;
 }
 
 /**
@@ -120,6 +126,28 @@ export interface EastAsianLayout {
 export type EmphasisMark = "dot" | "comma" | "circle" | "underDot";
 
 /**
+ * Theme color values per ECMA-376 Part 1 Section 17.18.96 (ST_ThemeColor)
+ * These reference colors defined in the document's theme (theme1.xml)
+ */
+export type ThemeColorValue =
+  | "dark1"
+  | "light1"
+  | "dark2"
+  | "light2"
+  | "accent1"
+  | "accent2"
+  | "accent3"
+  | "accent4"
+  | "accent5"
+  | "accent6"
+  | "hyperlink"
+  | "followedHyperlink"
+  | "background1"
+  | "text1"
+  | "background2"
+  | "text2";
+
+/**
  * Text formatting options for a run
  */
 export interface RunFormatting {
@@ -163,8 +191,25 @@ export interface RunFormatting {
   font?: string;
   /** Font size in points (half-points for Word) */
   size?: number;
+  /** Font size for complex scripts (RTL languages) in points. If not set, uses size. */
+  sizeCs?: number;
   /** Text color in hex format (without #) */
   color?: string;
+  /**
+   * Theme color reference for text color per ECMA-376 Part 1 Section 17.3.2.6
+   * When set, the color is derived from the document's theme rather than a fixed hex value
+   */
+  themeColor?: ThemeColorValue;
+  /**
+   * Theme color tint (0-255, where 0=no tint, 255=full tint toward white)
+   * Applied to themeColor to create lighter variations
+   */
+  themeTint?: number;
+  /**
+   * Theme color shade (0-255, where 0=no shade, 255=full shade toward black)
+   * Applied to themeColor to create darker variations
+   */
+  themeShade?: number;
   /** Highlight color */
   highlight?:
     | "yellow"
@@ -458,8 +503,20 @@ export class Run {
     // Convert undefined/null to empty string for consistent XML generation
     const normalizedText = cleanedText ?? "";
 
-    // Parse text to extract special characters into separate content elements
-    this.content = this.parseTextWithSpecialCharacters(normalizedText);
+    // Check if current content is all instructionText - preserve the type
+    // This is critical for TOC field instructions and other field codes
+    // Without this, calling setText() on a run with instrText would convert it to w:t
+    // which causes field instruction codes to appear as visible text in Word
+    const isAllInstructionText = this.content.length > 0 &&
+      this.content.every(c => c.type === "instructionText");
+
+    if (isAllInstructionText) {
+      // Preserve instructionText type - just update the value
+      this.content = [{ type: "instructionText", value: normalizedText }];
+    } else {
+      // Normal behavior - parse text to extract special characters into separate content elements
+      this.content = this.parseTextWithSpecialCharacters(normalizedText);
+    }
 
     // Track text change if tracking is enabled and text actually changed
     if (this.trackingContext?.isEnabled() && this._parentParagraph && oldText !== normalizedText && oldText) {
@@ -594,6 +651,32 @@ export class Run {
       return this.formatting.size;
     }
     return this.getConditionalFormattingProperty("size") as number | undefined;
+  }
+
+  /**
+   * Checks if this run has the "Hyperlink" character style applied.
+   *
+   * This is useful when applying bulk style changes to a document,
+   * to avoid overwriting hyperlink formatting (which would make
+   * hyperlinks appear as plain text).
+   *
+   * @returns True if the run has "Hyperlink" character style
+   *
+   * @example
+   * ```typescript
+   * // Skip hyperlink-styled runs when applying color changes
+   * for (const para of doc.getParagraphs()) {
+   *   for (const run of para.getRuns()) {
+   *     if (run.isHyperlinkStyled()) {
+   *       continue; // Preserve hyperlink formatting
+   *     }
+   *     run.setColor('000000');
+   *   }
+   * }
+   * ```
+   */
+  isHyperlinkStyled(): boolean {
+    return this.formatting.characterStyle === "Hyperlink";
   }
 
   /**
@@ -1133,6 +1216,29 @@ export class Run {
   }
 
   /**
+   * Sets font size for complex scripts (RTL languages like Arabic, Hebrew)
+   *
+   * Sets the font size used for complex script text (w:szCs element).
+   * If not set, the regular size is used for both regular and complex script text.
+   *
+   * @param size - Font size in points for complex scripts
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setSize(12).setSizeCs(14);   // 12pt for regular, 14pt for complex scripts
+   * ```
+   */
+  setSizeCs(size: number): this {
+    const previousValue = this.formatting.sizeCs;
+    this.formatting.sizeCs = size;
+    if (this.trackingContext?.isEnabled() && previousValue !== size) {
+      this.trackingContext.trackRunPropertyChange(this, 'sizeCs', previousValue, size);
+    }
+    return this;
+  }
+
+  /**
    * Sets text color
    *
    * Sets the foreground (text) color using hexadecimal format.
@@ -1156,6 +1262,76 @@ export class Run {
     this.formatting.color = normalizedColor;
     if (this.trackingContext?.isEnabled() && previousValue !== normalizedColor) {
       this.trackingContext.trackRunPropertyChange(this, 'color', previousValue, normalizedColor);
+    }
+    return this;
+  }
+
+  /**
+   * Sets theme color reference for text
+   *
+   * Uses a color from the document's theme instead of a fixed hex value.
+   * Theme colors automatically update when the document theme changes.
+   *
+   * @param themeColor - Theme color reference (e.g., 'accent1', 'dark1', 'hyperlink')
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setThemeColor('accent1');    // Use theme accent color 1
+   * run.setThemeColor('hyperlink');  // Use theme hyperlink color
+   * ```
+   */
+  setThemeColor(themeColor: ThemeColorValue): this {
+    const previousValue = this.formatting.themeColor;
+    this.formatting.themeColor = themeColor;
+    if (this.trackingContext?.isEnabled() && previousValue !== themeColor) {
+      this.trackingContext.trackRunPropertyChange(this, 'themeColor', previousValue, themeColor);
+    }
+    return this;
+  }
+
+  /**
+   * Sets theme color tint for lighter variations
+   *
+   * Applied to the theme color to create a lighter shade.
+   * The tint value is a percentage where 0 = no change and 255 = white.
+   *
+   * @param themeTint - Tint value (0-255, toward white)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setThemeColor('accent1').setThemeTint(128);  // 50% tint toward white
+   * ```
+   */
+  setThemeTint(themeTint: number): this {
+    const previousValue = this.formatting.themeTint;
+    this.formatting.themeTint = themeTint;
+    if (this.trackingContext?.isEnabled() && previousValue !== themeTint) {
+      this.trackingContext.trackRunPropertyChange(this, 'themeTint', previousValue, themeTint);
+    }
+    return this;
+  }
+
+  /**
+   * Sets theme color shade for darker variations
+   *
+   * Applied to the theme color to create a darker shade.
+   * The shade value is a percentage where 0 = no change and 255 = black.
+   *
+   * @param themeShade - Shade value (0-255, toward black)
+   * @returns This run instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * run.setThemeColor('accent1').setThemeShade(128);  // 50% shade toward black
+   * ```
+   */
+  setThemeShade(themeShade: number): this {
+    const previousValue = this.formatting.themeShade;
+    this.formatting.themeShade = themeShade;
+    if (this.trackingContext?.isEnabled() && previousValue !== themeShade) {
+      this.trackingContext.trackRunPropertyChange(this, 'themeShade', previousValue, themeShade);
     }
     return this;
   }
@@ -1959,12 +2135,19 @@ export class Run {
     }
 
     // 8. Underline
+    // When a character style is applied (e.g., Hyperlink) and underline is explicitly false,
+    // we need to output <w:u w:val="none"/> to prevent the style's underline from being inherited.
+    // Without this, setting underline=false on a run with characterStyle="Hyperlink" would
+    // result in no w:u element, causing the Hyperlink style's underline to apply.
     if (formatting.underline) {
       const underlineValue =
         typeof formatting.underline === "string"
           ? formatting.underline
           : "single";
       rPrChildren.push(XMLBuilder.wSelf("u", { "w:val": underlineValue }));
+    } else if (formatting.underline === false && formatting.characterStyle) {
+      // Explicit "no underline" to override character style that may have underline
+      rPrChildren.push(XMLBuilder.wSelf("u", { "w:val": "none" }));
     }
 
     // 8.5. Character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.33
@@ -2030,19 +2213,48 @@ export class Run {
       );
     }
 
-    // 9. Font size
+    // 9. Font size (w:sz for regular text, w:szCs for complex scripts)
+    // Per ECMA-376 Part 1 §17.3.2.39 (sz) and §17.3.2.40 (szCs)
     if (formatting.size !== undefined) {
       // Word uses half-points (size * 2)
       const halfPoints = formatting.size * 2;
       rPrChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints }));
-      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": halfPoints }));
+      // Use sizeCs if specified, otherwise fall back to size for backwards compatibility
+      const csHalfPoints = formatting.sizeCs !== undefined ? formatting.sizeCs * 2 : halfPoints;
+      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
+    } else if (formatting.sizeCs !== undefined) {
+      // Only complex script size specified (unusual but valid)
+      const csHalfPoints = formatting.sizeCs * 2;
+      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
     }
 
-    // 10. Text color
-    if (formatting.color) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("color", { "w:val": formatting.color })
-      );
+    // 10. Text color (per ECMA-376 Part 1 Section 17.3.2.6)
+    // Supports both hex colors and theme color references
+    if (formatting.color || formatting.themeColor) {
+      const colorAttrs: Record<string, string> = {};
+
+      if (formatting.color) {
+        colorAttrs["w:val"] = formatting.color;
+      }
+      if (formatting.themeColor) {
+        colorAttrs["w:themeColor"] = formatting.themeColor;
+      }
+      if (formatting.themeTint !== undefined) {
+        // Convert to hex string (2 characters, uppercase)
+        colorAttrs["w:themeTint"] = formatting.themeTint
+          .toString(16)
+          .toUpperCase()
+          .padStart(2, "0");
+      }
+      if (formatting.themeShade !== undefined) {
+        // Convert to hex string (2 characters, uppercase)
+        colorAttrs["w:themeShade"] = formatting.themeShade
+          .toString(16)
+          .toUpperCase()
+          .padStart(2, "0");
+      }
+
+      rPrChildren.push(XMLBuilder.wSelf("color", colorAttrs));
     }
 
     // 11. Highlight color

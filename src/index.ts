@@ -224,7 +224,7 @@ export {
   isShape,
   isTextBox,
 } from './elements/Paragraph';
-export { Run, RunFormatting } from './elements/Run';
+export { Run, RunFormatting, ThemeColorValue } from './elements/Run';
 export {
   Section,
   PageOrientation,
@@ -293,7 +293,7 @@ export { TableOfContentsElement } from './elements/TableOfContentsElement';
 export { Bookmark, BookmarkProperties } from './elements/Bookmark';
 export { BookmarkManager } from './elements/BookmarkManager';
 export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent } from './elements/StructuredDocumentTag';
-export { Revision, RevisionType, RevisionProperties } from './elements/Revision';
+export { Revision, RevisionType, RevisionProperties, FieldContext } from './elements/Revision';
 export { RevisionContent, isRunContent, isHyperlinkContent } from './elements/RevisionContent';
 export { RevisionManager, RevisionCategory, RevisionSummary } from './elements/RevisionManager';
 export {
@@ -432,6 +432,13 @@ export {
   countRevisionsByType,
   stripRevisionsFromXml,
 } from './utils/InMemoryRevisionAcceptor';
+
+// Move operation helper (creates complete move operations with range markers)
+export {
+  MoveOperationHelper,
+  MoveOperationOptions,
+  MoveOperationResult,
+} from './utils/MoveOperationHelper';
 
 // Constants
 export { LIMITS } from './constants/limits';

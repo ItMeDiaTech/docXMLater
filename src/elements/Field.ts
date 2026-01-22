@@ -8,6 +8,7 @@
 import { XMLElement } from '../xml/XMLBuilder';
 import { RunFormatting } from './Run';
 import { ParsedHyperlinkInstruction, parseHyperlinkInstruction, isHyperlinkInstruction } from './FieldHelpers';
+import type { Revision } from './Revision';
 
 /**
  * Common field types
@@ -584,6 +585,15 @@ export interface ComplexFieldProperties {
 
   /** Parsed HYPERLINK instruction components (auto-populated if instruction is HYPERLINK) */
   parsedHyperlink?: ParsedHyperlinkInstruction;
+
+  /**
+   * Whether the field has a result section (w:fldSep was present during parsing)
+   * Per ECMA-376, fields without results skip the separator element.
+   * This flag distinguishes between:
+   * - hasResult=true, result="" → Field had separator but result was empty
+   * - hasResult=false, result="" → Field never had a result section (empty field)
+   */
+  hasResult?: boolean;
 }
 
 /**
@@ -606,6 +616,13 @@ export class ComplexField {
   private resultContent: XMLElement[];
   private multiParagraph: boolean;
   private parsedHyperlink?: ParsedHyperlinkInstruction;
+  /** Revisions that wrap the result section (for tracked changes in field content) */
+  private resultRevisions: Revision[] = [];
+  /**
+   * Whether the field has a result section (w:fldSep was present during parsing)
+   * Per ECMA-376, fields without results skip the separator element.
+   */
+  private _hasResultSection: boolean = false;
 
   /**
    * Creates a new complex field
@@ -619,6 +636,7 @@ export class ComplexField {
     this.nestedFields = properties.nestedFields || [];
     this.resultContent = properties.resultContent || [];
     this.multiParagraph = properties.multiParagraph || false;
+    this._hasResultSection = properties.hasResult ?? false;
 
     // Auto-parse HYPERLINK instruction if provided or detected
     if (properties.parsedHyperlink) {
@@ -656,6 +674,35 @@ export class ComplexField {
   setResult(result: string): this {
     this.result = result;
     return this;
+  }
+
+  /**
+   * Checks if the field has a result section
+   *
+   * Per ECMA-376, complex fields may or may not have a result section.
+   * Fields without results (like TOC markers or empty PAGE fields) skip
+   * the w:fldSep (separator) element entirely.
+   *
+   * This method distinguishes between:
+   * - `hasResultSection() === true && getResult() === ""` → Field had separator but result was empty
+   * - `hasResultSection() === false && getResult() === undefined` → Field never had a result section
+   *
+   * @returns True if the field has a result section (w:fldSep was present)
+   *
+   * @example
+   * ```typescript
+   * const field = paragraph.getFields()[0];
+   * if (field instanceof ComplexField) {
+   *   if (field.hasResultSection()) {
+   *     console.log('Field result:', field.getResult());
+   *   } else {
+   *     console.log('Field has no result section (empty field)');
+   *   }
+   * }
+   * ```
+   */
+  hasResultSection(): boolean {
+    return this._hasResultSection;
   }
 
   /**
@@ -798,6 +845,39 @@ export class ComplexField {
   }
 
   /**
+   * Sets revisions that wrap the result section
+   * These are tracked changes (w:ins, w:del) that need to wrap the result AND end marker
+   * @param revisions Array of Revision objects
+   */
+  setResultRevisions(revisions: Revision[]): this {
+    this.resultRevisions = revisions;
+    return this;
+  }
+
+  /**
+   * Adds a revision to the result section
+   * @param revision Revision to add
+   */
+  addResultRevision(revision: Revision): this {
+    this.resultRevisions.push(revision);
+    return this;
+  }
+
+  /**
+   * Gets revisions that wrap the result section
+   */
+  getResultRevisions(): Revision[] {
+    return [...this.resultRevisions];
+  }
+
+  /**
+   * Checks if this field has revisions in the result section
+   */
+  hasResultRevisions(): boolean {
+    return this.resultRevisions.length > 0;
+  }
+
+  /**
    * Generates XML for the complex field
    * Returns array of run elements (begin, instr, sep, result, end)
    */
@@ -867,6 +947,16 @@ export class ComplexField {
         name: 'w:r',
         children: resultChildren,
       });
+    }
+
+    // 4a. Result revisions (tracked changes within the result section)
+    // These MUST appear between the separator and end marker per ECMA-376
+    // The revisions contain the actual field result content wrapped in w:ins or w:del
+    for (const revision of this.resultRevisions) {
+      const revisionXml = revision.toXML();
+      if (revisionXml) {
+        runs.push(revisionXml);
+      }
     }
 
     // 5. End marker run

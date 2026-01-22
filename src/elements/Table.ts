@@ -16,6 +16,7 @@ import {
   HorizontalAlignment,
   VerticalAlignment,
   WidthType,
+  ShadingPattern,
 } from "./CommonTypes";
 
 // ============================================================================
@@ -114,6 +115,19 @@ export interface TablePositionProperties {
 export type TableWidthType = "auto" | "dxa" | "pct";
 
 /**
+ * Table shading/background
+ * Per ECMA-376 Part 1 §17.4.56 (w:shd inside w:tblPr)
+ */
+export interface TableShading {
+  /** Background fill color in hex (e.g., 'F0F0F0') */
+  fill?: string;
+  /** Foreground/pattern color in hex */
+  color?: string;
+  /** Pattern type (solid, pct12, horzStripe, etc.) */
+  pattern?: ShadingPattern;
+}
+
+/**
  * Table formatting options
  */
 export interface TableFormatting {
@@ -127,6 +141,7 @@ export interface TableFormatting {
   cellSpacingType?: TableWidthType; // Cell spacing type
   indent?: number; // Left indent in twips
   tblLook?: string; // Table look flags (appearance settings)
+  shading?: TableShading; // Table background shading
   // Batch 1 properties
   position?: TablePositionProperties; // Floating table positioning
   overlap?: boolean; // Allow table overlap with other floating tables
@@ -869,6 +884,35 @@ export class Table {
   }
 
   /**
+   * Sets table-level shading (background)
+   *
+   * Per ECMA-376 Part 1 §17.4.56 (w:shd), this sets the default
+   * background shading for the entire table. Individual cells can
+   * override this with their own shading.
+   *
+   * @param shading - Table shading configuration
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * table.setShading({ fill: 'F0F0F0' }); // Light gray background
+   * table.setShading({ fill: 'FFFFFF', pattern: 'pct12', color: '000000' });
+   * ```
+   */
+  setShading(shading: TableShading): this {
+    this.formatting.shading = shading;
+    return this;
+  }
+
+  /**
+   * Gets table-level shading configuration
+   * @returns Table shading or undefined if not set
+   */
+  getShading(): TableShading | undefined {
+    return this.formatting.shading;
+  }
+
+  /**
    * Sets table width type
    *
    * Defines how the table width value should be interpreted.
@@ -1091,6 +1135,20 @@ export class Table {
       tblPrChildren.push(
         XMLBuilder.wSelf("tblLook", { "w:val": this.formatting.tblLook })
       );
+    }
+
+    // Add table shading (background) per ECMA-376 Part 1 §17.4.56
+    if (this.formatting.shading) {
+      const shdAttrs: Record<string, string> = {};
+      if (this.formatting.shading.pattern)
+        shdAttrs["w:val"] = this.formatting.shading.pattern;
+      if (this.formatting.shading.fill)
+        shdAttrs["w:fill"] = this.formatting.shading.fill;
+      if (this.formatting.shading.color)
+        shdAttrs["w:color"] = this.formatting.shading.color;
+      if (Object.keys(shdAttrs).length > 0) {
+        tblPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
+      }
     }
 
     // Add table caption (accessibility)

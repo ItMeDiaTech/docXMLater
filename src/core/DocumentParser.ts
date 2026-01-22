@@ -409,48 +409,30 @@ export class DocumentParser {
     startPos: number,
     endPos: number
   ): Bookmark[] {
-    const bookmarks: Bookmark[] = [];
     const searchContent = endPos === -1
       ? content.slice(startPos)
       : content.slice(startPos, endPos);
 
-    // Find all w:bookmarkEnd elements in the region
-    const bookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id="(\d+)"[^>]*\/?>/g;
-    let match: RegExpExecArray | null;
-
-    while ((match = bookmarkEndRegex.exec(searchContent)) !== null) {
-      const idStr = match[1];
-      if (idStr) {
-        const id = parseInt(idStr, 10);
-        if (!isNaN(id)) {
-          const bookmark = new Bookmark({
-            name: `_end_${id}`,
-            id: id,
-            skipNormalization: true,
-          });
-          bookmarks.push(bookmark);
-        }
-      }
-    }
-
-    return bookmarks;
+    return this.extractBookmarkEndsFromContent(searchContent);
   }
 
   /**
    * Extracts bookmarkEnd elements from any XML content string.
-   * Used for extracting bookmarkEnds between table rows, cells, etc.
+   * Uses position-based parsing via XMLParser (ECMA-376 compliant, ReDoS-safe).
    * @param content - The XML content to search
    * @returns Array of Bookmark objects for the bookmarkEnd elements
    */
   private extractBookmarkEndsFromContent(content: string): Bookmark[] {
     const bookmarks: Bookmark[] = [];
-    const bookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id="(\d+)"[^>]*\/?>/g;
-    let match: RegExpExecArray | null;
 
-    while ((match = bookmarkEndRegex.exec(content)) !== null) {
-      const idStr = match[1];
-      if (idStr) {
-        const id = parseInt(idStr, 10);
+    // Use position-based XMLParser instead of regex for ECMA-376 compliance
+    // This handles any attribute order and is safe from ReDoS attacks
+    const bookmarkEndXmls = XMLParser.extractElements(content, "w:bookmarkEnd");
+
+    for (const bookmarkEndXml of bookmarkEndXmls) {
+      const idAttr = XMLParser.extractAttribute(bookmarkEndXml, "w:id");
+      if (idAttr) {
+        const id = parseInt(idAttr, 10);
         if (!isNaN(id)) {
           const bookmark = new Bookmark({
             name: `_end_${id}`,
@@ -535,19 +517,64 @@ export class DocumentParser {
   }
 
   /**
+   * Counts unclosed opening tags of a specific element type in content.
+   * Uses position-based parsing instead of regex for ECMA-376 compliance.
+   * @param content - XML content to search
+   * @param tagName - Element name (e.g., "w:tbl", "w:p", "w:sdt")
+   * @returns Number of unclosed opening tags (opens - closes)
+   */
+  private countUnclosedTags(content: string, tagName: string): number {
+    let opens = 0;
+    let closes = 0;
+    let pos = 0;
+
+    // Count opening tags (handles self-closing correctly)
+    while (pos < content.length) {
+      const openPos = content.indexOf(`<${tagName}`, pos);
+      if (openPos === -1) break;
+
+      // Check the character after the tag name to ensure exact match
+      const afterTagName = openPos + tagName.length + 1;
+      if (afterTagName < content.length) {
+        const charAfter = content.charAt(afterTagName);
+        // Valid tag terminators: space, >, /, tab, newline
+        if (charAfter === ' ' || charAfter === '>' || charAfter === '/' ||
+            charAfter === '\t' || charAfter === '\n' || charAfter === '\r') {
+
+          // Find the end of this tag
+          const tagEnd = content.indexOf('>', openPos);
+          if (tagEnd !== -1) {
+            // Check if self-closing (ends with />)
+            const isSelfClosing = content.charAt(tagEnd - 1) === '/';
+            if (!isSelfClosing) {
+              opens++;
+            }
+          }
+        }
+      }
+      pos = openPos + 1;
+    }
+
+    // Count closing tags
+    pos = 0;
+    const closeTag = `</${tagName}>`;
+    while (pos < content.length) {
+      const closePos = content.indexOf(closeTag, pos);
+      if (closePos === -1) break;
+      closes++;
+      pos = closePos + closeTag.length;
+    }
+
+    return opens - closes;
+  }
+
+  /**
    * Checks if a position in the content is inside a table element
    * Returns true if there's an unclosed <w:tbl> before this position
    */
   private isPositionInsideTable(content: string, position: number): boolean {
-    // Look backwards from position to find the nearest table-related tag
     const beforeContent = content.substring(0, position);
-
-    // Find all <w:tbl> and </w:tbl> tags before this position
-    const openTableTags = (beforeContent.match(/<w:tbl[\s>]/g) || []).length;
-    const closeTableTags = (beforeContent.match(/<\/w:tbl>/g) || []).length;
-
-    // If there are more open tags than close tags, we're inside a table
-    return openTableTags > closeTableTags;
+    return this.countUnclosedTags(beforeContent, "w:tbl") > 0;
   }
 
   /**
@@ -582,27 +609,14 @@ export class DocumentParser {
     // If the <w:del is inside a paragraph or table, it's NOT body-level
     const contentBeforeDel = content.substring(0, lastDelOpen);
 
-    // Count unclosed <w:p> tags before this <w:del
-    const pOpens = (contentBeforeDel.match(/<w:p[\s>]/g) || []).length;
-    const pCloses = (contentBeforeDel.match(/<\/w:p>/g) || []).length;
-    const insideParagraph = pOpens > pCloses;
+    // Check if inside a paragraph using position-based parsing
+    if (this.countUnclosedTags(contentBeforeDel, "w:p") > 0) return false;
 
-    // If we're inside a paragraph, this is NOT a body-level deletion
-    if (insideParagraph) return false;
+    // Check if inside a table
+    if (this.countUnclosedTags(contentBeforeDel, "w:tbl") > 0) return false;
 
-    // Also check if inside a table (cells can have deletions too)
-    const tblOpens = (contentBeforeDel.match(/<w:tbl[\s>]/g) || []).length;
-    const tblCloses = (contentBeforeDel.match(/<\/w:tbl>/g) || []).length;
-    const insideTable = tblOpens > tblCloses;
-
-    if (insideTable) return false;
-
-    // Also check if inside an SDT (structured document tag)
-    const sdtOpens = (contentBeforeDel.match(/<w:sdt[\s>]/g) || []).length;
-    const sdtCloses = (contentBeforeDel.match(/<\/w:sdt>/g) || []).length;
-    const insideSdt = sdtOpens > sdtCloses;
-
-    if (insideSdt) return false;
+    // Check if inside an SDT (structured document tag)
+    if (this.countUnclosedTags(contentBeforeDel, "w:sdt") > 0) return false;
 
     return true; // This is a body-level <w:del>
   }
@@ -1093,15 +1107,22 @@ export class DocumentParser {
         if (child.index < insXmls.length) {
           const revisionXml = insXmls[child.index];
           if (revisionXml) {
-            const revision = await this.parseRevisionFromXml(
+            const revResult = await this.parseRevisionFromXml(
               revisionXml,
               "w:ins",
               relationshipManager,
               zipHandler,
               imageManager
             );
-            if (revision) {
-              paragraph.addRevision(revision);
+            if (revResult.revision) {
+              paragraph.addRevision(revResult.revision);
+            }
+            // Add any bookmarks found inside the revision to the paragraph
+            for (const bookmark of revResult.bookmarkStarts) {
+              paragraph.addBookmarkStart(bookmark);
+            }
+            for (const bookmark of revResult.bookmarkEnds) {
+              paragraph.addBookmarkEnd(bookmark);
             }
           }
         }
@@ -1109,15 +1130,22 @@ export class DocumentParser {
         if (child.index < delXmls.length) {
           const revisionXml = delXmls[child.index];
           if (revisionXml) {
-            const revision = await this.parseRevisionFromXml(
+            const revResult = await this.parseRevisionFromXml(
               revisionXml,
               "w:del",
               relationshipManager,
               zipHandler,
               imageManager
             );
-            if (revision) {
-              paragraph.addRevision(revision);
+            if (revResult.revision) {
+              paragraph.addRevision(revResult.revision);
+            }
+            // Add any bookmarks found inside the revision to the paragraph
+            for (const bookmark of revResult.bookmarkStarts) {
+              paragraph.addBookmarkStart(bookmark);
+            }
+            for (const bookmark of revResult.bookmarkEnds) {
+              paragraph.addBookmarkEnd(bookmark);
             }
           }
         }
@@ -1125,15 +1153,22 @@ export class DocumentParser {
         if (child.index < moveFromXmls.length) {
           const revisionXml = moveFromXmls[child.index];
           if (revisionXml) {
-            const revision = await this.parseRevisionFromXml(
+            const revResult = await this.parseRevisionFromXml(
               revisionXml,
               "w:moveFrom",
               relationshipManager,
               zipHandler,
               imageManager
             );
-            if (revision) {
-              paragraph.addRevision(revision);
+            if (revResult.revision) {
+              paragraph.addRevision(revResult.revision);
+            }
+            // Add any bookmarks found inside the revision to the paragraph
+            for (const bookmark of revResult.bookmarkStarts) {
+              paragraph.addBookmarkStart(bookmark);
+            }
+            for (const bookmark of revResult.bookmarkEnds) {
+              paragraph.addBookmarkEnd(bookmark);
             }
           }
         }
@@ -1141,15 +1176,22 @@ export class DocumentParser {
         if (child.index < moveToXmls.length) {
           const revisionXml = moveToXmls[child.index];
           if (revisionXml) {
-            const revision = await this.parseRevisionFromXml(
+            const revResult = await this.parseRevisionFromXml(
               revisionXml,
               "w:moveTo",
               relationshipManager,
               zipHandler,
               imageManager
             );
-            if (revision) {
-              paragraph.addRevision(revision);
+            if (revResult.revision) {
+              paragraph.addRevision(revResult.revision);
+            }
+            // Add any bookmarks found inside the revision to the paragraph
+            for (const bookmark of revResult.bookmarkStarts) {
+              paragraph.addBookmarkStart(bookmark);
+            }
+            for (const bookmark of revResult.bookmarkEnds) {
+              paragraph.addBookmarkEnd(bookmark);
             }
           }
         }
@@ -1181,13 +1223,13 @@ export class DocumentParser {
 
   /**
    * Parses a revision element from raw XML
-   * Extracts revision metadata (id, author, date) and contained runs
+   * Extracts revision metadata (id, author, date), contained runs, and any bookmarks
    * @param revisionXml - Raw XML of the revision element
    * @param tagName - Tag name (w:ins, w:del, w:moveFrom, w:moveTo)
    * @param relationshipManager - Relationship manager for image relationships
    * @param zipHandler - ZIP handler for loading image data
    * @param imageManager - Image manager for registering images
-   * @returns Parsed Revision instance or null
+   * @returns Object with parsed Revision and any bookmarks found inside, or null
    */
   private async parseRevisionFromXml(
     revisionXml: string,
@@ -1195,7 +1237,16 @@ export class DocumentParser {
     relationshipManager: RelationshipManager,
     zipHandler?: ZipHandler,
     imageManager?: ImageManager
-  ): Promise<Revision | null> {
+  ): Promise<{
+    revision: Revision | null;
+    bookmarkStarts: Bookmark[];
+    bookmarkEnds: Bookmark[];
+  }> {
+    const result: {
+      revision: Revision | null;
+      bookmarkStarts: Bookmark[];
+      bookmarkEnds: Bookmark[];
+    } = { revision: null, bookmarkStarts: [], bookmarkEnds: [] };
     try {
       // Map XML tag to RevisionType
       let revisionType: import("../elements/Revision").RevisionType;
@@ -1213,7 +1264,7 @@ export class DocumentParser {
           revisionType = "moveTo";
           break;
         default:
-          return null;
+          return result;
       }
 
       // Extract attributes
@@ -1223,7 +1274,7 @@ export class DocumentParser {
       const moveId = XMLParser.extractAttribute(revisionXml, "w:moveId");
 
       if (!idAttr || !author) {
-        return null; // Required attributes missing
+        return result; // Required attributes missing
       }
 
       const id = parseInt(idAttr, 10);
@@ -1235,9 +1286,11 @@ export class DocumentParser {
       const hyperlinkXmls = XMLParser.extractElements(revisionXml, "w:hyperlink");
 
       // Create a version of the XML with hyperlinks removed to extract standalone runs
+      // Use split().join() instead of replace() to remove ALL occurrences of identical hyperlinks
+      // (replace() only removes the first match, causing duplicate content)
       let xmlWithoutHyperlinks = revisionXml;
       for (const hyperlinkXml of hyperlinkXmls) {
-        xmlWithoutHyperlinks = xmlWithoutHyperlinks.replace(hyperlinkXml, '');
+        xmlWithoutHyperlinks = xmlWithoutHyperlinks.split(hyperlinkXml).join('');
       }
 
       // Extract runs from the XML without hyperlinks (these are standalone runs)
@@ -1278,15 +1331,34 @@ export class DocumentParser {
       // Parse hyperlinks inside revision (for tracked hyperlink changes)
       for (const hyperlinkXml of hyperlinkXmls) {
         const hyperlinkObj = XMLParser.parseToObject(hyperlinkXml, { trimValues: false });
-        const result = this.parseHyperlinkFromObject(
+        const hyperlinkResult = this.parseHyperlinkFromObject(
           hyperlinkObj["w:hyperlink"],
           relationshipManager
         );
-        if (result.hyperlink) {
-          content.push(result.hyperlink);
+        if (hyperlinkResult.hyperlink) {
+          content.push(hyperlinkResult.hyperlink);
         }
-        // Note: bookmarks inside revisions are not attached to paragraphs
-        // They would need special handling if needed
+        // Collect bookmarks from hyperlinks inside revisions
+        result.bookmarkStarts.push(...hyperlinkResult.bookmarkStarts);
+        result.bookmarkEnds.push(...hyperlinkResult.bookmarkEnds);
+      }
+
+      // Extract bookmarks directly inside the revision (not nested in hyperlinks)
+      const bookmarkStartXmls = XMLParser.extractElements(xmlWithoutHyperlinks, "w:bookmarkStart");
+      const bookmarkEndXmls = XMLParser.extractElements(xmlWithoutHyperlinks, "w:bookmarkEnd");
+
+      for (const bookmarkXml of bookmarkStartXmls) {
+        const bookmark = this.parseBookmarkStart(bookmarkXml);
+        if (bookmark) {
+          result.bookmarkStarts.push(bookmark);
+        }
+      }
+
+      for (const bookmarkXml of bookmarkEndXmls) {
+        const bookmark = this.parseBookmarkEnd(bookmarkXml);
+        if (bookmark) {
+          result.bookmarkEnds.push(bookmark);
+        }
       }
 
       if (content.length === 0) {
@@ -1295,7 +1367,8 @@ export class DocumentParser {
           "[DocumentParser] Empty revision content skipped",
           { tagName, id: idAttr, author }
         );
-        return null;
+        // Still return any bookmarks found even if revision has no content
+        return result;
       }
 
       // Create Revision instance
@@ -1308,7 +1381,8 @@ export class DocumentParser {
         moveId,
       });
 
-      return revision;
+      result.revision = revision;
+      return result;
     } catch (error) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse revision:",
@@ -1316,7 +1390,7 @@ export class DocumentParser {
           ? { message: error.message, stack: error.stack }
           : { error: String(error) }
       );
-      return null;
+      return result;
     }
   }
 
@@ -1707,6 +1781,9 @@ export class DocumentParser {
         paragraph.setRightIndent(safeParseInt(ind["@_w:right"]));
       if (isExplicitlySet(ind["@_w:firstLine"]))
         paragraph.setFirstLineIndent(safeParseInt(ind["@_w:firstLine"]));
+      // Parse hanging indent per ECMA-376 Part 1 §17.3.1.17
+      if (isExplicitlySet(ind["@_w:hanging"]))
+        paragraph.setHangingIndent(safeParseInt(ind["@_w:hanging"]));
     }
 
     // Spacing
@@ -2188,10 +2265,21 @@ export class DocumentParser {
    * @param paragraph The paragraph containing runs to process
    */
   private assembleComplexFields(paragraph: Paragraph): void {
+    // Skip if this paragraph is part of a multi-paragraph field (e.g., TOC)
+    // These paragraphs have already been processed and their field structure
+    // should be preserved - re-processing would corrupt the field runs
+    if (paragraph._isPartOfMultiParagraphField) {
+      defaultLogger.debug(
+        "[DocumentParser] Skipping assembleComplexFields for paragraph marked as part of multi-paragraph field"
+      );
+      return;
+    }
+
     const content = paragraph.getContent();
     const groupedContent: any[] = [];
     let fieldRuns: Run[] = [];
     let fieldRevisions: Revision[] = []; // Track revisions inside field result section
+    let instructionRevisions: Revision[] = []; // Track revisions in instruction area
     let fieldState:
       | "begin"
       | "instruction"
@@ -2227,6 +2315,56 @@ export class DocumentParser {
 
                 // Complete field assembly
                 if (fieldState === "end" && fieldRuns.length > 0) {
+                  // If there are revisions in the instruction area, we MUST preserve raw structure
+                  // The instruction text is INSIDE the revisions, so we can't extract it
+                  // This happens with field code hyperlinks inside tracked changes (w:ins/w:del)
+                  if (instructionRevisions.length > 0) {
+                    // Output field structure in original order: runs interleaved with revisions
+                    // We need to reconstruct the original order based on field state transitions
+                    let hasSep = false;
+                    for (const run of fieldRuns) {
+                      const runContent = run.getContent();
+                      const fieldCharToken = runContent.find((c: any) => c.type === "fieldChar");
+
+                      // Output begin run
+                      if (fieldCharToken?.fieldCharType === "begin") {
+                        groupedContent.push(run);
+                        // Instruction revisions come after begin
+                        for (const rev of instructionRevisions) {
+                          groupedContent.push(rev);
+                        }
+                      } else if (fieldCharToken?.fieldCharType === "separate") {
+                        // Separator
+                        groupedContent.push(run);
+                        hasSep = true;
+                        // Result revisions come after separator
+                        for (const rev of fieldRevisions) {
+                          groupedContent.push(rev);
+                        }
+                      } else if (fieldCharToken?.fieldCharType === "end") {
+                        // End marker - if no separator was found, output revisions first
+                        if (!hasSep) {
+                          for (const rev of fieldRevisions) {
+                            groupedContent.push(rev);
+                          }
+                        }
+                        groupedContent.push(run);
+                      } else {
+                        // Other runs (instruction text, result text outside revisions)
+                        groupedContent.push(run);
+                      }
+                    }
+
+                    defaultLogger.debug(
+                      `Preserved raw structure for field with ${instructionRevisions.length} instruction revisions`
+                    );
+                    fieldRuns = [];
+                    instructionRevisions = [];
+                    fieldRevisions = [];
+                    fieldState = null;
+                    break;
+                  }
+
                   // Extract instruction to determine field type
                   let instruction = "";
                   let resultText = "";
@@ -2275,14 +2413,28 @@ export class DocumentParser {
                         // Fallback to ComplexField if we can't determine link type
                         const complexField = this.createComplexFieldFromRuns(fieldRuns);
                         if (complexField) {
+                          // Attach revisions to ComplexField for proper serialization
+                          if (fieldRevisions.length > 0) {
+                            // Update field context on each revision with field reference and instruction
+                            for (const rev of fieldRevisions) {
+                              rev.setFieldContext({
+                                field: complexField,
+                                instruction: complexField.getInstruction(),
+                                position: 'result',
+                              });
+                            }
+                            complexField.setResultRevisions(fieldRevisions);
+                          }
                           groupedContent.push(complexField);
                         } else {
                           fieldRuns.forEach((run) => groupedContent.push(run));
-                        }
-                        for (const revision of fieldRevisions) {
-                          groupedContent.push(revision);
+                          // Only push revisions separately if ComplexField creation failed
+                          for (const revision of fieldRevisions) {
+                            groupedContent.push(revision);
+                          }
                         }
                         fieldRuns = [];
+                        instructionRevisions = [];
                         fieldRevisions = [];
                         fieldState = null;
                         break;
@@ -2301,6 +2453,7 @@ export class DocumentParser {
                         `Converted single-paragraph HYPERLINK field to Hyperlink element`
                       );
                       fieldRuns = [];
+                      instructionRevisions = [];
                       fieldRevisions = [];
                       fieldState = null;
                       break;
@@ -2311,12 +2464,21 @@ export class DocumentParser {
                   const complexField =
                     this.createComplexFieldFromRuns(fieldRuns);
                   if (complexField) {
-                    groupedContent.push(complexField);
-                    // Add any revisions that were inside the field result section
+                    // Attach any revisions that were inside the field result section
                     // These are tracked changes within the field's display content
-                    for (const revision of fieldRevisions) {
-                      groupedContent.push(revision);
+                    // They MUST be serialized before the end marker per ECMA-376
+                    if (fieldRevisions.length > 0) {
+                      // Update field context on each revision with field reference and instruction
+                      for (const rev of fieldRevisions) {
+                        rev.setFieldContext({
+                          field: complexField,
+                          instruction: complexField.getInstruction(),
+                          position: 'result',
+                        });
+                      }
+                      complexField.setResultRevisions(fieldRevisions);
                     }
+                    groupedContent.push(complexField);
                   } else {
                     // If assembly failed, add individual runs
                     fieldRuns.forEach((run) => groupedContent.push(run));
@@ -2326,6 +2488,7 @@ export class DocumentParser {
                     }
                   }
                   fieldRuns = [];
+                  instructionRevisions = [];
                   fieldRevisions = [];
                   fieldState = null;
                 }
@@ -2351,10 +2514,14 @@ export class DocumentParser {
           } else if (fieldRuns.length > 0) {
             // Incomplete field - add as individual runs
             fieldRuns.forEach((run) => groupedContent.push(run));
+            for (const revision of instructionRevisions) {
+              groupedContent.push(revision);
+            }
             for (const revision of fieldRevisions) {
               groupedContent.push(revision);
             }
             fieldRuns = [];
+            instructionRevisions = [];
             fieldRevisions = [];
             fieldState = null;
             groupedContent.push(item);
@@ -2363,22 +2530,39 @@ export class DocumentParser {
           }
         }
       } else if (item instanceof Revision) {
-        // Handle Revision objects (w:ins, w:del) that may appear inside field result sections
+        // Handle Revision objects (w:ins, w:del) that may appear inside field sections
         if (fieldState === "separate" || fieldState === "result") {
           // This revision is inside the field result section - track it
+          // Set preliminary field context (field reference will be set when ComplexField is created)
+          item.setFieldContext({ position: 'result' });
           fieldRevisions.push(item);
           fieldState = "result";
           defaultLogger.debug(
             `Found revision inside complex field result: type=${item.getType()}, id=${item.getId()}`
           );
+        } else if (fieldState === "begin" || fieldState === "instruction") {
+          // Revision in instruction area - track separately and continue field assembly
+          // This happens with field code hyperlinks inside tracked changes
+          // The instruction text is INSIDE the revision, so we can't extract it into ComplexField
+          // Set preliminary field context (field reference will be set when ComplexField is created)
+          item.setFieldContext({ position: 'instruction' });
+          instructionRevisions.push(item);
+          fieldState = "instruction";
+          defaultLogger.debug(
+            `Found revision inside complex field instruction: type=${item.getType()}, id=${item.getId()}`
+          );
         } else if (fieldRuns.length > 0) {
           // Revision appears in unexpected location during field assembly
           // Add incomplete field runs and the revision
           fieldRuns.forEach((run) => groupedContent.push(run));
+          for (const revision of instructionRevisions) {
+            groupedContent.push(revision);
+          }
           for (const revision of fieldRevisions) {
             groupedContent.push(revision);
           }
           fieldRuns = [];
+          instructionRevisions = [];
           fieldRevisions = [];
           fieldState = null;
           groupedContent.push(item);
@@ -2391,10 +2575,14 @@ export class DocumentParser {
         if (fieldRuns.length > 0) {
           // Incomplete field - add as individual runs
           fieldRuns.forEach((run) => groupedContent.push(run));
+          for (const revision of instructionRevisions) {
+            groupedContent.push(revision);
+          }
           for (const revision of fieldRevisions) {
             groupedContent.push(revision);
           }
           fieldRuns = [];
+          instructionRevisions = [];
           fieldRevisions = [];
           fieldState = null;
         }
@@ -2405,6 +2593,9 @@ export class DocumentParser {
     // Handle any remaining incomplete field
     if (fieldRuns.length > 0) {
       fieldRuns.forEach((run) => groupedContent.push(run));
+      for (const revision of instructionRevisions) {
+        groupedContent.push(revision);
+      }
       for (const revision of fieldRevisions) {
         groupedContent.push(revision);
       }
@@ -2720,6 +2911,8 @@ export class DocumentParser {
 
   /**
    * Process a multi-paragraph field as a ComplexField (standard behavior for non-HYPERLINK fields)
+   * For fields like TOC that span multiple paragraphs with content in between (begin → entries → end),
+   * we preserve the original runs instead of creating a ComplexField.
    */
   private processMultiParagraphFieldAsComplexField(
     fieldTracker: {
@@ -2729,6 +2922,46 @@ export class DocumentParser {
     allParagraphs: Paragraph[],
     runs: Run[]
   ): void {
+    // Mark all affected paragraphs so assembleComplexFields() skips them
+    // This is critical for TOC and other multi-paragraph fields to preserve
+    // the original field structure (fldChar begin/separate/end + instrText)
+    const affectedParaIndices = new Set<number>();
+    for (const fr of fieldTracker.fieldRuns) {
+      affectedParaIndices.add(fr.paragraphIndex);
+    }
+
+    // Get first and last paragraph indices
+    const sortedIndices = Array.from(affectedParaIndices).sort((a, b) => a - b);
+    const firstParaIdx = sortedIndices[0]!;
+    const lastParaIdx = sortedIndices[sortedIndices.length - 1]!;
+
+    // For fields spanning more than 2 consecutive paragraphs (like TOC),
+    // preserve the original runs instead of creating a ComplexField.
+    // This is because the field content (e.g., TOC entries) is in the intermediate
+    // paragraphs between begin/separate and end markers.
+    if (lastParaIdx - firstParaIdx > 1) {
+      // Mark ALL paragraphs in the range (including intermediate ones with field content)
+      // For TOC: para 2 has begin/sep, paras 3-5 have TOC entries, para 6 has end
+      for (let pIdx = firstParaIdx; pIdx <= lastParaIdx; pIdx++) {
+        const paragraph = allParagraphs[pIdx];
+        if (paragraph) {
+          paragraph._isPartOfMultiParagraphField = true;
+        }
+      }
+      defaultLogger.debug(
+        `Preserving original runs for multi-paragraph field spanning paragraphs ${firstParaIdx} to ${lastParaIdx} (gap > 1)`
+      );
+      return;
+    }
+
+    // For fields spanning exactly 2 consecutive paragraphs, proceed with ComplexField
+    for (const pIdx of affectedParaIndices) {
+      const paragraph = allParagraphs[pIdx];
+      if (paragraph) {
+        paragraph._isPartOfMultiParagraphField = true;
+      }
+    }
+
     // Create the ComplexField
     const complexField = this.createComplexFieldFromRuns(runs);
     if (!complexField) {
@@ -2905,6 +3138,7 @@ export class DocumentParser {
       instructionFormatting,
       resultFormatting,
       multiParagraph: false, // Default - can be set later if needed
+      hasResult: hasSeparate, // Track if field had a separator/result section per ECMA-376
     };
 
     return new ComplexField(properties);
@@ -2989,6 +3223,48 @@ export class DocumentParser {
               break;
             }
 
+            // Deleted text element (w:delText) - inside w:del tracked changes
+            // Per ECMA-376 Part 1 §22.1.2.27, deleted text uses w:delText instead of w:t
+            case "w:delText": {
+              const delTextElements = toArray(runObj["w:delText"]);
+              if (elementIndex >= delTextElements.length) {
+                defaultLogger.debug(
+                  "[DocumentParser] Invalid _orderedChildren index for w:delText",
+                  { index: elementIndex, arrayLength: delTextElements.length }
+                );
+                break;
+              }
+              const te = delTextElements[elementIndex];
+              if (te !== undefined && te !== null) {
+                const text = extractTextValue(te);
+                if (text) {
+                  // Store as deleted text - same as regular text for content purposes
+                  content.push({ type: "text", value: text, isDeleted: true });
+                }
+              }
+              break;
+            }
+
+            // Deleted instruction text (w:delInstrText) - inside w:del for field codes
+            // Per ECMA-376 Part 1 §22.1.2.26, deleted field instructions use w:delInstrText
+            case "w:delInstrText": {
+              const delInstrElements = toArray(runObj["w:delInstrText"]);
+              if (elementIndex >= delInstrElements.length) {
+                defaultLogger.debug(
+                  "[DocumentParser] Invalid _orderedChildren index for w:delInstrText",
+                  { index: elementIndex, arrayLength: delInstrElements.length }
+                );
+                break;
+              }
+              const instr = delInstrElements[elementIndex];
+              if (instr !== undefined && instr !== null) {
+                const text = extractTextValue(instr);
+                // Store as instruction text - field assembly will handle it
+                content.push({ type: "instructionText", value: text, isDeleted: true });
+              }
+              break;
+            }
+
             case "w:fldChar": {
               const fldChars = toArray(runObj["w:fldChar"]);
               // Bounds check with debug logging for malformed documents
@@ -3054,7 +3330,7 @@ export class DocumentParser {
         }
       } else {
         // Fallback: No _orderedChildren (older parser or simple run with single text)
-        console.warn('[DocumentParser] _orderedChildren missing - using fallback element ordering which may affect tab/break positions');
+        defaultLogger.warn('[DocumentParser] _orderedChildren missing - using fallback element ordering which may affect tab/break positions');
         // Extract text elements (can be array if multiple <w:t> in one run)
         const textElement = runObj["w:t"];
         if (textElement !== undefined && textElement !== null) {
@@ -3074,6 +3350,30 @@ export class DocumentParser {
           for (const instr of instrElements) {
             const text = extractTextValue(instr);
             content.push({ type: "instructionText", value: text });
+          }
+        }
+
+        // Handle deleted text (w:delText) - inside w:del tracked changes
+        // Per ECMA-376 Part 1 §22.1.2.27
+        const delTextElement = runObj["w:delText"];
+        if (delTextElement !== undefined && delTextElement !== null) {
+          const delTextElements = toArray(delTextElement);
+          for (const te of delTextElements) {
+            const text = extractTextValue(te);
+            if (text) {
+              content.push({ type: "text", value: text, isDeleted: true });
+            }
+          }
+        }
+
+        // Handle deleted instruction text (w:delInstrText) - inside w:del for field codes
+        // Per ECMA-376 Part 1 §22.1.2.26
+        const delInstrTextElement = runObj["w:delInstrText"];
+        if (delInstrTextElement !== undefined && delInstrTextElement !== null) {
+          const delInstrElements = toArray(delInstrTextElement);
+          for (const instr of delInstrElements) {
+            const text = extractTextValue(instr);
+            content.push({ type: "instructionText", value: text, isDeleted: true });
           }
         }
 
@@ -3297,6 +3597,17 @@ export class DocumentParser {
         );
       }
 
+      // Skip hyperlinks that have no destination (neither URL nor anchor nor relationship ID)
+      // This can happen with malformed HYPERLINK field codes or corrupted documents
+      // Note: If there's a relationshipId but the relationship is missing, we still keep the hyperlink
+      // (it has text and a reference that might be resolved later or is just broken)
+      if (!url && !finalAnchor && !finalRelationshipId) {
+        defaultLogger.debug(
+          `[DocumentParser] Skipping hyperlink with no URL, anchor, or relationship ID. Text: "${displayText}"`
+        );
+        return result;
+      }
+
       const hyperlink = new Hyperlink({
         url,
         anchor: finalAnchor,
@@ -3342,6 +3653,47 @@ export class DocumentParser {
   ): void {
     const content = paragraph.getContent();
     if (!content || content.length < 2) return;
+
+    // Guard: Skip merge when tracking is enabled - it corrupts field structures
+    // The clearContent() + addHyperlink() pattern creates new revisions
+    // that end up at the wrong position in the content array, placing them
+    // OUTSIDE field boundaries when field codes are present
+    const trackingEnabled = (paragraph as any).trackingContext?.isEnabled();
+    if (trackingEnabled) {
+      const hasFieldContent = content.some((item) => {
+        if (item instanceof Run) {
+          const runContent = item.getContent();
+          return runContent.some(
+            (c: any) => c.type === "fieldChar" || c.type === "instructionText"
+          );
+        }
+        // Also check inside Revisions for field content
+        if (item instanceof Revision) {
+          const revContent = item.getContent();
+          for (const inner of revContent) {
+            if (inner instanceof Run) {
+              const innerRunContent = inner.getContent();
+              if (
+                innerRunContent.some(
+                  (c: any) =>
+                    c.type === "fieldChar" || c.type === "instructionText"
+                )
+              ) {
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      });
+
+      if (hasFieldContent) {
+        defaultLogger.debug(
+          "Skipping hyperlink merge: tracking enabled with field content present"
+        );
+        return;
+      }
+    }
 
     const mergedContent: any[] = [];
     let i = 0;
@@ -3651,12 +4003,37 @@ export class DocumentParser {
       run.setSize(parseInt(rPrObj["w:sz"]["@_w:val"], 10) / 2);
     }
 
+    // Parse complex script font size (w:szCs) per ECMA-376 Part 1 §17.3.2.40
+    // This is separate from regular size to support RTL languages
+    if (rPrObj["w:szCs"]) {
+      const szCsVal = parseInt(rPrObj["w:szCs"]["@_w:val"], 10) / 2;
+      // Only set sizeCs if it differs from size (to avoid redundant storage)
+      // When sz is not present (undefined), always store szCs
+      const sizeVal = rPrObj["w:sz"] ? parseInt(rPrObj["w:sz"]["@_w:val"], 10) / 2 : undefined;
+      if (sizeVal === undefined || szCsVal !== sizeVal) {
+        run.setSizeCs(szCsVal);
+      }
+    }
+
     if (rPrObj["w:color"]) {
-      const colorVal = rPrObj["w:color"]["@_w:val"];
+      const colorObj = rPrObj["w:color"];
+      const colorVal = colorObj["@_w:val"];
       // Skip special OOXML values like "auto" (automatic/inherit from style)
       // "auto" is a valid OOXML color that means inherit - not a hex color
       if (colorVal && colorVal !== "auto") {
         run.setColor(colorVal);
+      }
+      // Parse theme color attributes per ECMA-376 Part 1 Section 17.3.2.6
+      if (colorObj["@_w:themeColor"]) {
+        run.setThemeColor(colorObj["@_w:themeColor"]);
+      }
+      if (colorObj["@_w:themeTint"]) {
+        // Theme tint is stored as hex string, convert to number
+        run.setThemeTint(parseInt(colorObj["@_w:themeTint"], 16));
+      }
+      if (colorObj["@_w:themeShade"]) {
+        // Theme shade is stored as hex string, convert to number
+        run.setThemeShade(parseInt(colorObj["@_w:themeShade"], 16));
       }
     }
 
@@ -3711,11 +4088,31 @@ export class DocumentParser {
           prevProps.size = safeParseInt(prevRPr["w:sz"]["@_w:val"]) / 2;
         }
 
-        // Parse previous color
+        // Parse previous complex script size (w:szCs) per ECMA-376 Part 1 §17.3.2.40
+        if (prevRPr["w:szCs"]) {
+          const szCsVal = safeParseInt(prevRPr["w:szCs"]["@_w:val"]) / 2;
+          // Only store if different from regular size
+          if (!prevRPr["w:sz"] || szCsVal !== prevProps.size) {
+            prevProps.sizeCs = szCsVal;
+          }
+        }
+
+        // Parse previous color (per ECMA-376 Part 1 Section 17.3.2.6)
         if (prevRPr["w:color"]) {
-          const colorVal = prevRPr["w:color"]["@_w:val"];
+          const colorObj = prevRPr["w:color"];
+          const colorVal = colorObj["@_w:val"];
           if (colorVal && colorVal !== "auto") {
             prevProps.color = colorVal;
+          }
+          // Parse theme color attributes
+          if (colorObj["@_w:themeColor"]) {
+            prevProps.themeColor = colorObj["@_w:themeColor"];
+          }
+          if (colorObj["@_w:themeTint"]) {
+            prevProps.themeTint = parseInt(colorObj["@_w:themeTint"], 16);
+          }
+          if (colorObj["@_w:themeShade"]) {
+            prevProps.themeShade = parseInt(colorObj["@_w:themeShade"], 16);
           }
         }
 
@@ -4024,6 +4421,7 @@ export class DocumentParser {
       // Border is stored as a:ln element inside pic:spPr
       const spPrObj = picPicObj["pic:spPr"];
       let border: { width: number } | undefined = undefined;
+      let rotation = 0;
       if (spPrObj) {
         const lnObj = spPrObj["a:ln"];
         if (lnObj) {
@@ -4032,6 +4430,12 @@ export class DocumentParser {
           if (widthEmu > 0) {
             border = { width: widthEmu / 12700 };
           }
+        }
+        // Parse rotation from a:xfrm/@rot (ECMA-376 §20.1.7.6)
+        // Rotation is stored as 60000ths of a degree in OOXML
+        const xfrmObj = spPrObj["a:xfrm"];
+        if (xfrmObj?.["@_rot"]) {
+          rotation = parseInt(xfrmObj["@_rot"], 10) / 60000;
         }
       }
 
@@ -4090,6 +4494,7 @@ export class DocumentParser {
         crop,
         effects,
         border,
+        rotation,
       });
 
       // Register image with ImageManager (preserve original filename for round-trip integrity)
@@ -4499,6 +4904,18 @@ export class DocumentParser {
         table.setAlignment(alignment as "left" | "center" | "right");
       }
     }
+
+    // Parse table shading (w:shd) per ECMA-376 Part 1 §17.4.56
+    if (tblPrObj["w:shd"]) {
+      const shd = tblPrObj["w:shd"];
+      const shading: any = {};
+      if (shd["@_w:val"]) shading.pattern = shd["@_w:val"];
+      if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
+      if (shd["@_w:color"]) shading.color = shd["@_w:color"];
+      if (Object.keys(shading).length > 0) {
+        table.setShading(shading);
+      }
+    }
   }
 
   private async parseTableRowFromObject(
@@ -4865,6 +5282,66 @@ export class DocumentParser {
           } else {
             cell.setVerticalMerge("continue");
           }
+        }
+
+        // Parse table cell insertion marker (w:cellIns) per ECMA-376 Part 1 §17.13.5.5
+        if (tcPr["w:cellIns"]) {
+          const cellIns = tcPr["w:cellIns"];
+          const id = parseInt(cellIns["@_w:id"] || "0", 10);
+          const author = cellIns["@_w:author"] || "Unknown";
+          const dateAttr = cellIns["@_w:date"];
+          const date = dateAttr ? new Date(dateAttr) : new Date();
+
+          const revision = new Revision({
+            id,
+            author,
+            date,
+            type: "tableCellInsert",
+            content: [],
+          });
+          cell.setCellRevision(revision);
+        }
+
+        // Parse table cell deletion marker (w:cellDel) per ECMA-376 Part 1 §17.13.5.6
+        if (tcPr["w:cellDel"]) {
+          const cellDel = tcPr["w:cellDel"];
+          const id = parseInt(cellDel["@_w:id"] || "0", 10);
+          const author = cellDel["@_w:author"] || "Unknown";
+          const dateAttr = cellDel["@_w:date"];
+          const date = dateAttr ? new Date(dateAttr) : new Date();
+
+          const revision = new Revision({
+            id,
+            author,
+            date,
+            type: "tableCellDelete",
+            content: [],
+          });
+          cell.setCellRevision(revision);
+        }
+
+        // Parse table cell merge marker (w:cellMerge) per ECMA-376 Part 1 §17.13.5.4
+        if (tcPr["w:cellMerge"]) {
+          const cellMerge = tcPr["w:cellMerge"];
+          const id = parseInt(cellMerge["@_w:id"] || "0", 10);
+          const author = cellMerge["@_w:author"] || "Unknown";
+          const dateAttr = cellMerge["@_w:date"];
+          const date = dateAttr ? new Date(dateAttr) : new Date();
+          const vMergeAttr = cellMerge["@_w:vMerge"];
+          const vMergeOrigAttr = cellMerge["@_w:vMergeOrig"];
+
+          const revision = new Revision({
+            id,
+            author,
+            date,
+            type: "tableCellMerge",
+            content: [],
+            previousProperties: {
+              vMerge: vMergeAttr,
+              vMergeOrig: vMergeOrigAttr,
+            },
+          });
+          cell.setCellRevision(revision);
         }
       }
 
@@ -6732,6 +7209,25 @@ export class DocumentParser {
       pPrXml.includes("<w:contextualSpacing ")
     ) {
       formatting.contextualSpacing = true;
+    }
+
+    // Parse outline level (w:outlineLvl) - used for TOC generation
+    // Per ECMA-376 Part 1 §17.3.1.20: val is 0-8 (heading levels 1-9)
+    const outlineLvlElement = XMLParser.extractSelfClosingTag(
+      pPrXml,
+      "w:outlineLvl"
+    );
+    if (outlineLvlElement) {
+      const outlineVal = XMLParser.extractAttribute(
+        `<w:outlineLvl${outlineLvlElement}`,
+        "w:val"
+      );
+      if (outlineVal) {
+        const level = parseInt(outlineVal, 10);
+        if (!isNaN(level) && level >= 0 && level <= 8) {
+          formatting.outlineLevel = level;
+        }
+      }
     }
 
     return formatting;
