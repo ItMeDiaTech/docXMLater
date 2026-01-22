@@ -5,6 +5,61 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.0.0] - 2025-01-22
+
+### Added
+
+- **Run Complex Script Font Size (w:szCs)**
+  - `setSizeCs(size)` - Set font size for complex scripts (RTL text like Arabic, Hebrew)
+  - `getSizeCs()` - Get complex script font size
+  - New `sizeCs` property in RunFormatting interface
+  - Per ECMA-376 Part 1 Section 17.3.2.40
+
+- **Run Theme Color Support**
+  - `setThemeColor(themeColor)` - Set color from document theme
+  - `setThemeTint(tint)` - Apply tint (0-255, toward white)
+  - `setThemeShade(shade)` - Apply shade (0-255, toward black)
+  - New properties: `themeColor`, `themeTint`, `themeShade`
+  - `ThemeColorValue` type exported with 16 standard theme colors
+
+- **Revision Field Context Tracking**
+  - `getFieldContext()` / `setFieldContext()` - Track revision position in fields
+  - `isInsideField()` / `isInsideFieldResult()` / `isInsideFieldInstruction()`
+  - New `FieldContext` interface with `position` and `instruction` properties
+
+- **Table Cell Revision Support**
+  - New revision types: `tableCellInsert`, `tableCellDelete`, `tableCellMerge`
+  - `setCellRevision()` / `getCellRevision()` / `hasCellRevision()` on TableCell
+
+- **NumberingLevel Restart Support (w:lvlRestart)**
+  - `getLvlRestart()` / `setLvlRestart(level)` - Control which level restarts
+  - Per ECMA-376 Part 1 Section 17.9.11
+  - Useful for legal documents with continuous sub-numbering
+
+### Fixed
+
+- **Hyperlink Defragmentation with Track Changes**
+  - `defragmentHyperlinks()` now guards against track changes conflicts
+  - Prevents field corruption when track changes is enabled
+  - Logs clear warning message when skipped
+
+- **InstructionText Preservation in Run.setText()**
+  - `setText()` now preserves `instructionText` content type for field instructions
+  - Prevents field codes from displaying as visible text
+
+### Tests
+
+- 70+ new test cases across 7 new test files
+- RunComplexScriptSize.test.ts (12 tests)
+- RunThemeColor.test.ts (18 tests)
+- RunInstructionText.test.ts (7 tests)
+- RevisionFieldContext.test.ts (10+ tests)
+- TableCellRevision.test.ts (10+ tests)
+- NumberingLevelRestart.test.ts (20 tests)
+- HyperlinkDefragmentWithRevisions.test.ts (regression tests)
+
+---
+
 ## [8.1.0] - 2025-12-25
 
 ### Added
