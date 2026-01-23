@@ -572,6 +572,110 @@ export class Run {
   }
 
   /**
+   * Gets the bold formatting value
+   * @returns True if bold, false otherwise
+   */
+  getBold(): boolean {
+    return this.formatting.bold ?? false;
+  }
+
+  /**
+   * Gets the italic formatting value
+   * @returns True if italic, false otherwise
+   */
+  getItalic(): boolean {
+    return this.formatting.italic ?? false;
+  }
+
+  /**
+   * Gets the underline style
+   * @returns Underline style (string, boolean, or undefined)
+   */
+  getUnderline(): boolean | "none" | "single" | "double" | "dotted" | "thick" | "dash" | undefined {
+    return this.formatting.underline;
+  }
+
+  /**
+   * Gets the strikethrough formatting value
+   * @returns True if strikethrough, false otherwise
+   */
+  getStrike(): boolean {
+    return this.formatting.strike ?? false;
+  }
+
+  /**
+   * Gets the font family name
+   * @returns Font name or undefined if not set
+   */
+  getFont(): string | undefined {
+    return this.formatting.font;
+  }
+
+  /**
+   * Gets the font size in half-points
+   * @returns Size in half-points or undefined if not set
+   */
+  getSize(): number | undefined {
+    return this.formatting.size;
+  }
+
+  /**
+   * Gets the text color as hex string
+   * @returns Color hex string or undefined if not set
+   */
+  getColor(): string | undefined {
+    return this.formatting.color;
+  }
+
+  /**
+   * Gets the highlight color
+   * @returns Highlight color name or undefined if not set
+   */
+  getHighlight(): string | undefined {
+    return this.formatting.highlight;
+  }
+
+  /**
+   * Gets the subscript formatting value
+   * @returns True if subscript, false otherwise
+   */
+  getSubscript(): boolean {
+    return this.formatting.subscript ?? false;
+  }
+
+  /**
+   * Gets the superscript formatting value
+   * @returns True if superscript, false otherwise
+   */
+  getSuperscript(): boolean {
+    return this.formatting.superscript ?? false;
+  }
+
+  /**
+   * Gets whether the run is right-to-left text
+   * @returns True if RTL, false otherwise
+   */
+  isRTL(): boolean {
+    return this.formatting.rtl ?? false;
+  }
+
+  /**
+   * Gets the small caps formatting value
+   * @returns True if small caps, false otherwise
+   */
+  getSmallCaps(): boolean {
+    return this.formatting.smallCaps ?? false;
+  }
+
+  /**
+   * Gets the all caps formatting value
+   * @returns True if all caps, false otherwise
+   */
+  getAllCaps(): boolean {
+    return this.formatting.allCaps ?? false;
+  }
+
+  /**
    * Gets effective bold formatting, resolving from:
    * 1. Direct formatting on this run
    * 2. Table conditional formatting (if in a table cell)

@@ -58,9 +58,9 @@ export const FORMAT_TO_LEVEL: Record<string, number> = {
   upperLetter: 1,  // A., B., C.
   lowerRoman: 2,   // i., ii., iii.
   upperRoman: 2,   // I., II., III.
-  bullet: 1,       // When converting to numbered
-  dash: 1,         // When converting to numbered
-  arrow: 1,        // When converting to numbered
+  bullet: 0,       // Top-level bullet (filled circle)
+  dash: 0,         // Top-level dash marker
+  arrow: 0,        // Top-level arrow marker
 };
 
 /**

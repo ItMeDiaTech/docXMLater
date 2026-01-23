@@ -858,7 +858,8 @@ describe('Numbering Parsing Fixes', () => {
   });
 
   describe('NumberingLevel.fromXML bold property parsing', () => {
-    it('should parse bold=true from self-closing w:b element', () => {
+    it('should always set bold=false regardless of source XML w:b element', () => {
+      // Bullet/number symbols should never be bold - source XML is ignored
       const xml = `
         <w:lvl w:ilvl="0">
           <w:numFmt w:val="bullet"/>
@@ -869,10 +870,10 @@ describe('Numbering Parsing Fixes', () => {
         </w:lvl>
       `;
       const level = NumberingLevel.fromXML(xml);
-      expect(level.getProperties().bold).toBe(true);
+      expect(level.getProperties().bold).toBe(false);
     });
 
-    it('should parse bold=false from w:b w:val="0"', () => {
+    it('should return bold=false when w:b w:val="0"', () => {
       const xml = `
         <w:lvl w:ilvl="0">
           <w:numFmt w:val="lowerLetter"/>
@@ -886,7 +887,7 @@ describe('Numbering Parsing Fixes', () => {
       expect(level.getProperties().bold).toBe(false);
     });
 
-    it('should default bold to true when no w:b element present', () => {
+    it('should default bold to false when no w:b element present', () => {
       const xml = `
         <w:lvl w:ilvl="0">
           <w:numFmt w:val="decimal"/>
@@ -897,7 +898,7 @@ describe('Numbering Parsing Fixes', () => {
         </w:lvl>
       `;
       const level = NumberingLevel.fromXML(xml);
-      expect(level.getProperties().bold).toBe(true);
+      expect(level.getProperties().bold).toBe(false);
     });
 
     it('should parse color from w:color element', () => {

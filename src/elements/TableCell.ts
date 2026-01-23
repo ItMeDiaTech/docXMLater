@@ -738,6 +738,74 @@ export class TableCell {
   }
 
   // ============================================================================
+  // Individual Formatting Getters
+  // ============================================================================
+
+  /**
+   * Gets the cell width in twips
+   * @returns Width in twips or undefined if not set
+   */
+  getWidth(): number | undefined {
+    return this.formatting.width;
+  }
+
+  /**
+   * Gets the cell width type
+   * @returns Width type ('auto', 'dxa', 'pct', 'nil') or undefined
+   */
+  getWidthType(): string | undefined {
+    return this.formatting.widthType;
+  }
+
+  /**
+   * Gets the vertical alignment of cell content
+   * @returns Vertical alignment ('top', 'center', 'bottom') or undefined
+   */
+  getVerticalAlignment(): string | undefined {
+    return this.formatting.verticalAlignment;
+  }
+
+  /**
+   * Gets the vertical merge state
+   * @returns Vertical merge state ('restart', 'continue') or undefined
+   */
+  getVerticalMerge(): VerticalMerge | undefined {
+    return this.formatting.vMerge;
+  }
+
+  /**
+   * Gets the cell margins
+   * @returns Margins object with top, right, bottom, left or undefined
+   */
+  getMargins(): CellMargins | undefined {
+    return this.formatting.margins;
+  }
+
+  /**
+   * Gets the cell borders
+   * @returns Borders object or undefined
+   */
+  getBorders(): CellBorders | undefined {
+    return this.formatting.borders;
+  }
+
+  /**
+   * Gets the cell shading/background
+   * @returns Shading object or undefined
+   */
+  getShading(): CellShading | undefined {
+    return this.formatting.shading;
+  }
+
+  /**
+   * Gets the text direction for the cell
+   * @returns Text direction or undefined
+   */
+  getTextDirection(): string | undefined {
+    return this.formatting.textDirection;
+  }
+
+  // ============================================================================
   // RAW NESTED CONTENT (Tables, SDTs preserved as XML)
   // ============================================================================
 

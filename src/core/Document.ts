@@ -1122,6 +1122,95 @@ export class Document {
     return this.getAllParagraphs();
   }
 
+  // ============================================================================
+  // Direct Index Access & Navigation Helpers
+  // ============================================================================
+
+  /**
+   * Gets a paragraph at a specific index from top-level body elements
+   * @param index - The index of the paragraph (0-based)
+   * @returns The paragraph at that index, or undefined if out of bounds
+   */
+  getParagraphAt(index: number): Paragraph | undefined {
+    const paragraphs = this.bodyElements.filter(
+      (el): el is Paragraph => el instanceof Paragraph
+    );
+    return paragraphs[index];
+  }
+
+  /**
+   * Gets a table at a specific index from top-level body elements
+   * @param index - The index of the table (0-based)
+   * @returns The table at that index, or undefined if out of bounds
+   */
+  getTableAt(index: number): Table | undefined {
+    const tables = this.bodyElements.filter(
+      (el): el is Table => el instanceof Table
+    );
+    return tables[index];
+  }
+
+  /**
+   * Gets a body element at a specific index
+   * @param index - The index of the element (0-based)
+   * @returns The body element at that index, or undefined if out of bounds
+   */
+  getBodyElementAt(index: number): BodyElement | undefined {
+    return this.bodyElements[index];
+  }
+
+  /**
+   * Gets the index of a paragraph within the top-level body elements
+   * @param paragraph - The paragraph to find
+   * @returns The index of the paragraph, or -1 if not found
+   */
+  getParagraphIndex(paragraph: Paragraph): number {
+    const paragraphs = this.bodyElements.filter(
+      (el): el is Paragraph => el instanceof Paragraph
+    );
+    return paragraphs.indexOf(paragraph);
+  }
+
+  /**
+   * Gets the index of a table within the top-level body elements
+   * @param table - The table to find
+   * @returns The index of the table, or -1 if not found
+   */
+  getTableIndex(table: Table): number {
+    const tables = this.bodyElements.filter(
+      (el): el is Table => el instanceof Table
+    );
+    return tables.indexOf(table);
+  }
+
+  /**
+   * Gets the next paragraph after the given paragraph
+   * @param paragraph - The current paragraph
+   * @returns The next paragraph, or undefined if none exists
+   */
+  getNextParagraph(paragraph: Paragraph): Paragraph | undefined {
+    const paragraphs = this.bodyElements.filter(
+      (el): el is Paragraph => el instanceof Paragraph
+    );
+    const index = paragraphs.indexOf(paragraph);
+    return index >= 0 && index < paragraphs.length - 1
+      ? paragraphs[index + 1]
+      : undefined;
+  }
+
+  /**
+   * Gets the previous paragraph before the given paragraph
+   * @param paragraph - The current paragraph
+   * @returns The previous paragraph, or undefined if none exists
+   */
+  getPreviousParagraph(paragraph: Paragraph): Paragraph | undefined {
+    const paragraphs = this.bodyElements.filter(
+      (el): el is Paragraph => el instanceof Paragraph
+    );
+    const index = paragraphs.indexOf(paragraph);
+    return index > 0 ? paragraphs[index - 1] : undefined;
+  }
+
   /**
    * Gets all tables in the document recursively
    * Includes tables inside SDTs
@@ -2729,7 +2818,7 @@ export class Document {
               if (headerRowFormatting.bold) run.setBold(true);
               run.setFont(headerRowFormatting.font, headerRowFormatting.size);
               // Preserve white font - don't change color if run is white (FFFFFF)
-              const currentColor = run.getFormatting().color?.toUpperCase();
+              const currentColor = run.getColor()?.toUpperCase();
               if (currentColor !== 'FFFFFF') {
                 run.setColor(headerRowFormatting.color);
               }
@@ -2750,7 +2839,7 @@ export class Document {
 
           // Apply shading and formatting to cells with existing shading
           // Shading can be either a hex fill color OR a pattern (like pct10)
-          const currentShading = cell.getFormatting().shading;
+          const currentShading = cell.getShading();
           const currentColor = currentShading?.fill?.toUpperCase();
           const currentPattern = currentShading?.pattern?.toLowerCase();
 
@@ -2791,7 +2880,7 @@ export class Document {
                 run.setBold(true);
                 run.setFont("Verdana", 12);
                 // Preserve white font - don't change color if run is white (FFFFFF)
-                const currentColor = run.getFormatting().color?.toUpperCase();
+                const currentColor = run.getColor()?.toUpperCase();
                 if (currentColor !== 'FFFFFF') {
                   run.setColor("000000");
                 }
@@ -4139,7 +4228,7 @@ export class Document {
         const allRuns = this.getAllRunsFromParagraph(para);
         const whiteFontRuns = new Set(
           options?.preserveWhiteFont
-            ? allRuns.filter(run => run.getFormatting().color?.toUpperCase() === 'FFFFFF')
+            ? allRuns.filter(run => run.getColor()?.toUpperCase() === 'FFFFFF')
             : []
         );
 
@@ -4263,7 +4352,7 @@ export class Document {
         const allRuns = this.getAllRunsFromParagraph(para);
         const whiteFontRuns = new Set(
           options?.preserveWhiteFont
-            ? allRuns.filter(run => run.getFormatting().color?.toUpperCase() === 'FFFFFF')
+            ? allRuns.filter(run => run.getColor()?.toUpperCase() === 'FFFFFF')
             : []
         );
 
@@ -4437,7 +4526,7 @@ export class Document {
         const allRuns = this.getAllRunsFromParagraph(para);
         const whiteFontRuns = new Set(
           options?.preserveWhiteFont
-            ? allRuns.filter(run => run.getFormatting().color?.toUpperCase() === 'FFFFFF')
+            ? allRuns.filter(run => run.getColor()?.toUpperCase() === 'FFFFFF')
             : []
         );
 
@@ -4525,8 +4614,8 @@ export class Document {
           const allRuns = this.getAllRunsFromParagraph(para);
           const preservedBold = allRuns.map((run) => ({
             run,
-            bold: run.getFormatting().bold,
-            isWhiteFont: options?.preserveWhiteFont && run.getFormatting().color?.toUpperCase() === 'FFFFFF',
+            bold: run.getBold(),
+            isWhiteFont: options?.preserveWhiteFont && run.getColor()?.toUpperCase() === 'FFFFFF',
           }));
 
           // Process as Normal style - skip ListParagraph processing
@@ -4676,7 +4765,7 @@ export class Document {
 
         // Save center alignment BEFORE clearing if preserveCenterAlignment is set
         const savedCenterAlignment = options?.normal?.preserveCenterAlignment &&
-          para.getFormatting().alignment === 'center';
+          para.getAlignment() === 'center';
 
         para.clearDirectFormattingConflicts(normal);
 
@@ -5708,10 +5797,13 @@ export class Document {
           const secondText = secondElem.getText().trim().toLowerCase();
           
           // Detect warning pattern - look for "warning" or "caution" keywords
-          const isWarningFirst = firstText.includes('warning') || firstText.includes('caution') || 
+          const isWarningFirst = firstText.includes('warning') || firstText.includes('caution') ||
                                  firstText.includes('important') || firstText.includes('note');
           const hasSecondLine = secondText.length > 0;
-          
+
+          // Skip if this paragraph is within a list context (e.g., "Note:" between bullet items)
+          if (this.isWithinListContext(i)) continue;
+
           // Additional check: the warning is typically 2 consecutive non-empty paragraphs
           // with similar formatting or style
           if (isWarningFirst && hasSecondLine && i > 0) {
@@ -5758,11 +5850,19 @@ export class Document {
           if (numbering) {
             // This is a list item - check if it's the last item of its list
             const nextElement = this.bodyElements[i + 1];
+
+            // Check if next non-list paragraph is within the same list context
+            // (e.g., "Example:" or "Note:" between list items)
+            const nextIsWithinList =
+              nextElement instanceof Paragraph &&
+              !nextElement.getNumbering() &&
+              this.isWithinListContext(i + 1);
+
             const isListEnd =
               !nextElement || // End of document
               !(nextElement instanceof Paragraph) || // Next is not a paragraph
-              !nextElement.getNumbering() || // Next paragraph has no numbering
-              nextElement.getNumbering()!.numId !== numbering.numId; // Different list
+              (!nextElement.getNumbering() && !nextIsWithinList) || // No numbering AND not within list context
+              (nextElement.getNumbering() && nextElement.getNumbering()!.numId !== numbering.numId); // Different list
 
             if (isListEnd) {
               // Check if there's already a blank paragraph after the list
@@ -5824,10 +5924,17 @@ export class Document {
 
               // This is a list item - check if it's the last item of its list in this cell
               const nextParaInCell = cellParas[ci + 1];
+
+              // Check if next non-list paragraph is within the same list context in the cell
+              const nextIsWithinListInCell =
+                nextParaInCell &&
+                !nextParaInCell.getNumbering() &&
+                this.isWithinListContextInCell(cell, ci + 1);
+
               const isListEndInCell =
                 !nextParaInCell || // End of cell
-                !nextParaInCell.getNumbering() || // Next has no numbering
-                nextParaInCell.getNumbering()!.numId !== numbering.numId; // Different list
+                (!nextParaInCell.getNumbering() && !nextIsWithinListInCell) || // No numbering AND not within list context
+                (nextParaInCell.getNumbering() && nextParaInCell.getNumbering()!.numId !== numbering.numId); // Different list
 
               if (isListEndInCell) {
                 // Check if this is the last paragraph in the cell - don't add blank
@@ -6019,6 +6126,9 @@ export class Document {
           const numbering = element.getNumbering();
           if (numbering) continue;
 
+          // Skip paragraphs within a list context (e.g., "Example:" between bullet items)
+          if (this.isWithinListContext(i)) continue;
+
           // Skip indented paragraphs - don't add blank lines above indented bold+colon
           const indentation = element.getFormatting().indentation;
           if (indentation && indentation.left && indentation.left > 0) continue;
@@ -6094,6 +6204,9 @@ export class Document {
 
               // Skip list items
               if (para.getNumbering()) continue;
+
+              // Skip paragraphs within a list context in the cell
+              if (this.isWithinListContextInCell(cell, ci)) continue;
 
               // Check bold+colon condition
               if (!this.startsWithBoldColon(para)) continue;
@@ -6610,7 +6723,7 @@ export class Document {
     levelsModified: number;
   } {
     const {
-      bold = true,
+      bold = false,
       fontSize = 24, // 12pt
       color = "000000",
       font = "Arial",
@@ -6689,7 +6802,7 @@ export class Document {
     levelsModified: number;
   } {
     const {
-      bold = true,
+      bold = false,
       fontSize = 24, // 12pt
       color = "000000",
       font = "Verdana",
@@ -7297,6 +7410,108 @@ export class Document {
 
     const first55 = fullText.substring(0, 55);
     return first55.includes(':');
+  }
+
+  /**
+   * Checks if a non-list paragraph is "within" a list context.
+   * A paragraph is within a list context if:
+   * - It has no numbering (not a list item itself)
+   * - The previous list item and next list item share the same numId
+   *
+   * This prevents blank lines from being added above paragraphs like
+   * "Example:" or "Note:" that appear between list items.
+   *
+   * @param index The index of the paragraph in bodyElements
+   * @returns True if the paragraph is within a list context
+   * @private
+   */
+  private isWithinListContext(index: number): boolean {
+    const current = this.bodyElements[index];
+    if (!(current instanceof Paragraph)) {
+      return false;
+    }
+
+    // If current is a list item, it's not "within" - it IS the list
+    const currentNum = current.getNumbering();
+    if (currentNum) {
+      return false;
+    }
+
+    // Find previous list item (scanning backwards)
+    let prevNumId: number | undefined;
+    for (let i = index - 1; i >= 0; i--) {
+      const el = this.bodyElements[i];
+      if (el instanceof Paragraph) {
+        const num = el.getNumbering();
+        if (num) {
+          prevNumId = num.numId;
+          break;
+        }
+      } else if (el instanceof Table) {
+        // Stop at table boundaries
+        break;
+      }
+    }
+
+    // Find next list item (scanning forwards)
+    let nextNumId: number | undefined;
+    for (let i = index + 1; i < this.bodyElements.length; i++) {
+      const el = this.bodyElements[i];
+      if (el instanceof Paragraph) {
+        const num = el.getNumbering();
+        if (num) {
+          nextNumId = num.numId;
+          break;
+        }
+      } else if (el instanceof Table) {
+        // Stop at table boundaries
+        break;
+      }
+    }
+
+    // "Within" = sandwiched between items of the SAME list
+    return prevNumId !== undefined && nextNumId !== undefined && prevNumId === nextNumId;
+  }
+
+  /**
+   * Checks if a non-list paragraph within a table cell is "within" a list context.
+   * Similar to isWithinListContext but operates within a single table cell.
+   *
+   * @param cell The table cell containing the paragraph
+   * @param paraIndex The index of the paragraph within the cell
+   * @returns True if the paragraph is within a list context in the cell
+   * @private
+   */
+  private isWithinListContextInCell(cell: TableCell, paraIndex: number): boolean {
+    const cellParas = cell.getParagraphs();
+    const current = cellParas[paraIndex];
+    if (!current) return false;
+
+    // If current is a list item, it's not "within" - it IS the list
+    const currentNum = current.getNumbering();
+    if (currentNum) return false;
+
+    // Find previous list item
+    let prevNumId: number | undefined;
+    for (let i = paraIndex - 1; i >= 0; i--) {
+      const num = cellParas[i]?.getNumbering();
+      if (num) {
+        prevNumId = num.numId;
+        break;
+      }
+    }
+
+    // Find next list item
+    let nextNumId: number | undefined;
+    for (let i = paraIndex + 1; i < cellParas.length; i++) {
+      const num = cellParas[i]?.getNumbering();
+      if (num) {
+        nextNumId = num.numId;
+        break;
+      }
+    }
+
+    return prevNumId !== undefined && nextNumId !== undefined && prevNumId === nextNumId;
   }
 
   /**

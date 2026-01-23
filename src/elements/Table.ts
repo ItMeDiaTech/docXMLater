@@ -965,6 +965,110 @@ export class Table {
     return { ...this.formatting };
   }
 
+  // ============================================================================
+  // Individual Formatting Getters
+  // ============================================================================
+
+  /**
+   * Gets the table width in twips
+   * @returns Width in twips or undefined if not set
+   */
+  getWidth(): number | undefined {
+    return this.formatting.width;
+  }
+
+  /**
+   * Gets the table width type
+   * @returns Width type ('auto', 'dxa', 'pct', 'nil') or undefined
+   */
+  getWidthType(): string | undefined {
+    return this.formatting.widthType;
+  }
+
+  /**
+   * Gets the table horizontal alignment
+   * @returns Alignment ('left', 'center', 'right') or undefined
+   */
+  getAlignment(): string | undefined {
+    return this.formatting.alignment;
+  }
+
+  /**
+   * Gets the table layout type
+   * @returns Layout ('autofit', 'fixed') or undefined
+   */
+  getLayout(): string | undefined {
+    return this.formatting.layout;
+  }
+
+  /**
+   * Gets the table left indentation in twips
+   * @returns Indent in twips or undefined if not set
+   */
+  getIndent(): number | undefined {
+    return this.formatting.indent;
+  }
+
+  /**
+   * Gets the table borders
+   * @returns Borders object or undefined
+   */
+  getBorders(): TableFormatting['borders'] | undefined {
+    return this.formatting.borders;
+  }
+
+  /**
+   * Gets the column widths (table grid)
+   * @returns Array of column widths in twips
+   */
+  getColumnWidths(): number[] {
+    return [...(this.formatting.tableGrid || [])];
+  }
+
+  /**
+   * Gets the cell spacing value
+   * @returns Cell spacing in twips or undefined
+   */
+  getCellSpacing(): number | undefined {
+    return this.formatting.cellSpacing;
+  }
+
+  /**
+   * Gets the table style ID
+   * @returns Style ID or undefined if not set
+   */
+  getStyle(): string | undefined {
+    return this.formatting.style;
+  }
+
+  // ============================================================================
+  // Checker Methods
+  // ============================================================================
+
+  /**
+   * Checks if the table has any rows
+   * @returns True if table has rows
+   */
+  hasRows(): boolean {
+    return this.rows.length > 0;
+  }
+
+  /**
+   * Checks if the table is a floating table (has positioning)
+   * @returns True if table has positioning properties
+   */
+  isFloating(): boolean {
+    return this.formatting.position !== undefined;
+  }
+
+  /**
+   * Checks if the table has a style applied
+   * @returns True if table has a style
+   */
+  hasStyle(): boolean {
+    return this.formatting.style !== undefined && this.formatting.style !== '';
+  }
+
   /**
    * Sets the StylesManager reference for conditional formatting resolution.
    * Propagates to all paragraphs in all cells.

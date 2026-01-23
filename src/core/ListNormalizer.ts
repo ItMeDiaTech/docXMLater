@@ -337,13 +337,10 @@ export function normalizeListsInCell(
       const levelShift = levelShiftByIndex.get(index) ?? 0;
 
       // Calculate target level
-      // - Use format-based level from detection (decimal=0, letter=1, roman=2)
+      // - Use format-based level from detection (decimal=0, letter=1, roman=2, bullet=0)
       // - Apply level shift to normalize lists without parent levels
-      // - Word bullets being converted get level 1 (before shift)
-      let targetLevel = detection.inferredLevel - levelShift;
-      if (needsConversion && isWordList) {
-        targetLevel = Math.max(0, 1 - levelShift); // Word bullets → level 1, shifted
-      }
+      // - Converted Word lists use the same level calculation as typed prefixes
+      const targetLevel = Math.max(0, detection.inferredLevel - levelShift);
 
       // Process based on what type of item this is
       if (hasTypedPrefix && detection.typedPrefix) {
@@ -388,6 +385,10 @@ export function normalizeListsInCell(
       });
     }
   }
+
+  // Ensure list items don't start at orphan levels (level 1+ without level 0 parent)
+  // This handles edge cases where the level shift calculation still results in non-zero levels
+  normalizeOrphanListLevelsInCell(cell);
 
   return report;
 }

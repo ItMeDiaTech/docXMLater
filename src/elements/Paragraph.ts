@@ -1422,6 +1422,184 @@ export class Paragraph {
     return { ...this.formatting };
   }
 
+  // ============================================================================
+  // Individual Formatting Getters
+  // ============================================================================
+
+  /**
+   * Gets the left indentation in twips
+   * @returns Left indent in twips or undefined if not set
+   */
+  getLeftIndent(): number | undefined {
+    return this.formatting.indentation?.left;
+  }
+
+  /**
+   * Gets the right indentation in twips
+   * @returns Right indent in twips or undefined if not set
+   */
+  getRightIndent(): number | undefined {
+    return this.formatting.indentation?.right;
+  }
+
+  /**
+   * Gets the first line indentation in twips
+   * @returns First line indent in twips or undefined if not set
+   */
+  getFirstLineIndent(): number | undefined {
+    return this.formatting.indentation?.firstLine;
+  }
+
+  /**
+   * Gets the hanging indentation in twips
+   * @returns Hanging indent in twips or undefined if not set
+   */
+  getHangingIndent(): number | undefined {
+    return this.formatting.indentation?.hanging;
+  }
+
+  /**
+   * Gets the spacing before the paragraph in twips
+   * @returns Space before in twips or undefined if not set
+   */
+  getSpaceBefore(): number | undefined {
+    return this.formatting.spacing?.before;
+  }
+
+  /**
+   * Gets the spacing after the paragraph in twips
+   * @returns Space after in twips or undefined if not set
+   */
+  getSpaceAfter(): number | undefined {
+    return this.formatting.spacing?.after;
+  }
+
+  /**
+   * Gets the line spacing value
+   * @returns Line spacing value or undefined if not set
+   */
+  getLineSpacing(): number | undefined {
+    return this.formatting.spacing?.line;
+  }
+
+  /**
+   * Gets the paragraph alignment
+   * @returns Alignment ('left', 'center', 'right', 'justify') or undefined
+   */
+  getAlignment(): string | undefined {
+    return this.formatting.alignment;
+  }
+
+  /**
+   * Gets the keepNext property (keep with next paragraph)
+   * @returns True if keepNext is set
+   */
+  getKeepNext(): boolean {
+    return this.formatting.keepNext ?? false;
+  }
+
+  /**
+   * Gets the keepLines property (keep lines together)
+   * @returns True if keepLines is set
+   */
+  getKeepLines(): boolean {
+    return this.formatting.keepLines ?? false;
+  }
+
+  /**
+   * Gets the pageBreakBefore property
+   * @returns True if page break before is set
+   */
+  getPageBreakBefore(): boolean {
+    return this.formatting.pageBreakBefore ?? false;
+  }
+
+  /**
+   * Gets the outline level for TOC headings
+   * @returns Outline level (0-8) or undefined if not set
+   */
+  getOutlineLevel(): number | undefined {
+    return this.formatting.outlineLevel;
+  }
+
+  /**
+   * Gets the text direction
+   * @returns Text direction or undefined if not set
+   */
+  getTextDirection(): string | undefined {
+    return this.formatting.textDirection;
+  }
+
+  /**
+   * Gets the widow/orphan control setting
+   * @returns True if widow control is enabled
+   */
+  getWidowControl(): boolean {
+    return this.formatting.widowControl ?? true; // Word defaults to true
+  }
+
+  /**
+   * Gets the contextual spacing setting
+   * @returns True if contextual spacing is enabled
+   */
+  getContextualSpacing(): boolean {
+    return this.formatting.contextualSpacing ?? false;
+  }
+
+  // ============================================================================
+  // Checker Methods (has*, is*, isEmpty)
+  // ============================================================================
+
+  /**
+   * Checks if the paragraph has list numbering applied
+   * @returns True if paragraph is part of a list
+   */
+  hasNumbering(): boolean {
+    return this.formatting.numbering !== undefined &&
+           this.formatting.numbering.numId !== undefined &&
+           this.formatting.numbering.numId !== 0;
+  }
+
+  /**
+   * Checks if the paragraph contains any fields
+   * @returns True if paragraph has fields
+   */
+  hasFields(): boolean {
+    return this.getFields().length > 0;
+  }
+
+  /**
+   * Checks if the paragraph has any bookmark start markers
+   * @returns True if paragraph has bookmarks
+   */
+  hasBookmarks(): boolean {
+    return this.getBookmarksStart().length > 0;
+  }
+
+  /**
+   * Checks if the paragraph has any comment start markers
+   * @returns True if paragraph has comments
+   */
+  hasComments(): boolean {
+    return this.getCommentsStart().length > 0;
+  }
+
+  /**
+   * Checks if the paragraph contains any revisions
+   * @returns True if paragraph has revisions
+   */
+  hasRevisions(): boolean {
+    return this.getRevisions().length > 0;
+  }
+
+  /**
+   * Checks if the paragraph is empty (no text content)
+   * @returns True if paragraph has no text
+   */
+  isEmpty(): boolean {
+    return this.getText().trim().length === 0;
+  }
+
   /**
    * Gets the paragraph style ID
    *
@@ -2384,7 +2562,7 @@ export class Paragraph {
     // Diagnostic logging before serialization
     const runData = this.getRuns().map((run) => ({
       text: run.getText(),
-      rtl: run.getFormatting().rtl,
+      rtl: run.isRTL(),
     }));
     logParagraphContent("serialization", -1, runData, this.formatting.bidi);
 
