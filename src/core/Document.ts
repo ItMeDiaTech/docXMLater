@@ -2877,6 +2877,10 @@ export class Document {
               para.setSpaceAfter(60); // 3pt
 
               for (const run of para.getRuns()) {
+                // Skip runs with Hyperlink style - preserve their blue color and underline
+                if (run.isHyperlinkStyled()) {
+                  continue;
+                }
                 run.setBold(true);
                 run.setFont("Verdana", 12);
                 // Preserve white font - don't change color if run is white (FFFFFF)
@@ -4236,6 +4240,10 @@ export class Document {
 
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
         for (const run of allRuns) {
+          // Skip runs with Hyperlink style - preserve their blue color and underline
+          if (run.isHyperlinkStyled()) {
+            continue;
+          }
           if (!h1Preserve.bold) {
             run.setBold(h1Config.run?.bold ?? false);
           }
@@ -4366,6 +4374,10 @@ export class Document {
 
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
         for (const run of allRuns) {
+          // Skip runs with Hyperlink style - preserve their blue color and underline
+          if (run.isHyperlinkStyled()) {
+            continue;
+          }
           if (!h2Preserve.bold) {
             run.setBold(h2Config.run?.bold ?? false);
           }
@@ -4534,6 +4546,10 @@ export class Document {
 
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
         for (const run of allRuns) {
+          // Skip runs with Hyperlink style - preserve their blue color and underline
+          if (run.isHyperlinkStyled()) {
+            continue;
+          }
           if (!h3Preserve.bold) {
             run.setBold(h3Config.run?.bold ?? false);
           }
@@ -4683,6 +4699,10 @@ export class Document {
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
         for (const saved of preservedFormatting) {
           const run = saved.run;
+          // Skip runs with Hyperlink style - preserve their blue color and underline
+          if (run.isHyperlinkStyled()) {
+            continue;
+          }
           if (!listParaPreserve.bold) {
             run.setBold(listParaConfig.run?.bold ?? false);
           }
@@ -4790,6 +4810,10 @@ export class Document {
         // Apply formatting to all runs (including those in revisions/hyperlinks), respecting preserve flags
         for (const saved of preservedFormatting) {
           const run = saved.run;
+          // Skip runs with Hyperlink style - preserve their blue color and underline
+          if (run.isHyperlinkStyled()) {
+            continue;
+          }
           if (!normalPreserve.bold) {
             run.setBold(normalConfig.run?.bold ?? false);
           }

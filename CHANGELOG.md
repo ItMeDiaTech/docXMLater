@@ -5,6 +5,18 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.3.2] - 2025-01-23
+
+### Fixed
+
+- **Hyperlinks in Tracked Changes Losing Styling**
+  - Hyperlinks inside revisions (`w:ins`) no longer lose their blue color and underline after processing
+  - Style application methods (`applyStandardTableFormatting()`, `applyH1()`, `applyH2()`, `applyH3()`, `applyListParagraph()`, `applyNormal()`) now skip runs with Hyperlink character style
+  - Previously, explicit `w:color w:val="000000"` and `w:u w:val="none"` were being added, overriding the inherited Hyperlink style
+  - Uses existing `Run.isHyperlinkStyled()` method to detect and preserve hyperlink formatting
+
+---
+
 ## [9.3.1] - 2025-01-23
 
 ### Fixed
