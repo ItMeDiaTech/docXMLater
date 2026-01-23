@@ -3513,6 +3513,8 @@ export class DocumentParser {
       const relationshipId = hyperlinkObj["@_r:id"];
       const anchor = hyperlinkObj["@_w:anchor"];
       const tooltip = hyperlinkObj["@_w:tooltip"];
+      const tgtFrame = hyperlinkObj["@_w:tgtFrame"];
+      const history = hyperlinkObj["@_w:history"];
 
       // Parse runs inside the hyperlink
       const runs = hyperlinkObj["w:r"];
@@ -3584,7 +3586,32 @@ export class DocumentParser {
         );
       }
 
-      // Create hyperlink with basic properties
+      // Skip hyperlinks that have no destination (neither URL nor anchor nor relationship ID)
+      // This can happen with malformed HYPERLINK field codes or corrupted documents
+      // Note: If there's a relationshipId but the relationship is missing, we still keep the hyperlink
+      // (it has text and a reference that might be resolved later or is just broken)
+      if (!url && !finalAnchor && !finalRelationshipId) {
+        defaultLogger.debug(
+          `[DocumentParser] Skipping hyperlink with no URL, anchor, or relationship ID. Text: "${text}"`
+        );
+        return result;
+      }
+
+      // Skip self-closing external hyperlinks (no runs at all)
+      // These are invisible hyperlinks that exist in the document structure but have no visible content
+      // They should be removed rather than having URLs appear as text
+      const isSelfClosingHyperlink = runChildren.length === 0;
+      const isExternalLink = (url || finalRelationshipId) && !finalAnchor;
+
+      if (isSelfClosingHyperlink && isExternalLink) {
+        // Skip self-closing external hyperlink - it has no visible content
+        defaultLogger.debug(
+          `[DocumentParser] Skipping self-closing external hyperlink with no display text. URL: "${url}"`
+        );
+        return result;
+      }
+
+      // Create hyperlink with display text
       // NOTE: Do NOT use anchor (bookmark ID) as display text - it should only be used for navigation
       let displayText = text || url || "[Link]";
 
@@ -3597,17 +3624,6 @@ export class DocumentParser {
         );
       }
 
-      // Skip hyperlinks that have no destination (neither URL nor anchor nor relationship ID)
-      // This can happen with malformed HYPERLINK field codes or corrupted documents
-      // Note: If there's a relationshipId but the relationship is missing, we still keep the hyperlink
-      // (it has text and a reference that might be resolved later or is just broken)
-      if (!url && !finalAnchor && !finalRelationshipId) {
-        defaultLogger.debug(
-          `[DocumentParser] Skipping hyperlink with no URL, anchor, or relationship ID. Text: "${displayText}"`
-        );
-        return result;
-      }
-
       const hyperlink = new Hyperlink({
         url,
         anchor: finalAnchor,
@@ -3615,6 +3631,8 @@ export class DocumentParser {
         formatting,
         tooltip,
         relationshipId: finalRelationshipId,
+        tgtFrame,
+        history,
       });
 
       // If we successfully parsed a run with tabs/breaks, use it instead of the default run

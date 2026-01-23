@@ -318,6 +318,13 @@ export {
   isNumberingChange,
 } from './elements/PropertyChangeTypes';
 
+// Cleanup Helper
+export {
+  CleanupHelper,
+  CleanupOptions,
+  CleanupReport,
+} from './helpers/CleanupHelper';
+
 // Changelog Generation
 export {
   ChangelogGenerator,

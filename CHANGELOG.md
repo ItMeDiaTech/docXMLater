@@ -5,6 +5,25 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.3.1] - 2025-01-23
+
+### Fixed
+
+- **Empty/Self-Closing Hyperlinks**
+  - Self-closing hyperlinks with no display text (e.g., `<w:hyperlink r:id="rId50"/>`) are now correctly skipped during parsing
+  - Previously, the URL was incorrectly used as display text, causing URLs to appear as visible text in processed documents
+  - This fix prevents invisible hyperlink markers from becoming visible text
+
+### Added
+
+- **Hyperlink Properties**
+  - `isEmpty()` - Check if hyperlink is empty/invisible
+  - `getTgtFrame()` - Get target frame attribute (e.g., "_blank")
+  - `getHistory()` - Get history tracking attribute
+  - `tgtFrame` and `history` attributes now preserved in XML output
+
+---
+
 ## [9.3.0] - 2025-01-22
 
 ### Added
