@@ -812,7 +812,7 @@ export class DocumentParser {
       const runs = paragraph.getRuns();
       const runData = runs.map((run) => ({
         text: run.getText(),
-        rtl: run.getFormatting().rtl,
+        rtl: run.isRTL(),
       }));
       const bidi = paragraph.getFormatting().bidi;
 

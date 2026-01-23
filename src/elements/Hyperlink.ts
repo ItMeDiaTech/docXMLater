@@ -540,6 +540,58 @@ export class Hyperlink {
     return this.formatting;
   }
 
+  // ============================================================================
+  // Individual Formatting Getters
+  // ============================================================================
+
+  /**
+   * Gets the text color
+   * @returns Color hex string or undefined
+   */
+  getColor(): string | undefined {
+    return this.formatting.color;
+  }
+
+  /**
+   * Gets the underline style
+   * @returns Underline style or undefined
+   */
+  getUnderline(): string | boolean | undefined {
+    return this.formatting.underline;
+  }
+
+  /**
+   * Gets whether the hyperlink is bold
+   * @returns True if bold, false otherwise
+   */
+  getBold(): boolean {
+    return this.formatting.bold ?? false;
+  }
+
+  /**
+   * Gets whether the hyperlink is italic
+   * @returns True if italic, false otherwise
+   */
+  getItalic(): boolean {
+    return this.formatting.italic ?? false;
+  }
+
+  /**
+   * Gets the font family
+   * @returns Font name or undefined
+   */
+  getFont(): string | undefined {
+    return this.formatting.font;
+  }
+
+  /**
+   * Gets the font size
+   * @returns Font size in points or undefined
+   */
+  getSize(): number | undefined {
+    return this.formatting.size;
+  }
+
   /**
    * Sets text color
    * @param color Color in hex format (e.g., '0563C1')

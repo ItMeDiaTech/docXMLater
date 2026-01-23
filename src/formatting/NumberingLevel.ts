@@ -689,7 +689,7 @@ export class NumberingLevel {
       alignment: "left",
       font: actualFont,
       fontSize: 24, // 12pt
-      bold: true,
+      bold: false,
       color: "000000",
       leftIndent: 720 + level * 360,
       hangingIndent: 360,
@@ -712,7 +712,7 @@ export class NumberingLevel {
       alignment: "left",
       font: "Verdana",
       fontSize: 24, // 12pt
-      bold: true,
+      bold: false,
       color: "000000",
       leftIndent: 720 + level * 360,
       hangingIndent: 360,
@@ -735,7 +735,7 @@ export class NumberingLevel {
       alignment: "left",
       font: "Verdana",
       fontSize: 24, // 12pt
-      bold: true,
+      bold: false,
       color: "000000",
       leftIndent: 720 + level * 360,
       hangingIndent: 360,
@@ -758,7 +758,7 @@ export class NumberingLevel {
       alignment: "left",
       font: "Verdana",
       fontSize: 24, // 12pt
-      bold: true,
+      bold: false,
       color: "000000",
       leftIndent: 720 + level * 360,
       hangingIndent: 360,
@@ -781,7 +781,7 @@ export class NumberingLevel {
       alignment: "left",
       font: "Verdana",
       fontSize: 24, // 12pt
-      bold: true,
+      bold: false,
       color: "000000",
       leftIndent: 720 + level * 360,
       hangingIndent: 360,
@@ -804,7 +804,7 @@ export class NumberingLevel {
       alignment: "left",
       font: "Verdana",
       fontSize: 24, // 12pt
-      bold: true,
+      bold: false,
       color: "000000",
       leftIndent: 720 + level * 360,
       hangingIndent: 360,
@@ -895,17 +895,8 @@ export class NumberingLevel {
     const szMatch = xml.match(/<w:sz[^>]*w:val="([^"]+)"/);
     if (szMatch && szMatch[1]) fontSize = parseInt(szMatch[1], 10);
 
-    // Extract bold from <w:rPr>
-    // <w:b/> or <w:b w:val="1"/> means bold
-    // <w:b w:val="0"/> or <w:b w:val="false"/> means NOT bold
-    // No <w:b> element defaults to true (per docxmlater convention)
-    let bold = true; // default
-    const bMatch = xml.match(/<w:b(?:\s+w:val="([^"]+)")?(?:\s*\/>|>)/);
-    if (bMatch) {
-      const val = bMatch[1];
-      // If val is "0" or "false", not bold. Otherwise (undefined, "1", "true"), bold.
-      bold = val !== "0" && val !== "false";
-    }
+    // Bullet/number symbols should never be bold - ignore source XML bold formatting
+    const bold = false;
 
     // Extract color from <w:rPr>
     let color: string | undefined;

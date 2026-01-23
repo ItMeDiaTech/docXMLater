@@ -362,6 +362,58 @@ export class TableRow {
     return { ...this.formatting };
   }
 
+  // ============================================================================
+  // Individual Formatting Getters
+  // ============================================================================
+
+  /**
+   * Gets the row height in twips
+   * @returns Height in twips or undefined if not set
+   */
+  getHeight(): number | undefined {
+    return this.formatting.height;
+  }
+
+  /**
+   * Gets the row height rule
+   * @returns Height rule ('auto', 'exact', 'atLeast') or undefined
+   */
+  getHeightRule(): string | undefined {
+    return this.formatting.heightRule;
+  }
+
+  /**
+   * Checks if this row is marked as a header row
+   * @returns True if this is a header row
+   */
+  getIsHeader(): boolean {
+    return this.formatting.isHeader ?? false;
+  }
+
+  /**
+   * Gets whether the row can split across pages
+   * @returns True if row cannot split
+   */
+  getCantSplit(): boolean {
+    return this.formatting.cantSplit ?? false;
+  }
+
+  /**
+   * Gets the row justification (alignment)
+   * @returns Justification ('left', 'center', 'right') or undefined
+   */
+  getJustification(): string | undefined {
+    return this.formatting.justification;
+  }
+
+  /**
+   * Checks if this row is hidden
+   * @returns True if row is hidden
+   */
+  isHidden(): boolean {
+    return this.formatting.hidden ?? false;
+  }
+
   /**
    * Sets the parent table reference for this row.
    * Called by Table when adding rows.

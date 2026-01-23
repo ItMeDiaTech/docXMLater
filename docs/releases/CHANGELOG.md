@@ -5,6 +5,30 @@ All notable changes to DocXML will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.2.0] - 2025-01-22
+
+### Added
+
+- **60+ new getter/helper methods** for convenient property access across element classes:
+  - **Run**: `getBold()`, `getItalic()`, `getUnderline()`, `getStrike()`, `getFont()`, `getSize()`, `getColor()`, `getHighlight()`, `getSubscript()`, `getSuperscript()`, `isRTL()`, `getSmallCaps()`, `getAllCaps()`
+  - **Paragraph**: `getAlignment()`, `getLeftIndent()`, `getRightIndent()`, `getFirstLineIndent()`, `getHangingIndent()`, `getSpaceBefore()`, `getSpaceAfter()`, `getLineSpacing()`, `getKeepNext()`, `getKeepLines()`, `getPageBreakBefore()`, `getOutlineLevel()`, `getTextDirection()`, `getWidowControl()`, `getContextualSpacing()`, `hasNumbering()`, `hasFields()`, `hasBookmarks()`, `hasComments()`, `hasRevisions()`, `isEmpty()`
+  - **Table**: `getWidth()`, `getWidthType()`, `getAlignment()`, `getLayout()`, `getIndent()`, `getBorders()`, `getColumnWidths()`, `getCellSpacing()`, `getStyle()`, `hasRows()`, `isFloating()`, `hasStyle()`
+  - **TableRow**: `getHeight()`, `getHeightRule()`, `getIsHeader()`, `getCantSplit()`, `getJustification()`, `isHidden()`
+  - **TableCell**: `getWidth()`, `getWidthType()`, `getVerticalAlignment()`, `getVerticalMerge()`, `getMargins()`, `getBorders()`, `getShading()`, `getTextDirection()`
+  - **Document**: `getParagraphAt()`, `getTableAt()`, `getBodyElementAt()`, `getParagraphIndex()`, `getTableIndex()`, `getNextParagraph()`, `getPreviousParagraph()`
+  - **Hyperlink**: `getColor()`, `getUnderline()`, `getBold()`, `getItalic()`, `getFont()`, `getSize()`
+
+### Fixed
+
+- **List bullet/number formatting**: Bullets and numbered list prefixes no longer apply bold formatting by default
+  - Previously, list numbering factory methods (createDecimal, createBullet, etc.) set `bold: true`
+  - Now defaults to `bold: false` for all list number/bullet symbols
+  - Source document bold formatting on bullets is now ignored during parsing
+
+### Changed
+
+- Internal refactoring: Replaced `.getFormatting().property` patterns with new getter methods throughout codebase
+
 ## [0.28.0] - 2025-01-20
 
 ### Fixed
