@@ -242,6 +242,39 @@ describe('TableRow', () => {
       const formatting = row.getFormatting();
       expect(formatting.cantSplit).toBe(true);
     });
+
+    it('should clear row height with clearHeight()', () => {
+      const row = new TableRow();
+      row.setHeight(720, 'exact');
+      expect(row.getHeight()).toBe(720);
+      expect(row.getHeightRule()).toBe('exact');
+
+      row.clearHeight();
+      expect(row.getHeight()).toBeUndefined();
+      expect(row.getHeightRule()).toBeUndefined();
+    });
+
+    it('should not include trHeight in XML after clearHeight()', () => {
+      const row = new TableRow(1);
+      row.setHeight(720, 'atLeast');
+      row.clearHeight();
+
+      const xml = row.toXML();
+      const trPr = filterXMLElements(xml.children).find(c => c.name === 'w:trPr');
+      // trPr should either not exist or not contain trHeight
+      if (trPr) {
+        const trHeight = filterXMLElements(trPr.children).find(c => c.name === 'w:trHeight');
+        expect(trHeight).toBeUndefined();
+      }
+    });
+
+    it('should support clearHeight() in method chain', () => {
+      const row = new TableRow();
+      const result = row.setHeight(720).clearHeight().setHeader(true);
+      expect(result).toBe(row);
+      expect(row.getHeight()).toBeUndefined();
+      expect(row.getIsHeader()).toBe(true);
+    });
   });
 
   describe('Method chaining', () => {

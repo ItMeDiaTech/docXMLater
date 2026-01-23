@@ -5,6 +5,35 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.3.0] - 2025-01-22
+
+### Added
+
+- **TableRow.clearHeight()**
+  - New method to clear row height properties, allowing Word to auto-size rows based on content
+  - Removes both `height` and `heightRule` properties
+  - Supports method chaining
+
+- **NumberingLevel Italic Support**
+  - `setItalic(italic)` - Set italic formatting for numbering/bullet text
+  - `getItalic()` - Get italic state (defaults to false)
+  - New `italic?: boolean` property in NumberingLevelProperties interface
+  - Generates `<w:i/>` and `<w:iCs/>` per ECMA-376
+
+- **NumberingLevel Underline Support**
+  - `setUnderline(style)` - Set underline style for numbering/bullet text
+  - `getUnderline()` - Get underline style
+  - `clearUnderline()` - Remove underline formatting
+  - New `underline?: string` property supporting all Word underline styles (single, double, wave, dotted, dash, etc.)
+  - Generates `<w:u w:val="..."/>` per ECMA-376
+
+### Tests
+
+- 3 new tests for TableRow.clearHeight()
+- 18 new tests for NumberingLevel italic/underline (property handling, XML generation, XML parsing)
+
+---
+
 ## [9.0.0] - 2025-01-22
 
 ### Added
