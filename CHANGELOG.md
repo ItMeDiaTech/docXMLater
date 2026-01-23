@@ -5,6 +5,18 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.3.3] - 2025-01-23
+
+### Fixed
+
+- **Nested Bullets in Numbered Lists Flattening to Level 0**
+  - Bullet points nested under numbered items are now converted to lettered sub-items (a, b, c) at Level 1
+  - Previously, bullets were flattened to Level 0 and continued the numbering sequence (1, 2, 3, 4, 5, 6)
+  - Now preserves hierarchy: `1. → • → • → 2.` becomes `1. → a. → b. → 2.`
+  - Only affects cells where numbered items are the majority; bullet-only cells unchanged
+
+---
+
 ## [9.3.2] - 2025-01-23
 
 ### Fixed

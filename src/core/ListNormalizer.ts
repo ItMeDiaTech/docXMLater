@@ -281,6 +281,33 @@ export function normalizeListsInCell(
     }
   }
 
+  // === Context-aware bullet level detection ===
+  // When bullets follow numbered items in a numbered-majority cell,
+  // treat them as sub-items at Level 1 (lowerLetter format: a, b, c)
+  // This preserves hierarchy instead of flattening bullets to Level 0
+  const bulletAsSubItemIndices = new Set<number>();
+
+  if (majorityCategory === "numbered") {
+    let lastNumberedItemIndex = -1;
+
+    for (let i = 0; i < analysis.paragraphs.length; i++) {
+      const item = analysis.paragraphs[i]!;
+      const detection = item.detection;
+
+      if (detection.category === "numbered") {
+        // This is a parent numbered item (decimal format or Word numbered list)
+        lastNumberedItemIndex = i;
+      } else if (detection.category === "bullet" && lastNumberedItemIndex >= 0) {
+        // This bullet follows a numbered item - mark it as a sub-item
+        bulletAsSubItemIndices.add(i);
+      } else if (detection.category === "none") {
+        // Non-list item breaks the context
+        lastNumberedItemIndex = -1;
+      }
+    }
+  }
+  // === End context-aware bullet detection ===
+
   // Track numId per level - will be reset when parent level appears
   const numIdByLevel = new Map<number, number>();
   let lastProcessedLevel = -1;
@@ -340,7 +367,13 @@ export function normalizeListsInCell(
       // - Use format-based level from detection (decimal=0, letter=1, roman=2, bullet=0)
       // - Apply level shift to normalize lists without parent levels
       // - Converted Word lists use the same level calculation as typed prefixes
-      const targetLevel = Math.max(0, detection.inferredLevel - levelShift);
+      // - Bullets following numbered items become Level 1 sub-items (lowerLetter)
+      let targetLevel = Math.max(0, detection.inferredLevel - levelShift);
+
+      // Override level for bullets that should be sub-items under numbered lists
+      if (bulletAsSubItemIndices.has(index) && targetLevel === 0) {
+        targetLevel = 1; // Promote to Level 1 (uses lowerLetter format: a, b, c)
+      }
 
       // Process based on what type of item this is
       if (hasTypedPrefix && detection.typedPrefix) {
