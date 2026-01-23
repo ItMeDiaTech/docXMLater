@@ -62,14 +62,20 @@ export interface HyperlinkProperties {
   url?: string;
   /** Bookmark anchor (for internal links) */
   anchor?: string;
-  /** Display text */
-  text: string;
+  /** Display text (optional for empty/invisible hyperlinks) */
+  text?: string;
   /** Text formatting */
   formatting?: RunFormatting;
   /** Tooltip text */
   tooltip?: string;
   /** Relationship ID (set by Document when saving) */
   relationshipId?: string;
+  /** Whether this is an empty/invisible hyperlink with no display text */
+  isEmpty?: boolean;
+  /** Target frame attribute (e.g., "_blank" for new window) */
+  tgtFrame?: string;
+  /** History tracking attribute */
+  history?: string;
 }
 
 /**
@@ -83,6 +89,12 @@ export class Hyperlink {
   private tooltip?: string;
   private relationshipId?: string;
   private formatting: RunFormatting;
+  /** Whether this is an empty/invisible hyperlink with no display text */
+  private _isEmpty: boolean = false;
+  /** Target frame attribute (e.g., "_blank" for new window) */
+  private tgtFrame?: string;
+  /** History tracking attribute */
+  private history?: string;
   /** Tracking context for automatic change tracking */
   private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
   /** Parent paragraph reference for automatic tracking */
@@ -101,6 +113,9 @@ export class Hyperlink {
     this.anchor = properties.anchor;
     this.tooltip = properties.tooltip;
     this.relationshipId = properties.relationshipId;
+    this.tgtFrame = properties.tgtFrame;
+    this.history = properties.history;
+    this._isEmpty = properties.isEmpty ?? false;
 
     // VALIDATION: Warn about hybrid links (url + anchor)
     if (this.url && this.anchor) {
@@ -109,6 +124,14 @@ export class Hyperlink {
           `This is ambiguous per ECMA-376 spec. URL will take precedence. ` +
           `Use Hyperlink.createExternal() or Hyperlink.createInternal() to avoid ambiguity.`
       );
+    }
+
+    // Handle empty/invisible hyperlinks (no display text)
+    if (this._isEmpty) {
+      this.text = "";
+      this.formatting = {};
+      this.run = new Run("", {});
+      return;
     }
 
     // Text fallback: properties.text → url → 'Link'
@@ -216,6 +239,28 @@ export class Hyperlink {
    */
   getAnchor(): string | undefined {
     return this.anchor;
+  }
+
+  /**
+   * Returns whether this is an empty/invisible hyperlink (has no display text).
+   * Empty hyperlinks are self-closing elements in the XML.
+   */
+  isEmpty(): boolean {
+    return this._isEmpty;
+  }
+
+  /**
+   * Gets the target frame attribute (e.g., "_blank" for new window)
+   */
+  getTgtFrame(): string | undefined {
+    return this.tgtFrame;
+  }
+
+  /**
+   * Gets the history tracking attribute
+   */
+  getHistory(): string | undefined {
+    return this.history;
   }
 
   /**
@@ -959,11 +1004,11 @@ export class Hyperlink {
    * @throws {Error} If hyperlink has neither url nor anchor (empty hyperlink)
    */
   toXML(): XMLElement {
-    // VALIDATION: Hyperlink must have url OR anchor
-    if (!this.url && !this.anchor) {
+    // VALIDATION: Hyperlink must have url OR anchor (unless it's an empty hyperlink with relationshipId)
+    if (!this.url && !this.anchor && !this.relationshipId) {
       throw new Error(
-        "CRITICAL: Hyperlink must have either a URL (external link) or anchor (internal link). " +
-          "Cannot generate valid XML for empty hyperlink."
+        "CRITICAL: Hyperlink must have either a URL (external link), anchor (internal link), or relationshipId. " +
+          "Cannot generate valid XML for hyperlink without destination."
       );
     }
 
@@ -981,7 +1026,7 @@ export class Hyperlink {
     const attributes: Record<string, string> = {};
 
     // External link - add relationship ID
-    if (this.url && this.relationshipId) {
+    if (this.relationshipId) {
       attributes["r:id"] = this.relationshipId;
     }
 
@@ -996,6 +1041,25 @@ export class Hyperlink {
       // Note: XMLBuilder.elementToString() will escape this via escapeXmlAttribute()
       // when generating the actual XML string. We store the raw value here.
       attributes["w:tooltip"] = this.tooltip;
+    }
+
+    // Target frame attribute (e.g., "_blank" for new window)
+    if (this.tgtFrame) {
+      attributes["w:tgtFrame"] = this.tgtFrame;
+    }
+
+    // History tracking attribute
+    if (this.history) {
+      attributes["w:history"] = this.history;
+    }
+
+    // Empty/invisible hyperlinks have no children (self-closing element)
+    if (this._isEmpty) {
+      return {
+        name: "w:hyperlink",
+        attributes,
+        children: [],
+      };
     }
 
     // Generate run XML

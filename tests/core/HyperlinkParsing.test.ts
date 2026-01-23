@@ -354,12 +354,12 @@ describe('Hyperlink Parsing', () => {
       expect(xml.attributes?.['r:id']).toBe('rId5');
     });
 
-    it('should throw error if hyperlink has neither url nor anchor', () => {
-      // Create hyperlink with neither url nor anchor (empty link)
+    it('should throw error if hyperlink has neither url nor anchor nor relationshipId', () => {
+      // Create hyperlink with neither url nor anchor nor relationshipId (empty link)
       const link = new Hyperlink({ text: 'Empty Link' });
 
       expect(() => link.toXML()).toThrow(/CRITICAL: Hyperlink must have either a URL/);
-      expect(() => link.toXML()).toThrow(/or anchor/);
+      expect(() => link.toXML()).toThrow(/anchor \(internal link\), or relationshipId/);
     });
 
     it('should NOT throw error for internal links without relationship ID', () => {
