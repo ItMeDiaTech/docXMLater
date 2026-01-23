@@ -239,6 +239,16 @@ export class TableRow {
   }
 
   /**
+   * Clears the row height, allowing Word to auto-size the row based on content
+   * @returns This row for chaining
+   */
+  clearHeight(): this {
+    delete this.formatting.height;
+    delete this.formatting.heightRule;
+    return this;
+  }
+
+  /**
    * Sets whether this is a header row
    * @param isHeader - Whether this is a header row
    * @returns This row for chaining

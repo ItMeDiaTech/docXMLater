@@ -84,6 +84,83 @@ describe('NumberingLevel', () => {
       expect(props.isLegalNumberingStyle).toBe(true);
       expect(props.suffix).toBe('space');
     });
+
+    it('should support italic property', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+        italic: true,
+      });
+      expect(level.getItalic()).toBe(true);
+    });
+
+    it('should support underline property', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+        underline: 'single',
+      });
+      expect(level.getUnderline()).toBe('single');
+    });
+
+    it('should default italic to false', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+      });
+      expect(level.getItalic()).toBe(false);
+    });
+
+    it('should default underline to undefined', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+      });
+      expect(level.getUnderline()).toBeUndefined();
+    });
+  });
+
+  describe('Italic and underline methods', () => {
+    it('should set italic with setItalic()', () => {
+      const level = NumberingLevel.createDecimalLevel(0);
+      level.setItalic(true);
+      expect(level.getItalic()).toBe(true);
+
+      level.setItalic(false);
+      expect(level.getItalic()).toBe(false);
+    });
+
+    it('should set underline with setUnderline()', () => {
+      const level = NumberingLevel.createDecimalLevel(0);
+      level.setUnderline('double');
+      expect(level.getUnderline()).toBe('double');
+    });
+
+    it('should clear underline with clearUnderline()', () => {
+      const level = NumberingLevel.createDecimalLevel(0);
+      level.setUnderline('wave');
+      expect(level.getUnderline()).toBe('wave');
+
+      level.clearUnderline();
+      expect(level.getUnderline()).toBeUndefined();
+    });
+
+    it('should support method chaining', () => {
+      const level = NumberingLevel.createDecimalLevel(0);
+      const result = level
+        .setItalic(true)
+        .setUnderline('single')
+        .setBold(true);
+
+      expect(result).toBe(level);
+      expect(level.getItalic()).toBe(true);
+      expect(level.getUnderline()).toBe('single');
+      expect(level.getProperties().bold).toBe(true);
+    });
   });
 
   describe('Validation', () => {
@@ -331,6 +408,92 @@ describe('NumberingLevel', () => {
       expect(ind?.attributes?.['w:left']).toBe('-1472');
       expect(ind?.attributes?.['w:hanging']).toBe('360');
     });
+
+    it('should generate XML with italic', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+        italic: true,
+      });
+
+      const xml = level.toXML();
+      const rPr = filterXMLElements(xml.children).find(c => c.name === 'w:rPr');
+      expect(rPr).toBeDefined();
+
+      const i = filterXMLElements(rPr?.children).find(c => c.name === 'w:i');
+      expect(i).toBeDefined();
+
+      const iCs = filterXMLElements(rPr?.children).find(c => c.name === 'w:iCs');
+      expect(iCs).toBeDefined();
+    });
+
+    it('should not generate italic XML when italic is false', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+        italic: false,
+      });
+
+      const xml = level.toXML();
+      const rPr = filterXMLElements(xml.children).find(c => c.name === 'w:rPr');
+      expect(rPr).toBeDefined();
+
+      const i = filterXMLElements(rPr?.children).find(c => c.name === 'w:i');
+      expect(i).toBeUndefined();
+    });
+
+    it('should generate XML with underline', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+        underline: 'single',
+      });
+
+      const xml = level.toXML();
+      const rPr = filterXMLElements(xml.children).find(c => c.name === 'w:rPr');
+      expect(rPr).toBeDefined();
+
+      const u = filterXMLElements(rPr?.children).find(c => c.name === 'w:u');
+      expect(u).toBeDefined();
+      expect(u?.attributes?.['w:val']).toBe('single');
+    });
+
+    it('should generate XML with double underline', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+        underline: 'double',
+      });
+
+      const xml = level.toXML();
+      const rPr = filterXMLElements(xml.children).find(c => c.name === 'w:rPr');
+      const u = filterXMLElements(rPr?.children).find(c => c.name === 'w:u');
+      expect(u?.attributes?.['w:val']).toBe('double');
+    });
+
+    it('should generate XML with combined italic and underline', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'lowerRoman',
+        text: '%1.',
+        italic: true,
+        underline: 'wave',
+      });
+
+      const xml = level.toXML();
+      const rPr = filterXMLElements(xml.children).find(c => c.name === 'w:rPr');
+      expect(rPr).toBeDefined();
+
+      const i = filterXMLElements(rPr?.children).find(c => c.name === 'w:i');
+      expect(i).toBeDefined();
+
+      const u = filterXMLElements(rPr?.children).find(c => c.name === 'w:u');
+      expect(u?.attributes?.['w:val']).toBe('wave');
+    });
   });
 
   describe('XML parsing', () => {
@@ -348,6 +511,105 @@ describe('NumberingLevel', () => {
       const level = NumberingLevel.fromXML(xml);
       expect(level.getProperties().leftIndent).toBe(-1472);
       expect(level.getProperties().hangingIndent).toBe(360);
+    });
+
+    it('should parse italic from XML', () => {
+      const xml = `<w:lvl w:ilvl="0">
+        <w:start w:val="1"/>
+        <w:numFmt w:val="decimal"/>
+        <w:lvlText w:val="%1."/>
+        <w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
+        <w:rPr><w:i/><w:iCs/></w:rPr>
+      </w:lvl>`;
+
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getItalic()).toBe(true);
+    });
+
+    it('should parse self-closing italic tag', () => {
+      const xml = `<w:lvl w:ilvl="0">
+        <w:start w:val="1"/>
+        <w:numFmt w:val="decimal"/>
+        <w:lvlText w:val="%1."/>
+        <w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
+        <w:rPr><w:i /></w:rPr>
+      </w:lvl>`;
+
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getItalic()).toBe(true);
+    });
+
+    it('should default to false when no italic in XML', () => {
+      const xml = `<w:lvl w:ilvl="0">
+        <w:start w:val="1"/>
+        <w:numFmt w:val="decimal"/>
+        <w:lvlText w:val="%1."/>
+        <w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
+        <w:rPr></w:rPr>
+      </w:lvl>`;
+
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getItalic()).toBe(false);
+    });
+
+    it('should parse underline from XML', () => {
+      const xml = `<w:lvl w:ilvl="0">
+        <w:start w:val="1"/>
+        <w:numFmt w:val="decimal"/>
+        <w:lvlText w:val="%1."/>
+        <w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
+        <w:rPr><w:u w:val="single"/></w:rPr>
+      </w:lvl>`;
+
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getUnderline()).toBe('single');
+    });
+
+    it('should parse double underline from XML', () => {
+      const xml = `<w:lvl w:ilvl="0">
+        <w:start w:val="1"/>
+        <w:numFmt w:val="decimal"/>
+        <w:lvlText w:val="%1."/>
+        <w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
+        <w:rPr><w:u w:val="double"/></w:rPr>
+      </w:lvl>`;
+
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getUnderline()).toBe('double');
+    });
+
+    it('should parse combined italic and underline from XML', () => {
+      const xml = `<w:lvl w:ilvl="0">
+        <w:start w:val="1"/>
+        <w:numFmt w:val="lowerRoman"/>
+        <w:lvlText w:val="%1."/>
+        <w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
+        <w:rPr><w:i/><w:u w:val="wave"/></w:rPr>
+      </w:lvl>`;
+
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getItalic()).toBe(true);
+      expect(level.getUnderline()).toBe('wave');
+    });
+
+    it('should default to undefined when no underline in XML', () => {
+      const xml = `<w:lvl w:ilvl="0">
+        <w:start w:val="1"/>
+        <w:numFmt w:val="decimal"/>
+        <w:lvlText w:val="%1."/>
+        <w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
+        <w:rPr></w:rPr>
+      </w:lvl>`;
+
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getUnderline()).toBeUndefined();
     });
   });
 

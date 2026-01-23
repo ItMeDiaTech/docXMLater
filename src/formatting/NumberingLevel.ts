@@ -97,6 +97,12 @@ export interface NumberingLevelProperties {
   /** Whether the numbering text is bold */
   bold?: boolean;
 
+  /** Whether the numbering text is italic */
+  italic?: boolean;
+
+  /** Underline style for numbering text ('single', 'double', 'wave', 'dotted', 'dash', etc.) */
+  underline?: string;
+
   /**
    * Level at which numbering should restart (w:lvlRestart per ECMA-376 Part 1 §17.9.11)
    * Specifies when to restart this level's numbering based on a higher-level change:
@@ -111,7 +117,7 @@ export interface NumberingLevelProperties {
  * Represents a single level in a numbering definition
  */
 export class NumberingLevel {
-  private properties: Required<Omit<NumberingLevelProperties, 'lvlRestart'>> & Pick<NumberingLevelProperties, 'lvlRestart'>;
+  private properties: Required<Omit<NumberingLevelProperties, 'lvlRestart' | 'underline'>> & Pick<NumberingLevelProperties, 'lvlRestart' | 'underline'>;
 
   /**
    * Creates a new numbering level
@@ -140,6 +146,8 @@ export class NumberingLevel {
       suffix: properties.suffix || "tab",
       color: properties.color || "000000",
       bold: properties.bold !== undefined ? properties.bold : false,
+      italic: properties.italic !== undefined ? properties.italic : false,
+      underline: properties.underline,
       lvlRestart: properties.lvlRestart, // undefined means default behavior (restart on level-1 change)
     };
 
@@ -239,7 +247,7 @@ export class NumberingLevel {
   /**
    * Gets the level properties
    */
-  getProperties(): Required<Omit<NumberingLevelProperties, 'lvlRestart'>> & Pick<NumberingLevelProperties, 'lvlRestart'> {
+  getProperties(): Required<Omit<NumberingLevelProperties, 'lvlRestart' | 'underline'>> & Pick<NumberingLevelProperties, 'lvlRestart' | 'underline'> {
     return { ...this.properties };
   }
 
@@ -316,6 +324,46 @@ export class NumberingLevel {
    */
   setBold(bold: boolean): this {
     this.properties.bold = bold;
+    return this;
+  }
+
+  /**
+   * Sets whether the numbering text is italic
+   * @param italic Whether to make italic
+   */
+  setItalic(italic: boolean): this {
+    this.properties.italic = italic;
+    return this;
+  }
+
+  /**
+   * Gets whether the numbering text is italic
+   */
+  getItalic(): boolean {
+    return this.properties.italic ?? false;
+  }
+
+  /**
+   * Sets the underline style for numbering text
+   * @param style Underline style ('single', 'double', 'wave', 'dotted', 'dash', etc.)
+   */
+  setUnderline(style: string | undefined): this {
+    this.properties.underline = style;
+    return this;
+  }
+
+  /**
+   * Gets the underline style
+   */
+  getUnderline(): string | undefined {
+    return this.properties.underline;
+  }
+
+  /**
+   * Clears the underline style
+   */
+  clearUnderline(): this {
+    this.properties.underline = undefined;
     return this;
   }
 
@@ -419,6 +467,19 @@ export class NumberingLevel {
     if (this.properties.bold) {
       rPrChildren.push(XMLBuilder.wSelf("b"));
       rPrChildren.push(XMLBuilder.wSelf("bCs"));
+    }
+
+    // Italic
+    if (this.properties.italic) {
+      rPrChildren.push(XMLBuilder.wSelf("i"));
+      rPrChildren.push(XMLBuilder.wSelf("iCs"));
+    }
+
+    // Underline
+    if (this.properties.underline) {
+      rPrChildren.push(
+        XMLBuilder.wSelf("u", { "w:val": this.properties.underline })
+      );
     }
 
     // Color
@@ -898,6 +959,17 @@ export class NumberingLevel {
     // Bullet/number symbols should never be bold - ignore source XML bold formatting
     const bold = false;
 
+    // Extract italic from <w:rPr>
+    const iMatch = xml.match(/<w:i(?:\s|\/|>)/);
+    const italic = !!iMatch;
+
+    // Extract underline from <w:rPr>
+    let underline: string | undefined;
+    const uMatch = xml.match(/<w:u[^>]*w:val="([^"]+)"/);
+    if (uMatch && uMatch[1]) {
+      underline = uMatch[1];
+    }
+
     // Extract color from <w:rPr>
     let color: string | undefined;
     const colorMatch = xml.match(/<w:color[^>]*w:val="([^"]+)"/);
@@ -917,6 +989,8 @@ export class NumberingLevel {
       fontSize,
       suffix,
       bold,
+      italic,
+      underline,
       color,
       lvlRestart,
     });
