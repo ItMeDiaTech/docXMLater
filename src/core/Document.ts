@@ -1940,16 +1940,25 @@ export class Document {
 
   /**
    * Updates the numbering.xml file with current numbering definitions
-   * Preserves original XML if numbering hasn't been modified (formatting preservation)
+   * Uses selective merge when possible to preserve original bullet/numbering styles
    */
   private updateNumberingXml(): void {
-    // Preserve original if numbering wasn't modified
+    // Case 1: No modifications - preserve original exactly
     if (this._originalNumberingXml && !this.numberingManager.isModified()) {
       this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, this._originalNumberingXml);
-    } else {
-      const xml = this.numberingManager.generateNumberingXml();
-      this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
+      return;
     }
+
+    // Case 2: Selective changes with original XML - use selective merge
+    if (this._originalNumberingXml && this.numberingManager.hasSelectiveChanges()) {
+      const xml = this.numberingManager.generateNumberingXmlSelective(this._originalNumberingXml);
+      this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
+      return;
+    }
+
+    // Case 3: Full regeneration (fallback for new documents or full changes)
+    const xml = this.numberingManager.generateNumberingXml();
+    this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
   }
 
   /**
@@ -6177,9 +6186,13 @@ export class Document {
 
         // Handle large images (>= 100x100 pixels) - original behavior
         // Add blank BEFORE image (if not at start of document and prev is not blank)
+        // Issue #7: Skip blank if prev is bold + centered text
         if (imgIdx > 0) {
           const prevElement = this.bodyElements[imgIdx - 1];
-          if (!(prevElement instanceof Paragraph && this.isParagraphBlank(prevElement))) {
+          const prevIsBlank = prevElement instanceof Paragraph && this.isParagraphBlank(prevElement);
+          const prevIsBoldCentered = prevElement instanceof Paragraph && this.isParagraphBoldAndCentered(prevElement);
+
+          if (!prevIsBlank && !prevIsBoldCentered) {
             const blankBefore = Paragraph.create();
             blankBefore.setStyle(style);
             blankBefore.setSpaceAfter(spacingAfter);
@@ -6287,9 +6300,13 @@ export class Document {
 
               // Handle large images (>= 100x100 pixels) - original behavior
               // Add blank BEFORE image (if not at start of cell)
+              // Issue #7: Skip blank if prev is bold + centered text
               if (ci > 0) {
                 const prevPara = cellParas[ci - 1];
-                if (prevPara && !this.isParagraphBlank(prevPara)) {
+                const prevIsBlank = prevPara && this.isParagraphBlank(prevPara);
+                const prevIsBoldCentered = prevPara && this.isParagraphBoldAndCentered(prevPara);
+
+                if (prevPara && !prevIsBlank && !prevIsBoldCentered) {
                   const blankBefore = Paragraph.create();
                   blankBefore.setStyle(style);
                   blankBefore.setSpaceAfter(spacingAfter);
@@ -6551,6 +6568,43 @@ export class Document {
     }
 
     blankLinesRemoved += listItemBlanksRemoved;
+
+    // Phase 13: Indentation-based blank lines (Issue #5)
+    // Rule #5: If current line is indented, and next line is neither indented nor a list, add blank before next
+    // Note: Issue #11 (both non-indented Normal) is not implemented here as it's too aggressive
+    // and would conflict with Issue #4 (removing incorrect blanks)
+    for (let ni = 0; ni < this.bodyElements.length - 1; ni++) {
+      const current = this.bodyElements[ni];
+      const next = this.bodyElements[ni + 1];
+
+      // Both must be paragraphs
+      if (!(current instanceof Paragraph) || !(next instanceof Paragraph)) continue;
+
+      // Skip blank paragraphs
+      if (this.isParagraphBlank(current) || this.isParagraphBlank(next)) continue;
+
+      // Skip if next is a list item - handled by list phases
+      if (next.getNumbering()) continue;
+
+      // Skip if within a list context (text between list items of same list)
+      if (this.isWithinListContext(ni) || this.isWithinListContext(ni + 1)) continue;
+
+      const currentIndent = current.getLeftIndent() || 0;
+      const nextIndent = next.getLeftIndent() || 0;
+
+      // Rule #5: Indented current → non-indented next → add blank
+      if (currentIndent > 0 && nextIndent === 0) {
+        const blankPara = Paragraph.create();
+        blankPara.setStyle(style);
+        blankPara.setSpaceAfter(spacingAfter);
+        if (markAsPreserved) {
+          blankPara.setPreserved(true);
+        }
+        this.bodyElements.splice(ni + 1, 0, blankPara);
+        totalBlankLinesAdded++;
+        ni++; // Skip the inserted blank
+      }
+    }
 
     // Final Phase: Remove consecutive blank paragraphs to prevent double blanks
     // This handles edge cases where multiple phases add adjacent blanks
@@ -6999,6 +7053,9 @@ export class Document {
         numLevel.setFontSize(fontSize);
         numLevel.setBold(bold);
         numLevel.setColor(color);
+        // Always clear italic and underline from bullets (Issue #1: bullets should never be formatted)
+        numLevel.setItalic(false);
+        numLevel.clearUnderline();
 
         levelsModified++;
       }
@@ -7077,6 +7134,9 @@ export class Document {
         numLevel.setFontSize(fontSize);
         numLevel.setBold(bold);
         numLevel.setColor(color);
+        // Always clear italic and underline from numbered prefixes (Issue #1: numbers should never be formatted)
+        numLevel.setItalic(false);
+        numLevel.clearUnderline();
 
         levelsModified++;
       }
@@ -7635,17 +7695,17 @@ export class Document {
    * @private
    */
   private startsWithBoldColon(para: Paragraph): boolean {
-    const content = para.getContent();
-    if (!content || content.length === 0) return false;
+    // Get ALL runs including those in revisions/hyperlinks (Issue #3, #8)
+    // This ensures we detect bold text even when inside tracked changes
+    const allRuns = this.getAllRunsFromParagraph(para);
+    if (allRuns.length === 0) return false;
 
-    // Get first content item that is a Run (skip any non-Run items at start)
-    const firstRun = content.find((item) => item instanceof Run) as
-      | Run
-      | undefined;
-    if (!firstRun) return false;
+    // Find first run with actual text content
+    const firstRunWithText = allRuns.find(run => run.getText().trim().length > 0);
+    if (!firstRunWithText) return false;
 
-    // Check if first run is bold
-    const formatting = firstRun.getFormatting();
+    // Check if first run with text is bold
+    const formatting = firstRunWithText.getFormatting();
     if (!formatting.bold) return false;
 
     // Check if colon exists within first 55 characters of paragraph text
@@ -7756,6 +7816,21 @@ export class Document {
     }
 
     return prevNumId !== undefined && nextNumId !== undefined && prevNumId === nextNumId;
+  }
+
+  /**
+   * Checks if a paragraph is bold and centered.
+   * Used for Issue #7: Don't add blank line above large images when preceded by bold+centered text.
+   * @param para The paragraph to check
+   * @returns True if the paragraph has centered alignment and contains bold text
+   * @private
+   */
+  private isParagraphBoldAndCentered(para: Paragraph): boolean {
+    const alignment = para.getFormatting().alignment;
+    if (alignment !== 'center') return false;
+
+    const runs = this.getAllRunsFromParagraph(para);
+    return runs.some(run => run.getBold() && run.getText().trim().length > 0);
   }
 
   /**

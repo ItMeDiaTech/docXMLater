@@ -5,6 +5,37 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.0] - 2025-01-24
+
+### Added
+
+- **Granular Numbering Modification Tracking**
+  - Selective XML merge for numbering.xml - only regenerates modified abstractNums
+  - Preserves original bullet styles, fonts, and formatting when processing existing documents
+  - Tracks new, modified, and deleted abstract numberings separately
+  - Fixes issue where all 186 original abstractNumIds were replaced with only 40
+
+- **NumberingLevel Getter Methods**
+  - `getLeftIndent()` - Get left indentation in twips
+  - `getHangingIndent()` - Get hanging indentation in twips
+
+- **NumberingManager New Methods**
+  - `markAbstractNumberingModified(id)` - Mark a numbering as modified
+  - `getModifiedAbstractNumIds()` - Get set of modified abstract numbering IDs
+  - `getNewAbstractNumIds()` - Get set of newly added abstract numbering IDs
+  - `getDeletedAbstractNumIds()` - Get set of deleted abstract numbering IDs
+  - `hasSelectiveChanges()` - Check if selective merge should be used
+  - `generateNumberingXmlSelective(originalXml)` - Merge changes with original XML
+  - `isLoadComplete()` - Check if initial document loading is complete
+
+### Fixed
+
+- **Bullet Style Preservation**
+  - Open circle bullets (Courier New "o") no longer become filled bullets (Symbol) after processing
+  - Original bullet fonts and characters are preserved when numbering is not explicitly modified
+
+---
+
 ## [9.4.0] - 2025-01-24
 
 ### Added

@@ -23,6 +23,12 @@ export class NumberingManager {
   // Track if numbering has been modified (for XML preservation)
   private _modified: boolean = false;
 
+  // Granular modification tracking for selective XML regeneration
+  private _modifiedAbstractNumIds: Set<number> = new Set();
+  private _newAbstractNumIds: Set<number> = new Set();
+  private _deletedAbstractNumIds: Set<number> = new Set();
+  private _loadComplete: boolean = false;
+
   /**
    * Creates a new numbering manager
    * @param initializeDefaults Whether to initialize with default numbering definitions
@@ -64,7 +70,17 @@ export class NumberingManager {
       this.nextAbstractNumId = id + 1;
     }
 
-    this._modified = true;
+    // Track as new if loading is complete (not during initial parse)
+    if (this._loadComplete) {
+      this._newAbstractNumIds.add(id);
+      this._modified = true;
+    }
+
+    // Set up modification callback to track level changes
+    abstractNumbering._setModificationCallback(() => {
+      this.markAbstractNumberingModified(id);
+    });
+
     return this;
   }
 
@@ -108,7 +124,23 @@ export class NumberingManager {
 
     instancesToRemove.forEach(numId => this.instances.delete(numId));
 
-    return this.abstractNumberings.delete(abstractNumId);
+    const deleted = this.abstractNumberings.delete(abstractNumId);
+
+    // Track deletion if loading is complete
+    if (deleted && this._loadComplete) {
+      // If it was a new item, just remove from new set
+      if (this._newAbstractNumIds.has(abstractNumId)) {
+        this._newAbstractNumIds.delete(abstractNumId);
+      } else {
+        // It was an original item, track as deleted
+        this._deletedAbstractNumIds.add(abstractNumId);
+      }
+      // Remove from modified set if present
+      this._modifiedAbstractNumIds.delete(abstractNumId);
+      this._modified = true;
+    }
+
+    return deleted;
   }
 
   /**
@@ -178,11 +210,83 @@ export class NumberingManager {
   }
 
   /**
-   * Resets the modified flag
+   * Resets the modified flag and marks loading as complete
    * Called after parsing to indicate that loaded numbering doesn't count as modifications
    */
   resetModified(): void {
     this._modified = false;
+    this._modifiedAbstractNumIds.clear();
+    this._newAbstractNumIds.clear();
+    this._deletedAbstractNumIds.clear();
+    this._loadComplete = true;
+  }
+
+  /**
+   * Marks an abstract numbering as modified
+   * Called when level properties are changed via setters
+   * @param abstractNumId The ID of the modified abstract numbering
+   */
+  markAbstractNumberingModified(abstractNumId: number): void {
+    // Only track modifications after loading is complete
+    if (this._loadComplete) {
+      // Don't mark new items as modified (they're already in _newAbstractNumIds)
+      if (!this._newAbstractNumIds.has(abstractNumId)) {
+        this._modifiedAbstractNumIds.add(abstractNumId);
+      }
+      this._modified = true;
+    }
+  }
+
+  /**
+   * Gets the set of abstract numbering IDs that have been modified
+   * @returns Set of modified abstract numbering IDs
+   */
+  getModifiedAbstractNumIds(): Set<number> {
+    return new Set(this._modifiedAbstractNumIds);
+  }
+
+  /**
+   * Gets the set of abstract numbering IDs that are new (added after loading)
+   * @returns Set of new abstract numbering IDs
+   */
+  getNewAbstractNumIds(): Set<number> {
+    return new Set(this._newAbstractNumIds);
+  }
+
+  /**
+   * Gets the set of abstract numbering IDs that have been deleted
+   * @returns Set of deleted abstract numbering IDs
+   */
+  getDeletedAbstractNumIds(): Set<number> {
+    return new Set(this._deletedAbstractNumIds);
+  }
+
+  /**
+   * Checks if selective XML merge should be used
+   * Returns true if there are granular changes that can be selectively merged
+   * rather than regenerating the entire numbering.xml
+   * @returns True if selective merge is appropriate
+   */
+  hasSelectiveChanges(): boolean {
+    // If no modifications at all, no need for selective merge
+    if (!this._modified) {
+      return false;
+    }
+
+    // If we have granular tracking data, use selective merge
+    return (
+      this._modifiedAbstractNumIds.size > 0 ||
+      this._newAbstractNumIds.size > 0 ||
+      this._deletedAbstractNumIds.size > 0
+    );
+  }
+
+  /**
+   * Checks if loading has been completed
+   * @returns True if the initial document loading is complete
+   */
+  isLoadComplete(): boolean {
+    return this._loadComplete;
   }
 
   /**
@@ -596,6 +700,86 @@ export class NumberingManager {
 
     // Generate XML with declaration
     return builder.build(true);
+  }
+
+  /**
+   * Generates numbering.xml using selective merge with original XML
+   *
+   * This preserves original XML for unmodified abstractNums while:
+   * - Removing deleted abstractNums
+   * - Replacing modified abstractNums with regenerated XML
+   * - Adding new abstractNums
+   *
+   * @param originalXml The original numbering.xml content
+   * @returns Merged XML with selective updates
+   */
+  generateNumberingXmlSelective(originalXml: string): string {
+    // If no selective changes, just return the original
+    if (!this.hasSelectiveChanges()) {
+      return originalXml;
+    }
+
+    let result = originalXml;
+
+    // Step 1: Remove deleted abstractNums
+    for (const deletedId of this._deletedAbstractNumIds) {
+      const pattern = new RegExp(
+        `<w:abstractNum[^>]*w:abstractNumId="${deletedId}"[^>]*>[\\s\\S]*?<\\/w:abstractNum>\\s*`,
+        'g'
+      );
+      result = result.replace(pattern, '');
+    }
+
+    // Step 2: Replace modified abstractNums with regenerated XML
+    for (const modifiedId of this._modifiedAbstractNumIds) {
+      const abstractNum = this.abstractNumberings.get(modifiedId);
+      if (abstractNum) {
+        const pattern = new RegExp(
+          `<w:abstractNum[^>]*w:abstractNumId="${modifiedId}"[^>]*>[\\s\\S]*?<\\/w:abstractNum>`,
+          'g'
+        );
+        const builder = new XMLBuilder();
+        builder.element(
+          abstractNum.toXML().name,
+          abstractNum.toXML().attributes,
+          abstractNum.toXML().children
+        );
+        const newXml = builder.build(false); // No declaration for inner elements
+        result = result.replace(pattern, newXml);
+      }
+    }
+
+    // Step 3: Add new abstractNums before the first <w:num> or before </w:numbering>
+    if (this._newAbstractNumIds.size > 0) {
+      const newAbstractNumsXml: string[] = [];
+      for (const newId of this._newAbstractNumIds) {
+        const abstractNum = this.abstractNumberings.get(newId);
+        if (abstractNum) {
+          const builder = new XMLBuilder();
+          builder.element(
+            abstractNum.toXML().name,
+            abstractNum.toXML().attributes,
+            abstractNum.toXML().children
+          );
+          newAbstractNumsXml.push(builder.build(false));
+        }
+      }
+
+      if (newAbstractNumsXml.length > 0) {
+        const insertionXml = newAbstractNumsXml.join('\n');
+        // Try to insert before first <w:num>, otherwise before </w:numbering>
+        if (result.includes('<w:num')) {
+          result = result.replace('<w:num', insertionXml + '\n<w:num');
+        } else {
+          result = result.replace('</w:numbering>', insertionXml + '\n</w:numbering>');
+        }
+      }
+    }
+
+    // Step 4: Handle instances - for now, instances are less commonly modified
+    // If we need more granular instance tracking, we can add it later
+
+    return result;
   }
 
   /**

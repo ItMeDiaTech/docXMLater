@@ -39,6 +39,9 @@ export class AbstractNumbering {
   private levels: Map<number, NumberingLevel>;
   private multiLevelType: number;
 
+  // Callback for notifying parent when properties change
+  private _onModified?: () => void;
+
   /**
    * Creates a new abstract numbering definition
    * @param idOrProps The abstract numbering ID (number) or properties object
@@ -81,6 +84,30 @@ export class AbstractNumbering {
 
     if (this.levels.size > 9) {
       throw new Error("Cannot have more than 9 levels (0-8)");
+    }
+  }
+
+  /**
+   * Sets the modification callback for tracking changes
+   * Called by NumberingManager when adding this abstract numbering
+   * @param callback Function to call when properties are modified
+   * @internal
+   */
+  _setModificationCallback(callback: () => void): void {
+    this._onModified = callback;
+    // Wire up all existing levels to the callback
+    this.levels.forEach((level) => {
+      level._setModificationCallback(callback);
+    });
+  }
+
+  /**
+   * Notifies the parent that this abstract numbering was modified
+   * @internal
+   */
+  private _notifyModified(): void {
+    if (this._onModified) {
+      this._onModified();
     }
   }
 
@@ -156,6 +183,12 @@ export class AbstractNumbering {
     }
 
     this.levels.set(levelIndex, level);
+
+    // Wire up modification callback if we have one
+    if (this._onModified) {
+      level._setModificationCallback(this._onModified);
+    }
+
     return this;
   }
 
