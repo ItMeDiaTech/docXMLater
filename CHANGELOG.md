@@ -5,6 +5,24 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.4.0] - 2025-01-24
+
+### Added
+
+- **Table Cell Margins Support**
+  - New `TableCellMargins` interface with top/bottom/left/right properties (in twips)
+  - `Table.getCellMargins()` - retrieve current cell margins
+  - `Table.setCellMargins(margins)` - set default cell margins for all cells
+  - Full round-trip support: parsing and serialization of `w:tblCellMar`
+  - Per ECMA-376 Part 1 Section 17.4.42
+
+- **HLP Hyperlinks Styling** (`styleDocument()` enhancement)
+  - New `aboveReturnToHLP` option to add blank lines above "Return to HLP" hyperlinks
+  - Auto-creates `HLPHyperlinks` style with right alignment, Verdana 12pt, blue underline
+  - Applies only to hyperlinks with exact text "return to hlp" (case-insensitive)
+
+---
+
 ## [9.3.3] - 2025-01-23
 
 ### Fixed

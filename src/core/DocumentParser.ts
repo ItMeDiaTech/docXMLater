@@ -4915,6 +4915,33 @@ export class DocumentParser {
       }
     }
 
+    // Parse table cell margins (w:tblCellMar) per ECMA-376 Part 1 §17.4.42
+    if (tblPrObj["w:tblCellMar"]) {
+      const cellMar = tblPrObj["w:tblCellMar"];
+      const margins: { top?: number; bottom?: number; left?: number; right?: number } = {};
+
+      if (cellMar["w:top"]) {
+        const w = cellMar["w:top"]["@_w:w"];
+        if (w !== undefined) margins.top = parseInt(w, 10);
+      }
+      if (cellMar["w:bottom"]) {
+        const w = cellMar["w:bottom"]["@_w:w"];
+        if (w !== undefined) margins.bottom = parseInt(w, 10);
+      }
+      if (cellMar["w:left"]) {
+        const w = cellMar["w:left"]["@_w:w"];
+        if (w !== undefined) margins.left = parseInt(w, 10);
+      }
+      if (cellMar["w:right"]) {
+        const w = cellMar["w:right"]["@_w:w"];
+        if (w !== undefined) margins.right = parseInt(w, 10);
+      }
+
+      if (Object.keys(margins).length > 0) {
+        table.setCellMargins(margins);
+      }
+    }
+
     // Parse table alignment (w:jc) - IMPORTANT for preserving table centering
     if (tblPrObj["w:jc"]) {
       const alignment = tblPrObj["w:jc"]["@_w:val"];
