@@ -5512,6 +5512,8 @@ export class Document {
     aboveFirstTable?: boolean;
     /** Add blank line above "Top of Document" hyperlinks (default: true) */
     aboveTODHyperlinks?: boolean;
+    /** Add blank line above "Return to HLP" hyperlinks and format with HLP Hyperlinks style (default: true) */
+    aboveReturnToHLP?: boolean;
     /** Add blank line below Heading 1 paragraphs with text (default: true) */
     belowHeading1Lines?: boolean;
     /** Add blank line below Table of Contents elements (default: true) */
@@ -5543,6 +5545,7 @@ export class Document {
     const filterOther = options?.filterOther;
     const aboveFirstTable = options?.aboveFirstTable ?? true;
     const aboveTODHyperlinks = options?.aboveTODHyperlinks ?? true;
+    const aboveReturnToHLP = options?.aboveReturnToHLP ?? true;
     const belowHeading1Lines = options?.belowHeading1Lines ?? true;
     const belowTOC = options?.belowTOC ?? true;
     const aboveWarning = options?.aboveWarning ?? true;
@@ -5668,6 +5671,87 @@ export class Document {
               totalBlankLinesAdded++;
             }
           }
+        }
+      }
+    }
+
+    // Phase 5b: Add blank above "Return to HLP" hyperlinks
+    if (aboveReturnToHLP) {
+      // Create or ensure HLP Hyperlinks style exists
+      if (!this.getStylesManager().hasStyle('HLPHyperlinks')) {
+        const hlpStyle = Style.create({
+          styleId: 'HLPHyperlinks',
+          name: 'HLP Hyperlinks',
+          type: 'paragraph',
+          basedOn: 'Normal',
+          customStyle: true,
+          paragraphFormatting: {
+            alignment: 'right',
+            spacing: {
+              before: 0,
+              after: 0,
+            }
+          },
+          runFormatting: {
+            font: 'Verdana',
+            size: 12,
+            color: '0000FF',
+            underline: 'single',
+            bold: false,
+            italic: false
+          }
+        });
+        this.addStyle(hlpStyle);
+      }
+
+      const hlpHyperlinks = this.getHyperlinks();
+
+      for (const { hyperlink, paragraph } of hlpHyperlinks) {
+        const text = hyperlink.getText().toLowerCase();
+
+        // Exact match only (case-insensitive)
+        if (text === 'return to hlp') {
+          const paraIndex = this.bodyElements.indexOf(paragraph);
+
+          if (paraIndex > 0) {
+            const prevElement = this.bodyElements[paraIndex - 1];
+
+            // Check if previous element is already blank
+            if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
+              // Mark existing blank as preserved
+              prevElement.setStyle(style);
+              if (markAsPreserved && !prevElement.isPreserved()) {
+                prevElement.setPreserved(true);
+                totalExistingLinesMarked++;
+              }
+            } else if (!(prevElement instanceof Table && prevElement.getRowCount() === 1 && prevElement.getColumnCount() === 1)) {
+              // Add blank only if previous is not a 1x1 table
+              const blankPara = Paragraph.create();
+              blankPara.setStyle(style);
+              blankPara.setSpaceAfter(spacingAfter);
+              if (markAsPreserved) {
+                blankPara.setPreserved(true);
+              }
+              this.bodyElements.splice(paraIndex, 0, blankPara);
+              totalBlankLinesAdded++;
+            }
+          }
+
+          // Format the hyperlink
+          hyperlink.setFormatting({
+            font: 'Verdana',
+            size: 12,
+            underline: 'single',
+            color: '0000FF',
+            bold: false,
+            italic: false
+          });
+
+          // Apply style and formatting to paragraph
+          paragraph.setStyle('HLPHyperlinks');
+          paragraph.setAlignment('right');
+          paragraph.setSpaceBefore(0);
+          paragraph.setSpaceAfter(0);
         }
       }
     }
@@ -5875,6 +5959,22 @@ export class Document {
             // This is a list item - check if it's the last item of its list
             const nextElement = this.bodyElements[i + 1];
 
+            // Check if next element is any list item (same or different list)
+            // If so, don't add blank between consecutive lists
+            const nextIsAnyListItem = nextElement instanceof Paragraph && nextElement.getNumbering();
+            if (nextIsAnyListItem) {
+              continue; // No blank between consecutive lists
+            }
+
+            // Check if next is small image followed by list item
+            // If so, don't add blank after this list
+            if (nextElement instanceof Paragraph && this.isSmallImageParagraph(nextElement)) {
+              const elementAfterImage = i + 2 < this.bodyElements.length ? this.bodyElements[i + 2] : undefined;
+              if (elementAfterImage && elementAfterImage instanceof Paragraph && elementAfterImage.getNumbering()) {
+                continue; // No blank: list → small image → list
+              }
+            }
+
             // Check if next non-list paragraph is within the same list context
             // (e.g., "Example:" or "Note:" between list items)
             const nextIsWithinList =
@@ -5885,8 +5985,7 @@ export class Document {
             const isListEnd =
               !nextElement || // End of document
               !(nextElement instanceof Paragraph) || // Next is not a paragraph
-              (!nextElement.getNumbering() && !nextIsWithinList) || // No numbering AND not within list context
-              (nextElement.getNumbering() && nextElement.getNumbering()!.numId !== numbering.numId); // Different list
+              (!nextElement.getNumbering() && !nextIsWithinList); // No numbering AND not within list context
 
             if (isListEnd) {
               // Check if there's already a blank paragraph after the list
@@ -5949,6 +6048,21 @@ export class Document {
               // This is a list item - check if it's the last item of its list in this cell
               const nextParaInCell = cellParas[ci + 1];
 
+              // Check if next element is any list item (same or different list)
+              // If so, don't add blank between consecutive lists
+              if (nextParaInCell && nextParaInCell.getNumbering()) {
+                continue; // No blank between consecutive lists in cell
+              }
+
+              // Check if next is small image followed by list item
+              // If so, don't add blank after this list
+              if (nextParaInCell && this.isSmallImageParagraph(nextParaInCell)) {
+                const paraAfterImage = cellParas[ci + 2];
+                if (paraAfterImage && paraAfterImage.getNumbering()) {
+                  continue; // No blank: list → small image → list in cell
+                }
+              }
+
               // Check if next non-list paragraph is within the same list context in the cell
               const nextIsWithinListInCell =
                 nextParaInCell &&
@@ -5957,8 +6071,7 @@ export class Document {
 
               const isListEndInCell =
                 !nextParaInCell || // End of cell
-                (!nextParaInCell.getNumbering() && !nextIsWithinListInCell) || // No numbering AND not within list context
-                (nextParaInCell.getNumbering() && nextParaInCell.getNumbering()!.numId !== numbering.numId); // Different list
+                (!nextParaInCell.getNumbering() && !nextIsWithinListInCell); // No numbering AND not within list context
 
               if (isListEndInCell) {
                 // Check if this is the last paragraph in the cell - don't add blank
@@ -5996,7 +6109,7 @@ export class Document {
       }
     }
 
-    // Phase 10: Add blank lines around images (larger than 100x100 pixels)
+    // Phase 10: Add blank lines around images
     if (aroundImages) {
       // Process body-level image paragraphs
       for (let imgIdx = 0; imgIdx < this.bodyElements.length; imgIdx++) {
@@ -6008,10 +6121,61 @@ export class Document {
         if (!imageRun) continue;
 
         const image = imageRun.getImageElement();
+        const isSmall = this.isImageSmall(image);
 
-        // Skip small images (both dimensions < 100px)
-        if (this.isImageSmall(image)) continue;
+        // Handle small images (< 100x100 pixels) with special rules
+        if (isSmall) {
+          // Add blank BEFORE small image unless:
+          // - Already blank OR
+          // - (Previous is list item AND current has left indent)
+          if (imgIdx > 0) {
+            const prevElement = this.bodyElements[imgIdx - 1];
+            const prevIsBlank = prevElement instanceof Paragraph && this.isParagraphBlank(prevElement);
+            const prevIsListItem = prevElement instanceof Paragraph && prevElement.getNumbering();
+            const leftIndent = (element as Paragraph).getLeftIndent();
+            const currentHasLeftIndent = leftIndent !== undefined && leftIndent > 0;
 
+            if (!prevIsBlank && !(prevIsListItem && currentHasLeftIndent)) {
+              const blankBefore = Paragraph.create();
+              blankBefore.setStyle(style);
+              blankBefore.setSpaceAfter(spacingAfter);
+              if (markAsPreserved) blankBefore.setPreserved(true);
+              this.bodyElements.splice(imgIdx, 0, blankBefore);
+              totalBlankLinesAdded++;
+              imgIdx++;
+            }
+          }
+
+          // Add blank AFTER small image unless:
+          // - Already blank OR
+          // - Next is list item
+          if (imgIdx < this.bodyElements.length - 1) {
+            const nextElement = this.bodyElements[imgIdx + 1];
+            const nextIsBlank = nextElement instanceof Paragraph && this.isParagraphBlank(nextElement);
+            const nextIsListItem = nextElement instanceof Paragraph && nextElement.getNumbering();
+
+            if (nextIsBlank) {
+              // Mark existing blank as preserved
+              nextElement.setStyle(style);
+              if (markAsPreserved && !(nextElement as Paragraph).isPreserved()) {
+                (nextElement as Paragraph).setPreserved(true);
+                totalExistingLinesMarked++;
+              }
+            } else if (!nextIsListItem) {
+              const blankAfter = Paragraph.create();
+              blankAfter.setStyle(style);
+              blankAfter.setSpaceAfter(spacingAfter);
+              if (markAsPreserved) blankAfter.setPreserved(true);
+              this.bodyElements.splice(imgIdx + 1, 0, blankAfter);
+              totalBlankLinesAdded++;
+              imgIdx++;
+            }
+          }
+
+          continue; // Skip large image processing
+        }
+
+        // Handle large images (>= 100x100 pixels) - original behavior
         // Add blank BEFORE image (if not at start of document and prev is not blank)
         if (imgIdx > 0) {
           const prevElement = this.bodyElements[imgIdx - 1];
@@ -6063,10 +6227,65 @@ export class Document {
               if (!imageRun) continue;
 
               const image = imageRun.getImageElement();
+              const isSmall = this.isImageSmall(image);
 
-              // Skip small images
-              if (this.isImageSmall(image)) continue;
+              // Handle small images (< 100x100 pixels) with special rules
+              if (isSmall) {
+                // Add blank BEFORE small image unless:
+                // - Already blank OR
+                // - (Previous is list item AND current has left indent)
+                if (ci > 0) {
+                  const prevPara = cellParas[ci - 1];
+                  const prevIsBlank = prevPara && this.isParagraphBlank(prevPara);
+                  const prevIsListItem = prevPara && prevPara.getNumbering();
+                  const leftIndent = para.getLeftIndent();
+                  const currentHasLeftIndent = leftIndent !== undefined && leftIndent > 0;
 
+                  if (!prevIsBlank && !(prevIsListItem && currentHasLeftIndent)) {
+                    const blankBefore = Paragraph.create();
+                    blankBefore.setStyle(style);
+                    blankBefore.setSpaceAfter(spacingAfter);
+                    if (markAsPreserved) blankBefore.setPreserved(true);
+                    cell.addParagraphAt(ci, blankBefore);
+                    totalBlankLinesAdded++;
+                    ci++;
+                    cellParaCount++;
+                  }
+                }
+
+                // Add blank AFTER small image unless:
+                // - Last in cell OR
+                // - Already blank OR
+                // - Next is list item
+                const isLastInCellSmall = ci === cell.getParagraphs().length - 1;
+                if (!isLastInCellSmall) {
+                  const nextPara = cell.getParagraphs()[ci + 1];
+                  const nextIsBlank = nextPara && this.isParagraphBlank(nextPara);
+                  const nextIsListItem = nextPara && nextPara.getNumbering();
+
+                  if (nextIsBlank) {
+                    // Mark existing blank as preserved
+                    nextPara.setStyle(style);
+                    if (markAsPreserved && !nextPara.isPreserved()) {
+                      nextPara.setPreserved(true);
+                      totalExistingLinesMarked++;
+                    }
+                  } else if (!nextIsListItem) {
+                    const blankAfter = Paragraph.create();
+                    blankAfter.setStyle(style);
+                    blankAfter.setSpaceAfter(spacingAfter);
+                    if (markAsPreserved) blankAfter.setPreserved(true);
+                    cell.addParagraphAt(ci + 1, blankAfter);
+                    totalBlankLinesAdded++;
+                    ci++;
+                    cellParaCount++;
+                  }
+                }
+
+                continue; // Skip large image processing
+              }
+
+              // Handle large images (>= 100x100 pixels) - original behavior
               // Add blank BEFORE image (if not at start of cell)
               if (ci > 0) {
                 const prevPara = cellParas[ci - 1];
@@ -6385,6 +6604,7 @@ export class Document {
       afterOtherTables: true,
       aboveFirstTable: true,
       aboveTODHyperlinks: true,
+      aboveReturnToHLP: true,
       belowHeading1Lines: true,
       belowTOC: true,
       aboveWarning: true,
@@ -7561,6 +7781,19 @@ export class Document {
     const widthPx = image.getWidth() / EMU_PER_PIXEL;
     const heightPx = image.getHeight() / EMU_PER_PIXEL;
     return widthPx < 100 && heightPx < 100;
+  }
+
+  /**
+   * Checks if a paragraph contains a small image (< 100x100 pixels)
+   * @param para The paragraph to check
+   * @returns True if paragraph contains a small image
+   * @private
+   */
+  private isSmallImageParagraph(para: Paragraph): boolean {
+    const imageRun = this.getImageRunFromParagraph(para);
+    if (!imageRun) return false;
+    const image = imageRun.getImageElement();
+    return this.isImageSmall(image);
   }
 
   /**

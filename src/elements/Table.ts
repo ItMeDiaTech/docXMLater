@@ -130,6 +130,24 @@ export interface TableShading {
 /**
  * Table formatting options
  */
+/**
+ * Table cell margins (padding inside cells)
+ * Per ECMA-376 Part 1 §17.4.42 (tblCellMar)
+ */
+export interface TableCellMargins {
+  /** Top margin in twips */
+  top?: number;
+  /** Bottom margin in twips */
+  bottom?: number;
+  /** Left margin in twips */
+  left?: number;
+  /** Right margin in twips */
+  right?: number;
+}
+
+/**
+ * Table formatting options
+ */
 export interface TableFormatting {
   style?: string; // Table style ID (e.g., 'Table1', 'TableGrid')
   width?: number; // Table width in twips
@@ -139,6 +157,7 @@ export interface TableFormatting {
   borders?: TableBorders;
   cellSpacing?: number; // Cell spacing in twips
   cellSpacingType?: TableWidthType; // Cell spacing type
+  cellMargins?: TableCellMargins; // Default cell margins (padding) for all cells
   indent?: number; // Left indent in twips
   tblLook?: string; // Table look flags (appearance settings)
   shading?: TableShading; // Table background shading
@@ -1034,6 +1053,30 @@ export class Table {
   }
 
   /**
+   * Gets the default cell margins (padding) for all cells
+   * Per ECMA-376 Part 1 §17.4.42 (tblCellMar)
+   * @returns Cell margins object or undefined if not set
+   */
+  getCellMargins(): TableCellMargins | undefined {
+    return this.formatting.cellMargins;
+  }
+
+  /**
+   * Sets the default cell margins (padding) for all cells
+   * Per ECMA-376 Part 1 §17.4.42 (tblCellMar)
+   * @param margins - Cell margins in twips
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * table.setCellMargins({ top: 43, left: 115, bottom: 43, right: 115 });
+   * ```
+   */
+  setCellMargins(margins: TableCellMargins): this {
+    this.formatting.cellMargins = margins;
+    return this;
+  }
+
+  /**
    * Gets the table style ID
    * @returns Style ID or undefined if not set
    */
@@ -1222,6 +1265,48 @@ export class Table {
           "w:type": cellSpacingType,
         })
       );
+    }
+
+    // Add cell margins (tblCellMar) - per ECMA-376 Part 1 §17.4.42
+    if (this.formatting.cellMargins) {
+      const marginElements: XMLElement[] = [];
+      if (this.formatting.cellMargins.top !== undefined) {
+        marginElements.push(
+          XMLBuilder.wSelf("top", {
+            "w:w": this.formatting.cellMargins.top,
+            "w:type": "dxa",
+          })
+        );
+      }
+      if (this.formatting.cellMargins.left !== undefined) {
+        marginElements.push(
+          XMLBuilder.wSelf("left", {
+            "w:w": this.formatting.cellMargins.left,
+            "w:type": "dxa",
+          })
+        );
+      }
+      if (this.formatting.cellMargins.bottom !== undefined) {
+        marginElements.push(
+          XMLBuilder.wSelf("bottom", {
+            "w:w": this.formatting.cellMargins.bottom,
+            "w:type": "dxa",
+          })
+        );
+      }
+      if (this.formatting.cellMargins.right !== undefined) {
+        marginElements.push(
+          XMLBuilder.wSelf("right", {
+            "w:w": this.formatting.cellMargins.right,
+            "w:type": "dxa",
+          })
+        );
+      }
+      if (marginElements.length > 0) {
+        tblPrChildren.push(
+          XMLBuilder.w("tblCellMar", undefined, marginElements)
+        );
+      }
     }
 
     // Add table indent
