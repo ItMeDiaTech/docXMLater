@@ -119,6 +119,9 @@ export interface NumberingLevelProperties {
 export class NumberingLevel {
   private properties: Required<Omit<NumberingLevelProperties, 'lvlRestart' | 'underline'>> & Pick<NumberingLevelProperties, 'lvlRestart' | 'underline'>;
 
+  // Callback for notifying parent when properties change
+  private _onModified?: () => void;
+
   /**
    * Creates a new numbering level
    * @param properties The level properties
@@ -173,6 +176,26 @@ export class NumberingLevel {
 
     if (this.properties.start < 0) {
       throw new Error("Start value must be non-negative");
+    }
+  }
+
+  /**
+   * Sets the modification callback for tracking changes
+   * Called by AbstractNumbering when adding this level
+   * @param callback Function to call when properties are modified
+   * @internal
+   */
+  _setModificationCallback(callback: () => void): void {
+    this._onModified = callback;
+  }
+
+  /**
+   * Notifies the parent that this level was modified
+   * @internal
+   */
+  private _notifyModified(): void {
+    if (this._onModified) {
+      this._onModified();
     }
   }
 
@@ -252,12 +275,27 @@ export class NumberingLevel {
   }
 
   /**
+   * Gets the left indentation in twips
+   */
+  getLeftIndent(): number {
+    return this.properties.leftIndent;
+  }
+
+  /**
+   * Gets the hanging indentation in twips
+   */
+  getHangingIndent(): number {
+    return this.properties.hangingIndent;
+  }
+
+  /**
    * Sets the left indentation
    * @param twips Indentation in twips
    */
   setLeftIndent(twips: number): this {
     // Note: Negative values are valid (outdent into margin) per ECMA-376
     this.properties.leftIndent = twips;
+    this._notifyModified();
     return this;
   }
 
@@ -270,6 +308,7 @@ export class NumberingLevel {
       throw new Error("Hanging indent must be non-negative");
     }
     this.properties.hangingIndent = twips;
+    this._notifyModified();
     return this;
   }
 
@@ -279,6 +318,7 @@ export class NumberingLevel {
    */
   setFont(font: string): this {
     this.properties.font = font;
+    this._notifyModified();
     return this;
   }
 
@@ -288,6 +328,7 @@ export class NumberingLevel {
    */
   setAlignment(alignment: NumberAlignment): this {
     this.properties.alignment = alignment;
+    this._notifyModified();
     return this;
   }
 
@@ -297,6 +338,7 @@ export class NumberingLevel {
    */
   setFontSize(halfPoints: number): this {
     this.properties.fontSize = halfPoints;
+    this._notifyModified();
     return this;
   }
 
@@ -306,6 +348,7 @@ export class NumberingLevel {
    */
   setText(text: string): this {
     this.properties.text = text;
+    this._notifyModified();
     return this;
   }
 
@@ -315,6 +358,7 @@ export class NumberingLevel {
    */
   setColor(color: string): this {
     this.properties.color = color;
+    this._notifyModified();
     return this;
   }
 
@@ -324,6 +368,7 @@ export class NumberingLevel {
    */
   setBold(bold: boolean): this {
     this.properties.bold = bold;
+    this._notifyModified();
     return this;
   }
 
@@ -333,6 +378,7 @@ export class NumberingLevel {
    */
   setItalic(italic: boolean): this {
     this.properties.italic = italic;
+    this._notifyModified();
     return this;
   }
 
@@ -349,6 +395,7 @@ export class NumberingLevel {
    */
   setUnderline(style: string | undefined): this {
     this.properties.underline = style;
+    this._notifyModified();
     return this;
   }
 
@@ -364,6 +411,7 @@ export class NumberingLevel {
    */
   clearUnderline(): this {
     this.properties.underline = undefined;
+    this._notifyModified();
     return this;
   }
 
@@ -388,6 +436,7 @@ export class NumberingLevel {
       throw new Error(`lvlRestart must be between 0 and 8, got ${level}`);
     }
     this.properties.lvlRestart = level;
+    this._notifyModified();
     return this;
   }
 
@@ -405,6 +454,7 @@ export class NumberingLevel {
    */
   setFormat(format: NumberFormat): this {
     this.properties.format = format;
+    this._notifyModified();
     return this;
   }
 
