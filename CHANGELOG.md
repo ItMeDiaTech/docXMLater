@@ -5,6 +5,18 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.1] - 2025-01-24
+
+### Fixed
+
+- **Bold+Colon Blank Line Logic Improvement**
+  - Changed `aboveBoldColon` option in `addStructureBlankLines()` to only skip indented paragraphs when the immediate previous element is a list item
+  - Previously, all indented bold+colon paragraphs were skipped regardless of context
+  - Now, indented bold+colon paragraphs (like "Note:", "Examples:") get blank lines added unless directly following a list item
+  - Affects both body paragraphs and table cell paragraphs
+
+---
+
 ## [9.5.0] - 2025-01-24
 
 ### Added
