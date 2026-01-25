@@ -6389,11 +6389,17 @@ export class Document {
           // Skip paragraphs within a list context (e.g., "Example:" between bullet items)
           if (this.isWithinListContext(i)) continue;
 
-          // Skip indented paragraphs - don't add blank lines above indented bold+colon
+          // Skip if IMMEDIATE previous is a list item AND current is indented
           const indentation = element.getFormatting().indentation;
-          if (indentation && indentation.left && indentation.left > 0) continue;
-
+          const isIndented = indentation && indentation.left && indentation.left > 0;
           const prevElement = this.bodyElements[i - 1];
+          if (isIndented && prevElement instanceof Paragraph) {
+            const prevNumbering = prevElement.getNumbering();
+            if (prevNumbering) {
+              // Previous is list item AND current is indented - skip
+              continue;
+            }
+          }
 
           if (
             prevElement instanceof Paragraph &&
@@ -6471,14 +6477,21 @@ export class Document {
               // Check bold+colon condition
               if (!this.startsWithBoldColon(para)) continue;
 
-              // Skip indented paragraphs - don't add blank lines above indented bold+colon
-              const indentation = para.getFormatting().indentation;
-              if (indentation && indentation.left && indentation.left > 0) continue;
-
               // Skip if first element in cell
               if (ci === 0) continue;
 
               const prevPara = cellParas[ci - 1];
+
+              // Skip if IMMEDIATE previous is a list item AND current is indented
+              const indentation = para.getFormatting().indentation;
+              const isIndented = indentation && indentation.left && indentation.left > 0;
+              if (isIndented && prevPara) {
+                const prevNumbering = prevPara.getNumbering();
+                if (prevNumbering) {
+                  // Previous is list item AND current is indented - skip
+                  continue;
+                }
+              }
 
               if (prevPara && this.isParagraphBlank(prevPara)) {
                 // Mark existing blank as preserved
