@@ -6212,6 +6212,105 @@ export class Document {
       }
     }
 
+    // Phase 9d: Add blank after long text paragraphs (>100 chars)
+    // This helps visually separate dense content from following paragraphs
+    if (afterLists) {
+      for (let i = 0; i < this.bodyElements.length; i++) {
+        const element = this.bodyElements[i];
+
+        if (!(element instanceof Paragraph)) continue;
+
+        // Skip list items
+        if (element.getNumbering()) continue;
+
+        // Skip if current has indentation
+        const currentIndent = element.getFormatting()?.indentation?.left;
+        if (currentIndent && currentIndent > 0) continue;
+
+        // Check text length
+        const text = element.getText() || '';
+        if (text.length <= 100) continue;
+
+        // Check next element
+        const nextElement = this.bodyElements[i + 1];
+        if (!nextElement || !(nextElement instanceof Paragraph)) continue;
+
+        // Skip if next is blank
+        if (this.isParagraphBlank(nextElement)) continue;
+
+        // Skip if next is list item
+        if (nextElement.getNumbering()) continue;
+
+        // Skip if next has indentation
+        const nextIndent = nextElement.getFormatting()?.indentation?.left;
+        if (nextIndent && nextIndent > 0) continue;
+
+        // Add blank line
+        const blankPara = Paragraph.create();
+        blankPara.setStyle(style);
+        blankPara.setSpaceAfter(spacingAfter);
+        blankPara.setPreserved(markAsPreserved);
+        this.bodyElements.splice(i + 1, 0, blankPara);
+        totalBlankLinesAdded++;
+        i++; // Skip inserted blank
+      }
+
+      // Phase 9d-table: Handle long text paragraphs inside table cells
+      for (const table of this.getAllTables()) {
+        for (const row of table.getRows()) {
+          for (const cell of row.getCells()) {
+            let cellParas = cell.getParagraphs();
+            let cellParaCount = cellParas.length;
+
+            for (let ci = 0; ci < cellParaCount; ci++) {
+              cellParas = cell.getParagraphs(); // Refresh after potential insertion
+              const para = cellParas[ci];
+              if (!para) continue;
+
+              // Skip list items
+              if (para.getNumbering()) continue;
+
+              // Skip if current has indentation
+              const currentIndent = para.getFormatting()?.indentation?.left;
+              if (currentIndent && currentIndent > 0) continue;
+
+              // Check text length
+              const text = para.getText() || '';
+              if (text.length <= 100) continue;
+
+              // Check if this is the last paragraph in the cell - never add blank at cell end
+              const isLastInCell = ci === cellParas.length - 1;
+              if (isLastInCell) continue;
+
+              // Check next element
+              const nextPara = cellParas[ci + 1];
+              if (!nextPara) continue;
+
+              // Skip if next is blank
+              if (this.isParagraphBlank(nextPara)) continue;
+
+              // Skip if next is list item
+              if (nextPara.getNumbering()) continue;
+
+              // Skip if next has indentation
+              const nextIndent = nextPara.getFormatting()?.indentation?.left;
+              if (nextIndent && nextIndent > 0) continue;
+
+              // Add blank line
+              const blankPara = Paragraph.create();
+              blankPara.setStyle(style);
+              blankPara.setSpaceAfter(spacingAfter);
+              blankPara.setPreserved(markAsPreserved);
+              cell.addParagraphAt(ci + 1, blankPara);
+              totalBlankLinesAdded++;
+              ci++; // Skip the newly inserted blank
+              cellParaCount++; // Account for added paragraph
+            }
+          }
+        }
+      }
+    }
+
     // Phase 10: Add blank lines around images
     if (aroundImages) {
       // Process body-level image paragraphs

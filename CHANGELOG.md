@@ -5,6 +5,19 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.11] - 2026-01-26
+
+### Added
+
+- **Blank Line After Long Text Paragraphs (Phase 9d)**
+  - Adds blank line after paragraphs with >100 characters of text
+  - Conditions: current and next elements must NOT be list items, NOT be blank, NOT be indented
+  - Never adds blank if current element is last in table cell
+  - Applies to both body-level paragraphs and table cell paragraphs
+  - Helps visually separate dense content from following paragraphs
+
+---
+
 ## [9.5.10] - 2025-01-26
 
 ### Fixed
