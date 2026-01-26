@@ -5,6 +5,26 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.4] - 2025-01-25
+
+### Fixed
+
+- **Bookmark-Only Paragraph Preservation**
+  - Fixed document corruption when paragraphs contain only bookmarks (no text runs)
+  - Bookmarks like `_Rationale`, `_Definitions`, `_Log_Activity` were incorrectly removed during `addStructureBlankLines()`
+  - Root cause: `parseParagraphFromObject()` didn't parse `w:bookmarkStart`/`w:bookmarkEnd` elements from XML objects
+  - Root cause: `isParagraphBlank()` returned true for empty content before checking for bookmarks
+  - Now correctly parses bookmarks in both `_orderedChildren` and fallback code paths
+  - Bookmark check moved to beginning of `isParagraphBlank()` to catch bookmark-only paragraphs
+
+### Changed
+
+- **Bookmark Parsing in DocumentParser**
+  - Added `w:bookmarkStart` and `w:bookmarkEnd` handling to `parseParagraphFromObject()`
+  - Bookmarks are now correctly attached to paragraphs when loaded via XML object parsing path
+
+---
+
 ## [9.5.3] - 2025-01-25
 
 ### Fixed

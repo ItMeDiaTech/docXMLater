@@ -5404,6 +5404,35 @@ export class Document {
   }
 
   /**
+   * Sets the default cell padding for all tables in the document.
+   * Uses table-level defaults (tblCellMar) which apply to all cells unless overridden.
+   *
+   * @param top - Top padding in twips
+   * @param bottom - Bottom padding in twips
+   * @param left - Left padding in twips
+   * @param right - Right padding in twips
+   * @returns Number of tables affected
+   * @example
+   * ```typescript
+   * // Set padding for all tables in document
+   * const count = doc.setTablePadding(100, 100, 100, 100);
+   * console.log(`Updated padding for ${count} tables`);
+   * ```
+   */
+  public setTablePadding(
+    top: number,
+    bottom: number,
+    left: number,
+    right: number
+  ): number {
+    const tables = this.getAllTables();
+    for (const table of tables) {
+      table.setPadding(top, bottom, left, right);
+    }
+    return tables.length;
+  }
+
+  /**
    * Helper method to process consecutive blank paragraphs
    * @private
    */
@@ -5991,10 +6020,22 @@ export class Document {
               !nextElement.getNumbering() &&
               this.isWithinListContext(i + 1);
 
+            // Check if next paragraph is indented (continuation of list content)
+            // Indented paragraphs after list items are typically additional content
+            // related to the list, not a new section, so don't add blank before them
+            const nextIndent = nextElement instanceof Paragraph
+              ? nextElement.getFormatting().indentation?.left
+              : undefined;
+            const nextIsIndented =
+              nextElement instanceof Paragraph &&
+              !nextElement.getNumbering() &&
+              typeof nextIndent === 'number' &&
+              nextIndent > 0;
+
             const isListEnd =
               !nextElement || // End of document
               !(nextElement instanceof Paragraph) || // Next is not a paragraph
-              (!nextElement.getNumbering() && !nextIsWithinList); // No numbering AND not within list context
+              (!nextElement.getNumbering() && !nextIsWithinList && !nextIsIndented); // No numbering AND not within list context AND not indented
 
             if (isListEnd) {
               // Check if there's already a blank paragraph after the list
@@ -6078,9 +6119,19 @@ export class Document {
                 !nextParaInCell.getNumbering() &&
                 this.isWithinListContextInCell(cell, ci + 1);
 
+              // Check if next paragraph is indented (continuation of list content)
+              const nextIndentInCell = nextParaInCell
+                ? nextParaInCell.getFormatting().indentation?.left
+                : undefined;
+              const nextIsIndentedInCell =
+                nextParaInCell &&
+                !nextParaInCell.getNumbering() &&
+                typeof nextIndentInCell === 'number' &&
+                nextIndentInCell > 0;
+
               const isListEndInCell =
                 !nextParaInCell || // End of cell
-                (!nextParaInCell.getNumbering() && !nextIsWithinListInCell); // No numbering AND not within list context
+                (!nextParaInCell.getNumbering() && !nextIsWithinListInCell && !nextIsIndentedInCell); // No numbering AND not within list context AND not indented
 
               if (isListEndInCell) {
                 // Check if this is the last paragraph in the cell - don't add blank
@@ -7587,9 +7638,18 @@ export class Document {
    * @private
    */
   private isParagraphBlank(para: Paragraph): boolean {
+    // Check for bookmarks FIRST - paragraphs with only bookmarks are NOT blank
+    // (bookmarks can exist without any content/runs)
+    if (
+      para.getBookmarksStart().length > 0 ||
+      para.getBookmarksEnd().length > 0
+    ) {
+      return false;
+    }
+
     const content = para.getContent();
 
-    // No content at all
+    // No content at all (and no bookmarks, checked above)
     if (!content || content.length === 0) {
       return true;
     }
@@ -7646,13 +7706,7 @@ export class Document {
       }
     }
 
-    // Check for bookmarks
-    if (
-      para.getBookmarksStart().length > 0 ||
-      para.getBookmarksEnd().length > 0
-    ) {
-      return false;
-    }
+    // Note: Bookmark check is done at the beginning of this function
 
     return true;
   }
