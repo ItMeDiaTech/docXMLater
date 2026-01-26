@@ -1,0 +1,2925 @@
+PASS tests/core/Document.insertValidation.test.ts (10.326 s)
+  Document Insert Validation
+    insertParagraphAt()
+      √ should reject non-Paragraph types (150 ms)
+      √ should reject null (3 ms)
+      √ should reject undefined (5 ms)
+      √ should accept valid Paragraph instance (4 ms)
+      √ should detect duplicate paragraph IDs (15 ms)
+      √ should allow paragraphs with different IDs (9 ms)
+      √ should warn about missing styles (4 ms)
+      √ should warn about missing numbering (2 ms)
+      √ should normalize negative index to 0 (3 ms)
+      √ should normalize index beyond length to end (3 ms)
+    insertTableAt()
+      √ should reject non-Table types (2 ms)
+      √ should reject null (3 ms)
+      √ should accept valid Table instance (2 ms)
+      √ should reject table with zero rows (2 ms)
+      √ should reject table with empty rows (2 ms)
+      √ should warn about missing table styles (7 ms)
+      √ should normalize negative index to 0 (2 ms)
+    insertTocAt()
+      √ should reject non-TableOfContentsElement types (5 ms)
+      √ should reject null (3 ms)
+      √ should accept valid TableOfContentsElement instance (2 ms)
+      √ should not throw when inserting TOC (2 ms)
+    replaceParagraphAt()
+      √ should reject non-Paragraph replacement types (2 ms)
+      √ should validate replacement paragraph (2 ms)
+      √ should accept valid replacement (3 ms)
+      √ should return false if index out of bounds (2 ms)
+      √ should return false if element is not a paragraph (2 ms)
+    replaceTableAt()
+      √ should reject non-Table replacement types (2 ms)
+      √ should validate replacement table (5 ms)
+      √ should accept valid replacement (2 ms)
+      √ should return false if index out of bounds (2 ms)
+      √ should return false if element is not a table (2 ms)
+    Integration Tests
+      √ should allow multiple inserts with validation (4 ms)
+      √ should maintain document integrity through save/load cycle (121 ms)
+
+PASS tests/validation/TextElementProtection.test.ts (10.43 s)
+  Text Element Protection (from Error Analysis Report)
+    Issue #1: Self-Closing Text Element Protection
+      √ should throw error if w:t is marked as self-closing (30 ms)
+      √ should never create self-closing w:t elements (1 ms)
+      √ should preserve empty text with proper closing tag (1 ms)
+    Issue #2: Run Text Validation
+      √ should warn when creating run with undefined text (5 ms)
+      √ should warn when creating run with null text (1 ms)
+      √ should convert undefined/null text to empty string (1 ms)
+    Issue #8: Run Helper Methods
+      √ should correctly identify runs with text (1 ms)
+      √ should correctly identify runs with formatting (1 ms)
+      √ should validate runs correctly
+    Round-Trip Text Preservation
+      √ should preserve text through load-save cycle (137 ms)
+      √ should preserve special characters through round-trip (41 ms)
+      √ should preserve formatted text through round-trip (48 ms)
+      √ should detect multiple round-trips without data loss (107 ms)
+
+PASS tests/core/HyperlinkParsing.test.ts (10.564 s)
+  Hyperlink Parsing
+    External Hyperlinks
+      √ should parse external hyperlink with URL (87 ms)
+      √ should parse hyperlink with tooltip (13 ms)
+      √ should parse hyperlink with formatted text (9 ms)
+      √ should handle multiple hyperlinks in one paragraph (12 ms)
+    Internal Hyperlinks (Anchors)
+      √ should parse internal hyperlink with anchor (10 ms)
+      √ should parse internal hyperlink with tooltip (9 ms)
+    Edge Cases
+      √ should handle hyperlink with empty text (improved fallback) (7 ms)
+      √ should handle hyperlink with missing relationship (7 ms)
+      √ should handle hyperlink with special characters in text (8 ms)
+    Round-Trip Fidelity
+      √ should preserve hyperlinks through load-save-load cycle (46 ms)
+      √ should preserve internal hyperlinks through round-trip (21 ms)
+    Validation (ECMA-376 Compliance)
+      √ should throw error if external link toXML() called without relationship ID (67 ms)
+      √ should NOT throw error if external link has relationship ID set
+      √ should throw error if hyperlink has neither url nor anchor (2 ms)
+      √ should NOT throw error for internal links without relationship ID (1 ms)
+      √ should warn when hyperlink has both url and anchor (hybrid link) (3 ms)
+      √ should properly escape special characters in tooltip attribute (1 ms)
+      √ should use correct text fallback chain (text → url → "Link") - anchor should NEVER be display text (1 ms)
+      √ should preserve validation through Document.save() workflow (17 ms)
+    Hyperlink URL Updates
+      √ should update hyperlink URL using setUrl() (1 ms)
+      √ should clear relationship ID when URL is updated (7 ms)
+      √ should update multiple hyperlinks in document using updateHyperlinkUrls() (3 ms)
+      √ should skip internal hyperlinks when updating URLs (10 ms)
+      √ should re-register relationships after URL update on save (23 ms)
+      √ should return 0 when no URLs match the map (2 ms)
+      √ should handle updating same URL multiple times in one document (4 ms)
+    External URL + Anchor Fragment Combination
+      √ should combine external URL with anchor fragment during parsing (13 ms)
+      √ should allow docid pattern to be extracted from combined URL (11 ms)
+      √ should handle multiple hyperlinks with different URL+anchor combinations (22 ms)
+      √ should preserve combined URL through round-trip save/load (32 ms)
+      √ should handle getFullUrl() for manually created hyperlinks with both url and anchor (1 ms)
+      √ should return url from getFullUrl() when no anchor is set
+      √ should return undefined from getFullUrl() for internal-only links (1 ms)
+    TOC Corruption Prevention (Anchor as Display Text Bug)
+      √ should NOT use anchor bookmark ID as display text when text is empty (8 ms)
+      √ should preserve TOC-like hyperlinks with proper display text through round-trip (23 ms)
+      √ should warn when parsing hyperlink with anchor but no display text (8 ms)
+  Hyperlinks in Tables (processHyperlinks fix)
+    External hyperlinks with URL+anchor in table cells
+      √ should preserve hyperlinks in table cells through round-trip save/load (28 ms)
+      √ should handle hyperlinks in table cells without anchor (simple external URL) (48 ms)
+      √ should register relationship IDs for hyperlinks created via API in table cells (43 ms)
+    Multiple hyperlinks in nested table structures
+      √ should handle multiple hyperlinks across multiple table cells (16 ms)
+
+PASS tests/core/TextPreservation.test.ts (10.532 s)
+  Text Preservation
+    √ should preserve text through save and load cycle (127 ms)
+    √ should preserve text with XML entities (46 ms)
+    √ should preserve unicode and special characters (43 ms)
+    √ should preserve whitespace and newlines (50 ms)
+    √ should handle empty paragraphs correctly (34 ms)
+    √ should warn when loading corrupted documents (5 ms)
+    √ should warn when saving documents with mostly empty content (36 ms)
+    √ should handle multiple save/load cycles without data loss (171 ms)
+
+PASS tests/elements/TablePropertiesBatch1.test.ts (10.887 s)
+  Table Properties Batch 1 - Table-Level Properties
+    Table Positioning (tblpPr)
+      √ should set and serialize absolute positioning (143 ms)
+      √ should set and serialize relative positioning with alignment (48 ms)
+      √ should set and serialize positioning with text distances (41 ms)
+    Table Overlap (tblOverlap)
+      √ should set and serialize overlap=true (20 ms)
+      √ should set and serialize overlap=false (17 ms)
+    Bidirectional Visual Layout (bidiVisual)
+      √ should set and serialize bidiVisual=true (19 ms)
+      √ should handle undefined bidiVisual (default LTR)
+    Table Grid (Column Widths)
+      √ should set and serialize table grid with custom widths (18 ms)
+      √ should handle varying column widths (19 ms)
+    Accessibility Properties
+      √ should set and serialize table caption (17 ms)
+      √ should set and serialize table description (89 ms)
+      √ should set and serialize both caption and description (62 ms)
+    Width and Spacing Types
+      √ should set and serialize table width with type (29 ms)
+      √ should set and serialize cell spacing with type (51 ms)
+      √ should default to 'dxa' for width type (25 ms)
+    Combined Properties
+      √ should handle multiple properties together (35 ms)
+      √ should preserve properties through multiple save/load cycles (152 ms)
+    XML Structure Validation
+      √ should generate correct XML for positioning (1 ms)
+      √ should generate correct XML for overlap (1 ms)
+      √ should generate correct XML for bidiVisual
+      √ should generate correct XML for caption and description (1 ms)
+
+PASS tests/elements/TablePropertiesBatch3.test.ts (10.968 s)
+  Phase 4.3 Batch 3 - Table Row Properties Part 1
+    Row Justification (w:jc)
+      √ should set row justification to center (120 ms)
+      √ should set row justification to right (51 ms)
+      √ should preserve multiple row justifications in round-trip (43 ms)
+    Hidden Row (w:hidden)
+      √ should set row as hidden (53 ms)
+      √ should preserve hidden flag in round-trip (41 ms)
+    Grid Before (w:gridBefore)
+      √ should set gridBefore to skip columns (57 ms)
+      √ should preserve gridBefore in round-trip (58 ms)
+    Grid After (w:gridAfter)
+      √ should set gridAfter to leave columns (32 ms)
+      √ should preserve gridAfter in round-trip (59 ms)
+    Grid Before + Grid After Combined
+      √ should handle both gridBefore and gridAfter (35 ms)
+      √ should preserve gridBefore and gridAfter in round-trip (55 ms)
+    Existing Properties Verification
+      √ should verify cantSplit property works correctly (44 ms)
+      √ should verify isHeader property works correctly (62 ms)
+      √ should verify trHeight property works correctly (52 ms)
+    Combined Properties
+      √ should handle multiple row properties together (53 ms)
+      √ should preserve all properties in multi-cycle round-trip (63 ms)
+    Edge Cases
+      √ should handle row with no properties (30 ms)
+      √ should handle gridBefore and gridAfter with value 0 (73 ms)
+      √ should handle all justification values (87 ms)
+
+  console.log
+      ⏱️  100-page document created in 238ms
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:49:13)
+
+  console.log
+      ⏱️  1000 paragraphs created in 60ms
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:78:13)
+
+  console.log
+      ⏱️  Load and save completed in 85ms
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:105:13)
+
+PASS tests/elements/TablePropertyExceptions.test.ts
+  Table Property Exceptions (tblPrEx)
+    Border Exceptions
+      √ should set border exceptions for a single row (80 ms)
+      √ should override different border styles per row (38 ms)
+    Shading Exceptions
+      √ should set shading exception for a row (64 ms)
+      √ should preserve different shading colors per row (104 ms)
+    Combined Exceptions
+      √ should set borders and shading together (56 ms)
+      √ should set all property types together (41 ms)
+    Cell Spacing Exception
+      √ should override cell spacing for specific row (52 ms)
+    Width and Indentation Exceptions
+      √ should override width for specific row (87 ms)
+    Justification Exception
+      √ should override justification for specific rows (45 ms)
+    Round-Trip Preservation
+      √ should preserve exceptions through multiple save-load cycles (44 ms)
+    Edge Cases
+      √ should handle row without exceptions (47 ms)
+      √ should handle empty exceptions object (39 ms)
+
+  console.log
+      💾 Memory growth: -38.25MB
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:141:13)
+
+  console.log
+      ⏱️  Formatted document created in 63ms
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:180:13)
+
+PASS tests/core/Document.test.ts (11.795 s)
+  Document
+    Document.create()
+      √ should create a new empty document (15 ms)
+      √ should create document with properties (4 ms)
+      √ should initialize required DOCX files (3 ms)
+    Paragraph management
+      √ should add paragraphs (5 ms)
+      √ should support method chaining for addParagraph (3 ms)
+      √ should create and add paragraph with text (4 ms)
+      √ should create empty paragraph when no text provided (1 ms)
+      √ should get paragraphs as copy (4 ms)
+      √ should clear all paragraphs (3 ms)
+      √ should support method chaining for clearParagraphs (6 ms)
+    Document properties
+      √ should set properties (2 ms)
+      √ should merge properties (2 ms)
+      √ should support method chaining for setProperties (1 ms)
+      √ should get properties as copy (9 ms)
+      √ should handle special characters in properties (2 ms)
+    save()
+      √ should save document to file (68 ms)
+      √ should save document with multiple paragraphs (42 ms)
+      √ should save document with formatted paragraphs (27 ms)
+      √ should update document.xml when saving (26 ms)
+    toBuffer()
+      √ should generate document as buffer (22 ms)
+      √ should be able to load buffer back (43 ms)
+    Document.load()
+      √ should load document from file (61 ms)
+      √ should throw error for invalid file (115 ms)
+    Document.loadFromBuffer()
+      √ should load document from buffer (23 ms)
+      √ should throw error for invalid buffer (178 ms)
+    XML generation
+      √ should generate valid [Content_Types].xml (3 ms)
+      √ should generate valid _rels/.rels (2 ms)
+      √ should generate valid core.xml (2 ms)
+      √ should generate valid app.xml (5 ms)
+      √ should escape special characters in properties (3 ms)
+    Integration tests
+      √ should create a complete valid DOCX file (30 ms)
+      √ should handle documents with many paragraphs (20 ms)
+      √ should create round-trip compatible documents (49 ms)
+      √ should preserve element order when loading and saving documents (55 ms)
+    Parsing documents with conflicting paragraph properties
+      √ should resolve pageBreakBefore + keepNext conflict during parsing (14 ms)
+      √ should preserve keepNext/keepLines when pageBreakBefore is not set (18 ms)
+      √ should handle multiple paragraphs with mixed conflict scenarios (15 ms)
+      √ should resolve conflicts when properties come from XML with non-standard order (15 ms)
+    TOC Field Instruction Parsing
+      parseTOCFieldInstruction()
+        √ should parse TOC field with double-quoted o switch (1 ms)
+        √ should parse TOC field with single-quoted o switch (3 ms)
+        √ should parse TOC field with unquoted o switch (1 ms)
+        √ should extract correct outline levels from double-quoted format (1 ms)
+        √ should extract correct outline levels from single-quoted format (1 ms)
+        √ should extract correct outline levels from unquoted format
+        √ should handle multiple spaces before unquoted o value (1 ms)
+        √ should not match non-TOC field instructions
+        √ should handle complex TOC instructions with multiple switches (1 ms)
+        √ should handle complex TOC instructions with unquoted o switch
+    Bookmark Helpers
+      addTopBookmark()
+        √ should create _top bookmark when it does not exist (2 ms)
+        √ should return existing _top bookmark when already present (2 ms)
+        √ should place bookmark at the beginning of document (2 ms)
+        √ should create working hyperlinks to _top bookmark (2 ms)
+        √ should be idempotent - safe to call multiple times on empty document (3 ms)
+        √ should be idempotent - safe to call multiple times on document with content (5 ms)
+        √ should preserve _top bookmark through save/load cycle (33 ms)
+        √ should generate correct XML structure (12 ms)
+        √ should work with hyperlinks in other paragraphs (54 ms)
+    Preserve Blank Lines After Heading 2 Tables
+      applyStyles with preserveBlankLinesAfterHeading2Tables
+        √ should mark blank lines as preserved when option is true (12 ms)
+        √ should not mark blank lines as preserved when option is false (11 ms)
+        √ should default to true when option is not specified (20 ms)
+      removeExtraBlankParagraphs
+        √ should not remove preserved blank paragraphs (11 ms)
+        √ should not remove paragraphs with text inside revisions (11 ms)
+    Revision Registration
+      √ should register parsed revisions with RevisionManager after loading (31 ms)
+      √ should make ChangelogGenerator work with parsed revisions (338 ms)
+    addBlankLineAfterLists()
+      √ should add blank line after a simple numbered list (5 ms)
+      √ should add blank line after a bullet list (10 ms)
+      √ should handle nested lists as one list (same numId) (1 ms)
+      √ should add blank line after each separate list (different numIds) (3 ms)
+      √ should add blank line when list is at end of document (4 ms)
+      √ should add blank line between list and table (2 ms)
+      √ should return 0 for document with no lists (2 ms)
+      √ should return 0 for empty document (5 ms)
+      √ should not add blank line if one already exists after list (2 ms)
+      √ should be idempotent - calling twice should not add duplicate blanks (2 ms)
+      √ should remove blank line in MIDDLE of a list via addStructureBlankLines (5 ms)
+      √ should add blank line above paragraph starting with bold text and colon (3 ms)
+      √ should add blank line above paragraph with bold date followed by colon (10 ms)
+      √ should NOT add blank line above non-bold text with colon (4 ms)
+      √ should NOT add blank line above bold text without colon (6 ms)
+      √ should mark existing blank as preserved when blank already exists above bold+colon (5 ms)
+      √ should respect aboveBoldColon: false option (4 ms)
+      √ should detect colon anywhere in first 55 characters (5 ms)
+      √ should NOT detect colon beyond first 55 characters (3 ms)
+      √ should add blank above bold+colon paragraph in table cell (4 ms)
+      √ should NOT add blank above bold+colon paragraph if first in table cell (2 ms)
+    acceptRevisions load option
+      √ should accept all revisions when acceptRevisions: true (27 ms)
+      √ should preserve revisions when acceptRevisions: false or unset (19 ms)
+      √ should allow subsequent modifications after acceptRevisions: true (41 ms)
+      √ should handle documents without revisions when acceptRevisions: true (14 ms)
+      √ acceptRevisions: true should take precedence over revisionHandling: preserve (27 ms)
+
+PASS tests/zip/ZipHandler.test.ts
+  ZipHandler
+    File Operations
+      √ should add a file to the archive (8 ms)
+      √ should add binary file to the archive (11 ms)
+      √ should update existing file (6 ms)
+      √ should return false when updating non-existent file (25 ms)
+      √ should remove a file (14 ms)
+      √ should return false when removing non-existent file (1 ms)
+      √ should get all files (3 ms)
+      √ should get file paths (4 ms)
+      √ should get file count (13 ms)
+      √ should normalize file paths (3 ms)
+    Validation
+      √ should validate DOCX structure (4 ms)
+      √ should throw error when missing required files (89 ms)
+    Save and Load
+      √ should save to file (12 ms)
+      √ should save to buffer (51 ms)
+      √ should load from file (67 ms)
+      √ should load from buffer (6 ms)
+      √ should handle save with validation disabled (3 ms)
+      √ should throw error when loading invalid ZIP (7 ms)
+    Utility Methods
+      √ should clear all files (2 ms)
+      √ should clone handler (1 ms)
+      √ should track mode correctly (2 ms)
+    Static Methods
+      √ should create new DOCX with static create method (39 ms)
+      √ should modify existing DOCX with static modify method (71 ms)
+    Helper Methods
+      File Operations
+        √ should rename file (5 ms)
+        √ should return false when renaming non-existent file (2 ms)
+        √ should copy file (2 ms)
+        √ should return false when copying non-existent file (4 ms)
+        √ should move file (2 ms)
+        √ should return false when moving non-existent file (2 ms)
+        √ should not throw when file exists (3 ms)
+        √ should throw when file does not exist (1 ms)
+      Batch Operations
+        √ should remove multiple files (9 ms)
+        √ should handle non-existent files in batch remove (2 ms)
+        √ should get files by extension (1 ms)
+        √ should handle case-insensitive extension search (2 ms)
+      Archive Information
+        √ should get total size (5 ms)
+        √ should return zero for empty archive (2 ms)
+        √ should get comprehensive stats (5 ms)
+        √ should handle empty archive stats (1 ms)
+        √ should check if archive is empty (2 ms)
+      Content Helpers
+        √ should get text files (1 ms)
+        √ should get binary files (1 ms)
+        √ should get media files (3 ms)
+      Import/Export
+        √ should export file (3 ms)
+        √ should throw when exporting non-existent file (24 ms)
+        √ should import file (39 ms)
+        √ should import binary file (12 ms)
+    Edge Cases
+      √ should handle empty file content (2 ms)
+      √ should handle large file content (16 ms)
+      √ should handle unicode content (6 ms)
+      √ should handle files with special characters in path
+    UTF-8 Encoding
+      √ should preserve UTF-8 characters when adding string content (14 ms)
+      √ should convert string to UTF-8 Buffer internally (2 ms)
+      √ should handle emoji and special characters (8 ms)
+      √ should handle mixed scripts (Latin, Greek, Cyrillic, Arabic, CJK) (4 ms)
+      √ should handle right-to-left text (Arabic, Hebrew) (1 ms)
+      √ should preserve UTF-8 in XML files (1 ms)
+      √ should round-trip UTF-8 content (add, retrieve, verify) (2 ms)
+      √ should handle UTF-8 with line breaks and whitespace (3 ms)
+      √ should handle Buffer containing valid UTF-8 (1 ms)
+      √ should preserve UTF-8 when saving and loading from file (19 ms)
+      √ should preserve complex UTF-8 sequences (5 ms)
+
+  console.log
+      ⏱️  5 concurrent documents created in 107ms
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:207:13)
+
+  console.log
+    
+      📊 Performance SLA Metrics:
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:240:15)
+
+  console.log
+         Document: 1000 paragraphs
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:241:15)
+
+  console.log
+         Duration: 52ms
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:242:15)
+
+  console.log
+         Throughput: 19231 paragraphs/sec
+
+      at Object.<anonymous> (tests/performance/benchmarks.test.ts:243:15)
+
+PASS tests/performance/benchmarks.test.ts
+  Performance Benchmarks
+    √ should create 100-page document in < 5 seconds (368 ms)
+    √ should create document with 1000 paragraphs in < 2 seconds (74 ms)
+    √ should load and re-save document in < 1 second (119 ms)
+    √ should handle 500 paragraphs without excessive memory growth (103 ms)
+    √ should create highly formatted document in < 3 seconds (65 ms)
+    √ should handle concurrent document creation (109 ms)
+  Performance Regression Detection
+    √ should meet performance SLA for typical document (65 ms)
+
+PASS tests/core/DocumentProperties.test.ts
+  Phase 5.5 - Document Properties (Extended)
+    Core Properties Extensions
+      √ should set and retrieve category (81 ms)
+      √ should set and retrieve content status (52 ms)
+      √ should set and retrieve language (124 ms)
+      √ should handle multiple core properties (101 ms)
+    Extended Properties (App Properties)
+      √ should set and retrieve application name (82 ms)
+      √ should set and retrieve app version (55 ms)
+      √ should set and retrieve company name (85 ms)
+      √ should set and retrieve manager name (29 ms)
+      √ should handle multiple extended properties (26 ms)
+    Custom Properties
+      √ should set and retrieve string custom property (52 ms)
+      √ should set and retrieve number custom property (28 ms)
+      √ should set and retrieve boolean custom property (66 ms)
+      √ should set and retrieve date custom property (47 ms)
+      √ should set multiple custom properties at once (43 ms)
+      √ should handle custom properties with special characters (32 ms)
+    Combined Properties Test
+      √ should handle all property types together (18 ms)
+    Fluent API Chaining
+      √ should support method chaining for all property setters (14 ms)
+
+PASS tests/elements/TablePropertiesBatch2.test.ts
+  Table Properties Batch 2 - Cell-Level Properties
+    Text Direction (textDirection)
+      √ should set and serialize tbRl (top-to-bottom, right-to-left) (77 ms)
+      √ should set and serialize lrTb (left-to-right, top-to-bottom) (93 ms)
+      √ should preserve textDirection through round-trip (57 ms)
+    Fit Text (tcFitText)
+      √ should set and serialize fitText property (224 ms)
+      √ should preserve fitText through round-trip (29 ms)
+    No Wrap (noWrap)
+      √ should set and serialize noWrap property (58 ms)
+      √ should preserve noWrap through round-trip (43 ms)
+    Hide Mark (hideMark)
+      √ should set and serialize hideMark property (65 ms)
+      √ should preserve hideMark through round-trip (51 ms)
+    Conditional Style (cnfStyle)
+      √ should set and serialize cnfStyle property (24 ms)
+      √ should preserve cnfStyle through round-trip (47 ms)
+    Width Type (tcW type)
+      √ should set and serialize auto width type (55 ms)
+      √ should set and serialize percentage width type (17 ms)
+      √ should preserve width types through round-trip (27 ms)
+    Vertical Merge (vMerge)
+      √ should set and serialize restart vMerge (17 ms)
+      √ should set and serialize continue vMerge (19 ms)
+      √ should handle multi-row vertical merge scenario (37 ms)
+    Combined Properties
+      √ should handle multiple cell properties together (24 ms)
+      √ should preserve all properties through multi-cycle round-trip (227 ms)
+
+PASS tests/elements/SectionPropertiesEnhanced.test.ts
+  Section Properties - Phase 4.5 Enhancements
+    Vertical Alignment
+      √ should set and serialize vertical alignment = top (91 ms)
+      √ should set and serialize vertical alignment = center (18 ms)
+      √ should set and serialize vertical alignment = bottom (21 ms)
+      √ should set and serialize vertical alignment = both (justified) (18 ms)
+    Paper Source
+      √ should set and serialize first page tray (32 ms)
+      √ should set and serialize other pages tray (21 ms)
+      √ should set and serialize both first and other trays (45 ms)
+    Column Separator
+      √ should set and serialize column separator line (enabled) (38 ms)
+      √ should set and serialize column separator line (disabled) (28 ms)
+    Custom Column Widths
+      √ should set and serialize custom column widths (34 ms)
+      √ should set unequal columns with separator (17 ms)
+    Text Direction
+      √ should set and serialize text direction = ltr (24 ms)
+      √ should set and serialize text direction = rtl (16 ms)
+      √ should set and serialize text direction = tbRl (top-to-bottom, right-to-left) (15 ms)
+      √ should set and serialize text direction = btLr (bottom-to-top, left-to-right) (45 ms)
+    Combined Properties
+      √ should handle all new properties together (47 ms)
+      √ should preserve new properties with existing properties (167 ms)
+      √ should preserve all properties through multiple save/load cycles (144 ms)
+    Edge Cases
+      √ should handle section without new properties (13 ms)
+      √ should handle column separator without custom widths (64 ms)
+
+PASS tests/elements/TableCellProperties.test.ts
+  Table Cell Properties - Round Trip Tests
+    Cell Margins
+      √ should round-trip cell with all margins (53 ms)
+      √ should round-trip cell with top and bottom margins only (101 ms)
+      √ should round-trip cell with uniform margins (46 ms)
+      √ should save margins to file and load correctly (24 ms)
+    Cell Borders
+      √ should round-trip cell with borders (17 ms)
+    Cell Shading
+      √ should round-trip cell with shading (31 ms)
+    Cell Vertical Alignment
+      √ should round-trip cell with vertical alignment (54 ms)
+    Cell Width
+      √ should round-trip cell with width (66 ms)
+    Column Span
+      √ should round-trip cell with column span (15 ms)
+    Combined Cell Properties
+      √ should round-trip cell with all properties (96 ms)
+      √ should save complete formatted table and load correctly (111 ms)
+    Professional Table Example
+      √ should create and load professional table with cell margins (74 ms)
+
+PASS tests/elements/RunAdvancedProperties.test.ts
+  Run Advanced Properties - Round Trip Tests
+    RTL (Right-to-Left)
+      √ should set RTL text direction (4 ms)
+      √ should round-trip RTL property (80 ms)
+    Vanish (Hidden Text)
+      √ should set vanish property
+      √ should round-trip vanish property (27 ms)
+    NoProof (Skip Spellcheck)
+      √ should set noProof property
+      √ should round-trip noProof property (78 ms)
+    SnapToGrid
+      √ should set snapToGrid property
+      √ should round-trip snapToGrid property (54 ms)
+    SpecVanish (Special Hidden)
+      √ should set specVanish property (2 ms)
+      √ should round-trip specVanish property (70 ms)
+    Text Effect
+      √ should set text effect (1 ms)
+      √ should round-trip text effect (37 ms)
+    FitText
+      √ should set fitText width (1 ms)
+      √ should round-trip fitText property (91 ms)
+    EastAsianLayout
+      √ should set East Asian layout with vertical text (1 ms)
+      √ should set East Asian layout with combine
+      √ should round-trip East Asian layout (76 ms)
+    Combined Properties
+      √ should support method chaining with all properties (4 ms)
+
+PASS tests/formatting/StylesRoundTrip.test.ts
+  Style Round-Trip Tests
+    Style Name Parsing
+      √ should correctly parse style name from self-closing w:name tag (79 ms)
+      √ should preserve style name with spaces through round-trip (43 ms)
+    Created Styles
+      √ should preserve colors in programmatically created styles (78 ms)
+      √ should handle black color (000000) without converting to 0 (66 ms)
+    Contextual Spacing (List Paragraph)
+      √ should preserve contextualSpacing in programmatically created styles (97 ms)
+      √ should preserve contextualSpacing through multiple round-trips (122 ms)
+      √ should NOT have contextualSpacing when not set (66 ms)
+
+PASS tests/elements/ParagraphCriticalProperties.test.ts
+  Paragraph - Critical Properties (Batch 1)
+    widowControl
+      √ should set and serialize widowControl=true (57 ms)
+      √ should set and serialize widowControl=false (32 ms)
+      √ should handle undefined widowControl (18 ms)
+    outlineLevel
+      √ should set and serialize outlineLevel=0 (highest level) (18 ms)
+      √ should set and serialize outlineLevel=5 (mid-level) (17 ms)
+      √ should set and serialize outlineLevel=9 (lowest level) (12 ms)
+      √ should reject outline level < 0 (102 ms)
+      √ should reject outline level > 9 (1 ms)
+    suppressLineNumbers
+      √ should set and serialize suppressLineNumbers=true (13 ms)
+      √ should handle default suppressLineNumbers (27 ms)
+    bidi
+      √ should set and serialize bidi=true (RTL layout) (37 ms)
+      √ should set and serialize bidi=false (LTR layout) (24 ms)
+      √ should handle mixed LTR and RTL text (26 ms)
+    textDirection
+      √ should set and serialize textDirection=lrTb (left-to-right, top-to-bottom) (20 ms)
+      √ should set and serialize textDirection=tbRl (vertical text) (19 ms)
+      √ should set and serialize textDirection=btLr (Mongolian) (24 ms)
+      √ should handle all text direction values (23 ms)
+    textAlignment
+      √ should set and serialize textAlignment=top (24 ms)
+      √ should set and serialize textAlignment=center (18 ms)
+      √ should handle all text alignment values (23 ms)
+    mirrorIndents
+      √ should set and serialize mirrorIndents=true (37 ms)
+      √ should handle default mirrorIndents (33 ms)
+    adjustRightInd
+      √ should set and serialize adjustRightInd=true (26 ms)
+      √ should set and serialize adjustRightInd=false (24 ms)
+    combined properties
+      √ should handle multiple critical properties together (26 ms)
+      √ should preserve all properties across multiple save/load cycles (42 ms)
+
+PASS tests/elements/ParagraphMarkProperties.test.ts
+  Paragraph Mark Run Properties
+    Basic Formatting
+      √ should set and serialize bold paragraph mark (119 ms)
+      √ should set and serialize colored paragraph mark (75 ms)
+      √ should set and serialize font for paragraph mark (19 ms)
+    Advanced Formatting
+      √ should set and serialize multiple paragraph mark properties (24 ms)
+      √ should set and serialize hidden paragraph mark (59 ms)
+      √ should set and serialize highlighted paragraph mark (89 ms)
+    Complex Script Support
+      √ should set and serialize complex script formatting for paragraph mark (87 ms)
+    XML Generation
+      √ should generate correct XML structure for paragraph mark properties (1 ms)
+      √ should not generate empty rPr when no paragraph mark properties set (3 ms)
+    Round-trip Verification
+      √ should preserve paragraph mark properties through multiple save/load cycles (141 ms)
+      √ should handle paragraphs with both run and paragraph mark properties (58 ms)
+    Edge Cases
+      √ should handle undefined paragraph mark properties gracefully (1 ms)
+      √ should overwrite previous paragraph mark properties (23 ms)
+
+PASS tests/elements/ParagraphTextBoxProperties.test.ts
+  Paragraph - Text Box & Advanced Properties (Batch 3)
+    framePr (Text Frame Properties)
+      √ should set and serialize basic frame properties (w, h, hRule) (48 ms)
+      √ should set and serialize positioning properties (x, y, anchors) (15 ms)
+      √ should set and serialize drop cap properties (13 ms)
+      √ should set and serialize all frame properties combined (38 ms)
+      √ should handle undefined framePr (54 ms)
+    suppressAutoHyphens
+      √ should set and serialize suppressAutoHyphens=true (26 ms)
+      √ should handle default (undefined) suppressAutoHyphens (27 ms)
+    suppressOverlap
+      √ should set and serialize suppressOverlap=true (31 ms)
+      √ should handle default (undefined) suppressOverlap (17 ms)
+    textboxTightWrap
+      √ should set and serialize textboxTightWrap=none (19 ms)
+      √ should set and serialize textboxTightWrap=allLines (17 ms)
+      √ should set and serialize textboxTightWrap=firstAndLastLine (17 ms)
+      √ should set and serialize textboxTightWrap=firstLineOnly (22 ms)
+      √ should set and serialize textboxTightWrap=lastLineOnly (13 ms)
+      √ should handle undefined textboxTightWrap (38 ms)
+    divId
+      √ should set and serialize divId with positive number (18 ms)
+      √ should handle divId round-trip with large number (16 ms)
+      √ should handle undefined divId (20 ms)
+    Combined Properties
+      √ should handle multiple text box properties together (42 ms)
+      √ should preserve all properties across multiple save/load cycles (75 ms)
+
+PASS tests/elements/ImageProperties.test.ts
+  Image Properties - Effect Extent
+    √ should set and get effect extent for shadows (72 ms)
+    √ should handle zero effect extent (22 ms)
+  Image Properties - Text Wrapping
+    √ should set square wrap with both sides (29 ms)
+    √ should set tight wrap with left side (41 ms)
+    √ should set top and bottom wrap (36 ms)
+  Image Properties - Positioning
+    √ should set absolute positioning with offset (54 ms)
+    √ should set relative positioning with alignment (83 ms)
+    √ should anchor to column (90 ms)
+  Image Properties - Anchor Configuration
+    √ should set floating image behind text (37 ms)
+    √ should set locked floating image (30 ms)
+  Image Properties - Cropping
+    √ should set image crop on all sides (33 ms)
+    √ should clamp crop values to 0-100 (3 ms)
+  Image Properties - Visual Effects
+    √ should set brightness and contrast (66 ms)
+    √ should set grayscale effect (76 ms)
+  Image Properties - Combined Properties
+    √ should handle multiple properties together (89 ms)
+    √ should preserve all properties through multiple save/load cycles (61 ms)
+  Image Properties - Inline vs Floating
+    √ should correctly identify inline images (24 ms)
+    √ should correctly identify floating images (35 ms)
+
+PASS tests/core/SpecialCharacters.test.ts
+  Special Characters in Runs
+    Tab Characters
+      √ should preserve tab characters in text (85 ms)
+      √ should serialize tabs as w:tab elements (22 ms)
+      √ should handle multiple consecutive tabs (22 ms)
+    Line Break Characters
+      √ should preserve line breaks in text (21 ms)
+      √ should serialize line breaks as w:br elements (14 ms)
+      √ should handle Windows-style line breaks (13 ms)
+    Mixed Special Characters
+      √ should handle tabs and line breaks together (14 ms)
+      √ should preserve order of text and special characters (25 ms)
+      √ should handle special characters in formatted runs (16 ms)
+    Non-Breaking Characters
+      √ should handle non-breaking hyphens (22 ms)
+      √ should serialize non-breaking hyphens correctly (19 ms)
+      √ should handle soft hyphens (18 ms)
+    Symbol Characters
+      √ should preserve Unicode symbols (15 ms)
+      √ should handle emoji characters (13 ms)
+      √ should preserve special punctuation (19 ms)
+    Edge Cases
+      √ should handle empty runs with only special characters (11 ms)
+      √ should handle very long strings with special characters (24 ms)
+      √ should handle special characters at boundaries (15 ms)
+      √ should round-trip complex documents without loss (29 ms)
+
+PASS tests/formatting/StyleEnhancements.test.ts
+  Style Enhancements - Phase 5.3
+    Setter Methods
+      √ should set qFormat property (6 ms)
+      √ should set uiPriority property with validation (76 ms)
+      √ should set semiHidden property (2 ms)
+      √ should set unhideWhenUsed property (4 ms)
+      √ should set locked property (2 ms)
+      √ should set personal property (2 ms)
+      √ should set link property (2 ms)
+      √ should set autoRedefine property (2 ms)
+      √ should set aliases property (2 ms)
+      √ should support fluent API chaining (5 ms)
+    Validation
+      √ should validate uiPriority range in isValid() (2 ms)
+      √ should prevent circular link references (2 ms)
+    XML Generation
+      √ should generate qFormat XML (2 ms)
+      √ should generate uiPriority XML (1 ms)
+      √ should generate semiHidden XML (3 ms)
+      √ should generate unhideWhenUsed XML (2 ms)
+      √ should generate locked XML (1 ms)
+      √ should generate personal XML (2 ms)
+      √ should generate link XML (3 ms)
+      √ should generate autoRedefine XML (2 ms)
+      √ should generate aliases XML (1 ms)
+      √ should generate complete metadata XML (2 ms)
+    StylesManager Helper Methods
+      √ should get quick styles (3 ms)
+      √ should get visible styles (2 ms)
+      √ should get styles sorted by priority (2 ms)
+      √ should get linked style (6 ms)
+      √ should return undefined for non-existent linked style (1 ms)
+    Round-Trip Testing
+      √ should preserve all metadata properties through save/load cycle (36 ms)
+      √ should handle styles with partial metadata (38 ms)
+      √ should handle multiple styles with different metadata (27 ms)
+
+PASS tests/core/DocumentParts.test.ts
+  Document Part Access Methods
+    getPart
+      √ should retrieve an existing part (8 ms)
+      √ should return null for non-existent part (2 ms)
+      √ should handle binary parts correctly (4 ms)
+      √ should retrieve content type for known parts (2 ms)
+    setPart
+      √ should add a new part (2 ms)
+      √ should update an existing part (2 ms)
+      √ should handle binary content (2 ms)
+    removePart
+      √ should remove an existing part (2 ms)
+      √ should return false for non-existent part (7 ms)
+      √ should not break document when removing optional parts (57 ms)
+    listParts
+      √ should list all parts in a new document (2 ms)
+      √ should include newly added parts (2 ms)
+      √ should not include removed parts (2 ms)
+    partExists
+      √ should return true for existing parts (2 ms)
+      √ should return false for non-existent parts (2 ms)
+      √ should reflect changes after adding/removing parts (2 ms)
+    getContentTypes
+      √ should retrieve default content types (2 ms)
+      √ should retrieve override content types (1 ms)
+    addContentType
+      √ should add new extension content type (3 ms)
+      √ should add new override content type (2 ms)
+      √ should update existing content type (2 ms)
+    getAllRelationships
+      √ should retrieve all relationship files (1 ms)
+      √ should parse relationship attributes correctly (1 ms)
+      √ should include external relationships (9 ms)
+    Document.createEmpty
+      √ should create minimal valid DOCX structure (2 ms)
+      √ should create a document that can be saved (4 ms)
+      √ should create a document that can be modified (6 ms)
+    Integration: URL replacement with relationship update
+      √ should update hyperlink URLs and relationships correctly (31 ms)
+      √ should preserve hyperlink functionality when updating URLs (36 ms)
+    Edge cases and error handling
+      √ should handle special characters in part names (3 ms)
+      √ should handle empty content (2 ms)
+      √ should handle large binary content (2 ms)
+      √ should preserve XML content without modification (2 ms)
+
+PASS tests/core/ComplexFieldParsing.test.ts
+  Complex Field Parsing
+    Field Type Detection
+      √ should parse IF conditional fields (44 ms)
+      √ should parse MERGEFIELD mail merge fields (18 ms)
+      √ should parse INCLUDE fields (24 ms)
+      √ should handle unknown field types as CUSTOM (30 ms)
+    Field Instruction Parsing
+      √ should preserve complete field instructions (33 ms)
+      √ should handle field formatting switches (18 ms)
+      √ should parse nested field instructions (14 ms)
+    Field Sequences
+      √ should handle SEQ sequence fields (21 ms)
+      √ should handle TC table of contents entry fields (17 ms)
+      √ should handle XE index entry fields (12 ms)
+    Field Formatting Preservation
+      √ should preserve field run formatting (14 ms)
+      √ should handle field result text (21 ms)
+    Complex Field State Machine
+      √ should handle field begin/separate/end sequence (20 ms)
+      √ should handle fields without separate/result (12 ms)
+      √ should parse multiple fields in same paragraph (21 ms)
+    TOC Field Whitespace Preservation
+      √ should preserve leading and trailing whitespace in TOC instruction (13 ms)
+      √ should preserve exact instrText content in document XML (13 ms)
+
+PASS tests/elements/DrawingElements.test.ts
+  Shape
+    Factory Methods
+      √ should create a rectangle shape (12 ms)
+      √ should create a circle shape (1 ms)
+      √ should create an ellipse shape (1 ms)
+      √ should create right arrow shape (1 ms)
+      √ should create left arrow shape (1 ms)
+      √ should create up arrow shape
+      √ should create down arrow shape
+      √ should create a line shape (1 ms)
+    Fill and Outline
+      √ should set fill color (1 ms)
+      √ should set fill with transparency
+      √ should set outline (1 ms)
+      √ should set dashed outline (1 ms)
+    Text in Shapes
+      √ should add text to shape
+      √ should add formatted text to shape
+    Position and Rotation
+      √ should set rotation
+      √ should set position (1 ms)
+      √ should identify floating shapes (1 ms)
+    XML Generation
+      √ should generate XML for rectangle (1 ms)
+      √ should generate XML for arrow with outline
+      √ should generate XML for shape with text (1 ms)
+    Integration with Paragraph
+      √ should add shape to paragraph (1 ms)
+  TextBox
+    Factory Methods
+      √ should create a text box
+    Content Management
+      √ should add paragraph to text box (1 ms)
+      √ should add multiple paragraphs (9 ms)
+    Fill and Borders
+      √ should set fill color
+      √ should set fill with transparency
+      √ should set borders (1 ms)
+    Position
+      √ should set position (1 ms)
+      √ should identify floating text boxes
+    XML Generation
+      √ should generate XML for empty text box (1 ms)
+      √ should generate XML for text box with content (1 ms)
+      √ should generate XML for text box with fill and borders
+    Integration with Paragraph
+      √ should add text box to paragraph (1 ms)
+  Shape and TextBox Round-Trip
+    √ should create document with shapes and save (36 ms)
+    √ should create document with text boxes and save (13 ms)
+
+PASS tests/elements/Field.test.ts
+  Field Tests
+    Simple Fields - Generation
+      √ should create and serialize PAGE field (36 ms)
+      √ should create DATE field (39 ms)
+      √ should create TIME field (59 ms)
+      √ should create AUTHOR field (17 ms)
+      √ should create FILENAME field (34 ms)
+      √ should create FILENAME field with path (20 ms)
+      √ should create TITLE field (29 ms)
+    Field Formatting
+      √ should apply bold formatting to PAGE field (18 ms)
+      √ should apply multiple formats to DATE field (20 ms)
+    Multiple Fields
+      √ should handle multiple fields in one paragraph (55 ms)
+      √ should handle fields in multiple paragraphs (17 ms)
+    Field Creation via Field Class
+      √ should create field using Field.create factory (10 ms)
+      √ should create custom field with instruction (15 ms)
+    Round-Trip - Field Parsing
+      √ should preserve PAGE field through save/load cycle (71 ms)
+      √ should preserve DATE field through save/load cycle (66 ms)
+      √ should preserve multiple fields through save/load cycle (29 ms)
+    Edge Cases
+      √ should handle field in empty paragraph (16 ms)
+      √ should handle paragraph with only fields (43 ms)
+
+PASS tests/elements/TableVMerge.test.ts
+  Table Vertical Merge (vMerge)
+    Basic Vertical Merging
+      √ should merge cells vertically using vMerge (3 ms)
+      √ should merge cells both horizontally and vertically (2 ms)
+      √ should create valid DOCX with vertical merges (53 ms)
+      √ should handle complex merge patterns (40 ms)
+    Edge Cases
+      √ should handle single-row merge (no vertical merge) (2 ms)
+      √ should handle single-column merge (only vertical merge) (1 ms)
+      √ should handle invalid merge ranges gracefully (1 ms)
+    Round-trip Testing
+      √ should preserve vMerge on round-trip (57 ms)
+
+PASS tests/elements/RunTextEffects.test.ts
+  Run Text Effects - Round Trip Tests
+    Outline Text Effect
+      √ should set outline text effect (6 ms)
+      √ should round-trip outline text effect (52 ms)
+      √ should support method chaining with outline (1 ms)
+    Shadow Text Effect
+      √ should set shadow text effect (1 ms)
+      √ should round-trip shadow text effect (30 ms)
+      √ should support method chaining with shadow (1 ms)
+    Emboss Text Effect
+      √ should set emboss text effect
+      √ should round-trip emboss text effect (25 ms)
+    Imprint Text Effect
+      √ should set imprint text effect (1 ms)
+      √ should round-trip imprint text effect (29 ms)
+      √ should work with multiple effects combined (1 ms)
+
+PASS tests/elements/ParagraphBordersShading.test.ts
+  Paragraph Borders, Shading, and Tabs - Round Trip Tests
+    Paragraph Borders
+      √ should round-trip paragraph with all borders (59 ms)
+      √ should round-trip paragraph with top and bottom borders only (64 ms)
+      √ should round-trip paragraph with dashed borders (22 ms)
+      √ should save borders to file and load correctly (42 ms)
+    Paragraph Shading
+      √ should round-trip paragraph with solid shading (27 ms)
+      √ should round-trip paragraph with pattern shading (26 ms)
+      √ should round-trip paragraph with horizontal cross pattern (30 ms)
+      √ should save shading to file and load correctly (31 ms)
+    Tab Stops
+      √ should round-trip paragraph with multiple tab stops (39 ms)
+      √ should round-trip paragraph with decimal tab stop (17 ms)
+      √ should round-trip paragraph with bar tab stop (14 ms)
+      √ should save tabs to file and load correctly (29 ms)
+    Combined Features
+      √ should round-trip paragraph with borders, shading, and tabs (14 ms)
+      √ should save complete formatted document and load correctly (19 ms)
+
+PASS tests/core/CommentParsing.test.ts
+  Comment Parsing
+    Basic Comment Parsing
+      √ should parse comments from comments.xml (57 ms)
+      √ should preserve comment metadata (15 ms)
+      √ should handle comment replies (22 ms)
+      √ should parse comment ranges in paragraphs (21 ms)
+    Complex Comment Scenarios
+      √ should handle multiple comments on same paragraph (21 ms)
+      √ should preserve comment formatting (15 ms)
+      √ should handle empty comments (26 ms)
+    Comment Manager Integration
+      √ should find comments by author (21 ms)
+      √ should get comment threads (33 ms)
+
+PASS tests/core/SDTParsing.test.ts
+  SDT (Structured Document Tag) Parsing
+    SDT Control Types
+      √ should parse richText content controls (52 ms)
+      √ should parse plainText content controls (20 ms)
+      √ should parse dropDownList content controls (18 ms)
+      √ should parse datePicker content controls (13 ms)
+      √ should parse checkbox content controls (17 ms)
+      √ should parse buildingBlock gallery controls (12 ms)
+    SDT Properties
+      √ should preserve SDT ID and tag (12 ms)
+      √ should preserve lock state (37 ms)
+      √ should handle temporary placeholder (15 ms)
+    SDT Content
+      √ should preserve paragraphs in SDT content (22 ms)
+      √ should preserve tables in SDT content (17 ms)
+      √ should handle nested SDTs (18 ms)
+    Critical SDT Use Cases
+      √ should preserve Table of Contents SDT (21 ms)
+      √ should preserve Google Docs table wrapper SDT (18 ms)
+      √ should handle empty SDT content (12 ms)
+
+PASS tests/core/BookmarkParsing.test.ts
+  Bookmark Parsing
+    Basic Bookmark Parsing
+      √ should parse bookmarks from document.xml (40 ms)
+      √ should preserve bookmark IDs and names (15 ms)
+      √ should handle bookmark name normalization (16 ms)
+      √ should preserve exact bookmark names when loading (14 ms)
+    Bookmark Cross-References
+      √ should work with REF fields (20 ms)
+      √ should handle duplicate bookmark names gracefully (10 ms)
+    Complex Bookmark Scenarios
+      √ should handle multiple bookmarks in same paragraph (13 ms)
+      √ should preserve bookmark order (20 ms)
+      √ should handle bookmarks spanning multiple paragraphs (14 ms)
+    Bookmark Manager Operations
+      √ should get unique bookmark names (20 ms)
+      √ should count bookmarks correctly (21 ms)
+      √ should check bookmark existence (10 ms)
+
+PASS tests/formatting/TableStyles.test.ts
+  TableStyles - Phase 5.1
+    Basic Table Properties
+      √ should set table indentation (1 ms)
+      √ should set cell spacing (1 ms)
+      √ should set table borders (1 ms)
+      √ should set cell margins (8 ms)
+      √ should set table shading
+      √ should set table alignment
+      √ should set cell vertical alignment
+      √ should set row height
+    Conditional Formatting
+      √ should add firstRow conditional formatting (1 ms)
+      √ should add lastRow conditional formatting
+      √ should add firstCol conditional formatting
+      √ should add lastCol conditional formatting
+      √ should add band1Horz (row banding) (1 ms)
+      √ should add band2Horz (even row banding)
+      √ should add band1Vert (column banding) (1 ms)
+      √ should add band2Vert (even column banding)
+      √ should add nwCell (northwest corner)
+      √ should add neCell (northeast corner) (1 ms)
+      √ should add swCell (southwest corner)
+      √ should add seCell (southeast corner) (1 ms)
+    XML Generation
+      √ should generate complete table style XML (1 ms)
+      √ should generate borders XML (2 ms)
+      √ should generate shading XML (1 ms)
+      √ should generate margins XML
+      √ should generate conditional formatting XML (1 ms)
+    Round-Trip Testing
+      √ should preserve table properties through save/load (64 ms)
+      √ should preserve conditional formatting through save/load (44 ms)
+      √ should preserve all table style properties (45 ms)
+
+PASS tests/core/PunctuationOrdering.test.ts
+  Punctuation Ordering - Regression Test
+    Mixed Run and Hyperlink Ordering
+      √ should preserve punctuation before hyperlinks (70 ms)
+      √ should preserve punctuation after hyperlinks (17 ms)
+      √ should handle multiple punctuation marks with hyperlinks (22 ms)
+      √ should preserve complex mixed content (23 ms)
+      √ should preserve exact sequence in real-world scenario (16 ms)
+    Edge Cases
+      √ should handle paragraph with only punctuation before hyperlink (2 ms)
+      √ should handle paragraph with only hyperlink and punctuation (2 ms)
+      √ should handle multiple consecutive hyperlinks with punctuation (33 ms)
+      √ should not reorder elements that are already in correct order (6 ms)
+    XML Structure Preservation
+      √ should generate correct XML order in document.xml (20 ms)
+
+PASS tests/elements/RunCharacterSpacing.test.ts
+  Run Character Spacing - Round Trip Tests
+    Character Spacing
+      √ should set character spacing (2 ms)
+      √ should round-trip positive character spacing through buffer (36 ms)
+      √ should round-trip negative character spacing (condensed) through file (25 ms)
+
+PASS tests/core/HeaderFooterRoundTrip.test.ts
+  Header/Footer Round-Trip
+    √ should create, save, and load document with headers/footers (132 ms)
+    √ should handle remove header/footer operations (88 ms)
+    √ should handle clearHeaders and clearFooters operations (53 ms)
+
+PASS tests/elements/RunTextBorder.test.ts
+  Run Text Border - Round Trip Tests
+    Text Border
+      √ should set text border with all properties (1 ms)
+      √ should round-trip text border with single style (36 ms)
+      √ should round-trip text border with double style (31 ms)
+      √ should round-trip text border with dashed style (14 ms)
+      √ should round-trip text border with thick style (19 ms)
+      √ should save text border to file and load correctly (60 ms)
+      √ should support method chaining with border
+      √ should work with multiple runs with different borders (14 ms)
+
+PASS tests/elements/ParagraphStyleConditional.test.ts
+  Paragraph - Style & Conditional Properties (Batch 4)
+    cnfStyle (Conditional Formatting)
+      √ should set and serialize cnfStyle with first row and column (32 ms)
+      √ should set and serialize cnfStyle with banding (15 ms)
+      √ should set and serialize cnfStyle with corner cells (15 ms)
+      √ should handle undefined cnfStyle (28 ms)
+    sectPr (Section Properties)
+      √ should set and serialize basic section properties (18 ms)
+      √ should set and serialize section properties with page setup (13 ms)
+      √ should handle undefined sectPr (11 ms)
+    pPrChange (Change Tracking)
+      √ should set and serialize change tracking with author and date (15 ms)
+      √ should set and serialize change tracking with previous properties (13 ms)
+      √ should handle undefined pPrChange (15 ms)
+    Combined Properties
+      √ should handle all three properties together (12 ms)
+      √ should preserve all properties across multiple save/load cycles (42 ms)
+
+PASS tests/elements/RunComplexScript.test.ts
+  Run Complex Script - Round Trip Tests
+    Complex Script Formatting
+      √ should set complex script bold and italic (2 ms)
+      √ should round-trip complex script formatting through buffer (42 ms)
+      √ should support mixed regular and complex script formatting (40 ms)
+
+PASS tests/utils/acceptRevisions.test.ts
+  acceptRevisions Integration
+    DOM-based processing
+      √ should accept insertions from loaded document (70 ms)
+      √ should preserve content after accepting revisions (17 ms)
+      √ should handle empty documents (13 ms)
+      √ should handle documents with tables (24 ms)
+      √ should round-trip document without introducing revision markup (67 ms)
+      √ should handle formatted text (21 ms)
+    XML parsing verification
+      √ should correctly parse and serialize XML without losing structure (1 ms)
+      √ should preserve attributes during parsing
+
+PASS tests/elements/RunScaling.test.ts
+  Run Scaling - Round Trip Tests
+    Horizontal Scaling
+      √ should set horizontal scaling (2 ms)
+      √ should round-trip expanded scaling through buffer (60 ms)
+      √ should round-trip condensed scaling through file (73 ms)
+
+PASS tests/formatting/StyleValidation.test.ts
+  Style Validation Features
+    Document.getStyles()
+      √ should return all styles including built-in (13 ms)
+      √ should include custom styles (3 ms)
+    Document.removeStyle()
+      √ should remove an existing style (9 ms)
+      √ should return false for non-existent style (2 ms)
+    Document.updateStyle()
+      √ should update style properties (14 ms)
+      √ should preserve styleId during update (2 ms)
+      √ should return false for non-existent style (3 ms)
+    Document.getStylesXml()
+      √ should return raw styles XML (2 ms)
+      √ should include all styles in XML (2 ms)
+    Document.setStylesXml()
+      √ should set raw styles XML (2 ms)
+      √ should clear styles manager when setting XML (4 ms)
+    Style.isValid()
+      √ should validate correct style (1 ms)
+      √ should reject style without required fields (2 ms)
+      √ should reject invalid style type (3 ms)
+      √ should reject circular reference (1 ms)
+      √ should reject invalid formatting values (2 ms)
+      √ should accept valid formatting values (1 ms)
+    StylesManager.validate()
+      √ should validate correct styles XML (6 ms)
+      √ should detect empty XML (2 ms)
+      √ should detect missing root element (2 ms)
+      √ should detect duplicate style IDs (2 ms)
+      √ should detect missing required attributes (2 ms)
+      √ should detect circular references (2 ms)
+      √ should detect XML corruption patterns (2 ms)
+      √ should warn about missing Normal style (2 ms)
+      √ should detect malformed style tags (2 ms)
+    Integration: Style validation workflow
+      √ should validate XML before setting (2 ms)
+      √ should repair corrupted styles (2 ms)
+
+PASS tests/elements/RunCharacterShading.test.ts
+  Run Character Shading - Round Trip Tests
+    Character Shading
+      √ should set character shading with solid fill (1 ms)
+      √ should round-trip solid shading (48 ms)
+      √ should round-trip pattern shading (33 ms)
+      √ should round-trip cross pattern shading (25 ms)
+      √ should save shading to file and load correctly (75 ms)
+      √ should support method chaining with shading (4 ms)
+      √ should work with multiple runs with different shading (22 ms)
+
+PASS tests/elements/Table.test.ts
+  TableCell
+    Basic functionality
+      √ should create an empty cell (2 ms)
+      √ should add text content
+      √ should add multiple paragraphs (1 ms)
+    Cell formatting
+      √ should set width
+      √ should set vertical alignment (1 ms)
+      √ should set shading
+      √ should set borders (1 ms)
+      √ should set all borders at once (1 ms)
+      √ should set grid span
+      √ should set vertical merge
+    Method chaining
+      √ should support method chaining
+    XML generation
+      √ should generate basic cell XML (1 ms)
+      √ should generate XML with formatting (1 ms)
+    Static methods
+      √ should create cell with static method (1 ms)
+  TableRow
+    Basic functionality
+      √ should create empty row
+      √ should create row with cells (1 ms)
+      √ should add cells
+      √ should create and add cell (1 ms)
+      √ should get cell by index (1 ms)
+      √ should return undefined for invalid index (2 ms)
+      √ should get all cells
+    Row formatting
+      √ should set row height (1 ms)
+      √ should set height rule (1 ms)
+      √ should set header row
+      √ should set cant split (1 ms)
+    Method chaining
+      √ should support method chaining
+    XML generation
+      √ should generate row XML with cells (1 ms)
+      √ should generate XML with formatting (1 ms)
+    Static methods
+      √ should create row with static method
+  Table
+    Basic functionality
+      √ should create empty table (1 ms)
+      √ should create table with rows and columns
+      √ should add row (1 ms)
+      √ should create and add row
+      √ should get row by index (1 ms)
+      √ should get cell by coordinates
+      √ should return undefined for invalid cell coordinates (1 ms)
+      √ should set default width for ECMA-376 compliance
+      √ should not override explicitly set width (1 ms)
+    Table formatting
+      √ should set table width
+      √ should set table alignment
+      √ should set table layout (1 ms)
+      √ should set table borders
+      √ should set all borders at once (1 ms)
+      √ should set cell spacing (1 ms)
+      √ should set indent
+    Row operations
+      √ should remove row (1 ms)
+      √ should return false when removing invalid row (1 ms)
+      √ should insert row at position
+      √ should insert row at beginning (1 ms)
+      √ should insert row at end
+    Column operations
+      √ should add column to all rows
+      √ should add column at specific position (1 ms)
+      √ should remove column from all rows
+      √ should return false when removing invalid column
+      √ should set column widths (1 ms)
+    Method chaining
+      √ should support method chaining (1 ms)
+    XML generation
+      √ should generate basic table XML (3 ms)
+      √ should generate XML with formatting (4 ms)
+    Static methods
+      √ should create table with static method
+    First row formatting
+      √ should set alignment for first row (1 ms)
+      √ should set text formatting (bold, italic, underline) for first row (1 ms)
+      √ should set spacing for first row paragraphs (1 ms)
+      √ should set shading for first row cells (1 ms)
+      √ should apply all formatting options together (17 ms)
+      √ should not affect other rows (1 ms)
+      √ should handle empty table gracefully
+      √ should support method chaining
+
+PASS tests/elements/RunKerning.test.ts
+  Run Kerning - Round Trip Tests
+    Kerning
+      √ should set kerning threshold (2 ms)
+      √ should round-trip kerning through buffer (43 ms)
+      √ should round-trip large kerning threshold through file (62 ms)
+
+PASS tests/elements/RunCharacterStyle.test.ts
+  Run Character Style Reference - Round Trip Tests
+    Character Style Reference
+      √ should set character style reference (3 ms)
+      √ should round-trip character style reference (54 ms)
+      √ should save character style to file and load correctly (24 ms)
+      √ should support method chaining (1 ms)
+      √ should work with multiple runs with different styles (12 ms)
+
+PASS src/__tests__/helper-methods.test.ts
+  Document Helper Methods
+    findText
+      √ should find text in paragraphs (6 ms)
+      √ should find text with case sensitivity (3 ms)
+      √ should find whole words only (4 ms)
+      √ should find text in tables (3 ms)
+    replaceText
+      √ should replace text in paragraphs (2 ms)
+      √ should replace multiple occurrences (3 ms)
+      √ should replace with case sensitivity (3 ms)
+      √ should replace whole words only (3 ms)
+    getWordCount
+      √ should count words in paragraphs (9 ms)
+      √ should count words in tables (2 ms)
+      √ should handle empty paragraphs (1 ms)
+    getCharacterCount
+      √ should count characters with spaces (2 ms)
+      √ should count characters without spaces (1 ms)
+      √ should count characters in tables (3 ms)
+    removeParagraph
+      √ should remove paragraph by object (1 ms)
+      √ should remove paragraph by index (1 ms)
+      √ should return false for invalid index (2 ms)
+    removeTable
+      √ should remove table by object (17 ms)
+      √ should remove table by index (12 ms)
+    insertParagraphAt
+      √ should insert paragraph at specific position (2 ms)
+      √ should handle edge cases (1 ms)
+    getHyperlinks
+      √ should find hyperlinks in paragraphs (2 ms)
+    getBookmarks
+      √ should find bookmarks in paragraphs (2 ms)
+    getImages
+      √ should return all images (2 ms)
+    setLanguage/getLanguage
+      √ should set and get document language (2 ms)
+  Paragraph Helper Methods
+    getWordCount
+      √ should count words in paragraph
+      √ should handle empty paragraph
+      √ should handle multiple runs
+    getLength
+      √ should count characters with spaces (1 ms)
+      √ should count characters without spaces (1 ms)
+    clone
+      √ should create a deep copy of paragraph (1 ms)
+    setBorder
+      √ should set paragraph borders (1 ms)
+    setShading
+      √ should set paragraph shading (1 ms)
+    setTabs
+      √ should set tab stops
+  Table Helper Methods
+    removeRow
+      √ should remove row at index (2 ms)
+      √ should return false for invalid index
+    insertRow
+      √ should insert row at position (1 ms)
+      √ should create row with correct column count
+    addColumn
+      √ should add column to all rows (1 ms)
+      √ should add column at specific position (1 ms)
+    removeColumn
+      √ should remove column from all rows
+      √ should return false for invalid index
+    getColumnCount
+      √ should return maximum column count
+      √ should return 0 for empty table (1 ms)
+    setColumnWidths
+      √ should set column widths
+  Image Helper Methods
+    setAltText/getAltText
+      √ should set and get alt text (1 ms)
+    rotate/getRotation
+      √ should set and get rotation (1 ms)
+      √ should swap dimensions on 90/270 degree rotation
+
+PASS tests/elements/RunLanguage.test.ts
+  Run Language - Round Trip Tests
+    Language
+      √ should set language code (1 ms)
+      √ should round-trip French language through buffer (43 ms)
+      √ should round-trip Spanish language through file (18 ms)
+
+PASS tests/utils/InMemoryRevisionAcceptor.test.ts
+  InMemoryRevisionAcceptor
+    acceptRevisionsInMemory
+      √ should accept insertion revisions by unwrapping content (11 ms)
+      √ should accept deletion revisions by removing content (2 ms)
+      √ should accept moveFrom revisions by removing content (2 ms)
+      √ should accept moveTo revisions by keeping content (13 ms)
+      √ should accept property change revisions (9 ms)
+      √ should handle multiple revisions in a single paragraph (3 ms)
+      √ should handle revisions across multiple paragraphs (6 ms)
+    subsequent modifications after acceptance
+      √ should allow text modifications after accepting revisions (2 ms)
+      √ should allow formatting changes after accepting revisions (3 ms)
+      √ should allow adding new content after accepting revisions (1 ms)
+    selective acceptance options
+      √ should only accept insertions when other options are disabled (2 ms)
+      √ should only accept deletions when other options are disabled (2 ms)
+    helper functions
+      paragraphHasRevisions
+        √ should return true when paragraph has revisions
+        √ should return false when paragraph has no revisions
+      getRevisionsFromParagraph
+        √ should return all revisions from paragraph (1 ms)
+      countRevisionsByType
+        √ should count revisions by type across document (3 ms)
+    ImageRun handling in revisions
+      type guard isImageRunContent
+        √ should correctly identify ImageRun objects (1 ms)
+        √ should return false for regular Run objects
+        √ should return false for null/undefined
+      isRunContent with ImageRun
+        √ should return true for ImageRun (since ImageRun extends Run)
+      accepting insertions with ImageRun
+        √ should preserve ImageRun when accepting insertion revision (2 ms)
+        √ should preserve mixed content (text + images) in insertion revision (3 ms)
+      accepting deletions with ImageRun
+        √ should remove ImageRun when accepting deletion revision (2 ms)
+      accepting moveTo with ImageRun
+        √ should preserve ImageRun when accepting moveTo revision (1 ms)
+      accepting moveFrom with ImageRun
+        √ should remove ImageRun when accepting moveFrom revision (2 ms)
+    stripRevisionsFromXml
+      √ should unwrap insertion tags keeping content (1 ms)
+      √ should remove deletion tags including content (1 ms)
+      √ should remove moveFrom tags including content
+      √ should unwrap moveTo tags keeping content (1 ms)
+      √ should remove property change elements
+      √ should remove run property change elements (1 ms)
+      √ should remove range markers (1 ms)
+      √ should handle nested revisions
+      √ should handle XML with no revisions (1 ms)
+      √ should handle table property changes
+      √ should handle cell property changes
+    empty table cleanup
+      √ should remove tables with no text content after revision acceptance (2 ms)
+      √ should preserve tables with text content (1 ms)
+      √ should not remove empty tables when cleanup is disabled (4 ms)
+      √ should handle multiple empty tables (2 ms)
+      √ should handle mix of empty and non-empty tables (1 ms)
+      √ should include emptyTablesRemoved in result even when zero (1 ms)
+    Hyperlink handling in revisions
+      √ should preserve hyperlinks when accepting insertion revisions (2 ms)
+      √ should remove hyperlinks when accepting deletion revisions (4 ms)
+      √ should preserve mixed content (runs and hyperlinks) in insertion revision (2 ms)
+
+PASS tests/formatting/Numbering.test.ts
+  NumberingLevel
+    Basic functionality
+      √ should create a numbering level with required properties (1 ms)
+      √ should use default values for optional properties (1 ms)
+      √ should calculate default indentation based on level (1 ms)
+      √ should use custom properties when provided
+    Validation
+      √ should throw error for invalid level (60 ms)
+      √ should allow negative left indent (outdent into margin)
+      √ should throw error for negative hanging indent (1 ms)
+      √ should throw error for negative start value (1 ms)
+    Setters
+      √ should set left indent
+      √ should set hanging indent
+      √ should set font
+      √ should set alignment (1 ms)
+      √ should allow negative left indent in setter (outdent) (1 ms)
+      √ should throw error for negative hanging indent in setter (2 ms)
+    Method chaining
+      √ should support method chaining (2 ms)
+    XML generation
+      √ should generate basic level XML (1 ms)
+      √ should generate XML with paragraph properties (1 ms)
+      √ should generate XML with run properties
+      √ should generate XML with suffix (1 ms)
+      √ should generate XML with legal numbering style (1 ms)
+      √ should generate XML with negative left indent (outdent) (2 ms)
+    XML parsing
+      √ should parse XML with negative left indent (outdent) (1 ms)
+    Static factory methods
+      √ should create bullet level with custom bullet (1 ms)
+      √ should use Word-native defaults when no parameters provided
+      √ should create decimal level
+      √ should create decimal level with custom template (1 ms)
+      √ should create lower roman level
+      √ should create upper roman level (1 ms)
+      √ should create lower letter level
+      √ should create upper letter level (7 ms)
+      √ should create level with custom properties (1 ms)
+    All number formats
+      √ should support all number formats (9 ms)
+  AbstractNumbering
+    Basic functionality
+      √ should create abstract numbering with ID (1 ms)
+      √ should add single level
+      √ should add multiple levels (1 ms)
+      √ should get all levels (1 ms)
+      √ should return undefined for invalid level index (1 ms)
+    Multi-level list ID
+      √ should set and get multi-level list ID (1 ms)
+    XML generation
+      √ should generate abstract numbering XML
+      √ should include multi-level type in XML (1 ms)
+    Static factory methods
+      √ should create bullet list (2 ms)
+      √ should create numbered list (1 ms)
+      √ should create outline list
+  NumberingInstance
+    Basic functionality
+      √ should create numbering instance (1 ms)
+      √ should set level overrides
+      √ should support multiple level overrides
+    XML generation
+      √ should generate basic numbering instance XML (1 ms)
+      √ should generate XML with level overrides (1 ms)
+    Static factory method
+      √ should create instance with static method
+  NumberingManager
+    Basic functionality
+      √ should create numbering manager (1 ms)
+      √ should add abstract numbering
+      √ should add numbering instance (1 ms)
+      √ should get all abstract numberings
+      √ should get all numbering instances
+    Create and register methods
+      √ should create and register bullet list (1 ms)
+      √ should create and register numbered list
+      √ should create and register outline list
+      √ should increment IDs for multiple lists
+    XML generation
+      √ should generate numbering XML document (1 ms)
+      √ should include namespaces in root element
+    Static factory method
+      √ should create manager with static method
+  Numbering Parsing Fixes
+    AbstractNumbering.fromXML multiLevelType parsing
+      √ should correctly parse singleLevel multiLevelType (1 ms)
+      √ should correctly parse multilevel multiLevelType (1 ms)
+      √ should correctly parse hybridMultilevel multiLevelType
+    NumberingLevel.fromXML bold property parsing
+      √ should parse bold=true from self-closing w:b element (1 ms)
+      √ should parse bold=false from w:b w:val="0"
+      √ should default bold to true when no w:b element present
+      √ should parse color from w:color element
+    NumberingLevel.setFormat
+      √ should change format from lowerLetter to decimal (1 ms)
+      √ should change format from bullet to decimal
+      √ should be chainable (1 ms)
+
+PASS tests/elements/RunEmphasisMarks.test.ts
+  Run Emphasis Marks - Round Trip Tests
+    Emphasis Marks
+      √ should set emphasis mark (1 ms)
+      √ should round-trip emphasis mark through buffer (45 ms)
+      √ should round-trip emphasis mark through file (19 ms)
+      √ should support all emphasis mark types (25 ms)
+
+PASS tests/elements/RevisionHyperlink.test.ts
+  RevisionHyperlink Tests
+    Hyperlink clone() method
+      √ should clone a hyperlink with URL (2 ms)
+      √ should clone a hyperlink with anchor (1 ms)
+      √ should clone hyperlink formatting
+      √ should create independent copy (modifying clone does not affect original) (30 ms)
+    Revision with Hyperlink content
+      √ should create insertion revision with hyperlink (1 ms)
+      √ should create deletion revision with hyperlink (1 ms)
+      √ should add hyperlink to revision (1 ms)
+      √ should get content including both runs and hyperlinks (1 ms)
+    Type guards for RevisionContent
+      √ should identify Run content
+      √ should identify Hyperlink content (1 ms)
+    Paragraph replaceContent() method
+      √ should replace single item with multiple items (2 ms)
+      √ should return false when item not found
+      √ should maintain correct order after replacement (2 ms)
+    Paragraph setContent() method
+      √ should replace all content (1 ms)
+    XML generation for revision hyperlinks
+      √ should generate XML for insertion revision with hyperlink (1 ms)
+      √ should generate XML for deletion revision with hyperlink (w:delText) (1 ms)
+    Document round-trip with revision hyperlinks
+      √ should create and save document with tracked hyperlink changes (88 ms)
+      √ should handle hyperlink URL update with track changes (15 ms)
+    Edge cases
+      √ should handle empty revision content (1 ms)
+      √ should handle revision with mixed content types
+      √ should preserve hyperlink tooltip through clone (1 ms)
+    Automatic URL/Anchor tracking
+      √ should create delete/insert pair when setUrl() called with tracking enabled (1 ms)
+      √ should create delete/insert pair when setAnchor() called with tracking enabled (1 ms)
+      √ should not track when tracking is disabled
+      √ should not track when no parent paragraph (1 ms)
+      √ should clear parent reference after tracking
+      √ should set parent reference when added via addHyperlink() (1 ms)
+      √ should set parent reference when using setContent() (1 ms)
+
+PASS tests/helpers/CleanupHelper.test.ts
+  CleanupHelper
+    formatAllHyperlinks
+      √ should format internal hyperlinks (7 ms)
+      √ should format external hyperlinks (3 ms)
+      √ should format simple HYPERLINK fields (2 ms)
+      √ should format complex HYPERLINK fields (2 ms)
+      √ should format mixed hyperlink types (3 ms)
+      √ should process hyperlinks in tables (2 ms)
+      √ should be included in all() method (51 ms)
+    Field.isHyperlinkField
+      √ should return true for HYPERLINK type
+      √ should return true for instruction starting with HYPERLINK
+      √ should return false for non-HYPERLINK fields
+    Field.setColor
+      √ should set color on field (1 ms)
+      √ should strip # from color
+      √ should create formatting object if not exists (2 ms)
+
+PASS src/__tests__/ensure-blank-lines-style.test.ts
+  ensureBlankLinesAfter* style parameter
+    ensureBlankLinesAfter1x1Tables
+      √ should use Normal style by default (29 ms)
+      √ should use custom style when specified (9 ms)
+      √ should apply custom spacing and style together (4 ms)
+    ensureBlankLinesAfterOtherTables
+      √ should use Normal style by default (3 ms)
+      √ should use custom style when specified (4 ms)
+      √ should skip 1x1 tables (1 ms)
+    backward compatibility
+      √ ensureBlankLinesAfter1x1Tables should work without style parameter (1 ms)
+      √ ensureBlankLinesAfterOtherTables should work without style parameter (2 ms)
+
+PASS tests/core/DocumentBodyLevelDeletion.test.ts
+  Body-Level Deletion Detection
+    isPositionInsideDel detection
+      √ should skip tables wrapped in w:del at body level (20 ms)
+      √ should skip paragraphs wrapped in w:del at body level (8 ms)
+      √ should preserve non-deleted tables (12 ms)
+      √ should handle multiple deleted elements (10 ms)
+      √ should NOT skip paragraphs containing paragraph-level w:del (run deletions) (5 ms)
+      √ should NOT skip paragraphs with multiple run-level deletions (6 ms)
+
+PASS tests/elements/ContentTracking.test.ts
+  Content Tracking
+    Paragraph.addRun() with tracking
+      √ should wrap run in insert revision when tracking enabled (6 ms)
+      √ should add run directly when tracking disabled (4 ms)
+      √ should set parent reference on run (2 ms)
+    Paragraph.addText() with tracking
+      √ should wrap created run in insert revision when tracking enabled (1 ms)
+      √ should add run directly when tracking disabled (1 ms)
+    Paragraph.addHyperlink() with tracking
+      √ should wrap hyperlink in insert revision when tracking enabled (1 ms)
+    Paragraph.clearContent() with tracking
+      √ should wrap content in delete revisions when tracking enabled (2 ms)
+      √ should clear content directly when tracking disabled (1 ms)
+    Paragraph.removeContentAt() with tracking
+      √ should wrap removed item in delete revision when tracking enabled (2 ms)
+    Run.setText() with tracking
+      √ should create delete/insert revisions when text changes with tracking (3 ms)
+      √ should not create revisions when text changes without tracking (2 ms)
+      √ should not create revisions when text unchanged (1 ms)
+      √ should not create revisions for runs without parent (1 ms)
+    RevisionManager registration
+      √ should register insert revisions with RevisionManager (1 ms)
+      √ should register delete revisions with RevisionManager (1 ms)
+
+PASS tests/elements/ParentTracking.test.ts
+  Parent Tracking
+    Paragraph -> TableCell
+      √ should set parent cell when adding paragraph with addParagraph() (1 ms)
+      √ should set parent cell when creating paragraph with createParagraph() (1 ms)
+      √ should set parent cell when adding paragraph at index with addParagraphAt()
+      √ should clear parent cell when removing paragraph
+      √ should report isInTableCell() correctly
+      √ should return cell cnfStyle from getTableConditionalStyle() (1 ms)
+      √ should return paragraph cnfStyle if not in cell
+      √ should prefer cell cnfStyle over paragraph cnfStyle
+    TableCell -> TableRow
+      √ should set parent row when adding cell with addCell()
+      √ should set parent row when creating cell with createCell()
+      √ should set parent row on cells created in constructor (1 ms)
+    TableRow -> Table
+      √ should set parent table when adding row with addRow()
+      √ should set parent table when creating row with createRow() (1 ms)
+      √ should set parent table on rows created in constructor
+    Full Parent Chain
+      √ should traverse from Paragraph to Table
+      √ should return table style ID through getTableStyleId() (1 ms)
+      √ should return undefined for getTableStyleId() if not in table
+      √ should return undefined for getTableStyleId() if table has no style (1 ms)
+    Run -> Paragraph (existing)
+      √ should set parent paragraph when adding run (1 ms)
+    Run getEffective* methods
+      √ should return direct formatting from getEffectiveBold()
+      √ should return undefined if no bold formatting (1 ms)
+      √ should return direct formatting from getEffectiveItalic()
+      √ should return direct formatting from getEffectiveColor()
+      √ should return direct formatting from getEffectiveFont()
+      √ should return direct formatting from getEffectiveSize() (1 ms)
+      √ should return undefined for run not in paragraph
+      √ should return undefined for run in paragraph but not in cell (1 ms)
+      √ should traverse parent chain for run in table cell (1 ms)
+    Style Resolution via Document
+      √ should resolve bold from table conditional formatting (firstRow) (10 ms)
+      √ should resolve italic from table conditional formatting (lastCol) (2 ms)
+      √ should resolve color from wholeTable conditional (2 ms)
+      √ should prioritize direct formatting over conditional (3 ms)
+      √ should prioritize corner over edge conditionals (1 ms)
+      √ should return undefined if no table style defined (2 ms)
+      √ should return undefined if style has no conditional formatting (2 ms)
+    Edge cases
+      √ should handle paragraph moved between cells (1 ms)
+      √ should handle deeply nested table structure
+    Default Bold via tblLook (no table style)
+      √ should apply default bold for firstColumn when tblLook.firstColumn is enabled (1 ms)
+      √ should apply default bold for firstRow when tblLook.firstRow is enabled (1 ms)
+      √ should NOT apply default bold when tblLook flag is not enabled (1 ms)
+      √ should decode tblLook hex string correctly
+
+PASS tests/core/PropertyChangeTracking.test.ts
+  Property Change Tracking
+    Run Property Changes (w:rPrChange)
+      Basic formatting
+        √ should parse bold property change (2 ms)
+        √ should parse italic property change (1 ms)
+        √ should parse underline property change
+        √ should parse strikethrough property change
+        √ should parse double strikethrough property change
+      Font and color
+        √ should parse font property change
+        √ should parse size property change (half-points to points)
+        √ should parse color property change (1 ms)
+        √ should ignore auto color value
+        √ should parse highlight property change
+      Text effects
+        √ should parse outline property change
+        √ should parse shadow property change (1 ms)
+        √ should parse emboss property change (1 ms)
+        √ should parse imprint property change
+      Caps and vertical alignment
+        √ should parse smallCaps property change
+        √ should parse allCaps property change
+        √ should parse subscript property change
+        √ should parse superscript property change (2 ms)
+      Hidden and proofing
+        √ should parse vanish property change (1 ms)
+        √ should parse specVanish property change
+        √ should parse noProof property change (1 ms)
+      RTL and complex scripts
+        √ should parse rtl property change
+        √ should parse complex script bold property change (1 ms)
+        √ should parse complex script italic property change
+      Spacing and positioning
+        √ should parse characterSpacing property change
+        √ should parse scaling property change (1 ms)
+        √ should parse position property change
+        √ should parse kerning property change (1 ms)
+      Language and style
+        √ should parse language property change (2 ms)
+        √ should parse characterStyle property change (1 ms)
+      Border and shading
+        √ should parse text border property change (1 ms)
+        √ should parse character shading property change (1 ms)
+      East Asian layout
+        √ should parse eastAsianLayout property change (1 ms)
+    Paragraph Property Changes (w:pPrChange)
+      Style and alignment
+        √ should parse style property change (1 ms)
+        √ should parse alignment property change
+      Keep properties
+        √ should parse keepNext property change (1 ms)
+        √ should parse keepLines property change
+        √ should parse pageBreakBefore property change
+        √ should parse widowControl property change (1 ms)
+      Spacing and hyphenation
+        √ should parse suppressAutoHyphens property change
+        √ should parse contextualSpacing property change (1 ms)
+        √ should parse mirrorIndents property change
+      Outline and direction
+        √ should parse outlineLevel property change (1 ms)
+        √ should parse bidi property change
+        √ should parse textDirection property change
+      Grid and spacing options
+        √ should parse suppressLineNumbers property change
+        √ should parse adjustRightInd property change (1 ms)
+        √ should parse snapToGrid property change (1 ms)
+        √ should parse wordWrap property change
+        √ should parse autoSpaceDE property change (1 ms)
+        √ should parse autoSpaceDN property change
+      Borders
+        √ should parse paragraph borders property change (1 ms)
+      Shading
+        √ should parse paragraph shading property change (1 ms)
+      Tabs
+        √ should parse single tab stop property change
+        √ should parse multiple tab stops property change (1 ms)
+
+PASS tests/elements/ContentControls.test.ts
+  ContentControls - Rich Text
+    √ should create rich text control (1 ms)
+    √ should generate correct XML for rich text control (2 ms)
+  ContentControls - Plain Text
+    √ should create plain text control (1 ms)
+    √ should create multiline plain text control
+    √ should generate correct XML for plain text control (1 ms)
+  ContentControls - Combo Box
+    √ should create combo box control
+    √ should generate correct XML for combo box control (1 ms)
+  ContentControls - Dropdown List
+    √ should create dropdown list control
+    √ should generate correct XML for dropdown list control
+  ContentControls - Date Picker
+    √ should create date picker control (1 ms)
+    √ should generate correct XML for date picker control
+    √ should include full date in XML when provided (1 ms)
+  ContentControls - Checkbox
+    √ should create checkbox control - unchecked
+    √ should create checkbox control - checked (1 ms)
+    √ should generate correct XML for checkbox control
+  ContentControls - Picture
+    √ should create picture control (1 ms)
+    √ should generate correct XML for picture control
+  ContentControls - Building Block
+    √ should create building block control (1 ms)
+    √ should generate correct XML for building block control (1 ms)
+  ContentControls - Group
+    √ should create group control
+    √ should generate correct XML for group control
+  ContentControls - Document Integration
+    √ should create document with rich text control (31 ms)
+    √ should create document with multiple control types (13 ms)
+
+PASS src/__tests__/clearCustom.test.ts
+  Document.clearCustom()
+    Basic SDT removal
+      √ should remove SDTs from body while preserving content (4 ms)
+      √ should preserve formatting of unwrapped content (30 ms)
+    Nested SDT handling
+      √ should handle nested SDTs recursively (2 ms)
+      √ should preserve multiple paragraphs from single SDT (4 ms)
+    Table cell SDT handling
+      √ should remove SDTs from table cells (3 ms)
+    Complex document scenarios
+      √ should handle mixed content with multiple SDTs (4 ms)
+      √ should be chainable with other methods (2 ms)
+      √ should work with empty document (2 ms)
+      √ should work with document containing only SDTs (3 ms)
+    Save and reload after clearCustom
+      √ should produce valid document after clearing (69 ms)
+    Google Docs SDT-wrapped tables with row exceptions
+      √ should clear tblPrEx from table rows when unwrapping SDTs (4 ms)
+      √ should preserve table structure when clearing tblPrEx (3 ms)
+      √ should handle multiple SDT-wrapped tables with row exceptions (2 ms)
+
+PASS tests/elements/Paragraph.test.ts
+  Run
+    Basic functionality
+      √ should create a run with text (5 ms)
+      √ should set text (1 ms)
+      √ should create run with formatting (1 ms)
+    Formatting methods
+      √ should set bold (1 ms)
+      √ should set italic
+      √ should set underline (1 ms)
+      √ should set underline with style
+      √ should set strike
+      √ should set subscript (1 ms)
+      √ should set superscript
+      √ should toggle between subscript and superscript (2 ms)
+      √ should set font
+      √ should set font without size (1 ms)
+      √ should set size
+      √ should set color (1 ms)
+      √ should set color without hash
+      √ should set highlight (1 ms)
+      √ should set small caps (1 ms)
+      √ should set all caps
+    Method chaining
+      √ should support method chaining (1 ms)
+    XML generation
+      √ should generate basic XML (1 ms)
+      √ should generate XML with formatting
+      √ should preserve spaces with xml:space attribute (1 ms)
+    Static methods
+      √ should create run with static method
+  Paragraph
+    Basic functionality
+      √ should create empty paragraph
+      √ should add run
+      √ should add text (1 ms)
+      √ should set text
+      √ should get combined text from multiple runs (2 ms)
+      √ should include hyperlink text in getText (1 ms)
+      √ should handle hyperlink-only paragraph (1 ms)
+      √ should handle multiple hyperlinks and runs
+      √ should handle hyperlink before runs
+      √ should handle internal hyperlinks in getText (1 ms)
+    Formatting methods
+      √ should set alignment (1 ms)
+      √ should set left indent
+      √ should set right indent
+      √ should set first line indent
+      √ should set space before (1 ms)
+      √ should set space after
+      √ should set line spacing (1 ms)
+      √ should set style (13 ms)
+      √ should set keep next (3 ms)
+      √ should set keep lines (1 ms)
+      √ should set page break before (1 ms)
+    Method chaining
+      √ should support method chaining (2 ms)
+    XML generation
+      √ should generate basic XML
+      √ should generate XML with empty run if no text (3 ms)
+      √ should generate XML with alignment (1 ms)
+      √ should generate XML with multiple formatted runs (1 ms)
+    Static methods
+      √ should create paragraph with static method (1 ms)
+    Detached paragraphs
+      Paragraph.create()
+        √ should create empty detached paragraph
+        √ should create detached paragraph with text
+        √ should create detached paragraph with text and formatting (1 ms)
+        √ should create detached paragraph with just formatting
+        √ should support method chaining after creation
+      Paragraph.createWithStyle()
+        √ should create detached paragraph with style (2 ms)
+        √ should support method chaining with styled paragraph
+      Paragraph.createEmpty()
+        √ should create empty detached paragraph (1 ms)
+        √ should allow adding content after creation
+      Paragraph.createFormatted()
+        √ should create detached paragraph with run and paragraph formatting (1 ms)
+        √ should work without paragraph formatting (1 ms)
+        √ should work without run formatting (1 ms)
+      Complex detached paragraph scenarios
+        √ should build complex paragraph with multiple runs
+        √ should clone detached paragraph (1 ms)
+        √ should set complex formatting on detached paragraph (1 ms)
+        √ should generate proper XML from detached paragraph (1 ms)
+      Style application with formatting control
+        √ should clear all direct run formatting (1 ms)
+        √ should clear only specified run properties
+        √ should apply style and clear all formatting (1 ms)
+        √ should apply style and clear specific properties (1 ms)
+        √ should apply style without clearing formatting when not specified
+        √ should handle paragraph with multiple runs (1 ms)
+        √ should support method chaining (1 ms)
+      Property conflict resolution
+        √ should clear pageBreakBefore when keepNext is set (1 ms)
+        √ should clear pageBreakBefore when keepLines is set
+        √ should not affect pageBreakBefore when keepNext is set to false (1 ms)
+        √ should work with method chaining
+        √ should work when keepNext/keepLines are set first (1 ms)
+        √ should produce correct XML without conflicting properties (1 ms)
+        √ should handle conflicts in constructor formatting
+      getRuns with nested content
+        √ should return runs from inside revisions (1 ms)
+        √ should return runs from inside hyperlinks (1 ms)
+        √ should allow formatting runs inside revisions
+        √ should combine direct runs, revision runs, and hyperlink runs (1 ms)
+
+  console.log
+    Skipping test: hyperlinks_autoaccept_off.docx not found
+
+      at Object.<anonymous> (tests/core/RevisionInField.test.ts:29:17)
+
+  console.log
+    Skipping test: hyperlinks_autoaccept_off.docx not found
+
+      at Object.<anonymous> (tests/core/RevisionInField.test.ts:65:17)
+
+  console.log
+    Skipping test: hyperlinks_autoaccept_off.docx not found
+
+      at Object.<anonymous> (tests/core/RevisionInField.test.ts:101:17)
+
+  console.log
+    Skipping test: hyperlinks_autoaccept_off.docx not found
+
+      at Object.<anonymous> (tests/core/RevisionInField.test.ts:132:17)
+
+  console.log
+    Skipping test: hyperlinks_autoaccept_off.docx not found
+
+      at Object.<anonymous> (tests/core/RevisionInField.test.ts:171:17)
+
+PASS tests/core/RevisionInField.test.ts
+  Revisions Inside Complex Fields
+    Field Assembly with Revisions
+      √ should detect revisions inside HYPERLINK field result sections (59 ms)
+      √ should correctly decode URL-encoded HYPERLINK instructions (6 ms)
+      √ should parse HYPERLINK with \l anchor switch correctly (8 ms)
+      √ should associate revisions with adjacent complex fields (3 ms)
+    Round-trip preservation
+      √ should preserve HYPERLINK fields after load and save (2 ms)
+
+PASS tests/elements/TableCellPositionTracking.test.ts
+  TableCell Position Tracking
+    removeParagraph position updates
+      √ should decrement rawNestedContent positions when paragraph is removed before nested content (3 ms)
+      √ should NOT change rawNestedContent position when paragraph is removed after nested content
+      √ should handle multiple rawNestedContent items correctly (1 ms)
+    addParagraphAt position updates
+      √ should increment rawNestedContent positions when paragraph is inserted before nested content (1 ms)
+      √ should NOT change rawNestedContent position when paragraph is added after nested content
+    removeTrailingBlankParagraphs
+      √ should remove trailing blank paragraphs from cell (1 ms)
+      √ should keep at least one paragraph in cell (1 ms)
+      √ should stop at non-blank paragraph (2 ms)
+      √ should respect preserve flag when ignorePreserveFlag is false
+      √ should ignore preserve flag when ignorePreserveFlag is true (1 ms)
+      √ should NOT remove blank if raw nested content is positioned after it (1 ms)
+  Document removeTrailingBlanksInTableCells
+    √ should remove trailing blanks from all table cells (4 ms)
+    √ should be called by removeExtraBlankParagraphs when option is enabled (6 ms)
+    √ should call removeTrailingBlanksInTableCells directly to remove trailing blanks (4 ms)
+
+PASS tests/elements/RunPosition.test.ts
+  Run Position - Round Trip Tests
+    Vertical Position
+      √ should set vertical position (1 ms)
+      √ should round-trip raised position through buffer (53 ms)
+      √ should round-trip lowered position through file (33 ms)
+
+PASS tests/xml/XMLParser-parseToObject.test.ts
+  XMLParser.parseToObject
+    Basic Parsing
+      √ should parse single element with attributes (1 ms)
+      √ should parse nested elements (7 ms)
+      √ should parse self-closing tags (1 ms)
+      √ should parse element with text content
+      √ should parse element with attributes and text (1 ms)
+      √ should handle empty elements (1 ms)
+    Relationships XML (Real-world OOXML)
+      √ should parse single Relationship element
+      √ should parse multiple Relationship elements as array (1 ms)
+      √ should handle single vs array normalization (1 ms)
+      √ should preserve relationship attributes
+    Styles XML (Complex Nested)
+      √ should parse WordprocessingML styles
+      √ should preserve namespaces in element names (1 ms)
+      √ should handle complex nested formatting (1 ms)
+      √ should handle self-closing formatting tags (1 ms)
+    Document XML (Text Content)
+      √ should parse paragraph with text (1 ms)
+      √ should handle #text property for mixed content
+      √ should trim whitespace by default
+      √ should preserve whitespace when trimValues=false (1 ms)
+      √ should handle multiple runs
+    Edge Cases
+      √ should handle empty XML (1 ms)
+      √ should handle XML declaration
+      √ should handle comments
+      √ should handle special characters in text (1 ms)
+      √ should handle numeric attribute values (1 ms)
+      √ should handle boolean attribute values (1 ms)
+      √ should handle nested elements with same name
+      √ should correctly parse nested self-closing tags with same name (rPrChange bug fix) (2 ms)
+      √ should throw on oversized documents (28 ms)
+    Options Configuration
+      √ should ignore attributes when ignoreAttributes=true (1 ms)
+      √ should use custom attribute prefix
+      √ should use custom text node name (2 ms)
+      √ should ignore namespaces when ignoreNamespace=true
+      √ should not parse attribute values when parseAttributeValue=false (1 ms)
+      √ should always create arrays when alwaysArray=true (1 ms)
+      √ should combine multiple options (1 ms)
+    Real-world OOXML Scenarios
+      √ should parse [Content_Types].xml
+      √ should parse document.xml structure (1 ms)
+      √ should parse numbering.xml (1 ms)
+    Performance
+      √ should parse typical .rels file quickly (1 ms)
+      √ should handle moderately large documents (5 ms)
+
+PASS tests/core/ListNormalizer.test.ts
+  ListNormalizer
+    normalizeListsInCell - list restart behavior
+      √ should restart sub-list numbering when a new parent level item appears (8 ms)
+      √ should keep same numId for consecutive items at same level (4 ms)
+      √ should handle multiple level transitions correctly (3 ms)
+      √ should shift level 1 items to level 0 when no level 0 parent exists (3 ms)
+      √ should shift multi-level lists without level 0 parent (3 ms)
+      √ should handle multiple list groups separated by non-list text (3 ms)
+    normalizeOrphanListLevelsInCell
+      √ should shift Level 1 bullets to Level 0 when no Level 0 exists (3 ms)
+      √ should not change Level 0 bullets (1 ms)
+      √ should shift mixed levels down by minimum level (1 ms)
+      √ should handle cells with no list items (2 ms)
+      √ should handle cells with mix of list and non-list paragraphs (2 ms)
+      √ should handle Level 3+ orphan bullets (2 ms)
+    normalizeOrphanListLevelsInTable
+      √ should normalize orphan levels across all cells in a table (2 ms)
+      √ should handle empty table (2 ms)
+      √ should handle large table with many cells (4 ms)
+    detectTypedPrefix - abbreviation handling
+      √ should NOT detect "P. O. Box" as a list marker (1 ms)
+      √ should NOT detect "U.S. Army" as a list marker
+      √ should detect "A. First item" as a list marker (1 ms)
+      √ should detect "a. lowercase item" as a list marker
+      √ should detect "1. Numbered item" as a list marker
+      √ should NOT detect "P.O. Box" without spaces as a list marker (1 ms)
+      √ should preserve P. O. Box text in cell normalization (1 ms)
+
+PASS tests/utils/validation.test.ts
+  Validation Utilities
+    validateDocxStructure
+      √ should not throw for valid DOCX structure (1 ms)
+      √ should throw when missing [Content_Types].xml (28 ms)
+      √ should throw when missing _rels/.rels (1 ms)
+      √ should throw when missing word/document.xml (1 ms)
+      √ should validate all required files
+    isBinaryFile
+      √ should identify image files as binary (1 ms)
+      √ should identify font files as binary
+      √ should identify text files as non-binary (1 ms)
+      √ should be case-insensitive
+      √ should handle paths with directories (1 ms)
+    normalizePath
+      √ should convert backslashes to forward slashes
+      √ should remove leading slashes
+      √ should handle mixed slashes (1 ms)
+      √ should preserve forward slashes in middle of path
+      √ should handle empty string
+      √ should handle single file name
+      √ should reject path traversal with ../ (Unix) (2 ms)
+      √ should reject path traversal with ..\ (Windows) (1 ms)
+      √ should reject absolute Windows paths (3 ms)
+      √ should allow valid relative paths
+    isValidZipBuffer
+      √ should recognize valid ZIP signature (1 ms)
+      √ should recognize empty ZIP signature
+      √ should reject invalid signature
+      √ should reject buffer too small
+      √ should reject text files
+      √ should reject PDF signature
+    isTextContent
+      √ should identify string as text (1 ms)
+      √ should identify UTF-8 buffer as text
+      √ should identify buffer with null bytes as binary
+      √ should handle unicode text
+      √ should identify binary data as non-text
+      √ should handle empty string (1 ms)
+      √ should handle empty buffer
+
+PASS tests/elements/ParagraphNumberingIndent.test.ts
+  Paragraph - Numbering and Indentation Conflict Resolution
+    setNumbering() clears conflicting indentation
+      √ should clear left indentation when numbering is applied (2 ms)
+      √ should clear firstLine indentation when numbering is applied (1 ms)
+      √ should clear hanging indentation when numbering is applied (1 ms)
+      √ should clear multiple indentation properties when numbering is applied
+      √ should preserve right indentation when numbering is applied
+      √ should handle numbering when no indentation exists (1 ms)
+    Warnings when setting indentation on numbered paragraphs
+      √ should warn when setting left indent on numbered paragraph (1 ms)
+      √ should warn when setting first line indent on numbered paragraph
+      √ should not warn when setting right indent on numbered paragraph (1 ms)
+      √ should not warn when setting indent on non-numbered paragraph
+    Edge cases and complex scenarios
+      √ should handle changing numbering levels
+      √ should handle numbering applied multiple times (1 ms)
+      √ should handle indent set before and after numbering (1 ms)
+      √ should preserve right indent across numbering changes (1 ms)
+    XML generation with conflict resolution
+      √ should not include left indent in XML when numbering is present (1 ms)
+      √ should include right indent in XML with numbering (1 ms)
+    Numbering validation
+      √ should throw error for negative numId (50 ms)
+      √ should throw error for level < 0 (1 ms)
+      √ should throw error for level > 8 (1 ms)
+      √ should accept valid levels 0-8 (2 ms)
+
+PASS tests/utils/SelectiveRevisionAcceptor.test.ts
+  SelectiveRevisionAcceptor
+    accept
+      √ should accept revisions matching criteria (2 ms)
+      √ should return empty result for document without revision manager (1 ms)
+      √ should accept nothing if no criteria matches
+    reject
+      √ should reject revisions matching criteria (1 ms)
+    preview
+      √ should preview accept action
+      √ should preview reject action (1 ms)
+    acceptByAuthor
+      √ should accept all revisions by specific author (1 ms)
+    rejectByAuthor
+      √ should reject all revisions by specific author
+    acceptByType
+      √ should accept all revisions of specific types (2 ms)
+    rejectByType
+      √ should reject all revisions of specific types (2 ms)
+    acceptBeforeDate
+      √ should accept revisions before cutoff date (1 ms)
+    acceptAfterDate
+      √ should accept revisions after start date (1 ms)
+    acceptInsertionsOnly
+      √ should accept only insertions
+    acceptDeletionsOnly
+      √ should accept only deletions (1 ms)
+    rejectFormattingChanges
+      √ should reject formatting changes (1 ms)
+    acceptContentChangesOnly
+      √ should accept only content changes
+    category filtering
+      √ should correctly categorize table changes (1 ms)
+      √ should correctly categorize structural changes (2 ms)
+    custom filter
+      √ should apply custom filter function (1 ms)
+    combined criteria
+      √ should combine multiple criteria with AND logic
+
+PASS tests/elements/RevisionManager.test.ts
+  RevisionManager
+    Basic Operations
+      √ should create empty manager (1 ms)
+      √ should register revisions and assign unique IDs (1 ms)
+      √ should return the registered revision from register() (1 ms)
+      √ should clear all revisions
+      √ should reset nextId after clear
+    Retrieval Methods
+      √ should get all revisions (1 ms)
+      √ should return defensive copy from getAllRevisions
+      √ should get revisions by type
+      √ should get revisions by author
+      √ should get revision by ID (1 ms)
+      √ should return undefined for non-existent ID
+      √ should get all insertions (1 ms)
+      √ should get all deletions (1 ms)
+      √ should get all property changes (1 ms)
+    Count Methods
+      √ should return total count (1 ms)
+      √ should return insertion count
+      √ should return deletion count (1 ms)
+    Author Methods
+      √ should get unique authors (1 ms)
+    Date Range Filtering
+      √ should filter by date range
+      √ should include boundary dates (1 ms)
+    Text Search
+      √ should find revisions by text (case-insensitive)
+      √ should find revisions containing partial match (1 ms)
+      √ should return empty array for no matches
+    Recent Revisions
+      √ should return most recent N revisions (1 ms)
+      √ should return all if N exceeds total
+    Latest Revision
+      √ should return undefined when empty (1 ms)
+      √ should return last registered revision
+    Category Filtering
+      √ should filter by content category (1 ms)
+      √ should filter by formatting category (1 ms)
+      √ should filter by structural category
+      √ should filter by table category (1 ms)
+      √ should include internal tracking types in content category
+      √ should include bookmarkChange in structural category (1 ms)
+    Move Operations
+      √ should get all moves
+      √ should get all moveFrom (1 ms)
+      √ should get all moveTo
+      √ should get move pair by ID (1 ms)
+      √ should return partial pair for orphaned move (1 ms)
+    Statistics
+      √ should get comprehensive stats (1 ms)
+      √ should get summary with date range (1 ms)
+    Validation
+      √ should validate unique revision IDs
+      √ should detect duplicate revision IDs (1 ms)
+      √ should validate move pairs
+      √ should detect orphaned moveFrom (1 ms)
+      √ should detect orphaned moveTo
+    ID Management
+      √ should peek next ID without incrementing (1 ms)
+      √ should consume next ID
+      √ should get highest ID (1 ms)
+      √ should return -1 for highest ID when empty
+      √ should reassign all IDs (1 ms)
+      √ should sync next ID after loading
+    Location-Based Queries
+      √ should get revisions for paragraph (1 ms)
+      √ should get revisions for specific run
+      √ should return empty for negative paragraph index (1 ms)
+      √ should get revisions with location
+      √ should get revisions without location
+      √ should get revisions by location criteria (1 ms)
+    Multi-Criteria Matching
+      √ should match by types
+      √ should match by authors
+      √ should match by types AND authors (1 ms)
+      √ should match by date range
+      √ should match by all criteria
+    Status Methods
+      √ should report not tracking when empty
+      √ should report tracking when has revisions (1 ms)
+    Remove Operations
+      √ should remove revision by ID
+      √ should return false for non-existent ID (1 ms)
+    Static Factory
+      √ should create manager via static method
+
+PASS tests/elements/FieldTypes.test.ts
+  Field Types - Page Fields
+    √ should create PAGE field (2 ms)
+    √ should create NUMPAGES field
+    √ should create SECTIONPAGES field (1 ms)
+    √ should generate XML for page number field (1 ms)
+  Field Types - Reference Fields
+    √ should create REF field with bookmark
+    √ should create REF field with custom format (1 ms)
+    √ should create HYPERLINK field
+    √ should create HYPERLINK field with tooltip
+    √ should create SEQ field
+    √ should create SEQ field with Roman numerals
+    √ should generate XML for REF field (1 ms)
+  Field Types - Document Property Fields
+    √ should create AUTHOR field
+    √ should create TITLE field
+    √ should create FILENAME field (1 ms)
+    √ should create FILENAME field with path
+    √ should create TC entry field (5 ms)
+    √ should create TC entry field with level 3 (1 ms)
+    √ should throw error for invalid TC level (24 ms)
+    √ should create XE entry field (1 ms)
+    √ should create XE entry field with sub-entry
+  Field Types - Date and Time Fields
+    √ should create DATE field
+    √ should create DATE field with format (1 ms)
+    √ should create TIME field
+    √ should create TIME field with format
+  Field Types - Formatting
+    √ should apply bold formatting to field (1 ms)
+    √ should apply multiple formatting options
+  Field Types - XML Generation
+    √ should generate correct XML structure for all field types (18 ms)
+    √ should include placeholder text in XML
+  Field Types - Factory Methods
+    √ should create field using generic create method
+    √ should create custom field (1 ms)
+  Field Types - Integration
+    √ should support method chaining for formatting
+    √ should preserve field instruction when formatting changes
+    √ should generate valid field codes for all types (1 ms)
+
+PASS tests/utils/RevisionAwareProcessor.test.ts
+  RevisionAwareProcessor
+    hasTrackedChanges
+      √ should return false for document without revisions (1 ms)
+      √ should return true for document with revisions (1 ms)
+    getTrackedChangesSummary
+      √ should return null for document without revision manager (1 ms)
+      √ should return summary for document with revisions (1 ms)
+    prepare
+      √ should handle document without revisions (1 ms)
+      √ should preserve revisions in preserve mode (1 ms)
+      √ should track revisions for preserve_and_wrap mode
+      √ should log processing actions (1 ms)
+    acceptSelective
+      √ should filter revisions by type
+      √ should filter revisions by author (1 ms)
+      √ should filter revisions by category (1 ms)
+      √ should apply custom filter
+    checkConflict
+      √ should return null for document without revision manager (1 ms)
+      √ should return revision if conflict exists
+    getAffectedRevisions
+      √ should return empty array for document without revision manager (1 ms)
+
+PASS tests/elements/Section.test.ts
+  Section
+    Basic functionality
+      √ should create section with default properties (12 ms)
+      √ should create section with custom properties (1 ms)
+    Page size
+      √ should set page size
+      √ should set page orientation
+      √ should swap dimensions for landscape orientation
+    Margins
+      √ should set margins (1 ms)
+      √ should set gutter margin (1 ms)
+    Columns
+      √ should set column layout (1 ms)
+      √ should use default spacing for columns
+    Section type
+      √ should set section type
+      √ should support all section types (1 ms)
+    Page numbering
+      √ should set page numbering start
+      √ should set page numbering format
+      √ should set only format without start
+    Headers and footers
+      √ should set title page flag
+      √ should set header references (1 ms)
+      √ should set footer references
+    Method chaining
+      √ should support method chaining (1 ms)
+    XML generation
+      √ should generate basic section XML (1 ms)
+      √ should generate XML with landscape orientation (1 ms)
+      √ should generate XML with multiple columns
+      √ should generate XML with page numbering
+      √ should generate XML with title page (1 ms)
+      √ should generate XML with headers and footers
+      √ should generate XML with gutter margin
+    clone()
+      √ should create an independent clone with all properties (3 ms)
+      √ should create independent objects (not references)
+      √ should handle section with minimal properties (1 ms)
+      √ should deep clone columnWidths array
+    Static factory methods
+      √ should create section with default properties (1 ms)
+      √ should create letter-sized section
+      √ should create A4-sized section (1 ms)
+      √ should create landscape letter section
+      √ should create landscape A4 section (1 ms)
+      √ should default to letter for landscape
+
+PASS tests/utils/ChangelogGenerator.test.ts
+  ChangelogGenerator
+    categorize
+      √ should categorize insert as content (1 ms)
+      √ should categorize delete as content
+      √ should categorize moveFrom as structural
+      √ should categorize moveTo as structural (1 ms)
+      √ should categorize runPropertiesChange as formatting
+      √ should categorize paragraphPropertiesChange as formatting
+      √ should categorize tablePropertiesChange as table (1 ms)
+      √ should categorize tableCellInsert as table
+      √ should categorize sectionPropertiesChange as structural
+    describeRevision
+      √ should describe insertion (1 ms)
+      √ should describe deletion
+      √ should truncate long text (1 ms)
+      √ should describe moveFrom
+      √ should describe moveTo
+      √ should describe table cell insert (1 ms)
+    fromRevisions
+      √ should convert revisions to changelog entries (1 ms)
+      √ should filter by author (1 ms)
+      √ should filter by category
+      √ should filter out formatting changes when requested (1 ms)
+      √ should filter by date range
+      √ should set content.after for insertions (1 ms)
+      √ should set content.before for deletions
+    getSummary
+      √ should return correct total count (1 ms)
+      √ should count by category (1 ms)
+      √ should count by author (1 ms)
+      √ should track date range
+      √ should return null date range for empty entries (1 ms)
+    consolidate
+      √ should group similar changes
+      √ should not group changes from different authors
+      √ should group property changes with same property and value (1 ms)
+      √ should sort consolidated changes by count descending
+    toMarkdown
+      √ should generate valid markdown (1 ms)
+      √ should include metadata when requested (1 ms)
+      √ should not include metadata when disabled
+    toPlainText
+      √ should generate plain text output (1 ms)
+      √ should show before/after markers
+    toJSON
+      √ should generate valid JSON (2 ms)
+      √ should include summary in JSON output
+
+PASS tests/elements/ComplexField.test.ts
+  ComplexField
+    Constructor and Basic Properties
+      √ should create a complex field with instruction (4 ms)
+      √ should create a complex field with instruction and result (1 ms)
+      √ should support method chaining for setters (1 ms)
+    XML Generation Structure
+      √ should generate correct begin/separate/end structure (3 ms)
+      √ should generate 4 runs when result is not provided (1 ms)
+      √ should preserve xml:space attribute on instrText and result
+    Formatting Support
+      √ should apply instruction formatting (5 ms)
+      √ should apply result formatting (1 ms)
+      √ should support all formatting options (3 ms)
+    XML Output Validation
+      √ should generate valid XML that can be serialized (5 ms)
+      √ should escape special characters in instruction and result (1 ms)
+  createTOCField
+    Default Options
+      √ should create TOC with default options
+      √ should enable hyperlinks by default
+      √ should enable hideInWebLayout by default (1 ms)
+      √ should enable useOutlineLevels by default (5 ms)
+    Custom Levels
+      √ should support custom heading levels (1 ms)
+      √ should support single level
+      √ should support non-sequential levels (1 ms)
+    Switch Options
+      √ should disable hyperlinks when requested
+      √ should disable hideInWebLayout when requested (1 ms)
+      √ should disable useOutlineLevels when requested
+      √ should add omitPageNumbers switch
+      √ should add customStyles switch (1 ms)
+    Combined Options
+      √ should support multiple options combined (1 ms)
+      √ should support all options
+    Instruction Format
+      √ should have correct instruction format (1 ms)
+      √ should maintain switch order (1 ms)
+    Integration with ComplexField
+      √ should return a ComplexField instance
+      √ should generate valid XML structure (2 ms)
+      √ should allow formatting to be applied after creation (3 ms)
+
+PASS tests/utils/RevisionWalker.test.ts
+  RevisionWalker
+    processTree
+      Unwrapping insertions (w:ins)
+        √ should unwrap simple w:ins with one w:r child (1 ms)
+        √ should unwrap w:ins with multiple w:r children (1 ms)
+        √ should handle nested w:ins elements (1 ms)
+        √ should preserve existing runs when unwrapping w:ins (2 ms)
+        √ should not unwrap w:ins when acceptInsertions is false
+      Removing deletions (w:del)
+        √ should remove simple w:del with content (1 ms)
+        √ should preserve sibling runs when removing w:del (1 ms)
+        √ should not remove w:del when acceptDeletions is false
+      Move operations (w:moveFrom, w:moveTo)
+        √ should remove w:moveFrom with content (1 ms)
+        √ should unwrap w:moveTo keeping content
+        √ should not process moves when acceptMoves is false (1 ms)
+      Property changes
+        √ should remove w:rPrChange
+        √ should remove w:pPrChange (1 ms)
+        √ should remove all property change types (1 ms)
+        √ should not remove property changes when acceptPropertyChanges is false
+      Range markers
+        √ should remove move range markers (1 ms)
+        √ should remove all range marker types (2 ms)
+      Element order preservation
+        √ should update _orderedChildren when unwrapping
+        √ should update _orderedChildren when removing (1 ms)
+      Edge cases
+        √ should handle empty w:ins elements
+        √ should handle empty w:del elements
+        √ should handle w:ins containing w:del (1 ms)
+        √ should not mutate the original object
+        √ should handle deeply nested structures
+        √ should handle multiple w:ins elements at same level (1 ms)
+      Integration with XMLParser
+        √ should process parsed XML correctly (2 ms)
+        √ should handle complex real-world XML (2 ms)
+    isRevisionElement
+      √ should identify w:ins as revision element
+      √ should identify w:del as revision element
+      √ should identify property changes as revision elements (1 ms)
+      √ should identify range markers as revision elements
+      √ should not identify regular elements as revision elements
+    getRevisionElementCategories
+      √ should return all revision element categories (20 ms)
+
+PASS tests/utils/corruptionDetection.test.ts
+  CorruptionDetection
+    detectCorruptionInText
+      √ should detect escaped XML tags (1 ms)
+      √ should detect raw XML tags
+      √ should detect XML entities in suspicious patterns (1 ms)
+      √ should detect mixed corruption types
+      √ should not flag clean text (1 ms)
+      √ should handle empty or null input
+    suggestFix
+      √ should clean escaped XML tags (1 ms)
+      √ should clean raw XML tags
+      √ should clean mixed corruption
+      √ should handle multiple XML patterns
+      √ should clean up extra whitespace
+      √ should handle already clean text
+      √ should handle empty or null input
+    looksCorrupted
+      √ should quickly detect obvious corruption
+      √ should not flag clean text (1 ms)
+      √ should handle empty or null input
+    detectCorruptionInDocument
+      √ should detect corruption in a document (9 ms)
+      √ should provide correct location information (1 ms)
+      √ should not flag clean documents (1 ms)
+      √ should generate helpful summary (2 ms)
+      √ should handle empty documents (2 ms)
+      √ should track statistics correctly (1 ms)
+      √ should provide suggested fixes for each location (3 ms)
+    Real-world corruption patterns
+      √ should detect the exact pattern from the bug report (1 ms)
+      √ should handle all patterns from the bug report (2 ms)
+
+PASS tests/elements/Revision.test.ts
+  Revision
+    Basic Creation
+      √ should create an insertion revision (3 ms)
+      √ should create a deletion revision
+      √ should create revision from text (1 ms)
+      √ should create revision with custom date
+      √ should default to current date if not provided
+    Property Change Revisions
+      √ should create run properties change revision (1 ms)
+      √ should create paragraph properties change revision
+      √ should create table properties change revision
+      √ should create table exception properties change revision (1 ms)
+      √ should create numbering change revision
+    Move Operations
+      √ should create moveFrom revision with move ID (1 ms)
+      √ should create moveTo revision with move ID
+      √ should link moveFrom and moveTo with same move ID (1 ms)
+    Table Cell Operations
+      √ should create table cell insert revision
+      √ should create table cell delete revision
+      √ should create table cell merge revision (1 ms)
+    Multiple Runs
+      √ should accept array of runs for insertion
+      √ should add runs incrementally
+    Author and Date Modification
+      √ should allow setting author (1 ms)
+      √ should allow setting date
+      √ should support method chaining
+    Location Tracking
+      √ should set and get revision location (1 ms)
+      √ should support all location fields
+    Field Instruction Handling
+      √ should create field instruction deletion (1 ms)
+      √ should mark revision as field instruction
+    XML Generation
+      √ should generate valid XML for insertion (1 ms)
+      √ should generate valid XML for deletion
+      √ should include move ID in move revisions (1 ms)
+      √ should generate correct element names for all types (3 ms)
+      √ should generate previous properties for property change revisions (1 ms)
+      √ should format date as ISO 8601
+      √ should return null for internal tracking types (1 ms)
+    Content Access
+      √ should return defensive copy of content
+      √ should return defensive copy of runs (1 ms)
+    ID Management
+      √ should start with default ID of 0
+      √ should allow setting ID
+    Internal Tracking Types
+      √ should allow creating internal tracking type revisions for metadata purposes (1 ms)
+
+PASS tests/elements/FieldHyperlink.test.ts
+  HYPERLINK Field Instruction Parsing
+    parseHyperlinkInstruction
+      √ should parse basic HYPERLINK instruction (12 ms)
+      √ should parse HYPERLINK with \l anchor switch (2 ms)
+      √ should parse anchor-only HYPERLINK (no URL) (1 ms)
+      √ should parse anchor-only HYPERLINK with extra spaces
+      √ should parse HYPERLINK with \o tooltip switch (1 ms)
+      √ should parse HYPERLINK with all switches (1 ms)
+      √ should detect \h switch at end of instruction
+      √ should detect missing \h switch (1 ms)
+      √ should decode URL-encoded characters (1 ms)
+      √ should decode %23 (hash) in URL (1 ms)
+      √ should decode anchor value as well (1 ms)
+      √ should handle URL with existing fragment and anchor switch
+      √ should return null for non-HYPERLINK instructions (1 ms)
+      √ should return null for empty or null input
+      √ should return null for HYPERLINK without URL (1 ms)
+      √ should preserve raw instruction
+      √ should handle case-insensitive HYPERLINK keyword (1 ms)
+      √ should handle URLs with query parameters (1 ms)
+    buildHyperlinkInstruction
+      √ should build basic HYPERLINK instruction
+      √ should build HYPERLINK with anchor (1 ms)
+      √ should build HYPERLINK with tooltip
+      √ should build HYPERLINK with all options
+    isHyperlinkInstruction
+      √ should return true for HYPERLINK instructions (1 ms)
+      √ should return false for non-HYPERLINK instructions (7 ms)
+      √ should return false for empty/null input (1 ms)
+    ComplexField HYPERLINK integration
+      √ should auto-parse HYPERLINK instruction in ComplexField
+      √ should not auto-parse non-HYPERLINK instruction (1 ms)
+      √ should decode URL-encoded characters in ComplexField
+      √ should handle HYPERLINK with base URL and \l anchor (1 ms)
+
+PASS tests/ms-doc/cfb/CFBReader.test.ts
+  CFBReader
+    isValidCFB
+      √ should return true for valid CFB signature (2 ms)
+      √ should return false for invalid signature
+      √ should return false for data too short (1 ms)
+      √ should work with ArrayBuffer input
+      √ should work with Buffer input (1 ms)
+    parse
+      √ should throw CFBParseError for file too small (44 ms)
+      √ should throw CFBParseError for invalid signature (1 ms)
+      √ should throw CFBParseError for unsupported version (1 ms)
+      √ should throw CFBParseError for wrong byte order (2 ms)
+    header parsing
+      √ should correctly parse version 3 header (6 ms)
+      √ should correctly parse signature (1 ms)
+    directory entries
+      √ should find root storage entry (1 ms)
+      √ should parse all directory entries
+    stream access
+      √ should return null for non-existent stream (1 ms)
+      √ should report correct stream names
+      √ should report correct storage names (1 ms)
+      √ should correctly check stream existence (1 ms)
+    FAT chain following
+      √ should correctly build FAT
+    integration with real .doc files
+      ○ skipped should parse a real .doc file
+
+PASS tests/elements/BookmarkManager.test.ts
+  BookmarkManager
+    Basic Operations
+      √ should create empty manager (1 ms)
+      √ should register bookmarks and assign unique IDs
+      √ should throw on duplicate bookmark names (14 ms)
+      √ should clear all bookmarks
+    getUniqueName
+      √ should return base name if not taken (1 ms)
+      √ should add suffix if name is taken
+      √ should increment suffix until unique (1 ms)
+      √ should truncate long names to fit 40-char limit with suffix
+      √ should handle multiple duplicates with long names (1 ms)
+      √ should handle larger suffix numbers (1 ms)
+    createHeadingBookmark
+      √ should create bookmark from heading text (1 ms)
+      √ should handle multiple headings with same prefix (1 ms)
+      √ should handle many similar long headings (2 ms)
+    getStats
+      √ should return correct statistics
+
+PASS tests/xml/XMLBuilder-sanitization.test.ts
+  XML Sanitization
+    removeInvalidXmlChars
+      √ should remove NULL byte (0x00) (3 ms)
+      √ should remove all invalid control chars (0x00-0x08) (1 ms)
+      √ should preserve TAB (0x09) (1 ms)
+      √ should preserve newline (0x0A) (1 ms)
+      √ should remove VERTICAL TAB (0x0B) (3 ms)
+      √ should remove FORM FEED (0x0C) (1 ms)
+      √ should preserve carriage return (0x0D)
+      √ should remove control chars (0x0E-0x1F) (1 ms)
+      √ should remove DELETE (0x7F)
+      √ should handle empty string (1 ms)
+      √ should handle string with only invalid chars
+      √ should preserve normal text unchanged (1 ms)
+      √ should preserve Unicode characters
+      √ should preserve emoji (1 ms)
+      √ should handle mixed valid and invalid characters
+    findInvalidXmlChars
+      √ should return empty array for valid text (1 ms)
+      √ should find NULL byte (1 ms)
+      √ should find multiple invalid chars (1 ms)
+      √ should return unique codes only
+      √ should not include valid control chars (tab, newline, CR)
+    hasInvalidXmlChars
+      √ should return false for valid text
+      √ should return true for text with NULL (1 ms)
+      √ should return false for valid control chars
+      √ should return true for DELETE char
+    XML_CONTROL_CHARS constants
+      √ should have correct values for valid chars
+      √ should have correct values for invalid chars
+    XMLBuilder.escapeXmlText
+      √ should escape & < > characters (1 ms)
+      √ should NOT escape quotes (text content, not attributes) (1 ms)
+      √ should remove NULL byte before escaping
+      √ should preserve tab and newline
+      √ should remove DELETE char (1 ms)
+      √ should handle complex mixed content
+    XMLBuilder.escapeXmlAttribute
+      √ should escape all XML special chars including quotes
+      √ should escape single quotes
+      √ should remove NULL byte before escaping
+      √ should remove control chars
+    XMLBuilder.sanitizeXmlContent
+      √ should remove control chars and escape XML (1 ms)
+      √ should escape CDATA end marker (2 ms)
+      √ should preserve valid control chars (1 ms)
+    Integration: Document round-trip with control chars
+      √ should produce valid XML when text contains control chars (1 ms)
+      √ should produce valid XML in attributes
+
+PASS tests/core/HyperlinkMerging.test.ts
+  Hyperlink Merging Behavior
+    consecutive hyperlinks with same URL
+      √ should merge truly consecutive hyperlinks with same URL (2 ms)
+      √ should NOT merge non-consecutive hyperlinks with same URL (1 ms)
+      √ should preserve text position between non-consecutive hyperlinks (1 ms)
+      √ should handle multiple different URLs correctly (2 ms)
+    paragraph getText() with mixed content
+      √ should concatenate text correctly from mixed hyperlinks and runs
+      √ should preserve exact text when same URL appears multiple times (1 ms)
+
+PASS tests/utils/cnfStyleDecoder.test.ts
+  cnfStyleDecoder
+    decodeCnfStyle
+      √ should decode firstRow flag from position 0 (2 ms)
+      √ should decode lastRow flag from position 1 (1 ms)
+      √ should decode firstCol flag from position 2
+      √ should decode lastCol flag from position 3
+      √ should decode banding flags from positions 4-7
+      √ should decode corner cell flags from positions 8-11 (1 ms)
+      √ should decode multiple flags at once
+      √ should decode first row + nwCell (top-left corner)
+      √ should handle short strings by padding with zeros (1 ms)
+      √ should handle empty string
+      √ should return all false for all zeros
+      √ should return all true for all ones
+    encodeCnfStyle
+      √ should encode firstRow flag
+      √ should encode multiple flags (1 ms)
+      √ should encode corner cells
+      √ should encode banding flags
+      √ should return all zeros for empty object (1 ms)
+      √ should round-trip encode/decode
+    getActiveConditionals
+      √ should return empty array for no active conditionals
+      √ should return firstRow for 100000000000
+      √ should return multiple conditionals (1 ms)
+      √ should return corner cells correctly
+    getActiveConditionalsInPriorityOrder
+      √ should return conditionals in priority order (corners first) (1 ms)
+      √ should order edges before banding
+      √ should match CONDITIONAL_PRIORITY_ORDER (1 ms)
+    CNF_TO_CONDITIONAL_MAP
+      √ should map all flags to valid ConditionalFormattingType values (1 ms)
+
+PASS tests/utils/parsingHelpers.test.ts
+  parsingHelpers
+    safeParseInt
+      √ should parse valid integer strings (2 ms)
+      √ should handle numeric input
+      √ should return default for undefined/null (1 ms)
+      √ should return default for invalid strings
+      √ should return default for NaN input (1 ms)
+      √ should handle zero correctly (not as falsy) (1 ms)
+    parseOoxmlBoolean
+      √ should return false for absent element (1 ms)
+      √ should return true for self-closing element without w:val
+      √ should return true for explicit true values (1 ms)
+      √ should return false for explicit false values
+      √ should handle case variations (1 ms)
+    isExplicitlySet
+      √ should return true for explicitly set values (1 ms)
+      √ should return false for undefined/null
+      √ should correctly handle zero (the main fix)
+    parseNumericAttribute
+      √ should parse valid values
+      √ should return default for undefined/null (1 ms)
+      √ should return default for invalid values
+      √ should preserve zero values
+    parseOnOffAttribute
+      √ should return true for on values (2 ms)
+      √ should return false for off values (1 ms)
+      √ should return default for undefined/null
+
+PASS tests/core/NestedTablePreservation.test.ts
+  NestedTablePreservation
+    TableCell raw nested content
+      √ should store and retrieve raw nested content (2 ms)
+      √ should update raw nested content
+      √ should return false when updating invalid index
+      √ should clear raw nested content (1 ms)
+      √ should handle SDT content type
+    TableCell toXML with nested content
+      √ should include nested table in XML output
+      √ should preserve multiple nested tables at different positions (1 ms)
+      √ should handle cell with only nested table and no paragraphs
+    Document load/save with nested tables
+      √ should preserve nested tables when loading and saving
+    Deep nesting scenarios
+      √ should preserve 5 levels of nested tables (1 ms)
+      √ should handle nested tables with revision markers
+      √ should handle multiple nested tables at different positions in same cell
+      √ should handle nested SDT containing nested table
+      √ should handle large nested table structures without performance degradation
+    Edge cases
+      √ should handle nested table with minimal valid structure
+      √ should handle nested table with merged cells (gridSpan and vMerge) (1 ms)
+      √ should handle nested table with complex borders and shading
+      √ should handle nested table with hyperlinks and bookmarks (1 ms)
+      √ should handle empty cell with only nested content
+
+Test Suites: 86 passed, 86 total
+Tests:       1 skipped, 1986 passed, 1987 total
+Snapshots:   0 total
+Time:        19.066 s
+Ran all test suites.

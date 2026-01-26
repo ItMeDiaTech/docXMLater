@@ -513,7 +513,7 @@ describe('NumberingLevel', () => {
       expect(level.getProperties().hangingIndent).toBe(360);
     });
 
-    it('should parse italic from XML', () => {
+    it('should clear italic when parsing XML (list prefixes should not be italic)', () => {
       const xml = `<w:lvl w:ilvl="0">
         <w:start w:val="1"/>
         <w:numFmt w:val="decimal"/>
@@ -524,10 +524,10 @@ describe('NumberingLevel', () => {
       </w:lvl>`;
 
       const level = NumberingLevel.fromXML(xml);
-      expect(level.getItalic()).toBe(true);
+      expect(level.getItalic()).toBe(false);
     });
 
-    it('should parse self-closing italic tag', () => {
+    it('should clear self-closing italic tag when parsing (list prefixes should not be italic)', () => {
       const xml = `<w:lvl w:ilvl="0">
         <w:start w:val="1"/>
         <w:numFmt w:val="decimal"/>
@@ -538,7 +538,7 @@ describe('NumberingLevel', () => {
       </w:lvl>`;
 
       const level = NumberingLevel.fromXML(xml);
-      expect(level.getItalic()).toBe(true);
+      expect(level.getItalic()).toBe(false);
     });
 
     it('should default to false when no italic in XML', () => {
@@ -555,7 +555,7 @@ describe('NumberingLevel', () => {
       expect(level.getItalic()).toBe(false);
     });
 
-    it('should parse underline from XML', () => {
+    it('should clear underline when parsing XML (list prefixes should not be underlined)', () => {
       const xml = `<w:lvl w:ilvl="0">
         <w:start w:val="1"/>
         <w:numFmt w:val="decimal"/>
@@ -566,10 +566,10 @@ describe('NumberingLevel', () => {
       </w:lvl>`;
 
       const level = NumberingLevel.fromXML(xml);
-      expect(level.getUnderline()).toBe('single');
+      expect(level.getUnderline()).toBeUndefined();
     });
 
-    it('should parse double underline from XML', () => {
+    it('should clear double underline when parsing XML (list prefixes should not be underlined)', () => {
       const xml = `<w:lvl w:ilvl="0">
         <w:start w:val="1"/>
         <w:numFmt w:val="decimal"/>
@@ -580,10 +580,10 @@ describe('NumberingLevel', () => {
       </w:lvl>`;
 
       const level = NumberingLevel.fromXML(xml);
-      expect(level.getUnderline()).toBe('double');
+      expect(level.getUnderline()).toBeUndefined();
     });
 
-    it('should parse combined italic and underline from XML', () => {
+    it('should clear combined italic and underline when parsing XML (list prefixes should be plain)', () => {
       const xml = `<w:lvl w:ilvl="0">
         <w:start w:val="1"/>
         <w:numFmt w:val="lowerRoman"/>
@@ -594,8 +594,8 @@ describe('NumberingLevel', () => {
       </w:lvl>`;
 
       const level = NumberingLevel.fromXML(xml);
-      expect(level.getItalic()).toBe(true);
-      expect(level.getUnderline()).toBe('wave');
+      expect(level.getItalic()).toBe(false);
+      expect(level.getUnderline()).toBeUndefined();
     });
 
     it('should default to undefined when no underline in XML', () => {

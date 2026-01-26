@@ -5,6 +5,18 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.7] - 2025-01-25
+
+### Fixed
+
+- **List Prefix Formatting Normalization**
+  - List prefixes (bullets, numbers, letters) are now cleared of bold, italic, and underline when parsing documents
+  - Previously, only bold was cleared; now italic and underline are also cleared
+  - Ensures consistent, clean list prefix appearance across all processed documents
+  - Affects `NumberingLevel.fromXML()` parsing behavior
+
+---
+
 ## [9.5.6] - 2025-01-25
 
 ### Reverted

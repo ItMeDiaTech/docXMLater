@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId8" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings" Target="webSettings.xml"/>
+  <Relationship Id="rId13" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://aetnao365.sharepoint.com/sites/FEPCareSubcommittee/Lists/Feedback%20Tracker/Uv3qgxk/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/DPKPKKGX/CMS-PRD1-086554" TargetMode="External"/>
+  <Relationship Id="rId18" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://aetnao365.sharepoint.com/sites/FEPCareSubcommittee/Lists/Feedback%20Tracker/Uv3qgxk/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/DPKPKKGX/CMS-PRD1-064034" TargetMode="External"/>
+  <Relationship Id="rId26" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image9.png"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item3.xml"/>
+  <Relationship Id="rId21" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image5.png"/>
+  <Relationship Id="rId34" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://aetnao365.sharepoint.com/sites/FEPCareSubcommittee/Lists/Feedback%20Tracker/Uv3qgxk/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/DPKPKKGX/CMS-PRD1-064719" TargetMode="External"/>
+  <Relationship Id="rId42" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
+  <Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+  <Relationship Id="rId12" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://aetnao365.sharepoint.com/sites/FEPCareSubcommittee/Lists/Feedback%20Tracker/Uv3qgxk/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/DPKPKKGX/CMS-PRD1-065392" TargetMode="External"/>
+  <Relationship Id="rId25" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image8.png"/>
+  <Relationship Id="rId33" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://aetnao365.sharepoint.com/sites/FEPCareSubcommittee/Lists/Feedback%20Tracker/Uv3qgxk/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/DPKPKKGX/CMS-PRD1-083442" TargetMode="External"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item2.xml"/>
+  <Relationship Id="rId20" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="http://www.fepblue.org" TargetMode="External"/>
+  <Relationship Id="rId29" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image12.png"/>
+  <Relationship Id="rId41" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/>
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item1.xml"/>
+  <Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId11" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image3.png"/>
+  <Relationship Id="rId24" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image7.png"/>
+  <Relationship Id="rId37" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://aetnao365.sharepoint.com/sites/FEPCareSubcommittee/Lists/Feedback%20Tracker/Uv3qgxk/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/DPKPKKGX/CMS-2-017428" TargetMode="External"/>
+  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+  <Relationship Id="rId15" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image4.png"/>
+  <Relationship Id="rId28" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image11.png"/>
+  <Relationship Id="rId36" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://policy.corp.cvscaremark.com/pnp/faces/DocRenderer?documentId=CALL-0049" TargetMode="External"/>
+  <Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes" Target="endnotes.xml"/>
+  <Relationship Id="rId19" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://aetnao365.sharepoint.com/sites/FEPCareSubcommittee/Lists/Feedback%20Tracker/Uv3qgxk/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/DPKPKKGX/CMS-PRD1-087778" TargetMode="External"/>
+  <Relationship Id="rId31" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://aetnao365.sharepoint.com/sites/FEPCareSubcommittee/Lists/Feedback%20Tracker/Uv3qgxk/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/DPKPKKGX/CMS-PRD1-064145" TargetMode="External"/>
+  <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item4.xml"/>
+  <Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes" Target="footnotes.xml"/>
+  <Relationship Id="rId14" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://aetnao365.sharepoint.com/sites/FEPCareSubcommittee/Lists/Feedback%20Tracker/Uv3qgxk/AppData/Local/Microsoft/Windows/INetCache/Content.Outlook/DPKPKKGX/CMS-PRD1-105153" TargetMode="External"/>
+  <Relationship Id="rId22" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image6.png"/>
+  <Relationship Id="rId27" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image10.png"/>
+  <Relationship Id="rId30" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image13.png"/>
+  <Relationship Id="rId43" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=90a1b549-d4ea-41d9-bb3b-29a6f98e2314" TargetMode="External"/>
+  <Relationship Id="rId44" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=a54a9ef9-ee69-49bb-86c1-6974d117088c" TargetMode="External"/>
+  <Relationship Id="rId45" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=90a1b549-d4ea-41d9-bb3b-29a6f98e2314" TargetMode="External"/>
+  <Relationship Id="rId46" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=0e3acdd5-a872-45b1-ae23-dafa130b1b9f" TargetMode="External"/>
+  <Relationship Id="rId47" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=81ea1ecc-7204-4e6b-b94c-c9043fb9de1d" TargetMode="External"/>
+  <Relationship Id="rId48" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=b1d39722-96c2-41ee-8b4a-87449c52de04" TargetMode="External"/>
+  <Relationship Id="rId49" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=e996eb14-43ea-4186-bac6-6ed2c4169948" TargetMode="External"/>
+  <Relationship Id="rId50" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=7318d8f7-f854-45a1-afae-a96d5596da5f" TargetMode="External"/>
+  <Relationship Id="rId51" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=d74a4954-2879-4180-9d15-489088bb41dd" TargetMode="External"/>
+  <Relationship Id="rId52" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=e1e938a1-39bc-4a22-9464-8a51046014b5" TargetMode="External"/>
+  <Relationship Id="rId53" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=b2a51280-ccec-41b9-bb27-a8325ea12a03" TargetMode="External"/>
+  <Relationship Id="rId54" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=8e8d63ce-0ffb-4bd1-9791-f1b5b34c5f8e" TargetMode="External"/>
+  <Relationship Id="rId55" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=6d7e3779-0e58-458d-a1ae-2fd4bcd9c4cc" TargetMode="External"/>
+  <Relationship Id="rId56" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=c1f1028b-e42c-4b4f-a4cf-cc0b42c91606" TargetMode="External"/>
+</Relationships>
