@@ -5,6 +5,19 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.12] - 2026-01-26
+
+### Fixed
+
+- **Style numPr Preservation**
+  - Styles now preserve `w:numPr` (numbering properties) through round-trip
+  - Fixes issue where paragraphs using `ListParagraph` style lost their numbered prefix after processing
+  - Added `numPr` property to `Style` class for storing numId and ilvl
+  - Added numPr parsing in `DocumentParser.parseStyle()` method
+  - Added numPr generation in `Style.toXML()` method
+
+---
+
 ## [9.5.11] - 2026-01-26
 
 ### Added

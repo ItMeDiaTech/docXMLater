@@ -7020,6 +7020,7 @@ export class DocumentParser {
 
     // Parse paragraph formatting (w:pPr)
     let paragraphFormatting: ParagraphFormatting | undefined;
+    let styleNumPr: { numId?: number; ilvl?: number } | undefined;
     const pPrXml = XMLParser.extractBetweenTags(
       styleXml,
       "<w:pPr>",
@@ -7027,6 +7028,21 @@ export class DocumentParser {
     );
     if (pPrXml) {
       paragraphFormatting = this.parseParagraphFormattingFromXml(pPrXml);
+
+      // Parse numPr (numbering properties) from style's paragraph properties
+      // Styles like ListParagraph can inherit list formatting via numPr
+      const numPrXml = XMLParser.extractBetweenTags(pPrXml, "<w:numPr>", "</w:numPr>");
+      if (numPrXml) {
+        styleNumPr = {};
+        const numIdMatch = numPrXml.match(/<w:numId[^>]*w:val="(\d+)"/);
+        if (numIdMatch && numIdMatch[1]) {
+          styleNumPr.numId = parseInt(numIdMatch[1], 10);
+        }
+        const ilvlMatch = numPrXml.match(/<w:ilvl[^>]*w:val="(\d+)"/);
+        if (ilvlMatch && ilvlMatch[1]) {
+          styleNumPr.ilvl = parseInt(ilvlMatch[1], 10);
+        }
+      }
     }
 
     // Parse run formatting (w:rPr)
@@ -7125,6 +7141,7 @@ export class DocumentParser {
       isDefault: defaultAttr === "1" || defaultAttr === "true",
       customStyle: customStyleAttr === "1" || customStyleAttr === "true",
       paragraphFormatting,
+      numPr: styleNumPr,
       runFormatting,
       tableStyle,
       // Metadata properties (Phase 5.3)
