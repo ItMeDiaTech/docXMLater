@@ -956,19 +956,10 @@ export class NumberingLevel {
     const szMatch = xml.match(/<w:sz[^>]*w:val="([^"]+)"/);
     if (szMatch && szMatch[1]) fontSize = parseInt(szMatch[1], 10);
 
-    // Bullet/number symbols should never be bold - ignore source XML bold formatting
+    // List prefixes should never have bold, italic, or underline - ignore source XML formatting
     const bold = false;
-
-    // Extract italic from <w:rPr>
-    const iMatch = xml.match(/<w:i(?:\s|\/|>)/);
-    const italic = !!iMatch;
-
-    // Extract underline from <w:rPr>
-    let underline: string | undefined;
-    const uMatch = xml.match(/<w:u[^>]*w:val="([^"]+)"/);
-    if (uMatch && uMatch[1]) {
-      underline = uMatch[1];
-    }
+    const italic = false;
+    const underline: string | undefined = undefined;
 
     // Extract color from <w:rPr>
     let color: string | undefined;
