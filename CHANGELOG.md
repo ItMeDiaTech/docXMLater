@@ -5,6 +5,19 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.13] - 2026-01-26
+
+### Added
+
+- **Centered Bold Text Blank Line Handling (Phases 11c/11d)**
+  - Added `isCenteredBoldText()` helper to detect paragraphs that are centered with all text runs bold
+  - Added `isTextOnlyParagraph()` helper to detect paragraphs containing only text (no images/shapes)
+  - No blank line between centered bold text and following image (caption pattern)
+  - Add blank line above centered bold text when preceded by text-only paragraph or list item
+  - Applies to both body-level paragraphs and table cell paragraphs
+
+---
+
 ## [9.5.12] - 2026-01-26
 
 ### Fixed

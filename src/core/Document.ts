@@ -6329,15 +6329,17 @@ export class Document {
         if (isSmall) {
           // Add blank BEFORE small image unless:
           // - Already blank OR
+          // - Previous is centered bold text (caption pattern) OR
           // - (Previous is list item AND current has left indent)
           if (imgIdx > 0) {
             const prevElement = this.bodyElements[imgIdx - 1];
             const prevIsBlank = prevElement instanceof Paragraph && this.isParagraphBlank(prevElement);
+            const prevIsCenteredBold = prevElement instanceof Paragraph && this.isCenteredBoldText(prevElement);
             const prevIsListItem = prevElement instanceof Paragraph && prevElement.getNumbering();
             const leftIndent = (element as Paragraph).getLeftIndent();
             const currentHasLeftIndent = leftIndent !== undefined && leftIndent > 0;
 
-            if (!prevIsBlank && !(prevIsListItem && currentHasLeftIndent)) {
+            if (!prevIsBlank && !prevIsCenteredBold && !(prevIsListItem && currentHasLeftIndent)) {
               const blankBefore = Paragraph.create();
               blankBefore.setStyle(style);
               blankBefore.setSpaceAfter(spacingAfter);
@@ -6381,9 +6383,13 @@ export class Document {
 
         // Handle large images (>= 100x100 pixels) - original behavior
         // Add blank BEFORE image (if not at start of document and prev is not blank)
+        // Skip if previous is centered bold text (caption pattern)
         if (imgIdx > 0) {
           const prevElement = this.bodyElements[imgIdx - 1];
-          if (!(prevElement instanceof Paragraph && this.isParagraphBlank(prevElement))) {
+          const prevIsBlank = prevElement instanceof Paragraph && this.isParagraphBlank(prevElement);
+          const prevIsCenteredBold = prevElement instanceof Paragraph && this.isCenteredBoldText(prevElement);
+
+          if (!prevIsBlank && !prevIsCenteredBold) {
             const blankBefore = Paragraph.create();
             blankBefore.setStyle(style);
             blankBefore.setSpaceAfter(spacingAfter);
@@ -6437,15 +6443,17 @@ export class Document {
               if (isSmall) {
                 // Add blank BEFORE small image unless:
                 // - Already blank OR
+                // - Previous is centered bold text (caption pattern) OR
                 // - (Previous is list item AND current has left indent)
                 if (ci > 0) {
                   const prevPara = cellParas[ci - 1];
                   const prevIsBlank = prevPara && this.isParagraphBlank(prevPara);
+                  const prevIsCenteredBold = prevPara && this.isCenteredBoldText(prevPara);
                   const prevIsListItem = prevPara && prevPara.getNumbering();
                   const leftIndent = para.getLeftIndent();
                   const currentHasLeftIndent = leftIndent !== undefined && leftIndent > 0;
 
-                  if (!prevIsBlank && !(prevIsListItem && currentHasLeftIndent)) {
+                  if (!prevIsBlank && !prevIsCenteredBold && !(prevIsListItem && currentHasLeftIndent)) {
                     const blankBefore = Paragraph.create();
                     blankBefore.setStyle(style);
                     blankBefore.setSpaceAfter(spacingAfter);
@@ -6494,9 +6502,13 @@ export class Document {
 
               // Handle large images (>= 100x100 pixels) - original behavior
               // Add blank BEFORE image (if not at start of cell)
+              // Skip if previous is centered bold text (caption pattern)
               if (ci > 0) {
                 const prevPara = cellParas[ci - 1];
-                if (prevPara && !this.isParagraphBlank(prevPara)) {
+                const prevIsBlank = prevPara && this.isParagraphBlank(prevPara);
+                const prevIsCenteredBold = prevPara && this.isCenteredBoldText(prevPara);
+
+                if (prevPara && !prevIsBlank && !prevIsCenteredBold) {
                   const blankBefore = Paragraph.create();
                   blankBefore.setStyle(style);
                   blankBefore.setSpaceAfter(spacingAfter);
@@ -6689,6 +6701,86 @@ export class Document {
                 totalBlankLinesAdded++;
                 ci++; // Skip the inserted blank
                 cellParaCount++; // Account for inserted paragraph
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Phase 11c: Add blank above centered bold text when previous is text-only paragraph or list item
+    for (let i = 1; i < this.bodyElements.length; i++) {
+      const element = this.bodyElements[i];
+
+      if (!(element instanceof Paragraph)) continue;
+      if (this.isParagraphBlank(element)) continue;
+      if (!this.isCenteredBoldText(element)) continue;
+
+      const prevElement = this.bodyElements[i - 1];
+
+      // Check if previous is text-only paragraph or list item
+      if (prevElement instanceof Paragraph) {
+        const prevIsBlank = this.isParagraphBlank(prevElement);
+        const prevIsListItem = prevElement.getNumbering() !== undefined;
+        const prevIsTextOnly = this.isTextOnlyParagraph(prevElement);
+
+        // Add blank above if previous is text-only paragraph OR list item
+        if (prevIsTextOnly || prevIsListItem) {
+          if (prevIsBlank) {
+            // Mark existing blank as preserved
+            prevElement.setStyle(style);
+            if (markAsPreserved && !prevElement.isPreserved()) {
+              prevElement.setPreserved(true);
+              totalExistingLinesMarked++;
+            }
+          } else {
+            // Insert blank paragraph before centered bold text
+            const blankAbove = Paragraph.create();
+            blankAbove.setStyle(style);
+            blankAbove.setSpaceAfter(spacingAfter);
+            if (markAsPreserved) blankAbove.setPreserved(true);
+            this.bodyElements.splice(i, 0, blankAbove);
+            totalBlankLinesAdded++;
+            i++; // Skip inserted element
+          }
+        }
+      }
+    }
+
+    // Phase 11d: Add blank above centered bold text in table cells
+    for (const table of this.getAllTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          let cellParas = cell.getParagraphs();
+
+          for (let ci = 1; ci < cellParas.length; ci++) {
+            const para = cellParas[ci];
+            if (!para || this.isParagraphBlank(para)) continue;
+            if (!this.isCenteredBoldText(para)) continue;
+
+            const prevPara = cellParas[ci - 1];
+            if (!prevPara) continue;
+
+            const prevIsBlank = this.isParagraphBlank(prevPara);
+            const prevIsListItem = prevPara.getNumbering() !== undefined;
+            const prevIsTextOnly = this.isTextOnlyParagraph(prevPara);
+
+            if (prevIsTextOnly || prevIsListItem) {
+              if (prevIsBlank) {
+                prevPara.setStyle(style);
+                if (markAsPreserved && !prevPara.isPreserved()) {
+                  prevPara.setPreserved(true);
+                  totalExistingLinesMarked++;
+                }
+              } else {
+                const blankAbove = Paragraph.create();
+                blankAbove.setStyle(style);
+                blankAbove.setSpaceAfter(spacingAfter);
+                if (markAsPreserved) blankAbove.setPreserved(true);
+                cell.addParagraphAt(ci, blankAbove);
+                totalBlankLinesAdded++;
+                ci++; // Skip inserted element
+                cellParas = cell.getParagraphs(); // Refresh after insertion
               }
             }
           }
@@ -8016,6 +8108,63 @@ export class Document {
       }
     }
     return null;
+  }
+
+  /**
+   * Checks if a paragraph is centered and contains only bold text (all runs bold)
+   * @param para The paragraph to check
+   * @returns True if the paragraph is centered and all text runs are bold
+   * @private
+   */
+  private isCenteredBoldText(para: Paragraph): boolean {
+    // Must be centered
+    if (para.getAlignment() !== 'center') return false;
+
+    // Must have content
+    const content = para.getContent();
+    if (!content || content.length === 0) return false;
+
+    // Check all runs - all must be bold
+    let hasTextRuns = false;
+    for (const item of content) {
+      if (item instanceof Run) {
+        const text = item.getText().trim();
+        if (text !== '') {
+          hasTextRuns = true;
+          const formatting = item.getFormatting();
+          if (!formatting.bold) {
+            return false; // Non-bold run found
+          }
+        }
+      }
+    }
+
+    return hasTextRuns; // Must have at least one text run
+  }
+
+  /**
+   * Checks if a paragraph contains only text content (no images, shapes, etc.)
+   * @param para The paragraph to check
+   * @returns True if the paragraph has text but no images/shapes/etc.
+   * @private
+   */
+  private isTextOnlyParagraph(para: Paragraph): boolean {
+    if (this.isParagraphBlank(para)) return false;
+
+    const content = para.getContent();
+    if (!content || content.length === 0) return false;
+
+    // Check for non-text elements
+    for (const item of content) {
+      if (item instanceof ImageRun) return false;
+      if (item instanceof Shape) return false;
+      if (item instanceof TextBox) return false;
+      // Hyperlinks and Fields are OK - they contain text
+    }
+
+    // Must have at least some text
+    const text = para.getText().trim();
+    return text !== '';
   }
 
   /**
