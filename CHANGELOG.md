@@ -5,6 +5,17 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.10] - 2025-01-26
+
+### Fixed
+
+- **No Blank Line Between Consecutive Small Images**
+  - Don't add blank line after small image (<100x100) if next element is also a small image
+  - Applies to both body-level and table cell images
+  - Improves layout for documents with multiple inline icons or small graphics
+
+---
+
 ## [9.5.9] - 2025-01-26
 
 ### Added
