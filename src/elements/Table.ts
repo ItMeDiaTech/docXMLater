@@ -193,11 +193,26 @@ export interface FirstRowFormattingOptions {
 /**
  * Represents a table
  */
+/**
+ * Inter-row content item (elements that appear between table rows)
+ * Per ECMA-376, elements like w:bookmarkEnd can appear between w:tr elements
+ */
+export interface InterRowContent {
+  /** Index of the row after which this content appears (-1 for before first row) */
+  afterRowIndex: number;
+  /** Raw XML string of the element */
+  xml: string;
+  /** Element type (e.g., 'bookmarkEnd', 'bookmarkStart', 'commentRangeEnd') */
+  type: string;
+}
+
 export class Table {
   private rows: TableRow[] = [];
   private formatting: TableFormatting;
   /** StylesManager reference for conditional formatting resolution */
   private _stylesManager?: import("../formatting/StylesManager").StylesManager;
+  /** Content that appears between table rows (preserved for round-trip fidelity) */
+  private interRowContent: InterRowContent[] = [];
 
   /**
    * Creates a new Table
@@ -314,6 +329,61 @@ export class Table {
    */
   getRows(): TableRow[] {
     return [...this.rows];
+  }
+
+  // ============================================================================
+  // INTER-ROW CONTENT MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Adds inter-row content (elements that appear between table rows)
+   *
+   * Per ECMA-376, certain elements like w:bookmarkEnd, w:bookmarkStart,
+   * w:commentRangeEnd can appear between w:tr elements. This method
+   * preserves such content for round-trip fidelity.
+   *
+   * @param afterRowIndex - Index of the row after which content appears (-1 for before first row)
+   * @param xml - Raw XML string of the element
+   * @param type - Element type (e.g., 'bookmarkEnd', 'bookmarkStart')
+   * @returns This table instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * table.addInterRowContent(2, '<w:bookmarkEnd w:id="107"/>', 'bookmarkEnd');
+   * ```
+   */
+  addInterRowContent(afterRowIndex: number, xml: string, type: string): this {
+    this.interRowContent.push({ afterRowIndex, xml, type });
+    return this;
+  }
+
+  /**
+   * Gets all inter-row content
+   *
+   * @returns Array of inter-row content items
+   */
+  getInterRowContent(): InterRowContent[] {
+    return [...this.interRowContent];
+  }
+
+  /**
+   * Gets inter-row content after a specific row
+   *
+   * @param afterRowIndex - Index of the row after which to get content
+   * @returns Array of inter-row content items after that row
+   */
+  getInterRowContentAfterRow(afterRowIndex: number): InterRowContent[] {
+    return this.interRowContent.filter((c) => c.afterRowIndex === afterRowIndex);
+  }
+
+  /**
+   * Clears all inter-row content
+   *
+   * @returns This table instance for method chaining
+   */
+  clearInterRowContent(): this {
+    this.interRowContent = [];
+    return this;
   }
 
   /**
@@ -1077,6 +1147,29 @@ export class Table {
   }
 
   /**
+   * Sets the default cell padding (margins) for all cells in this table.
+   * This is a convenience method that wraps setCellMargins().
+   * Per ECMA-376 Part 1 §17.4.42 (tblCellMar)
+   *
+   * @param top - Top padding in twips
+   * @param bottom - Bottom padding in twips
+   * @param left - Left padding in twips
+   * @param right - Right padding in twips
+   * @returns This table for chaining
+   * @example
+   * ```typescript
+   * // Set uniform padding of 100 twips on all sides
+   * table.setPadding(100, 100, 100, 100);
+   *
+   * // Set different padding for top/bottom vs left/right
+   * table.setPadding(50, 50, 100, 100);
+   * ```
+   */
+  setPadding(top: number, bottom: number, left: number, right: number): this {
+    return this.setCellMargins({ top, bottom, left, right });
+  }
+
+  /**
    * Gets the table style ID
    * @returns Style ID or undefined if not set
    */
@@ -1390,9 +1483,26 @@ export class Table {
     }
     tableChildren.push(XMLBuilder.w("tblGrid", undefined, tblGridChildren));
 
-    // Add rows
-    for (const row of this.rows) {
-      tableChildren.push(row.toXML());
+    // Add any inter-row content before the first row (afterRowIndex = -1)
+    for (const irc of this.interRowContent) {
+      if (irc.afterRowIndex === -1) {
+        tableChildren.push({ name: "__rawXml", rawXml: irc.xml });
+      }
+    }
+
+    // Add rows with inter-row content after each row
+    for (let i = 0; i < this.rows.length; i++) {
+      const row = this.rows[i];
+      if (row) {
+        tableChildren.push(row.toXML());
+      }
+
+      // Add inter-row content after this row
+      for (const irc of this.interRowContent) {
+        if (irc.afterRowIndex === i) {
+          tableChildren.push({ name: "__rawXml", rawXml: irc.xml });
+        }
+      }
     }
 
     return XMLBuilder.w("tbl", undefined, tableChildren);
