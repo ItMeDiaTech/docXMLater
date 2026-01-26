@@ -4,6 +4,11 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
+# Project directories (not for public repo)
+.github/
+config/
+data/
+
 # Build output
 dist/
 build/
