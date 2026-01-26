@@ -223,6 +223,11 @@ export interface StyleProperties {
   customStyle?: boolean;
   /** Paragraph formatting (for paragraph and table styles) */
   paragraphFormatting?: ParagraphFormatting;
+  /** Numbering properties for styles that inherit list formatting */
+  numPr?: {
+    numId?: number;
+    ilvl?: number;
+  };
   /** Run formatting (for character and paragraph styles) */
   runFormatting?: RunFormatting;
   /** Table style properties (for table styles only - Phase 5.1) */
@@ -796,10 +801,32 @@ export class Style {
     }
 
     // Add paragraph properties
-    if (this.properties.paragraphFormatting) {
+    if (this.properties.paragraphFormatting || this.properties.numPr) {
       const pPr = this.generateParagraphProperties(
-        this.properties.paragraphFormatting
+        this.properties.paragraphFormatting || {}
       );
+      // Add numPr (numbering properties) if present - styles can inherit list formatting
+      if (this.properties.numPr) {
+        const numPrChildren: XMLElement[] = [];
+        if (this.properties.numPr.ilvl !== undefined) {
+          numPrChildren.push(
+            XMLBuilder.wSelf("ilvl", { "w:val": String(this.properties.numPr.ilvl) })
+          );
+        }
+        if (this.properties.numPr.numId !== undefined) {
+          numPrChildren.push(
+            XMLBuilder.wSelf("numId", { "w:val": String(this.properties.numPr.numId) })
+          );
+        }
+        if (numPrChildren.length > 0) {
+          // Insert numPr at the beginning of pPr children (per ECMA-376 element order)
+          if (pPr.children) {
+            pPr.children.unshift(XMLBuilder.w("numPr", undefined, numPrChildren));
+          } else {
+            pPr.children = [XMLBuilder.w("numPr", undefined, numPrChildren)];
+          }
+        }
+      }
       if (pPr.children && pPr.children.length > 0) {
         styleChildren.push(pPr);
       }
