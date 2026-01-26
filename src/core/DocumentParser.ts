@@ -4961,6 +4961,34 @@ export class DocumentParser {
         table.setShading(shading);
       }
     }
+
+    // Parse table borders (w:tblBorders) per ECMA-376 Part 1 §17.4.40
+    if (tblPrObj["w:tblBorders"]) {
+      const bordersObj = tblPrObj["w:tblBorders"];
+      const borders: import("../elements/Table").TableBorders = {};
+
+      const parseBorder = (borderObj: any) => {
+        if (!borderObj) return undefined;
+        const border: import("../elements/Table").TableBorder = {
+          style: borderObj["@_w:val"] || "single",
+        };
+        if (borderObj["@_w:sz"]) border.size = parseInt(borderObj["@_w:sz"], 10);
+        if (borderObj["@_w:space"]) border.space = parseInt(borderObj["@_w:space"], 10);
+        if (borderObj["@_w:color"]) border.color = borderObj["@_w:color"];
+        return border;
+      };
+
+      if (bordersObj["w:top"]) borders.top = parseBorder(bordersObj["w:top"]);
+      if (bordersObj["w:bottom"]) borders.bottom = parseBorder(bordersObj["w:bottom"]);
+      if (bordersObj["w:left"]) borders.left = parseBorder(bordersObj["w:left"]);
+      if (bordersObj["w:right"]) borders.right = parseBorder(bordersObj["w:right"]);
+      if (bordersObj["w:insideH"]) borders.insideH = parseBorder(bordersObj["w:insideH"]);
+      if (bordersObj["w:insideV"]) borders.insideV = parseBorder(bordersObj["w:insideV"]);
+
+      if (Object.keys(borders).length > 0) {
+        table.setBorders(borders);
+      }
+    }
   }
 
   private async parseTableRowFromObject(
@@ -5218,13 +5246,13 @@ export class DocumentParser {
 
           const parseBorder = (borderObj: any) => {
             if (!borderObj) return undefined;
-            return {
+            const border: any = {
               style: borderObj["@_w:val"] || "single",
-              size: borderObj["@_w:sz"]
-                ? parseInt(borderObj["@_w:sz"], 10)
-                : undefined,
-              color: borderObj["@_w:color"] || undefined,
             };
+            if (borderObj["@_w:sz"]) border.size = parseInt(borderObj["@_w:sz"], 10);
+            if (borderObj["@_w:space"]) border.space = parseInt(borderObj["@_w:space"], 10);
+            if (borderObj["@_w:color"]) border.color = borderObj["@_w:color"];
+            return border;
           };
 
           if (bordersObj["w:top"])

@@ -420,6 +420,7 @@ export class Table {
    * Sets table borders
    *
    * Defines borders for all sides of the table and interior borders.
+   * By default, also applies borders to all cells within the table for consistency.
    *
    * @param borders - Border definitions for each edge
    * @param borders.top - Top border of table
@@ -428,20 +429,55 @@ export class Table {
    * @param borders.right - Right border of table
    * @param borders.insideH - Horizontal borders between rows
    * @param borders.insideV - Vertical borders between columns
+   * @param options - Additional options
+   * @param options.applyToCells - Whether to also set borders on all cells (default: true)
    * @returns This table instance for method chaining
    *
    * @example
    * ```typescript
+   * // Set borders on table AND all cells (default behavior)
    * table.setBorders({
    *   top: { style: 'single', size: 4, color: '000000' },
    *   bottom: { style: 'single', size: 4, color: '000000' },
    *   insideH: { style: 'single', size: 2, color: 'CCCCCC' },
    *   insideV: { style: 'single', size: 2, color: 'CCCCCC' }
    * });
+   *
+   * // Set only table-level borders (no cell borders)
+   * table.setBorders({ top: { style: 'single', size: 4 } }, { applyToCells: false });
    * ```
    */
-  setBorders(borders: TableBorders): this {
+  setBorders(borders: TableBorders, options?: { applyToCells?: boolean }): this {
+    // Set table-level borders (w:tblBorders)
     this.formatting.borders = borders;
+
+    // Also apply to all cells for consistency (default: true)
+    if (options?.applyToCells !== false) {
+      const cellBorders = {
+        top: borders.top,
+        bottom: borders.bottom,
+        left: borders.left,
+        right: borders.right,
+      };
+
+      for (const row of this.rows) {
+        // Update row-level table property exceptions if they have borders
+        // Per ECMA-376, w:tblPrEx can contain border overrides that must also be updated
+        const exceptions = row.getTablePropertyExceptions();
+        if (exceptions?.borders) {
+          row.setTablePropertyExceptions({
+            ...exceptions,
+            borders: borders, // Use full table borders for row-level exceptions
+          });
+        }
+
+        // Update cell borders
+        for (const cell of row.getCells()) {
+          cell.setBorders(cellBorders);
+        }
+      }
+    }
+
     return this;
   }
 
@@ -449,31 +485,35 @@ export class Table {
    * Sets all borders to the same style
    *
    * Convenience method that applies identical borders to all edges
-   * (top, bottom, left, right, insideH, insideV).
+   * (top, bottom, left, right, insideH, insideV) and all cells.
    *
    * @param border - Border definition to apply uniformly
+   * @param options - Additional options
+   * @param options.applyToCells - Whether to also set borders on all cells (default: true)
    * @returns This table instance for method chaining
    *
    * @example
    * ```typescript
-   * // Apply single black border to all edges
+   * // Apply single black border to all edges and cells
    * table.setAllBorders({
    *   style: 'single',
    *   size: 4,
    *   color: '000000'
    * });
+   *
+   * // Apply only to table, not individual cells
+   * table.setAllBorders({ style: 'single', size: 4 }, { applyToCells: false });
    * ```
    */
-  setAllBorders(border: TableBorder): this {
-    this.formatting.borders = {
+  setAllBorders(border: TableBorder, options?: { applyToCells?: boolean }): this {
+    return this.setBorders({
       top: border,
       bottom: border,
       left: border,
       right: border,
       insideH: border,
       insideV: border,
-    };
-    return this;
+    }, options);
   }
 
   /**

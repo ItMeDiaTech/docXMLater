@@ -847,4 +847,176 @@ describe('Table', () => {
       expect(table.getFormatting().alignment).toBe('center');
     });
   });
+
+  describe('setBorders cell propagation', () => {
+    it('should apply borders to all cells by default', () => {
+      const table = new Table(2, 3);
+      const border = { style: 'single' as const, size: 4, color: '000000' };
+
+      table.setBorders({
+        top: border,
+        bottom: border,
+        left: border,
+        right: border,
+      });
+
+      // Verify table-level borders are set
+      const formatting = table.getFormatting();
+      expect(formatting.borders?.top).toEqual(border);
+
+      // Verify each cell has borders
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 3; col++) {
+          const cell = table.getCell(row, col);
+          const cellBorders = cell?.getBorders();
+          expect(cellBorders?.top).toEqual(border);
+          expect(cellBorders?.bottom).toEqual(border);
+          expect(cellBorders?.left).toEqual(border);
+          expect(cellBorders?.right).toEqual(border);
+        }
+      }
+    });
+
+    it('should NOT apply to cells when applyToCells is false', () => {
+      const table = new Table(2, 2);
+      const border = { style: 'single' as const, size: 8, color: 'FF0000' };
+
+      table.setBorders({
+        top: border,
+        bottom: border,
+      }, { applyToCells: false });
+
+      // Table-level borders should be set
+      const formatting = table.getFormatting();
+      expect(formatting.borders?.top).toEqual(border);
+
+      // Cell borders should NOT be set
+      const cell = table.getCell(0, 0);
+      expect(cell?.getBorders()).toBeUndefined();
+    });
+
+    it('setAllBorders should apply same border to all cells', () => {
+      const table = new Table(3, 3);
+      const border = { style: 'double' as const, size: 6, color: '0000FF' };
+
+      table.setAllBorders(border);
+
+      // Verify all 9 cells have the border
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 3; col++) {
+          const cell = table.getCell(row, col);
+          const cellBorders = cell?.getBorders();
+          expect(cellBorders?.top).toEqual(border);
+          expect(cellBorders?.bottom).toEqual(border);
+          expect(cellBorders?.left).toEqual(border);
+          expect(cellBorders?.right).toEqual(border);
+        }
+      }
+    });
+
+    it('setAllBorders should respect applyToCells option', () => {
+      const table = new Table(2, 2);
+      const border = { style: 'thick' as const, size: 12, color: '00FF00' };
+
+      table.setAllBorders(border, { applyToCells: false });
+
+      // Table has borders
+      expect(table.getFormatting().borders?.top).toEqual(border);
+
+      // Cells do not
+      expect(table.getCell(0, 0)?.getBorders()).toBeUndefined();
+    });
+
+    it('should generate XML with both table and cell borders', () => {
+      const table = new Table(1, 1);
+      const border = { style: 'single' as const, size: 4, color: '000000' };
+
+      table.setBorders({ top: border, bottom: border, left: border, right: border });
+
+      const xml = table.toXML();
+
+      // Check table-level borders (tblBorders)
+      const tblPr = filterXMLElements(xml.children).find(c => c.name === 'w:tblPr');
+      const tblBorders = filterXMLElements(tblPr?.children).find(c => c.name === 'w:tblBorders');
+      expect(tblBorders).toBeDefined();
+
+      // Check cell-level borders (tcBorders)
+      const tr = filterXMLElements(xml.children).find(c => c.name === 'w:tr');
+      const tc = filterXMLElements(tr?.children).find(c => c.name === 'w:tc');
+      const tcPr = filterXMLElements(tc?.children).find(c => c.name === 'w:tcPr');
+      const tcBorders = filterXMLElements(tcPr?.children).find(c => c.name === 'w:tcBorders');
+      expect(tcBorders).toBeDefined();
+
+      // Verify border attributes
+      const topBorder = filterXMLElements(tcBorders?.children).find(c => c.name === 'w:top');
+      expect(topBorder?.attributes?.['w:val']).toBe('single');
+      expect(topBorder?.attributes?.['w:sz']).toBe(4);
+      expect(topBorder?.attributes?.['w:color']).toBe('000000');
+    });
+
+    it('should update row-level table property exceptions borders', () => {
+      const table = new Table(2, 2);
+      const row = table.getRow(0);
+
+      // Set initial row-level border exception (simulating a parsed document)
+      row?.setTablePropertyExceptions({
+        borders: { top: { style: 'single', size: 2, color: 'AAAAAA' } }
+      });
+
+      // Update table borders - this should also update row-level exceptions
+      const newBorder = { style: 'single' as const, size: 8, color: '000000' };
+      table.setBorders({
+        top: newBorder,
+        bottom: newBorder,
+        left: newBorder,
+        right: newBorder,
+        insideH: newBorder,
+        insideV: newBorder,
+      });
+
+      // Verify row-level exception was updated
+      const exceptions = table.getRow(0)?.getTablePropertyExceptions();
+      expect(exceptions?.borders?.top?.size).toBe(8);
+      expect(exceptions?.borders?.top?.color).toBe('000000');
+      // Verify all border sides were set
+      expect(exceptions?.borders?.insideH?.size).toBe(8);
+      expect(exceptions?.borders?.insideV?.size).toBe(8);
+    });
+
+    it('should NOT add row-level exceptions when row has none', () => {
+      const table = new Table(2, 2);
+
+      // Row has no tablePropertyExceptions initially
+      expect(table.getRow(0)?.getTablePropertyExceptions()).toBeUndefined();
+
+      // Update borders
+      const border = { style: 'single' as const, size: 4, color: '000000' };
+      table.setBorders({ top: border, bottom: border, left: border, right: border });
+
+      // Row should still not have exceptions (we only update existing, not create)
+      expect(table.getRow(0)?.getTablePropertyExceptions()).toBeUndefined();
+    });
+
+    it('should NOT update row-level exceptions when applyToCells is false', () => {
+      const table = new Table(2, 2);
+      const row = table.getRow(0);
+
+      // Set initial row-level border exception
+      row?.setTablePropertyExceptions({
+        borders: { top: { style: 'single', size: 2, color: 'AAAAAA' } }
+      });
+
+      // Update borders with applyToCells: false
+      const newBorder = { style: 'thick' as const, size: 12, color: 'FF0000' };
+      table.setBorders({
+        top: newBorder,
+        bottom: newBorder,
+      }, { applyToCells: false });
+
+      // Row-level exception should remain unchanged
+      const exceptions = table.getRow(0)?.getTablePropertyExceptions();
+      expect(exceptions?.borders?.top?.size).toBe(2);
+      expect(exceptions?.borders?.top?.color).toBe('AAAAAA');
+    });
+  });
 });
