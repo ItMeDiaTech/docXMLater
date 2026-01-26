@@ -1,3 +1,18 @@
+# ============================================================================
+# SENSITIVE FILES - NEVER COMMIT (auto-enforced)
+# ============================================================================
+# All .docx files in root directory (may contain client/sensitive data)
+/*.docx
+/*.doc
+
+# All extracted DOCX contents (XML, media, relationships)
+extracted_*/
+extracted*/
+*_extracted/
+*_Extract/
+
+# ============================================================================
+
 # Dependencies
 node_modules/
 package-lock.json
