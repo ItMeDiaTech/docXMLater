@@ -5696,7 +5696,7 @@ export class Document {
             font: 'Verdana',
             size: 12,
             color: '0000FF',
-            underline: 'single',
+            // underline removed - hyperlink gets its own underline via setFormatting() below
             bold: false,
             italic: false
           }
@@ -6077,9 +6077,17 @@ export class Document {
                 !nextParaInCell.getNumbering() &&
                 this.isWithinListContextInCell(cell, ci + 1);
 
+              // Check if next paragraph is indented (continuation content, not section break)
+              // Don't add blank after list if followed by indented content (e.g., "Example:" notes)
+              const nextIsIndentedInCell =
+                nextParaInCell &&
+                !nextParaInCell.getNumbering() &&
+                nextParaInCell.getFormatting()?.indentation?.left &&
+                nextParaInCell.getFormatting().indentation!.left! > 0;
+
               const isListEndInCell =
                 !nextParaInCell || // End of cell
-                (!nextParaInCell.getNumbering() && !nextIsWithinListInCell); // No numbering AND not within list context
+                (!nextParaInCell.getNumbering() && !nextIsWithinListInCell && !nextIsIndentedInCell); // No numbering AND not within list context AND not indented
 
               if (isListEndInCell) {
                 // Check if this is the last paragraph in the cell - don't add blank
@@ -8081,11 +8089,25 @@ export class Document {
 
   /**
    * Checks if an image is small (both dimensions < 100 pixels)
+   *
+   * Small images are typically icons, bullets, or decorative elements that
+   * don't need the same spacing treatment as larger content images.
+   *
    * @param image The image to check
    * @returns True if both width and height are < 100 pixels
-   * @private
+   *
+   * @example
+   * ```typescript
+   * const imageRun = paragraph.getContent().find(c => c instanceof ImageRun);
+   * if (imageRun) {
+   *   const image = imageRun.getImageElement();
+   *   if (doc.isImageSmall(image)) {
+   *     console.log('This is a small image (icon/bullet)');
+   *   }
+   * }
+   * ```
    */
-  private isImageSmall(image: Image): boolean {
+  public isImageSmall(image: Image): boolean {
     const EMU_PER_PIXEL = 9525; // at 96 DPI (914400 EMUs/inch / 96 pixels/inch)
     const widthPx = image.getWidth() / EMU_PER_PIXEL;
     const heightPx = image.getHeight() / EMU_PER_PIXEL;
@@ -8094,11 +8116,23 @@ export class Document {
 
   /**
    * Checks if a paragraph contains a small image (< 100x100 pixels)
+   *
+   * Useful for determining if a paragraph contains an icon or small decorative
+   * image vs. a larger content image that may need different formatting treatment.
+   *
    * @param para The paragraph to check
-   * @returns True if paragraph contains a small image
-   * @private
+   * @returns True if paragraph contains a small image, false if no image or image is >= 100x100
+   *
+   * @example
+   * ```typescript
+   * for (const para of doc.getParagraphs()) {
+   *   if (doc.isSmallImageParagraph(para)) {
+   *     console.log('Paragraph contains a small image/icon');
+   *   }
+   * }
+   * ```
    */
-  private isSmallImageParagraph(para: Paragraph): boolean {
+  public isSmallImageParagraph(para: Paragraph): boolean {
     const imageRun = this.getImageRunFromParagraph(para);
     if (!imageRun) return false;
     const image = imageRun.getImageElement();
@@ -8107,14 +8141,37 @@ export class Document {
 
   /**
    * Gets the first ImageRun from a paragraph if it contains one
+   *
+   * Checks both direct ImageRun children and ImageRuns inside Revision objects
+   * (tracked changes). This ensures images inserted as tracked changes are
+   * properly detected for spacing calculations.
+   *
    * @param para The paragraph to check
    * @returns The ImageRun if found, null otherwise
-   * @private
+   *
+   * @example
+   * ```typescript
+   * const imageRun = doc.getImageRunFromParagraph(paragraph);
+   * if (imageRun) {
+   *   const image = imageRun.getImageElement();
+   *   console.log(`Image dimensions: ${image.getWidth()} x ${image.getHeight()} EMUs`);
+   * }
+   * ```
    */
-  private getImageRunFromParagraph(para: Paragraph): ImageRun | null {
+  public getImageRunFromParagraph(para: Paragraph): ImageRun | null {
     for (const item of para.getContent()) {
+      // Check direct ImageRun
       if (item instanceof ImageRun) {
         return item;
+      }
+      // Check inside Revision objects (tracked changes)
+      // Per ECMA-376, w:ins and w:del can contain w:r with w:drawing (image runs)
+      if (item instanceof Revision) {
+        for (const revContent of item.getContent()) {
+          if (revContent instanceof ImageRun) {
+            return revContent;
+          }
+        }
       }
     }
     return null;
