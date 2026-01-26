@@ -217,6 +217,11 @@ export class DocumentParser {
       return bodyElements;
     }
 
+    // Persistent bookmark accumulators - survive across loop iterations
+    // This is critical for preserving bookmarks when del blocks are skipped
+    let pendingBookmarkStarts: Bookmark[] = [];
+    let pendingBookmarkEnds: Bookmark[] = [];
+
     let pos = 0;
     while (pos < bodyContent.length) {
       const nextP = this.findNextTopLevelTag(bodyContent, "w:p", pos);
@@ -236,7 +241,6 @@ export class DocumentParser {
       if (next) {
         // Check for body-level bookmark elements BEFORE this element
         // Per ECMA-376, bookmarks can appear between body-level elements
-        let pendingBookmarkStarts: Bookmark[] = [];
 
         if (next.pos > pos) {
           // Extract bookmarkEnd elements - attach to PREVIOUS element
@@ -275,23 +279,63 @@ export class DocumentParser {
           }
 
           // Extract bookmarkStart elements - will attach to NEXT element
-          pendingBookmarkStarts = this.extractBodyLevelBookmarkStarts(
+          // ACCUMULATE instead of replace - bookmarks from previous skipped dels must persist
+          const newBookmarkStarts = this.extractBodyLevelBookmarkStarts(
             bodyContent,
             pos,
             next.pos
           );
+          pendingBookmarkStarts.push(...newBookmarkStarts);
         }
 
         // Check if this element is inside a w:del block (deleted via Track Changes)
-        // If so, skip the entire w:del block including all its content
+        // If so, skip the entire w:del block but PRESERVE bookmarks within it
         if (this.isPositionInsideDel(bodyContent, next.pos)) {
+          // Extract bookmarks from inside the del block before skipping
+          // Even deleted content may contain bookmarks that external references point to
+          const delBlockXml = this.extractBodyDelBlockXml(bodyContent, next.pos);
+          if (delBlockXml) {
+            const delBookmarks = this.extractBookmarksFromBodyDel(delBlockXml);
+            pendingBookmarkStarts.push(...delBookmarks.bookmarkStarts);
+
+            // Try to attach ends to previous element
+            if (delBookmarks.bookmarkEnds.length > 0 && bodyElements.length > 0) {
+              const prevElement = bodyElements[bodyElements.length - 1];
+              if (prevElement instanceof Paragraph) {
+                for (const bookmark of delBookmarks.bookmarkEnds) {
+                  prevElement.addBookmarkEnd(bookmark);
+                }
+              } else if (prevElement instanceof Table) {
+                // For tables, attach to the last paragraph in the last cell
+                const rows = prevElement.getRows();
+                const lastRow = rows[rows.length - 1];
+                if (lastRow) {
+                  const cells = lastRow.getCells();
+                  const lastCell = cells[cells.length - 1];
+                  if (lastCell) {
+                    const cellParas = lastCell.getParagraphs();
+                    const lastPara = cellParas[cellParas.length - 1];
+                    if (lastPara) {
+                      for (const bookmark of delBookmarks.bookmarkEnds) {
+                        lastPara.addBookmarkEnd(bookmark);
+                      }
+                    }
+                  }
+                }
+              }
+            } else if (delBookmarks.bookmarkEnds.length > 0) {
+              // No previous element - carry forward for next element
+              pendingBookmarkEnds.push(...delBookmarks.bookmarkEnds);
+            }
+          }
+
           const delEndPos = this.findDelEndPosition(bodyContent, next.pos);
           if (delEndPos > 0) {
             pos = delEndPos;
           } else {
             pos = next.pos + 1;
           }
-          continue;
+          continue; // pendingBookmarkStarts now persists across iterations!
         }
 
         if (next.type === "p") {
@@ -311,10 +355,18 @@ export class DocumentParser {
               imageManager
             );
             if (paragraph) {
-              // Add pending bookmarkStart elements from between elements
+              // Add pending bookmarkStart elements from between elements or skipped del blocks
               for (const bookmark of pendingBookmarkStarts) {
                 paragraph.addBookmarkStart(bookmark);
               }
+              pendingBookmarkStarts = []; // Clear after attachment
+
+              // Add pending bookmarkEnd elements that couldn't attach to previous element
+              for (const bookmark of pendingBookmarkEnds) {
+                paragraph.addBookmarkEnd(bookmark);
+              }
+              pendingBookmarkEnds = []; // Clear after attachment
+
               bodyElements.push(paragraph);
             }
             pos = next.pos + elementXml.length;
@@ -340,7 +392,32 @@ export class DocumentParser {
               imageManager,
               elementXml
             );
-            if (table) bodyElements.push(table);
+            if (table) {
+              // For tables, attach pending bookmarks to first paragraph of first cell
+              if (pendingBookmarkStarts.length > 0 || pendingBookmarkEnds.length > 0) {
+                const rows = table.getRows();
+                const firstRow = rows[0];
+                if (firstRow) {
+                  const cells = firstRow.getCells();
+                  const firstCell = cells[0];
+                  if (firstCell) {
+                    const cellParas = firstCell.getParagraphs();
+                    const firstPara = cellParas[0];
+                    if (firstPara) {
+                      for (const bookmark of pendingBookmarkStarts) {
+                        firstPara.addBookmarkStart(bookmark);
+                      }
+                      for (const bookmark of pendingBookmarkEnds) {
+                        firstPara.addBookmarkEnd(bookmark);
+                      }
+                    }
+                  }
+                }
+              }
+              pendingBookmarkStarts = [];
+              pendingBookmarkEnds = [];
+              bodyElements.push(table);
+            }
             pos = next.pos + elementXml.length;
           } else {
             pos = next.pos + 1;
@@ -363,7 +440,13 @@ export class DocumentParser {
               zipHandler,
               imageManager
             );
-            if (sdt) bodyElements.push(sdt);
+            if (sdt) {
+              // Clear pending bookmarks for SDTs (they don't directly support bookmarks)
+              // The bookmarks should have been processed by now
+              pendingBookmarkStarts = [];
+              pendingBookmarkEnds = [];
+              bodyElements.push(sdt);
+            }
             pos = next.pos + elementXml.length;
           } else {
             pos = next.pos + 1;
@@ -509,6 +592,95 @@ export class DocumentParser {
     }
 
     return bookmarks;
+  }
+
+  /**
+   * Extracts the full XML of a body-level w:del block.
+   * Used to extract bookmarks from deletion blocks before skipping them.
+   *
+   * @param content - The body content XML
+   * @param insidePosition - A position known to be inside the del block
+   * @returns The full w:del block XML, or empty string if not found
+   */
+  private extractBodyDelBlockXml(
+    content: string,
+    insidePosition: number
+  ): string {
+    // Find the opening <w:del tag before insidePosition
+    const beforeContent = content.substring(0, insidePosition);
+    const lastDelOpen = beforeContent.lastIndexOf("<w:del");
+
+    if (lastDelOpen === -1) return "";
+
+    // Find the matching </w:del> using depth tracking
+    const endPos = this.findDelEndPosition(content, lastDelOpen);
+    if (endPos === -1) return "";
+
+    return content.substring(lastDelOpen, endPos);
+  }
+
+  /**
+   * Extracts bookmarks from a body-level w:del block.
+   * Even though deleted content is skipped, bookmarks must be preserved
+   * for round-trip fidelity and bookmark balance.
+   *
+   * Per ECMA-376, bookmarks mark document locations for navigation (TOC, hyperlinks,
+   * cross-refs). Even deleted content may have bookmarks that external references point to.
+   *
+   * @param delBlockXml - The full XML content of the w:del block
+   * @returns Object with bookmarkStarts and bookmarkEnds arrays
+   */
+  private extractBookmarksFromBodyDel(delBlockXml: string): {
+    bookmarkStarts: Bookmark[];
+    bookmarkEnds: Bookmark[];
+  } {
+    const bookmarkStarts: Bookmark[] = [];
+    const bookmarkEnds: Bookmark[] = [];
+
+    // Extract bookmarkStart elements
+    const bookmarkStartXmls = XMLParser.extractElements(
+      delBlockXml,
+      "w:bookmarkStart"
+    );
+    for (const bookmarkXml of bookmarkStartXmls) {
+      const idAttr = XMLParser.extractAttribute(bookmarkXml, "w:id");
+      const nameAttr = XMLParser.extractAttribute(bookmarkXml, "w:name");
+      if (idAttr) {
+        const id = parseInt(idAttr, 10);
+        if (!isNaN(id)) {
+          bookmarkStarts.push(
+            new Bookmark({
+              name: nameAttr || `_bookmark_${id}`,
+              id: id,
+              skipNormalization: true,
+            })
+          );
+        }
+      }
+    }
+
+    // Extract bookmarkEnd elements
+    const bookmarkEndXmls = XMLParser.extractElements(
+      delBlockXml,
+      "w:bookmarkEnd"
+    );
+    for (const bookmarkXml of bookmarkEndXmls) {
+      const idAttr = XMLParser.extractAttribute(bookmarkXml, "w:id");
+      if (idAttr) {
+        const id = parseInt(idAttr, 10);
+        if (!isNaN(id)) {
+          bookmarkEnds.push(
+            new Bookmark({
+              name: `_end_${id}`,
+              id,
+              skipNormalization: true,
+            })
+          );
+        }
+      }
+    }
+
+    return { bookmarkStarts, bookmarkEnds };
   }
 
   /**

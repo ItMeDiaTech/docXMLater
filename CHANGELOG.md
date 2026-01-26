@@ -5,6 +5,26 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.3] - 2025-01-25
+
+### Fixed
+
+- **Bookmarks Inside Body-Level Deletions**
+  - Fixed document corruption when bookmarks appear inside body-level `<w:del>` blocks
+  - Parser now extracts bookmarkStart and bookmarkEnd elements from deletion blocks before skipping
+  - Pending bookmarks now persist across loop iterations (accumulate instead of replace)
+  - Ensures complete bookmark pair preservation even when content is deleted via Track Changes
+  - Per ECMA-376, bookmarks mark document locations that may be referenced externally
+
+### Changed
+
+- **Bookmark Handling Improvements**
+  - `pendingBookmarkStarts` and `pendingBookmarkEnds` now accumulate across parser iterations
+  - Tables now attach pending bookmarks to first paragraph of first cell
+  - SDTs clear pending bookmarks after processing
+
+---
+
 ## [9.5.2] - 2025-01-25
 
 ### Fixed
