@@ -6212,7 +6212,7 @@ export class Document {
       }
     }
 
-    // Phase 9d: Add blank after long text paragraphs (>100 chars)
+    // Phase 9d: Add blank after long text paragraphs (>60 chars, excluding hyperlink-only paragraphs)
     // This helps visually separate dense content from following paragraphs
     if (afterLists) {
       for (let i = 0; i < this.bodyElements.length; i++) {
@@ -6229,7 +6229,12 @@ export class Document {
 
         // Check text length
         const text = element.getText() || '';
-        if (text.length <= 100) continue;
+        if (text.length <= 60) continue;
+
+        // Skip if paragraph contains only hyperlink(s)
+        const content = element.getContent();
+        const isOnlyHyperlinks = content.length > 0 && content.every(item => item instanceof Hyperlink);
+        if (isOnlyHyperlinks) continue;
 
         // Check next element
         const nextElement = this.bodyElements[i + 1];
@@ -6276,7 +6281,12 @@ export class Document {
 
               // Check text length
               const text = para.getText() || '';
-              if (text.length <= 100) continue;
+              if (text.length <= 60) continue;
+
+              // Skip if paragraph contains only hyperlink(s)
+              const content = para.getContent();
+              const isOnlyHyperlinks = content.length > 0 && content.every(item => item instanceof Hyperlink);
+              if (isOnlyHyperlinks) continue;
 
               // Check if this is the last paragraph in the cell - never add blank at cell end
               const isLastInCell = ci === cellParas.length - 1;
