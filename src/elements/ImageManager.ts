@@ -69,6 +69,9 @@ export class ImageManager {
    *   When provided (during parsing), preserves the original filename to maintain
    *   consistency with relationship targets. When not provided (adding new images),
    *   generates a new sequential filename.
+   * @param partName Optional part name (e.g., 'header1.xml', 'footer1.xml') for
+   *   distinguishing relationship IDs from different document parts. Headers and footers
+   *   have their own .rels files, so rId1 in header1.xml is different from rId1 in document.xml.
    * @returns The filename assigned to this image
    * @throws {Error} If image limits are exceeded
    *
@@ -77,7 +80,7 @@ export class ImageManager {
    * However, each image occurrence gets its own entry to preserve dimensions
    * (Word allows same image file displayed at different sizes via wp:extent).
    */
-  registerImage(image: Image, relationshipId: string, originalFilename?: string): string {
+  registerImage(image: Image, relationshipId: string, originalFilename?: string, partName?: string): string {
     // Check if already registered by object reference (exact same object)
     const existing = this.images.get(image);
     if (existing) {
@@ -86,7 +89,9 @@ export class ImageManager {
 
     // Issue #12 fix: Reuse FILENAME for same rId, but create separate entry
     // This prevents duplicate files in media folder while preserving dimensions
-    const existingByRelId = this.imagesByRelId.get(relationshipId);
+    // Use composite key with partName to distinguish headers/footers from document body
+    const relIdKey = partName ? `${partName}:${relationshipId}` : relationshipId;
+    const existingByRelId = this.imagesByRelId.get(relIdKey);
 
     // Filename priority:
     // 1. Existing filename for same rId (prevents duplicates)
@@ -166,8 +171,9 @@ export class ImageManager {
     this.images.set(image, entry);
 
     // Only store first image for each rId (used for filename reuse)
+    // Use composite key to distinguish headers/footers from document body
     if (!existingByRelId) {
-      this.imagesByRelId.set(relationshipId, entry);
+      this.imagesByRelId.set(relIdKey, entry);
     }
 
     return filename;

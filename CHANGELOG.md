@@ -5,6 +5,31 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.19] - 2026-01-26
+
+### Fixed
+
+- **Header/Footer Image Parsing**
+  - Images in headers and footers now use their own relationship files (header1.xml.rels, footer1.xml.rels)
+  - Previously, header/footer images incorrectly used document.xml.rels, causing image relationship mismatches
+  - Added `currentPartName` tracking in DocumentParser to distinguish image sources
+  - ImageManager now uses composite keys (e.g., `header1.xml:rId1`) to prevent relationship ID collisions
+
+### Added
+
+- **Public API Methods for Image Size Detection**
+  - `isImageSmall(image)` - Check if image is small (< 100x100 pixels)
+  - `isSmallImageParagraph(para)` - Check if paragraph contains a small image
+  - These were previously private; now available for external use
+
+### Changed
+
+- **List Spacing Logic Improvement**
+  - No longer adds blank line after list items when followed by indented content (e.g., "Example:" notes)
+  - Improves layout for documents with continuation content after lists
+
+---
+
 ## [9.5.13] - 2026-01-26
 
 ### Added

@@ -74,6 +74,12 @@ export class DocumentParser {
   private parseErrors: ParseError[] = [];
   private strictParsing: boolean;
   private bookmarkManager: BookmarkManager | null = null;
+  /**
+   * Current part name being parsed (e.g., 'header1.xml', 'footer1.xml').
+   * Used to create composite keys for image relationship IDs to distinguish
+   * between images in different parts (headers/footers have their own .rels files).
+   */
+  private currentPartName: string | undefined = undefined;
 
   constructor(strictParsing: boolean = false) {
     this.strictParsing = strictParsing;
@@ -4324,6 +4330,7 @@ export class DocumentParser {
     relationshipManager: RelationshipManager,
     imageManager: ImageManager
   ): Promise<ImageRun | null> {
+    const logger = getLogger();
     try {
       // Drawing can contain either wp:inline (inline image) or wp:anchor (floating image)
       const inlineObj = drawingObj["wp:inline"];
@@ -4331,6 +4338,7 @@ export class DocumentParser {
       const imageObj = inlineObj || anchorObj;
 
       if (!imageObj) {
+        logger.debug('Drawing found but no wp:inline or wp:anchor element');
         return null;
       }
 
@@ -4460,23 +4468,22 @@ export class DocumentParser {
       // Extract relationship ID (r:embed)
       const relationshipId = blipObj["@_r:embed"];
       if (!relationshipId) {
+        logger.debug('Drawing has no r:embed relationship ID');
         return null;
       }
 
       // Get the image from the relationship
+      // Note: For headers/footers, we use their specific RelationshipManager
+      const partContext = this.currentPartName ? ` (part: ${this.currentPartName})` : '';
       const relationship = relationshipManager.getRelationship(relationshipId);
       if (!relationship) {
-        defaultLogger.warn(
-          `[DocumentParser] Image relationship not found: ${relationshipId}`
-        );
+        logger.warn(`Image relationship not found: ${relationshipId}${partContext}`);
         return null;
       }
 
       const imageTarget = relationship.getTarget();
       if (!imageTarget) {
-        defaultLogger.warn(
-          `[DocumentParser] Image relationship has no target: ${relationshipId}`
-        );
+        logger.warn(`Image relationship has no target: ${relationshipId}${partContext}`);
         return null;
       }
 
@@ -4484,11 +4491,11 @@ export class DocumentParser {
       const imagePath = `word/${imageTarget}`;
       const imageData = zipHandler.getFileAsBuffer(imagePath);
       if (!imageData) {
-        defaultLogger.warn(
-          `[DocumentParser] Image file not found: ${imagePath}`
-        );
+        logger.warn(`Image file not found in ZIP: ${imagePath}${partContext}`);
         return null;
       }
+
+      logger.debug(`Parsing image: ${imagePath}, relId: ${relationshipId}${partContext}`);
 
       // Extract original filename from relationship target (e.g., "media/image5.png" -> "image5.png")
       // This preserves the original filename during round-trip to prevent relationship/file mismatches
@@ -4516,17 +4523,20 @@ export class DocumentParser {
       });
 
       // Register image with ImageManager (preserve original filename for round-trip integrity)
-      imageManager.registerImage(image, relationshipId, originalFilename);
+      // Pass currentPartName to distinguish header/footer images from body images
+      imageManager.registerImage(image, relationshipId, originalFilename, this.currentPartName);
       image.setRelationshipId(relationshipId);
-      
+
       // Preserve the original docPr ID to prevent corruption
       image.setDocPrId(docPrId);
+
+      logger.debug(`Image registered: ${originalFilename}, relId: ${relationshipId}${partContext}`);
 
       // Create and return ImageRun
       return new ImageRun(image);
     } catch (error) {
-      defaultLogger.warn(
-        "[DocumentParser] Failed to parse drawing:",
+      const partContext = this.currentPartName ? ` (part: ${this.currentPartName})` : '';
+      logger.warn(`Failed to parse drawing${partContext}:`,
         error instanceof Error
           ? { message: error.message, stack: error.stack }
           : { error: String(error) }
@@ -8177,24 +8187,39 @@ export class DocumentParser {
         const rel = relationshipManager.getRelationship(rId);
         if (!rel) continue;
 
-        const headerPath = `word/${rel.getTarget()}`;
+        const headerTarget = rel.getTarget();
+        const headerPath = `word/${headerTarget}`;
         const headerXml = zipHandler.getFileAsString(headerPath);
         if (!headerXml) continue;
 
-        // Create Header object
-        const header = await this.parseHeader(
-          headerXml,
-          type as "default" | "first" | "even",
-          zipHandler,
-          relationshipManager,
-          imageManager
-        );
-        if (header) {
-          headers.push({
-            header,
-            relationshipId: rId,
-            filename: rel.getTarget(),
-          });
+        // Load header-specific relationships (for images in headers)
+        // Header relationships are in word/_rels/header1.xml.rels for word/header1.xml
+        const headerRelsPath = `word/_rels/${headerTarget}.rels`;
+        const headerRelsXml = zipHandler.getFileAsString(headerRelsPath);
+        const headerRelManager = headerRelsXml
+          ? RelationshipManager.fromXml(headerRelsXml)
+          : relationshipManager;
+
+        // Set current part name for image registration (distinguishes header images from body images)
+        this.currentPartName = headerTarget;
+        try {
+          // Create Header object using header-specific relationship manager
+          const header = await this.parseHeader(
+            headerXml,
+            type as "default" | "first" | "even",
+            zipHandler,
+            headerRelManager,
+            imageManager
+          );
+          if (header) {
+            headers.push({
+              header,
+              relationshipId: rId,
+              filename: headerTarget,
+            });
+          }
+        } finally {
+          this.currentPartName = undefined;
         }
       }
     }
@@ -8208,24 +8233,39 @@ export class DocumentParser {
         const rel = relationshipManager.getRelationship(rId);
         if (!rel) continue;
 
-        const footerPath = `word/${rel.getTarget()}`;
+        const footerTarget = rel.getTarget();
+        const footerPath = `word/${footerTarget}`;
         const footerXml = zipHandler.getFileAsString(footerPath);
         if (!footerXml) continue;
 
-        // Create Footer object
-        const footer = await this.parseFooter(
-          footerXml,
-          type as "default" | "first" | "even",
-          zipHandler,
-          relationshipManager,
-          imageManager
-        );
-        if (footer) {
-          footers.push({
-            footer,
-            relationshipId: rId,
-            filename: rel.getTarget(),
-          });
+        // Load footer-specific relationships (for images in footers)
+        // Footer relationships are in word/_rels/footer1.xml.rels for word/footer1.xml
+        const footerRelsPath = `word/_rels/${footerTarget}.rels`;
+        const footerRelsXml = zipHandler.getFileAsString(footerRelsPath);
+        const footerRelManager = footerRelsXml
+          ? RelationshipManager.fromXml(footerRelsXml)
+          : relationshipManager;
+
+        // Set current part name for image registration (distinguishes footer images from body images)
+        this.currentPartName = footerTarget;
+        try {
+          // Create Footer object using footer-specific relationship manager
+          const footer = await this.parseFooter(
+            footerXml,
+            type as "default" | "first" | "even",
+            zipHandler,
+            footerRelManager,
+            imageManager
+          );
+          if (footer) {
+            footers.push({
+              footer,
+              relationshipId: rId,
+              filename: footerTarget,
+            });
+          }
+        } finally {
+          this.currentPartName = undefined;
         }
       }
     }
