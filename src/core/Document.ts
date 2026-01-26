@@ -6256,6 +6256,8 @@ export class Document {
             const nextElement = this.bodyElements[imgIdx + 1];
             const nextIsBlank = nextElement instanceof Paragraph && this.isParagraphBlank(nextElement);
             const nextIsListItem = nextElement instanceof Paragraph && nextElement.getNumbering();
+            // Don't add blank between consecutive small images
+            const nextIsSmallImage = nextElement instanceof Paragraph && this.isSmallImageParagraph(nextElement);
 
             if (nextIsBlank) {
               // Mark existing blank as preserved
@@ -6264,7 +6266,7 @@ export class Document {
                 (nextElement as Paragraph).setPreserved(true);
                 totalExistingLinesMarked++;
               }
-            } else if (!nextIsListItem) {
+            } else if (!nextIsListItem && !nextIsSmallImage) {
               const blankAfter = Paragraph.create();
               blankAfter.setStyle(style);
               blankAfter.setSpaceAfter(spacingAfter);
@@ -6359,12 +6361,15 @@ export class Document {
                 // Add blank AFTER small image unless:
                 // - Last in cell OR
                 // - Already blank OR
-                // - Next is list item
+                // - Next is list item OR
+                // - Next is also a small image
                 const isLastInCellSmall = ci === cell.getParagraphs().length - 1;
                 if (!isLastInCellSmall) {
                   const nextPara = cell.getParagraphs()[ci + 1];
                   const nextIsBlank = nextPara && this.isParagraphBlank(nextPara);
                   const nextIsListItem = nextPara && nextPara.getNumbering();
+                  // Don't add blank between consecutive small images
+                  const nextIsSmallImage = nextPara && this.isSmallImageParagraph(nextPara);
 
                   if (nextIsBlank) {
                     // Mark existing blank as preserved
@@ -6373,7 +6378,7 @@ export class Document {
                       nextPara.setPreserved(true);
                       totalExistingLinesMarked++;
                     }
-                  } else if (!nextIsListItem) {
+                  } else if (!nextIsListItem && !nextIsSmallImage) {
                     const blankAfter = Paragraph.create();
                     blankAfter.setStyle(style);
                     blankAfter.setSpaceAfter(spacingAfter);
