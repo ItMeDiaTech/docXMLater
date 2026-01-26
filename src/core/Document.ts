@@ -6157,6 +6157,59 @@ export class Document {
           i++; // Skip the newly inserted blank
         }
       }
+
+      // Phase 9c-table: Handle indented paragraph blocks inside table cells
+      for (const table of this.getAllTables()) {
+        for (const row of table.getRows()) {
+          for (const cell of row.getCells()) {
+            let cellParas = cell.getParagraphs();
+            let cellParaCount = cellParas.length;
+
+            for (let ci = 0; ci < cellParaCount; ci++) {
+              cellParas = cell.getParagraphs(); // Refresh after potential insertion
+              const para = cellParas[ci];
+              if (!para) continue;
+
+              // Check if current is indented non-list paragraph
+              const currentIndent = para.getFormatting()?.indentation?.left;
+              const isIndented = currentIndent && currentIndent > 0 && !para.getNumbering();
+
+              if (!isIndented) continue;
+
+              // Skip if current paragraph is blank
+              if (this.isParagraphBlank(para)) continue;
+
+              // Check if this is the last paragraph in the cell - never add blank at cell end
+              const isLastInCell = ci === cellParas.length - 1;
+              if (isLastInCell) continue;
+
+              // Check next element
+              const nextPara = cellParas[ci + 1];
+              if (!nextPara) continue;
+
+              // Skip if next is blank (already has separation)
+              if (this.isParagraphBlank(nextPara)) continue;
+
+              // Check if next is non-indented and non-list
+              const nextIndent = nextPara.getFormatting()?.indentation?.left;
+              const nextIsIndented = nextIndent && nextIndent > 0;
+              const nextIsList = !!nextPara.getNumbering();
+
+              if (!nextIsIndented && !nextIsList) {
+                // Transition from indented to non-indented: add blank
+                const blankPara = Paragraph.create();
+                blankPara.setStyle(style);
+                blankPara.setSpaceAfter(spacingAfter);
+                blankPara.setPreserved(markAsPreserved);
+                cell.addParagraphAt(ci + 1, blankPara);
+                totalBlankLinesAdded++;
+                ci++; // Skip the newly inserted blank
+                cellParaCount++; // Account for added paragraph
+              }
+            }
+          }
+        }
+      }
     }
 
     // Phase 10: Add blank lines around images

@@ -5,6 +5,17 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.9] - 2025-01-26
+
+### Added
+
+- **Indented Paragraph Handling in Table Cells (Phase 9c-table)**
+  - Added blank line handling for indented-to-non-indented transitions inside table cells
+  - Never adds blank line if element is last in table cell
+  - All blank lines use "Normal" style (already the default)
+
+---
+
 ## [9.5.8] - 2025-01-26
 
 ### Fixed
