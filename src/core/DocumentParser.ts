@@ -1945,6 +1945,51 @@ export class DocumentParser {
                 paragraph.addField(field);
               }
             }
+          } else if (elementType === "w:bookmarkStart") {
+            // Parse bookmark start element
+            const bookmarkStarts = paraObj["w:bookmarkStart"];
+            const bookmarkArray = Array.isArray(bookmarkStarts)
+              ? bookmarkStarts
+              : bookmarkStarts
+              ? [bookmarkStarts]
+              : [];
+            if (elementIndex < bookmarkArray.length) {
+              const bookmarkObj = bookmarkArray[elementIndex];
+              if (bookmarkObj) {
+                const id = bookmarkObj["@_w:id"];
+                const name = bookmarkObj["@_w:name"];
+                if (id !== undefined) {
+                  const bookmark = new Bookmark({
+                    id: parseInt(id, 10),
+                    name: name || "",
+                    skipNormalization: true,
+                  });
+                  paragraph.addBookmarkStart(bookmark);
+                }
+              }
+            }
+          } else if (elementType === "w:bookmarkEnd") {
+            // Parse bookmark end element
+            const bookmarkEnds = paraObj["w:bookmarkEnd"];
+            const bookmarkArray = Array.isArray(bookmarkEnds)
+              ? bookmarkEnds
+              : bookmarkEnds
+              ? [bookmarkEnds]
+              : [];
+            if (elementIndex < bookmarkArray.length) {
+              const bookmarkObj = bookmarkArray[elementIndex];
+              if (bookmarkObj) {
+                const id = bookmarkObj["@_w:id"];
+                if (id !== undefined) {
+                  const bookmark = new Bookmark({
+                    id: parseInt(id, 10),
+                    name: "",
+                    skipNormalization: true,
+                  });
+                  paragraph.addBookmarkEnd(bookmark);
+                }
+              }
+            }
           }
         }
       } else {
@@ -2013,6 +2058,47 @@ export class DocumentParser {
           const field = this.parseSimpleFieldFromObject(fieldObj);
           if (field) {
             paragraph.addField(field);
+          }
+        }
+
+        // Handle bookmarks (w:bookmarkStart)
+        const bookmarkStarts = paraObj["w:bookmarkStart"];
+        const bookmarkStartChildren = Array.isArray(bookmarkStarts)
+          ? bookmarkStarts
+          : bookmarkStarts
+          ? [bookmarkStarts]
+          : [];
+
+        for (const bookmarkObj of bookmarkStartChildren) {
+          const id = bookmarkObj["@_w:id"];
+          const name = bookmarkObj["@_w:name"];
+          if (id !== undefined) {
+            const bookmark = new Bookmark({
+              id: parseInt(id, 10),
+              name: name || "",
+              skipNormalization: true,
+            });
+            paragraph.addBookmarkStart(bookmark);
+          }
+        }
+
+        // Handle bookmarks (w:bookmarkEnd)
+        const bookmarkEnds = paraObj["w:bookmarkEnd"];
+        const bookmarkEndChildren = Array.isArray(bookmarkEnds)
+          ? bookmarkEnds
+          : bookmarkEnds
+          ? [bookmarkEnds]
+          : [];
+
+        for (const bookmarkObj of bookmarkEndChildren) {
+          const id = bookmarkObj["@_w:id"];
+          if (id !== undefined) {
+            const bookmark = new Bookmark({
+              id: parseInt(id, 10),
+              name: "",
+              skipNormalization: true,
+            });
+            paragraph.addBookmarkEnd(bookmark);
           }
         }
       }

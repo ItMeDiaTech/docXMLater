@@ -1945,4 +1945,113 @@ describe('Document', () => {
       loadedDoc.dispose();
     });
   });
+
+  describe('setTablePadding', () => {
+    it('should set padding for all tables in document', () => {
+      const doc = Document.create();
+      const table1 = new Table(2, 2);
+      const table2 = new Table(3, 3);
+      table1.getCell(0, 0)?.createParagraph('Table 1');
+      table2.getCell(0, 0)?.createParagraph('Table 2');
+      doc.addTable(table1);
+      doc.addTable(table2);
+
+      const count = doc.setTablePadding(100, 100, 100, 100);
+
+      expect(count).toBe(2);
+      expect(table1.getCellMargins()?.top).toBe(100);
+      expect(table1.getCellMargins()?.bottom).toBe(100);
+      expect(table1.getCellMargins()?.left).toBe(100);
+      expect(table1.getCellMargins()?.right).toBe(100);
+      expect(table2.getCellMargins()?.top).toBe(100);
+    });
+
+    it('should return 0 when no tables exist', () => {
+      const doc = Document.create();
+      const count = doc.setTablePadding(100, 100, 100, 100);
+      expect(count).toBe(0);
+    });
+
+    it('should round-trip through save/load', async () => {
+      const doc = Document.create();
+      const table = new Table(2, 2);
+      table.getCell(0, 0)?.createParagraph('Test');
+      doc.addTable(table);
+      doc.setTablePadding(120, 130, 140, 150);
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const loadedMargins = loaded.getTables()[0]?.getCellMargins();
+
+      expect(loadedMargins?.top).toBe(120);
+      expect(loadedMargins?.bottom).toBe(130);
+      expect(loadedMargins?.left).toBe(140);
+      expect(loadedMargins?.right).toBe(150);
+
+      loaded.dispose();
+    });
+  });
+
+  describe('bookmark-only paragraph preservation', () => {
+    it('should preserve paragraphs with only bookmarks during addStructureBlankLines', async () => {
+      // Create document with bookmark-only paragraph followed by content
+      const doc = Document.create();
+
+      // First paragraph with only bookmarks (no text)
+      const bookmarkPara = doc.createParagraph('');
+      const { Bookmark } = await import('../../src/elements/Bookmark');
+      bookmarkPara.addBookmarkStart(new Bookmark({ id: 1, name: '_TestBookmark', skipNormalization: true }));
+      bookmarkPara.addBookmarkEnd(new Bookmark({ id: 1, name: '_TestBookmark', skipNormalization: true }));
+
+      // Second paragraph with text
+      doc.createParagraph('Content after bookmark');
+
+      expect(doc.getBodyElements().length).toBe(2);
+
+      // Round-trip
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      const loaded = await Document.loadFromBuffer(buffer);
+
+      // Verify bookmark paragraph was parsed with bookmarks
+      const paras = loaded.getParagraphs();
+      expect(paras.length).toBe(2);
+      expect(paras[0]?.getBookmarksStart().length).toBe(1);
+      expect(paras[0]?.getBookmarksStart()[0]?.getName()).toBe('_TestBookmark');
+
+      // Call addStructureBlankLines - should NOT remove the bookmark paragraph
+      loaded.addStructureBlankLines();
+
+      // Verify bookmark paragraph was preserved
+      const parasAfter = loaded.getParagraphs();
+      const bookmarkParaStillExists = parasAfter.some(p => p.getBookmarksStart().length > 0);
+      expect(bookmarkParaStillExists).toBe(true);
+
+      loaded.dispose();
+    });
+
+    it('should parse bookmarks from paragraph when loading document', async () => {
+      // Create document with bookmarks directly in paragraph
+      const doc = Document.create();
+
+      const para = doc.createParagraph('Text with bookmark');
+      const { Bookmark } = await import('../../src/elements/Bookmark');
+      para.addBookmarkStart(new Bookmark({ id: 5, name: '_Rationale', skipNormalization: true }));
+      para.addBookmarkEnd(new Bookmark({ id: 5, name: '_Rationale', skipNormalization: true }));
+
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      const loaded = await Document.loadFromBuffer(buffer);
+      const paras = loaded.getParagraphs();
+
+      expect(paras.length).toBe(1);
+      expect(paras[0]?.getBookmarksStart().length).toBe(1);
+      expect(paras[0]?.getBookmarksStart()[0]?.getName()).toBe('_Rationale');
+      expect(paras[0]?.getBookmarksEnd().length).toBe(1);
+
+      loaded.dispose();
+    });
+  });
 });
