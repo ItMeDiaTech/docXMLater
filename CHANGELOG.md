@@ -5,6 +5,18 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.8] - 2025-01-26
+
+### Fixed
+
+- **Blank Line Handling for Indented Paragraphs After Lists**
+  - No longer adds unwanted blank line between list items and following indented paragraphs
+  - Now adds blank line after indented paragraph blocks when transitioning to non-indented content
+  - Affects `addStructureBlankLines()` Phase 9 and new Phase 9c
+  - Example: List item followed by indented email text no longer has blank before, but does have blank after
+
+---
+
 ## [9.5.7] - 2025-01-25
 
 ### Fixed

@@ -5982,10 +5982,18 @@ export class Document {
               !nextElement.getNumbering() &&
               this.isWithinListContext(i + 1);
 
+            // Check if next paragraph is indented (continuation content, not section break)
+            // Don't add blank after list if followed by indented content
+            const nextIsIndented =
+              nextElement instanceof Paragraph &&
+              !nextElement.getNumbering() &&
+              nextElement.getFormatting()?.indentation?.left &&
+              nextElement.getFormatting().indentation!.left! > 0;
+
             const isListEnd =
               !nextElement || // End of document
               !(nextElement instanceof Paragraph) || // Next is not a paragraph
-              (!nextElement.getNumbering() && !nextIsWithinList); // No numbering AND not within list context
+              (!nextElement.getNumbering() && !nextIsWithinList && !nextIsIndented); // No numbering AND not within list context AND not indented
 
             if (isListEnd) {
               // Check if there's already a blank paragraph after the list
@@ -6105,6 +6113,48 @@ export class Document {
               }
             }
           }
+        }
+      }
+    }
+
+    // Phase 9c: Add blank after indented paragraph blocks when followed by non-indented content
+    // This handles the case where indented content (like email text) transitions back to normal paragraphs
+    if (afterLists) {
+      for (let i = 0; i < this.bodyElements.length; i++) {
+        const element = this.bodyElements[i];
+
+        if (!(element instanceof Paragraph)) continue;
+
+        // Check if current is indented non-list paragraph
+        const currentIndent = element.getFormatting()?.indentation?.left;
+        const isIndented = currentIndent && currentIndent > 0 && !element.getNumbering();
+
+        if (!isIndented) continue;
+
+        // Skip if current paragraph is blank
+        if (this.isParagraphBlank(element)) continue;
+
+        // Check next element
+        const nextElement = this.bodyElements[i + 1];
+        if (!nextElement || !(nextElement instanceof Paragraph)) continue;
+
+        // Skip if next is blank (already has separation)
+        if (this.isParagraphBlank(nextElement)) continue;
+
+        // Check if next is non-indented and non-list
+        const nextIndent = nextElement.getFormatting()?.indentation?.left;
+        const nextIsIndented = nextIndent && nextIndent > 0;
+        const nextIsList = !!nextElement.getNumbering();
+
+        if (!nextIsIndented && !nextIsList) {
+          // Transition from indented to non-indented: add blank
+          const blankPara = Paragraph.create();
+          blankPara.setStyle(style);
+          blankPara.setSpaceAfter(spacingAfter);
+          blankPara.setPreserved(markAsPreserved);
+          this.bodyElements.splice(i + 1, 0, blankPara);
+          totalBlankLinesAdded++;
+          i++; // Skip the newly inserted blank
         }
       }
     }
