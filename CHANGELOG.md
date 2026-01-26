@@ -5,6 +5,24 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.6] - 2025-01-25
+
+### Reverted
+
+- **Reverted to 9.4.0 codebase**
+  - All 9.5.x versions have been reverted due to stability issues
+  - Reverted changes:
+    - 9.5.5: Revert to 9.5.1 (partial revert)
+    - 9.5.4: Bookmark-only paragraph preservation
+    - 9.5.3: Bookmarks inside body-level deleted content handling
+    - 9.5.2: Inter-row and body-level bookmark preservation
+    - 9.5.1: Bold+colon blank line logic for indented paragraphs
+    - 9.5.0: Granular numbering modification tracking for style preservation
+  - The numbering tracking and bookmark handling approaches need redesign
+  - This release restores the stable 9.4.0 feature set
+
+---
+
 ## [9.4.0] - 2025-01-24
 
 ### Added
