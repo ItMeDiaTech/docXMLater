@@ -7,6 +7,7 @@ import { TableRow } from '../../src/elements/TableRow';
 import { TableCell } from '../../src/elements/TableCell';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { XMLElement } from '../../src/xml/XMLBuilder';
+import { Document } from '../../src/core/Document';
 
 /**
  * Helper to filter and safely access XMLElement children
@@ -845,6 +846,157 @@ describe('Table', () => {
       expect(result).toBe(table);
       expect(table.getFormatting().width).toBe(8000);
       expect(table.getFormatting().alignment).toBe('center');
+    });
+  });
+
+  describe('setPadding', () => {
+    it('should set padding on all sides', () => {
+      const table = new Table(2, 2);
+      table.setPadding(100, 100, 100, 100);
+
+      const margins = table.getCellMargins();
+      expect(margins?.top).toBe(100);
+      expect(margins?.bottom).toBe(100);
+      expect(margins?.left).toBe(100);
+      expect(margins?.right).toBe(100);
+    });
+
+    it('should set different padding for each side', () => {
+      const table = new Table(2, 2);
+      table.setPadding(50, 60, 70, 80);
+
+      const margins = table.getCellMargins();
+      expect(margins?.top).toBe(50);
+      expect(margins?.bottom).toBe(60);
+      expect(margins?.left).toBe(70);
+      expect(margins?.right).toBe(80);
+    });
+
+    it('should support method chaining', () => {
+      const table = new Table(2, 2);
+      const result = table.setPadding(100, 100, 100, 100);
+      expect(result).toBe(table);
+    });
+
+    it('should round-trip through save/load', async () => {
+      const doc = Document.create();
+      const table = new Table(1, 1);
+      table.setPadding(100, 150, 200, 250);
+      table.getCell(0, 0)?.createParagraph('Test');
+      doc.addTable(table);
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const loadedMargins = loaded.getTables()[0]?.getCellMargins();
+
+      expect(loadedMargins?.top).toBe(100);
+      expect(loadedMargins?.bottom).toBe(150);
+      expect(loadedMargins?.left).toBe(200);
+      expect(loadedMargins?.right).toBe(250);
+    });
+  });
+
+  describe('Inter-row content', () => {
+    it('should store inter-row content', () => {
+      const table = new Table(2, 2);
+      table.addInterRowContent(0, '<w:bookmarkEnd w:id="107"/>', 'bookmarkEnd');
+
+      const content = table.getInterRowContent();
+      expect(content).toHaveLength(1);
+      expect(content[0]?.afterRowIndex).toBe(0);
+      expect(content[0]?.xml).toBe('<w:bookmarkEnd w:id="107"/>');
+      expect(content[0]?.type).toBe('bookmarkEnd');
+    });
+
+    it('should store multiple inter-row content items', () => {
+      const table = new Table(3, 2);
+      table.addInterRowContent(0, '<w:bookmarkEnd w:id="1"/>', 'bookmarkEnd');
+      table.addInterRowContent(1, '<w:bookmarkEnd w:id="2"/>', 'bookmarkEnd');
+      table.addInterRowContent(1, '<w:bookmarkStart w:id="3" w:name="test"/>', 'bookmarkStart');
+
+      const content = table.getInterRowContent();
+      expect(content).toHaveLength(3);
+    });
+
+    it('should return inter-row content for specific row', () => {
+      const table = new Table(3, 2);
+      table.addInterRowContent(0, '<w:bookmarkEnd w:id="1"/>', 'bookmarkEnd');
+      table.addInterRowContent(1, '<w:bookmarkEnd w:id="2"/>', 'bookmarkEnd');
+      table.addInterRowContent(1, '<w:bookmarkStart w:id="3" w:name="test"/>', 'bookmarkStart');
+
+      const afterRow1 = table.getInterRowContentAfterRow(1);
+      expect(afterRow1).toHaveLength(2);
+    });
+
+    it('should clear inter-row content', () => {
+      const table = new Table(2, 2);
+      table.addInterRowContent(0, '<w:bookmarkEnd w:id="107"/>', 'bookmarkEnd');
+      table.clearInterRowContent();
+
+      expect(table.getInterRowContent()).toHaveLength(0);
+    });
+
+    it('should include inter-row content in XML output', () => {
+      const table = new Table(2, 1);
+      table.getCell(0, 0)?.createParagraph('Row 1');
+      table.getCell(1, 0)?.createParagraph('Row 2');
+      table.addInterRowContent(0, '<w:bookmarkEnd w:id="107"/>', 'bookmarkEnd');
+
+      const xml = table.toXML();
+      const children = filterXMLElements(xml.children);
+
+      // Find tblGrid, rows, and raw XML elements
+      const tblGrid = children.find(c => c.name === 'w:tblGrid');
+      const rows = children.filter(c => c.name === 'w:tr');
+      const rawXmlElements = children.filter(c => c.name === '__rawXml');
+
+      expect(tblGrid).toBeDefined();
+      expect(rows).toHaveLength(2);
+      expect(rawXmlElements).toHaveLength(1);
+
+      // The raw XML element should contain the bookmark
+      expect(rawXmlElements[0]?.rawXml).toContain('w:bookmarkEnd');
+      expect(rawXmlElements[0]?.rawXml).toContain('w:id="107"');
+
+      // Verify order: tblGrid, row, rawXml, row
+      const tblGridIdx = children.indexOf(tblGrid!);
+      const row1Idx = children.indexOf(rows[0]!);
+      const rawXmlIdx = children.indexOf(rawXmlElements[0]!);
+      const row2Idx = children.indexOf(rows[1]!);
+
+      expect(tblGridIdx).toBeLessThan(row1Idx);
+      expect(row1Idx).toBeLessThan(rawXmlIdx);
+      expect(rawXmlIdx).toBeLessThan(row2Idx);
+    });
+
+    it('should handle inter-row content before first row', () => {
+      const table = new Table(1, 1);
+      table.getCell(0, 0)?.createParagraph('Content');
+      table.addInterRowContent(-1, '<w:bookmarkStart w:id="1" w:name="beforeTable"/>', 'bookmarkStart');
+
+      const xml = table.toXML();
+      const children = filterXMLElements(xml.children);
+
+      // Find tblGrid, row, and raw XML elements
+      const tblGrid = children.find(c => c.name === 'w:tblGrid');
+      const rows = children.filter(c => c.name === 'w:tr');
+      const rawXmlElements = children.filter(c => c.name === '__rawXml');
+
+      expect(tblGrid).toBeDefined();
+      expect(rows).toHaveLength(1);
+      expect(rawXmlElements).toHaveLength(1);
+
+      // The raw XML element should contain the bookmark
+      expect(rawXmlElements[0]?.rawXml).toContain('bookmarkStart');
+      expect(rawXmlElements[0]?.rawXml).toContain('beforeTable');
+
+      // Verify order: tblGrid, rawXml, row
+      const tblGridIdx = children.indexOf(tblGrid!);
+      const rawXmlIdx = children.indexOf(rawXmlElements[0]!);
+      const rowIdx = children.indexOf(rows[0]!);
+
+      expect(tblGridIdx).toBeLessThan(rawXmlIdx);
+      expect(rawXmlIdx).toBeLessThan(rowIdx);
     });
   });
 });

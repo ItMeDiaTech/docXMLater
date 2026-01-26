@@ -245,6 +245,7 @@ export {
   TableBorder,
   TableBorders,
   TableFormatting,
+  InterRowContent,
 } from './elements/Table';
 export { TableRow, RowFormatting } from './elements/TableRow';
 export {

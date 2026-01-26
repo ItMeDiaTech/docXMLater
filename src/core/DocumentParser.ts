@@ -234,40 +234,52 @@ export class DocumentParser {
       const next = candidates[0];
 
       if (next) {
-        // Check for body-level bookmarkEnd elements BEFORE this element
-        // These appear between the previous element and this one
-        if (bodyElements.length > 0 && next.pos > pos) {
-          const bookmarkEnds = this.extractBodyLevelBookmarkEnds(
-            bodyContent,
-            pos,
-            next.pos
-          );
-          if (bookmarkEnds.length > 0) {
-            // Attach to the previous element
-            const prevElement = bodyElements[bodyElements.length - 1];
-            if (prevElement instanceof Paragraph) {
-              for (const bookmark of bookmarkEnds) {
-                prevElement.addBookmarkEnd(bookmark);
-              }
-            } else if (prevElement instanceof Table) {
-              // For tables, attach to the last paragraph in the last cell
-              const rows = prevElement.getRows();
-              const lastRow = rows[rows.length - 1];
-              if (lastRow) {
-                const cells = lastRow.getCells();
-                const lastCell = cells[cells.length - 1];
-                if (lastCell) {
-                  const cellParas = lastCell.getParagraphs();
-                  const lastPara = cellParas[cellParas.length - 1];
-                  if (lastPara) {
-                    for (const bookmark of bookmarkEnds) {
-                      lastPara.addBookmarkEnd(bookmark);
+        // Check for body-level bookmark elements BEFORE this element
+        // Per ECMA-376, bookmarks can appear between body-level elements
+        let pendingBookmarkStarts: Bookmark[] = [];
+
+        if (next.pos > pos) {
+          // Extract bookmarkEnd elements - attach to PREVIOUS element
+          if (bodyElements.length > 0) {
+            const bookmarkEnds = this.extractBodyLevelBookmarkEnds(
+              bodyContent,
+              pos,
+              next.pos
+            );
+            if (bookmarkEnds.length > 0) {
+              // Attach to the previous element
+              const prevElement = bodyElements[bodyElements.length - 1];
+              if (prevElement instanceof Paragraph) {
+                for (const bookmark of bookmarkEnds) {
+                  prevElement.addBookmarkEnd(bookmark);
+                }
+              } else if (prevElement instanceof Table) {
+                // For tables, attach to the last paragraph in the last cell
+                const rows = prevElement.getRows();
+                const lastRow = rows[rows.length - 1];
+                if (lastRow) {
+                  const cells = lastRow.getCells();
+                  const lastCell = cells[cells.length - 1];
+                  if (lastCell) {
+                    const cellParas = lastCell.getParagraphs();
+                    const lastPara = cellParas[cellParas.length - 1];
+                    if (lastPara) {
+                      for (const bookmark of bookmarkEnds) {
+                        lastPara.addBookmarkEnd(bookmark);
+                      }
                     }
                   }
                 }
               }
             }
           }
+
+          // Extract bookmarkStart elements - will attach to NEXT element
+          pendingBookmarkStarts = this.extractBodyLevelBookmarkStarts(
+            bodyContent,
+            pos,
+            next.pos
+          );
         }
 
         // Check if this element is inside a w:del block (deleted via Track Changes)
@@ -298,7 +310,13 @@ export class DocumentParser {
               zipHandler,
               imageManager
             );
-            if (paragraph) bodyElements.push(paragraph);
+            if (paragraph) {
+              // Add pending bookmarkStart elements from between elements
+              for (const bookmark of pendingBookmarkStarts) {
+                paragraph.addBookmarkStart(bookmark);
+              }
+              bodyElements.push(paragraph);
+            }
             pos = next.pos + elementXml.length;
           } else {
             pos = next.pos + 1;
@@ -417,6 +435,52 @@ export class DocumentParser {
   }
 
   /**
+   * Extracts body-level bookmarkStart elements between two positions.
+   * Per ECMA-376, bookmarkStart can appear between body-level elements.
+   * These should be attached to the NEXT element.
+   *
+   * @param content - Body content
+   * @param startPos - Start position to search from
+   * @param endPos - End position to search to (-1 for end of content)
+   * @returns Array of Bookmark objects with start markers
+   */
+  private extractBodyLevelBookmarkStarts(
+    content: string,
+    startPos: number,
+    endPos: number
+  ): Bookmark[] {
+    const searchContent =
+      endPos === -1 ? content.slice(startPos) : content.slice(startPos, endPos);
+
+    const bookmarks: Bookmark[] = [];
+
+    // Use position-based XMLParser for ECMA-376 compliance
+    const bookmarkStartXmls = XMLParser.extractElements(
+      searchContent,
+      "w:bookmarkStart"
+    );
+
+    for (const bookmarkStartXml of bookmarkStartXmls) {
+      const idAttr = XMLParser.extractAttribute(bookmarkStartXml, "w:id");
+      const nameAttr = XMLParser.extractAttribute(bookmarkStartXml, "w:name");
+
+      if (idAttr) {
+        const id = parseInt(idAttr, 10);
+        if (!isNaN(id)) {
+          const bookmark = new Bookmark({
+            name: nameAttr || `_bookmark_${id}`,
+            id: id,
+            skipNormalization: true,
+          });
+          bookmarks.push(bookmark);
+        }
+      }
+    }
+
+    return bookmarks;
+  }
+
+  /**
    * Extracts bookmarkEnd elements from any XML content string.
    * Uses position-based parsing via XMLParser (ECMA-376 compliant, ReDoS-safe).
    * @param content - The XML content to search
@@ -445,6 +509,62 @@ export class DocumentParser {
     }
 
     return bookmarks;
+  }
+
+  /**
+   * Extracts inter-row elements from content between table rows.
+   * Per ECMA-376, elements like w:bookmarkEnd, w:bookmarkStart, w:commentRangeEnd
+   * can appear between w:tr elements and must be preserved for round-trip fidelity.
+   *
+   * @param content - XML content between rows
+   * @returns Array of { xml, type } objects for each inter-row element
+   */
+  private extractInterRowElements(
+    content: string
+  ): Array<{ xml: string; type: string }> {
+    const elements: Array<{ xml: string; type: string }> = [];
+
+    // List of elements that can appear between rows
+    // Per ECMA-376 Part 1, these are range marker elements
+    const interRowElementTypes = [
+      "w:bookmarkEnd",
+      "w:bookmarkStart",
+      "w:commentRangeEnd",
+      "w:commentRangeStart",
+      "w:customXmlDelRangeEnd",
+      "w:customXmlDelRangeStart",
+      "w:customXmlInsRangeEnd",
+      "w:customXmlInsRangeStart",
+      "w:customXmlMoveFromRangeEnd",
+      "w:customXmlMoveFromRangeStart",
+      "w:customXmlMoveToRangeEnd",
+      "w:customXmlMoveToRangeStart",
+      "w:moveFromRangeEnd",
+      "w:moveFromRangeStart",
+      "w:moveToRangeEnd",
+      "w:moveToRangeStart",
+      "w:permEnd",
+      "w:permStart",
+    ];
+
+    for (const elementType of interRowElementTypes) {
+      const extracted = XMLParser.extractElements(content, elementType);
+      for (const xml of extracted) {
+        elements.push({
+          xml,
+          type: elementType.replace("w:", ""), // Remove namespace prefix for type
+        });
+      }
+    }
+
+    // Sort by position in original content to maintain order
+    elements.sort((a, b) => {
+      const posA = content.indexOf(a.xml);
+      const posB = content.indexOf(b.xml);
+      return posA - posB;
+    });
+
+    return elements;
   }
 
   /**
@@ -4756,7 +4876,8 @@ export class DocumentParser {
         if (row) {
           table.addRow(row);
 
-          // Check for bookmarkEnd elements AFTER this row (between rows)
+          // Check for inter-row elements AFTER this row (between rows)
+          // Per ECMA-376, elements like w:bookmarkEnd, w:bookmarkStart can appear between w:tr elements
           if (rawTableXml && i < rowPositions.length) {
             const currentRowEnd = rowPositions[i]?.end || 0;
             const nextRowStart =
@@ -4769,22 +4890,12 @@ export class DocumentParser {
                 currentRowEnd,
                 nextRowStart
               );
-              const bookmarkEnds =
-                this.extractBookmarkEndsFromContent(betweenContent);
 
-              if (bookmarkEnds.length > 0) {
-                // Attach to last paragraph in last cell of this row
-                const cells = row.getCells();
-                const lastCell = cells[cells.length - 1];
-                if (lastCell) {
-                  const cellParas = lastCell.getParagraphs();
-                  const lastPara = cellParas[cellParas.length - 1];
-                  if (lastPara) {
-                    for (const bookmark of bookmarkEnds) {
-                      lastPara.addBookmarkEnd(bookmark);
-                    }
-                  }
-                }
+              // Extract all inter-row elements and store them as raw XML
+              // This preserves exact XML for round-trip fidelity
+              const interRowElements = this.extractInterRowElements(betweenContent);
+              for (const element of interRowElements) {
+                table.addInterRowContent(i, element.xml, element.type);
               }
             }
           }

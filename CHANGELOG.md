@@ -5,6 +5,32 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.2] - 2025-01-25
+
+### Fixed
+
+- **Inter-Row Bookmark Preservation**
+  - Fixed document corruption when bookmarkEnd elements appear between table rows
+  - Added `InterRowContent` interface and storage in Table class
+  - New methods: `addInterRowContent()`, `getInterRowContent()`, `getInterRowContentAfterRow()`, `clearInterRowContent()`
+  - Table serialization now correctly outputs inter-row content at proper positions
+  - Per ECMA-376, elements like `w:bookmarkEnd` can appear between `w:tr` elements
+
+- **Body-Level Bookmark Preservation**
+  - Fixed loss of bookmarkStart elements that appear between body-level elements
+  - Parser now captures bookmarkStart between paragraphs/tables and attaches to next element
+  - Ensures complete bookmark pair preservation during document round-trips
+
+### Added
+
+- **Table Inter-Row Content API**
+  - `Table.addInterRowContent(afterRowIndex, xml, type)` - Add content between rows
+  - `Table.getInterRowContent()` - Get all inter-row content items
+  - `Table.getInterRowContentAfterRow(index)` - Get content after specific row
+  - `Table.clearInterRowContent()` - Remove all inter-row content
+
+---
+
 ## [9.5.1] - 2025-01-24
 
 ### Fixed
