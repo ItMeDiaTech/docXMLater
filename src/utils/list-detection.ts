@@ -96,6 +96,16 @@ export function inferLevelFromIndentation(indentTwips: number): number {
 }
 
 /**
+ * Infer list level from relative indentation (baseline already subtracted).
+ * Used when normalizing lists within a table cell where the baseline
+ * indentation varies per cell.
+ */
+export function inferLevelFromRelativeIndentation(relativeIndentTwips: number): number {
+  if (relativeIndentTwips <= 0) return 0;
+  return Math.min(8, Math.floor(relativeIndentTwips / INDENT_PER_LEVEL));
+}
+
+/**
  * Detect typed list prefix in text.
  * Returns the matched prefix and format type.
  *

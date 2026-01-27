@@ -5,6 +5,32 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.20] - 2026-01-26
+
+### Added
+
+- **Relative Indentation Level Inference**
+  - New `inferLevelFromRelativeIndentation()` function for table cell list normalization
+  - Calculates list level based on paragraph indentation relative to cell baseline
+  - Handles variable baseline indentation per cell (different from document-level lists)
+
+### Changed
+
+- **List Normalization Indentation-Based Levels**
+  - Typed prefix lists now use indentation-based level detection instead of format-based
+  - Calculates baseline (minimum) indentation within each cell
+  - Sub-items are identified by relative indentation, not prefix format (a. vs 1.)
+  - Numbered items following bullets are promoted to level 1 when indented beyond baseline
+
+### Fixed
+
+- **Mixed List Category Handling**
+  - Improved detection of numbered items that should be sub-items under bullet lists
+  - Added `numberedAsSubItemIndices` tracking for proper level assignment
+  - Prevents flat list appearance when numbered items follow bullet parents
+
+---
+
 ## [9.5.19] - 2026-01-26
 
 ### Fixed

@@ -44,10 +44,12 @@ describe('ListNormalizer', () => {
 
       const para1a = Paragraph.create();
       para1a.addText('a. Sub-item 1a');
+      para1a.setLeftIndent(360); // Sub-item indentation
       cell.addParagraph(para1a);
 
       const para1b = Paragraph.create();
       para1b.addText('b. Sub-item 1b');
+      para1b.setLeftIndent(360); // Sub-item indentation
       cell.addParagraph(para1b);
 
       const para2 = Paragraph.create();
@@ -56,10 +58,12 @@ describe('ListNormalizer', () => {
 
       const para2a = Paragraph.create();
       para2a.addText('c. Sub-item 2a'); // Intentionally 'c' to test restart
+      para2a.setLeftIndent(360); // Sub-item indentation
       cell.addParagraph(para2a);
 
       const para2b = Paragraph.create();
       para2b.addText('d. Sub-item 2b'); // Intentionally 'd' to test restart
+      para2b.setLeftIndent(360); // Sub-item indentation
       cell.addParagraph(para2b);
 
       // Run normalization with all required options
@@ -175,17 +179,20 @@ describe('ListNormalizer', () => {
       //    a. Sub (should restart again)
 
       const items = [
-        '1. First',
-        'a. Sub 1',
-        '2. Second',
-        'a. Sub 2',
-        '3. Third',
-        'a. Sub 3',
+        { text: '1. First', indent: 0 },
+        { text: 'a. Sub 1', indent: 360 },
+        { text: '2. Second', indent: 0 },
+        { text: 'a. Sub 2', indent: 360 },
+        { text: '3. Third', indent: 0 },
+        { text: 'a. Sub 3', indent: 360 },
       ];
 
       for (const item of items) {
         const para = Paragraph.create();
-        para.addText(item);
+        para.addText(item.text);
+        if (item.indent > 0) {
+          para.setLeftIndent(item.indent);
+        }
         cell.addParagraph(para);
       }
 
@@ -315,15 +322,15 @@ describe('ListNormalizer', () => {
 
       const normalizedParas = cell.getParagraphs();
 
-      // Level 1 (lowerLetter) should become level 0 (shifted by 1)
-      // Level 2 (lowerRoman) should become level 1 (shifted by 1)
+      // With indentation-based levels (new behavior):
+      // All paragraphs have no indentation, so all become level 0
       const para1Numbering = normalizedParas[0]!.getNumbering();
       const para2Numbering = normalizedParas[1]!.getNumbering();
       const para3Numbering = normalizedParas[2]!.getNumbering();
 
-      expect(para1Numbering!.level).toBe(0); // Was level 1, shifted to 0
-      expect(para2Numbering!.level).toBe(1); // Was level 2, shifted to 1
-      expect(para3Numbering!.level).toBe(0); // Was level 1, shifted to 0
+      expect(para1Numbering!.level).toBe(0); // No indentation = level 0
+      expect(para2Numbering!.level).toBe(0); // No indentation = level 0
+      expect(para3Numbering!.level).toBe(0); // No indentation = level 0
 
       doc.dispose();
     });
