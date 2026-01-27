@@ -20,6 +20,7 @@ import {
   detectListType,
   detectTypedPrefix,
   getListCategoryFromFormat,
+  inferLevelFromRelativeIndentation,
 } from "../utils/list-detection";
 import { defaultLogger } from "../utils/logger";
 import { isRun } from "../elements/Paragraph";
@@ -239,6 +240,15 @@ export function normalizeListsInCell(
     return report;
   }
 
+  // Calculate baseline (minimum) indentation for relative level inference
+  let baselineIndent = Infinity;
+  for (const item of analysis.paragraphs) {
+    if (item.detection.category !== "none") {
+      baselineIndent = Math.min(baselineIndent, item.detection.indentationTwips);
+    }
+  }
+  if (baselineIndent === Infinity) baselineIndent = 0;
+
   // Calculate level shifts PER LIST GROUP, not globally
   // A "list group" is a contiguous sequence of list items separated by non-list items
   // Each group gets its own minimum level calculation
@@ -308,6 +318,23 @@ export function normalizeListsInCell(
   }
   // === End context-aware bullet detection ===
 
+  // === Handle numbered items that should be sub-items under bullets ===
+  // When the majority is bullets, numbered items with greater indentation
+  // than baseline should be treated as sub-items (level 1)
+  const numberedAsSubItemIndices = new Set<number>();
+  if (majorityCategory === "bullet") {
+    for (let i = 0; i < analysis.paragraphs.length; i++) {
+      const item = analysis.paragraphs[i]!;
+      if (
+        item.detection.category === "numbered" &&
+        item.detection.indentationTwips > baselineIndent
+      ) {
+        numberedAsSubItemIndices.add(i);
+      }
+    }
+  }
+  // === End numbered sub-item detection ===
+
   // Track numId per level - will be reset when parent level appears
   const numIdByLevel = new Map<number, number>();
   let lastProcessedLevel = -1;
@@ -364,15 +391,26 @@ export function normalizeListsInCell(
       const levelShift = levelShiftByIndex.get(index) ?? 0;
 
       // Calculate target level
-      // - Use format-based level from detection (decimal=0, letter=1, roman=2, bullet=0)
-      // - Apply level shift to normalize lists without parent levels
-      // - Converted Word lists use the same level calculation as typed prefixes
+      // - For typed prefixes: use indentation-based level (relative to baseline)
+      // - For Word lists: use format-based level with level shift applied
       // - Bullets following numbered items become Level 1 sub-items (lowerLetter)
-      let targetLevel = Math.max(0, detection.inferredLevel - levelShift);
+      let targetLevel: number;
+      if (hasTypedPrefix) {
+        // Use indentation-based level for typed lists (relative to baseline)
+        const relativeIndent = detection.indentationTwips - baselineIndent;
+        targetLevel = inferLevelFromRelativeIndentation(relativeIndent);
+      } else {
+        targetLevel = Math.max(0, detection.inferredLevel - levelShift);
+      }
 
       // Override level for bullets that should be sub-items under numbered lists
       if (bulletAsSubItemIndices.has(index) && targetLevel === 0) {
         targetLevel = 1; // Promote to Level 1 (uses lowerLetter format: a, b, c)
+      }
+
+      // Override level for numbered items that should be sub-items under bullets
+      if (numberedAsSubItemIndices.has(index) && targetLevel === 0) {
+        targetLevel = 1; // Promote to Level 1
       }
 
       // Process based on what type of item this is
