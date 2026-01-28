@@ -15,6 +15,8 @@ import type {
   ListAnalysis,
   ListNormalizationOptions,
   ListNormalizationReport,
+  NumberFormat,
+  IndentationLevel,
 } from "../types/list-types";
 import {
   detectListType,
@@ -24,6 +26,45 @@ import {
 } from "../utils/list-detection";
 import { defaultLogger } from "../utils/logger";
 import { isRun } from "../elements/Paragraph";
+
+// =============================================================================
+// INDENTATION SETTINGS HELPERS
+// =============================================================================
+
+/** Helper to convert inches to twips (1 inch = 1440 twips) */
+function inchesToTwips(inches: number): number {
+  return Math.round(inches * 1440);
+}
+
+/**
+ * Apply user's indentation settings to an abstract numbering definition.
+ */
+function applyIndentationSettings(
+  abstractNum: ReturnType<NumberingManager["getAbstractNumbering"]>,
+  indentationLevels: IndentationLevel[],
+  isBulletList: boolean
+): void {
+  if (!abstractNum || !indentationLevels || indentationLevels.length === 0) return;
+
+  for (const levelConfig of indentationLevels) {
+    const level = abstractNum.getLevel(levelConfig.level);
+    if (level) {
+      const textIndentTwips = inchesToTwips(levelConfig.textIndent);
+      const symbolIndentTwips = inchesToTwips(levelConfig.symbolIndent);
+      const hangingTwips = textIndentTwips - symbolIndentTwips;
+
+      level.setLeftIndent(textIndentTwips);
+      level.setHangingIndent(hangingTwips);
+
+      if (isBulletList && levelConfig.bulletChar) {
+        level.setText(levelConfig.bulletChar);
+      }
+      if (!isBulletList && levelConfig.numberedFormat) {
+        level.setFormat(levelConfig.numberedFormat as NumberFormat);
+      }
+    }
+  }
+}
 
 // =============================================================================
 // ANALYSIS FUNCTIONS
@@ -218,10 +259,11 @@ export function stripTypedPrefix(paragraph: Paragraph, prefix: string): void {
  * - Format determines level: decimal=0, letter=1, roman=2
  * - Word lists that don't match majority are converted
  * - Non-list items are NEVER touched
+ * - User indentation settings are applied when provided
  */
 export function normalizeListsInCell(
   cell: TableCell,
-  options: Required<ListNormalizationOptions>,
+  options: ListNormalizationOptions,
   numberingManager: NumberingManager
 ): ListNormalizationReport {
   const analysis = analyzeCellLists(cell, numberingManager);
@@ -234,9 +276,54 @@ export function normalizeListsInCell(
     details: [],
   };
 
-  // Nothing to do if no normalization needed
+  // Handle cells that don't need category normalization but may need indentation fixes
   if (analysis.recommendedAction === "none") {
+    // Even if no normalization needed, still apply user indentation settings to Word lists
+    if (options?.indentationLevels?.length && analysis.hasWordLists) {
+      // Create numId maps for applying correct settings
+      const correctedNumIdByLevel = new Map<string, number>();
+      const getCorrectedNumId = (level: number, isBullet: boolean): number => {
+        const key = `${isBullet ? 'b' : 'n'}-${level}`;
+        if (!correctedNumIdByLevel.has(key)) {
+          const numId = isBullet
+            ? numberingManager.createBulletList()
+            : numberingManager.createNumberedList();
+          correctedNumIdByLevel.set(key, numId);
+
+          const instance = numberingManager.getInstance(numId);
+          if (instance) {
+            const abstractNum = numberingManager.getAbstractNumbering(instance.getAbstractNumId());
+            if (abstractNum) {
+              applyIndentationSettings(abstractNum, options.indentationLevels!, isBullet);
+            }
+          }
+        }
+        return correctedNumIdByLevel.get(key)!;
+      };
+
+      for (const item of analysis.paragraphs) {
+        if (item.detection.isWordList && item.detection.numId !== null) {
+          const para = item.paragraph as Paragraph;
+          const numbering = para.getNumbering();
+          if (numbering) {
+            const isBullet = item.detection.category === "bullet";
+            const correctedNumId = getCorrectedNumId(numbering.level, isBullet);
+            para.setNumbering(correctedNumId, numbering.level);
+            report.normalized++;
+            report.details.push({
+              originalText: item.text.substring(0, 50),
+              action: "normalized",
+              reason: `Applied indentation settings at level ${numbering.level}`,
+            });
+          }
+        }
+      }
+      normalizeOrphanListLevelsInCell(cell);
+      return report;
+    }
     report.skipped = analysis.paragraphs.length;
+    // Always normalize orphan levels even when no other normalization needed
+    normalizeOrphanListLevelsInCell(cell);
     return report;
   }
 
@@ -249,11 +336,9 @@ export function normalizeListsInCell(
   }
   if (baselineIndent === Infinity) baselineIndent = 0;
 
-  // Calculate level shifts PER LIST GROUP, not globally
+  // Calculate level shifts PER LIST GROUP based on MAJORITY CATEGORY items only
+  // This ensures minority category items don't affect the shift calculation
   // A "list group" is a contiguous sequence of list items separated by non-list items
-  // Each group gets its own minimum level calculation
-  // If no list items exist before the current one in the group, default to level 0
-  // This fixes cases where a cell has "a., b." at the top and "1., 2., 3." at the bottom
   const levelShiftByIndex = new Map<number, number>();
   let currentGroupStart = -1;
   let currentGroupMinLevel = Infinity;
@@ -261,41 +346,67 @@ export function normalizeListsInCell(
   for (let i = 0; i < analysis.paragraphs.length; i++) {
     const item = analysis.paragraphs[i]!;
 
-    if (item.detection.category !== "none") {
-      // This is a list item
+    // Only consider majority category items for level shift calculation
+    if (item.detection.category === majorityCategory) {
       if (currentGroupStart === -1) {
         currentGroupStart = i; // Start new group
         currentGroupMinLevel = Infinity;
       }
-      // Track minimum level in current group
+      // Track minimum level in current group (only from majority category)
       currentGroupMinLevel = Math.min(currentGroupMinLevel, item.detection.inferredLevel);
-    } else {
+    } else if (item.detection.category === "none") {
       // Non-list item - end current group if any
       if (currentGroupStart !== -1) {
-        // Apply the group's level shift to all items in the group
+        // Apply the group's level shift to ALL non-"none" items in the group
         const shift = currentGroupMinLevel === Infinity ? 0 : currentGroupMinLevel;
         for (let j = currentGroupStart; j < i; j++) {
-          levelShiftByIndex.set(j, shift);
+          if (analysis.paragraphs[j]!.detection.category !== "none") {
+            levelShiftByIndex.set(j, shift);
+          }
         }
         currentGroupStart = -1;
         currentGroupMinLevel = Infinity;
       }
     }
+    // Minority category items don't break the group but don't affect minLevel
   }
 
   // Handle last group if cell ends with list items
   if (currentGroupStart !== -1) {
     const shift = currentGroupMinLevel === Infinity ? 0 : currentGroupMinLevel;
     for (let j = currentGroupStart; j < analysis.paragraphs.length; j++) {
-      levelShiftByIndex.set(j, shift);
+      if (analysis.paragraphs[j]!.detection.category !== "none") {
+        levelShiftByIndex.set(j, shift);
+      }
     }
   }
 
-  // === Context-aware bullet level detection ===
-  // When bullets follow numbered items in a numbered-majority cell,
-  // treat them as sub-items at Level 1 (lowerLetter format: a, b, c)
-  // This preserves hierarchy instead of flattening bullets to Level 0
+  // === Context-aware sub-item detection ===
+  // Track which items should be treated as sub-items and their parent indices
   const bulletAsSubItemIndices = new Set<number>();
+  const numberedAsSubItemIndices = new Set<number>();
+  const parentIndexByIndex = new Map<number, number>();
+
+  // Helper to calculate normalized level for an item (used for parent level lookup)
+  const getNormalizedLevel = (itemIndex: number): number => {
+    const item = analysis.paragraphs[itemIndex]!;
+    const detection = item.detection;
+    const hasTypedPrefix = !!detection.typedPrefix;
+    const levelShift = levelShiftByIndex.get(itemIndex) ?? 0;
+
+    if (hasTypedPrefix) {
+      const relativeIndent = detection.indentationTwips - baselineIndent;
+      const rawLevel = inferLevelFromRelativeIndentation(relativeIndent);
+      // Apply levelShift consistently for typed prefixes too
+      return Math.max(0, rawLevel - levelShift);
+    } else {
+      return Math.max(0, detection.inferredLevel - levelShift);
+    }
+  };
+
+  // Minimum indentation difference (in twips) to consider an item a sub-item
+  // 200 twips ≈ 0.14 inches - small enough to catch real sub-items but avoid false positives
+  const INDENT_THRESHOLD = 200;
 
   if (majorityCategory === "numbered") {
     let lastNumberedItemIndex = -1;
@@ -305,47 +416,64 @@ export function normalizeListsInCell(
       const detection = item.detection;
 
       if (detection.category === "numbered") {
-        // This is a parent numbered item (decimal format or Word numbered list)
         lastNumberedItemIndex = i;
       } else if (detection.category === "bullet" && lastNumberedItemIndex >= 0) {
-        // This bullet follows a numbered item - mark it as a sub-item
-        bulletAsSubItemIndices.add(i);
+        // Only mark as sub-item if actually indented MORE than the parent
+        // This prevents level-0 bullets from being wrongly demoted to level-1
+        const parentDetection = analysis.paragraphs[lastNumberedItemIndex]!.detection;
+        if (detection.indentationTwips > parentDetection.indentationTwips + INDENT_THRESHOLD) {
+          bulletAsSubItemIndices.add(i);
+          parentIndexByIndex.set(i, lastNumberedItemIndex);
+        } else if (detection.indentationTwips === 0 && parentDetection.indentationTwips === 0) {
+          // Fallback: when both have 0 indentation (no explicit w:ind), treat minority
+          // category items as sub-items. This handles documents where indentation comes
+          // from numbering definitions rather than explicit paragraph indentation.
+          bulletAsSubItemIndices.add(i);
+          parentIndexByIndex.set(i, lastNumberedItemIndex);
+        }
+        // If not indented more, treat as separate list (don't add to sub-item set)
       } else if (detection.category === "none") {
-        // Non-list item breaks the context
         lastNumberedItemIndex = -1;
       }
     }
   }
-  // === End context-aware bullet detection ===
 
-  // === Handle numbered items that should be sub-items under bullets ===
-  // When the majority is bullets, numbered items with greater indentation
-  // than baseline should be treated as sub-items (level 1)
-  const numberedAsSubItemIndices = new Set<number>();
   if (majorityCategory === "bullet") {
+    let lastBulletItemIndex = -1;
+
     for (let i = 0; i < analysis.paragraphs.length; i++) {
       const item = analysis.paragraphs[i]!;
-      if (
-        item.detection.category === "numbered" &&
-        item.detection.indentationTwips > baselineIndent
-      ) {
-        numberedAsSubItemIndices.add(i);
+      const detection = item.detection;
+
+      if (detection.category === "bullet") {
+        lastBulletItemIndex = i;
+      } else if (detection.category === "numbered" && lastBulletItemIndex >= 0) {
+        // Only mark as sub-item if actually indented MORE than the parent
+        const parentDetection = analysis.paragraphs[lastBulletItemIndex]!.detection;
+        if (detection.indentationTwips > parentDetection.indentationTwips + INDENT_THRESHOLD) {
+          numberedAsSubItemIndices.add(i);
+          parentIndexByIndex.set(i, lastBulletItemIndex);
+        } else if (detection.indentationTwips === 0 && parentDetection.indentationTwips === 0) {
+          // Fallback: when both have 0 indentation (no explicit w:ind), treat minority
+          // category items as sub-items. This handles documents where indentation comes
+          // from numbering definitions rather than explicit paragraph indentation.
+          numberedAsSubItemIndices.add(i);
+          parentIndexByIndex.set(i, lastBulletItemIndex);
+        }
+      } else if (detection.category === "none") {
+        lastBulletItemIndex = -1;
       }
     }
   }
-  // === End numbered sub-item detection ===
+  // === End sub-item detection ===
 
   // Track numId per level - will be reset when parent level appears
   const numIdByLevel = new Map<number, number>();
   let lastProcessedLevel = -1;
 
-  // Helper to get/create numId for a level
-  // Standard Word behavior: when a higher-level item appears (lower number),
-  // all lower-level items (higher numbers) should restart numbering.
-  // E.g., after level 0 ("1."), level 1 ("a.") restarts from "a" not continues.
+  // Helper to get/create numId for a level (uses majority category)
   const getNumId = (level: number): number => {
     if (level < lastProcessedLevel) {
-      // Parent level appeared - clear all child level numIds to force restart
       for (const existingLevel of numIdByLevel.keys()) {
         if (existingLevel > level) {
           numIdByLevel.delete(existingLevel);
@@ -360,8 +488,51 @@ export function normalizeListsInCell(
           ? numberingManager.createNumberedList()
           : numberingManager.createBulletList();
       numIdByLevel.set(level, numId);
+
+      // Apply user's indentation settings if provided
+      if (options?.indentationLevels?.length) {
+        const instance = numberingManager.getInstance(numId);
+        if (instance) {
+          const abstractNum = numberingManager.getAbstractNumbering(instance.getAbstractNumId());
+          if (abstractNum) {
+            applyIndentationSettings(abstractNum, options.indentationLevels, majorityCategory !== "numbered");
+          }
+        }
+      }
     }
     return numIdByLevel.get(level)!;
+  };
+
+  // Separate tracking for bullet numIds (used for trailing bullets in numbered-majority cells)
+  const bulletNumIdByLevel = new Map<number, number>();
+  let lastBulletProcessedLevel = -1;
+
+  const getBulletNumId = (level: number): number => {
+    if (level < lastBulletProcessedLevel) {
+      for (const existingLevel of bulletNumIdByLevel.keys()) {
+        if (existingLevel > level) {
+          bulletNumIdByLevel.delete(existingLevel);
+        }
+      }
+    }
+    lastBulletProcessedLevel = level;
+
+    if (!bulletNumIdByLevel.has(level)) {
+      const numId = numberingManager.createBulletList();
+      bulletNumIdByLevel.set(level, numId);
+
+      // Apply user's indentation settings if provided
+      if (options?.indentationLevels?.length) {
+        const instance = numberingManager.getInstance(numId);
+        if (instance) {
+          const abstractNum = numberingManager.getAbstractNumbering(instance.getAbstractNumId());
+          if (abstractNum) {
+            applyIndentationSettings(abstractNum, options.indentationLevels, true);
+          }
+        }
+      }
+    }
+    return bulletNumIdByLevel.get(level)!;
   };
 
   // Process each paragraph
@@ -391,26 +562,28 @@ export function normalizeListsInCell(
       const levelShift = levelShiftByIndex.get(index) ?? 0;
 
       // Calculate target level
-      // - For typed prefixes: use indentation-based level (relative to baseline)
+      // - For typed prefixes: use format-based level (decimal=0, letter=1, roman=2) with shift
+      //   unless explicitly indented, in which case use indentation-based level
+      // - For sub-items: use parent's normalized level + 1
       // - For Word lists: use format-based level with level shift applied
-      // - Bullets following numbered items become Level 1 sub-items (lowerLetter)
       let targetLevel: number;
       if (hasTypedPrefix) {
-        // Use indentation-based level for typed lists (relative to baseline)
         const relativeIndent = detection.indentationTwips - baselineIndent;
-        targetLevel = inferLevelFromRelativeIndentation(relativeIndent);
+        const indentBasedLevel = inferLevelFromRelativeIndentation(relativeIndent);
+        // Use format-based level (from FORMAT_TO_LEVEL) if no explicit extra indentation
+        // This preserves semantic hierarchy: 1.→L0, a)→L1, i.→L2
+        if (indentBasedLevel === 0 && detection.inferredLevel > 0) {
+          targetLevel = Math.max(0, detection.inferredLevel - levelShift);
+        } else {
+          targetLevel = indentBasedLevel;
+        }
+      } else if (bulletAsSubItemIndices.has(index) || numberedAsSubItemIndices.has(index)) {
+        // Sub-item: use parent's NORMALIZED level + 1
+        const parentIndex = parentIndexByIndex.get(index);
+        const parentNormalizedLevel = parentIndex !== undefined ? getNormalizedLevel(parentIndex) : 0;
+        targetLevel = parentNormalizedLevel + 1;
       } else {
         targetLevel = Math.max(0, detection.inferredLevel - levelShift);
-      }
-
-      // Override level for bullets that should be sub-items under numbered lists
-      if (bulletAsSubItemIndices.has(index) && targetLevel === 0) {
-        targetLevel = 1; // Promote to Level 1 (uses lowerLetter format: a, b, c)
-      }
-
-      // Override level for numbered items that should be sub-items under bullets
-      if (numberedAsSubItemIndices.has(index) && targetLevel === 0) {
-        targetLevel = 1; // Promote to Level 1
       }
 
       // Process based on what type of item this is
@@ -424,9 +597,40 @@ export function normalizeListsInCell(
           action: "normalized",
           reason: `Typed prefix → level ${targetLevel}`,
         });
-      } else if (isWordList && needsConversion) {
-        // Word list that doesn't match majority: convert it
+      } else if (isWordList && bulletAsSubItemIndices.has(index)) {
+        // Sandwiched bullet following numbered → convert to numbered sub-item
         para.setNumbering(getNumId(targetLevel), targetLevel);
+        report.normalized++;
+        report.details.push({
+          originalText: text.substring(0, 50),
+          action: "normalized",
+          reason: `Bullet → numbered sub-item at level ${targetLevel}`,
+        });
+      } else if (isWordList && numberedAsSubItemIndices.has(index)) {
+        // Numbered following bullet → convert to bullet sub-item
+        para.setNumbering(getBulletNumId(targetLevel), targetLevel);
+        report.normalized++;
+        report.details.push({
+          originalText: text.substring(0, 50),
+          action: "normalized",
+          reason: `Numbered → bullet at level ${targetLevel}`,
+        });
+      } else if (isWordList && detection.category === "bullet" && majorityCategory === "numbered" && !bulletAsSubItemIndices.has(index)) {
+        // Trailing bullet in numbered-majority cell - preserve as bullet
+        para.setNumbering(getBulletNumId(targetLevel), targetLevel);
+        report.normalized++;
+        report.details.push({
+          originalText: text.substring(0, 50),
+          action: "normalized",
+          reason: `Trailing bullet preserved at level ${targetLevel}`,
+        });
+      } else if (isWordList && needsConversion) {
+        // Regular category conversion
+        if (majorityCategory === "bullet") {
+          para.setNumbering(getBulletNumId(targetLevel), targetLevel);
+        } else {
+          para.setNumbering(getNumId(targetLevel), targetLevel);
+        }
         report.normalized++;
         report.details.push({
           originalText: text.substring(0, 50),
@@ -434,11 +638,12 @@ export function normalizeListsInCell(
           reason: `Word ${detection.category} → ${majorityCategory} level ${targetLevel}`,
         });
       } else if (isWordList) {
-        // CRITICAL FIX (Round 5): Word lists matching majority ALSO need numId update!
-        // Without this, items keep their old numId while converted items get new numId,
-        // causing Word to restart numbering when it sees different numIds.
-        // ALL list items in a cell must share the SAME numId per level.
-        para.setNumbering(getNumId(targetLevel), targetLevel);
+        // Preserve category but ensure consistent numId with user settings
+        if (detection.category === "bullet") {
+          para.setNumbering(getBulletNumId(targetLevel), targetLevel);
+        } else {
+          para.setNumbering(getNumId(targetLevel), targetLevel);
+        }
         report.normalized++;
         report.details.push({
           originalText: text.substring(0, 50),
@@ -469,7 +674,7 @@ export function normalizeListsInCell(
  */
 export function normalizeListsInTable(
   table: Table,
-  options: Required<ListNormalizationOptions>,
+  options: ListNormalizationOptions,
   numberingManager: NumberingManager
 ): ListNormalizationReport {
   const aggregateReport: ListNormalizationReport = {
@@ -734,7 +939,7 @@ export class ListNormalizer {
    */
   private resolveOptions(
     partial: Partial<ListNormalizationOptions>
-  ): Required<ListNormalizationOptions> {
+  ): ListNormalizationOptions {
     return {
       numberedStyleNumId:
         partial.numberedStyleNumId ??
@@ -745,6 +950,7 @@ export class ListNormalizer {
       scope: partial.scope ?? "cell",
       forceMajority: partial.forceMajority ?? false,
       preserveIndentation: partial.preserveIndentation ?? false,
+      indentationLevels: partial.indentationLevels,
     };
   }
 }

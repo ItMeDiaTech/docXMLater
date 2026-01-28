@@ -86,6 +86,17 @@ export interface ListAnalysis {
 }
 
 /**
+ * User-defined indentation level configuration for list normalization
+ */
+export interface IndentationLevel {
+  level: number;
+  textIndent: number;      // in inches
+  symbolIndent: number;    // in inches
+  bulletChar?: string;
+  numberedFormat?: NumberFormat | string;
+}
+
+/**
  * Options for list normalization
  */
 export interface ListNormalizationOptions {
@@ -108,6 +119,12 @@ export interface ListNormalizationOptions {
    * If true, preserve original indentation instead of using level defaults.
    */
   preserveIndentation?: boolean;
+
+  /**
+   * User-defined indentation settings per list level.
+   * Used to configure symbol indent, text indent, and bullet characters.
+   */
+  indentationLevels?: IndentationLevel[];
 }
 
 /**
