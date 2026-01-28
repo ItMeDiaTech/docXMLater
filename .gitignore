@@ -227,7 +227,10 @@ FULL_TEST/word/_rels/document.xml.rels
 
 # Debug/analysis scripts (session-specific)
 analyze-*.ts
+analyze_*.ts
 compare-*.ts
+compare_*.ts
+dump_*.ts
 diagnose.ts
 find-*.ts
 show-cell-xml-structure.ts
