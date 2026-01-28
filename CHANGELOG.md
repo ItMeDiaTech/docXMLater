@@ -5,6 +5,63 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.31] - 2026-01-28
+
+### Added
+
+- **Revision Consolidation**
+  - New `Document.consolidateAllRevisions()` method merges adjacent same-author revisions within a time window
+  - New `Paragraph.consolidateRevisions()` for paragraph-level consolidation
+  - Automatically called during `save()` when track changes is enabled
+  - Prevents "random insertions and deletions" appearance in Word by matching Word's consolidation behavior
+
+- **Section Property Getters**
+  - Added individual getters: `getPageSize()`, `getOrientation()`, `getMargins()`, `getColumns()`, `getSectionType()`, `getPageNumbering()`, `getTitlePage()`, `getHeaderReferences()`, `getFooterReferences()`, `getVerticalAlignment()`, `getPaperSource()`, `getColumnSeparator()`, `getColumnWidths()`, `getTextDirection()`, `getBidi()`, `getRtlGutter()`, `getDocGrid()`
+
+- **Table Property Getters**
+  - Added: `getTblLook()`, `getPosition()`, `getOverlap()`, `getBidiVisual()`, `getTableGrid()`, `getCaption()`, `getDescription()`, `getCellSpacingType()`
+
+- **TableCell Property Getters**
+  - Added: `getFitText()`, `getNoWrap()`, `getHideMark()`, `getCnfStyle()`
+
+- **Table Merge Conflict Detection**
+  - New `Table.canMergeCells()` method checks for merge conflicts before attempting merge
+  - `Table.mergeCells()` now throws descriptive errors when cells are already part of merge regions
+
+- **Bookmark Raw Name Setter**
+  - New `Bookmark.setRawName()` method sets bookmark name without normalization for round-trip fidelity
+
+- **StylesManager Circular Reference Detection**
+  - New `hasCircularReference()` method for explicit cycle detection
+  - Improved `validateStyleReferences()` with better cycle path reporting
+
+### Changed
+
+- **Enhanced dispose() Method**
+  - Now uses `clear()` methods on managers instead of creating new instances
+  - Clears ZIP handler, tracking context, and preserved state
+  - More thorough memory cleanup for API server use cases
+
+- **TableCell.setVerticalMerge()**
+  - Now accepts `undefined` to clear vertical merge
+  - `Table.splitCell()` now clears both column span and vertical merge
+
+### Fixed
+
+- **Save State Rollback on Failure**
+  - Document now creates state snapshot before save operations
+  - On save failure, preserved paragraph flags and revision state are restored
+  - Image data is only released after successful save, allowing retry without reload
+
+- **Header/Footer Parse Error Handling**
+  - Header/footer parsing errors no longer crash document loading
+  - Document loads with warning when headers/footers cannot be parsed
+
+- **List Normalizer Whitespace Trimming**
+  - Fixed edge case where whitespace-only runs after prefix stripping didn't continue trimming
+
+---
+
 ## [9.5.28] - 2026-01-27
 
 ### Fixed

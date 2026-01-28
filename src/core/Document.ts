@@ -363,6 +363,60 @@ export class Document {
   };
 
   /**
+   * Snapshot of save-related state for rollback on failure
+   * @private
+   */
+  private saveStateSnapshot?: {
+    preservedParagraphs: Set<Paragraph>;
+    acceptRevisionsBeforeSave: boolean;
+  };
+
+  /**
+   * Creates a snapshot of mutable state before save operations
+   * This allows rollback if save fails after state modifications
+   * @private
+   */
+  private createSaveStateSnapshot(): void {
+    const preservedParagraphs = new Set<Paragraph>();
+    for (const para of this.getAllParagraphs()) {
+      if (para.isPreserved()) {
+        preservedParagraphs.add(para);
+      }
+    }
+    this.saveStateSnapshot = {
+      preservedParagraphs,
+      acceptRevisionsBeforeSave: this.acceptRevisionsBeforeSave,
+    };
+  }
+
+  /**
+   * Restores mutable state from snapshot after a failed save
+   * @private
+   */
+  private restoreSaveStateSnapshot(): void {
+    if (!this.saveStateSnapshot) return;
+
+    // Restore preserve flags
+    for (const para of this.saveStateSnapshot.preservedParagraphs) {
+      para.setPreserved(true);
+    }
+
+    // Restore acceptRevisionsBeforeSave flag
+    this.acceptRevisionsBeforeSave = this.saveStateSnapshot.acceptRevisionsBeforeSave;
+
+    // Clear snapshot
+    this.saveStateSnapshot = undefined;
+  }
+
+  /**
+   * Clears the save state snapshot (called after successful save)
+   * @private
+   */
+  private clearSaveStateSnapshot(): void {
+    this.saveStateSnapshot = undefined;
+  }
+
+  /**
    * Creates a new empty Word document
    *
    * Creates a new DOCX document with all required files initialized and ready for content.
@@ -652,22 +706,38 @@ export class Document {
       this.section = result.section;
     }
 
-    // Parse and register headers/footers
-    const headersFooters = await this.parser.parseHeadersAndFooters(
-      this.zipHandler,
-      result.section,
-      this.relationshipManager,
-      this.imageManager
-    );
+    // Parse and register headers/footers with error handling
+    // If parsing fails, document loads but headers/footers are lost - warn user
+    try {
+      const headersFooters = await this.parser.parseHeadersAndFooters(
+        this.zipHandler,
+        result.section,
+        this.relationshipManager,
+        this.imageManager
+      );
 
-    // Register headers with HeaderFooterManager
-    for (const { header, relationshipId } of headersFooters.headers) {
-      this.headerFooterManager.registerHeader(header, relationshipId);
-    }
+      // Register headers with HeaderFooterManager
+      for (const { header, relationshipId } of headersFooters.headers) {
+        this.headerFooterManager.registerHeader(header, relationshipId);
+      }
 
-    // Register footers with HeaderFooterManager
-    for (const { footer, relationshipId } of headersFooters.footers) {
-      this.headerFooterManager.registerFooter(footer, relationshipId);
+      // Register footers with HeaderFooterManager
+      for (const { footer, relationshipId } of headersFooters.footers) {
+        this.headerFooterManager.registerFooter(footer, relationshipId);
+      }
+    } catch (headerFooterError) {
+      const logger = getLogger();
+      logger.warn(
+        "Failed to parse headers/footers - document will load without them",
+        {
+          error:
+            headerFooterError instanceof Error
+              ? headerFooterError.message
+              : String(headerFooterError),
+        }
+      );
+      // Continue loading - headers/footers are not critical for document structure
+      // User should be aware that headers/footers may be missing
     }
 
     // Reset modified flags - loading doesn't count as modification
@@ -1625,6 +1695,12 @@ export class Document {
     // This prevents partial/corrupted saves if operation fails mid-way
     const tempPath = `${filePath}.tmp.${Date.now()}`;
 
+    // Track whether save succeeded for proper cleanup
+    let saveSucceeded = false;
+
+    // Create state snapshot before any modifications for rollback on failure
+    this.createSaveStateSnapshot();
+
     try {
       // Validate before saving to prevent data loss
       this.validator.validateBeforeSave(this.bodyElements);
@@ -1660,6 +1736,13 @@ export class Document {
       // Flush pending tracked changes to create Revision objects before XML generation
       if (this.trackChangesEnabled && this.trackingContext) {
         this.flushPendingChanges();
+      }
+
+      // Consolidate adjacent revisions to match Word's behavior
+      // This merges adjacent same-author revisions within a 1-second window,
+      // preventing the "random insertions and deletions" problem in Word
+      if (this.trackChangesEnabled) {
+        this.consolidateAllRevisions();
       }
 
       // Accept all revisions if auto-accept is enabled
@@ -1699,8 +1782,15 @@ export class Document {
       // Atomic rename - only if save succeeded
       const { promises: fs } = await import("fs");
       await fs.rename(tempPath, filePath);
+
+      // Mark save as successful - image data can now be released safely
+      saveSucceeded = true;
+      this.clearSaveStateSnapshot();
       logger.info('Document saved', { path: filePath });
     } catch (error) {
+      // Restore state snapshot on failure - allows retry without data loss
+      this.restoreSaveStateSnapshot();
+
       // Cleanup temporary file on error
       try {
         const { promises: fs } = await import("fs");
@@ -1710,8 +1800,11 @@ export class Document {
       }
       throw error; // Re-throw original error
     } finally {
-      // Release image data to free memory
-      this.imageManager.releaseAllImageData();
+      // Only release image data if save succeeded
+      // On failure, keep images loaded so user can retry save without reloading
+      if (saveSucceeded) {
+        this.imageManager.releaseAllImageData();
+      }
     }
   }
 
@@ -1746,6 +1839,12 @@ export class Document {
   async toBuffer(): Promise<Buffer> {
     const logger = getLogger();
     logger.info('Generating document buffer', { paragraphs: this.getParagraphCount() });
+
+    // Track whether generation succeeded for proper cleanup
+    let generateSucceeded = false;
+
+    // Create state snapshot before any modifications for rollback on failure
+    this.createSaveStateSnapshot();
 
     try {
       // Validate before saving to prevent data loss
@@ -1784,6 +1883,13 @@ export class Document {
         this.flushPendingChanges();
       }
 
+      // Consolidate adjacent revisions to match Word's behavior
+      // This merges adjacent same-author revisions within a 1-second window,
+      // preventing the "random insertions and deletions" problem in Word
+      if (this.trackChangesEnabled) {
+        this.consolidateAllRevisions();
+      }
+
       // Accept all revisions if auto-accept is enabled
       // This MUST happen after flushPendingChanges() to catch all revisions
       // but BEFORE updateDocumentXml() so accepted changes are serialized correctly
@@ -1820,11 +1926,22 @@ export class Document {
       }
 
       const buffer = await this.zipHandler.toBuffer();
+
+      // Mark generation as successful
+      generateSucceeded = true;
+      this.clearSaveStateSnapshot();
       logger.info('Document buffer generated', { bufferSize: buffer.length });
       return buffer;
+    } catch (error) {
+      // Restore state snapshot on failure - allows retry without data loss
+      this.restoreSaveStateSnapshot();
+      throw error;
     } finally {
-      // Release image data to free memory
-      this.imageManager.releaseAllImageData();
+      // Only release image data if generation succeeded
+      // On failure, keep images loaded so user can retry without reloading
+      if (generateSucceeded) {
+        this.imageManager.releaseAllImageData();
+      }
     }
   }
 
@@ -11716,6 +11833,97 @@ export class Document {
   }
 
   /**
+   * Consolidates adjacent revisions throughout the document.
+   *
+   * This addresses the "random insertions and deletions" problem where Word displays
+   * many small revisions instead of consolidated ones. The method merges adjacent
+   * revisions that have:
+   * - Same type (both insertions or both deletions)
+   * - Same author
+   * - Timestamps within the specified time window
+   *
+   * **Why this matters:**
+   * Microsoft Word typically consolidates edits made in quick succession by the same
+   * author. Without consolidation, programmatic edits create many tiny revisions that
+   * clutter the document and confuse users when reviewing changes.
+   *
+   * **When to call:**
+   * - After making multiple programmatic changes with track changes enabled
+   * - Before saving a document that will be reviewed in Word
+   * - Automatically called during save() if track changes was enabled
+   *
+   * @param timeWindowMs - Time window in milliseconds for consolidation (default: 1000ms)
+   * @returns Object with total paragraphs processed and revisions consolidated
+   *
+   * @example
+   * ```typescript
+   * // Enable track changes
+   * doc.enableTrackChanges({ author: 'Automation' });
+   *
+   * // Make multiple changes
+   * for (const para of doc.getParagraphs()) {
+   *   for (const run of para.getRuns()) {
+   *     run.setColor('000000');
+   *   }
+   * }
+   *
+   * // Consolidate before saving
+   * const result = doc.consolidateAllRevisions();
+   * console.log(`Consolidated ${result.revisionsConsolidated} revisions`);
+   *
+   * await doc.save('output.docx');
+   * ```
+   */
+  consolidateAllRevisions(timeWindowMs: number = 1000): { paragraphsProcessed: number; revisionsConsolidated: number } {
+    let paragraphsProcessed = 0;
+    let totalConsolidated = 0;
+
+    // Process main document body paragraphs
+    for (const para of this.getAllParagraphs()) {
+      paragraphsProcessed++;
+      totalConsolidated += para.consolidateRevisions(timeWindowMs);
+    }
+
+    // Process table cell paragraphs
+    for (const table of this.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            paragraphsProcessed++;
+            totalConsolidated += para.consolidateRevisions(timeWindowMs);
+          }
+        }
+      }
+    }
+
+    // Process headers and footers
+    for (const headerEntry of this.headerFooterManager.getAllHeaders()) {
+      for (const element of headerEntry.header.getElements()) {
+        if (element instanceof Paragraph) {
+          paragraphsProcessed++;
+          totalConsolidated += element.consolidateRevisions(timeWindowMs);
+        }
+      }
+    }
+
+    for (const footerEntry of this.headerFooterManager.getAllFooters()) {
+      for (const element of footerEntry.footer.getElements()) {
+        if (element instanceof Paragraph) {
+          paragraphsProcessed++;
+          totalConsolidated += element.consolidateRevisions(timeWindowMs);
+        }
+      }
+    }
+
+    this.logger.info('Consolidated revisions across document', {
+      paragraphsProcessed,
+      revisionsConsolidated: totalConsolidated,
+    });
+
+    return { paragraphsProcessed, revisionsConsolidated: totalConsolidated };
+  }
+
+  /**
    * Accept all revisions using raw XML modification (legacy approach).
    *
    * This method modifies the raw XML in the ZIP package directly, then sets
@@ -11909,18 +12117,43 @@ export class Document {
    * Especially important for API servers processing many documents
    */
   dispose(): void {
-    // Clear all managers to free memory
+    // Clear all internal state to free memory
+    // NOTE: Use clear() methods instead of creating new instances to properly free memory
+
+    // Clear body elements
     this.bodyElements = [];
+
+    // Clear parser state
     this.parser.clearParseErrors();
-    this.stylesManager = StylesManager.create();
-    this.numberingManager = NumberingManager.create();
+
+    // Clear all managers using their clear() methods
+    this.stylesManager.clear();
+    this.numberingManager.clear();
     this.imageManager.clear();
     this.imageManager.releaseAllImageData();
-    this.relationshipManager = RelationshipManager.create();
-    this.headerFooterManager = HeaderFooterManager.create();
+    this.relationshipManager.clear();
+    this.headerFooterManager.clear();
     this.bookmarkManager.clear();
     this.revisionManager.clear();
     this.commentManager.clear();
+
+    // Clear ZIP handler to free compressed data
+    this.zipHandler.clear();
+
+    // Disable tracking context (cannot set to undefined since it's not optional)
+    // The context will be recreated if document is reused
+    this.trackingContext.disable();
+
+    // Clear preserved state
+    this._originalStylesXml = undefined;
+    this._originalNumberingXml = undefined;
+    this._originalContentTypes = undefined;
+    this.saveStateSnapshot = undefined;
+
+    // Reset document properties to minimal state
+    this.properties = {};
+    this.section = Section.create();
+    this.namespaces = {};
   }
 
   /**

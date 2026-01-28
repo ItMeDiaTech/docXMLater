@@ -389,6 +389,38 @@ export class TableCell {
   }
 
   /**
+   * Gets whether to fit text to cell width
+   * @returns true if fit text is enabled, false otherwise
+   */
+  getFitText(): boolean {
+    return this.formatting.fitText ?? false;
+  }
+
+  /**
+   * Gets whether text wrapping is prevented in cell
+   * @returns true if no-wrap is enabled, false otherwise
+   */
+  getNoWrap(): boolean {
+    return this.formatting.noWrap ?? false;
+  }
+
+  /**
+   * Gets whether the end-of-cell mark is hidden
+   * @returns true if hidden, false otherwise
+   */
+  getHideMark(): boolean {
+    return this.formatting.hideMark ?? false;
+  }
+
+  /**
+   * Gets the conditional formatting style (cnfStyle) for this cell
+   * @returns 14-character binary string or undefined if not set
+   */
+  getCnfStyle(): string | undefined {
+    return this.formatting.cnfStyle;
+  }
+
+  /**
    * Validates a margin value
    * @param value - Margin value in twips
    * @param side - Name of the margin side (for error messages)
@@ -535,7 +567,7 @@ export class TableCell {
    *   - 'continue': Continue the current vertically merged region (cells below)
    * @returns This cell for chaining
    */
-  setVerticalMerge(merge: VerticalMerge): this {
+  setVerticalMerge(merge: VerticalMerge | undefined): this {
     this.formatting.vMerge = merge;
     return this;
   }

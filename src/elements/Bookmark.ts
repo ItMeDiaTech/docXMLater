@@ -91,10 +91,46 @@ export class Bookmark {
   }
 
   /**
-   * Sets the bookmark name
+   * Sets the bookmark name (normalizes the name)
+   *
+   * The name will be normalized:
+   * - Invalid characters replaced with underscores
+   * - Leading digits prefixed with underscore
+   * - Limited to 40 characters
+   *
+   * @param name - New bookmark name
+   * @returns This bookmark for chaining
    */
   setName(name: string): this {
     this.name = this.normalizeName(name);
+    return this;
+  }
+
+  /**
+   * Sets the bookmark name without normalization
+   *
+   * Use this method when:
+   * - Preserving exact names from imported documents
+   * - Setting names with special characters that Word allows (=, ., etc.)
+   * - Round-trip fidelity is required
+   *
+   * **Warning:** Setting invalid bookmark names may cause issues in Word.
+   * Only use this if you know the name is valid or needs to match an existing document.
+   *
+   * @param name - Raw bookmark name (not normalized)
+   * @returns This bookmark for chaining
+   *
+   * @example
+   * ```typescript
+   * // Preserve exact name from Word document
+   * bookmark.setRawName('SECTION=II.MNKE7E8NA385_');
+   *
+   * // For new bookmarks, prefer setName() which normalizes
+   * bookmark.setName('My Heading'); // Becomes 'My_Heading'
+   * ```
+   */
+  setRawName(name: string): this {
+    this.name = name;
     return this;
   }
 

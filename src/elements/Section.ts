@@ -232,6 +232,168 @@ export class Section {
     return { ...this.properties };
   }
 
+  // ============================================================================
+  // Individual Property Getters
+  // ============================================================================
+
+  /**
+   * Gets the page size settings
+   * @returns Page size object with width, height, and orientation, or undefined
+   */
+  getPageSize(): PageSize | undefined {
+    return this.properties.pageSize ? { ...this.properties.pageSize } : undefined;
+  }
+
+  /**
+   * Gets the page orientation
+   * @returns 'portrait' or 'landscape', or undefined if not set
+   */
+  getOrientation(): PageOrientation | undefined {
+    return this.properties.pageSize?.orientation;
+  }
+
+  /**
+   * Gets the margin settings
+   * @returns Margins object or undefined if not set
+   */
+  getMargins(): Margins | undefined {
+    return this.properties.margins ? { ...this.properties.margins } : undefined;
+  }
+
+  /**
+   * Gets the column layout settings
+   * @returns Columns object or undefined if not set
+   */
+  getColumns(): Columns | undefined {
+    return this.properties.columns ? { ...this.properties.columns } : undefined;
+  }
+
+  /**
+   * Gets the section type (break type)
+   * @returns Section type or undefined if not set
+   */
+  getSectionType(): SectionType | undefined {
+    return this.properties.type;
+  }
+
+  /**
+   * Gets the page numbering settings
+   * @returns PageNumbering object or undefined if not set
+   */
+  getPageNumbering(): PageNumbering | undefined {
+    return this.properties.pageNumbering ? { ...this.properties.pageNumbering } : undefined;
+  }
+
+  /**
+   * Gets whether this section has a title page (different first page)
+   * @returns true if title page is enabled, false otherwise
+   */
+  getTitlePage(): boolean {
+    return this.properties.titlePage ?? false;
+  }
+
+  /**
+   * Gets header references
+   * @returns Object with default, first, and even header relationship IDs, or undefined
+   */
+  getHeaderReferences(): { default?: string; first?: string; even?: string } | undefined {
+    return this.properties.headers ? { ...this.properties.headers } : undefined;
+  }
+
+  /**
+   * Gets a specific header reference
+   * @param type Header type (default, first, even)
+   * @returns Relationship ID or undefined if not set
+   */
+  getHeaderReference(type: 'default' | 'first' | 'even'): string | undefined {
+    return this.properties.headers?.[type];
+  }
+
+  /**
+   * Gets footer references
+   * @returns Object with default, first, and even footer relationship IDs, or undefined
+   */
+  getFooterReferences(): { default?: string; first?: string; even?: string } | undefined {
+    return this.properties.footers ? { ...this.properties.footers } : undefined;
+  }
+
+  /**
+   * Gets a specific footer reference
+   * @param type Footer type (default, first, even)
+   * @returns Relationship ID or undefined if not set
+   */
+  getFooterReference(type: 'default' | 'first' | 'even'): string | undefined {
+    return this.properties.footers?.[type];
+  }
+
+  /**
+   * Gets the vertical page alignment
+   * @returns Vertical alignment or undefined if not set
+   */
+  getVerticalAlignment(): VerticalAlignment | undefined {
+    return this.properties.verticalAlignment;
+  }
+
+  /**
+   * Gets the paper source (printer tray) settings
+   * @returns PaperSource object or undefined if not set
+   */
+  getPaperSource(): PaperSource | undefined {
+    return this.properties.paperSource ? { ...this.properties.paperSource } : undefined;
+  }
+
+  /**
+   * Gets whether column separator is enabled
+   * @returns true if separator is enabled, false otherwise
+   */
+  getColumnSeparator(): boolean {
+    return this.properties.columns?.separator ?? false;
+  }
+
+  /**
+   * Gets custom column widths
+   * @returns Array of column widths in twips, or undefined if not set
+   */
+  getColumnWidths(): number[] | undefined {
+    return this.properties.columns?.columnWidths ? [...this.properties.columns.columnWidths] : undefined;
+  }
+
+  /**
+   * Gets the text direction
+   * @returns Text direction or undefined if not set
+   */
+  getTextDirection(): TextDirection | undefined {
+    return this.properties.textDirection;
+  }
+
+  /**
+   * Gets whether the section is bidirectional (RTL)
+   * @returns true if bidi is enabled, false otherwise
+   */
+  getBidi(): boolean {
+    return this.properties.bidi ?? false;
+  }
+
+  /**
+   * Gets whether RTL gutter is enabled (gutter on right side)
+   * @returns true if RTL gutter is enabled, false otherwise
+   */
+  getRtlGutter(): boolean {
+    return this.properties.rtlGutter ?? false;
+  }
+
+  /**
+   * Gets the document grid settings
+   * @returns DocumentGrid object or undefined if not set
+   */
+  getDocGrid(): DocumentGrid | undefined {
+    return this.properties.docGrid ? { ...this.properties.docGrid } : undefined;
+  }
+
+  // ============================================================================
+  // Setters
+  // ============================================================================
+
   /**
    * Sets page size
    * @param width Width in twips

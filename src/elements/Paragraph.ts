@@ -1593,6 +1593,141 @@ export class Paragraph {
   }
 
   /**
+   * Consolidates adjacent revisions of the same type, author, and within a time window.
+   *
+   * This addresses the "random insertions and deletions" problem where Word displays
+   * many small revisions instead of consolidated ones. The method merges:
+   * - Adjacent insertions from the same author within 1 second
+   * - Adjacent deletions from the same author within 1 second
+   *
+   * **How it works:**
+   * - Iterates through paragraph content
+   * - When finding consecutive Revisions of same type/author within time window:
+   *   - Merges their content (Runs/Hyperlinks) into a single Revision
+   *   - Uses the earliest timestamp for the merged revision
+   * - Non-revision content acts as a boundary (stops merging)
+   *
+   * **Why this matters:**
+   * Microsoft Word typically consolidates edits made in quick succession by the same
+   * author. Without consolidation, programmatic edits create many tiny revisions that
+   * clutter the document and confuse users when reviewing changes.
+   *
+   * @param timeWindowMs - Time window in milliseconds for consolidation (default: 1000ms)
+   * @returns Number of revisions that were consolidated (merged)
+   *
+   * @example
+   * ```typescript
+   * // Before: Multiple separate insertions
+   * para.addText('Hello ');  // Creates w:ins #1
+   * para.addText('World');   // Creates w:ins #2
+   *
+   * // Consolidate into single revision
+   * const merged = para.consolidateRevisions();
+   * console.log(`Consolidated ${merged} revisions`);
+   * // Result: Single w:ins containing "Hello World"
+   * ```
+   */
+  consolidateRevisions(timeWindowMs: number = 1000): number {
+    if (!this.hasRevisions()) {
+      return 0;
+    }
+
+    const consolidatedContent: ParagraphContent[] = [];
+    let mergeCount = 0;
+    let currentMergeGroup: Revision | null = null;
+
+    for (const item of this.content) {
+      if (item instanceof Revision) {
+        // Check if we can merge with current group
+        if (currentMergeGroup && this.canMergeRevisions(currentMergeGroup, item, timeWindowMs)) {
+          // Merge this revision into the current group
+          for (const content of item.getContent()) {
+            currentMergeGroup.addContent(content);
+          }
+          mergeCount++;
+        } else {
+          // Start a new merge group
+          if (currentMergeGroup) {
+            consolidatedContent.push(currentMergeGroup);
+          }
+          // Clone the revision to avoid modifying the original
+          currentMergeGroup = this.cloneRevision(item);
+        }
+      } else {
+        // Non-revision content - acts as boundary
+        if (currentMergeGroup) {
+          consolidatedContent.push(currentMergeGroup);
+          currentMergeGroup = null;
+        }
+        consolidatedContent.push(item);
+      }
+    }
+
+    // Don't forget the last merge group
+    if (currentMergeGroup) {
+      consolidatedContent.push(currentMergeGroup);
+    }
+
+    // Only update content if we actually merged something
+    if (mergeCount > 0) {
+      this.content = consolidatedContent;
+    }
+
+    return mergeCount;
+  }
+
+  /**
+   * Checks if two revisions can be merged based on type, author, and time window.
+   * @private
+   */
+  private canMergeRevisions(rev1: Revision, rev2: Revision, timeWindowMs: number): boolean {
+    // Must be same type (both insertions or both deletions)
+    if (rev1.getType() !== rev2.getType()) {
+      return false;
+    }
+
+    // Only merge insert/delete content revisions, not property changes
+    const mergeableTypes: string[] = ['insert', 'delete', 'moveFrom', 'moveTo'];
+    if (!mergeableTypes.includes(rev1.getType())) {
+      return false;
+    }
+
+    // Must be same author
+    if (rev1.getAuthor() !== rev2.getAuthor()) {
+      return false;
+    }
+
+    // Must be within time window
+    const timeDiff = Math.abs(rev1.getDate().getTime() - rev2.getDate().getTime());
+    if (timeDiff > timeWindowMs) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Creates a shallow clone of a revision with cloned content array.
+   * @private
+   */
+  private cloneRevision(revision: Revision): Revision {
+    const cloned = new Revision({
+      id: revision.getId(),
+      author: revision.getAuthor(),
+      date: revision.getDate(),
+      type: revision.getType(),
+      content: [...revision.getContent()],
+      previousProperties: revision.getPreviousProperties(),
+      newProperties: revision.getNewProperties(),
+      moveId: revision.getMoveId(),
+      moveLocation: revision.getMoveLocation(),
+      location: revision.getLocation(),
+      fieldContext: revision.getFieldContext(),
+    });
+    return cloned;
+  }
+
+  /**
    * Checks if the paragraph is empty (no text content)
    * @returns True if paragraph has no text
    */
