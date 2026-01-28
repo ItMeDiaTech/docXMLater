@@ -1124,6 +1124,70 @@ export class Table {
     return this.formatting.style;
   }
 
+  /**
+   * Gets the raw table look (tblLook) value
+   * @returns Table look hex string or undefined if not set
+   */
+  getTblLook(): string | undefined {
+    return this.formatting.tblLook;
+  }
+
+  /**
+   * Gets the table position properties for floating tables
+   * @returns Table position properties or undefined if not set
+   */
+  getPosition(): TablePositionProperties | undefined {
+    return this.formatting.position ? { ...this.formatting.position } : undefined;
+  }
+
+  /**
+   * Gets whether table can overlap with other floating tables
+   * @returns True if overlap is allowed, false if not, undefined if not set
+   */
+  getOverlap(): boolean | undefined {
+    return this.formatting.overlap;
+  }
+
+  /**
+   * Gets whether bidirectional (RTL) visual layout is enabled
+   * @returns True if RTL layout, false if LTR, undefined if not set
+   */
+  getBidiVisual(): boolean | undefined {
+    return this.formatting.bidiVisual;
+  }
+
+  /**
+   * Gets the table grid column widths
+   * @returns Array of column widths in twips, or undefined if not set
+   */
+  getTableGrid(): number[] | undefined {
+    return this.formatting.tableGrid ? [...this.formatting.tableGrid] : undefined;
+  }
+
+  /**
+   * Gets the table caption for accessibility
+   * @returns Caption text or undefined if not set
+   */
+  getCaption(): string | undefined {
+    return this.formatting.caption;
+  }
+
+  /**
+   * Gets the table description for accessibility
+   * @returns Description text or undefined if not set
+   */
+  getDescription(): string | undefined {
+    return this.formatting.description;
+  }
+
+  /**
+   * Gets the cell spacing type
+   * @returns Cell spacing type or undefined if not set
+   */
+  getCellSpacingType(): TableWidthType | undefined {
+    return this.formatting.cellSpacingType;
+  }
+
   // ============================================================================
   // Checker Methods
   // ============================================================================
@@ -1671,6 +1735,43 @@ export class Table {
       return this;
     }
 
+    // Check for merge conflicts - cells already part of another merge region
+    // This prevents undefined behavior when merging overlapping regions
+    for (let row = startRow; row <= endRow; row++) {
+      for (let col = startCol; col <= endCol; col++) {
+        const checkCell = this.getCell(row, col);
+        if (!checkCell) continue;
+
+        // Check if cell is already part of a vertical merge
+        const vMerge = checkCell.getVerticalMerge();
+        if (vMerge) {
+          // Allow if this is the start cell and it's a 'restart' (we'll overwrite it)
+          if (row === startRow && col === startCol && vMerge === "restart") {
+            continue;
+          }
+          // Cell is part of an existing vertical merge - conflict
+          throw new Error(
+            `Cannot merge cells: Cell at row ${row}, column ${col} is already part of a vertical merge region. ` +
+              `Use splitCell() or clear existing merges before creating new merge regions.`
+          );
+        }
+
+        // Check if cell has a column span > 1 (already part of horizontal merge)
+        const colSpan = checkCell.getColumnSpan();
+        if (colSpan > 1) {
+          // Allow if this is the start cell (we'll overwrite its span)
+          if (row === startRow && col === startCol) {
+            continue;
+          }
+          // Cell has existing column span - conflict
+          throw new Error(
+            `Cannot merge cells: Cell at row ${row}, column ${col} already has a column span of ${colSpan}. ` +
+              `Use splitCell() or clear existing merges before creating new merge regions.`
+          );
+        }
+      }
+    }
+
     // Set column span if merging horizontally
     if (endCol > startCol) {
       cell.setColumnSpan(endCol - startCol + 1);
@@ -1711,8 +1812,81 @@ export class Table {
     const cell = this.getCell(row, col);
     if (cell) {
       cell.setColumnSpan(1); // Reset to single cell
+      cell.setVerticalMerge(undefined); // Clear vertical merge
     }
     return this;
+  }
+
+  /**
+   * Checks if a merge region would conflict with existing merges
+   * @param startRow - Starting row index (0-based)
+   * @param startCol - Starting column index (0-based)
+   * @param endRow - Ending row index (0-based, inclusive)
+   * @param endCol - Ending column index (0-based, inclusive)
+   * @returns Object with valid flag and list of conflicts found
+   * @example
+   * ```typescript
+   * const result = table.canMergeCells(0, 0, 2, 2);
+   * if (!result.valid) {
+   *   console.log('Conflicts:', result.conflicts);
+   * }
+   * ```
+   */
+  canMergeCells(
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number
+  ): { valid: boolean; conflicts: string[] } {
+    const conflicts: string[] = [];
+
+    // Validate bounds
+    if (
+      startRow < 0 ||
+      endRow >= this.rows.length ||
+      startCol < 0 ||
+      endCol < 0 ||
+      endRow < startRow ||
+      endCol < startCol
+    ) {
+      conflicts.push("Invalid cell range specified");
+      return { valid: false, conflicts };
+    }
+
+    // Check each cell in the proposed merge region
+    for (let row = startRow; row <= endRow; row++) {
+      for (let col = startCol; col <= endCol; col++) {
+        const checkCell = this.getCell(row, col);
+        if (!checkCell) {
+          conflicts.push(`Cell at row ${row}, column ${col} does not exist`);
+          continue;
+        }
+
+        // Check if cell is already part of a vertical merge
+        const vMerge = checkCell.getVerticalMerge();
+        if (vMerge) {
+          // Allow if this is the start cell and it's a 'restart'
+          if (!(row === startRow && col === startCol && vMerge === "restart")) {
+            conflicts.push(
+              `Cell at row ${row}, column ${col} is part of a vertical merge (${vMerge})`
+            );
+          }
+        }
+
+        // Check if cell has a column span > 1
+        const colSpan = checkCell.getColumnSpan();
+        if (colSpan > 1) {
+          // Allow if this is the start cell
+          if (!(row === startRow && col === startCol)) {
+            conflicts.push(
+              `Cell at row ${row}, column ${col} has column span of ${colSpan}`
+            );
+          }
+        }
+      }
+    }
+
+    return { valid: conflicts.length === 0, conflicts };
   }
 
   /**

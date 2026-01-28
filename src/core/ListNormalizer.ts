@@ -238,14 +238,16 @@ export function stripTypedPrefix(paragraph: Paragraph, prefix: string): void {
           }
         }
       } else if (prefixFullyStripped) {
-        // After stripping prefix, trim leading whitespace from first non-empty run
         const currentText = run.getText();
         if (currentText.length > 0) {
           const trimmed = currentText.trimStart();
           if (trimmed !== currentText) {
             run.setText(trimmed);
           }
-          break; // Only trim the first run after the prefix
+          // Only break if we found actual content (not just whitespace that got trimmed away)
+          if (trimmed.length > 0) {
+            break;
+          }
         }
       }
     }

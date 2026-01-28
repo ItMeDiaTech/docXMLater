@@ -756,6 +756,7 @@ export class StylesManager {
   } {
     const broken: Array<{ styleId: string; basedOn: string }> = [];
     const circular: Array<string[]> = [];
+    const checkedForCycles = new Set<string>();
 
     for (const style of this.getAllStyles()) {
       const props = style.getProperties();
@@ -765,11 +766,14 @@ export class StylesManager {
         broken.push({ styleId: props.styleId, basedOn: props.basedOn });
       }
 
-      // Check for circular references
-      const chain = this.getInheritanceChain(props.styleId);
-      const ids = chain.map((s) => s.getStyleId());
-      if (new Set(ids).size !== ids.length) {
-        circular.push(ids);
+      // Check for circular references (only if not already checked as part of another cycle)
+      if (!checkedForCycles.has(props.styleId)) {
+        const result = this.hasCircularReference(props.styleId);
+        if (result.hasCircularRef && result.cyclePath) {
+          circular.push(result.cyclePath);
+          // Mark all styles in this cycle as checked
+          result.cyclePath.forEach((id) => checkedForCycles.add(id));
+        }
       }
     }
 
@@ -784,7 +788,7 @@ export class StylesManager {
    * Gets the complete inheritance chain for a style
    * @param styleId - Style ID to analyze
    * @returns Array of styles from base to derived (base style first)
-   * @throws Error if style doesn't exist
+   * @throws Error if style doesn't exist or circular reference detected
    * @example
    * ```typescript
    * const chain = stylesManager.getInheritanceChain('Heading1');
@@ -794,6 +798,7 @@ export class StylesManager {
    */
   getInheritanceChain(styleId: string): Style[] {
     const chain: Style[] = [];
+    const visited = new Set<string>(); // Track visited styles to detect cycles
     let current = this.getStyle(styleId);
 
     if (!current) {
@@ -801,12 +806,61 @@ export class StylesManager {
     }
 
     while (current) {
+      const currentId = current.getStyleId();
+
+      // Detect circular reference
+      if (visited.has(currentId)) {
+        const cycle = [...chain.map((s) => s.getStyleId()), currentId];
+        throw new Error(
+          `Circular style reference detected: ${cycle.join(" -> ")}. ` +
+            `Style '${currentId}' references itself through inheritance chain.`
+        );
+      }
+
+      visited.add(currentId);
       chain.unshift(current); // Add to beginning to maintain base-to-derived order
       const props = current.getProperties();
       current = props.basedOn ? this.getStyle(props.basedOn) : undefined;
     }
 
     return chain;
+  }
+
+  /**
+   * Checks if a style has circular references in its inheritance chain
+   * @param styleId - Style ID to check
+   * @returns Object with hasCircularRef flag and the cycle path if found
+   * @example
+   * ```typescript
+   * const result = stylesManager.hasCircularReference('MyStyle');
+   * if (result.hasCircularRef) {
+   *   console.log('Circular reference found:', result.cyclePath?.join(' -> '));
+   * }
+   * ```
+   */
+  hasCircularReference(styleId: string): {
+    hasCircularRef: boolean;
+    cyclePath?: string[];
+  } {
+    const visited = new Set<string>();
+    const path: string[] = [];
+    let current = this.getStyle(styleId);
+
+    while (current) {
+      const currentId = current.getStyleId();
+
+      if (visited.has(currentId)) {
+        path.push(currentId);
+        return { hasCircularRef: true, cyclePath: path };
+      }
+
+      visited.add(currentId);
+      path.push(currentId);
+      const props = current.getProperties();
+      current = props.basedOn ? this.getStyle(props.basedOn) : undefined;
+    }
+
+    return { hasCircularRef: false };
   }
 
   /**

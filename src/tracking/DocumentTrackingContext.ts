@@ -14,6 +14,13 @@ import { Paragraph } from '../elements/Paragraph';
 import type { TrackingContext, PendingChange } from './TrackingContext';
 
 /**
+ * Time window in milliseconds for consolidating adjacent revisions.
+ * Revisions from the same author within this window will be merged.
+ * Default: 1000ms (1 second) to match typical Word behavior.
+ */
+const CONSOLIDATION_TIME_WINDOW_MS = 1000;
+
+/**
  * Enable options for tracking context
  */
 export interface TrackingEnableOptions {
