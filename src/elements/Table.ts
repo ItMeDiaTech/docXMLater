@@ -1664,8 +1664,9 @@ export class Table {
    * ```
    */
   setColumnWidths(widths: (number | null)[]): this {
-    // Store column widths in formatting for use in toXML
-    (this.formatting as any).columnWidths = widths;
+    // Use tableGrid (the property that toXML() actually reads)
+    // Convert null values to undefined for auto-width handling in toXML()
+    this.formatting.tableGrid = widths.map(w => w === null ? undefined : w) as number[];
     return this;
   }
 
@@ -1989,9 +1990,10 @@ export class Table {
    * ```
    */
   setColumnWidth(columnIndex: number, width: number): this {
-    const columnWidths = (this.formatting as any).columnWidths || [];
-    columnWidths[columnIndex] = width;
-    (this.formatting as any).columnWidths = columnWidths;
+    // Use tableGrid (the property that toXML() actually reads)
+    const tableGrid = this.formatting.tableGrid || [];
+    tableGrid[columnIndex] = width;
+    this.formatting.tableGrid = tableGrid;
     return this;
   }
 

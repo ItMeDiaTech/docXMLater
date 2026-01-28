@@ -2614,6 +2614,10 @@ export class Document {
   }
 
   /**
+   * @deprecated This functionality has been moved to Template_UI's
+   * WordDocumentProcessor.fixExistingTopHyperlinks() for consolidation.
+   * This method will be removed in a future version.
+   *
    * Fixes all "Top of Document" hyperlinks to use standard formatting and anchor
    *
    * Changes made to matching hyperlinks:
@@ -2632,6 +2636,10 @@ export class Document {
    * ```
    */
   fixTODHyperlinks(): number {
+    console.warn(
+      'DEPRECATION WARNING: fixTODHyperlinks() is deprecated. ' +
+      'Use Template_UI WordDocumentProcessor.fixExistingTopHyperlinks() instead.'
+    );
     let count = 0;
 
     // Ensure _top bookmark exists at document start
