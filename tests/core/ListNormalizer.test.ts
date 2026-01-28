@@ -322,15 +322,15 @@ describe('ListNormalizer', () => {
 
       const normalizedParas = cell.getParagraphs();
 
-      // With indentation-based levels (new behavior):
-      // All paragraphs have no indentation, so all become level 0
+      // With format-based levels: a.=L1, ii.=L2, b.=L1
+      // Orphan normalization shifts by min level (1): L1→L0, L2→L1, L1→L0
       const para1Numbering = normalizedParas[0]!.getNumbering();
       const para2Numbering = normalizedParas[1]!.getNumbering();
       const para3Numbering = normalizedParas[2]!.getNumbering();
 
-      expect(para1Numbering!.level).toBe(0); // No indentation = level 0
-      expect(para2Numbering!.level).toBe(0); // No indentation = level 0
-      expect(para3Numbering!.level).toBe(0); // No indentation = level 0
+      expect(para1Numbering!.level).toBe(0); // a. (lowerLetter L1) → L0 after shift
+      expect(para2Numbering!.level).toBe(1); // ii. (lowerRoman L2) → L1 after shift
+      expect(para3Numbering!.level).toBe(0); // b. (lowerLetter L1) → L0 after shift
 
       doc.dispose();
     });

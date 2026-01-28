@@ -5,6 +5,25 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.28] - 2026-01-27
+
+### Fixed
+
+- **Orphan List Level Normalization**
+  - Fixed early exit path that skipped orphan level normalization when `recommendedAction === "none"`
+  - Word lists at L1/L2 are now correctly shifted to L0/L1 when no L0 parent exists
+  - Applies to all cells regardless of whether typed prefix conversion is needed
+
+- **Format-Based Levels for Typed Prefixes**
+  - Typed prefixes without explicit indentation now use semantic levels from `FORMAT_TO_LEVEL`
+  - `decimal` (1., 2., 3.) maps to Level 0
+  - `lowerLetter` (a., b., c.) maps to Level 1
+  - `lowerRoman` (i., ii., iii.) maps to Level 2
+  - Previously all typed prefixes defaulted to Level 0 when no extra indentation was present
+  - Preserves semantic list hierarchy: "1." at L0, "a)" at L1, "i." at L2
+
+---
+
 ## [9.5.20] - 2026-01-26
 
 ### Added

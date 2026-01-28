@@ -491,4 +491,5 @@ export {
   ListAnalysis,
   ListNormalizationOptions,
   ListNormalizationReport,
+  IndentationLevel,
 } from './types/list-types';

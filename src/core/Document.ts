@@ -6829,9 +6829,9 @@ export class Document {
         const prevNumbering = prev.getNumbering();
         const nextNumbering = next.getNumbering();
 
-        if (prevNumbering && nextNumbering && prevNumbering.numId === nextNumbering.numId) {
-          // Both are items of the SAME list - remove the blank between them
-          // Keep blanks between DIFFERENT lists (e.g., bullet list followed by numbered list)
+        if (prevNumbering && nextNumbering) {
+          // Both are list items - remove the blank between them
+          // This handles cases where ListNormalizer assigns different numIds during level transitions
           this.bodyElements.splice(bi, 1);
           bi--; // Adjust index after removal
           listItemBlanksRemoved++;
@@ -6854,9 +6854,9 @@ export class Document {
             const prevNumbering = prev?.getNumbering();
             const nextNumbering = next?.getNumbering();
 
-            if (prevNumbering && nextNumbering && prevNumbering.numId === nextNumbering.numId) {
-              // Both are items of the SAME list - remove the blank between them
-              // Keep blanks between DIFFERENT lists (e.g., bullet list followed by numbered list)
+            if (prevNumbering && nextNumbering) {
+              // Both are list items - remove the blank between them
+              // This handles cases where ListNormalizer assigns different numIds during level transitions
               cell.removeParagraph(ci);
               ci--; // Adjust index after removal
               listItemBlanksRemoved++;
@@ -6900,6 +6900,82 @@ export class Document {
       blankLinesRemoved: blankLinesRemoved + duplicateBlanksRemoved,
       listsProcessed: totalListsProcessed,
     };
+  }
+
+  /**
+   * Removes blank paragraphs between consecutive list items in table cells.
+   *
+   * This method should be called AFTER list normalization (e.g., after converting
+   * typed list prefixes like "1.", "a." to proper Word numbering) to clean up any
+   * blank lines that were missed because the items didn't have Word numbering yet.
+   *
+   * @returns Number of blank paragraphs removed
+   *
+   * @example
+   * // After normalizing typed list prefixes to Word lists
+   * doc.normalizeTableLists();
+   *
+   * // Clean up any blanks between list items
+   * const removed = doc.removeBlanksBetweenListItems();
+   * console.log(`Removed ${removed} blank lines between list items`);
+   */
+  public removeBlanksBetweenListItems(): number {
+    let removed = 0;
+
+    // Process table cells
+    for (const table of this.getAllTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          let cellParas = cell.getParagraphs();
+          for (let ci = 1; ci < cellParas.length - 1; ci++) {
+            const prev = cellParas[ci - 1];
+            const current = cellParas[ci];
+            const next = cellParas[ci + 1];
+
+            // Skip if current is not a blank paragraph
+            if (!current || !this.isParagraphBlank(current)) continue;
+
+            const prevNumbering = prev?.getNumbering();
+            const nextNumbering = next?.getNumbering();
+
+            // If both prev and next are list items, remove the blank between them
+            if (prevNumbering && nextNumbering) {
+              cell.removeParagraph(ci);
+              ci--; // Adjust index after removal
+              removed++;
+              cellParas = cell.getParagraphs(); // Refresh after removal
+            }
+          }
+        }
+      }
+    }
+
+    // Also process body-level list items
+    for (let bi = 1; bi < this.bodyElements.length - 1; bi++) {
+      const prev = this.bodyElements[bi - 1];
+      const current = this.bodyElements[bi];
+      const next = this.bodyElements[bi + 1];
+
+      // Skip if current is not a blank paragraph
+      if (!(current instanceof Paragraph) || !this.isParagraphBlank(current)) continue;
+
+      // Skip if prev or next is a table (don't cross table boundaries)
+      if (prev instanceof Table || next instanceof Table) continue;
+
+      // Check if prev and next are both list items
+      if (prev instanceof Paragraph && next instanceof Paragraph) {
+        const prevNumbering = prev.getNumbering();
+        const nextNumbering = next.getNumbering();
+
+        if (prevNumbering && nextNumbering) {
+          this.bodyElements.splice(bi, 1);
+          bi--; // Adjust index after removal
+          removed++;
+        }
+      }
+    }
+
+    return removed;
   }
 
   /**
