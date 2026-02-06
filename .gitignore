@@ -68,7 +68,7 @@ Images/*
 Test_Code*
 Errors*
 
-# Claude AI files and development notes (not for public repo)
+# Development workspace files (not for public repo)
 CLAUDE.md
 **/CLAUDE.md
 .claude/
