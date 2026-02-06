@@ -157,7 +157,7 @@ graph TB
 
 ### Maintainability: 4/5
 
-- **Strengths:** Clean module structure, comprehensive documentation (CLAUDE.md files)
+- **Strengths:** Clean module structure, comprehensive documentation (module docs)
 - **Weaknesses:** Document.ts at 11K lines, some dead code
 - **Impact:** Generally maintainable, could benefit from further decomposition
 

@@ -741,7 +741,7 @@ For detailed changes between v3.2.0 and v3.5.0, see:
 - Enhanced `Paragraph.ts` with 61 lines of indentation conflict resolution logic
 - Expanded `Revision.ts` with 395+ lines supporting all revision types
 - Improved `RevisionManager.ts` with 111+ lines of revision management features
-- Added comprehensive formatting module documentation: `src/formatting/CLAUDE.md` (52 lines)
+- Added comprehensive formatting module documentation (52 lines)
 
 ### Tests
 
@@ -753,7 +753,7 @@ For detailed changes between v3.2.0 and v3.5.0, see:
 ### Documentation
 
 - Added comprehensive list indentation analysis document
-- Updated formatting module CLAUDE.md with detailed specifications
+- Updated formatting module documentation with detailed specifications
 - Added advanced tracked changes example with real-world scenarios
 
 ---
@@ -770,7 +770,7 @@ Internal release with infrastructure improvements.
 
 - **Comprehensive Documentation Update**: Added complete documentation suite
   - New README.md with full feature matrix, API overview, and code examples
-  - Updated CLAUDE.md to reflect all 5 phases complete (2073+ tests, 65 source files)
+  - Updated project documentation to reflect all 5 phases complete (2073+ tests, 65 source files)
   - Added documentation consistency analysis (docs/analysis/)
 
 ### Added

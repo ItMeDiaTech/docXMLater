@@ -13,7 +13,7 @@
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
     "docs:metrics": "echo 'Source Files:' && find src -name '*.ts' | wc -l && echo 'Test Files:' && find tests -name '*.test.ts' | wc -l && echo 'Lines of Code:' && find src -name '*.ts' -exec wc -l {} + | tail -1",
-    "docs:check": "echo 'Checking documentation...' && ls -1 CLAUDE.md README.md CHANGELOG.md src/*/CLAUDE.md 2>/dev/null || echo 'Missing documentation files'",
+    "docs:check": "echo 'Checking documentation...' && ls -1 README.md CHANGELOG.md 2>/dev/null || echo 'Missing documentation files'",
     "test-list-arch": "ts-node examples/test-list-formatting-architecture.ts"
   },
   "keywords": [
