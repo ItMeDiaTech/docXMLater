@@ -9,6 +9,7 @@ import { XMLElement } from '../xml/XMLBuilder';
 import { RunFormatting } from './Run';
 import { ParsedHyperlinkInstruction, parseHyperlinkInstruction, isHyperlinkInstruction } from './FieldHelpers';
 import type { Revision } from './Revision';
+import { pointsToHalfPoints } from '../utils/units';
 
 /**
  * Common field types
@@ -283,7 +284,7 @@ export class Field {
     }
 
     if (this.formatting.size) {
-      const sizeValue = (this.formatting.size * 2).toString();
+      const sizeValue = pointsToHalfPoints(this.formatting.size).toString();
       children.push({
         name: 'w:sz',
         attributes: { 'w:val': sizeValue },
@@ -1017,7 +1018,7 @@ export class ComplexField {
     }
 
     if (formatting.size) {
-      const sizeValue = (formatting.size * 2).toString();
+      const sizeValue = pointsToHalfPoints(formatting.size).toString();
       children.push({
         name: 'w:sz',
         attributes: { 'w:val': sizeValue },

@@ -7,7 +7,7 @@
 
 import { promises as fs } from 'fs';
 import { defaultLogger } from '../utils/logger';
-import { inchesToEmus } from '../utils/units';
+import { inchesToEmus, UNITS } from '../utils/units';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
@@ -121,6 +121,16 @@ export interface ImageAnchor {
   allowOverlap: boolean;
   /** Z-order (higher = in front) */
   relativeHeight: number;
+  /** Use simple positioning (wp:simplePos coordinates) */
+  simplePos?: boolean;
+  /** Distance from text - top (EMUs) */
+  distT?: number;
+  /** Distance from text - bottom (EMUs) */
+  distB?: number;
+  /** Distance from text - left (EMUs) */
+  distL?: number;
+  /** Distance from text - right (EMUs) */
+  distR?: number;
 }
 
 /**
@@ -165,6 +175,8 @@ export interface ImageProperties {
   description?: string;
   /** Image name/title */
   name?: string;
+  /** Image title (wp:docPr title attribute for accessibility) */
+  title?: string;
   /** Relationship ID (will be set by ImageManager) */
   relationshipId?: string;
   /** Effect extent (space for shadows/glows) */
@@ -199,6 +211,7 @@ export class Image {
   private height: number;
   private description: string;
   private name: string;
+  private title?: string;
   private relationshipId?: string;
   private imageData?: Buffer;
   private extension: string;
@@ -293,6 +306,7 @@ export class Image {
     this.source = properties.source;
     this.description = properties.description || 'Image';
     this.name = properties.name || 'image';
+    this.title = properties.title;
     this.relationshipId = properties.relationshipId;
 
     // Detect image extension
@@ -359,9 +373,10 @@ export class Image {
           this.imageData = undefined; // Release
         }
       }
-    } catch (error) {
-      defaultLogger.error(`Failed to load image for dimensions: ${error instanceof Error ? error.message : String(error)}`);
-      throw new Error(`Image loading failed: ${error instanceof Error ? error.message : String(error)}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      defaultLogger.error(`Failed to load image for dimensions: ${message}`);
+      throw new Error(`Image loading failed: ${message}`);
     }
   }
 
@@ -380,9 +395,10 @@ export class Image {
       } else {
         throw new Error('Invalid image source');
       }
-    } catch (error) {
-      defaultLogger.error(`Failed to load image data: ${error instanceof Error ? error.message : String(error)}`);
-      throw new Error(`Image data loading failed: ${error instanceof Error ? error.message : String(error)}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      defaultLogger.error(`Failed to load image data: ${message}`);
+      throw new Error(`Image data loading failed: ${message}`);
     }
   }
 
@@ -629,6 +645,15 @@ export class Image {
     return this.description;
   }
 
+  setTitle(title: string): this {
+    this.title = title;
+    return this;
+  }
+
+  getTitle(): string | undefined {
+    return this.title;
+  }
+
   rotate(degrees: number): this {
     this.rotation = ((degrees % 360) + 360) % 360;
     if (this.rotation === 90 || this.rotation === 270) {
@@ -844,8 +869,9 @@ export class Image {
           offset += 2 + this.imageData.readUInt16BE(offset + 2);
         }
       }
-    } catch (error) {
-      defaultLogger.warn(`DPI detection failed: ${error instanceof Error ? error.message : String(error)}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      defaultLogger.warn(`DPI detection failed: ${message}`);
     }
     return undefined;
   }
@@ -930,8 +956,8 @@ export class Image {
     this.border = { width: thicknessPt };
 
     // Calculate space needed for border (half-width on each side)
-    // 1 point = 12700 EMUs - border is drawn centered on the edge
-    const borderEmu = thicknessPt * 12700;
+    // Border is drawn centered on the edge
+    const borderEmu = thicknessPt * UNITS.EMUS_PER_POINT;
     const halfBorderEmu = Math.ceil(borderEmu / 2);
 
     // Ensure effectExtent has at least enough space for the border
@@ -1108,17 +1134,30 @@ export class Image {
         anchorChildren.push(XMLBuilder.wp(wrapElementName, wrapAttrs));
       }
 
-      anchorChildren.push(XMLBuilder.wp('docPr', { id: this.docPrId, name: this.name, descr: this.description }));
+      const floatDocPrAttrs: Record<string, any> = { id: this.docPrId, name: this.name, descr: this.description };
+      if (this.title) floatDocPrAttrs.title = this.title;
+      anchorChildren.push(XMLBuilder.wp('docPr', floatDocPrAttrs));
       anchorChildren.push(graphic);
 
+      // Build anchor attributes including simplePos and distance from text
+      const anchorAttrs: Record<string, any> = {
+        behindDoc: this.anchor?.behindDoc ? 1 : 0,
+        locked: this.anchor?.locked ? 1 : 0,
+        layoutInCell: this.anchor?.layoutInCell ? 1 : 0,
+        allowOverlap: this.anchor?.allowOverlap ? 1 : 0,
+        relativeHeight: this.anchor?.relativeHeight,
+        simplePos: this.anchor?.simplePos ? '1' : '0',
+        distT: (this.anchor?.distT ?? 0).toString(),
+        distB: (this.anchor?.distB ?? 0).toString(),
+        distL: (this.anchor?.distL ?? 0).toString(),
+        distR: (this.anchor?.distR ?? 0).toString(),
+      };
+
+      // Add wp:simplePos child element (required by ECMA-376 even when simplePos="0")
+      anchorChildren.unshift(XMLBuilder.wp('simplePos', { x: '0', y: '0' }));
+
       return XMLBuilder.w('drawing', undefined, [
-        XMLBuilder.wp('anchor', {
-          behindDoc: this.anchor?.behindDoc ? 1 : 0,
-          locked: this.anchor?.locked ? 1 : 0,
-          layoutInCell: this.anchor?.layoutInCell ? 1 : 0,
-          allowOverlap: this.anchor?.allowOverlap ? 1 : 0,
-          relativeHeight: this.anchor?.relativeHeight
-        }, anchorChildren)
+        XMLBuilder.wp('anchor', anchorAttrs, anchorChildren)
       ]);
     } else {
       // Inline image - requires specific attributes and elements for Word compatibility
@@ -1140,9 +1179,9 @@ export class Image {
           }),
           XMLBuilder.wp('docPr', {
             id: this.docPrId.toString(),
-            name: '',
-            descr: '',
-            title: ''
+            name: this.name || '',
+            descr: this.description || '',
+            ...(this.title ? { title: this.title } : {})
           }),
           XMLBuilder.wp('cNvGraphicFramePr', undefined, [
             XMLBuilder.a('graphicFrameLocks', {

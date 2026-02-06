@@ -460,8 +460,8 @@ describe('Table Helper Methods', () => {
     it('should set column widths', () => {
       table.setColumnWidths([2880, 1440, null]);
 
-      const formatting = table.getFormatting() as any;
-      expect(formatting.columnWidths).toEqual([2880, 1440, null]);
+      const formatting = table.getFormatting();
+      expect(formatting.tableGrid).toEqual([2880, 1440, undefined]);
     });
   });
 });

@@ -9,7 +9,7 @@
  */
 
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { inchesToEmus } from '../utils/units';
+import { inchesToEmus, pointsToHalfPoints } from '../utils/units';
 import { RunFormatting } from './Run';
 import {
   ImagePosition,
@@ -53,8 +53,14 @@ export interface ShapeOutline {
   color: string;
   /** Outline width in EMUs */
   width: number;
-  /** Line style ('solid', 'dash', 'dot', etc.) */
-  style?: 'solid' | 'dash' | 'dot' | 'dashDot';
+  /** Line dash style */
+  style?: 'solid' | 'dash' | 'dot' | 'dashDot' | 'lgDash' | 'lgDashDot' | 'lgDashDotDot' | 'sysDash' | 'sysDot' | 'sysDashDot' | 'sysDashDotDot';
+  /** Line cap style (ECMA-376 §20.1.10.31) */
+  cap?: 'flat' | 'rnd' | 'sq';
+  /** Line join style (ECMA-376 §20.1.10.32) */
+  join?: 'bevel' | 'miter' | 'round';
+  /** Compound line type (ECMA-376 §20.1.10.15) */
+  compound?: 'sng' | 'dbl' | 'thickThin' | 'thinThick' | 'tri';
 }
 
 /**
@@ -737,6 +743,8 @@ export class Shape {
       const lnAttrs: Record<string, string> = {
         w: this.outline.width.toString(),
       };
+      if (this.outline.cap) lnAttrs.cap = this.outline.cap;
+      if (this.outline.compound) lnAttrs.cmpd = this.outline.compound;
 
       const lnChildren: XMLElement[] = [];
 
@@ -763,6 +771,18 @@ export class Shape {
           },
           selfClosing: true,
         });
+      }
+
+      // Line join style
+      if (this.outline.join) {
+        const joinNames = { bevel: 'a:bevel', miter: 'a:miter', round: 'a:round' } as const;
+        const joinName = joinNames[this.outline.join];
+        if (joinName) {
+          lnChildren.push({
+            name: joinName,
+            selfClosing: true,
+          });
+        }
       }
 
       children.push({
@@ -800,7 +820,7 @@ export class Shape {
         rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': this.textFormatting.color }));
       }
       if (this.textFormatting.size) {
-        const halfPoints = this.textFormatting.size * 2;
+        const halfPoints = pointsToHalfPoints(this.textFormatting.size);
         rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': halfPoints }));
         rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': halfPoints }));
       }

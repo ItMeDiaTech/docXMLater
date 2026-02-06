@@ -333,7 +333,7 @@ describe('Revision', () => {
       const xml = revision.toXML();
 
       expect(xml).not.toBeNull();
-      expect(xml!.attributes?.['w:date']).toBe('2025-06-15T12:30:45.000Z');
+      expect(xml!.attributes?.['w:date']).toBe('2025-06-15T12:30:45Z');
     });
 
     it('should return null for internal tracking types', () => {

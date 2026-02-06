@@ -49,7 +49,7 @@ export function getDiagnosticConfig(): DiagnosticConfig {
 /**
  * Log parsing activity
  */
-export function logParsing(message: string, data?: any): void {
+export function logParsing(message: string, data?: unknown): void {
   if (config.enabled && config.logParsing) {
     console.log(`[PARSE] ${message}`, data !== undefined ? data : '');
   }
@@ -58,7 +58,7 @@ export function logParsing(message: string, data?: any): void {
 /**
  * Log serialization activity
  */
-export function logSerialization(message: string, data?: any): void {
+export function logSerialization(message: string, data?: unknown): void {
   if (config.enabled && config.logSerialization) {
     console.log(`[SERIALIZE] ${message}`, data !== undefined ? data : '');
   }
@@ -67,7 +67,7 @@ export function logSerialization(message: string, data?: any): void {
 /**
  * Log text direction properties
  */
-export function logTextDirection(message: string, data?: any): void {
+export function logTextDirection(message: string, data?: unknown): void {
   if (config.enabled && config.logTextDirection) {
     console.log(`[TEXT-DIR] ${message}`, data !== undefined ? data : '');
   }
@@ -76,7 +76,7 @@ export function logTextDirection(message: string, data?: any): void {
 /**
  * Log verbose details
  */
-export function logVerbose(message: string, data?: any): void {
+export function logVerbose(message: string, data?: unknown): void {
   if (config.enabled && config.verbose) {
     console.log(`[VERBOSE] ${message}`, data !== undefined ? data : '');
   }

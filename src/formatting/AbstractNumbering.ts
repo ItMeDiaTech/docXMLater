@@ -480,7 +480,7 @@ export class AbstractNumbering {
         try {
           const level = NumberingLevel.fromXML(lvlXml);
           abstractNum.addLevel(level);
-        } catch (error) {
+        } catch (error: unknown) {
           // Skip malformed levels but continue parsing
           defaultLogger.warn(`Failed to parse level: ${error}`);
         }

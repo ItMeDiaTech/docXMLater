@@ -74,7 +74,7 @@ export function cloneFormatting<T>(formatting: T): T {
  * hasFormatting({ bold: undefined }) // false
  * ```
  */
-export function hasFormatting(formatting: Record<string, any>): boolean {
+export function hasFormatting(formatting: Record<string, unknown>): boolean {
   for (const value of Object.values(formatting)) {
     if (value !== undefined && value !== null) {
       return true;
@@ -135,8 +135,8 @@ export function cleanFormatting<T extends Record<string, any>>(formatting: T): P
  * ```
  */
 export function isEqualFormatting(
-  format1: Record<string, any>,
-  format2: Record<string, any>
+  format1: Record<string, unknown>,
+  format2: Record<string, unknown>
 ): boolean {
   // Quick reference check
   if (format1 === format2) return true;
@@ -167,8 +167,8 @@ export function isEqualFormatting(
     }
 
     // Check nested objects
-    if (typeof val1 === 'object' && typeof val2 === 'object' && !Array.isArray(val1) && !Array.isArray(val2)) {
-      if (!isEqualFormatting(val1, val2)) return false;
+    if (typeof val1 === 'object' && val1 !== null && typeof val2 === 'object' && val2 !== null && !Array.isArray(val1) && !Array.isArray(val2)) {
+      if (!isEqualFormatting(val1 as Record<string, unknown>, val2 as Record<string, unknown>)) return false;
     } else if (val1 !== val2) {
       return false;
     }

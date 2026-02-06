@@ -11,6 +11,9 @@ import type { Revision, RevisionType } from '../elements/Revision';
 import type { RevisionManager } from '../elements/RevisionManager';
 import type { Run } from '../elements/Run';
 
+/** Union of element types that can be tracked */
+export type TrackableElement = Run | { constructor: { name: string } };
+
 /**
  * Pending change entry before flushing to RevisionManager
  */
@@ -20,11 +23,11 @@ export interface PendingChange {
   /** Property that changed */
   property: string;
   /** Value before the change */
-  previousValue: any;
+  previousValue: unknown;
   /** Value after the change */
-  newValue: any;
+  newValue: unknown;
   /** Element that was modified */
-  element: any;
+  element: TrackableElement;
   /** When the change occurred */
   timestamp: number;
   /** Count for consolidated changes */
@@ -68,8 +71,8 @@ export interface TrackingContext {
   trackRunPropertyChange(
     run: Run,
     property: string,
-    oldValue: any,
-    newValue: any
+    oldValue: unknown,
+    newValue: unknown
   ): void;
 
   /**
@@ -80,10 +83,10 @@ export interface TrackingContext {
    * @param newValue - Value after the change
    */
   trackParagraphPropertyChange(
-    paragraph: any,
+    paragraph: TrackableElement,
     property: string,
-    oldValue: any,
-    newValue: any
+    oldValue: unknown,
+    newValue: unknown
   ): void;
 
   /**
@@ -94,10 +97,10 @@ export interface TrackingContext {
    * @param newValue - Value after the change
    */
   trackHyperlinkChange(
-    hyperlink: any,
+    hyperlink: TrackableElement,
     changeType: string,
-    oldValue: any,
-    newValue: any
+    oldValue: unknown,
+    newValue: unknown
   ): void;
 
   /**
@@ -108,10 +111,10 @@ export interface TrackingContext {
    * @param newValue - Value after the change
    */
   trackTableChange(
-    element: any,
+    element: TrackableElement,
     property: string,
-    oldValue: any,
-    newValue: any
+    oldValue: unknown,
+    newValue: unknown
   ): void;
 
   /**
@@ -119,14 +122,14 @@ export interface TrackingContext {
    * @param element - Element containing the insertion
    * @param text - Text that was inserted
    */
-  trackInsertion(element: any, text: string): void;
+  trackInsertion(element: TrackableElement, text: string): void;
 
   /**
    * Track text deletion
    * @param element - Element containing the deletion
    * @param text - Text that was deleted
    */
-  trackDeletion(element: any, text: string): void;
+  trackDeletion(element: TrackableElement, text: string): void;
 
   /**
    * Flush all pending changes and create Revision objects.

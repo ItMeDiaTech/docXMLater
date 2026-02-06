@@ -1,6 +1,6 @@
 {
   "name": "docxmlater",
-  "version": "9.5.33",
+  "version": "9.6.1",
   "description": "A comprehensive DOCX editing framework for creating, reading, and manipulating Microsoft Word documents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -57,8 +57,6 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
-    "all": "^0.0.0",
-    "jszip": "^3.10.1",
-    "tailwindcss": "^4.1.18"
+    "jszip": "^3.10.1"
   }
 }

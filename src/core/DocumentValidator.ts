@@ -7,6 +7,10 @@ import { Paragraph } from '../elements/Paragraph';
 import { Table } from '../elements/Table';
 import { TableOfContentsElement } from '../elements/TableOfContentsElement';
 import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
+import { AlternateContent } from '../elements/AlternateContent';
+import { MathParagraph } from '../elements/MathElement';
+import { CustomXmlBlock } from '../elements/CustomXml';
+import { PreservedElement } from '../elements/PreservedElement';
 import { ImageManager } from '../elements/ImageManager';
 import { DocumentProperties } from './Document';
 import { LIMITS } from '../constants/limits';
@@ -28,7 +32,7 @@ export interface MemoryOptions {
 /**
  * Body element types
  */
-type BodyElement = Paragraph | Table | TableOfContentsElement | StructuredDocumentTag;
+type BodyElement = Paragraph | Table | TableOfContentsElement | StructuredDocumentTag | AlternateContent | MathParagraph | CustomXmlBlock | PreservedElement;
 
 /**
  * Size estimation result

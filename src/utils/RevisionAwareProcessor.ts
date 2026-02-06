@@ -203,7 +203,7 @@ export class RevisionAwareProcessor {
         conflicts,
         log,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       addLog('error', `Processing failed: ${errorMessage}`);
 

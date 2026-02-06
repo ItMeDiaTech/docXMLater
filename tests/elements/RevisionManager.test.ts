@@ -59,6 +59,92 @@ describe('RevisionManager', () => {
     });
   });
 
+  describe('registerExisting', () => {
+    it('should preserve the original ID from parsed XML', () => {
+      const rev = Revision.fromText('insert', 'Author', 'text');
+      rev.setId(42);
+
+      manager.registerExisting(rev);
+
+      expect(rev.getId()).toBe(42);
+      expect(manager.getCount()).toBe(1);
+      expect(manager.getById(42)).toBe(rev);
+    });
+
+    it('should not overwrite IDs for multiple existing revisions', () => {
+      const rev1 = Revision.fromText('insert', 'A', 'text1');
+      rev1.setId(100);
+      const rev2 = Revision.fromText('delete', 'B', 'text2');
+      rev2.setId(104);
+      const rev3 = Revision.fromText('insert', 'A', 'text3');
+      rev3.setId(107);
+
+      manager.registerExisting(rev1);
+      manager.registerExisting(rev2);
+      manager.registerExisting(rev3);
+
+      expect(rev1.getId()).toBe(100);
+      expect(rev2.getId()).toBe(104);
+      expect(rev3.getId()).toBe(107);
+      expect(manager.getCount()).toBe(3);
+    });
+
+    it('should update local nextId above the highest existing ID', () => {
+      const rev = Revision.fromText('insert', 'A', 'text');
+      rev.setId(50);
+
+      manager.registerExisting(rev);
+
+      expect(manager.peekNextId()).toBeGreaterThanOrEqual(51);
+    });
+
+    it('should call idExistsNotifier when centralized provider is set', () => {
+      const notifiedIds: number[] = [];
+      let nextId = 200;
+      manager.setIdProvider(
+        () => nextId++,
+        (existingId) => notifiedIds.push(existingId)
+      );
+
+      const rev = Revision.fromText('insert', 'A', 'text');
+      rev.setId(104);
+
+      manager.registerExisting(rev);
+
+      expect(notifiedIds).toContain(104);
+      expect(rev.getId()).toBe(104);
+    });
+
+    it('should invalidate caches after registering existing revision', () => {
+      const rev1 = Revision.fromText('insert', 'A', 'text1');
+      rev1.setId(10);
+      manager.registerExisting(rev1);
+
+      const insertions1 = manager.getRevisionsByType('insert');
+      expect(insertions1).toHaveLength(1);
+
+      const rev2 = Revision.fromText('insert', 'A', 'text2');
+      rev2.setId(11);
+      manager.registerExisting(rev2);
+
+      const insertions2 = manager.getRevisionsByType('insert');
+      expect(insertions2).toHaveLength(2);
+    });
+
+    it('should not produce duplicate IDs when mixing register and registerExisting', () => {
+      const existing = Revision.fromText('insert', 'A', 'existing');
+      existing.setId(5);
+      manager.registerExisting(existing);
+
+      const newRev = Revision.fromText('insert', 'A', 'new');
+      manager.register(newRev);
+
+      expect(newRev.getId()).not.toBe(5);
+      const validation = manager.validateRevisionIds();
+      expect(validation.valid).toBe(true);
+    });
+  });
+
   describe('Retrieval Methods', () => {
     beforeEach(() => {
       // Set up test data

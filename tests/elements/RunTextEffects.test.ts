@@ -10,7 +10,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 
 describe('Run Text Effects - Round Trip Tests', () => {
-  const TEMP_DIR = path.join(__dirname, '..', '..', 'temp-test-output');
+  const TEMP_DIR = path.join(__dirname, '..', '..', 'temp-test-output', 'run-text-effects');
 
   beforeAll(async () => {
     await fs.mkdir(TEMP_DIR, { recursive: true });
@@ -18,11 +18,7 @@ describe('Run Text Effects - Round Trip Tests', () => {
 
   afterAll(async () => {
     try {
-      const files = await fs.readdir(TEMP_DIR);
-      for (const file of files) {
-        await fs.unlink(path.join(TEMP_DIR, file));
-      }
-      await fs.rmdir(TEMP_DIR);
+      await fs.rm(TEMP_DIR, { recursive: true, force: true });
     } catch (error) {
       // Ignore cleanup errors
     }

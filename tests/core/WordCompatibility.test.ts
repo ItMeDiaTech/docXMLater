@@ -198,7 +198,7 @@ describe('Word Compatibility - Track Changes', () => {
       revision.setId(1);
       const xml = revision.toXML();
 
-      expect(xml!.attributes?.['w:date']).toBe('2025-06-15T14:30:45.123Z');
+      expect(xml!.attributes?.['w:date']).toBe('2025-06-15T14:30:45Z');
     });
   });
 
@@ -359,7 +359,7 @@ describe('Word Compatibility - Track Changes', () => {
       expect(xml!.attributes?.['w:id']).toBe('42');
       expect(xml!.attributes?.['w:author']).toBe('TestAuthor');
       // Date is optional but recommended
-      expect(xml!.attributes?.['w:date']).toBe('2025-01-15T10:30:00.000Z');
+      expect(xml!.attributes?.['w:date']).toBe('2025-01-15T10:30:00Z');
     });
 
     it('should use unique IDs across revisions', () => {

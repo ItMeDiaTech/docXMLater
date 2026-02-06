@@ -262,9 +262,9 @@ export interface FixAction {
   /** Description of the action taken */
   action: string;
   /** Value before the fix */
-  before: any;
+  before: unknown;
   /** Value after the fix */
-  after: any;
+  after: unknown;
   /** Whether the fix was successful */
   success: boolean;
 }

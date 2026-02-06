@@ -522,8 +522,20 @@ export class RevisionAcceptor {
             !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren'
         );
 
+      // Per ECMA-376, certain elements MUST NOT be self-closing (e.g., <w:p/> is invalid).
+      // This mirrors the CANNOT_SELF_CLOSE list in XMLBuilder.ts.
+      const CANNOT_SELF_CLOSE = [
+        'w:t', 'w:r', 'w:p', 'w:tbl', 'w:tr', 'w:tc', 'w:body',
+        'w:document', 'w:hyperlink', 'w:sdt', 'w:sdtContent', 'w:sdtPr',
+        'w:pPr', 'w:rPr', 'w:sectPr', 'w:del', 'w:ins', 'w:moveFrom', 'w:moveTo',
+      ];
+
       if (!hasChildren && (!element || !element['#text'])) {
-        xml += '/>';
+        if (CANNOT_SELF_CLOSE.includes(tagName)) {
+          xml += `></${tagName}>`;
+        } else {
+          xml += '/>';
+        }
       } else {
         xml += '>';
 

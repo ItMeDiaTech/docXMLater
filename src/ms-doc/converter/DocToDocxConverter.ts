@@ -125,7 +125,7 @@ export class DocToDocxConverter {
     let cfb: CFBFile;
     try {
       cfb = CFBReader.parse(data);
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof CFBParseError) {
         throw new DocConversionError(`Invalid .doc file: ${error.message}`, error);
       }
@@ -145,7 +145,7 @@ export class DocToDocxConverter {
     let fib: FIB;
     try {
       fib = FIBParser.parse(wordDocStream.data);
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof FIBParseError) {
         throw new DocConversionError(`Invalid FIB: ${error.message}`, error);
       }
@@ -169,7 +169,7 @@ export class DocToDocxConverter {
         const pieceTableParser = new PieceTableParser(clxData, wordDocStream.data);
         textRanges = pieceTableParser.extractText();
         fullText = pieceTableParser.getFullText();
-      } catch (error) {
+      } catch (error: unknown) {
         if (error instanceof PieceTableError) {
           throw new DocConversionError(`Piece table error: ${error.message}`, error);
         }

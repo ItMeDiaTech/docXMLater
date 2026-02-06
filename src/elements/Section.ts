@@ -21,7 +21,31 @@ export type SectionType = 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' | '
 /**
  * Page numbering format
  */
-export type PageNumberFormat = 'decimal' | 'lowerRoman' | 'upperRoman' | 'lowerLetter' | 'upperLetter';
+/**
+ * Per ECMA-376 Part 1 §17.18.59 (ST_NumberFormat)
+ * Comprehensive set of page number formats
+ */
+export type PageNumberFormat =
+  | 'decimal' | 'lowerRoman' | 'upperRoman' | 'lowerLetter' | 'upperLetter'
+  | 'ordinal' | 'cardinalText' | 'ordinalText'
+  | 'hex' | 'chicago' | 'decimalZero'
+  | 'decimalEnclosedCircle' | 'decimalEnclosedFullstop' | 'decimalEnclosedParen'
+  | 'ideographDigital' | 'ideographTraditional' | 'ideographLegalTraditional'
+  | 'ideographEnclosedCircle' | 'ideographZodiac' | 'ideographZodiacTraditional'
+  | 'chineseCounting' | 'chineseCountingThousand' | 'chineseLegalSimplified'
+  | 'japaneseCounting' | 'japaneseDigitalTenThousand' | 'japaneseLegal'
+  | 'koreanCounting' | 'koreanDigital' | 'koreanDigital2' | 'koreanLegal'
+  | 'taiwaneseCounting' | 'taiwaneseCountingThousand' | 'taiwaneseDigital'
+  | 'aiueo' | 'aiueoFullWidth' | 'iroha' | 'irohaFullWidth'
+  | 'arabicAbjad' | 'arabicAlpha' | 'hebrew1' | 'hebrew2'
+  | 'hindiConsonants' | 'hindiCounting' | 'hindiNumbers' | 'hindiVowels'
+  | 'thaiCounting' | 'thaiLetters' | 'thaiNumbers'
+  | 'vietnameseCounting'
+  | 'russianLower' | 'russianUpper'
+  | 'numberInDash' | 'dollarText' | 'bullet'
+  | 'bahtText' | 'ganada' | 'chosung'
+  | 'none'
+  | string; // Allow any format string for forward compatibility
 
 /**
  * Page size properties
@@ -139,6 +163,37 @@ export interface LineNumbering {
 }
 
 /**
+ * Footnote/endnote position
+ * Per ECMA-376 Part 1 §17.11.6 and §17.11.7
+ */
+export type NotePosition = 'pageBottom' | 'beneathText' | 'sectEnd' | 'docEnd';
+
+/**
+ * Note numbering restart mode
+ */
+export type NoteNumberRestart = 'continuous' | 'eachSect' | 'eachPage';
+
+/**
+ * Chapter separator character for page numbering
+ * Per ECMA-376 Part 1 §17.18.5
+ */
+export type ChapterSeparator = 'colon' | 'emDash' | 'enDash' | 'hyphen' | 'period';
+
+/**
+ * Footnote/endnote section-level properties
+ */
+export interface NoteProperties {
+  /** Note positioning */
+  position?: NotePosition;
+  /** Number format */
+  numberFormat?: PageNumberFormat;
+  /** Starting number */
+  startNumber?: number;
+  /** Restart numbering mode */
+  restart?: NoteNumberRestart;
+}
+
+/**
  * Section properties
  */
 export interface SectionProperties {
@@ -180,6 +235,20 @@ export interface SectionProperties {
   docGrid?: DocumentGrid;
   /** Line numbering configuration */
   lineNumbering?: LineNumbering;
+  /** Section-level footnote properties (w:footnotePr) */
+  footnotePr?: NoteProperties;
+  /** Section-level endnote properties (w:endnotePr) */
+  endnotePr?: NoteProperties;
+  /** Suppress endnotes in this section (w:noEndnote) */
+  noEndnote?: boolean;
+  /** Form protection for this section (w:formProt) */
+  formProt?: boolean;
+  /** Printer settings relationship ID (w:printerSettings r:id) */
+  printerSettingsId?: string;
+  /** Chapter style heading level for page numbering (w:pgNumType w:chapStyle) */
+  chapStyle?: number;
+  /** Chapter separator for page numbering (w:pgNumType w:chapSep) */
+  chapSep?: ChapterSeparator;
 }
 
 /**
@@ -588,6 +657,63 @@ export class Section {
   }
 
   /**
+   * Sets section-level footnote properties
+   * Per ECMA-376 Part 1 §17.11.6
+   */
+  setFootnoteProperties(props: NoteProperties): this {
+    this.properties.footnotePr = { ...props };
+    return this;
+  }
+
+  /**
+   * Sets section-level endnote properties
+   * Per ECMA-376 Part 1 §17.11.7
+   */
+  setEndnoteProperties(props: NoteProperties): this {
+    this.properties.endnotePr = { ...props };
+    return this;
+  }
+
+  /**
+   * Sets whether endnotes are suppressed in this section
+   * Per ECMA-376 Part 1 §17.6.14
+   */
+  setNoEndnote(noEndnote: boolean = true): this {
+    this.properties.noEndnote = noEndnote;
+    return this;
+  }
+
+  /**
+   * Sets form protection for this section
+   * Per ECMA-376 Part 1 §17.6.4
+   */
+  setFormProtection(formProt: boolean = true): this {
+    this.properties.formProt = formProt;
+    return this;
+  }
+
+  /**
+   * Sets printer settings relationship ID
+   * Per ECMA-376 Part 1 §17.6.6
+   */
+  setPrinterSettings(rId: string): this {
+    this.properties.printerSettingsId = rId;
+    return this;
+  }
+
+  /**
+   * Sets chapter numbering for page numbers
+   * Per ECMA-376 Part 1 §17.6.12
+   * @param chapStyle - Heading level (1-9) to use for chapter numbering
+   * @param chapSep - Separator between chapter and page number
+   */
+  setChapterNumbering(chapStyle: number, chapSep?: ChapterSeparator): this {
+    this.properties.chapStyle = chapStyle;
+    if (chapSep) this.properties.chapSep = chapSep;
+    return this;
+  }
+
+  /**
    * Generates WordprocessingML XML for section properties
    */
   toXML(): XMLElement {
@@ -725,14 +851,70 @@ export class Section {
       children.push(XMLBuilder.wSelf('titlePg', { 'w:val': '1' }));
     }
 
+    // Footnote properties (w:footnotePr) per ECMA-376 Part 1 §17.11.6
+    if (this.properties.footnotePr) {
+      const fnChildren: XMLElement[] = [];
+      if (this.properties.footnotePr.position) {
+        fnChildren.push(XMLBuilder.wSelf('pos', { 'w:val': this.properties.footnotePr.position }));
+      }
+      if (this.properties.footnotePr.numberFormat) {
+        fnChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.footnotePr.numberFormat }));
+      }
+      if (this.properties.footnotePr.startNumber !== undefined) {
+        fnChildren.push(XMLBuilder.wSelf('numStart', { 'w:val': this.properties.footnotePr.startNumber.toString() }));
+      }
+      if (this.properties.footnotePr.restart) {
+        fnChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.footnotePr.restart }));
+      }
+      if (fnChildren.length > 0) {
+        children.push(XMLBuilder.w('footnotePr', undefined, fnChildren));
+      }
+    }
+
+    // Endnote properties (w:endnotePr) per ECMA-376 Part 1 §17.11.7
+    if (this.properties.endnotePr) {
+      const enChildren: XMLElement[] = [];
+      if (this.properties.endnotePr.position) {
+        enChildren.push(XMLBuilder.wSelf('pos', { 'w:val': this.properties.endnotePr.position }));
+      }
+      if (this.properties.endnotePr.numberFormat) {
+        enChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.endnotePr.numberFormat }));
+      }
+      if (this.properties.endnotePr.startNumber !== undefined) {
+        enChildren.push(XMLBuilder.wSelf('numStart', { 'w:val': this.properties.endnotePr.startNumber.toString() }));
+      }
+      if (this.properties.endnotePr.restart) {
+        enChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.endnotePr.restart }));
+      }
+      if (enChildren.length > 0) {
+        children.push(XMLBuilder.w('endnotePr', undefined, enChildren));
+      }
+    }
+
+    // Suppress endnotes (w:noEndnote) per ECMA-376 Part 1 §17.6.14
+    if (this.properties.noEndnote) {
+      children.push(XMLBuilder.wSelf('noEndnote'));
+    }
+
+    // Form protection (w:formProt) per ECMA-376 Part 1 §17.6.4
+    if (this.properties.formProt) {
+      children.push(XMLBuilder.wSelf('formProt'));
+    }
+
     // Page numbering
-    if (this.properties.pageNumbering) {
+    if (this.properties.pageNumbering || this.properties.chapStyle !== undefined) {
       const attrs: Record<string, string> = {};
-      if (this.properties.pageNumbering.start !== undefined) {
+      if (this.properties.pageNumbering?.start !== undefined) {
         attrs['w:start'] = this.properties.pageNumbering.start.toString();
       }
-      if (this.properties.pageNumbering.format) {
+      if (this.properties.pageNumbering?.format) {
         attrs['w:fmt'] = this.properties.pageNumbering.format;
+      }
+      if (this.properties.chapStyle !== undefined) {
+        attrs['w:chapStyle'] = this.properties.chapStyle.toString();
+      }
+      if (this.properties.chapSep) {
+        attrs['w:chapSep'] = this.properties.chapSep;
       }
       if (Object.keys(attrs).length > 0) {
         children.push(XMLBuilder.wSelf('pgNumType', attrs));
@@ -812,6 +994,13 @@ export class Section {
       if (Object.keys(attrs).length > 0) {
         children.push(XMLBuilder.wSelf('docGrid', attrs));
       }
+    }
+
+    // Printer settings (w:printerSettings) per ECMA-376 Part 1 §17.6.6
+    if (this.properties.printerSettingsId) {
+      children.push(XMLBuilder.wSelf('printerSettings', {
+        'r:id': this.properties.printerSettingsId,
+      }));
     }
 
     return XMLBuilder.w('sectPr', undefined, children);

@@ -18,6 +18,8 @@
 import { Document } from "../core/Document";
 import { Field, ComplexField } from "../elements/Field";
 import { Hyperlink } from "../elements/Hyperlink";
+import { Paragraph } from "../elements/Paragraph";
+import { Table } from "../elements/Table";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 
 export interface CleanupOptions {
@@ -210,15 +212,44 @@ export class CleanupHelper {
   }
 
   private removeSDTs(): number {
-    // Delegate to existing clearCustom() which removes SDTs and unwraps content
-    const before = this.doc.getBodyElements().length;
-    this.doc.clearCustom();
-    const after = this.doc.getBodyElements().length;
-    return Math.abs(after - before); // Approximate count of removed SDTs
+    // Unwrap SDT wrappers, preserving their content
+    const bodyElements = this.doc.getBodyElements();
+    type BodyElement = Paragraph | Table | StructuredDocumentTag;
+    const unwrapped: BodyElement[] = [];
+    let sdtCount = 0;
+
+    const unwrapSDT = (sdt: StructuredDocumentTag, target: BodyElement[]) => {
+      sdtCount++;
+      for (const item of sdt.getContent()) {
+        if (item instanceof Paragraph || item instanceof Table) {
+          target.push(item);
+        } else if (item instanceof StructuredDocumentTag) {
+          unwrapSDT(item, target);
+        }
+      }
+    };
+
+    for (const element of bodyElements) {
+      if (element instanceof StructuredDocumentTag) {
+        unwrapSDT(element, unwrapped);
+      } else {
+        unwrapped.push(element as BodyElement);
+      }
+    }
+
+    this.doc.setBodyElements(unwrapped);
+    return sdtCount;
   }
 
   private clearPreserveFlags(): number {
-    return this.doc.removeAllPreserveFlags();
+    let cleared = 0;
+    for (const para of this.doc.getAllParagraphs()) {
+      if (para.isPreserved()) {
+        para.setPreserved(false);
+        cleared++;
+      }
+    }
+    return cleared;
   }
 
   private defragmentHyperlinks(resetFormatting: boolean): number {
@@ -341,7 +372,12 @@ export class CleanupHelper {
     const tables = this.doc.getAllTables();
     let processed = 0;
     for (const table of tables) {
-      this.doc.sanitizeTableRowExceptions(table);
+      for (const row of table.getRows()) {
+        const exceptions = row.getTablePropertyExceptions();
+        if (exceptions && Object.keys(exceptions).length > 0) {
+          row.setTablePropertyExceptions(undefined as any);
+        }
+      }
       processed++;
     }
     return processed;

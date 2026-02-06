@@ -35,7 +35,7 @@ export function deepClone<T>(obj: T): T {
 
   // Handle Array
   if (Array.isArray(obj)) {
-    const arrCopy: any[] = [];
+    const arrCopy: unknown[] = [];
     for (let i = 0; i < obj.length; i++) {
       arrCopy[i] = deepClone(obj[i]);
     }
@@ -66,10 +66,10 @@ export function deepClone<T>(obj: T): T {
   }
 
   // Handle plain objects
-  const objCopy: any = Object.create(Object.getPrototypeOf(obj));
+  const objCopy = Object.create(Object.getPrototypeOf(obj)) as Record<string, unknown>;
   for (const key in obj) {
     if (obj.hasOwnProperty(key)) {
-      objCopy[key] = deepClone((obj as any)[key]);
+      objCopy[key] = deepClone((obj as Record<string, unknown>)[key]);
     }
   }
 

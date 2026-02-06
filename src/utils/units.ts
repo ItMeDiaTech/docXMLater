@@ -41,6 +41,8 @@ export const UNITS = {
   INCHES_PER_CM: 0.393701,
   /** Centimeters per inch */
   CM_PER_INCH: 2.54,
+  /** Half-points per point (Word uses half-points for font sizes) */
+  HALF_POINTS_PER_POINT: 2,
 } as const;
 
 // ============================================================================
@@ -171,6 +173,28 @@ export function pointsToInches(points: number): number {
  */
 export function pointsToCm(points: number): number {
   return pointsToInches(points) * UNITS.CM_PER_INCH;
+}
+
+// ============================================================================
+// Half-Points Conversions (Word uses half-points for font sizes)
+// ============================================================================
+
+/**
+ * Converts points to half-points (for Word font size storage)
+ * @param points Value in points
+ * @returns Value in half-points
+ */
+export function pointsToHalfPoints(points: number): number {
+  return points * UNITS.HALF_POINTS_PER_POINT;
+}
+
+/**
+ * Converts half-points to points (from Word font size storage)
+ * @param halfPoints Value in half-points
+ * @returns Value in points
+ */
+export function halfPointsToPoints(halfPoints: number): number {
+  return halfPoints / UNITS.HALF_POINTS_PER_POINT;
 }
 
 // ============================================================================

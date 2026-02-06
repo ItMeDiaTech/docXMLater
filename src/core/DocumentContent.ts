@@ -10,15 +10,23 @@ import { Table } from "../elements/Table";
 import { Section } from "../elements/Section";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { AlternateContent } from "../elements/AlternateContent";
+import { MathParagraph } from "../elements/MathElement";
+import { CustomXmlBlock } from "../elements/CustomXml";
+import { PreservedElement } from "../elements/PreservedElement";
 
 /**
- * Body element type - can be a Paragraph, Table, TOC, or SDT
+ * Body element type - can be a Paragraph, Table, TOC, SDT, or raw XML preservation element
  */
 export type BodyElement =
   | Paragraph
   | Table
   | TableOfContentsElement
-  | StructuredDocumentTag;
+  | StructuredDocumentTag
+  | AlternateContent
+  | MathParagraph
+  | CustomXmlBlock
+  | PreservedElement;
 
 /**
  * Manages document content (paragraphs, tables, sections)

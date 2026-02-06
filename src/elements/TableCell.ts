@@ -2,6 +2,7 @@
  * TableCell - Represents a cell in a table
  */
 
+import { formatDateForXml } from "../utils/dateFormatting";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { Paragraph, TextDirection } from "./Paragraph";
 import { Revision } from "./Revision";
@@ -1259,7 +1260,7 @@ export class TableCell {
       const attrs: Record<string, string | number> = {
         "w:id": this.cellRevision.getId(),
         "w:author": this.cellRevision.getAuthor(),
-        "w:date": this.cellRevision.getDate().toISOString(),
+        "w:date": formatDateForXml(this.cellRevision.getDate()),
       };
 
       if (revType === "tableCellInsert") {

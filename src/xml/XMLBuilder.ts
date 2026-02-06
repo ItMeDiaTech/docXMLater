@@ -5,6 +5,10 @@
 
 import { removeInvalidXmlChars } from "../utils/xmlSanitization";
 
+/** Represents a parsed XML object from XMLParser.parseToObject() */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed XML has dynamic keys and recursive structure
+type ParsedXmlObject = Record<string, any>;
+
 /**
  * Represents an XML element with attributes and children
  */
@@ -576,6 +580,27 @@ export class XMLBuilder {
 
     const allNamespaces = { ...XMLBuilder.createNamespaces(), ...namespaces };
 
+    // Ensure mc:Ignorable is present when extended namespaces are declared.
+    // Per ECMA-376, mc:Ignorable tells Word which namespace prefixes can be
+    // safely ignored if the processor doesn't support them. Without it,
+    // attributes like w14:paraId in raw XML passthrough zones cause corruption.
+    if (!allNamespaces["mc:Ignorable"]) {
+      const ignorable: string[] = [];
+      if (allNamespaces["xmlns:w14"]) ignorable.push("w14");
+      if (allNamespaces["xmlns:w15"]) ignorable.push("w15");
+      if (allNamespaces["xmlns:wp14"]) ignorable.push("wp14");
+      if (allNamespaces["xmlns:w16se"]) ignorable.push("w16se");
+      if (allNamespaces["xmlns:w16cid"]) ignorable.push("w16cid");
+      if (allNamespaces["xmlns:w16"]) ignorable.push("w16");
+      if (allNamespaces["xmlns:w16cex"]) ignorable.push("w16cex");
+      if (allNamespaces["xmlns:w16sdtdh"]) ignorable.push("w16sdtdh");
+      if (allNamespaces["xmlns:w16sdtfl"]) ignorable.push("w16sdtfl");
+      if (allNamespaces["xmlns:w16du"]) ignorable.push("w16du");
+      if (ignorable.length > 0) {
+        allNamespaces["mc:Ignorable"] = ignorable.join(" ");
+      }
+    }
+
     builder.element("w:document", allNamespaces, [
       XMLBuilder.w("body", undefined, bodyContent),
     ]);
@@ -587,7 +612,7 @@ export class XMLBuilder {
    * Builds an XML string from a JavaScript object.
    * This is the reverse of XMLParser.parseToObject
    */
-  static buildObject(obj: any, rootName: string): string {
+  static buildObject(obj: ParsedXmlObject, rootName: string): string {
     const builder = new XMLBuilder();
     const element = XMLBuilder.objectToElement(obj, rootName);
     if (element) {
@@ -605,7 +630,7 @@ export class XMLBuilder {
    * @private
    */
   private static objectToElement(
-    obj: any,
+    obj: ParsedXmlObject | string | number | boolean | null | undefined,
     name: string
   ): XMLElement | string | null {
     if (obj === null || obj === undefined) {
@@ -616,7 +641,7 @@ export class XMLBuilder {
       return String(obj);
     }
 
-    const attributes: Record<string, any> = {};
+    const attributes: Record<string, string | number | boolean> = {};
     const children: (XMLElement | string)[] = [];
 
     if (obj["#text"] && Object.keys(obj).length === 1) {

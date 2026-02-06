@@ -6,6 +6,7 @@
  */
 
 import { XMLElement, XMLBuilder } from '../xml/XMLBuilder';
+import { formatDateForXml } from '../utils/dateFormatting';
 
 /**
  * Table grid column definition
@@ -87,9 +88,10 @@ export class TableGridChange {
 
   /**
    * Formats a date to ISO 8601 format for XML
+   * Uses formatDateForXml() to strip milliseconds which Word does not accept.
    */
   private formatDate(date: Date): string {
-    return date.toISOString();
+    return formatDateForXml(date);
   }
 
   /**

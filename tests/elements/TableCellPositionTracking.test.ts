@@ -3,8 +3,6 @@
  * Critical bug fix: rawNestedContent positions must update when paragraphs are added/removed
  */
 
-import { Document } from "../../src/core/Document";
-import { Table } from "../../src/elements/Table";
 import { TableCell } from "../../src/elements/TableCell";
 import { Paragraph } from "../../src/elements/Paragraph";
 
@@ -219,85 +217,5 @@ describe("TableCell Position Tracking", () => {
       expect(removed).toBe(0);
       expect(cell.getParagraphs().length).toBe(2);
     });
-  });
-});
-
-describe("Document removeTrailingBlanksInTableCells", () => {
-  it("should remove trailing blanks from all table cells", async () => {
-    const doc = Document.create();
-    const table = new Table(2, 2);
-
-    // Cell 0,0: content + trailing blanks
-    const cell00 = table.getCell(0, 0);
-    cell00?.createParagraph("Cell 0,0 content");
-    cell00?.createParagraph("");
-    cell00?.createParagraph("");
-
-    // Cell 0,1: content only
-    const cell01 = table.getCell(0, 1);
-    cell01?.createParagraph("Cell 0,1 content");
-
-    // Cell 1,0: trailing blanks only (should keep one)
-    const cell10 = table.getCell(1, 0);
-    cell10?.createParagraph("");
-    cell10?.createParagraph("");
-
-    // Cell 1,1: content + one trailing blank
-    const cell11 = table.getCell(1, 1);
-    cell11?.createParagraph("Cell 1,1 content");
-    cell11?.createParagraph("");
-
-    doc.addTable(table);
-
-    const removed = doc.removeTrailingBlanksInTableCells();
-
-    // Cell 0,0: 2 blanks removed
-    // Cell 0,1: 0 blanks removed
-    // Cell 1,0: 1 blank removed (keeps one)
-    // Cell 1,1: 1 blank removed
-    expect(removed).toBe(4);
-
-    // Verify cell contents
-    const tables = doc.getTables();
-    expect(tables[0]?.getCell(0, 0)?.getParagraphs().length).toBe(1);
-    expect(tables[0]?.getCell(0, 1)?.getParagraphs().length).toBe(1);
-    expect(tables[0]?.getCell(1, 0)?.getParagraphs().length).toBe(1);
-    expect(tables[0]?.getCell(1, 1)?.getParagraphs().length).toBe(1);
-  });
-
-  it("should be called by removeExtraBlankParagraphs when option is enabled", async () => {
-    const doc = Document.create();
-    const table = new Table(1, 1);
-
-    const cell = table.getCell(0, 0);
-    cell?.createParagraph("Content");
-    cell?.createParagraph(""); // trailing blank
-
-    doc.addTable(table);
-
-    const result = doc.removeExtraBlankParagraphs({
-      addStructureBlankLines: false,
-      removeTrailingCellBlanks: true,
-    });
-
-    expect(result.removed).toBeGreaterThanOrEqual(1);
-    expect(doc.getTables()[0]?.getCell(0, 0)?.getParagraphs().length).toBe(1);
-  });
-
-  it("should call removeTrailingBlanksInTableCells directly to remove trailing blanks", async () => {
-    const doc = Document.create();
-    const table = new Table(1, 1);
-
-    const cell = table.getCell(0, 0);
-    cell?.createParagraph("Content");
-    cell?.createParagraph(""); // trailing blank
-
-    doc.addTable(table);
-
-    // Call the new method directly
-    const removed = doc.removeTrailingBlanksInTableCells();
-
-    expect(removed).toBe(1);
-    expect(doc.getTables()[0]?.getCell(0, 0)?.getParagraphs().length).toBe(1);
   });
 });

@@ -8,6 +8,7 @@ import { ParagraphFormatting } from "../elements/Paragraph";
 import { RunFormatting } from "../elements/Run";
 import { Heading2TableOptions } from "../types/styleConfig";
 import { deepClone } from "../utils/deepClone";
+import { pointsToHalfPoints } from "../utils/units";
 
 /**
  * Style type
@@ -1002,8 +1003,7 @@ export class Style {
       );
     }
     if (formatting.size !== undefined) {
-      // Word uses half-points (size * 2)
-      const halfPoints = formatting.size * 2;
+      const halfPoints = pointsToHalfPoints(formatting.size);
       rPrChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints }));
       rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": halfPoints }));
     }

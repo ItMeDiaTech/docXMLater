@@ -119,6 +119,43 @@ export class RevisionManager {
   }
 
   /**
+   * Registers an existing revision (from parsing) with its pre-assigned ID.
+   * Unlike register(), this does NOT assign a new ID - preserves the original
+   * ID from parsed XML. Used when loading documents to avoid overwriting
+   * revision IDs that are already correct.
+   *
+   * @param revision - Revision with ID already set from XML parsing
+   * @returns The registered revision (same instance)
+   */
+  registerExisting(revision: Revision): Revision {
+    const logger = getLogger();
+    const existingId = revision.getId();
+
+    // Notify centralized ID manager about this existing ID
+    // This ensures the shared counter stays above all existing IDs
+    if (this.idExistsNotifier) {
+      this.idExistsNotifier(existingId);
+    }
+
+    // Also update local nextId to avoid collisions (fallback when no provider)
+    if (existingId >= this.nextId) {
+      this.nextId = existingId + 1;
+    }
+
+    // Store revision (keep its existing ID - do NOT overwrite)
+    this.revisions.push(revision);
+    this.invalidateCache();
+
+    logger.debug('Existing revision registered', {
+      id: existingId,
+      type: revision.getType(),
+      author: revision.getAuthor()
+    });
+
+    return revision;
+  }
+
+  /**
    * Gets all revisions
    * @returns Array of all revisions
    */

@@ -10,6 +10,7 @@ import { XMLElement } from '../xml/XMLBuilder';
 import type { RevisionLocation } from './PropertyChangeTypes';
 import type { RevisionContent } from './RevisionContent';
 import { isRunContent, isHyperlinkContent } from './RevisionContent';
+import { formatDateForXml } from '../utils/dateFormatting';
 
 /**
  * Revision type - All OpenXML WordprocessingML revision types
@@ -349,11 +350,12 @@ export class Revision {
   /**
    * Formats a date to ISO 8601 format for XML
    * Per ECMA-376, revision dates must be in ISO 8601 format (e.g., "2024-01-01T12:00:00Z")
+   * Uses formatDateForXml() to strip milliseconds which Word does not accept.
    * @param date - Date to format
-   * @returns ISO 8601 formatted date string
+   * @returns ISO 8601 formatted date string without milliseconds
    */
   private formatDate(date: Date): string {
-    return date.toISOString();
+    return formatDateForXml(date);
   }
 
   /**

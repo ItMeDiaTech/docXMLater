@@ -43,11 +43,12 @@ export class ZipReader {
       // Read file as buffer
       const buffer = await fs.readFile(filePath);
       await this.loadFromBuffer(buffer, options);
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof DocxNotFoundError) {
         throw error;
       }
-      throw new FileOperationError('read', (error as Error).message);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new FileOperationError('read', message);
     }
   }
 
@@ -77,11 +78,12 @@ export class ZipReader {
       }
 
       this.loaded = true;
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof InvalidDocxError) {
         throw error;
       }
-      throw new CorruptedArchiveError((error as Error).message);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new CorruptedArchiveError(message);
     }
   }
 
