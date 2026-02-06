@@ -9,6 +9,11 @@
 import { Paragraph } from '../elements/Paragraph';
 import { Run } from '../elements/Run';
 
+/** Minimal interface for document corruption scanning (avoids circular import) */
+interface DocumentLike {
+  getAllParagraphs?(): Paragraph[];
+}
+
 /**
  * Types of corruption that can be detected
  */
@@ -79,7 +84,7 @@ export interface CorruptionReport {
  * }
  * ```
  */
-export function detectCorruptionInDocument(doc: any): CorruptionReport {
+export function detectCorruptionInDocument(doc: DocumentLike): CorruptionReport {
   const locations: CorruptionLocation[] = [];
   const stats = {
     escapedXml: 0,

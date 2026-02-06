@@ -4,6 +4,7 @@
  */
 
 import { deepClone } from "../utils/deepClone";
+import { formatDateForXml } from "../utils/dateFormatting";
 import { logParagraphContent, logTextDirection } from "../utils/diagnostics";
 import { defaultLogger } from "../utils/logger";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
@@ -29,6 +30,7 @@ import { Revision } from "./Revision";
 import { Run, RunFormatting } from "./Run";
 import { Shape } from "./Shape";
 import { TextBox } from "./TextBox";
+import { PreservedElement } from "./PreservedElement";
 
 // ============================================================================
 // RE-EXPORTED TYPES (for backward compatibility)
@@ -256,7 +258,7 @@ export interface ParagraphFormatting {
   /** Conditional table style formatting (bitmask string, e.g., "101000000100") */
   cnfStyle?: string;
   /** Section properties at paragraph level (for section breaks) */
-  sectPr?: any; // Complex object - simplified for now
+  sectPr?: string | Record<string, unknown>;
   /** Paragraph property change tracking (revision history) */
   pPrChange?: ParagraphPropertiesChange;
   /** Run properties for the paragraph mark (¶ symbol formatting) */
@@ -282,7 +284,8 @@ export type ParagraphContent =
   | Revision
   | RangeMarker
   | Shape
-  | TextBox;
+  | TextBox
+  | PreservedElement;
 
 // ============================================================================
 // TYPE GUARDS FOR ParagraphContent
@@ -774,6 +777,17 @@ export class Paragraph {
    */
   addTextBox(textbox: TextBox): this {
     this.content.push(textbox);
+    return this;
+  }
+
+  /**
+   * Adds any ParagraphContent item to the paragraph
+   * Used for preserved elements (proofErr, permStart/End, etc.)
+   * @param item - Content item to add
+   * @returns This paragraph for chaining
+   */
+  addContent(item: ParagraphContent): this {
+    this.content.push(item);
     return this;
   }
 
@@ -2549,7 +2563,7 @@ export class Paragraph {
    * @param properties - Section properties object
    * @returns This paragraph for chaining
    */
-  setSectionProperties(properties: any): this {
+  setSectionProperties(properties: string | Record<string, unknown>): this {
     const previousValue = this.formatting.sectPr;
     this.formatting.sectPr = properties;
     if (this.trackingContext?.isEnabled() && previousValue !== properties) {
@@ -2745,7 +2759,7 @@ export class Paragraph {
           XMLBuilder.wSelf("del", {
             "w:id": del.id.toString(),
             "w:author": del.author,
-            "w:date": del.date.toISOString(),
+            "w:date": formatDateForXml(del.date),
           })
         );
       }
@@ -3037,9 +3051,10 @@ export class Paragraph {
     if (this.formatting.pPrChange) {
       const change = this.formatting.pPrChange;
       const attrs: Record<string, string> = {};
+      // ECMA-376 attribute order: w:id (required), w:author (required), w:date (optional)
+      if (change.id) attrs["w:id"] = change.id;
       if (change.author) attrs["w:author"] = change.author;
       if (change.date) attrs["w:date"] = change.date;
-      if (change.id) attrs["w:id"] = change.id;
 
       // Build child w:pPr element with previous properties
       const prevPPrChildren: XMLElement[] = [];
@@ -3279,9 +3294,15 @@ export class Paragraph {
     // 20. Section properties per ECMA-376 Part 1 §17.3.1.30
     // Note: sectPr is typically the last child of pPr
     if (this.formatting.sectPr) {
-      // Simplified: serialize as-is (complex structure)
-      // Full implementation would generate complete sectPr XML structure
-      pPrChildren.push(XMLBuilder.wSelf("sectPr", this.formatting.sectPr));
+      if (typeof this.formatting.sectPr === 'string') {
+        // Raw XML passthrough for inline sectPr (preserves exact structure)
+        pPrChildren.push({
+          name: "__rawXml",
+          rawXml: this.formatting.sectPr,
+        } as XMLElement);
+      }
+      // Non-string (parsed object) is skipped to prevent corruption from
+      // XMLBuilder.wSelf treating complex objects as flat attributes
     }
 
     // Build paragraph element

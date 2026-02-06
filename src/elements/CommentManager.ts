@@ -11,6 +11,7 @@
 import { Comment } from './Comment';
 import { Run } from './Run';
 import { XMLBuilder } from '../xml/XMLBuilder';
+import { formatDateForXml } from '../utils/dateFormatting';
 
 /**
  * Type for the centralized ID provider callback.
@@ -117,6 +118,10 @@ export class CommentManager {
    * This builds the reply arrays for each parent comment.
    */
   linkReplies(): void {
+    // Clear existing replies first for idempotency (safe to call multiple times)
+    for (const entry of this.comments.values()) {
+      entry.replies = [];
+    }
     for (const entry of this.comments.values()) {
       const comment = entry.comment;
       if (comment.isReply() && comment.getParentId() !== undefined) {
@@ -439,7 +444,7 @@ export class CommentManager {
   private commentToXmlString(comment: Comment): string {
     let xml = `  <w:comment w:id="${comment.getId()}"`;
     xml += ` w:author="${XMLBuilder.escapeXmlAttribute(comment.getAuthor())}"`;
-    xml += ` w:date="${comment.getDate().toISOString()}"`;
+    xml += ` w:date="${formatDateForXml(comment.getDate())}"`;
     xml += ` w:initials="${XMLBuilder.escapeXmlAttribute(comment.getInitials())}"`;
 
     if (comment.isReply() && comment.getParentId() !== undefined) {

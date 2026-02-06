@@ -4,9 +4,11 @@
  */
 
 import { deepClone } from "../utils/deepClone";
+import { formatDateForXml } from "../utils/dateFormatting";
 import { logSerialization, logTextDirection } from "../utils/diagnostics";
 import { defaultLogger } from "../utils/logger";
 import { normalizeColor, validateRunText } from "../utils/validation";
+import { pointsToHalfPoints } from "../utils/units";
 import { getActiveConditionalsInPriorityOrder } from "../utils/cnfStyleDecoder";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import {
@@ -31,7 +33,21 @@ export type RunContentType =
   | "noBreakHyphen" // <w:noBreakHyphen/> - Non-breaking hyphen
   | "instructionText" // <w:instrText> - Field instruction text
   | "fieldChar" // <w:fldChar/> - Field character markers
-  | "vml"; // <w:pict> - VML/legacy graphics (preserved as raw XML)
+  | "vml" // <w:pict> - VML/legacy graphics (preserved as raw XML)
+  | "lastRenderedPageBreak" // <w:lastRenderedPageBreak/> - Last rendered page break position
+  | "separator" // <w:separator/> - Footnote/endnote separator line
+  | "continuationSeparator" // <w:continuationSeparator/> - Continuation separator line
+  | "pageNumber" // <w:pgNum/> - Page number field
+  | "annotationRef" // <w:annotationRef/> - Annotation reference marker
+  | "dayShort" // <w:dayShort/> - Short date day field
+  | "dayLong" // <w:dayLong/> - Long date day field
+  | "monthShort" // <w:monthShort/> - Short month field
+  | "monthLong" // <w:monthLong/> - Long month field
+  | "yearShort" // <w:yearShort/> - Short year field
+  | "yearLong" // <w:yearLong/> - Long year field
+  | "symbol" // <w:sym/> - Symbol character with font and char code
+  | "positionTab" // <w:ptab/> - Absolute position tab
+  | "embeddedObject"; // <w:object> - Embedded OLE object (preserved as raw XML)
 
 /**
  * Break type for <w:br> elements
@@ -64,6 +80,16 @@ export interface RunContent {
    * This flag helps with proper serialization back to w:delText/w:delInstrText
    */
   isDeleted?: boolean;
+  /** Symbol font name (only for 'symbol' type, w:sym w:font) */
+  symbolFont?: string;
+  /** Symbol character code (only for 'symbol' type, w:sym w:char) */
+  symbolChar?: string;
+  /** Position tab alignment (only for 'positionTab' type, w:ptab w:alignment) */
+  ptabAlignment?: string;
+  /** Position tab relative-to (only for 'positionTab' type, w:ptab w:relativeTo) */
+  ptabRelativeTo?: string;
+  /** Position tab leader character (only for 'positionTab' type, w:ptab w:leader) */
+  ptabLeader?: string;
 }
 
 /**
@@ -265,6 +291,18 @@ export interface RunFormatting {
   fitText?: number;
   /** East Asian typography layout options */
   eastAsianLayout?: EastAsianLayout;
+  /** Complex script formatting flag (w:cs) per ECMA-376 Part 1 §17.3.2.7 */
+  complexScript?: boolean;
+  /** Web hidden - hide text in web layout view (w:webHidden) per ECMA-376 Part 1 §17.3.2.44 */
+  webHidden?: boolean;
+  /** High ANSI font (w:rFonts w:hAnsi) - font for characters in the high ANSI range */
+  fontHAnsi?: string;
+  /** East Asian font (w:rFonts w:eastAsia) - font for East Asian characters */
+  fontEastAsia?: string;
+  /** Complex script font (w:rFonts w:cs) - font for complex script (RTL) characters */
+  fontCs?: string;
+  /** Font hint (w:rFonts w:hint) - hint for font selection: 'default' | 'eastAsia' | 'cs' */
+  fontHint?: string;
   /**
    * Automatically clean XML-like patterns from text content.
    * When true (default), removes XML tags like <w:t> from text to prevent display issues.
@@ -1640,6 +1678,90 @@ export class Run {
   }
 
   /**
+   * Sets complex script formatting flag (w:cs)
+   * @param complexScript - Whether complex script formatting applies (default: true)
+   * @returns This run for method chaining
+   */
+  setComplexScript(complexScript: boolean = true): this {
+    const previousValue = this.formatting.complexScript;
+    this.formatting.complexScript = complexScript;
+    if (this.trackingContext?.isEnabled() && previousValue !== complexScript) {
+      this.trackingContext.trackRunPropertyChange(this, 'complexScript', previousValue, complexScript);
+    }
+    return this;
+  }
+
+  /**
+   * Sets web hidden flag (w:webHidden) - hide text in web layout view
+   * @param webHidden - Whether text is hidden in web view (default: true)
+   * @returns This run for method chaining
+   */
+  setWebHidden(webHidden: boolean = true): this {
+    const previousValue = this.formatting.webHidden;
+    this.formatting.webHidden = webHidden;
+    if (this.trackingContext?.isEnabled() && previousValue !== webHidden) {
+      this.trackingContext.trackRunPropertyChange(this, 'webHidden', previousValue, webHidden);
+    }
+    return this;
+  }
+
+  /**
+   * Sets the High ANSI font (w:rFonts w:hAnsi)
+   * @param font - Font name for high ANSI characters
+   * @returns This run for method chaining
+   */
+  setFontHAnsi(font: string): this {
+    const previousValue = this.formatting.fontHAnsi;
+    this.formatting.fontHAnsi = font;
+    if (this.trackingContext?.isEnabled() && previousValue !== font) {
+      this.trackingContext.trackRunPropertyChange(this, 'fontHAnsi', previousValue, font);
+    }
+    return this;
+  }
+
+  /**
+   * Sets the East Asian font (w:rFonts w:eastAsia)
+   * @param font - Font name for East Asian characters
+   * @returns This run for method chaining
+   */
+  setFontEastAsia(font: string): this {
+    const previousValue = this.formatting.fontEastAsia;
+    this.formatting.fontEastAsia = font;
+    if (this.trackingContext?.isEnabled() && previousValue !== font) {
+      this.trackingContext.trackRunPropertyChange(this, 'fontEastAsia', previousValue, font);
+    }
+    return this;
+  }
+
+  /**
+   * Sets the complex script font (w:rFonts w:cs)
+   * @param font - Font name for complex script (RTL) characters
+   * @returns This run for method chaining
+   */
+  setFontCs(font: string): this {
+    const previousValue = this.formatting.fontCs;
+    this.formatting.fontCs = font;
+    if (this.trackingContext?.isEnabled() && previousValue !== font) {
+      this.trackingContext.trackRunPropertyChange(this, 'fontCs', previousValue, font);
+    }
+    return this;
+  }
+
+  /**
+   * Sets the font hint (w:rFonts w:hint)
+   * @param hint - Font selection hint: 'default', 'eastAsia', or 'cs'
+   * @returns This run for method chaining
+   */
+  setFontHint(hint: string): this {
+    const previousValue = this.formatting.fontHint;
+    this.formatting.fontHint = hint;
+    if (this.trackingContext?.isEnabled() && previousValue !== hint) {
+      this.trackingContext.trackRunPropertyChange(this, 'fontHint', previousValue, hint);
+    }
+    return this;
+  }
+
+  /**
    * Sets text effect/animation
    * @param effect - Effect type (e.g., 'shimmer', 'sparkleText')
    * @returns This run for method chaining
@@ -1766,7 +1888,7 @@ export class Run {
             }));
           }
           if (prevProps.size) {
-            const halfPoints = Math.round(prevProps.size * 2);
+            const halfPoints = Math.round(pointsToHalfPoints(prevProps.size));
             prevPropChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints.toString() }));
             prevPropChildren.push(XMLBuilder.wSelf("szCs", { "w:val": halfPoints.toString() }));
           }
@@ -1805,7 +1927,7 @@ export class Run {
           attributes: {
             'w:id': this.propertyChangeRevision.id.toString(),
             'w:author': this.propertyChangeRevision.author,
-            'w:date': this.propertyChangeRevision.date.toISOString(),
+            'w:date': formatDateForXml(this.propertyChangeRevision.date),
           },
           children: rPrChangeChildren,
         };
@@ -1898,6 +2020,80 @@ export class Run {
           );
           break;
         }
+
+        // Simple marker elements (self-closing, no attributes)
+        case "lastRenderedPageBreak":
+          runChildren.push(XMLBuilder.wSelf("lastRenderedPageBreak"));
+          break;
+
+        case "separator":
+          runChildren.push(XMLBuilder.wSelf("separator"));
+          break;
+
+        case "continuationSeparator":
+          runChildren.push(XMLBuilder.wSelf("continuationSeparator"));
+          break;
+
+        case "pageNumber":
+          runChildren.push(XMLBuilder.wSelf("pgNum"));
+          break;
+
+        case "annotationRef":
+          runChildren.push(XMLBuilder.wSelf("annotationRef"));
+          break;
+
+        case "dayShort":
+          runChildren.push(XMLBuilder.wSelf("dayShort"));
+          break;
+
+        case "dayLong":
+          runChildren.push(XMLBuilder.wSelf("dayLong"));
+          break;
+
+        case "monthShort":
+          runChildren.push(XMLBuilder.wSelf("monthShort"));
+          break;
+
+        case "monthLong":
+          runChildren.push(XMLBuilder.wSelf("monthLong"));
+          break;
+
+        case "yearShort":
+          runChildren.push(XMLBuilder.wSelf("yearShort"));
+          break;
+
+        case "yearLong":
+          runChildren.push(XMLBuilder.wSelf("yearLong"));
+          break;
+
+        // Symbol character (w:sym) per ECMA-376 Part 1 §17.3.3.30
+        case "symbol": {
+          const symAttrs: Record<string, string> = {};
+          if (contentElement.symbolFont) symAttrs["w:font"] = contentElement.symbolFont;
+          if (contentElement.symbolChar) symAttrs["w:char"] = contentElement.symbolChar;
+          runChildren.push(XMLBuilder.wSelf("sym", symAttrs));
+          break;
+        }
+
+        // Absolute position tab (w:ptab) per ECMA-376 Part 1 §17.3.3.23
+        case "positionTab": {
+          const ptabAttrs: Record<string, string> = {};
+          if (contentElement.ptabAlignment) ptabAttrs["w:alignment"] = contentElement.ptabAlignment;
+          if (contentElement.ptabRelativeTo) ptabAttrs["w:relativeTo"] = contentElement.ptabRelativeTo;
+          if (contentElement.ptabLeader) ptabAttrs["w:leader"] = contentElement.ptabLeader;
+          runChildren.push(XMLBuilder.wSelf("ptab", ptabAttrs));
+          break;
+        }
+
+        // Embedded OLE object (w:object) - preserved as raw XML
+        case "embeddedObject":
+          if (contentElement.rawXml) {
+            runChildren.push({
+              name: "__rawXml",
+              rawXml: contentElement.rawXml,
+            });
+          }
+          break;
 
         case "vml":
           // VML graphics (w:pict) - include raw XML without modification
@@ -2110,14 +2306,22 @@ export class Run {
     }
 
     // 2. Font family (must be second per ECMA-376 §17.3.2.28)
-    if (formatting.font) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("rFonts", {
-          "w:ascii": formatting.font,
-          "w:hAnsi": formatting.font,
-          "w:cs": formatting.font,
-        })
-      );
+    if (formatting.font || formatting.fontHAnsi || formatting.fontEastAsia || formatting.fontCs || formatting.fontHint) {
+      const rFontsAttrs: Record<string, string> = {};
+      if (formatting.font) rFontsAttrs["w:ascii"] = formatting.font;
+      rFontsAttrs["w:hAnsi"] = formatting.fontHAnsi || formatting.font || "";
+      if (formatting.fontEastAsia) rFontsAttrs["w:eastAsia"] = formatting.fontEastAsia;
+      rFontsAttrs["w:cs"] = formatting.fontCs || formatting.font || "";
+      if (formatting.fontHint) rFontsAttrs["w:hint"] = formatting.fontHint;
+
+      // Remove empty string values (only include attributes that have actual values)
+      for (const key of Object.keys(rFontsAttrs)) {
+        if (rFontsAttrs[key] === "") delete rFontsAttrs[key];
+      }
+
+      if (Object.keys(rFontsAttrs).length > 0) {
+        rPrChildren.push(XMLBuilder.wSelf("rFonts", rFontsAttrs));
+      }
     }
 
     // 2.5. Text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5
@@ -2219,6 +2423,11 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf("vanish", { "w:val": "1" }));
     }
 
+    // 6.12.3. Web hidden (w:webHidden) per ECMA-376 Part 1 §17.3.2.44
+    if (formatting.webHidden) {
+      rPrChildren.push(XMLBuilder.wSelf("webHidden", { "w:val": "1" }));
+    }
+
     // 6.12.5. Special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
     if (formatting.specVanish) {
       rPrChildren.push(XMLBuilder.wSelf("specVanish", { "w:val": "1" }));
@@ -2228,6 +2437,11 @@ export class Run {
     // FIX: Must include w:val="1" to explicitly enable RTL, otherwise Word interprets empty tag incorrectly
     if (formatting.rtl) {
       rPrChildren.push(XMLBuilder.wSelf("rtl", { "w:val": "1" }));
+    }
+
+    // 6.14. Complex script flag (w:cs) per ECMA-376 Part 1 §17.3.2.7
+    if (formatting.complexScript) {
+      rPrChildren.push(XMLBuilder.wSelf("cs", { "w:val": "1" }));
     }
 
     // 7. Strikethrough
@@ -2320,15 +2534,14 @@ export class Run {
     // 9. Font size (w:sz for regular text, w:szCs for complex scripts)
     // Per ECMA-376 Part 1 §17.3.2.39 (sz) and §17.3.2.40 (szCs)
     if (formatting.size !== undefined) {
-      // Word uses half-points (size * 2)
-      const halfPoints = formatting.size * 2;
+      const halfPoints = pointsToHalfPoints(formatting.size);
       rPrChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints }));
       // Use sizeCs if specified, otherwise fall back to size for backwards compatibility
-      const csHalfPoints = formatting.sizeCs !== undefined ? formatting.sizeCs * 2 : halfPoints;
+      const csHalfPoints = formatting.sizeCs !== undefined ? pointsToHalfPoints(formatting.sizeCs) : halfPoints;
       rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
     } else if (formatting.sizeCs !== undefined) {
       // Only complex script size specified (unusual but valid)
-      const csHalfPoints = formatting.sizeCs * 2;
+      const csHalfPoints = pointsToHalfPoints(formatting.sizeCs);
       rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
     }
 

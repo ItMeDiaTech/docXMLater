@@ -338,7 +338,7 @@ export class ZipWriter {
       });
 
       return buffer;
-    } catch (error) {
+    } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       throw new FileOperationError("generate", err.message);
     }
@@ -353,7 +353,7 @@ export class ZipWriter {
     try {
       const buffer = await this.toBuffer(options);
       await fs.writeFile(filePath, buffer);
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof FileOperationError) {
         throw error;
       }

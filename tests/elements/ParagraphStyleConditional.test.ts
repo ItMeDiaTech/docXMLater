@@ -87,7 +87,8 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
       const doc = Document.create();
       const para = new Paragraph();
       para.addText('Paragraph with section break');
-      para.setSectionProperties({ type: 'nextPage' });
+      // Use raw XML string for inline sectPr (required for correct serialization)
+      para.setSectionProperties('<w:sectPr><w:type w:val="nextPage"/></w:sectPr>');
 
       doc.addParagraph(para);
 
@@ -95,20 +96,20 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
       const buffer = await doc.toBuffer();
       const loaded = await Document.loadFromBuffer(buffer);
 
-      // Verify - sectPr is complex, just verify it exists
+      // Verify - sectPr should round-trip as raw XML string
       const loadedPara = loaded.getParagraphs()[0]!;
       expect(loadedPara.formatting.sectPr).toBeDefined();
-      // Note: Full sectPr serialization would require proper XML structure handling
+      expect(typeof loadedPara.formatting.sectPr).toBe('string');
     });
 
     it('should set and serialize section properties with page setup', async () => {
       const doc = Document.create();
       const para = new Paragraph();
       para.addText('Section with custom page setup');
-      para.setSectionProperties({
-        type: 'continuous',
-        pageSize: { w: 12240, h: 15840 }
-      });
+      // Use raw XML string for inline sectPr (required for correct serialization)
+      para.setSectionProperties(
+        '<w:sectPr><w:type w:val="continuous"/><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
+      );
 
       doc.addParagraph(para);
 
@@ -116,10 +117,11 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
       const buffer = await doc.toBuffer();
       const loaded = await Document.loadFromBuffer(buffer);
 
-      // Verify - sectPr is complex, just verify it exists
+      // Verify - sectPr should round-trip as raw XML string
       const loadedPara = loaded.getParagraphs()[0]!;
       expect(loadedPara.formatting.sectPr).toBeDefined();
-      // Note: Full sectPr serialization would require proper XML structure handling
+      expect(typeof loadedPara.formatting.sectPr).toBe('string');
+      expect(loadedPara.formatting.sectPr).toContain('w:val="continuous"');
     });
 
     it('should handle undefined sectPr', async () => {
@@ -223,7 +225,8 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
       const para = new Paragraph();
       para.addText('Complex paragraph with all properties');
       para.setConditionalFormatting('110000000000');
-      para.setSectionProperties({ type: 'nextPage' });
+      // Use raw XML string for inline sectPr (required for correct serialization)
+      para.setSectionProperties('<w:sectPr><w:type w:val="nextPage"/></w:sectPr>');
       // Per ECMA-376 §17.13.5.29, pPrChange MUST contain previousProperties (child w:pPr element)
       para.setParagraphPropertiesChange({
         author: 'Test User',
@@ -242,7 +245,7 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
       const loadedPara = loaded.getParagraphs()[0]!;
       expect(loadedPara.formatting.cnfStyle).toBe('110000000000');
       expect(loadedPara.formatting.sectPr).toBeDefined();
-      // Note: sectPr is complex and simplified in this implementation
+      expect(typeof loadedPara.formatting.sectPr).toBe('string');
       expect(loadedPara.formatting.pPrChange).toBeDefined();
       expect(loadedPara.formatting.pPrChange!.author).toBe('Test User');
     });

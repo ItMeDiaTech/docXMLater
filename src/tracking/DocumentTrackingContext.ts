@@ -11,7 +11,8 @@ import { Revision, RevisionType } from '../elements/Revision';
 import { RevisionManager } from '../elements/RevisionManager';
 import { Run } from '../elements/Run';
 import { Paragraph } from '../elements/Paragraph';
-import type { TrackingContext, PendingChange } from './TrackingContext';
+import type { TrackingContext, PendingChange, TrackableElement } from './TrackingContext';
+import { formatDateForXml } from '../utils/dateFormatting';
 
 /**
  * Time window in milliseconds for consolidating adjacent revisions.
@@ -134,8 +135,8 @@ export class DocumentTrackingContext implements TrackingContext {
   trackRunPropertyChange(
     run: Run,
     property: string,
-    oldValue: any,
-    newValue: any
+    oldValue: unknown,
+    newValue: unknown
   ): void {
     if (!this.enabled) return;
     if (oldValue === newValue) return;
@@ -162,10 +163,10 @@ export class DocumentTrackingContext implements TrackingContext {
   }
 
   trackParagraphPropertyChange(
-    paragraph: any,
+    paragraph: TrackableElement,
     property: string,
-    oldValue: any,
-    newValue: any
+    oldValue: unknown,
+    newValue: unknown
   ): void {
     if (!this.enabled) return;
     if (oldValue === newValue) return;
@@ -183,10 +184,10 @@ export class DocumentTrackingContext implements TrackingContext {
   }
 
   trackHyperlinkChange(
-    hyperlink: any,
+    hyperlink: TrackableElement,
     changeType: string,
-    oldValue: any,
-    newValue: any
+    oldValue: unknown,
+    newValue: unknown
   ): void {
     if (!this.enabled) return;
     if (oldValue === newValue) return;
@@ -205,10 +206,10 @@ export class DocumentTrackingContext implements TrackingContext {
   }
 
   trackTableChange(
-    element: any,
+    element: TrackableElement,
     property: string,
-    oldValue: any,
-    newValue: any
+    oldValue: unknown,
+    newValue: unknown
   ): void {
     if (!this.enabled) return;
     if (oldValue === newValue) return;
@@ -235,7 +236,7 @@ export class DocumentTrackingContext implements TrackingContext {
     });
   }
 
-  trackInsertion(element: any, text: string): void {
+  trackInsertion(element: TrackableElement, text: string): void {
     if (!this.enabled) return;
     if (!text) return;
 
@@ -251,7 +252,7 @@ export class DocumentTrackingContext implements TrackingContext {
     });
   }
 
-  trackDeletion(element: any, text: string): void {
+  trackDeletion(element: TrackableElement, text: string): void {
     if (!this.enabled) return;
     if (!text) return;
 
@@ -289,7 +290,7 @@ export class DocumentTrackingContext implements TrackingContext {
     // Apply pPrChange to each paragraph that has property changes
     for (const [paragraph, changes] of paragraphChanges) {
       // Build previous properties from all changes to this paragraph
-      const newPreviousProperties: Record<string, any> = {};
+      const newPreviousProperties: Record<string, unknown> = {};
       let latestTimestamp = 0;
 
       for (const change of changes) {
@@ -310,7 +311,7 @@ export class DocumentTrackingContext implements TrackingContext {
       if (existingChange) {
         // Preserve the original pPrChange - this represents what accepting ALL changes would revert to
         // We only update the previousProperties for properties we're NEWLY changing
-        const mergedPreviousProperties: Record<string, any> = {
+        const mergedPreviousProperties: Record<string, unknown> = {
           // Start with existing previous properties (original state before any tracked changes)
           ...(existingChange.previousProperties || {}),
         };
@@ -348,7 +349,7 @@ export class DocumentTrackingContext implements TrackingContext {
           const revisionId = this.revisionManager.consumeNextId();
           paragraph.formatting.pPrChange = {
             author: this.author,
-            date: new Date(latestTimestamp).toISOString(),
+            date: formatDateForXml(new Date(latestTimestamp)),
             id: String(revisionId),
             previousProperties: newPreviousProperties,
           };
@@ -409,23 +410,23 @@ export class DocumentTrackingContext implements TrackingContext {
   /**
    * Get or create a Run from an element for revision content
    */
-  private getRunFromElement(element: any): Run {
+  private getRunFromElement(element: TrackableElement): Run {
     if (element instanceof Run) {
       return element;
     }
 
     // For other elements, create a placeholder Run with description
-    const text =
-      element?.getText?.() ||
-      element?.constructor?.name ||
-      'Unknown element';
+    const hasGetText = 'getText' in element && typeof (element as { getText?: () => string }).getText === 'function';
+    const text = hasGetText
+      ? (element as { getText: () => string }).getText()
+      : element?.constructor?.name || 'Unknown element';
     return new Run(typeof text === 'string' ? text : String(text));
   }
 
   /**
    * Stringify a value for use in consolidation key
    */
-  private stringifyValue(value: any): string {
+  private stringifyValue(value: unknown): string {
     if (value === undefined) return 'undefined';
     if (value === null) return 'null';
     if (typeof value === 'object') {

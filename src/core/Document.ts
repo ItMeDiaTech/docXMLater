@@ -3,9 +3,13 @@
  * Provides a simple interface for creating DOCX files without managing ZIP and XML manually
  */
 
+import { AlternateContent } from "../elements/AlternateContent";
 import { Bookmark } from "../elements/Bookmark";
 import { BookmarkManager } from "../elements/BookmarkManager";
 import { Comment } from "../elements/Comment";
+import { CustomXmlBlock } from "../elements/CustomXml";
+import { PreservedElement } from "../elements/PreservedElement";
+import { MathParagraph } from "../elements/MathElement";
 import { CommentManager } from "../elements/CommentManager";
 import { EndnoteManager } from "../elements/EndnoteManager";
 import { Field } from "../elements/Field";
@@ -42,10 +46,10 @@ import { NumberingManager } from "../formatting/NumberingManager";
 import { Style, StyleProperties } from "../formatting/Style";
 import { StylesManager } from "../formatting/StylesManager";
 import { FormatOptions, StyleApplyOptions } from "../types/formatting";
-import {
-  ListNormalizationOptions,
-  ListNormalizationReport,
-} from "../types/list-types";
+import { CompatibilityMode, CompatibilityInfo, CompatSetting } from "../types/compatibility-types";
+import { CompatibilityUpgrader, UpgradeReport } from "../utils/CompatibilityUpgrader";
+import { MODERN_COMPAT_SETTINGS } from "../constants/legacyCompatFlags";
+// ListNormalizationOptions and ListNormalizationReport removed - normalizeTableLists moved to consumer
 import {
   ApplyStylesOptions,
   Heading2Config,
@@ -53,8 +57,9 @@ import {
   StyleRunFormatting,
   StyleParagraphFormatting,
 } from "../types/styleConfig";
-import { ListNormalizer } from "./ListNormalizer";
+// ListNormalizer import removed - moved to consumer
 import { defaultLogger, ILogger, getGlobalLogger, createScopedLogger } from "../utils/logger";
+import { UNITS } from "../utils/units";
 
 // Create scoped logger for Document operations
 function getLogger(): ILogger {
@@ -230,7 +235,11 @@ type BodyElement =
   | Paragraph
   | Table
   | TableOfContentsElement
-  | StructuredDocumentTag;
+  | StructuredDocumentTag
+  | AlternateContent
+  | MathParagraph
+  | CustomXmlBlock
+  | PreservedElement;
 
 /**
  * Represents a Word document
@@ -343,10 +352,19 @@ export class Document {
   // (VBA macros, custom UI, embedded objects, etc.)
   private _originalContentTypes?: { defaults: Set<string>; overrides: Set<string> };
 
-  // Store original styles.xml and numbering.xml to preserve formatting during save
+  // Store original styles.xml, numbering.xml, and settings.xml to preserve formatting during save
   // Prevents loss of formatting details not captured by parsers (bullet indentation, cell padding, etc.)
   private _originalStylesXml?: string;
   private _originalNumberingXml?: string;
+  private _originalSettingsXml?: string;
+
+  // Track whether settings have been programmatically modified since load
+  // When true, mergeSettingsWithOriginal() will apply in-memory state to the preserved XML
+  private _settingsModified: boolean = false;
+
+  // Parsed compatibility mode info from w:compat block in settings.xml
+  // Per MS-DOCX spec, default when absent is mode 12 (Word 2007)
+  private _compatInfo?: CompatibilityInfo;
 
   private rsidRoot?: string;
   private rsids: Set<string> = new Set();
@@ -544,6 +562,14 @@ export class Document {
       doc._originalNumberingXml = numberingXml;
     }
 
+    // Preserve original settings.xml and parse managed settings into in-memory state
+    // This ensures round-trip fidelity and accurate merge logic on save
+    const settingsXml = zipHandler.getFileAsString(DOCX_PATHS.SETTINGS);
+    if (settingsXml) {
+      doc._originalSettingsXml = settingsXml;
+      doc.parseSettingsFromXml(settingsXml);
+    }
+
     await doc.parseDocument();
 
     // If acceptRevisions option was set, accept revisions using in-memory transformation
@@ -644,6 +670,14 @@ export class Document {
       doc._originalNumberingXml = numberingXml;
     }
 
+    // Preserve original settings.xml and parse managed settings into in-memory state
+    // This ensures round-trip fidelity and accurate merge logic on save
+    const settingsXml = zipHandler.getFileAsString(DOCX_PATHS.SETTINGS);
+    if (settingsXml) {
+      doc._originalSettingsXml = settingsXml;
+      doc.parseSettingsFromXml(settingsXml);
+    }
+
     await doc.parseDocument();
 
     // If acceptRevisions option was set, accept revisions using in-memory transformation
@@ -658,6 +692,191 @@ export class Document {
     logger.info('Document loaded from buffer', { paragraphs: doc.getParagraphCount() });
 
     return doc;
+  }
+
+  /**
+   * Parses managed settings from settings.xml into in-memory state.
+   *
+   * This populates trackChangesEnabled, trackFormatting, revisionViewSettings,
+   * documentProtection, rsidRoot, and rsids from the original settings.xml so that
+   * the merge logic on save has accurate state to work with.
+   *
+   * Without this, calling protectDocument() on a loaded doc could accidentally
+   * strip <w:trackRevisions/> during the merge because trackChangesEnabled would
+   * still be false (constructor default) rather than the value from the file.
+   *
+   * @param settingsXml - The raw settings.xml content
+   * @private
+   */
+  private parseSettingsFromXml(settingsXml: string): void {
+    // Parse w:trackRevisions - presence means tracking is enabled
+    // Both <w:trackRevisions/> and <w:trackRevisions w:val="true"/> mean enabled
+    // <w:trackRevisions w:val="false"/> or <w:trackRevisions w:val="0"/> means disabled
+    const trackRevisionsMatch = settingsXml.match(/<w:trackRevisions\b([^>]*)\/?>/);
+    if (trackRevisionsMatch) {
+      const attrs = trackRevisionsMatch[1] ?? '';
+      const valMatch = attrs.match(/w:val\s*=\s*"([^"]*)"/);
+      if (valMatch && valMatch[1] !== undefined) {
+        const val = valMatch[1].toLowerCase();
+        this.trackChangesEnabled = val !== 'false' && val !== '0' && val !== 'off';
+      } else {
+        // Self-closing without val attribute means enabled
+        this.trackChangesEnabled = true;
+      }
+    }
+
+    // Parse w:doNotTrackFormatting - presence means formatting tracking is disabled
+    const hasDoNotTrackFormatting = /<w:doNotTrackFormatting\b[^>]*\/?>/.test(settingsXml);
+    if (hasDoNotTrackFormatting) {
+      this.trackFormatting = false;
+    }
+    // Parse w:trackFormatting - explicit presence means formatting tracking is enabled
+    const hasTrackFormatting = /<w:trackFormatting\b[^>]*\/?>/.test(settingsXml);
+    if (hasTrackFormatting) {
+      this.trackFormatting = true;
+    }
+
+    // Parse w:revisionView
+    const revisionViewMatch = settingsXml.match(/<w:revisionView\b([^>]*)\/?>/);
+    if (revisionViewMatch) {
+      const attrs = revisionViewMatch[1] || '';
+      const insDelMatch = attrs.match(/w:insDel\s*=\s*"([^"]*)"/);
+      const formattingMatch = attrs.match(/w:formatting\s*=\s*"([^"]*)"/);
+      const inkMatch = attrs.match(/w:inkAnnotations\s*=\s*"([^"]*)"/);
+      if (insDelMatch?.[1] !== undefined) {
+        this.revisionViewSettings.showInsertionsAndDeletions = insDelMatch[1] !== '0';
+      }
+      if (formattingMatch?.[1] !== undefined) {
+        this.revisionViewSettings.showFormatting = formattingMatch[1] !== '0';
+      }
+      if (inkMatch?.[1] !== undefined) {
+        this.revisionViewSettings.showInkAnnotations = inkMatch[1] !== '0';
+      }
+    }
+
+    // Parse w:documentProtection
+    const protMatch = settingsXml.match(/<w:documentProtection\b([^>]*)\/?>/);
+    if (protMatch) {
+      const attrs = protMatch[1] || '';
+      const editMatch = attrs.match(/w:edit\s*=\s*"([^"]*)"/);
+      const enforcementMatch = attrs.match(/w:enforcement\s*=\s*"([^"]*)"/);
+      if (editMatch?.[1]) {
+        const edit = editMatch[1] as 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+        const enforcement = enforcementMatch?.[1] ? enforcementMatch[1] !== '0' : true;
+        this.documentProtection = { edit, enforcement };
+
+        // Parse optional crypto attributes
+        const cryptProviderMatch = attrs.match(/w:cryptProviderType\s*=\s*"([^"]*)"/);
+        const cryptAlgClassMatch = attrs.match(/w:cryptAlgorithmClass\s*=\s*"([^"]*)"/);
+        const cryptAlgTypeMatch = attrs.match(/w:cryptAlgorithmType\s*=\s*"([^"]*)"/);
+        const cryptAlgSidMatch = attrs.match(/w:cryptAlgorithmSid\s*=\s*"([^"]*)"/);
+        const cryptSpinMatch = attrs.match(/w:cryptSpinCount\s*=\s*"([^"]*)"/);
+        const hashMatch = attrs.match(/w:hash\s*=\s*"([^"]*)"/);
+        const saltMatch = attrs.match(/w:salt\s*=\s*"([^"]*)"/);
+
+        if (cryptProviderMatch?.[1]) this.documentProtection.cryptProviderType = cryptProviderMatch[1];
+        if (cryptAlgClassMatch?.[1]) this.documentProtection.cryptAlgorithmClass = cryptAlgClassMatch[1];
+        if (cryptAlgTypeMatch?.[1]) this.documentProtection.cryptAlgorithmType = cryptAlgTypeMatch[1];
+        if (cryptAlgSidMatch?.[1]) this.documentProtection.cryptAlgorithmSid = parseInt(cryptAlgSidMatch[1], 10);
+        if (cryptSpinMatch?.[1]) this.documentProtection.cryptSpinCount = parseInt(cryptSpinMatch[1], 10);
+        if (hashMatch?.[1]) this.documentProtection.hash = hashMatch[1];
+        if (saltMatch?.[1]) this.documentProtection.salt = saltMatch[1];
+      }
+    }
+
+    // Parse w:rsids block
+    const rsidsBlockMatch = settingsXml.match(/<w:rsids>([\s\S]*?)<\/w:rsids>/);
+    if (rsidsBlockMatch?.[1]) {
+      const rsidsBlock = rsidsBlockMatch[1];
+
+      // Parse rsidRoot
+      const rsidRootMatch = rsidsBlock.match(/<w:rsidRoot\s+w:val\s*=\s*"([^"]*)"\s*\/?>/);
+      if (rsidRootMatch?.[1]) {
+        this.rsidRoot = rsidRootMatch[1].toUpperCase();
+      }
+
+      // Parse all rsid entries
+      const rsidRegex = /<w:rsid\s+w:val\s*=\s*"([^"]*)"\s*\/?>/g;
+      let rsidMatch;
+      while ((rsidMatch = rsidRegex.exec(rsidsBlock)) !== null) {
+        if (rsidMatch[1]) this.rsids.add(rsidMatch[1].toUpperCase());
+      }
+
+      // Ensure rsidRoot is also in the rsids set
+      if (this.rsidRoot) {
+        this.rsids.add(this.rsidRoot);
+      }
+    }
+
+    // Parse w:compat block for compatibility mode detection
+    this._compatInfo = this.parseCompatBlock(settingsXml);
+  }
+
+  /**
+   * Parses the w:compat block from settings.xml to extract compatibility mode info.
+   *
+   * Per MS-DOCX specification, when the compatibilityMode compatSetting is absent,
+   * the effective mode is 12 (Word 2007 / ECMA-376 1st edition).
+   *
+   * @param settingsXml - The raw settings.xml content
+   * @returns Parsed CompatibilityInfo
+   * @private
+   */
+  private parseCompatBlock(settingsXml: string): CompatibilityInfo {
+    const compatSettings: CompatSetting[] = [];
+    const legacyFlags: string[] = [];
+    let mode = CompatibilityMode.Word2007; // Default per MS-DOCX spec
+
+    // Extract w:compat block
+    const compatBlockMatch = settingsXml.match(/<w:compat>([\s\S]*?)<\/w:compat>/);
+    if (compatBlockMatch?.[1]) {
+      const compatBlock = compatBlockMatch[1];
+
+      // Parse w:compatSetting entries (name/uri/val triples)
+      const settingRegex = /<w:compatSetting\s+([^>]*)\/?\s*>/g;
+      let settingMatch;
+      while ((settingMatch = settingRegex.exec(compatBlock)) !== null) {
+        const attrs = settingMatch[1] ?? '';
+        const nameMatch = attrs.match(/w:name\s*=\s*"([^"]*)"/);
+        const uriMatch = attrs.match(/w:uri\s*=\s*"([^"]*)"/);
+        const valMatch = attrs.match(/w:val\s*=\s*"([^"]*)"/);
+
+        if (nameMatch?.[1] && uriMatch?.[1] && valMatch?.[1]) {
+          const setting: CompatSetting = {
+            name: nameMatch[1],
+            uri: uriMatch[1],
+            val: valMatch[1],
+          };
+          compatSettings.push(setting);
+
+          // Extract compatibility mode value
+          if (setting.name === 'compatibilityMode' &&
+              setting.uri === 'http://schemas.microsoft.com/office/word') {
+            const modeVal = parseInt(setting.val, 10);
+            if (!isNaN(modeVal)) {
+              mode = modeVal as CompatibilityMode;
+            }
+          }
+        }
+      }
+
+      // Parse legacy boolean compat flags (self-closing w: elements that are NOT w:compatSetting)
+      const legacyFlagRegex = /<w:(\w+)(?:\s[^>]*)?\/?>/g;
+      let flagMatch;
+      while ((flagMatch = legacyFlagRegex.exec(compatBlock)) !== null) {
+        const tagName = flagMatch[1];
+        // Skip w:compatSetting entries (already parsed above)
+        if (!tagName || tagName === 'compatSetting') continue;
+        legacyFlags.push(tagName);
+      }
+    }
+
+    return {
+      mode,
+      isLegacyMode: mode < CompatibilityMode.Word2013Plus,
+      compatSettings,
+      legacyFlags,
+    };
   }
 
   /**
@@ -716,14 +935,21 @@ export class Document {
         this.imageManager
       );
 
-      // Register headers with HeaderFooterManager
+      // Register headers with HeaderFooterManager (deduplicate by rId)
+      // Multiple section property types may reference the same rId
+      const registeredHeaderRIds = new Set<string>();
       for (const { header, relationshipId } of headersFooters.headers) {
+        if (registeredHeaderRIds.has(relationshipId)) continue;
         this.headerFooterManager.registerHeader(header, relationshipId);
+        registeredHeaderRIds.add(relationshipId);
       }
 
-      // Register footers with HeaderFooterManager
+      // Register footers with HeaderFooterManager (deduplicate by rId)
+      const registeredFooterRIds = new Set<string>();
       for (const { footer, relationshipId } of headersFooters.footers) {
+        if (registeredFooterRIds.has(relationshipId)) continue;
         this.headerFooterManager.registerFooter(footer, relationshipId);
+        registeredFooterRIds.add(relationshipId);
       }
     } catch (headerFooterError) {
       const logger = getLogger();
@@ -847,8 +1073,10 @@ export class Document {
         // Register revision with manager if not already registered
         // This ensures parsed revisions from document XML are accessible via
         // ChangelogGenerator.fromDocument() and revisionManager.getAllRevisions()
+        // Uses registerExisting() to preserve original IDs from parsed XML
+        // (register() would overwrite them with new sequential IDs)
         if (!registeredRevisions.has(revision)) {
-          this.revisionManager.register(revision);
+          this.revisionManager.registerExisting(revision);
           registeredRevisions.add(revision);
         }
 
@@ -907,7 +1135,7 @@ export class Document {
 
     // word/settings.xml (REQUIRED for DOCX compliance)
     this.zipHandler.addFile(
-      "word/settings.xml",
+      DOCX_PATHS.SETTINGS,
       this.generator.generateSettings({
         trackChangesEnabled: this.trackChangesEnabled,
         trackFormatting: this.trackFormatting,
@@ -917,6 +1145,20 @@ export class Document {
         documentProtection: this.documentProtection,
       })
     );
+
+    // Set compatibility info for new documents (always mode 15)
+    this._compatInfo = {
+      mode: CompatibilityMode.Word2013Plus,
+      isLegacyMode: false,
+      compatSettings: [
+        { name: 'compatibilityMode', uri: 'http://schemas.microsoft.com/office/word', val: '15' },
+        { name: 'overrideTableStyleFontSizeAndJustification', uri: 'http://schemas.microsoft.com/office/word', val: '1' },
+        { name: 'enableOpenTypeFeatures', uri: 'http://schemas.microsoft.com/office/word', val: '1' },
+        { name: 'doNotFlipMirrorIndents', uri: 'http://schemas.microsoft.com/office/word', val: '1' },
+        { name: 'differentiateMultirowTableHeaders', uri: 'http://schemas.microsoft.com/office/word', val: '1' },
+      ],
+      legacyFlags: [],
+    };
 
     // word/theme/theme1.xml (REQUIRED for DOCX compliance)
     this.zipHandler.addFile(
@@ -1307,37 +1549,6 @@ export class Document {
   }
 
   /**
-   * Normalizes typed list prefixes in all tables to proper Word list formatting.
-   *
-   * This method detects manually-typed list prefixes like "1. ", "a. ", "• ", etc.
-   * and converts them to proper Word list formatting using <w:numPr>.
-   * Within each table cell, lists are normalized to the majority type (numbered or bullet).
-   *
-   * @param options - Optional configuration for normalization
-   * @returns Report with counts of normalized/skipped items and any errors
-   *
-   * @example
-   * ```typescript
-   * // Normalize all typed lists in tables
-   * const report = doc.normalizeTableLists();
-   * console.log(`Normalized ${report.normalized} list items`);
-   *
-   * // With custom numIds
-   * const report = doc.normalizeTableLists({
-   *   numberedStyleNumId: 5,
-   *   bulletStyleNumId: 8,
-   * });
-   * ```
-   */
-  normalizeTableLists(
-    options?: ListNormalizationOptions
-  ): ListNormalizationReport {
-    const normalizer = new ListNormalizer(this.numberingManager);
-    const tables = this.getAllTables();
-    return normalizer.normalizeAllTables(tables, options);
-  }
-
-  /**
    * Gets all Table of Contents elements in the document
    * @returns Array of TableOfContentsElement
    */
@@ -1461,8 +1672,8 @@ export class Document {
    * @param value - Property value
    * @returns This document for chaining
    */
-  setProperty(key: keyof DocumentProperties, value: any): this {
-    (this.properties as any)[key] = value;
+  setProperty(key: keyof DocumentProperties, value: DocumentProperties[keyof DocumentProperties]): this {
+    (this.properties[key] as DocumentProperties[typeof key]) = value as never;
     return this;
   }
 
@@ -1753,6 +1964,10 @@ export class Document {
         this.acceptRevisionsBeforeSave = false; // Reset flag after acceptance
       }
 
+      // Validate numbering references before generating XML to prevent corruption
+      // from orphaned numId references pointing to removed definitions
+      this.validateNumberingReferences();
+
       // Only regenerate document.xml if we haven't manually stripped tracked changes
       // Stripping sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
       if (!this.skipDocumentXmlRegeneration) {
@@ -1761,12 +1976,14 @@ export class Document {
 
       this.updateStylesXml();
       this.updateNumberingXml();
+      this.updateSettingsXml();
       this.updateCoreProps();
       this.updateAppProps(); // Update app.xml with current property values
       this.saveImages();
       this.saveHeaders();
       this.saveFooters();
       this.saveComments();
+      this.updatePeopleXml();
       this.saveCustomProperties(); // Add custom.xml if custom properties exist
       this.updateRelationships();
       this.updateContentTypesWithImagesHeadersFootersAndComments();
@@ -1787,7 +2004,7 @@ export class Document {
       saveSucceeded = true;
       this.clearSaveStateSnapshot();
       logger.info('Document saved', { path: filePath });
-    } catch (error) {
+    } catch (error: unknown) {
       // Restore state snapshot on failure - allows retry without data loss
       this.restoreSaveStateSnapshot();
 
@@ -1898,6 +2115,9 @@ export class Document {
         this.acceptRevisionsBeforeSave = false; // Reset flag after acceptance
       }
 
+      // Validate numbering references before generating XML to prevent corruption
+      this.validateNumberingReferences();
+
       // Only regenerate document.xml if we haven't manually stripped tracked changes
       if (!this.skipDocumentXmlRegeneration) {
         this.updateDocumentXml();
@@ -1905,12 +2125,15 @@ export class Document {
 
       this.updateStylesXml();
       this.updateNumberingXml();
+      this.updateSettingsXml();
       this.updateCoreProps();
       this.updateAppProps(); // Update app.xml with current property values
       this.saveImages();
       this.saveHeaders();
       this.saveFooters();
       this.saveComments();
+      this.updatePeopleXml();
+      this.saveCustomProperties(); // Add custom.xml if custom properties exist
       this.updateRelationships();
       this.updateContentTypesWithImagesHeadersFootersAndComments();
 
@@ -1932,7 +2155,7 @@ export class Document {
       this.clearSaveStateSnapshot();
       logger.info('Document buffer generated', { bufferSize: buffer.length });
       return buffer;
-    } catch (error) {
+    } catch (error: unknown) {
       // Restore state snapshot on failure - allows retry without data loss
       this.restoreSaveStateSnapshot();
       throw error;
@@ -2067,6 +2290,200 @@ export class Document {
       const xml = this.numberingManager.generateNumberingXml();
       this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
     }
+  }
+
+  /**
+   * Updates the settings.xml file with current in-memory state.
+   *
+   * For loaded documents: merges programmatic changes (track changes, protection, RSIDs)
+   * into the preserved original XML to maintain round-trip fidelity.
+   * For new documents: generates settings.xml from scratch.
+   *
+   * This method is called during save() and toBuffer() to ensure settings.xml
+   * reflects any changes made via enableTrackChanges(), protectDocument(), etc.
+   */
+  private updateSettingsXml(): void {
+    const xml = this.mergeSettingsWithOriginal();
+    this.zipHandler.updateFile(DOCX_PATHS.SETTINGS, xml);
+  }
+
+  /**
+   * Merges framework-managed settings into the preserved original settings.xml.
+   *
+   * If no original settings.xml exists (new document), generates from scratch.
+   * If settings were not modified, returns original as-is for perfect round-trip.
+   * If settings were modified, applies only changed settings into the original XML
+   * using schema-aware insertion points per CT_Settings (ECMA-376).
+   *
+   * @returns The merged settings.xml content
+   * @private
+   */
+  private mergeSettingsWithOriginal(): string {
+    if (!this._originalSettingsXml) {
+      // New document — generate from scratch (existing behavior)
+      return this.generator.generateSettings({
+        trackChangesEnabled: this.trackChangesEnabled,
+        trackFormatting: this.trackFormatting,
+        revisionView: this.revisionViewSettings,
+        rsidRoot: this.rsidRoot,
+        rsids: this.getRsids(),
+        documentProtection: this.documentProtection,
+      });
+    }
+
+    // If nothing was modified, return original as-is for perfect round-trip
+    if (!this._settingsModified) {
+      return this._originalSettingsXml;
+    }
+
+    // Start from original XML and selectively merge changed settings
+    let xml = this._originalSettingsXml;
+    xml = this.mergeTrackChangesIntoSettings(xml);
+    xml = this.mergeProtectionIntoSettings(xml);
+    xml = this.mergeRsidsIntoSettings(xml);
+
+    return xml;
+  }
+
+  /**
+   * Merges track changes settings (w:trackRevisions, w:doNotTrackFormatting,
+   * w:trackFormatting, w:revisionView) into settings.xml.
+   *
+   * Per CT_Settings schema order:
+   *   #31 w:revisionView, #32 w:trackRevisions,
+   *   #33 w:doNotTrackMoves, #34 w:doNotTrackFormatting
+   *
+   * @private
+   */
+  private mergeTrackChangesIntoSettings(xml: string): string {
+    // Remove existing track changes elements (will re-insert if needed)
+    xml = xml.replace(/<w:trackRevisions\b[^>]*\/>/g, '');
+    xml = xml.replace(/<w:trackRevisions\b[^>]*>[\s\S]*?<\/w:trackRevisions>/g, '');
+    xml = xml.replace(/<w:doNotTrackFormatting\b[^>]*\/>/g, '');
+    xml = xml.replace(/<w:doNotTrackFormatting\b[^>]*>[\s\S]*?<\/w:doNotTrackFormatting>/g, '');
+    xml = xml.replace(/<w:trackFormatting\b[^>]*\/>/g, '');
+    xml = xml.replace(/<w:trackFormatting\b[^>]*>[\s\S]*?<\/w:trackFormatting>/g, '');
+    xml = xml.replace(/<w:revisionView\b[^>]*\/>/g, '');
+    xml = xml.replace(/<w:revisionView\b[^>]*>[\s\S]*?<\/w:revisionView>/g, '');
+
+    // Build the new track changes block
+    let trackBlock = '';
+
+    // w:revisionView (#31 in CT_Settings)
+    const view = this.revisionViewSettings;
+    // Only emit revisionView if it differs from defaults (all true)
+    if (!view.showInsertionsAndDeletions || !view.showFormatting || !view.showInkAnnotations) {
+      trackBlock += `\n  <w:revisionView w:insDel="${view.showInsertionsAndDeletions ? '1' : '0'}" w:formatting="${view.showFormatting ? '1' : '0'}" w:inkAnnotations="${view.showInkAnnotations ? '1' : '0'}"/>`;
+    }
+
+    // w:trackRevisions (#32)
+    if (this.trackChangesEnabled) {
+      trackBlock += '\n  <w:trackRevisions/>';
+    }
+
+    // w:doNotTrackFormatting (#34) — only if explicitly disabled
+    if (!this.trackFormatting) {
+      trackBlock += '\n  <w:doNotTrackFormatting/>';
+    }
+
+    // Insert before w:documentProtection (#35) if it exists,
+    // else before w:autoFormatOverride (#36), else before w:defaultTabStop (#39)
+    if (trackBlock) {
+      if (/<w:documentProtection\b/.test(xml)) {
+        xml = xml.replace(/<w:documentProtection\b/, trackBlock + '\n  <w:documentProtection');
+      } else if (/<w:autoFormatOverride\b/.test(xml)) {
+        xml = xml.replace(/<w:autoFormatOverride\b/, trackBlock + '\n  <w:autoFormatOverride');
+      } else if (/<w:defaultTabStop\b/.test(xml)) {
+        xml = xml.replace(/<w:defaultTabStop\b/, trackBlock + '\n  <w:defaultTabStop');
+      } else {
+        // Fallback: insert before </w:settings>
+        xml = xml.replace(/<\/w:settings>/, trackBlock + '\n</w:settings>');
+      }
+    }
+
+    return xml;
+  }
+
+  /**
+   * Merges document protection settings into settings.xml.
+   *
+   * Per CT_Settings schema: w:documentProtection is element #35
+   * (after w:doNotTrackFormatting #34, before w:autoFormatOverride #36)
+   *
+   * @private
+   */
+  private mergeProtectionIntoSettings(xml: string): string {
+    // Remove existing protection element
+    xml = xml.replace(/<w:documentProtection\b[^>]*\/>/g, '');
+    xml = xml.replace(/<w:documentProtection\b[^>]*>[\s\S]*?<\/w:documentProtection>/g, '');
+
+    if (!this.documentProtection) {
+      return xml;
+    }
+
+    // Build protection element
+    const prot = this.documentProtection;
+    let protXml = `\n  <w:documentProtection w:edit="${prot.edit}" w:enforcement="${prot.enforcement ? '1' : '0'}"`;
+    if (prot.cryptProviderType) protXml += ` w:cryptProviderType="${prot.cryptProviderType}"`;
+    if (prot.cryptAlgorithmClass) protXml += ` w:cryptAlgorithmClass="${prot.cryptAlgorithmClass}"`;
+    if (prot.cryptAlgorithmType) protXml += ` w:cryptAlgorithmType="${prot.cryptAlgorithmType}"`;
+    if (prot.cryptAlgorithmSid) protXml += ` w:cryptAlgorithmSid="${prot.cryptAlgorithmSid}"`;
+    if (prot.cryptSpinCount) protXml += ` w:cryptSpinCount="${prot.cryptSpinCount}"`;
+    if (prot.hash) protXml += ` w:hash="${prot.hash}"`;
+    if (prot.salt) protXml += ` w:salt="${prot.salt}"`;
+    protXml += '/>';
+
+    // Insert before w:autoFormatOverride (#36) if exists,
+    // else before w:defaultTabStop (#39), else before </w:settings>
+    if (/<w:autoFormatOverride\b/.test(xml)) {
+      xml = xml.replace(/<w:autoFormatOverride\b/, protXml + '\n  <w:autoFormatOverride');
+    } else if (/<w:defaultTabStop\b/.test(xml)) {
+      xml = xml.replace(/<w:defaultTabStop\b/, protXml + '\n  <w:defaultTabStop');
+    } else {
+      xml = xml.replace(/<\/w:settings>/, protXml + '\n</w:settings>');
+    }
+
+    return xml;
+  }
+
+  /**
+   * Merges RSIDs into settings.xml.
+   *
+   * Per CT_Settings schema: w:rsids is element #83
+   * (after w:compat #81 / w:docVars #82, before m:mathPr #84)
+   *
+   * @private
+   */
+  private mergeRsidsIntoSettings(xml: string): string {
+    // Remove existing rsids block
+    xml = xml.replace(/<w:rsids>[\s\S]*?<\/w:rsids>/g, '');
+
+    if (this.rsids.size === 0) {
+      return xml;
+    }
+
+    // Build RSIDs block
+    let rsidsXml = '\n  <w:rsids>';
+    if (this.rsidRoot) {
+      rsidsXml += `\n    <w:rsidRoot w:val="${this.rsidRoot}"/>`;
+    }
+    for (const rsid of this.rsids) {
+      rsidsXml += `\n    <w:rsid w:val="${rsid}"/>`;
+    }
+    rsidsXml += '\n  </w:rsids>';
+
+    // Insert after w:compat or w:docVars (#81/#82), before m:mathPr (#84)
+    if (/<\/w:compat>/.test(xml)) {
+      xml = xml.replace(/<\/w:compat>/, '</w:compat>' + rsidsXml);
+    } else if (/<m:mathPr\b/.test(xml)) {
+      xml = xml.replace(/<m:mathPr\b/, rsidsXml + '\n  <m:mathPr');
+    } else if (/<w:themeFontLang\b/.test(xml)) {
+      xml = xml.replace(/<w:themeFontLang\b/, rsidsXml + '\n  <w:themeFontLang');
+    } else {
+      xml = xml.replace(/<\/w:settings>/, rsidsXml + '\n</w:settings>');
+    }
+
+    return xml;
   }
 
   /**
@@ -2278,11 +2695,7 @@ export class Document {
   applyStyleToAll(
     styleId: string,
     predicate: (
-      element:
-        | Paragraph
-        | Table
-        | TableOfContentsElement
-        | StructuredDocumentTag
+      element: BodyElement
     ) => boolean
   ): number {
     let count = 0;
@@ -2834,7 +3247,22 @@ export class Document {
     singleCellTablesShaded: number;
   } {
     // Handle different parameter combinations
-    let options: any;
+    let options: {
+      autofitToWindow?: boolean;
+      singleCellShading?: string;
+      headerRowShading?: string;
+      headerRowFormatting?: {
+        bold?: boolean;
+        alignment?: "left" | "center" | "right" | "justify";
+        font?: string;
+        size?: number;
+        color?: string;
+        spacingBefore?: number;
+        spacingAfter?: number;
+      };
+      cellMargins?: { top?: number; bottom?: number; left?: number; right?: number };
+      skipSingleCellTables?: boolean;
+    } | undefined;
     if (typeof colorOrOptions === "string") {
       if (multiCellColor) {
         // Two colors provided: applyStandardTableFormatting('BFBFBF', 'E9E9E9')
@@ -3357,25 +3785,119 @@ export class Document {
    * Cleans up unused numbering definitions
    *
    * Removes numbering instances and abstract numberings that are no longer
-   * referenced by any paragraphs in the document. This prevents corruption
-   * from orphaned numbering definitions.
+   * referenced by any paragraphs in the document. Performs a comprehensive
+   * scan that includes:
+   * - Current paragraph numbering properties
+   * - Previous numbering from paragraph property changes (w:pPrChange)
+   * - numId references inside raw nested content (nested tables/SDTs)
+   * - numId references inside body-level tracked deletions (w:del blocks
+   *   that were skipped during parsing)
    *
    * @public
    */
   cleanupUnusedNumbering(): void {
-    // Collect all numIds currently used by paragraphs
     const usedNumIds = new Set<number>();
-    const paragraphs = this.getAllParagraphs();
 
+    // 1. Scan all parsed paragraphs for current numbering
+    const paragraphs = this.getAllParagraphs();
     for (const para of paragraphs) {
       const numbering = para.getNumbering();
       if (numbering) {
         usedNumIds.add(numbering.numId);
       }
+
+      // 2. Scan pPrChange for previous numbering references
+      const pPrChange = para.getFormatting().pPrChange;
+      if (pPrChange?.previousProperties?.numbering?.numId !== undefined) {
+        usedNumIds.add(pPrChange.previousProperties.numbering.numId);
+      }
     }
 
-    // Clean up unused numbering definitions
+    // 3. Scan raw nested content in table cells for numId references
+    for (const element of this.bodyElements) {
+      if (element instanceof Table) {
+        this.collectNumIdsFromTable(element, usedNumIds);
+      } else if (element instanceof StructuredDocumentTag) {
+        for (const content of element.getContent()) {
+          if (content instanceof Table) {
+            this.collectNumIdsFromTable(content, usedNumIds);
+          }
+        }
+      }
+    }
+
+    // 4. Scan original document XML for numId references in body-level w:del
+    //    blocks (deleted paragraphs skipped during parsing)
+    const documentXml = this.zipHandler.getFileAsString('word/document.xml');
+    if (documentXml) {
+      this.collectNumIdsFromXml(documentXml, usedNumIds);
+    }
+
+    // Clean up numbering definitions not found in any of the above scans
     this.numberingManager.cleanupUnusedNumbering(usedNumIds);
+  }
+
+  /**
+   * Validates that all paragraph numId references point to existing numbering
+   * definitions. Removes orphaned references where the numId definition was
+   * deleted but paragraphs still reference it. This prevents Word "unreadable
+   * content" corruption caused by active numbering references to missing definitions.
+   *
+   * @returns Number of orphaned numId references fixed
+   */
+  validateNumberingReferences(): number {
+    let fixed = 0;
+    const existingNumIds = new Set<number>(
+      this.numberingManager.getAllInstances().map((i: any) => i.getNumId())
+    );
+
+    for (const para of this.getAllParagraphs()) {
+      const numbering = para.getNumbering();
+      if (numbering && !existingNumIds.has(numbering.numId)) {
+        para.removeNumbering();
+        fixed++;
+      }
+    }
+
+    if (fixed > 0) {
+      this.logger.warn(`Fixed ${fixed} orphaned numId references (numbering definitions missing)`);
+    }
+    return fixed;
+  }
+
+  /**
+   * Collects numId references from raw nested content in a table's cells.
+   * Nested tables are stored as raw XML passthrough and may contain
+   * numbering references not captured by the in-memory paragraph model.
+   * @private
+   */
+  private collectNumIdsFromTable(table: Table, usedNumIds: Set<number>): void {
+    for (const row of table.getRows()) {
+      for (const cell of row.getCells()) {
+        const rawContent = cell.getRawNestedContent();
+        for (const item of rawContent) {
+          this.collectNumIdsFromXml(item.xml, usedNumIds);
+        }
+      }
+    }
+  }
+
+  /**
+   * Extracts all w:numId w:val="X" references from an XML string.
+   * Used to find numbering references in raw XML content that is not
+   * represented in the in-memory paragraph model (e.g., nested tables,
+   * deleted paragraphs in tracked changes).
+   * @private
+   */
+  private collectNumIdsFromXml(xml: string, usedNumIds: Set<number>): void {
+    const numIdPattern = /<w:numId\s+w:val="(\d+)"/g;
+    let match: RegExpExecArray | null;
+    while ((match = numIdPattern.exec(xml)) !== null) {
+      const val = match[1];
+      if (val) {
+        usedNumIds.add(parseInt(val, 10));
+      }
+    }
   }
 
   /**
@@ -3419,7 +3941,8 @@ export class Document {
             // Check if there's already a blank paragraph after the list
             const alreadyHasBlank =
               nextElement instanceof Paragraph &&
-              this.isParagraphBlank(nextElement);
+              nextElement.getText().trim() === '' &&
+              nextElement.getContent().length === 0;
 
             if (!alreadyHasBlank) {
               // Insert blank paragraph with Normal style after this list item
@@ -5187,209 +5710,6 @@ export class Document {
   }
 
   /**
-   * Removes extra blank paragraphs from the document with optional structure spacing
-   *
-   * This method uses a two-pass approach:
-   * 1. First pass: Removes ALL blank paragraphs (ignoring preserve flags)
-   * 2. Second pass (optional): Re-inserts Normal-style blank paragraphs after structural elements
-   *
-   * A paragraph is considered blank if it:
-   * - Has no text content (or only whitespace)
-   * - Has no images, hyperlinks, or other non-text content
-   * - Has no bookmarks or comments
-   *
-   * When `addStructureBlankLines` is enabled, blank paragraphs are added after:
-   * - Heading 1 paragraphs
-   * - Table of Contents elements
-   * - Bullet/numbered list blocks
-   * - "End of Document Warning" paragraph
-   * - Hyperlinks with display text "top of the document" (case-insensitive)
-   * - Every 1×1 table (including those in cells)
-   *
-   * @param options Configuration options for removal and re-insertion
-   * @returns Statistics about removed and added paragraphs
-   *
-   * @example
-   * // Remove all blank paragraphs and add structure spacing
-   * const result = doc.removeExtraBlankParagraphs({ addStructureBlankLines: true });
-   * console.log(`Removed ${result.removed} blank paragraphs, added ${result.added} structure blanks`);
-   *
-   * @example
-   * // Remove blanks and re-add structure spacing
-   * const result = doc.removeExtraBlankParagraphs({ addStructureBlankLines: true });
-   * console.log(`Removed ${result.removed}, added ${result.added} structure blanks`);
-   */
-  public removeExtraBlankParagraphs(options?: {
-    /**
-     * Whether to re-insert Normal-style blank paragraphs after structural elements.
-     * When true, adds spacing after headers, TOCs, lists, tables, and special hyperlinks.
-     * @default true
-     */
-    addStructureBlankLines?: boolean;
-    /**
-     * Stop adding bold+colon blank lines after this heading text is found in a 1x1 table.
-     * This option is passed through to addStructureBlankLines().
-     */
-    stopBoldColonAfterHeading?: string;
-    /**
-     * Whether to remove trailing blank paragraphs from table cells.
-     * A trailing blank is a blank paragraph at the END of a cell, after content.
-     * This removes blanks after images, text, or nested tables in cells.
-     * @default true
-     */
-    removeTrailingCellBlanks?: boolean;
-    /**
-     * Whether to preserve single blank lines (non-consecutive).
-     * When true, only consecutive duplicate blanks (2+) are removed, keeping one.
-     * Single blank lines between content are preserved.
-     * @default false
-     */
-    preserveSingleBlanks?: boolean;
-  }): {
-    removed: number;
-    added: number;
-    total: number;
-    preserved: number;
-  } {
-    const addStructureBlankLines = options?.addStructureBlankLines ?? true;
-    const removeTrailingCellBlanks = options?.removeTrailingCellBlanks ?? true;
-    const preserveSingleBlanks = options?.preserveSingleBlanks ?? false;
-    let removed = 0;
-    let added = 0;
-    let preserved = 0;
-
-    // OPTIONAL PASS: Remove SDT wrappers if addStructureBlankLines is enabled
-    if (addStructureBlankLines) {
-      this.clearCustom();
-    }
-
-    // OPTIONAL PASS: Mark single blanks as preserved if option enabled
-    // This ensures only consecutive duplicates (2+) are removed, keeping one
-    if (preserveSingleBlanks) {
-      preserved = this.markSingleBlanksAsPreserved();
-    }
-
-    // PASS 1: Remove blank paragraphs (respecting preserve flag)
-    const indicesToRemove: number[] = [];
-
-    for (let i = 0; i < this.bodyElements.length; i++) {
-      const element = this.bodyElements[i];
-
-      // Only process paragraphs
-      if (!(element instanceof Paragraph)) {
-        continue;
-      }
-
-      const para = element;
-
-      // Skip preserved paragraphs
-      if (para.isPreserved()) {
-        continue;
-      }
-
-      // Check if paragraph is blank
-      const isBlank = this.isParagraphBlank(para);
-
-      if (isBlank) {
-        indicesToRemove.push(i);
-      }
-    }
-
-    // Remove in reverse order to maintain indices
-    for (let i = indicesToRemove.length - 1; i >= 0; i--) {
-      const index = indicesToRemove[i];
-      if (index !== undefined) {
-        this.bodyElements.splice(index, 1);
-        removed++;
-      }
-    }
-
-    // PASS 1.5: Remove blank paragraphs inside table cells
-    for (const table of this.getAllTables()) {
-      for (const row of table.getRows()) {
-        for (const cell of row.getCells()) {
-          // Get fresh count each iteration since we're modifying the cell
-          let cellParaCount = cell.getParagraphs().length;
-          // Remove blank paragraphs from cell (in reverse to maintain indices)
-          // Keep at least one paragraph in the cell (Word requires it)
-          for (let i = cellParaCount - 1; i >= 0; i--) {
-            // Don't remove the last paragraph in a cell
-            if (cell.getParagraphs().length <= 1) break;
-
-            const para = cell.getParagraphs()[i];
-            if (para && !para.isPreserved() && this.isParagraphBlank(para)) {
-              cell.removeParagraph(i);
-              removed++;
-            }
-          }
-        }
-      }
-    }
-
-    // PASS 2: If requested, re-insert structure blank lines
-    if (addStructureBlankLines) {
-      added = this.addStructureBlankLinesAfterElements({
-        stopBoldColonAfterHeading: options?.stopBoldColonAfterHeading,
-      });
-    }
-
-    // PASS 3: Remove trailing blank paragraphs from table cells
-    // This removes blanks at the END of cells, after images/text/nested content
-    if (removeTrailingCellBlanks) {
-      const trailingRemoved = this.removeTrailingBlanksInTableCells({
-        ignorePreserveFlag: true, // Always remove trailing cell blanks
-      });
-      removed += trailingRemoved;
-    }
-
-    return {
-      removed,
-      added,
-      total: removed,
-      preserved,
-    };
-  }
-
-  /**
-   * Removes trailing blank paragraphs from all table cells in the document.
-   * A trailing blank is a blank paragraph at the END of a cell, after all content (images, text, nested tables).
-   * This is useful for removing unnecessary whitespace in table cells.
-   *
-   * This method respects the ECMA-376 requirement that each table cell must have at least one paragraph.
-   *
-   * @param options.ignorePreserveFlag - If true, removes trailing blanks even if marked preserved (default: true)
-   * @returns Total number of paragraphs removed across all cells
-   *
-   * @example
-   * ```typescript
-   * // Remove all trailing blanks in table cells (ignoring preserve flags)
-   * const removed = doc.removeTrailingBlanksInTableCells();
-   * console.log(`Removed ${removed} trailing blank paragraphs from cells`);
-   *
-   * // Remove trailing blanks but respect preserve flags
-   * const removed = doc.removeTrailingBlanksInTableCells({ ignorePreserveFlag: false });
-   * ```
-   */
-  public removeTrailingBlanksInTableCells(options?: {
-    ignorePreserveFlag?: boolean;
-  }): number {
-    let totalRemoved = 0;
-    const ignorePreserve = options?.ignorePreserveFlag ?? true;
-
-    for (const table of this.getAllTables()) {
-      for (const row of table.getRows()) {
-        for (const cell of row.getCells()) {
-          totalRemoved += cell.removeTrailingBlankParagraphs({
-            ignorePreserveFlag: ignorePreserve,
-          });
-        }
-      }
-    }
-
-    return totalRemoved;
-  }
-
-  /**
    * Updates shading colors in table style definitions in styles.xml.
    *
    * Table styles (e.g., GridTable4-Accent3) often have conditional formatting with
@@ -5543,1909 +5863,6 @@ export class Document {
       toRemove.push(...blanks);
     }
     // If keepOne is true and there's only 1 blank, don't remove it
-  }
-
-  /**
-   * Marks blank lines after 1x1 Heading 2 tables as preserved
-   * @private
-   */
-  /**
-   * Adds structural blank lines throughout the document for improved readability
-   *
-   * This comprehensive helper method systematically adds Normal-style blank paragraphs after
-   * key structural elements to improve document readability and visual spacing. It combines
-   * multiple spacing operations into a single convenient method.
-   *
-   * **Elements that receive blank lines:**
-   * - All 1×1 tables (configurable via filter)
-   * - All multi-cell tables (configurable via filter)
-   * - Bullet and numbered list blocks (configurable)
-   *
-   * **Features:**
-   * - Optional cleanup of duplicate blanks before adding structure blanks
-   * - Configurable spacing after blank paragraphs (default: 120 twips = 6pt)
-   * - Automatic preserve flag marking to protect structural blanks
-   * - Customizable style for blank paragraphs (default: 'Normal')
-   * - Per-table-type filtering for selective processing
-   * - List block detection via paragraph numbering properties
-   *
-   * **Typical Workflow:**
-   * 1. (Optional) Remove all duplicate blank paragraphs
-   * 2. Add blank lines after 1×1 tables
-   * 3. Add blank lines after multi-cell tables
-   * 4. Add blank lines after list blocks
-   * 5. Return aggregated statistics
-   *
-   * @param options Configuration options
-   * @returns Statistics about the operation
-   *
-   * @example
-   * // Add structure blanks with defaults (6pt spacing, marked as preserved)
-   * const result = doc.addStructureBlankLines();
-   * console.log(`Processed ${result.tablesProcessed} tables`);
-   * console.log(`Added ${result.blankLinesAdded} new blank lines`);
-   * console.log(`Marked ${result.existingLinesMarked} existing blank lines`);
-   *
-   * @example
-   * // Clean up duplicates first, then add structure blanks
-   * const result = doc.addStructureBlankLines({
-   *   cleanupFirst: true
-   * });
-   * console.log(`Removed ${result.blankLinesRemoved} duplicates`);
-   * console.log(`Added ${result.blankLinesAdded} structure blanks`);
-   *
-   * @example
-   * // Custom spacing and selective processing
-   * const result = doc.addStructureBlankLines({
-   *   spacingAfter: 240,  // 12pt spacing
-   *   after1x1Tables: true,
-   *   afterOtherTables: false,  // Only 1x1 tables
-   *   filter1x1: (table, index) => {
-   *     // Only add blanks after Heading 2 tables
-   *     const cell = table.getCell(0, 0);
-   *     if (!cell) return false;
-   *     return cell.getParagraphs().some(p => {
-   *       const style = p.getStyle();
-   *       return style === 'Heading2' || style === 'Heading 2';
-   *     });
-   *   }
-   * });
-   *
-   * @example
-   * // Don't mark as preserved (allow future cleanup)
-   * doc.addStructureBlankLines({
-   *   markAsPreserved: false,
-   *   spacingAfter: 120
-   * });
-   */
-  public addStructureBlankLines(options?: {
-    /** Spacing after blank paragraphs in twips (default: 120 = 6pt) */
-    spacingAfter?: number;
-    /** Mark blank paragraphs as preserved to prevent removal (default: true) */
-    markAsPreserved?: boolean;
-    /** Style to apply to blank paragraphs (default: 'Normal') */
-    style?: string;
-    /** Add blanks after 1×1 tables (default: true) */
-    after1x1Tables?: boolean;
-    /** Add blanks after multi-cell tables (default: true) */
-    afterOtherTables?: boolean;
-    /** Optional filter for selecting which 1×1 tables to process */
-    filter1x1?: (table: Table, index: number) => boolean;
-    /** Optional filter for selecting which multi-cell tables to process */
-    filterOther?: (table: Table, index: number) => boolean;
-    /** Add blank line above the first table in document (default: true) */
-    aboveFirstTable?: boolean;
-    /** Add blank line above "Top of Document" hyperlinks (default: true) */
-    aboveTODHyperlinks?: boolean;
-    /** Add blank line above "Return to HLP" hyperlinks and format with HLP Hyperlinks style (default: true) */
-    aboveReturnToHLP?: boolean;
-    /** Add blank line below Heading 1 paragraphs with text (default: true) */
-    belowHeading1Lines?: boolean;
-    /** Add blank line below Table of Contents elements (default: true) */
-    belowTOC?: boolean;
-    /** Add blank line above warning message (default: true) */
-    aboveWarning?: boolean;
-    /** Add blank line after bullet/numbered list blocks (default: true) */
-    afterLists?: boolean;
-    /** Add blank lines around images larger than 100x100 pixels (default: true) */
-    aroundImages?: boolean;
-    /** Add blank line above paragraphs starting with bold text followed by colon (default: true) */
-    aboveBoldColon?: boolean;
-    /** Stop adding bold+colon blank lines after this heading text is found in a 1x1 table (default: undefined - process all) */
-    stopBoldColonAfterHeading?: string;
-  }): {
-    tablesProcessed: number;
-    blankLinesAdded: number;
-    existingLinesMarked: number;
-    blankLinesRemoved: number;
-    listsProcessed: number;
-  } {
-    // Extract options with defaults
-    const spacingAfter = options?.spacingAfter ?? 120;
-    const markAsPreserved = options?.markAsPreserved ?? true;
-    const style = options?.style ?? 'Normal';
-    const after1x1Tables = options?.after1x1Tables ?? true;
-    const afterOtherTables = options?.afterOtherTables ?? true;
-    const filter1x1 = options?.filter1x1;
-    const filterOther = options?.filterOther;
-    const aboveFirstTable = options?.aboveFirstTable ?? true;
-    const aboveTODHyperlinks = options?.aboveTODHyperlinks ?? true;
-    const aboveReturnToHLP = options?.aboveReturnToHLP ?? true;
-    const belowHeading1Lines = options?.belowHeading1Lines ?? true;
-    const belowTOC = options?.belowTOC ?? true;
-    const aboveWarning = options?.aboveWarning ?? true;
-    const afterLists = options?.afterLists ?? true;
-    const aroundImages = options?.aroundImages ?? true;
-    const aboveBoldColon = options?.aboveBoldColon ?? true;
-    const stopBoldColonAfterHeading = options?.stopBoldColonAfterHeading?.toLowerCase();
-
-    // Aggregated statistics
-    let totalTablesProcessed = 0;
-    let totalBlankLinesAdded = 0;
-    let totalExistingLinesMarked = 0;
-    let blankLinesRemoved: number = 0;
-    let totalListsProcessed = 0;
-
-    // Phase 1: Remove duplicate blank paragraphs (always execute)
-    // Note: Pass false to avoid recursive loop since addStructureBlankLines defaults to true
-    const cleanupResult = this.removeExtraBlankParagraphs({ addStructureBlankLines: false });
-    blankLinesRemoved = cleanupResult.removed;
-
-    // Phase 2: Add blanks after 1×1 tables
-    if (after1x1Tables) {
-      const result1x1 = this.ensureBlankLinesAfter1x1Tables({
-        spacingAfter,
-        markAsPreserved,
-        style,
-        filter: filter1x1,
-      });
-      totalTablesProcessed += result1x1.tablesProcessed;
-      totalBlankLinesAdded += result1x1.blankLinesAdded;
-      totalExistingLinesMarked += result1x1.existingLinesMarked;
-    }
-
-    // Phase 3: Add blanks after multi-cell tables
-    if (afterOtherTables) {
-      const resultOther = this.ensureBlankLinesAfterOtherTables({
-        spacingAfter,
-        markAsPreserved,
-        style,
-        filter: filterOther,
-      });
-      totalTablesProcessed += resultOther.tablesProcessed;
-      totalBlankLinesAdded += resultOther.blankLinesAdded;
-      totalExistingLinesMarked += resultOther.existingLinesMarked;
-    }
-
-    // Phase 4: Add blank above first table
-    if (aboveFirstTable) {
-      const tables = this.getAllTables();
-      if (tables.length > 0) {
-        const firstTable = tables[0];
-        if (firstTable) {
-          const tableIndex = this.bodyElements.indexOf(firstTable);
-          if (tableIndex > 0) {
-            const prevElement = this.bodyElements[tableIndex - 1];
-            
-            // Check if previous element is already a blank paragraph
-            if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
-              // Mark existing blank as preserved
-              prevElement.setStyle(style);
-              if (markAsPreserved && !prevElement.isPreserved()) {
-                prevElement.setPreserved(true);
-                totalExistingLinesMarked++;
-              }
-            } else {
-              // Add blank paragraph before first table
-              const blankPara = Paragraph.create();
-              blankPara.setStyle(style);
-              blankPara.setSpaceAfter(spacingAfter);
-              if (markAsPreserved) {
-                blankPara.setPreserved(true);
-              }
-              this.bodyElements.splice(tableIndex, 0, blankPara);
-              totalBlankLinesAdded++;
-            }
-          }
-        }
-      }
-    }
-
-    // Phase 5: Add blank above "Top of Document" hyperlinks
-    if (aboveTODHyperlinks) {
-      const hyperlinks = this.getHyperlinks();
-      
-      for (const { hyperlink, paragraph } of hyperlinks) {
-        const text = hyperlink.getText().toLowerCase();
-        
-        // Match "top of document" or "top of the document" (case-insensitive)
-        if ((text === 'top of document' || text === 'top of the document')) {
-          const paraIndex = this.bodyElements.indexOf(paragraph);
-          
-          if (paraIndex > 0) {
-            const prevElement = this.bodyElements[paraIndex - 1];
-            
-            // Check if previous element is already blank
-            if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
-              // Check if it's a 1x1 table followed by blank - skip to avoid double blanks
-              if (paraIndex >= 2) {
-                const twoPrevElement = this.bodyElements[paraIndex - 2];
-                if (twoPrevElement instanceof Table) {
-                  const is1x1 = twoPrevElement.getRowCount() === 1 && twoPrevElement.getColumnCount() === 1;
-                  if (is1x1) {
-                    continue; // Skip - this blank is already from the 1x1 table
-                  }
-                }
-              }
-              
-              // Mark existing blank as preserved
-              prevElement.setStyle(style);
-              if (markAsPreserved && !prevElement.isPreserved()) {
-                prevElement.setPreserved(true);
-                totalExistingLinesMarked++;
-              }
-            } else if (!(prevElement instanceof Table && prevElement.getRowCount() === 1 && prevElement.getColumnCount() === 1)) {
-              // Add blank only if previous is not a 1x1 table (which already has its own blank)
-              const blankPara = Paragraph.create();
-              blankPara.setStyle(style);
-              blankPara.setSpaceAfter(spacingAfter);
-              if (markAsPreserved) {
-                blankPara.setPreserved(true);
-              }
-              this.bodyElements.splice(paraIndex, 0, blankPara);
-              totalBlankLinesAdded++;
-            }
-          }
-        }
-      }
-    }
-
-    // Phase 5b: Add blank above "Return to HLP" hyperlinks
-    if (aboveReturnToHLP) {
-      // Create or ensure HLP Hyperlinks style exists
-      if (!this.getStylesManager().hasStyle('HLPHyperlinks')) {
-        const hlpStyle = Style.create({
-          styleId: 'HLPHyperlinks',
-          name: 'HLP Hyperlinks',
-          type: 'paragraph',
-          basedOn: 'Normal',
-          customStyle: true,
-          paragraphFormatting: {
-            alignment: 'right',
-            spacing: {
-              before: 0,
-              after: 0,
-            }
-          },
-          runFormatting: {
-            font: 'Verdana',
-            size: 12,
-            color: '0000FF',
-            // underline removed - hyperlink gets its own underline via setFormatting() below
-            bold: false,
-            italic: false
-          }
-        });
-        this.addStyle(hlpStyle);
-      }
-
-      const hlpHyperlinks = this.getHyperlinks();
-
-      for (const { hyperlink, paragraph } of hlpHyperlinks) {
-        const text = hyperlink.getText().toLowerCase();
-
-        // Exact match only (case-insensitive)
-        if (text === 'return to hlp') {
-          const paraIndex = this.bodyElements.indexOf(paragraph);
-
-          if (paraIndex > 0) {
-            const prevElement = this.bodyElements[paraIndex - 1];
-
-            // Check if previous element is already blank
-            if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
-              // Mark existing blank as preserved
-              prevElement.setStyle(style);
-              if (markAsPreserved && !prevElement.isPreserved()) {
-                prevElement.setPreserved(true);
-                totalExistingLinesMarked++;
-              }
-            } else if (!(prevElement instanceof Table && prevElement.getRowCount() === 1 && prevElement.getColumnCount() === 1)) {
-              // Add blank only if previous is not a 1x1 table
-              const blankPara = Paragraph.create();
-              blankPara.setStyle(style);
-              blankPara.setSpaceAfter(spacingAfter);
-              if (markAsPreserved) {
-                blankPara.setPreserved(true);
-              }
-              this.bodyElements.splice(paraIndex, 0, blankPara);
-              totalBlankLinesAdded++;
-            }
-          }
-
-          // Format the hyperlink
-          hyperlink.setFormatting({
-            font: 'Verdana',
-            size: 12,
-            underline: 'single',
-            color: '0000FF',
-            bold: false,
-            italic: false
-          });
-
-          // Apply style and formatting to paragraph
-          paragraph.setStyle('HLPHyperlinks');
-          paragraph.setAlignment('right');
-          paragraph.setSpaceBefore(0);
-          paragraph.setSpaceAfter(0);
-        }
-      }
-    }
-
-    // Phase 6: Add blank below Heading 1 paragraphs with text
-    if (belowHeading1Lines) {
-      const allParas = this.getAllParagraphs();
-      
-      for (const para of allParas) {
-        const styleId = para.getStyle();
-        
-        // Check if it's a Heading1 paragraph with text
-        if (styleId === 'Heading1' && para.getText().trim() !== '') {
-          const paraIndex = this.bodyElements.indexOf(para);
-          
-          if (paraIndex !== -1 && paraIndex < this.bodyElements.length - 1) {
-            const nextElement = this.bodyElements[paraIndex + 1];
-            
-            // Check if next element is already blank
-            if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
-              // Mark existing blank as preserved
-              nextElement.setStyle(style);
-              if (markAsPreserved && !nextElement.isPreserved()) {
-                nextElement.setPreserved(true);
-                totalExistingLinesMarked++;
-              }
-            } else {
-              // Add blank paragraph after Heading 1
-              const blankPara = Paragraph.create();
-              blankPara.setStyle(style);
-              blankPara.setSpaceAfter(spacingAfter);
-              if (markAsPreserved) {
-                blankPara.setPreserved(true);
-              }
-              this.bodyElements.splice(paraIndex + 1, 0, blankPara);
-              totalBlankLinesAdded++;
-            }
-          }
-        }
-      }
-    }
-
-    // Phase 7: Add blank below Table of Contents elements
-    if (belowTOC) {
-      // Part A: Handle TableOfContentsElement instances (programmatically created TOCs)
-      const tocElements = this.getTableOfContentsElements();
-
-      for (const toc of tocElements) {
-        const tocIndex = this.bodyElements.indexOf(toc);
-
-        if (tocIndex !== -1 && tocIndex < this.bodyElements.length - 1) {
-          const nextElement = this.bodyElements[tocIndex + 1];
-
-          // Check if next element is already blank
-          if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
-            // Mark existing blank as preserved
-            nextElement.setStyle(style);
-            if (markAsPreserved && !nextElement.isPreserved()) {
-              nextElement.setPreserved(true);
-              totalExistingLinesMarked++;
-            }
-          } else {
-            // Add blank paragraph after TOC
-            const blankPara = Paragraph.create();
-            blankPara.setStyle(style);
-            blankPara.setSpaceAfter(spacingAfter);
-            if (markAsPreserved) {
-              blankPara.setPreserved(true);
-            }
-            this.bodyElements.splice(tocIndex + 1, 0, blankPara);
-            totalBlankLinesAdded++;
-          }
-        }
-      }
-
-      // Part B: Handle TOC paragraphs by style (parsed documents without SDT wrapper)
-      // Find the last paragraph in each TOC block (consecutive TOC-styled paragraphs)
-      let inTocBlock = false;
-      let lastTocParaIndex = -1;
-
-      for (let idx = 0; idx < this.bodyElements.length; idx++) {
-        const element = this.bodyElements[idx];
-
-        if (element instanceof Paragraph && this.isTocParagraph(element)) {
-          inTocBlock = true;
-          lastTocParaIndex = idx;
-        } else if (inTocBlock) {
-          // End of TOC block - add blank after the last TOC paragraph
-          inTocBlock = false;
-
-          if (lastTocParaIndex !== -1 && lastTocParaIndex < this.bodyElements.length - 1) {
-            const nextElement = this.bodyElements[lastTocParaIndex + 1];
-
-            // Check if next element is already blank
-            if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
-              // Mark existing blank as preserved
-              nextElement.setStyle(style);
-              if (markAsPreserved && !nextElement.isPreserved()) {
-                nextElement.setPreserved(true);
-                totalExistingLinesMarked++;
-              }
-            } else {
-              // Add blank paragraph after TOC block
-              const blankPara = Paragraph.create();
-              blankPara.setStyle(style);
-              blankPara.setSpaceAfter(spacingAfter);
-              if (markAsPreserved) {
-                blankPara.setPreserved(true);
-              }
-              this.bodyElements.splice(lastTocParaIndex + 1, 0, blankPara);
-              totalBlankLinesAdded++;
-              idx++; // Account for inserted element
-            }
-          }
-          lastTocParaIndex = -1;
-        }
-      }
-
-      // Handle case where TOC block is at the end of the document
-      if (inTocBlock && lastTocParaIndex !== -1 && lastTocParaIndex < this.bodyElements.length - 1) {
-        const nextElement = this.bodyElements[lastTocParaIndex + 1];
-
-        if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
-          nextElement.setStyle(style);
-          if (markAsPreserved && !nextElement.isPreserved()) {
-            nextElement.setPreserved(true);
-            totalExistingLinesMarked++;
-          }
-        } else {
-          const blankPara = Paragraph.create();
-          blankPara.setStyle(style);
-          blankPara.setSpaceAfter(spacingAfter);
-          if (markAsPreserved) {
-            blankPara.setPreserved(true);
-          }
-          this.bodyElements.splice(lastTocParaIndex + 1, 0, blankPara);
-          totalBlankLinesAdded++;
-        }
-      }
-    }
-
-    // Phase 8: Add blank above warning message
-    if (aboveWarning) {
-      // Look for the two-line warning pattern in consecutive paragraphs
-      for (let i = 0; i < this.bodyElements.length - 1; i++) {
-        const firstElem = this.bodyElements[i];
-        const secondElem = this.bodyElements[i + 1];
-        
-        if (firstElem instanceof Paragraph && secondElem instanceof Paragraph) {
-          const firstText = firstElem.getText().trim().toLowerCase();
-          const secondText = secondElem.getText().trim().toLowerCase();
-          
-          // Detect warning pattern - look for "warning" or "caution" keywords
-          const isWarningFirst = firstText.includes('warning') || firstText.includes('caution') ||
-                                 firstText.includes('important') || firstText.includes('note');
-          const hasSecondLine = secondText.length > 0;
-
-          // Skip if this paragraph is within a list context (e.g., "Note:" between bullet items)
-          if (this.isWithinListContext(i)) continue;
-
-          // Additional check: the warning is typically 2 consecutive non-empty paragraphs
-          // with similar formatting or style
-          if (isWarningFirst && hasSecondLine && i > 0) {
-            const prevElement = this.bodyElements[i - 1];
-            
-            // Check if previous element is already blank
-            if (prevElement instanceof Paragraph && this.isParagraphBlank(prevElement)) {
-              // Mark existing blank as preserved
-              prevElement.setStyle(style);
-              if (markAsPreserved && !prevElement.isPreserved()) {
-                prevElement.setPreserved(true);
-                totalExistingLinesMarked++;
-              }
-            } else {
-              // Add blank paragraph before warning
-              const blankPara = Paragraph.create();
-              blankPara.setStyle(style);
-              blankPara.setSpaceAfter(spacingAfter);
-              if (markAsPreserved) {
-                blankPara.setPreserved(true);
-              }
-              this.bodyElements.splice(i, 0, blankPara);
-              totalBlankLinesAdded++;
-              i++; // Skip the newly inserted blank paragraph
-            }
-            
-            // Only process the first warning found
-            break;
-          }
-        }
-      }
-    }
-
-    // Phase 9: Add blank after bullet/numbered list blocks
-    // Uses numId to distinguish between different lists - nested items with same numId
-    // are treated as part of the same list
-    if (afterLists) {
-      for (let i = 0; i < this.bodyElements.length; i++) {
-        const element = this.bodyElements[i];
-
-        if (element instanceof Paragraph) {
-          const numbering = element.getNumbering();
-
-          if (numbering) {
-            // This is a list item - check if it's the last item of its list
-            const nextElement = this.bodyElements[i + 1];
-
-            // Check if next element is any list item (same or different list)
-            // If so, don't add blank between consecutive lists
-            const nextIsAnyListItem = nextElement instanceof Paragraph && nextElement.getNumbering();
-            if (nextIsAnyListItem) {
-              continue; // No blank between consecutive lists
-            }
-
-            // Check if next is small image followed by list item
-            // If so, don't add blank after this list
-            if (nextElement instanceof Paragraph && this.isSmallImageParagraph(nextElement)) {
-              const elementAfterImage = i + 2 < this.bodyElements.length ? this.bodyElements[i + 2] : undefined;
-              if (elementAfterImage && elementAfterImage instanceof Paragraph && elementAfterImage.getNumbering()) {
-                continue; // No blank: list → small image → list
-              }
-            }
-
-            // Check if next non-list paragraph is within the same list context
-            // (e.g., "Example:" or "Note:" between list items)
-            const nextIsWithinList =
-              nextElement instanceof Paragraph &&
-              !nextElement.getNumbering() &&
-              this.isWithinListContext(i + 1);
-
-            // Check if next paragraph is indented (continuation content, not section break)
-            // Don't add blank after list if followed by indented content
-            const nextIsIndented =
-              nextElement instanceof Paragraph &&
-              !nextElement.getNumbering() &&
-              nextElement.getFormatting()?.indentation?.left &&
-              nextElement.getFormatting().indentation!.left! > 0;
-
-            const isListEnd =
-              !nextElement || // End of document
-              !(nextElement instanceof Paragraph) || // Next is not a paragraph
-              (!nextElement.getNumbering() && !nextIsWithinList && !nextIsIndented); // No numbering AND not within list context AND not indented
-
-            if (isListEnd) {
-              // Check if there's already a blank paragraph after the list
-              const alreadyHasBlank =
-                nextElement instanceof Paragraph &&
-                this.isParagraphBlank(nextElement);
-
-              if (alreadyHasBlank) {
-                // Look PAST the blank to see if the list continues with the same numId
-                const elementAfterBlank = this.bodyElements[i + 2];
-                const listContinuesAfterBlank =
-                  elementAfterBlank instanceof Paragraph &&
-                  elementAfterBlank.getNumbering()?.numId === numbering.numId;
-
-                if (listContinuesAfterBlank) {
-                  // Blank is in the MIDDLE of a list - do NOT preserve it
-                  // It will be removed by removeExtraBlankParagraphs
-                } else {
-                  // Blank is at the END of a list - preserve it
-                  nextElement.setStyle(style);
-                  if (markAsPreserved && !nextElement.isPreserved()) {
-                    nextElement.setPreserved(true);
-                    totalExistingLinesMarked++;
-                  }
-                }
-              } else {
-                // Add blank paragraph after list
-                const blankPara = Paragraph.create();
-                blankPara.setStyle(style);
-                blankPara.setSpaceAfter(spacingAfter);
-                blankPara.setPreserved(markAsPreserved);
-                this.bodyElements.splice(i + 1, 0, blankPara);
-                totalBlankLinesAdded++;
-              }
-
-              totalListsProcessed++;
-              // Skip the next element (either newly inserted or existing blank)
-              i++;
-            }
-          }
-        }
-      }
-
-      // Phase 9b: Handle lists inside table cells
-      // Add blank after list blocks in table cells, but NOT if list is last in cell
-      for (const table of this.getAllTables()) {
-        for (const row of table.getRows()) {
-          for (const cell of row.getCells()) {
-            // Get fresh paragraph list each iteration since we may modify it
-            let cellParaCount = cell.getParagraphs().length;
-
-            for (let ci = 0; ci < cellParaCount; ci++) {
-              const cellParas = cell.getParagraphs(); // Get fresh copy
-              const para = cellParas[ci];
-              if (!para) continue;
-
-              const numbering = para.getNumbering();
-              if (!numbering) continue;
-
-              // This is a list item - check if it's the last item of its list in this cell
-              const nextParaInCell = cellParas[ci + 1];
-
-              // Check if next element is any list item (same or different list)
-              // If so, don't add blank between consecutive lists
-              if (nextParaInCell && nextParaInCell.getNumbering()) {
-                continue; // No blank between consecutive lists in cell
-              }
-
-              // Check if next is small image followed by list item
-              // If so, don't add blank after this list
-              if (nextParaInCell && this.isSmallImageParagraph(nextParaInCell)) {
-                const paraAfterImage = cellParas[ci + 2];
-                if (paraAfterImage && paraAfterImage.getNumbering()) {
-                  continue; // No blank: list → small image → list in cell
-                }
-              }
-
-              // Check if next non-list paragraph is within the same list context in the cell
-              const nextIsWithinListInCell =
-                nextParaInCell &&
-                !nextParaInCell.getNumbering() &&
-                this.isWithinListContextInCell(cell, ci + 1);
-
-              // Check if next paragraph is indented (continuation content, not section break)
-              // Don't add blank after list if followed by indented content (e.g., "Example:" notes)
-              const nextIsIndentedInCell =
-                nextParaInCell &&
-                !nextParaInCell.getNumbering() &&
-                nextParaInCell.getFormatting()?.indentation?.left &&
-                nextParaInCell.getFormatting().indentation!.left! > 0;
-
-              const isListEndInCell =
-                !nextParaInCell || // End of cell
-                (!nextParaInCell.getNumbering() && !nextIsWithinListInCell && !nextIsIndentedInCell); // No numbering AND not within list context AND not indented
-
-              if (isListEndInCell) {
-                // Check if this is the last paragraph in the cell - don't add blank
-                const isLastInCell = ci === cellParas.length - 1;
-                if (isLastInCell) {
-                  // List ends at cell boundary - no blank needed
-                  continue;
-                }
-
-                // List ends but more content follows in cell
-                // Check if next is already blank
-                if (nextParaInCell && this.isParagraphBlank(nextParaInCell)) {
-                  // Mark existing blank as preserved
-                  nextParaInCell.setStyle(style);
-                  if (markAsPreserved && !nextParaInCell.isPreserved()) {
-                    nextParaInCell.setPreserved(true);
-                    totalExistingLinesMarked++;
-                  }
-                } else {
-                  // Add blank paragraph after list in cell
-                  const blankPara = Paragraph.create();
-                  blankPara.setStyle(style);
-                  blankPara.setSpaceAfter(spacingAfter);
-                  blankPara.setPreserved(markAsPreserved);
-                  cell.addParagraphAt(ci + 1, blankPara);
-                  totalBlankLinesAdded++;
-                  ci++; // Skip the newly inserted blank
-                  cellParaCount++; // Account for added paragraph
-                }
-                totalListsProcessed++;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Phase 9c: Add blank after indented paragraph blocks when followed by non-indented content
-    // This handles the case where indented content (like email text) transitions back to normal paragraphs
-    if (afterLists) {
-      for (let i = 0; i < this.bodyElements.length; i++) {
-        const element = this.bodyElements[i];
-
-        if (!(element instanceof Paragraph)) continue;
-
-        // Check if current is indented non-list paragraph
-        const currentIndent = element.getFormatting()?.indentation?.left;
-        const isIndented = currentIndent && currentIndent > 0 && !element.getNumbering();
-
-        if (!isIndented) continue;
-
-        // Skip if current paragraph is blank
-        if (this.isParagraphBlank(element)) continue;
-
-        // Check next element
-        const nextElement = this.bodyElements[i + 1];
-        if (!nextElement || !(nextElement instanceof Paragraph)) continue;
-
-        // Skip if next is blank (already has separation)
-        if (this.isParagraphBlank(nextElement)) continue;
-
-        // Check if next is non-indented and non-list
-        const nextIndent = nextElement.getFormatting()?.indentation?.left;
-        const nextIsIndented = nextIndent && nextIndent > 0;
-        const nextIsList = !!nextElement.getNumbering();
-
-        if (!nextIsIndented && !nextIsList) {
-          // Transition from indented to non-indented: add blank
-          const blankPara = Paragraph.create();
-          blankPara.setStyle(style);
-          blankPara.setSpaceAfter(spacingAfter);
-          blankPara.setPreserved(markAsPreserved);
-          this.bodyElements.splice(i + 1, 0, blankPara);
-          totalBlankLinesAdded++;
-          i++; // Skip the newly inserted blank
-        }
-      }
-
-      // Phase 9c-table: Handle indented paragraph blocks inside table cells
-      for (const table of this.getAllTables()) {
-        for (const row of table.getRows()) {
-          for (const cell of row.getCells()) {
-            let cellParas = cell.getParagraphs();
-            let cellParaCount = cellParas.length;
-
-            for (let ci = 0; ci < cellParaCount; ci++) {
-              cellParas = cell.getParagraphs(); // Refresh after potential insertion
-              const para = cellParas[ci];
-              if (!para) continue;
-
-              // Check if current is indented non-list paragraph
-              const currentIndent = para.getFormatting()?.indentation?.left;
-              const isIndented = currentIndent && currentIndent > 0 && !para.getNumbering();
-
-              if (!isIndented) continue;
-
-              // Skip if current paragraph is blank
-              if (this.isParagraphBlank(para)) continue;
-
-              // Check if this is the last paragraph in the cell - never add blank at cell end
-              const isLastInCell = ci === cellParas.length - 1;
-              if (isLastInCell) continue;
-
-              // Check next element
-              const nextPara = cellParas[ci + 1];
-              if (!nextPara) continue;
-
-              // Skip if next is blank (already has separation)
-              if (this.isParagraphBlank(nextPara)) continue;
-
-              // Check if next is non-indented and non-list
-              const nextIndent = nextPara.getFormatting()?.indentation?.left;
-              const nextIsIndented = nextIndent && nextIndent > 0;
-              const nextIsList = !!nextPara.getNumbering();
-
-              if (!nextIsIndented && !nextIsList) {
-                // Transition from indented to non-indented: add blank
-                const blankPara = Paragraph.create();
-                blankPara.setStyle(style);
-                blankPara.setSpaceAfter(spacingAfter);
-                blankPara.setPreserved(markAsPreserved);
-                cell.addParagraphAt(ci + 1, blankPara);
-                totalBlankLinesAdded++;
-                ci++; // Skip the newly inserted blank
-                cellParaCount++; // Account for added paragraph
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Phase 9d: Add blank after long text paragraphs (>60 chars, excluding hyperlink-only paragraphs)
-    // This helps visually separate dense content from following paragraphs
-    if (afterLists) {
-      for (let i = 0; i < this.bodyElements.length; i++) {
-        const element = this.bodyElements[i];
-
-        if (!(element instanceof Paragraph)) continue;
-
-        // Skip list items
-        if (element.getNumbering()) continue;
-
-        // Skip if current has indentation
-        const currentIndent = element.getFormatting()?.indentation?.left;
-        if (currentIndent && currentIndent > 0) continue;
-
-        // Check text length
-        const text = element.getText() || '';
-        if (text.length <= 60) continue;
-
-        // Skip if paragraph contains only hyperlink(s)
-        const content = element.getContent();
-        const isOnlyHyperlinks = content.length > 0 && content.every(item => item instanceof Hyperlink);
-        if (isOnlyHyperlinks) continue;
-
-        // Check next element
-        const nextElement = this.bodyElements[i + 1];
-        if (!nextElement || !(nextElement instanceof Paragraph)) continue;
-
-        // Skip if next is blank
-        if (this.isParagraphBlank(nextElement)) continue;
-
-        // Skip if next is list item
-        if (nextElement.getNumbering()) continue;
-
-        // Skip if next has indentation
-        const nextIndent = nextElement.getFormatting()?.indentation?.left;
-        if (nextIndent && nextIndent > 0) continue;
-
-        // Add blank line
-        const blankPara = Paragraph.create();
-        blankPara.setStyle(style);
-        blankPara.setSpaceAfter(spacingAfter);
-        blankPara.setPreserved(markAsPreserved);
-        this.bodyElements.splice(i + 1, 0, blankPara);
-        totalBlankLinesAdded++;
-        i++; // Skip inserted blank
-      }
-
-      // Phase 9d-table: Handle long text paragraphs inside table cells
-      for (const table of this.getAllTables()) {
-        for (const row of table.getRows()) {
-          for (const cell of row.getCells()) {
-            let cellParas = cell.getParagraphs();
-            let cellParaCount = cellParas.length;
-
-            for (let ci = 0; ci < cellParaCount; ci++) {
-              cellParas = cell.getParagraphs(); // Refresh after potential insertion
-              const para = cellParas[ci];
-              if (!para) continue;
-
-              // Skip list items
-              if (para.getNumbering()) continue;
-
-              // Skip if current has indentation
-              const currentIndent = para.getFormatting()?.indentation?.left;
-              if (currentIndent && currentIndent > 0) continue;
-
-              // Check text length
-              const text = para.getText() || '';
-              if (text.length <= 60) continue;
-
-              // Skip if paragraph contains only hyperlink(s)
-              const content = para.getContent();
-              const isOnlyHyperlinks = content.length > 0 && content.every(item => item instanceof Hyperlink);
-              if (isOnlyHyperlinks) continue;
-
-              // Check if this is the last paragraph in the cell - never add blank at cell end
-              const isLastInCell = ci === cellParas.length - 1;
-              if (isLastInCell) continue;
-
-              // Check next element
-              const nextPara = cellParas[ci + 1];
-              if (!nextPara) continue;
-
-              // Skip if next is blank
-              if (this.isParagraphBlank(nextPara)) continue;
-
-              // Skip if next is list item
-              if (nextPara.getNumbering()) continue;
-
-              // Skip if next has indentation
-              const nextIndent = nextPara.getFormatting()?.indentation?.left;
-              if (nextIndent && nextIndent > 0) continue;
-
-              // Add blank line
-              const blankPara = Paragraph.create();
-              blankPara.setStyle(style);
-              blankPara.setSpaceAfter(spacingAfter);
-              blankPara.setPreserved(markAsPreserved);
-              cell.addParagraphAt(ci + 1, blankPara);
-              totalBlankLinesAdded++;
-              ci++; // Skip the newly inserted blank
-              cellParaCount++; // Account for added paragraph
-            }
-          }
-        }
-      }
-    }
-
-    // Phase 10: Add blank lines around images
-    if (aroundImages) {
-      // Process body-level image paragraphs
-      for (let imgIdx = 0; imgIdx < this.bodyElements.length; imgIdx++) {
-        const element = this.bodyElements[imgIdx];
-
-        if (!(element instanceof Paragraph)) continue;
-
-        const imageRun = this.getImageRunFromParagraph(element);
-        if (!imageRun) continue;
-
-        const image = imageRun.getImageElement();
-        const isSmall = this.isImageSmall(image);
-
-        // Handle small images (< 100x100 pixels) with special rules
-        if (isSmall) {
-          // Add blank BEFORE small image unless:
-          // - Already blank OR
-          // - Previous is centered bold text (caption pattern) OR
-          // - (Previous is list item AND current has left indent)
-          if (imgIdx > 0) {
-            const prevElement = this.bodyElements[imgIdx - 1];
-            const prevIsBlank = prevElement instanceof Paragraph && this.isParagraphBlank(prevElement);
-            const prevIsCenteredBold = prevElement instanceof Paragraph && this.isCenteredBoldText(prevElement);
-            const prevIsListItem = prevElement instanceof Paragraph && prevElement.getNumbering();
-            const leftIndent = (element as Paragraph).getLeftIndent();
-            const currentHasLeftIndent = leftIndent !== undefined && leftIndent > 0;
-
-            if (!prevIsBlank && !prevIsCenteredBold && !(prevIsListItem && currentHasLeftIndent)) {
-              const blankBefore = Paragraph.create();
-              blankBefore.setStyle(style);
-              blankBefore.setSpaceAfter(spacingAfter);
-              if (markAsPreserved) blankBefore.setPreserved(true);
-              this.bodyElements.splice(imgIdx, 0, blankBefore);
-              totalBlankLinesAdded++;
-              imgIdx++;
-            }
-          }
-
-          // Add blank AFTER small image unless:
-          // - Already blank OR
-          // - Next is list item
-          if (imgIdx < this.bodyElements.length - 1) {
-            const nextElement = this.bodyElements[imgIdx + 1];
-            const nextIsBlank = nextElement instanceof Paragraph && this.isParagraphBlank(nextElement);
-            const nextIsListItem = nextElement instanceof Paragraph && nextElement.getNumbering();
-            // Don't add blank between consecutive small images
-            const nextIsSmallImage = nextElement instanceof Paragraph && this.isSmallImageParagraph(nextElement);
-
-            if (nextIsBlank) {
-              // Mark existing blank as preserved
-              nextElement.setStyle(style);
-              if (markAsPreserved && !(nextElement as Paragraph).isPreserved()) {
-                (nextElement as Paragraph).setPreserved(true);
-                totalExistingLinesMarked++;
-              }
-            } else if (!nextIsListItem && !nextIsSmallImage) {
-              const blankAfter = Paragraph.create();
-              blankAfter.setStyle(style);
-              blankAfter.setSpaceAfter(spacingAfter);
-              if (markAsPreserved) blankAfter.setPreserved(true);
-              this.bodyElements.splice(imgIdx + 1, 0, blankAfter);
-              totalBlankLinesAdded++;
-              imgIdx++;
-            }
-          }
-
-          continue; // Skip large image processing
-        }
-
-        // Handle large images (>= 100x100 pixels) - original behavior
-        // Add blank BEFORE image (if not at start of document and prev is not blank)
-        // Skip if previous is centered bold text (caption pattern)
-        if (imgIdx > 0) {
-          const prevElement = this.bodyElements[imgIdx - 1];
-          const prevIsBlank = prevElement instanceof Paragraph && this.isParagraphBlank(prevElement);
-          const prevIsCenteredBold = prevElement instanceof Paragraph && this.isCenteredBoldText(prevElement);
-
-          if (!prevIsBlank && !prevIsCenteredBold) {
-            const blankBefore = Paragraph.create();
-            blankBefore.setStyle(style);
-            blankBefore.setSpaceAfter(spacingAfter);
-            if (markAsPreserved) blankBefore.setPreserved(true);
-            this.bodyElements.splice(imgIdx, 0, blankBefore);
-            totalBlankLinesAdded++;
-            imgIdx++; // Account for inserted element
-          }
-        }
-
-        // Add blank AFTER image (if not at end and next is not blank)
-        if (imgIdx < this.bodyElements.length - 1) {
-          const nextElement = this.bodyElements[imgIdx + 1];
-          if (nextElement instanceof Paragraph && this.isParagraphBlank(nextElement)) {
-            // Mark existing blank as preserved
-            nextElement.setStyle(style);
-            if (markAsPreserved && !nextElement.isPreserved()) {
-              nextElement.setPreserved(true);
-              totalExistingLinesMarked++;
-            }
-          } else {
-            const blankAfter = Paragraph.create();
-            blankAfter.setStyle(style);
-            blankAfter.setSpaceAfter(spacingAfter);
-            if (markAsPreserved) blankAfter.setPreserved(true);
-            this.bodyElements.splice(imgIdx + 1, 0, blankAfter);
-            totalBlankLinesAdded++;
-            imgIdx++; // Skip the inserted blank
-          }
-        }
-      }
-
-      // Process images inside table cells
-      for (const table of this.getAllTables()) {
-        for (const row of table.getRows()) {
-          for (const cell of row.getCells()) {
-            let cellParaCount = cell.getParagraphs().length;
-
-            for (let ci = 0; ci < cellParaCount; ci++) {
-              const cellParas = cell.getParagraphs();
-              const para = cellParas[ci];
-              if (!para) continue;
-
-              const imageRun = this.getImageRunFromParagraph(para);
-              if (!imageRun) continue;
-
-              const image = imageRun.getImageElement();
-              const isSmall = this.isImageSmall(image);
-
-              // Handle small images (< 100x100 pixels) with special rules
-              if (isSmall) {
-                // Add blank BEFORE small image unless:
-                // - Already blank OR
-                // - Previous is centered bold text (caption pattern) OR
-                // - (Previous is list item AND current has left indent)
-                if (ci > 0) {
-                  const prevPara = cellParas[ci - 1];
-                  const prevIsBlank = prevPara && this.isParagraphBlank(prevPara);
-                  const prevIsCenteredBold = prevPara && this.isCenteredBoldText(prevPara);
-                  const prevIsListItem = prevPara && prevPara.getNumbering();
-                  const leftIndent = para.getLeftIndent();
-                  const currentHasLeftIndent = leftIndent !== undefined && leftIndent > 0;
-
-                  if (!prevIsBlank && !prevIsCenteredBold && !(prevIsListItem && currentHasLeftIndent)) {
-                    const blankBefore = Paragraph.create();
-                    blankBefore.setStyle(style);
-                    blankBefore.setSpaceAfter(spacingAfter);
-                    if (markAsPreserved) blankBefore.setPreserved(true);
-                    cell.addParagraphAt(ci, blankBefore);
-                    totalBlankLinesAdded++;
-                    ci++;
-                    cellParaCount++;
-                  }
-                }
-
-                // Add blank AFTER small image unless:
-                // - Last in cell OR
-                // - Already blank OR
-                // - Next is list item OR
-                // - Next is also a small image
-                const isLastInCellSmall = ci === cell.getParagraphs().length - 1;
-                if (!isLastInCellSmall) {
-                  const nextPara = cell.getParagraphs()[ci + 1];
-                  const nextIsBlank = nextPara && this.isParagraphBlank(nextPara);
-                  const nextIsListItem = nextPara && nextPara.getNumbering();
-                  // Don't add blank between consecutive small images
-                  const nextIsSmallImage = nextPara && this.isSmallImageParagraph(nextPara);
-
-                  if (nextIsBlank) {
-                    // Mark existing blank as preserved
-                    nextPara.setStyle(style);
-                    if (markAsPreserved && !nextPara.isPreserved()) {
-                      nextPara.setPreserved(true);
-                      totalExistingLinesMarked++;
-                    }
-                  } else if (!nextIsListItem && !nextIsSmallImage) {
-                    const blankAfter = Paragraph.create();
-                    blankAfter.setStyle(style);
-                    blankAfter.setSpaceAfter(spacingAfter);
-                    if (markAsPreserved) blankAfter.setPreserved(true);
-                    cell.addParagraphAt(ci + 1, blankAfter);
-                    totalBlankLinesAdded++;
-                    ci++;
-                    cellParaCount++;
-                  }
-                }
-
-                continue; // Skip large image processing
-              }
-
-              // Handle large images (>= 100x100 pixels) - original behavior
-              // Add blank BEFORE image (if not at start of cell)
-              // Skip if previous is centered bold text (caption pattern)
-              if (ci > 0) {
-                const prevPara = cellParas[ci - 1];
-                const prevIsBlank = prevPara && this.isParagraphBlank(prevPara);
-                const prevIsCenteredBold = prevPara && this.isCenteredBoldText(prevPara);
-
-                if (prevPara && !prevIsBlank && !prevIsCenteredBold) {
-                  const blankBefore = Paragraph.create();
-                  blankBefore.setStyle(style);
-                  blankBefore.setSpaceAfter(spacingAfter);
-                  if (markAsPreserved) blankBefore.setPreserved(true);
-                  cell.addParagraphAt(ci, blankBefore);
-                  totalBlankLinesAdded++;
-                  ci++;
-                  cellParaCount++;
-                }
-              }
-
-              // Add blank AFTER image (if not last in cell)
-              const isLastInCell = ci === cell.getParagraphs().length - 1;
-              if (!isLastInCell) {
-                const nextPara = cell.getParagraphs()[ci + 1];
-                if (nextPara && this.isParagraphBlank(nextPara)) {
-                  // Mark existing blank as preserved
-                  nextPara.setStyle(style);
-                  if (markAsPreserved && !nextPara.isPreserved()) {
-                    nextPara.setPreserved(true);
-                    totalExistingLinesMarked++;
-                  }
-                } else {
-                  const blankAfter = Paragraph.create();
-                  blankAfter.setStyle(style);
-                  blankAfter.setSpaceAfter(spacingAfter);
-                  if (markAsPreserved) blankAfter.setPreserved(true);
-                  cell.addParagraphAt(ci + 1, blankAfter);
-                  totalBlankLinesAdded++;
-                  ci++;
-                  cellParaCount++;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Phase 11: Add blank above paragraphs starting with bold text followed by colon
-    if (aboveBoldColon) {
-      let foundStopHeading = false;
-
-      for (let i = 1; i < this.bodyElements.length; i++) {
-        const element = this.bodyElements[i];
-
-        // Check if this element is a 1x1 table containing the stop heading
-        if (stopBoldColonAfterHeading && !foundStopHeading && element instanceof Table) {
-          const rowCount = element.getRowCount();
-          const colCount = element.getColumnCount();
-          if (rowCount === 1 && colCount === 1) {
-            const cell = element.getCell(0, 0);
-            if (cell) {
-              const cellText = cell
-                .getParagraphs()
-                .map((p) => p.getText())
-                .join(" ")
-                .toLowerCase();
-              if (cellText.includes(stopBoldColonAfterHeading)) {
-                foundStopHeading = true;
-                continue;
-              }
-            }
-          }
-        }
-
-        // Skip bold+colon processing after stop heading is found
-        if (foundStopHeading) continue;
-
-        if (!(element instanceof Paragraph)) continue;
-
-        // Skip blank paragraphs
-        if (this.isParagraphBlank(element)) continue;
-
-        if (this.startsWithBoldColon(element)) {
-          // Skip list items - they shouldn't get blank lines above them for bold+colon
-          const numbering = element.getNumbering();
-          if (numbering) continue;
-
-          // Skip paragraphs within a list context (e.g., "Example:" between bullet items)
-          if (this.isWithinListContext(i)) continue;
-
-          // Skip indented paragraphs - don't add blank lines above indented bold+colon
-          const indentation = element.getFormatting().indentation;
-          if (indentation && indentation.left && indentation.left > 0) continue;
-
-          const prevElement = this.bodyElements[i - 1];
-
-          if (
-            prevElement instanceof Paragraph &&
-            this.isParagraphBlank(prevElement)
-          ) {
-            // Mark existing blank as preserved
-            prevElement.setStyle(style);
-            if (markAsPreserved && !prevElement.isPreserved()) {
-              prevElement.setPreserved(true);
-              totalExistingLinesMarked++;
-            }
-          } else {
-            // Add blank paragraph before bold+colon line
-            const blankPara = Paragraph.create();
-            blankPara.setStyle(style);
-            blankPara.setSpaceAfter(spacingAfter);
-            if (markAsPreserved) {
-              blankPara.setPreserved(true);
-            }
-            this.bodyElements.splice(i, 0, blankPara);
-            totalBlankLinesAdded++;
-            i++; // Skip the inserted blank
-          }
-        }
-      }
-    }
-
-    // Phase 11b: Handle bold+colon paragraphs inside table cells
-    if (aboveBoldColon) {
-      let foundStopHeadingInTable = false;
-
-      for (const table of this.getAllTables()) {
-        // Check if this is a 1x1 table containing the stop heading
-        if (stopBoldColonAfterHeading && !foundStopHeadingInTable) {
-          const rowCount = table.getRowCount();
-          const colCount = table.getColumnCount();
-          if (rowCount === 1 && colCount === 1) {
-            const cell = table.getCell(0, 0);
-            if (cell) {
-              const cellText = cell
-                .getParagraphs()
-                .map((p) => p.getText())
-                .join(" ")
-                .toLowerCase();
-              if (cellText.includes(stopBoldColonAfterHeading)) {
-                foundStopHeadingInTable = true;
-                continue; // Skip this table and all subsequent tables
-              }
-            }
-          }
-        }
-
-        // Skip all tables after the stop heading table is found
-        if (foundStopHeadingInTable) continue;
-
-        for (const row of table.getRows()) {
-          for (const cell of row.getCells()) {
-            let cellParas = cell.getParagraphs();
-            let cellParaCount = cellParas.length;
-
-            for (let ci = 0; ci < cellParaCount; ci++) {
-              cellParas = cell.getParagraphs(); // Refresh after potential insertion
-              const para = cellParas[ci];
-              if (!para) continue;
-
-              // Skip blank paragraphs
-              if (this.isParagraphBlank(para)) continue;
-
-              // Skip list items
-              if (para.getNumbering()) continue;
-
-              // Skip paragraphs within a list context in the cell
-              if (this.isWithinListContextInCell(cell, ci)) continue;
-
-              // Check bold+colon condition
-              if (!this.startsWithBoldColon(para)) continue;
-
-              // Skip indented paragraphs - don't add blank lines above indented bold+colon
-              const indentation = para.getFormatting().indentation;
-              if (indentation && indentation.left && indentation.left > 0) continue;
-
-              // Skip if first element in cell
-              if (ci === 0) continue;
-
-              const prevPara = cellParas[ci - 1];
-
-              if (prevPara && this.isParagraphBlank(prevPara)) {
-                // Mark existing blank as preserved
-                prevPara.setStyle(style);
-                if (markAsPreserved && !prevPara.isPreserved()) {
-                  prevPara.setPreserved(true);
-                  totalExistingLinesMarked++;
-                }
-              } else {
-                // Add blank paragraph before bold+colon line
-                const blankPara = Paragraph.create();
-                blankPara.setStyle(style);
-                blankPara.setSpaceAfter(spacingAfter);
-                if (markAsPreserved) {
-                  blankPara.setPreserved(true);
-                }
-                cell.addParagraphAt(ci, blankPara);
-                totalBlankLinesAdded++;
-                ci++; // Skip the inserted blank
-                cellParaCount++; // Account for inserted paragraph
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Phase 11c: Add blank above centered bold text when previous is text-only paragraph or list item
-    for (let i = 1; i < this.bodyElements.length; i++) {
-      const element = this.bodyElements[i];
-
-      if (!(element instanceof Paragraph)) continue;
-      if (this.isParagraphBlank(element)) continue;
-      if (!this.isCenteredBoldText(element)) continue;
-
-      const prevElement = this.bodyElements[i - 1];
-
-      // Check if previous is text-only paragraph or list item
-      if (prevElement instanceof Paragraph) {
-        const prevIsBlank = this.isParagraphBlank(prevElement);
-        const prevIsListItem = prevElement.getNumbering() !== undefined;
-        const prevIsTextOnly = this.isTextOnlyParagraph(prevElement);
-
-        // Add blank above if previous is text-only paragraph OR list item
-        if (prevIsTextOnly || prevIsListItem) {
-          if (prevIsBlank) {
-            // Mark existing blank as preserved
-            prevElement.setStyle(style);
-            if (markAsPreserved && !prevElement.isPreserved()) {
-              prevElement.setPreserved(true);
-              totalExistingLinesMarked++;
-            }
-          } else {
-            // Insert blank paragraph before centered bold text
-            const blankAbove = Paragraph.create();
-            blankAbove.setStyle(style);
-            blankAbove.setSpaceAfter(spacingAfter);
-            if (markAsPreserved) blankAbove.setPreserved(true);
-            this.bodyElements.splice(i, 0, blankAbove);
-            totalBlankLinesAdded++;
-            i++; // Skip inserted element
-          }
-        }
-      }
-    }
-
-    // Phase 11d: Add blank above centered bold text in table cells
-    for (const table of this.getAllTables()) {
-      for (const row of table.getRows()) {
-        for (const cell of row.getCells()) {
-          let cellParas = cell.getParagraphs();
-
-          for (let ci = 1; ci < cellParas.length; ci++) {
-            const para = cellParas[ci];
-            if (!para || this.isParagraphBlank(para)) continue;
-            if (!this.isCenteredBoldText(para)) continue;
-
-            const prevPara = cellParas[ci - 1];
-            if (!prevPara) continue;
-
-            const prevIsBlank = this.isParagraphBlank(prevPara);
-            const prevIsListItem = prevPara.getNumbering() !== undefined;
-            const prevIsTextOnly = this.isTextOnlyParagraph(prevPara);
-
-            if (prevIsTextOnly || prevIsListItem) {
-              if (prevIsBlank) {
-                prevPara.setStyle(style);
-                if (markAsPreserved && !prevPara.isPreserved()) {
-                  prevPara.setPreserved(true);
-                  totalExistingLinesMarked++;
-                }
-              } else {
-                const blankAbove = Paragraph.create();
-                blankAbove.setStyle(style);
-                blankAbove.setSpaceAfter(spacingAfter);
-                if (markAsPreserved) blankAbove.setPreserved(true);
-                cell.addParagraphAt(ci, blankAbove);
-                totalBlankLinesAdded++;
-                ci++; // Skip inserted element
-                cellParas = cell.getParagraphs(); // Refresh after insertion
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Phase 12: Remove blank lines between consecutive list items
-    // List normalization may create different numIds for sub-lists (restart behavior),
-    // which causes Phase 9b to see them as "different lists" and add blanks between them.
-    // This cleanup removes blanks that are directly between two list items.
-    let listItemBlanksRemoved = 0;
-
-    // Body-level cleanup
-    for (let bi = 1; bi < this.bodyElements.length - 1; bi++) {
-      const prev = this.bodyElements[bi - 1];
-      const current = this.bodyElements[bi];
-      const next = this.bodyElements[bi + 1];
-
-      // Skip if current is not a blank paragraph
-      if (!(current instanceof Paragraph) || !this.isParagraphBlank(current)) continue;
-
-      // Skip if prev or next is a table (don't cross table boundaries)
-      if (prev instanceof Table || next instanceof Table) continue;
-
-      // Check if prev and next are both list items
-      if (prev instanceof Paragraph && next instanceof Paragraph) {
-        const prevNumbering = prev.getNumbering();
-        const nextNumbering = next.getNumbering();
-
-        if (prevNumbering && nextNumbering) {
-          // Both are list items - remove the blank between them
-          // This handles cases where ListNormalizer assigns different numIds during level transitions
-          this.bodyElements.splice(bi, 1);
-          bi--; // Adjust index after removal
-          listItemBlanksRemoved++;
-        }
-      }
-    }
-
-    // Table cell cleanup - remove blanks between list items within each cell
-    for (const table of this.getAllTables()) {
-      for (const row of table.getRows()) {
-        for (const cell of row.getCells()) {
-          let cellParas = cell.getParagraphs();
-          for (let ci = 1; ci < cellParas.length - 1; ci++) {
-            const prev = cellParas[ci - 1];
-            const current = cellParas[ci];
-            const next = cellParas[ci + 1];
-
-            if (!current || !this.isParagraphBlank(current)) continue;
-
-            const prevNumbering = prev?.getNumbering();
-            const nextNumbering = next?.getNumbering();
-
-            if (prevNumbering && nextNumbering) {
-              // Both are list items - remove the blank between them
-              // This handles cases where ListNormalizer assigns different numIds during level transitions
-              cell.removeParagraph(ci);
-              ci--; // Adjust index after removal
-              listItemBlanksRemoved++;
-              cellParas = cell.getParagraphs(); // Refresh after removal
-            }
-          }
-        }
-      }
-    }
-
-    blankLinesRemoved += listItemBlanksRemoved;
-
-    // Final Phase: Remove consecutive blank paragraphs to prevent double blanks
-    // This handles edge cases where multiple phases add adjacent blanks
-    let duplicateBlanksRemoved = 0;
-    let i = 0;
-    while (i < this.bodyElements.length - 1) {
-      const current = this.bodyElements[i];
-      const next = this.bodyElements[i + 1];
-
-      if (
-        current instanceof Paragraph &&
-        this.isParagraphBlank(current) &&
-        next instanceof Paragraph &&
-        this.isParagraphBlank(next)
-      ) {
-        // Keep first blank, remove second
-        this.bodyElements.splice(i + 1, 1);
-        duplicateBlanksRemoved++;
-        // Don't increment - check same position again in case there are 3+ blanks
-      } else {
-        i++;
-      }
-    }
-
-    // Return aggregated statistics
-    return {
-      tablesProcessed: totalTablesProcessed,
-      blankLinesAdded: totalBlankLinesAdded - duplicateBlanksRemoved,
-      existingLinesMarked: totalExistingLinesMarked,
-      blankLinesRemoved: blankLinesRemoved + duplicateBlanksRemoved,
-      listsProcessed: totalListsProcessed,
-    };
-  }
-
-  /**
-   * Removes blank paragraphs between consecutive list items in table cells.
-   *
-   * This method should be called AFTER list normalization (e.g., after converting
-   * typed list prefixes like "1.", "a." to proper Word numbering) to clean up any
-   * blank lines that were missed because the items didn't have Word numbering yet.
-   *
-   * @returns Number of blank paragraphs removed
-   *
-   * @example
-   * // After normalizing typed list prefixes to Word lists
-   * doc.normalizeTableLists();
-   *
-   * // Clean up any blanks between list items
-   * const removed = doc.removeBlanksBetweenListItems();
-   * console.log(`Removed ${removed} blank lines between list items`);
-   */
-  public removeBlanksBetweenListItems(): number {
-    let removed = 0;
-
-    // Process table cells
-    for (const table of this.getAllTables()) {
-      for (const row of table.getRows()) {
-        for (const cell of row.getCells()) {
-          let cellParas = cell.getParagraphs();
-          for (let ci = 1; ci < cellParas.length - 1; ci++) {
-            const prev = cellParas[ci - 1];
-            const current = cellParas[ci];
-            const next = cellParas[ci + 1];
-
-            // Skip if current is not a blank paragraph
-            if (!current || !this.isParagraphBlank(current)) continue;
-
-            const prevNumbering = prev?.getNumbering();
-            const nextNumbering = next?.getNumbering();
-
-            // If both prev and next are list items, remove the blank between them
-            if (prevNumbering && nextNumbering) {
-              cell.removeParagraph(ci);
-              ci--; // Adjust index after removal
-              removed++;
-              cellParas = cell.getParagraphs(); // Refresh after removal
-            }
-          }
-        }
-      }
-    }
-
-    // Also process body-level list items
-    for (let bi = 1; bi < this.bodyElements.length - 1; bi++) {
-      const prev = this.bodyElements[bi - 1];
-      const current = this.bodyElements[bi];
-      const next = this.bodyElements[bi + 1];
-
-      // Skip if current is not a blank paragraph
-      if (!(current instanceof Paragraph) || !this.isParagraphBlank(current)) continue;
-
-      // Skip if prev or next is a table (don't cross table boundaries)
-      if (prev instanceof Table || next instanceof Table) continue;
-
-      // Check if prev and next are both list items
-      if (prev instanceof Paragraph && next instanceof Paragraph) {
-        const prevNumbering = prev.getNumbering();
-        const nextNumbering = next.getNumbering();
-
-        if (prevNumbering && nextNumbering) {
-          this.bodyElements.splice(bi, 1);
-          bi--; // Adjust index after removal
-          removed++;
-        }
-      }
-    }
-
-    return removed;
-  }
-
-  /**
-   * Helper method called by removeExtraBlankParagraphs to re-insert structural blank lines
-   * @private
-   * @param options Optional configuration
-   * @param options.stopBoldColonAfterHeading Stop adding bold+colon blank lines after this heading
-   * @returns Number of blank paragraphs added
-   */
-  private addStructureBlankLinesAfterElements(options?: {
-    stopBoldColonAfterHeading?: string;
-  }): number {
-    // Use the public method with all structure options enabled
-    const result = this.addStructureBlankLines({
-      spacingAfter: 120,
-      markAsPreserved: true,
-      style: 'Normal',
-      after1x1Tables: true,
-      afterOtherTables: true,
-      aboveFirstTable: true,
-      aboveTODHyperlinks: true,
-      aboveReturnToHLP: true,
-      belowHeading1Lines: true,
-      belowTOC: true,
-      aboveWarning: true,
-      afterLists: true,
-      aroundImages: true,
-      stopBoldColonAfterHeading: options?.stopBoldColonAfterHeading,
-    });
-
-    return result.blankLinesAdded;
-  }
-
-
-  private markHeading2BlankLinesAsPreserved(): void {
-    const tables = this.getAllTables();
-
-    for (const table of tables) {
-      const rowCount = table.getRowCount();
-      const colCount = table.getColumnCount();
-
-      // Check if it's a 1x1 table
-      if (rowCount !== 1 || colCount !== 1) {
-        continue;
-      }
-
-      // Get the cell and check if it contains a Heading 2 paragraph
-      const cell = table.getCell(0, 0);
-      if (!cell) continue;
-
-      const cellParas = cell.getParagraphs();
-      let hasHeading2 = false;
-
-      for (const para of cellParas) {
-        const style = para.getStyle();
-        if (
-          style === "Heading2" ||
-          style === "Heading 2" ||
-          style === "CustomHeader2" ||
-          style === "Header2"
-        ) {
-          hasHeading2 = true;
-          break;
-        }
-      }
-
-      if (!hasHeading2) continue;
-
-      // Found a 1x1 table with Heading 2 - mark next paragraph as preserved if it's blank
-      const tableIndex = this.bodyElements.indexOf(table);
-      if (tableIndex === -1) continue;
-
-      const nextElement = this.bodyElements[tableIndex + 1];
-      if (nextElement instanceof Paragraph) {
-        if (this.isParagraphBlank(nextElement)) {
-          nextElement.setPreserved(true);
-        }
-      }
-    }
-  }
-
-  /**
-   * Ensures that all 1x1 tables have a blank line after them with optional preserve flag.
-   * This is useful for maintaining spacing after single-cell tables (e.g., Heading 2 tables).
-   *
-   * The method:
-   * 1. Finds all 1x1 tables in the document
-   * 2. Checks if there's a blank paragraph immediately after each table
-   * 3. If no blank paragraph exists, adds one with spacing and preserve flag
-   * 4. If a blank paragraph exists, optionally marks it as preserved
-   *
-   * @param options Configuration options
-   * @param options.spacingAfter Spacing after the blank paragraph in twips (default: 120 twips = 6pt)
-   * @param options.markAsPreserved Whether to mark blank paragraphs as preserved (default: true)
-   * @param options.style Style to apply to blank paragraphs (default: 'Normal')
-   * @param options.filter Optional filter function to select which tables to process
-   * @returns Statistics about the operation
-   *
-   * @example
-   * // Add blank lines after all 1x1 tables with default settings
-   * const result = doc.ensureBlankLinesAfter1x1Tables();
-   * console.log(`Added ${result.blankLinesAdded} blank lines`);
-   * console.log(`Marked ${result.existingLinesMarked} existing blank lines as preserved`);
-   *
-   * @example
-   * // Custom spacing and preserve flag
-   * doc.ensureBlankLinesAfter1x1Tables({
-   *   spacingAfter: 240,  // 12pt spacing
-   *   markAsPreserved: true
-   * });
-   *
-   * @example
-   * // Custom style for blank paragraphs
-   * doc.ensureBlankLinesAfter1x1Tables({
-   *   style: 'BodyText',  // Use BodyText instead of Normal
-   *   spacingAfter: 120
-   * });
-   *
-   * @example
-   * // Only process tables with Heading 2 paragraphs
-   * doc.ensureBlankLinesAfter1x1Tables({
-   *   filter: (table, index) => {
-   *     const cell = table.getCell(0, 0);
-   *     if (!cell) return false;
-   *     return cell.getParagraphs().some(p => {
-   *       const style = p.getStyle();
-   *       return style === 'Heading2' || style === 'Heading 2';
-   *     });
-   *   }
-   * });
-   */
-  public ensureBlankLinesAfter1x1Tables(options?: {
-    spacingAfter?: number;
-    markAsPreserved?: boolean;
-    style?: string;
-    filter?: (table: Table, index: number) => boolean;
-  }): {
-    tablesProcessed: number;
-    blankLinesAdded: number;
-    existingLinesMarked: number;
-  } {
-    const spacingAfter = options?.spacingAfter ?? 120;
-    const markAsPreserved = options?.markAsPreserved ?? true;
-    const style = options?.style ?? "Normal";
-    const filter = options?.filter;
-
-    let tablesProcessed = 0;
-    let blankLinesAdded = 0;
-    let existingLinesMarked = 0;
-
-    const tables = this.getAllTables();
-
-    for (let i = 0; i < tables.length; i++) {
-      const table = tables[i];
-      if (!table) continue;
-
-      const rowCount = table.getRowCount();
-      const colCount = table.getColumnCount();
-
-      // Check if it's a 1x1 table
-      if (rowCount !== 1 || colCount !== 1) {
-        continue;
-      }
-
-      // Apply filter if provided
-      if (filter && !filter(table, i)) {
-        continue;
-      }
-
-      tablesProcessed++;
-
-      // Find table index in body elements
-      const tableIndex = this.bodyElements.indexOf(table);
-      if (tableIndex === -1) continue;
-
-      // Check next element
-      const nextElement = this.bodyElements[tableIndex + 1];
-
-      if (nextElement instanceof Paragraph) {
-        // Next element is a paragraph - check if it's blank
-        if (this.isParagraphBlank(nextElement)) {
-          // Blank paragraph exists - set style to Normal and mark as preserved
-          nextElement.setStyle(style);
-          if (markAsPreserved && !nextElement.isPreserved()) {
-            nextElement.setPreserved(true);
-            existingLinesMarked++;
-          }
-        } else {
-          // Next paragraph has content - add blank paragraph between table and content
-          const blankPara = Paragraph.create();
-          blankPara.setStyle(style);
-          blankPara.setSpaceAfter(spacingAfter);
-          if (markAsPreserved) {
-            blankPara.setPreserved(true);
-          }
-          this.bodyElements.splice(tableIndex + 1, 0, blankPara);
-          blankLinesAdded++;
-        }
-      } else {
-        // No paragraph after table (or it's another table/element) - add blank paragraph
-        const blankPara = Paragraph.create();
-        blankPara.setStyle(style);
-        blankPara.setSpaceAfter(spacingAfter);
-        if (markAsPreserved) {
-          blankPara.setPreserved(true);
-        }
-        this.bodyElements.splice(tableIndex + 1, 0, blankPara);
-        blankLinesAdded++;
-      }
-    }
-
-    return {
-      tablesProcessed,
-      blankLinesAdded,
-      existingLinesMarked,
-    };
-  }
-  /**
-   * Ensures that all tables (excluding 1x1 tables) have a blank line after them with optional preserve flag.
-   * This is useful for maintaining spacing after multi-cell tables.
-   *
-   * The method:
-   * 1. Finds all tables with more than one cell (not 1x1) in the document
-   * 2. Checks if there's a blank paragraph immediately after each table
-   * 3. If no blank paragraph exists, adds one with spacing and preserve flag
-   * 4. If a blank paragraph exists, optionally marks it as preserved
-   *
-   * @param options Configuration options
-   * @param options.spacingAfter Spacing after the blank paragraph in twips (default: 120 twips = 6pt)
-   * @param options.markAsPreserved Whether to mark blank paragraphs as preserved (default: true)
-   * @param options.style Style to apply to blank paragraphs (default: 'Normal')
-   * @param options.filter Optional filter function to select which tables to process
-   * @returns Statistics about the operation
-   *
-   * @example
-   * // Add blank lines after all multi-cell tables with default settings
-   * const result = doc.ensureBlankLinesAfterOtherTables();
-   * console.log(`Added ${result.blankLinesAdded} blank lines`);
-   * console.log(`Marked ${result.existingLinesMarked} existing blank lines as preserved`);
-   *
-   * @example
-   * // Custom spacing and preserve flag
-   * doc.ensureBlankLinesAfterOtherTables({
-   *   spacingAfter: 240,  // 12pt spacing
-   *   markAsPreserved: true
-   * });
-   *
-   * @example
-   * // Custom style for blank paragraphs
-   * doc.ensureBlankLinesAfterOtherTables({
-   *   style: 'BodyText',  // Use BodyText instead of Normal
-   *   spacingAfter: 120
-   * });
-   *
-   * @example
-   * // Only process tables with more than 2 rows
-   * doc.ensureBlankLinesAfterOtherTables({
-   *   filter: (table, index) => table.getRowCount() > 2
-   * });
-   */
-  public ensureBlankLinesAfterOtherTables(options?: {
-    spacingAfter?: number;
-    markAsPreserved?: boolean;
-    style?: string;
-    filter?: (table: Table, index: number) => boolean;
-  }): {
-    tablesProcessed: number;
-    blankLinesAdded: number;
-    existingLinesMarked: number;
-  } {
-    const spacingAfter = options?.spacingAfter ?? 120;
-    const markAsPreserved = options?.markAsPreserved ?? true;
-    const style = options?.style ?? "Normal";
-    const filter = options?.filter;
-
-    let tablesProcessed = 0;
-    let blankLinesAdded = 0;
-    let existingLinesMarked = 0;
-
-    const tables = this.getAllTables();
-
-    for (let i = 0; i < tables.length; i++) {
-      const table = tables[i];
-      if (!table) continue;
-
-      const rowCount = table.getRowCount();
-      const colCount = table.getColumnCount();
-
-      // Skip 1x1 tables (handled by ensureBlankLinesAfter1x1Tables)
-      if (rowCount === 1 && colCount === 1) {
-        continue;
-      }
-
-      // Apply filter if provided
-      if (filter && !filter(table, i)) {
-        continue;
-      }
-
-      tablesProcessed++;
-
-      // Find table index in body elements
-      const tableIndex = this.bodyElements.indexOf(table);
-      if (tableIndex === -1) continue;
-
-      // Check next element
-      const nextElement = this.bodyElements[tableIndex + 1];
-
-      if (nextElement instanceof Paragraph) {
-        // Next element is a paragraph - check if it's blank
-        if (this.isParagraphBlank(nextElement)) {
-          // Blank paragraph exists - set style to Normal and mark as preserved
-          nextElement.setStyle(style);
-          if (markAsPreserved && !nextElement.isPreserved()) {
-            nextElement.setPreserved(true);
-            existingLinesMarked++;
-          }
-        } else {
-          // Next paragraph has content - add blank paragraph between table and content
-          const blankPara = Paragraph.create();
-          blankPara.setStyle(style);
-          blankPara.setSpaceAfter(spacingAfter);
-          if (markAsPreserved) {
-            blankPara.setPreserved(true);
-          }
-          this.bodyElements.splice(tableIndex + 1, 0, blankPara);
-          blankLinesAdded++;
-        }
-      } else {
-        // No paragraph after table (or it's another table/element) - add blank paragraph
-        const blankPara = Paragraph.create();
-        blankPara.setStyle(style);
-        blankPara.setSpaceAfter(spacingAfter);
-        if (markAsPreserved) {
-          blankPara.setPreserved(true);
-        }
-        this.bodyElements.splice(tableIndex + 1, 0, blankPara);
-        blankLinesAdded++;
-      }
-    }
-
-    return {
-      tablesProcessed,
-      blankLinesAdded,
-      existingLinesMarked,
-    };
   }
 
   /**
@@ -7887,33 +6304,33 @@ export class Document {
       para.setAlignment(options.alignment);
     }
 
-    // Spacing (convert points to twips: 1pt = 20 twips)
+    // Spacing (convert points to twips)
     if (options.spaceAbove !== undefined) {
-      para.setSpaceBefore(options.spaceAbove * 20);
+      para.setSpaceBefore(options.spaceAbove * UNITS.TWIPS_PER_POINT);
     }
     if (options.spaceBelow !== undefined) {
-      para.setSpaceAfter(options.spaceBelow * 20);
+      para.setSpaceAfter(options.spaceBelow * UNITS.TWIPS_PER_POINT);
     }
     if (options.lineSpacing !== undefined) {
-      para.setLineSpacing(options.lineSpacing * 20);
+      para.setLineSpacing(options.lineSpacing * UNITS.TWIPS_PER_POINT);
     }
 
-    // Indentation (convert inches to twips: 1in = 1440 twips)
+    // Indentation (convert inches to twips)
     if (options.indentLeft !== undefined) {
-      para.setLeftIndent(options.indentLeft * 1440);
+      para.setLeftIndent(options.indentLeft * UNITS.TWIPS_PER_INCH);
     }
     if (options.indentRight !== undefined) {
-      para.setRightIndent(options.indentRight * 1440);
+      para.setRightIndent(options.indentRight * UNITS.TWIPS_PER_INCH);
     }
     if (options.indentFirst !== undefined) {
-      para.setFirstLineIndent(options.indentFirst * 1440);
+      para.setFirstLineIndent(options.indentFirst * UNITS.TWIPS_PER_INCH);
     }
     if (options.indentHanging !== undefined) {
       // Set hanging indent directly through formatting
       if (!para.formatting.indentation) {
         para.formatting.indentation = {};
       }
-      para.formatting.indentation.hanging = options.indentHanging * 1440;
+      para.formatting.indentation.hanging = options.indentHanging * UNITS.TWIPS_PER_INCH;
     }
 
     // Advanced options (only set if true)
@@ -7934,12 +6351,12 @@ export class Document {
     keepProperties: string[]
   ): void {
     // Save properties to keep
-    const savedProps: any = {};
-    const formatting = para.formatting;
+    const savedProps: Record<string, unknown> = {};
+    const formatting = para.formatting as Record<string, unknown>;
 
     for (const prop of keepProperties) {
-      if ((formatting as any)[prop] !== undefined) {
-        savedProps[prop] = (formatting as any)[prop];
+      if (formatting[prop] !== undefined) {
+        savedProps[prop] = formatting[prop];
       }
     }
 
@@ -7947,19 +6364,21 @@ export class Document {
     para.clearDirectFormatting();
 
     // Restore saved properties
+    const restoredFormatting = para.formatting as Record<string, unknown>;
     for (const prop of keepProperties) {
       if (savedProps[prop] !== undefined) {
-        (para.formatting as any)[prop] = savedProps[prop];
+        restoredFormatting[prop] = savedProps[prop];
       }
     }
 
     // Handle run-level properties
     for (const run of para.getRuns()) {
-      const runFormatting = run.getFormatting();
-      const runSavedProps: any = {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic property backup/restore requires flexible typing
+      const runFormatting = run.getFormatting() as Record<string, any>;
+      const runSavedProps: Record<string, any> = {};
       for (const prop of keepProperties) {
-        if ((runFormatting as any)[prop] !== undefined) {
-          runSavedProps[prop] = (runFormatting as any)[prop];
+        if (runFormatting[prop] !== undefined) {
+          runSavedProps[prop] = runFormatting[prop];
         }
       }
 
@@ -8028,464 +6447,20 @@ export class Document {
   }
 
   /**
-   * Checks if a paragraph is blank (no meaningful content)
-   * @private
-   */
-  private isParagraphBlank(para: Paragraph): boolean {
-    const content = para.getContent();
-
-    // No content at all
-    if (!content || content.length === 0) {
-      return true;
-    }
-
-    // Check all content items
-    for (const item of content) {
-      // Hyperlinks count as content
-      if (item instanceof Hyperlink) {
-        return false;
-      }
-
-      // ImageRun (images embedded in runs) count as content
-      // IMPORTANT: Check ImageRun BEFORE Run since ImageRun extends Run
-      if (item instanceof ImageRun) {
-        return false;
-      }
-
-      // Images/shapes count as content
-      if (item instanceof Shape) {
-        return false;
-      }
-
-      // TextBox count as content
-      if (item instanceof TextBox) {
-        return false;
-      }
-
-      // Fields count as content
-      if (item instanceof Field) {
-        return false;
-      }
-
-      // Revisions (track changes) - check nested content for text and hyperlinks
-      if (item instanceof Revision) {
-        const revisionText = item.getText().trim();
-        if (revisionText !== '') {
-          return false;
-        }
-        // Also check if revision contains hyperlinks (may have empty display text)
-        for (const revContent of item.getContent()) {
-          if (revContent instanceof Hyperlink) {
-            return false;
-          }
-        }
-        continue; // Already checked, move to next item
-      }
-
-      // Check runs for non-whitespace text
-      if ((item as any).getText) {
-        const text = (item as any).getText().trim();
-        if (text !== "") {
-          return false;
-        }
-      }
-    }
-
-    // Check for bookmarks
-    if (
-      para.getBookmarksStart().length > 0 ||
-      para.getBookmarksEnd().length > 0
-    ) {
-      return false;
-    }
-
-    return true;
-  }
-
-  /**
-   * Mark single blank paragraphs as preserved.
-   * Single blanks are blank paragraphs that are NOT followed by another blank.
-   * This allows consecutive duplicate blanks (2+) to be removed while keeping
-   * intentional single blanks.
-   *
-   * Logic: For consecutive blanks [blank1, blank2], only blank2 is marked (last in series).
-   * This means blank1 will be removed, blank2 kept - reducing duplicates to 1.
-   *
-   * @returns Number of paragraphs marked as preserved
-   * @private
-   */
-  private markSingleBlanksAsPreserved(): number {
-    let markedCount = 0;
-    const paragraphs = this.getAllParagraphs();
-
-    for (let i = 0; i < paragraphs.length; i++) {
-      const para = paragraphs[i];
-
-      // Skip undefined paragraphs
-      if (!para) continue;
-
-      // Skip if already preserved
-      if (para.isPreserved()) continue;
-
-      // Check if this paragraph is blank
-      if (!this.isParagraphBlank(para)) continue;
-
-      // Check if next paragraph is also blank
-      const nextPara = paragraphs[i + 1];
-      const nextIsBlank = nextPara && this.isParagraphBlank(nextPara);
-
-      // If this is a single blank (not followed by another blank), mark as preserved
-      // This marks the LAST blank in any consecutive series
-      if (!nextIsBlank) {
-        para.setPreserved(true);
-        markedCount++;
-      }
-    }
-
-    return markedCount;
-  }
-
-  /**
-   * Checks if a paragraph starts with bold text and has a colon within the first 55 characters.
-   * Examples: "Note:", "Warning:", "Note: This can include the following:"
-   * @param para The paragraph to check
-   * @returns True if the paragraph starts with bold and has colon within first 55 chars
-   * @private
-   */
-  private startsWithBoldColon(para: Paragraph): boolean {
-    const content = para.getContent();
-    if (!content || content.length === 0) return false;
-
-    // Get first content item that is a Run (skip any non-Run items at start)
-    const firstRun = content.find((item) => item instanceof Run) as
-      | Run
-      | undefined;
-    if (!firstRun) return false;
-
-    // Check if first run is bold
-    const formatting = firstRun.getFormatting();
-    if (!formatting.bold) return false;
-
-    // Check if colon exists within first 55 characters of paragraph text
-    const fullText = para.getText();
-    if (!fullText) return false;
-
-    const first55 = fullText.substring(0, 55);
-    return first55.includes(':');
-  }
-
-  /**
-   * Checks if a non-list paragraph is "within" a list context.
-   * A paragraph is within a list context if:
-   * - It has no numbering (not a list item itself)
-   * - The previous list item and next list item share the same numId
-   *
-   * This prevents blank lines from being added above paragraphs like
-   * "Example:" or "Note:" that appear between list items.
-   *
-   * @param index The index of the paragraph in bodyElements
-   * @returns True if the paragraph is within a list context
-   * @private
-   */
-  private isWithinListContext(index: number): boolean {
-    const current = this.bodyElements[index];
-    if (!(current instanceof Paragraph)) {
-      return false;
-    }
-
-    // If current is a list item, it's not "within" - it IS the list
-    const currentNum = current.getNumbering();
-    if (currentNum) {
-      return false;
-    }
-
-    // Find previous list item (scanning backwards)
-    let prevNumId: number | undefined;
-    for (let i = index - 1; i >= 0; i--) {
-      const el = this.bodyElements[i];
-      if (el instanceof Paragraph) {
-        const num = el.getNumbering();
-        if (num) {
-          prevNumId = num.numId;
-          break;
-        }
-      } else if (el instanceof Table) {
-        // Stop at table boundaries
-        break;
-      }
-    }
-
-    // Find next list item (scanning forwards)
-    let nextNumId: number | undefined;
-    for (let i = index + 1; i < this.bodyElements.length; i++) {
-      const el = this.bodyElements[i];
-      if (el instanceof Paragraph) {
-        const num = el.getNumbering();
-        if (num) {
-          nextNumId = num.numId;
-          break;
-        }
-      } else if (el instanceof Table) {
-        // Stop at table boundaries
-        break;
-      }
-    }
-
-    // "Within" = sandwiched between items of the SAME list
-    return prevNumId !== undefined && nextNumId !== undefined && prevNumId === nextNumId;
-  }
-
-  /**
-   * Checks if a non-list paragraph within a table cell is "within" a list context.
-   * Similar to isWithinListContext but operates within a single table cell.
-   *
-   * @param cell The table cell containing the paragraph
-   * @param paraIndex The index of the paragraph within the cell
-   * @returns True if the paragraph is within a list context in the cell
-   * @private
-   */
-  private isWithinListContextInCell(cell: TableCell, paraIndex: number): boolean {
-    const cellParas = cell.getParagraphs();
-    const current = cellParas[paraIndex];
-    if (!current) return false;
-
-    // If current is a list item, it's not "within" - it IS the list
-    const currentNum = current.getNumbering();
-    if (currentNum) return false;
-
-    // Find previous list item
-    let prevNumId: number | undefined;
-    for (let i = paraIndex - 1; i >= 0; i--) {
-      const num = cellParas[i]?.getNumbering();
-      if (num) {
-        prevNumId = num.numId;
-        break;
-      }
-    }
-
-    // Find next list item
-    let nextNumId: number | undefined;
-    for (let i = paraIndex + 1; i < cellParas.length; i++) {
-      const num = cellParas[i]?.getNumbering();
-      if (num) {
-        nextNumId = num.numId;
-        break;
-      }
-    }
-
-    return prevNumId !== undefined && nextNumId !== undefined && prevNumId === nextNumId;
-  }
-
-  /**
-   * Checks if a paragraph is a Table of Contents entry based on its style
-   * @param para The paragraph to check
-   * @returns True if the paragraph uses a TOC style
-   * @private
-   */
-  private isTocParagraph(para: Paragraph): boolean {
-    const styleId = para.getStyle()?.toLowerCase() || '';
-    // Match TOC styles: toc1, toc2, toc 1, toc 2, TOC1, TOC2, etc.
-    return /^toc\s?\d$/i.test(styleId) || styleId.startsWith('toc');
-  }
-
-  /**
-   * Checks if an image is small (both dimensions < 100 pixels)
-   *
-   * Small images are typically icons, bullets, or decorative elements that
-   * don't need the same spacing treatment as larger content images.
-   *
-   * @param image The image to check
-   * @returns True if both width and height are < 100 pixels
-   *
-   * @example
-   * ```typescript
-   * const imageRun = paragraph.getContent().find(c => c instanceof ImageRun);
-   * if (imageRun) {
-   *   const image = imageRun.getImageElement();
-   *   if (doc.isImageSmall(image)) {
-   *     console.log('This is a small image (icon/bullet)');
-   *   }
-   * }
-   * ```
-   */
-  public isImageSmall(image: Image): boolean {
-    const EMU_PER_PIXEL = 9525; // at 96 DPI (914400 EMUs/inch / 96 pixels/inch)
-    const widthPx = image.getWidth() / EMU_PER_PIXEL;
-    const heightPx = image.getHeight() / EMU_PER_PIXEL;
-    return widthPx < 100 && heightPx < 100;
-  }
-
-  /**
-   * Checks if a paragraph contains a small image (< 100x100 pixels)
-   *
-   * Useful for determining if a paragraph contains an icon or small decorative
-   * image vs. a larger content image that may need different formatting treatment.
-   *
-   * @param para The paragraph to check
-   * @returns True if paragraph contains a small image, false if no image or image is >= 100x100
-   *
-   * @example
-   * ```typescript
-   * for (const para of doc.getParagraphs()) {
-   *   if (doc.isSmallImageParagraph(para)) {
-   *     console.log('Paragraph contains a small image/icon');
-   *   }
-   * }
-   * ```
-   */
-  public isSmallImageParagraph(para: Paragraph): boolean {
-    const imageRun = this.getImageRunFromParagraph(para);
-    if (!imageRun) return false;
-    const image = imageRun.getImageElement();
-    return this.isImageSmall(image);
-  }
-
-  /**
-   * Gets the first ImageRun from a paragraph if it contains one
-   *
-   * Checks both direct ImageRun children and ImageRuns inside Revision objects
-   * (tracked changes). This ensures images inserted as tracked changes are
-   * properly detected for spacing calculations.
-   *
-   * @param para The paragraph to check
-   * @returns The ImageRun if found, null otherwise
-   *
-   * @example
-   * ```typescript
-   * const imageRun = doc.getImageRunFromParagraph(paragraph);
-   * if (imageRun) {
-   *   const image = imageRun.getImageElement();
-   *   console.log(`Image dimensions: ${image.getWidth()} x ${image.getHeight()} EMUs`);
-   * }
-   * ```
-   */
-  public getImageRunFromParagraph(para: Paragraph): ImageRun | null {
-    for (const item of para.getContent()) {
-      // Check direct ImageRun
-      if (item instanceof ImageRun) {
-        return item;
-      }
-      // Check inside Revision objects (tracked changes)
-      // Per ECMA-376, w:ins and w:del can contain w:r with w:drawing (image runs)
-      if (item instanceof Revision) {
-        for (const revContent of item.getContent()) {
-          if (revContent instanceof ImageRun) {
-            return revContent;
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Checks if a paragraph is centered and contains only bold text (all runs bold)
-   * @param para The paragraph to check
-   * @returns True if the paragraph is centered and all text runs are bold
-   * @private
-   */
-  private isCenteredBoldText(para: Paragraph): boolean {
-    // Must be centered
-    if (para.getAlignment() !== 'center') return false;
-
-    // Must have content
-    const content = para.getContent();
-    if (!content || content.length === 0) return false;
-
-    // Check all runs - all must be bold
-    let hasTextRuns = false;
-    for (const item of content) {
-      if (item instanceof Run) {
-        const text = item.getText().trim();
-        if (text !== '') {
-          hasTextRuns = true;
-          const formatting = item.getFormatting();
-          if (!formatting.bold) {
-            return false; // Non-bold run found
-          }
-        }
-      }
-    }
-
-    return hasTextRuns; // Must have at least one text run
-  }
-
-  /**
-   * Checks if a paragraph contains only text content (no images, shapes, etc.)
-   * @param para The paragraph to check
-   * @returns True if the paragraph has text but no images/shapes/etc.
-   * @private
-   */
-  private isTextOnlyParagraph(para: Paragraph): boolean {
-    if (this.isParagraphBlank(para)) return false;
-
-    const content = para.getContent();
-    if (!content || content.length === 0) return false;
-
-    // Check for non-text elements
-    for (const item of content) {
-      if (item instanceof ImageRun) return false;
-      if (item instanceof Shape) return false;
-      if (item instanceof TextBox) return false;
-      // Hyperlinks and Fields are OK - they contain text
-    }
-
-    // Must have at least some text
-    const text = para.getText().trim();
-    return text !== '';
-  }
-
-  /**
-   * Removes all preserve flags from paragraphs in the document
-   *
-   * Clears the preserved state from all paragraphs, allowing them to be removed
-   * by automatic cleanup operations like {@link removeExtraBlankParagraphs}.
-   *
-   * Preserve flags are runtime-only markers that prevent paragraphs from being
-   * automatically removed. This method is useful when you need to allow
-   * previously-protected paragraphs to be cleaned up.
-   *
-   * @returns Number of paragraphs that had preserve flags removed
-   *
-   * @example
-   * ```typescript
-   * // Remove all preserve flags to allow cleanup
-   * const cleared = doc.removeAllPreserveFlags();
-   * console.log(`Cleared preserve flags from ${cleared} paragraphs`);
-   *
-   * // Now remove extra blank paragraphs (including previously-preserved ones)
-   * const result = doc.removeExtraBlankParagraphs();
-   * console.log(`Removed ${result.removed} blank paragraphs`);
-   * ```
-   *
-   * @example
-   * ```typescript
-   * // Clear all preserved paragraphs before applying operations
-   * doc.removeAllPreserveFlags();
-   * doc.normalizeSpacing({ removeDuplicateEmptyParagraphs: true });
-   * ```
-   */
-  public removeAllPreserveFlags(): number {
-    let cleared = 0;
-
-    for (const para of this.getAllParagraphs()) {
-      if (para.isPreserved()) {
-        para.setPreserved(false);
-        cleared++;
-      }
-    }
-
-    return cleared;
-  }
-
-  /**
    * Clears preserve flags from all paragraphs in the document
    * Called automatically before save since preserve flags are runtime-only
    * @returns Number of paragraphs that had preserve flags cleared
    * @private
    */
   private clearAllPreserveFlags(): number {
-    return this.removeAllPreserveFlags();
+    let cleared = 0;
+    for (const para of this.getAllParagraphs()) {
+      if (para.isPreserved()) {
+        para.setPreserved(false);
+        cleared++;
+      }
+    }
+    return cleared;
   }
 
   /**
@@ -8658,7 +6633,7 @@ export class Document {
       }
 
       return modifiedXml;
-    } catch (error) {
+    } catch (error: unknown) {
       // Log error but don't fail the save
       this.logger.error(
         "Error syncing TOC field instructions - document will save with original instructions",
@@ -9048,7 +7023,7 @@ export class Document {
           }
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.error(
         "Error parsing document.xml for headings:",
         error instanceof Error
@@ -9338,7 +7313,7 @@ export class Document {
 
           const newTocXml = this.generateTOCXML(headings, fieldInstruction);
           modifiedXml = modifiedXml.replace(tocXml, newTocXml);
-        } catch (error) {
+        } catch (error: unknown) {
           this.logger.error(
             "Error populating SDT TOC",
             error instanceof Error
@@ -9405,7 +7380,7 @@ export class Document {
           this.logger.info(
             `Populated simple TOC with ${headings.length} heading entries`
           );
-        } catch (error) {
+        } catch (error: unknown) {
           this.logger.error(
             "Error populating simple TOC",
             error instanceof Error
@@ -9974,6 +7949,105 @@ export class Document {
 
       // Add comments relationship
       this.relationshipManager.addComments();
+    }
+  }
+
+  /**
+   * Updates word/people.xml to include all tracked change authors from the document.
+   *
+   * Word expects every author referenced in tracked changes (w:ins, w:del, w:pPrChange, etc.)
+   * to have a corresponding entry in people.xml. Missing authors cause "unreadable content" warnings.
+   */
+  private updatePeopleXml(): void {
+    // Collect all unique authors from tracked changes
+    const authors = new Set<string>();
+
+    for (const para of this.getAllParagraphs()) {
+      // Check revision content (w:ins, w:del, w:moveFrom, w:moveTo)
+      for (const item of para.getContent()) {
+        if (item instanceof Revision) {
+          const author = item.getAuthor();
+          if (author) authors.add(author);
+        }
+      }
+      // Check pPrChange author
+      if (para.formatting.pPrChange?.author) {
+        authors.add(para.formatting.pPrChange.author);
+      }
+    }
+
+    // Also check table cells for tracked changes
+    for (const element of this.bodyElements) {
+      if (element instanceof Table) {
+        this.collectAuthorsFromTable(element, authors);
+      }
+    }
+
+    if (authors.size === 0) return;
+
+    // Read existing people.xml
+    const existingPeopleXml = this.zipHandler.getFileAsString('word/people.xml');
+
+    // Extract existing authors from people.xml
+    const existingAuthors = new Set<string>();
+    if (existingPeopleXml) {
+      const authorMatches = existingPeopleXml.matchAll(/w15:author="([^"]+)"/g);
+      for (const match of authorMatches) {
+        if (match[1]) existingAuthors.add(match[1]);
+      }
+    }
+
+    // Find authors that are missing from people.xml
+    const missingAuthors: string[] = [];
+    for (const author of authors) {
+      if (!existingAuthors.has(author)) {
+        missingAuthors.push(author);
+      }
+    }
+
+    if (missingAuthors.length === 0) return;
+
+    // Build person elements for missing authors
+    const personElements = missingAuthors.map(author => {
+      const escapedAuthor = author.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<w15:person w15:author="${escapedAuthor}"><w15:presenceInfo w15:providerId="None" w15:userId="${escapedAuthor}"/></w15:person>`;
+    }).join('');
+
+    if (existingPeopleXml) {
+      // Insert new person elements before closing tag
+      const updatedXml = existingPeopleXml.replace('</w15:people>', `${personElements}</w15:people>`);
+      this.zipHandler.updateFile('word/people.xml', updatedXml);
+    } else {
+      // Create new people.xml
+      const newPeopleXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w15:people xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="w15">${personElements}</w15:people>`;
+      this.zipHandler.addFile('word/people.xml', newPeopleXml);
+    }
+
+    this.logger.info('Updated people.xml with missing authors', { added: missingAuthors.length, authors: missingAuthors });
+  }
+
+  /**
+   * Recursively collects tracked change authors from a table's cells
+   */
+  private collectAuthorsFromTable(table: Table, authors: Set<string>): void {
+    for (let r = 0; r < table.getRowCount(); r++) {
+      const row = table.getRow(r);
+      if (!row) continue;
+      for (let c = 0; c < row.getCellCount(); c++) {
+        const cell = row.getCell(c);
+        if (!cell) continue;
+        for (const para of cell.getParagraphs()) {
+          for (const item of para.getContent()) {
+            if (item instanceof Revision) {
+              const author = item.getAuthor();
+              if (author) authors.add(author);
+            }
+          }
+          if (para.formatting.pPrChange?.author) {
+            authors.add(para.formatting.pPrChange.author);
+          }
+        }
+      }
     }
   }
 
@@ -10719,6 +8793,7 @@ export class Document {
     }
 
     this.trackChangesEnabled = true;
+    this._settingsModified = true;
 
     if (options) {
       if (options.trackFormatting !== undefined) {
@@ -10765,6 +8840,7 @@ export class Document {
    */
   disableTrackChanges(): this {
     this.trackChangesEnabled = false;
+    this._settingsModified = true;
     this.trackingContext.disable(); // Flushes pending changes and disables
     return this;
   }
@@ -10927,6 +9003,7 @@ export class Document {
     }
     this.rsidRoot = rsidRoot.toUpperCase();
     this.rsids.add(this.rsidRoot);
+    this._settingsModified = true;
     return this;
   }
 
@@ -10941,6 +9018,7 @@ export class Document {
       throw new Error("RSID must be an 8-character hexadecimal value");
     }
     this.rsids.add(rsid.toUpperCase());
+    this._settingsModified = true;
     return this;
   }
 
@@ -10954,6 +9032,7 @@ export class Document {
       .toUpperCase()
       .padStart(8, "0");
     this.rsids.add(rsid);
+    this._settingsModified = true;
     return rsid;
   }
 
@@ -10996,6 +9075,7 @@ export class Document {
       cryptAlgorithmSid: protection.cryptAlgorithmSid,
       cryptSpinCount: protection.cryptSpinCount,
     };
+    this._settingsModified = true;
 
     // If password provided, generate hash and salt
     if (protection.password) {
@@ -11024,6 +9104,7 @@ export class Document {
    */
   unprotectDocument(): this {
     this.documentProtection = undefined;
+    this._settingsModified = true;
     return this;
   }
 
@@ -11041,6 +9122,135 @@ export class Document {
    */
   getProtection(): typeof this.documentProtection {
     return this.documentProtection;
+  }
+
+  // ==================== COMPATIBILITY MODE API ====================
+
+  /**
+   * Gets the document's compatibility mode version.
+   *
+   * For loaded documents, returns the mode parsed from settings.xml.
+   * For new documents, returns Word2013Plus (15) since that's what the framework generates.
+   * Per MS-DOCX spec, the default when the w:compat block is absent is 12 (Word 2007).
+   *
+   * @returns The CompatibilityMode enum value (11, 12, 14, or 15)
+   */
+  getCompatibilityMode(): CompatibilityMode {
+    return this._compatInfo?.mode ?? CompatibilityMode.Word2007;
+  }
+
+  /**
+   * Whether the document is in a legacy compatibility mode (anything below Word 2013/mode 15).
+   *
+   * When true, Word's layout engine uses older rendering rules that may differ from
+   * modern mode for table sizing, line breaking, text wrapping, and spacing.
+   *
+   * Per MS-DOCX spec, documents without a w:compat block default to mode 12 (legacy).
+   *
+   * @returns true if the document targets a Word version prior to 2013
+   */
+  isCompatibilityMode(): boolean {
+    return this._compatInfo?.isLegacyMode ?? true;
+  }
+
+  /**
+   * Gets the full parsed compatibility settings from the w:compat block.
+   *
+   * Includes the numeric mode, whether it's legacy, all modern w:compatSetting entries
+   * (name/uri/val triples), and all legacy boolean compat flags that are enabled.
+   *
+   * @returns CompatibilityInfo with all parsed settings
+   */
+  getCompatibilityInfo(): CompatibilityInfo {
+    return this._compatInfo ?? {
+      mode: CompatibilityMode.Word2007,
+      isLegacyMode: true,
+      compatSettings: [],
+      legacyFlags: [],
+    };
+  }
+
+  /**
+   * Upgrades the document to modern Word format (compatibility mode 15).
+   *
+   * This is equivalent to clicking File > Info > Convert in Microsoft Word.
+   * It performs the following:
+   *
+   * 1. Updates compatibilityMode to 15 (Word 2013+)
+   * 2. Removes legacy compat boolean flags (~65 possible elements)
+   * 3. Adds modern w:compatSetting entries
+   * 4. Ensures document.xml namespaces include w14/w15/w16se/w16cid
+   *
+   * WARNING: This may cause minor layout shifts. Word's modern layout engine
+   * handles table sizing, line breaking, text wrapping, and spacing differently
+   * than legacy modes. This is the same behavior as Word's own Convert button.
+   *
+   * This does NOT convert VML shapes to DrawingML, or upgrade legacy equation
+   * objects. Those transformations are Word-internal and are preserved as-is
+   * via XML passthrough.
+   *
+   * @returns UpgradeReport with details of what changed
+   */
+  upgradeToModernFormat(): UpgradeReport {
+    const currentMode = this.getCompatibilityMode();
+    const currentInfo = this.getCompatibilityInfo();
+
+    // Already fully modern — check if there are any legacy flags to clean
+    if (currentMode === CompatibilityMode.Word2013Plus && currentInfo.legacyFlags.length === 0) {
+      return {
+        previousMode: currentMode,
+        newMode: 15,
+        removedFlags: [],
+        addedSettings: [],
+        namespacesExpanded: false,
+        changed: false,
+      };
+    }
+
+    // Upgrade the settings.xml compat block
+    if (this._originalSettingsXml) {
+      const result = CompatibilityUpgrader.upgradeCompatBlock(
+        this._originalSettingsXml,
+        currentMode
+      );
+      this._originalSettingsXml = result.xml;
+      this._settingsModified = true;
+
+      // Expand namespaces on the document
+      const nsResult = CompatibilityUpgrader.ensureModernNamespaces(this.namespaces);
+      this.namespaces = nsResult.namespaces;
+      result.report.namespacesExpanded = nsResult.expanded;
+
+      // Update in-memory compat info
+      this._compatInfo = {
+        mode: CompatibilityMode.Word2013Plus,
+        isLegacyMode: false,
+        compatSettings: [...MODERN_COMPAT_SETTINGS],
+        legacyFlags: [],
+      };
+
+      return result.report;
+    }
+
+    // New document (no original settings.xml) — ensure modern compat info
+    this._compatInfo = {
+      mode: CompatibilityMode.Word2013Plus,
+      isLegacyMode: false,
+      compatSettings: [...MODERN_COMPAT_SETTINGS],
+      legacyFlags: [],
+    };
+
+    const nsResult = CompatibilityUpgrader.ensureModernNamespaces(this.namespaces);
+    this.namespaces = nsResult.namespaces;
+
+    return {
+      previousMode: currentMode,
+      newMode: 15,
+      removedFlags: [],
+      addedSettings: MODERN_COMPAT_SETTINGS.map(s => s.name),
+      namespacesExpanded: nsResult.expanded,
+      changed: currentMode !== CompatibilityMode.Word2013Plus,
+    };
   }
 
   /**
@@ -12155,8 +10365,23 @@ export class Document {
     // Clear preserved state
     this._originalStylesXml = undefined;
     this._originalNumberingXml = undefined;
+    this._originalSettingsXml = undefined;
     this._originalContentTypes = undefined;
+    this._settingsModified = false;
+    this._compatInfo = undefined;
     this.saveStateSnapshot = undefined;
+
+    // Reset track changes and settings-managed fields
+    this.trackChangesEnabled = false;
+    this.trackFormatting = true;
+    this.revisionViewSettings = {
+      showInsertionsAndDeletions: true,
+      showFormatting: true,
+      showInkAnnotations: true,
+    };
+    this.rsidRoot = undefined;
+    this.rsids = new Set();
+    this.documentProtection = undefined;
 
     // Reset document properties to minimal state
     this.properties = {};
@@ -12227,7 +10452,7 @@ export class Document {
         isBinary: file.isBinary,
         size: file.size,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       // Return null for any errors (file not found, etc.)
       return null;
     }
@@ -12368,7 +10593,7 @@ export class Document {
           contentTypes.set(match[1], match[2]);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Return empty map on error
     }
 
@@ -12419,7 +10644,7 @@ export class Document {
       }
 
       return null;
-    } catch (error) {
+    } catch (error: unknown) {
       return null;
     }
   }
@@ -12469,7 +10694,7 @@ export class Document {
           xmlMap.set(partName, xml);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Return partial results on error
     }
 
@@ -12597,7 +10822,7 @@ export class Document {
       // Update the content types file
       this.zipHandler.updateFile("[Content_Types].xml", contentTypesXml);
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       return false;
     }
   }
@@ -12668,7 +10893,7 @@ export class Document {
           relationships.set(relsPath, rels);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Return empty map on error
     }
 
@@ -12756,7 +10981,7 @@ export class Document {
       }
 
       return relationships;
-    } catch (error) {
+    } catch (error: unknown) {
       // Return empty array on error
       return [];
     }
@@ -12802,7 +11027,7 @@ export class Document {
           return defaultMatch[1];
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Return undefined on error
     }
 
@@ -13999,6 +12224,92 @@ export class Document {
     return false;
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Body Element Access API
+  // These methods provide index-based access to the internal bodyElements array,
+  // enabling external code to perform the same manipulations that were previously
+  // only possible from within the Document class.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Gets the index of a body element in the document's body elements array.
+   * Unlike getParagraphIndex/getTableIndex which find the index among same-type elements,
+   * this returns the absolute index in the full bodyElements array.
+   * @param element - The element to find
+   * @returns The zero-based index of the element, or -1 if not found
+   * @example
+   * ```typescript
+   * const tables = doc.getAllTables();
+   * const index = doc.getBodyElementIndex(tables[0]);
+   * if (index !== -1) {
+   *   const nextElement = doc.getBodyElementAt(index + 1);
+   * }
+   * ```
+   */
+  getBodyElementIndex(element: BodyElement): number {
+    return this.bodyElements.indexOf(element);
+  }
+
+  /**
+   * Gets the total number of body elements in the document.
+   * @returns The count of body elements (paragraphs, tables, TOC elements, SDTs)
+   * @example
+   * ```typescript
+   * for (let i = 0; i < doc.getBodyElementCount(); i++) {
+   *   const el = doc.getBodyElementAt(i);
+   * }
+   * ```
+   */
+  getBodyElementCount(): number {
+    return this.bodyElements.length;
+  }
+
+  /**
+   * Removes the body element at a specific index.
+   * @param index - The zero-based index of the element to remove
+   * @returns True if the element was removed, false if the index was out of bounds
+   * @example
+   * ```typescript
+   * const index = doc.getBodyElementIndex(paragraph);
+   * if (index !== -1) {
+   *   doc.removeBodyElementAt(index);
+   * }
+   * ```
+   */
+  removeBodyElementAt(index: number): boolean {
+    if (index >= 0 && index < this.bodyElements.length) {
+      this.bodyElements.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Inserts a body element at a specific index, shifting existing elements forward.
+   * @param index - The zero-based index at which to insert. Clamped to valid range.
+   * @param element - The element to insert (Paragraph, Table, TOC, or SDT)
+   * @example
+   * ```typescript
+   * const blankPara = Paragraph.create();
+   * const tableIndex = doc.getBodyElementIndex(table);
+   * doc.insertBodyElementAt(tableIndex + 1, blankPara);
+   * ```
+   */
+  insertBodyElementAt(index: number, element: BodyElement): void {
+    const clampedIndex = Math.max(0, Math.min(index, this.bodyElements.length));
+    this.bodyElements.splice(clampedIndex, 0, element);
+  }
+
+  /**
+   * Replaces the entire body elements array.
+   * Use with caution - this is a low-level operation for code that needs to
+   * rebuild the body element list (e.g., SDT unwrapping).
+   * @param elements - The new body elements array
+   */
+  setBodyElements(elements: BodyElement[]): void {
+    this.bodyElements = elements;
+  }
+
   /**
    * Gets all hyperlinks in the document
    *
@@ -14779,170 +13090,32 @@ export class Document {
   }
 
   /**
-   * Removes all Structured Document Tags (SDTs) from the document
-   *
-   * Google Docs and other applications wrap content in SDT (Structured Document Tag)
-   * elements, which add complexity without functional benefit in many cases. This helper
-   * removes all SDT wrappers while preserving the wrapped content (paragraphs, tables, etc.).
-   *
-   * **Important Behavior**: When unwrapping tables from SDTs, this method also sanitizes
-   * table property exceptions (tblPrEx) from row formatting. This is critical because:
-   * - Google Docs uses tblPrEx to define header row formatting (bold, center, shading)
-   * - When the table is relocated outside the SDT context, tblPrEx applies to ALL rows
-   * - Sanitizing tblPrEx prevents formatting from "leaking" to data rows
-   * - Cell-level formatting (direct shading, margins) is preserved
-   *
-   * Targeted removal:
-   * - Removes `<w:sdt>` elements with `goog_rdk_0` tags
-   * - Removes properties `<w:sdtPr>` with lock/id/tag attributes
-   * - Keeps all wrapped content intact (paragraphs, tables, nested SDTs)
-   * - Recursively processes nested SDTs and SDTs inside table cells
-   * - **Clears row-level tblPrEx from tables coming out of SDTs**
-   *
-   * Effects:
-   * - Resulting XML no longer emits `<w:sdt*>` nodes
-   * - Content order is preserved
-   * - All inner formatting and styles remain intact
-   * - Row-level exceptions are cleared to prevent styling leakage
-   *
-   * @returns This document instance for method chaining
-   *
-   * @example
-   * ```typescript
-   * // Load a document with Google Docs SDT wrappers
-   * const doc = await Document.load('google-docs-export.docx');
-   *
-   * // Remove all SDT wrappers and sanitize table formatting
-   * doc.clearCustom();
-   *
-   * // Save without SDT elements and without formatting leakage
-   * await doc.save('cleaned.docx');
-   * ```
-   *
-   * @example
-   * ```typescript
-   * // Remove SDTs and apply formatting in one workflow
-   * const doc = await Document.load('input.docx');
-   * doc.clearCustom()
-   *   .applyStyles()
-   *   .normalizeSpacing();
-   * await doc.save('output.docx');
-   * ```
+   * Removes all SDT (Structured Document Tag) wrappers from the document body,
+   * unwrapping their content. Used internally by rebuildTOCs.
+   * @private
    */
-  clearCustom(): this {
-    // Process body elements: remove all SDTs and unwrap their content
+  private clearCustom(): void {
     const unwrappedBody: BodyElement[] = [];
+
+    const unwrapSDT = (sdt: StructuredDocumentTag, target: BodyElement[]) => {
+      for (const item of sdt.getContent()) {
+        if (item instanceof Paragraph || item instanceof Table) {
+          target.push(item);
+        } else if (item instanceof StructuredDocumentTag) {
+          unwrapSDT(item, target);
+        }
+      }
+    };
 
     for (const element of this.bodyElements) {
       if (element instanceof StructuredDocumentTag) {
-        // Unwrap SDT: add its content directly to the body
-        const sdtContent = element.getContent();
-        for (const item of sdtContent) {
-          if (item instanceof Table) {
-            // CRITICAL: Sanitize tblPrEx from table rows when coming out of SDT
-            // This prevents row-level formatting exceptions from applying to all rows
-            this.sanitizeTableRowExceptions(item);
-            unwrappedBody.push(item);
-          } else if (item instanceof Paragraph || item instanceof Table) {
-            unwrappedBody.push(item);
-          } else if (item instanceof StructuredDocumentTag) {
-            // Recursively handle nested SDTs
-            this.unwrapNestedStructuredDocumentTags(item, unwrappedBody);
-          }
-        }
-      } else if (element instanceof Table) {
-        // Process table: unwrap SDTs inside cells
-        this.clearCustomInTable(element);
-        unwrappedBody.push(element);
+        unwrapSDT(element, unwrappedBody);
       } else {
-        // Keep non-SDT elements as-is
         unwrappedBody.push(element);
       }
     }
 
-    // Replace body elements with unwrapped content
     this.bodyElements = unwrappedBody;
-
-    return this;
-  }
-
-  /**
-   * Sanitizes table property exceptions from all rows in a table
-   * 
-   * Clears tblPrEx (row-level table property overrides) to prevent formatting
-   * from leaking when tables are relocated outside SDT context.
-   * 
-   * This is essential after unwrapping Google Docs SDT-wrapped tables where
-   * header formatting (bold, center, shading) is defined via tblPrEx rather
-   * than cell-level formatting.
-   *
-   * @param table - Table to sanitize
-   * @public
-   */
-  sanitizeTableRowExceptions(table: Table): void {
-    const rows = table.getRows();
-    
-    for (const row of rows) {
-      // Get current exceptions
-      const exceptions = row.getTablePropertyExceptions();
-      
-      // Only process rows that have exceptions
-      if (exceptions && Object.keys(exceptions).length > 0) {
-        // Clear tblPrEx by setting to undefined (completely removes exceptions)
-        row.setTablePropertyExceptions(undefined as any);
-      }
-    }
-  }
-
-  /**
-   * Recursively unwraps nested SDTs, adding their content to the target array
-   * @private
-   */
-  private unwrapNestedStructuredDocumentTags(
-    sdt: StructuredDocumentTag,
-    targetArray: BodyElement[]
-  ): void {
-    const content = sdt.getContent();
-
-    for (const item of content) {
-      if (item instanceof Paragraph || item instanceof Table) {
-        targetArray.push(item);
-      } else if (item instanceof StructuredDocumentTag) {
-        // Recursively unwrap nested SDTs
-        this.unwrapNestedStructuredDocumentTags(item, targetArray);
-      }
-    }
-  }
-
-  /**
-   * Recursively clears SDTs from all cells in a table
-   * Also processes nested tables within cells
-   * @private
-   */
-  private clearCustomInTable(table: Table): void {
-    const rows = table.getRows();
-
-    for (const row of rows) {
-      const cells = row.getCells();
-
-      for (const cell of cells) {
-        if (!(cell instanceof TableCell)) {
-          continue;
-        }
-
-        // Process all paragraphs in this cell
-        // In standard DOCX, cells contain paragraphs (not SDTs directly)
-        // However, we need to handle any nested tables that might be inside paragraphs
-        const cellParagraphs = cell.getParagraphs();
-
-        for (const para of cellParagraphs) {
-          // Check paragraph content for nested tables
-          // (Tables can appear as block-level content in some DOCX structures)
-          // This is handled through the paragraph's content iteration
-          // If there are nested tables, they will be processed separately
-        }
-      }
-    }
   }
 
   /**
@@ -15078,7 +13251,7 @@ export class Document {
         
         // Add to results: [instruction, counts]
         results.push([fieldInstruction, headingCounts]);
-      } catch (error) {
+      } catch (error: unknown) {
         // Skip this TOC on error
         this.logger.warn(
           'Error processing TOC in rebuildTOCs',

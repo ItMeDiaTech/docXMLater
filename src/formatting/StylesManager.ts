@@ -919,7 +919,7 @@ export class StylesManager {
       const style = Style.create(props);
       this.addStyle(style);
       return style;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new Error(
         `Failed to import style: ${
           error instanceof Error ? error.message : "Invalid JSON"
@@ -972,7 +972,7 @@ export class StylesManager {
       }
 
       return styles;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new Error(
         `Failed to import styles: ${
           error instanceof Error ? error.message : "Invalid JSON"

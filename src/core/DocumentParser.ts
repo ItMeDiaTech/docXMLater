@@ -3,9 +3,13 @@
  * Extracts content from ZIP archives and converts XML to structured data
  */
 
+import { AlternateContent } from "../elements/AlternateContent";
 import { Bookmark } from "../elements/Bookmark";
 import { BookmarkManager } from "../elements/BookmarkManager";
 import { Comment } from "../elements/Comment";
+import { CustomXmlBlock } from "../elements/CustomXml";
+import { PreservedElement } from "../elements/PreservedElement";
+import { MathParagraph } from "../elements/MathElement";
 import { ComplexField, Field } from "../elements/Field";
 import { isHyperlinkInstruction, parseHyperlinkInstruction } from "../elements/FieldHelpers";
 import { Footer } from "../elements/Footer";
@@ -23,7 +27,7 @@ import {
   SectionType,
 } from "../elements/Section";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
-import { Table } from "../elements/Table";
+import { Table, TableBorder } from "../elements/Table";
 import { TableCell } from "../elements/TableCell";
 import { TableOfContents } from "../elements/TableOfContents";
 import { TableOfContentsElement } from "../elements/TableOfContentsElement";
@@ -38,6 +42,7 @@ import {
 } from "../utils/diagnostics";
 import { getGlobalLogger, createScopedLogger, ILogger, defaultLogger } from "../utils/logger";
 import { safeParseInt, isExplicitlySet, parseOoxmlBoolean } from "../utils/parsingHelpers";
+import { halfPointsToPoints } from "../utils/units";
 
 // Create scoped logger for DocumentParser operations
 function getLogger(): ILogger {
@@ -65,7 +70,11 @@ type BodyElement =
   | Paragraph
   | Table
   | TableOfContentsElement
-  | StructuredDocumentTag;
+  | StructuredDocumentTag
+  | AlternateContent
+  | MathParagraph
+  | CustomXmlBlock
+  | PreservedElement;
 
 /**
  * DocumentParser handles all document parsing logic
@@ -228,11 +237,19 @@ export class DocumentParser {
       const nextP = this.findNextTopLevelTag(bodyContent, "w:p", pos);
       const nextTbl = this.findNextTopLevelTag(bodyContent, "w:tbl", pos);
       const nextSdt = this.findNextTopLevelTag(bodyContent, "w:sdt", pos);
+      const nextAC = this.findNextTopLevelTag(bodyContent, "mc:AlternateContent", pos);
+      const nextMath = this.findNextTopLevelTag(bodyContent, "m:oMathPara", pos);
+      const nextCXml = this.findNextTopLevelTag(bodyContent, "w:customXml", pos);
+      const nextAltChunk = this.findNextTopLevelTag(bodyContent, "w:altChunk", pos);
 
       const candidates = [];
       if (nextP !== -1) candidates.push({ type: "p", pos: nextP });
       if (nextTbl !== -1) candidates.push({ type: "tbl", pos: nextTbl });
       if (nextSdt !== -1) candidates.push({ type: "sdt", pos: nextSdt });
+      if (nextAC !== -1) candidates.push({ type: "alternateContent", pos: nextAC });
+      if (nextMath !== -1) candidates.push({ type: "mathParagraph", pos: nextMath });
+      if (nextCXml !== -1) candidates.push({ type: "customXml", pos: nextCXml });
+      if (nextAltChunk !== -1) candidates.push({ type: "altChunk", pos: nextAltChunk });
 
       if (candidates.length === 0) break;
 
@@ -352,6 +369,58 @@ export class DocumentParser {
               imageManager
             );
             if (sdt) bodyElements.push(sdt);
+            pos = next.pos + elementXml.length;
+          } else {
+            pos = next.pos + 1;
+          }
+        } else if (next.type === "alternateContent") {
+          // mc:AlternateContent - preserve as raw XML for round-trip fidelity
+          const elementXml = this.extractSingleElement(
+            bodyContent,
+            "mc:AlternateContent",
+            next.pos
+          );
+          if (elementXml) {
+            bodyElements.push(new AlternateContent(elementXml));
+            pos = next.pos + elementXml.length;
+          } else {
+            pos = next.pos + 1;
+          }
+        } else if (next.type === "mathParagraph") {
+          // m:oMathPara - preserve as raw XML for round-trip fidelity
+          const elementXml = this.extractSingleElement(
+            bodyContent,
+            "m:oMathPara",
+            next.pos
+          );
+          if (elementXml) {
+            bodyElements.push(new MathParagraph(elementXml));
+            pos = next.pos + elementXml.length;
+          } else {
+            pos = next.pos + 1;
+          }
+        } else if (next.type === "customXml") {
+          // w:customXml - preserve as raw XML for round-trip fidelity
+          const elementXml = this.extractSingleElement(
+            bodyContent,
+            "w:customXml",
+            next.pos
+          );
+          if (elementXml) {
+            bodyElements.push(new CustomXmlBlock(elementXml));
+            pos = next.pos + elementXml.length;
+          } else {
+            pos = next.pos + 1;
+          }
+        } else if (next.type === "altChunk") {
+          // w:altChunk - preserve as raw XML for round-trip fidelity
+          const elementXml = this.extractSingleElement(
+            bodyContent,
+            "w:altChunk",
+            next.pos
+          );
+          if (elementXml) {
+            bodyElements.push(new PreservedElement(elementXml, 'altChunk', 'block'));
             pos = next.pos + elementXml.length;
           } else {
             pos = next.pos + 1;
@@ -791,6 +860,23 @@ export class DocumentParser {
       const pPr = pElement["w:pPr"];
       this.parseParagraphPropertiesFromObject(pPr, paragraph);
 
+      // If the paragraph has inline sectPr, extract the raw XML for round-trip fidelity.
+      // The parsed object from parseParagraphPropertiesFromObject is a complex structure that
+      // cannot be serialized correctly by XMLBuilder.wSelf (which expects flat attributes).
+      // Using raw XML passthrough prevents corruption from malformed sectPr serialization.
+      if (paragraph.formatting.sectPr) {
+        const pPrElements = XMLParser.extractElements(paraXml, "w:pPr");
+        const pPrXml = pPrElements[0];
+        if (pPrXml) {
+          const sectPrElements = XMLParser.extractElements(pPrXml, "w:sectPr");
+          const rawSectPr = sectPrElements[0];
+          if (rawSectPr) {
+            // Store as raw XML string (including the <w:sectPr>...</w:sectPr> wrapper)
+            paragraph.setSectionProperties(rawSectPr);
+          }
+        }
+      }
+
       // Parse w14:paraId if present
       const paraId = pElement["w14:paraId"];
       if (paraId) {
@@ -832,7 +918,7 @@ export class DocumentParser {
       this.mergeConsecutiveHyperlinks(paragraph);
 
       return paragraph;
-    } catch (error) {
+    } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.parseErrors.push({ element: "paragraph", error: err });
 
@@ -879,7 +965,7 @@ export class DocumentParser {
 
     // Track children by scanning XML for opening tags
     interface ChildMarker {
-      type: "w:r" | "w:hyperlink" | "w:fldSimple" | "w:ins" | "w:del" | "w:moveFrom" | "w:moveTo" | "w:bookmarkStart" | "w:bookmarkEnd";
+      type: "w:r" | "w:hyperlink" | "w:fldSimple" | "w:ins" | "w:del" | "w:moveFrom" | "w:moveTo" | "w:bookmarkStart" | "w:bookmarkEnd" | "w:proofErr" | "w:permStart" | "w:permEnd" | "m:oMath" | "w:ruby";
       pos: number;
       index: number;
     }
@@ -894,6 +980,11 @@ export class DocumentParser {
     let moveToIndex = 0;
     let bookmarkStartIndex = 0;
     let bookmarkEndIndex = 0;
+    let proofErrIndex = 0;
+    let permStartIndex = 0;
+    let permEndIndex = 0;
+    let oMathIndex = 0;
+    let rubyIndex = 0;
 
     // Helper to find closing tag position for a given tag name starting from position
     const findClosingTagEnd = (content: string, tagName: string, startPos: number): number => {
@@ -991,6 +1082,46 @@ export class DocumentParser {
           index: bookmarkEndIndex++,
         });
         searchPos = tagEnd + 1;
+      } else if (tagName === "w:proofErr") {
+        // Proofing error markers - always self-closing
+        children.push({
+          type: "w:proofErr",
+          pos: tagStart,
+          index: proofErrIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "w:permStart") {
+        // Permission range start - always self-closing
+        children.push({
+          type: "w:permStart",
+          pos: tagStart,
+          index: permStartIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "w:permEnd") {
+        // Permission range end - always self-closing
+        children.push({
+          type: "w:permEnd",
+          pos: tagStart,
+          index: permEndIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "m:oMath") {
+        // Inline math expression - preserve as raw XML
+        children.push({
+          type: "m:oMath",
+          pos: tagStart,
+          index: oMathIndex++,
+        });
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "m:oMath", tagEnd);
+      } else if (tagName === "w:ruby") {
+        // Ruby text (phonetic guides) - preserve as raw XML
+        children.push({
+          type: "w:ruby",
+          pos: tagStart,
+          index: rubyIndex++,
+        });
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, "w:ruby", tagEnd);
       } else {
         searchPos = tagEnd + 1;
       }
@@ -1060,6 +1191,18 @@ export class DocumentParser {
               if (pictXmls.length > 0 && pictXmls[0]) {
                 const run = Run.createFromContent([{ type: "vml", rawXml: pictXmls[0] }]);
                 // Apply any run properties (formatting) to the VML run
+                this.parseRunPropertiesFromObject(runObj["w:rPr"], run);
+                paragraph.addRun(run);
+              }
+            }
+          } else if (runObj["w:object"]) {
+            // Embedded OLE object - preserve as raw XML for round-trip fidelity
+            // Per ECMA-376 Part 1 §17.3.3.19
+            const runXml = extractRunXmlAtPosition(child.pos);
+            if (runXml) {
+              const objectXmls = XMLParser.extractElements(runXml, "w:object");
+              if (objectXmls.length > 0 && objectXmls[0]) {
+                const run = Run.createFromContent([{ type: "embeddedObject", rawXml: objectXmls[0] }]);
                 this.parseRunPropertiesFromObject(runObj["w:rPr"], run);
                 paragraph.addRun(run);
               }
@@ -1222,6 +1365,20 @@ export class DocumentParser {
               paragraph.addBookmarkEnd(bookmark);
             }
           }
+        }
+      } else if (child.type === "w:proofErr" || child.type === "w:permStart" || child.type === "w:permEnd") {
+        // Preserve proofing errors and permission ranges as raw XML
+        // These are self-closing elements: extract from pos to end of tag
+        const selfCloseEnd = paraContent.indexOf(">", child.pos);
+        if (selfCloseEnd !== -1) {
+          const rawXml = paraContent.substring(child.pos, selfCloseEnd + 1);
+          paragraph.addContent(new PreservedElement(rawXml, child.type, 'inline'));
+        }
+      } else if (child.type === "m:oMath" || child.type === "w:ruby") {
+        // Preserve inline math and ruby elements as raw XML for round-trip fidelity
+        const elementXml = this.extractSingleElement(paraContent, child.type, child.pos);
+        if (elementXml) {
+          paragraph.addContent(new PreservedElement(elementXml, child.type, 'inline'));
         }
       }
     }
@@ -1389,7 +1546,7 @@ export class DocumentParser {
 
       result.revision = revision;
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse revision:",
         error instanceof Error
@@ -1471,7 +1628,7 @@ export class DocumentParser {
       });
 
       return comment;
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse comment:",
         error instanceof Error
@@ -1522,7 +1679,7 @@ export class DocumentParser {
       }
 
       return bookmark;
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse bookmark start:",
         error instanceof Error
@@ -1557,7 +1714,7 @@ export class DocumentParser {
       });
 
       return bookmark;
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse bookmark end:",
         error instanceof Error
@@ -1735,7 +1892,7 @@ export class DocumentParser {
       this.mergeConsecutiveHyperlinks(paragraph);
 
       return paragraph;
-    } catch (error) {
+    } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.parseErrors.push({ element: "paragraph", error: err });
 
@@ -2256,9 +2413,9 @@ export class DocumentParser {
     }
 
     // Section properties per ECMA-376 Part 1 §17.3.1.30
+    // Note: sectPr is set as raw XML string by callers that have access to the raw paragraph XML.
+    // The parsed object is stored as a marker; callers override with raw XML for round-trip fidelity.
     if (pPrObj["w:sectPr"]) {
-      // Simplified: store as-is (complex structure)
-      // Full implementation would parse complete sectPr structure
       paragraph.setSectionProperties(pPrObj["w:sectPr"]);
     }
   }
@@ -3329,6 +3486,84 @@ export class DocumentParser {
               content.push({ type: "noBreakHyphen" });
               break;
 
+            // Simple marker elements per ECMA-376 Part 1 §17.3.3
+            case "w:lastRenderedPageBreak":
+              content.push({ type: "lastRenderedPageBreak" });
+              break;
+
+            case "w:separator":
+              content.push({ type: "separator" });
+              break;
+
+            case "w:continuationSeparator":
+              content.push({ type: "continuationSeparator" });
+              break;
+
+            case "w:pgNum":
+              content.push({ type: "pageNumber" });
+              break;
+
+            case "w:annotationRef":
+              content.push({ type: "annotationRef" });
+              break;
+
+            case "w:dayShort":
+              content.push({ type: "dayShort" });
+              break;
+
+            case "w:dayLong":
+              content.push({ type: "dayLong" });
+              break;
+
+            case "w:monthShort":
+              content.push({ type: "monthShort" });
+              break;
+
+            case "w:monthLong":
+              content.push({ type: "monthLong" });
+              break;
+
+            case "w:yearShort":
+              content.push({ type: "yearShort" });
+              break;
+
+            case "w:yearLong":
+              content.push({ type: "yearLong" });
+              break;
+
+            // Symbol character (w:sym) per ECMA-376 Part 1 §17.3.3.30
+            case "w:sym": {
+              const symElements = toArray(runObj["w:sym"]);
+              const sym = symElements[elementIndex] || symElements[0];
+              if (sym && typeof sym === "object") {
+                content.push({
+                  type: "symbol",
+                  symbolFont: sym["@_w:font"],
+                  symbolChar: sym["@_w:char"],
+                });
+              } else {
+                content.push({ type: "symbol" });
+              }
+              break;
+            }
+
+            // Absolute position tab (w:ptab) per ECMA-376 Part 1 §17.3.3.23
+            case "w:ptab": {
+              const ptabElements = toArray(runObj["w:ptab"]);
+              const ptab = ptabElements[elementIndex] || ptabElements[0];
+              if (ptab && typeof ptab === "object") {
+                content.push({
+                  type: "positionTab",
+                  ptabAlignment: ptab["@_w:alignment"],
+                  ptabRelativeTo: ptab["@_w:relativeTo"],
+                  ptabLeader: ptab["@_w:leader"],
+                });
+              } else {
+                content.push({ type: "positionTab" });
+              }
+              break;
+            }
+
             // Ignore formatting elements (w:rPr) - handled separately
             case "w:rPr":
               break;
@@ -3430,6 +3665,74 @@ export class DocumentParser {
         if (runObj["w:noBreakHyphen"] !== undefined) {
           content.push({ type: "noBreakHyphen" });
         }
+
+        // Simple marker elements (fallback path)
+        if (runObj["w:lastRenderedPageBreak"] !== undefined) {
+          content.push({ type: "lastRenderedPageBreak" });
+        }
+        if (runObj["w:separator"] !== undefined) {
+          content.push({ type: "separator" });
+        }
+        if (runObj["w:continuationSeparator"] !== undefined) {
+          content.push({ type: "continuationSeparator" });
+        }
+        if (runObj["w:pgNum"] !== undefined) {
+          content.push({ type: "pageNumber" });
+        }
+        if (runObj["w:annotationRef"] !== undefined) {
+          content.push({ type: "annotationRef" });
+        }
+        if (runObj["w:dayShort"] !== undefined) {
+          content.push({ type: "dayShort" });
+        }
+        if (runObj["w:dayLong"] !== undefined) {
+          content.push({ type: "dayLong" });
+        }
+        if (runObj["w:monthShort"] !== undefined) {
+          content.push({ type: "monthShort" });
+        }
+        if (runObj["w:monthLong"] !== undefined) {
+          content.push({ type: "monthLong" });
+        }
+        if (runObj["w:yearShort"] !== undefined) {
+          content.push({ type: "yearShort" });
+        }
+        if (runObj["w:yearLong"] !== undefined) {
+          content.push({ type: "yearLong" });
+        }
+
+        // Symbol character (w:sym) - fallback path
+        if (runObj["w:sym"] !== undefined) {
+          const symElements = toArray(runObj["w:sym"]);
+          for (const sym of symElements) {
+            if (sym && typeof sym === "object") {
+              content.push({
+                type: "symbol",
+                symbolFont: sym["@_w:font"],
+                symbolChar: sym["@_w:char"],
+              });
+            } else {
+              content.push({ type: "symbol" });
+            }
+          }
+        }
+
+        // Absolute position tab (w:ptab) - fallback path
+        if (runObj["w:ptab"] !== undefined) {
+          const ptabElements = toArray(runObj["w:ptab"]);
+          for (const ptab of ptabElements) {
+            if (ptab && typeof ptab === "object") {
+              content.push({
+                type: "positionTab",
+                ptabAlignment: ptab["@_w:alignment"],
+                ptabRelativeTo: ptab["@_w:relativeTo"],
+                ptabLeader: ptab["@_w:leader"],
+              });
+            } else {
+              content.push({ type: "positionTab" });
+            }
+          }
+        }
       }
 
       // Create run from content elements
@@ -3450,7 +3753,7 @@ export class DocumentParser {
       );
 
       return run;
-    } catch (error) {
+    } catch (error: unknown) {
       return null;
     }
   }
@@ -3649,7 +3952,7 @@ export class DocumentParser {
 
       result.hyperlink = hyperlink;
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse hyperlink:",
         error instanceof Error
@@ -3856,7 +4159,7 @@ export class DocumentParser {
       });
 
       return field;
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse field:",
         error instanceof Error
@@ -3948,6 +4251,12 @@ export class DocumentParser {
     if (parseOoxmlBoolean(rPrObj["w:smallCaps"])) run.setSmallCaps(true);
     if (parseOoxmlBoolean(rPrObj["w:caps"])) run.setAllCaps(true);
 
+    // Parse complex script flag (w:cs) per ECMA-376 Part 1 §17.3.2.7
+    if (parseOoxmlBoolean(rPrObj["w:cs"])) run.setComplexScript(true);
+
+    // Parse web hidden (w:webHidden) per ECMA-376 Part 1 §17.3.2.44
+    if (parseOoxmlBoolean(rPrObj["w:webHidden"])) run.setWebHidden(true);
+
     if (rPrObj["w:u"]) {
       // XMLParser adds @_ prefix to attributes
       const uVal = rPrObj["w:u"]["@_w:val"];
@@ -4020,20 +4329,26 @@ export class DocumentParser {
     }
 
     if (rPrObj["w:rFonts"]) {
-      run.setFont(rPrObj["w:rFonts"]["@_w:ascii"]);
+      const rFonts = rPrObj["w:rFonts"];
+      if (rFonts["@_w:ascii"]) run.setFont(rFonts["@_w:ascii"]);
+      // Parse additional font variants per ECMA-376 Part 1 §17.3.2.26
+      if (rFonts["@_w:hAnsi"]) run.setFontHAnsi(rFonts["@_w:hAnsi"]);
+      if (rFonts["@_w:eastAsia"]) run.setFontEastAsia(rFonts["@_w:eastAsia"]);
+      if (rFonts["@_w:cs"]) run.setFontCs(rFonts["@_w:cs"]);
+      if (rFonts["@_w:hint"]) run.setFontHint(rFonts["@_w:hint"]);
     }
 
     if (rPrObj["w:sz"]) {
-      run.setSize(parseInt(rPrObj["w:sz"]["@_w:val"], 10) / 2);
+      run.setSize(halfPointsToPoints(parseInt(rPrObj["w:sz"]["@_w:val"], 10)));
     }
 
     // Parse complex script font size (w:szCs) per ECMA-376 Part 1 §17.3.2.40
     // This is separate from regular size to support RTL languages
     if (rPrObj["w:szCs"]) {
-      const szCsVal = parseInt(rPrObj["w:szCs"]["@_w:val"], 10) / 2;
+      const szCsVal = halfPointsToPoints(parseInt(rPrObj["w:szCs"]["@_w:val"], 10));
       // Only set sizeCs if it differs from size (to avoid redundant storage)
       // When sz is not present (undefined), always store szCs
-      const sizeVal = rPrObj["w:sz"] ? parseInt(rPrObj["w:sz"]["@_w:val"], 10) / 2 : undefined;
+      const sizeVal = rPrObj["w:sz"] ? halfPointsToPoints(parseInt(rPrObj["w:sz"]["@_w:val"], 10)) : undefined;
       if (sizeVal === undefined || szCsVal !== sizeVal) {
         run.setSizeCs(szCsVal);
       }
@@ -4109,12 +4424,12 @@ export class DocumentParser {
 
         // Parse previous size (half-points to points)
         if (prevRPr["w:sz"]) {
-          prevProps.size = safeParseInt(prevRPr["w:sz"]["@_w:val"]) / 2;
+          prevProps.size = halfPointsToPoints(safeParseInt(prevRPr["w:sz"]["@_w:val"]));
         }
 
         // Parse previous complex script size (w:szCs) per ECMA-376 Part 1 §17.3.2.40
         if (prevRPr["w:szCs"]) {
-          const szCsVal = safeParseInt(prevRPr["w:szCs"]["@_w:val"]) / 2;
+          const szCsVal = halfPointsToPoints(safeParseInt(prevRPr["w:szCs"]["@_w:val"]));
           // Only store if different from regular size
           if (!prevRPr["w:sz"] || szCsVal !== prevProps.size) {
             prevProps.sizeCs = szCsVal;
@@ -4365,14 +4680,18 @@ export class DocumentParser {
         };
       }
 
-      // Extract name, description, and ID from wp:docPr
+      // Extract name, description, title, and ID from wp:docPr
       const docPrObj = imageObj["wp:docPr"];
       let name = "image";
       let description = "Image";
+      let title: string | undefined = undefined;
       let docPrId = 1;
       if (docPrObj) {
         name = docPrObj["@_name"] || "image";
         description = docPrObj["@_descr"] || "Image";
+        if (docPrObj["@_title"]) {
+          title = String(docPrObj["@_title"]);
+        }
         // Parse docPr id to preserve unique image IDs
         const idAttr = docPrObj["@_id"];
         if (idAttr) {
@@ -4397,6 +4716,11 @@ export class DocumentParser {
       if (isFloating && anchorObj) {
         // XMLParser converts attribute values - handle both string and number
         const toBool = (val: any) => val === "1" || val === 1 || val === true;
+        const toOptInt = (val: any): number | undefined => {
+          if (val === undefined || val === null) return undefined;
+          const n = parseInt(String(val), 10);
+          return isNaN(n) ? undefined : n;
+        };
 
         anchor = {
           behindDoc: toBool(anchorObj["@_behindDoc"]),
@@ -4407,6 +4731,11 @@ export class DocumentParser {
             anchorObj["@_relativeHeight"] || "251658240",
             10
           ),
+          simplePos: toBool(anchorObj["@_simplePos"]),
+          distT: toOptInt(anchorObj["@_distT"]),
+          distB: toOptInt(anchorObj["@_distB"]),
+          distL: toOptInt(anchorObj["@_distL"]),
+          distR: toOptInt(anchorObj["@_distR"]),
         };
       }
 
@@ -4512,6 +4841,7 @@ export class DocumentParser {
         height,
         name,
         description,
+        title,
         effectExtent,
         wrap,
         position,
@@ -4534,7 +4864,7 @@ export class DocumentParser {
 
       // Create and return ImageRun
       return new ImageRun(image);
-    } catch (error) {
+    } catch (error: unknown) {
       const partContext = this.currentPartName ? ` (part: ${this.currentPartName})` : '';
       logger.warn(`Failed to parse drawing${partContext}:`,
         error instanceof Error
@@ -4696,6 +5026,21 @@ export class DocumentParser {
     return Object.keys(effects).length > 0 ? effects : undefined;
   }
 
+  /**
+   * Parse a single border element from a parsed XML object.
+   * Shared by table border and cell border parsing.
+   */
+  private parseBorderElement(borderObj: any): TableBorder | undefined {
+    if (!borderObj) return undefined;
+    const border: TableBorder = {
+      style: (borderObj["@_w:val"] || "single") as TableBorder["style"],
+    };
+    if (borderObj["@_w:sz"]) border.size = parseInt(borderObj["@_w:sz"], 10);
+    if (borderObj["@_w:space"]) border.space = parseInt(borderObj["@_w:space"], 10);
+    if (borderObj["@_w:color"]) border.color = borderObj["@_w:color"];
+    return border;
+  }
+
   private async parseTableFromObject(
     tableObj: any,
     relationshipManager: RelationshipManager,
@@ -4804,7 +5149,7 @@ export class DocumentParser {
       // Note: StylesManager is injected by Document.parseDocument() after styles are loaded
 
       return table;
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse table:",
         error instanceof Error
@@ -4960,6 +5305,22 @@ export class DocumentParser {
       }
     }
 
+    // Parse table style row band size (w:tblStyleRowBandSize) per ECMA-376 Part 1 §17.4.52
+    if (tblPrObj["w:tblStyleRowBandSize"]) {
+      const val = parseInt(tblPrObj["w:tblStyleRowBandSize"]["@_w:val"] || "0", 10);
+      if (val > 0) {
+        table.setStyleRowBandSize(val);
+      }
+    }
+
+    // Parse table style column band size (w:tblStyleColBandSize) per ECMA-376 Part 1 §17.4.51
+    if (tblPrObj["w:tblStyleColBandSize"]) {
+      const val = parseInt(tblPrObj["w:tblStyleColBandSize"]["@_w:val"] || "0", 10);
+      if (val > 0) {
+        table.setStyleColBandSize(val);
+      }
+    }
+
     // Parse table shading (w:shd) per ECMA-376 Part 1 §17.4.56
     if (tblPrObj["w:shd"]) {
       const shd = tblPrObj["w:shd"];
@@ -4977,23 +5338,12 @@ export class DocumentParser {
       const bordersObj = tblPrObj["w:tblBorders"];
       const borders: import("../elements/Table").TableBorders = {};
 
-      const parseBorder = (borderObj: any) => {
-        if (!borderObj) return undefined;
-        const border: import("../elements/Table").TableBorder = {
-          style: borderObj["@_w:val"] || "single",
-        };
-        if (borderObj["@_w:sz"]) border.size = parseInt(borderObj["@_w:sz"], 10);
-        if (borderObj["@_w:space"]) border.space = parseInt(borderObj["@_w:space"], 10);
-        if (borderObj["@_w:color"]) border.color = borderObj["@_w:color"];
-        return border;
-      };
-
-      if (bordersObj["w:top"]) borders.top = parseBorder(bordersObj["w:top"]);
-      if (bordersObj["w:bottom"]) borders.bottom = parseBorder(bordersObj["w:bottom"]);
-      if (bordersObj["w:left"]) borders.left = parseBorder(bordersObj["w:left"]);
-      if (bordersObj["w:right"]) borders.right = parseBorder(bordersObj["w:right"]);
-      if (bordersObj["w:insideH"]) borders.insideH = parseBorder(bordersObj["w:insideH"]);
-      if (bordersObj["w:insideV"]) borders.insideV = parseBorder(bordersObj["w:insideV"]);
+      if (bordersObj["w:top"]) borders.top = this.parseBorderElement(bordersObj["w:top"]);
+      if (bordersObj["w:bottom"]) borders.bottom = this.parseBorderElement(bordersObj["w:bottom"]);
+      if (bordersObj["w:left"]) borders.left = this.parseBorderElement(bordersObj["w:left"]);
+      if (bordersObj["w:right"]) borders.right = this.parseBorderElement(bordersObj["w:right"]);
+      if (bordersObj["w:insideH"]) borders.insideH = this.parseBorderElement(bordersObj["w:insideH"]);
+      if (bordersObj["w:insideV"]) borders.insideV = this.parseBorderElement(bordersObj["w:insideV"]);
 
       if (Object.keys(borders).length > 0) {
         table.setBorders(borders);
@@ -5054,7 +5404,7 @@ export class DocumentParser {
       }
 
       return row;
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse table row:",
         error instanceof Error
@@ -5117,6 +5467,41 @@ export class DocumentParser {
       const val = parseInt(trPrObj["w:gridAfter"]["@_w:val"] || "0", 10);
       if (val > 0) {
         row.setGridAfter(val);
+      }
+    }
+
+    // Parse width before (w:wBefore) per ECMA-376 Part 1 §17.4.83
+    if (trPrObj["w:wBefore"]) {
+      const w = parseInt(trPrObj["w:wBefore"]["@_w:w"] || "0", 10);
+      const type = trPrObj["w:wBefore"]["@_w:type"] || "dxa";
+      if (w > 0) {
+        row.setWBefore(w, type);
+      }
+    }
+
+    // Parse width after (w:wAfter) per ECMA-376 Part 1 §17.4.82
+    if (trPrObj["w:wAfter"]) {
+      const w = parseInt(trPrObj["w:wAfter"]["@_w:w"] || "0", 10);
+      const type = trPrObj["w:wAfter"]["@_w:type"] || "dxa";
+      if (w > 0) {
+        row.setWAfter(w, type);
+      }
+    }
+
+    // Parse row-level cell spacing (w:tblCellSpacing)
+    if (trPrObj["w:tblCellSpacing"]) {
+      const w = parseInt(trPrObj["w:tblCellSpacing"]["@_w:w"] || "0", 10);
+      const type = trPrObj["w:tblCellSpacing"]["@_w:type"] || "dxa";
+      if (w > 0) {
+        row.setRowCellSpacing(w, type);
+      }
+    }
+
+    // Parse conditional formatting (w:cnfStyle) per ECMA-376 Part 1 §17.3.1.8
+    if (trPrObj["w:cnfStyle"]) {
+      const val = trPrObj["w:cnfStyle"]["@_w:val"];
+      if (val) {
+        row.setCnfStyle(val);
       }
     }
   }
@@ -5254,25 +5639,14 @@ export class DocumentParser {
           const bordersObj = tcPr["w:tcBorders"];
           const borders: any = {};
 
-          const parseBorder = (borderObj: any) => {
-            if (!borderObj) return undefined;
-            const border: any = {
-              style: borderObj["@_w:val"] || "single",
-            };
-            if (borderObj["@_w:sz"]) border.size = parseInt(borderObj["@_w:sz"], 10);
-            if (borderObj["@_w:space"]) border.space = parseInt(borderObj["@_w:space"], 10);
-            if (borderObj["@_w:color"]) border.color = borderObj["@_w:color"];
-            return border;
-          };
-
           if (bordersObj["w:top"])
-            borders.top = parseBorder(bordersObj["w:top"]);
+            borders.top = this.parseBorderElement(bordersObj["w:top"]);
           if (bordersObj["w:bottom"])
-            borders.bottom = parseBorder(bordersObj["w:bottom"]);
+            borders.bottom = this.parseBorderElement(bordersObj["w:bottom"]);
           if (bordersObj["w:left"])
-            borders.left = parseBorder(bordersObj["w:left"]);
+            borders.left = this.parseBorderElement(bordersObj["w:left"]);
           if (bordersObj["w:right"])
-            borders.right = parseBorder(bordersObj["w:right"]);
+            borders.right = this.parseBorderElement(bordersObj["w:right"]);
 
           if (Object.keys(borders).length > 0) {
             cell.setBorders(borders);
@@ -5487,7 +5861,7 @@ export class DocumentParser {
     }
 
       return cell;
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse table cell:",
         error instanceof Error
@@ -5897,7 +6271,7 @@ export class DocumentParser {
       }
 
       return new StructuredDocumentTag(properties, content);
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse SDT:",
         error instanceof Error
@@ -6320,7 +6694,7 @@ export class DocumentParser {
       }
 
       return new TableOfContents(tocOptions);
-    } catch (error) {
+    } catch (error: unknown) {
       defaultLogger.warn(
         "[DocumentParser] Failed to parse TOC from SDT content:",
         error instanceof Error
@@ -6644,7 +7018,7 @@ export class DocumentParser {
           if (style) {
             styles.push(style);
           }
-        } catch (error) {
+        } catch (error: unknown) {
           const err = error instanceof Error ? error : new Error(String(error));
           this.parseErrors.push({ element: "style", error: err });
 
@@ -6654,7 +7028,7 @@ export class DocumentParser {
           // In lenient mode, continue parsing other styles
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.parseErrors.push({ element: "styles.xml", error: err });
 
@@ -6696,7 +7070,7 @@ export class DocumentParser {
         try {
           const abstractNum = AbstractNumbering.fromXML(abstractNumXml);
           abstractNumberings.push(abstractNum);
-        } catch (error) {
+        } catch (error: unknown) {
           const err = error instanceof Error ? error : new Error(String(error));
           this.parseErrors.push({ element: "abstractNum", error: err });
 
@@ -6714,7 +7088,7 @@ export class DocumentParser {
         try {
           const instance = NumberingInstance.fromXML(numXml);
           numberingInstances.push(instance);
-        } catch (error) {
+        } catch (error: unknown) {
           const err = error instanceof Error ? error : new Error(String(error));
           this.parseErrors.push({ element: "num", error: err });
 
@@ -6724,7 +7098,7 @@ export class DocumentParser {
           // In lenient mode, continue parsing other instances
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.parseErrors.push({ element: "numbering.xml", error: err });
 
@@ -6753,15 +7127,37 @@ export class DocumentParser {
         return null;
       }
 
-      const sectPrElements = XMLParser.extractElements(bodyContent, "w:sectPr");
-      if (sectPrElements.length === 0) {
-        return null;
-      }
+      // Find the body-level sectPr (direct child of w:body), NOT inline sectPr inside w:pPr.
+      // Per ECMA-376, the body-level sectPr appears as the last child of w:body,
+      // after all paragraphs and tables. Inline sectPr elements inside w:pPr define
+      // section breaks and must not be confused with the document-level section properties.
+      // Search only in the content after the last block-level element to avoid picking up
+      // inline sectPr from paragraph properties.
+      const lastPClose = bodyContent.lastIndexOf('</w:p>');
+      const lastTblClose = bodyContent.lastIndexOf('</w:tbl>');
+      const lastSdtClose = bodyContent.lastIndexOf('</w:sdt>');
+      const lastBlockEnd = Math.max(lastPClose, lastTblClose, lastSdtClose);
 
-      // Use the last sectPr (document-level section properties)
-      const sectPr = sectPrElements[sectPrElements.length - 1];
+      let sectPr: string | undefined;
+      if (lastBlockEnd !== -1) {
+        // Search for sectPr only after the last block element
+        const tailContent = bodyContent.substring(lastBlockEnd);
+        const sectPrElements = XMLParser.extractElements(tailContent, "w:sectPr");
+        if (sectPrElements.length > 0) {
+          sectPr = sectPrElements[0];
+        }
+      }
       if (!sectPr) {
-        return null;
+        // Fallback: no block elements found, or sectPr not found after last block.
+        // Search the entire body content (covers edge cases like empty documents).
+        const sectPrElements = XMLParser.extractElements(bodyContent, "w:sectPr");
+        if (sectPrElements.length === 0) {
+          return null;
+        }
+        sectPr = sectPrElements[sectPrElements.length - 1];
+        if (!sectPr) {
+          return null;
+        }
       }
 
       const sectionProps: SectionProperties = {};
@@ -6881,6 +7277,16 @@ export class DocumentParser {
             start: start ? parseInt(start, 10) : undefined,
             format: fmt,
           };
+
+          // Parse chapter numbering (w:chapStyle, w:chapSep)
+          const chapStyle = XMLParser.extractAttribute(pgNumType, "w:chapStyle");
+          if (chapStyle) {
+            sectionProps.chapStyle = parseInt(chapStyle, 10);
+          }
+          const chapSep = XMLParser.extractAttribute(pgNumType, "w:chapSep");
+          if (chapSep) {
+            sectionProps.chapSep = chapSep as any;
+          }
         }
       }
 
@@ -6967,8 +7373,109 @@ export class DocumentParser {
         }
       }
 
+      // Parse bidi (right-to-left section layout)
+      if (XMLParser.hasSelfClosingTag(sectPr, "w:bidi")) {
+        sectionProps.bidi = true;
+      }
+
+      // Parse RTL gutter
+      if (XMLParser.hasSelfClosingTag(sectPr, "w:rtlGutter")) {
+        sectionProps.rtlGutter = true;
+      }
+
+      // Parse document grid (w:docGrid)
+      const docGridElements = XMLParser.extractElements(sectPr, "w:docGrid");
+      if (docGridElements.length > 0) {
+        const docGrid = docGridElements[0];
+        if (docGrid) {
+          const gridType = XMLParser.extractAttribute(docGrid, "w:type");
+          const linePitch = XMLParser.extractAttribute(docGrid, "w:linePitch");
+          const charSpace = XMLParser.extractAttribute(docGrid, "w:charSpace");
+          sectionProps.docGrid = {};
+          if (gridType) sectionProps.docGrid.type = gridType as any;
+          if (linePitch) sectionProps.docGrid.linePitch = parseInt(linePitch, 10);
+          if (charSpace) sectionProps.docGrid.charSpace = parseInt(charSpace, 10);
+        }
+      }
+
+      // Parse line numbering (w:lnNumType)
+      const lnNumElements = XMLParser.extractElements(sectPr, "w:lnNumType");
+      if (lnNumElements.length > 0) {
+        const lnNum = lnNumElements[0];
+        if (lnNum) {
+          const countBy = XMLParser.extractAttribute(lnNum, "w:countBy");
+          const start = XMLParser.extractAttribute(lnNum, "w:start");
+          const distance = XMLParser.extractAttribute(lnNum, "w:distance");
+          const restart = XMLParser.extractAttribute(lnNum, "w:restart");
+          sectionProps.lineNumbering = {};
+          if (countBy) sectionProps.lineNumbering.countBy = parseInt(countBy, 10);
+          if (start) sectionProps.lineNumbering.start = parseInt(start, 10);
+          if (distance) sectionProps.lineNumbering.distance = parseInt(distance, 10);
+          if (restart) sectionProps.lineNumbering.restart = restart as any;
+        }
+      }
+
+      // Helper to extract a single attribute from a child element
+      const extractChildAttr = (parentXml: string, childTag: string, attr: string): string | undefined => {
+        const els = XMLParser.extractElements(parentXml, childTag);
+        if (els.length > 0 && els[0]) return XMLParser.extractAttribute(els[0], attr);
+        return undefined;
+      };
+
+      // Parse footnote properties (w:footnotePr)
+      const footnotePrElements = XMLParser.extractElements(sectPr, "w:footnotePr");
+      if (footnotePrElements.length > 0 && footnotePrElements[0]) {
+        const fnPr = footnotePrElements[0];
+        const props: any = {};
+        const pos = extractChildAttr(fnPr, "w:pos", "w:val");
+        if (pos) props.position = pos;
+        const fmt = extractChildAttr(fnPr, "w:numFmt", "w:val");
+        if (fmt) props.numberFormat = fmt;
+        const startVal = extractChildAttr(fnPr, "w:numStart", "w:val");
+        if (startVal) props.startNumber = parseInt(startVal, 10);
+        const restart = extractChildAttr(fnPr, "w:numRestart", "w:val");
+        if (restart) props.restart = restart;
+        if (Object.keys(props).length > 0) sectionProps.footnotePr = props;
+      }
+
+      // Parse endnote properties (w:endnotePr)
+      const endnotePrElements = XMLParser.extractElements(sectPr, "w:endnotePr");
+      if (endnotePrElements.length > 0 && endnotePrElements[0]) {
+        const enPr = endnotePrElements[0];
+        const props: any = {};
+        const pos = extractChildAttr(enPr, "w:pos", "w:val");
+        if (pos) props.position = pos;
+        const fmt = extractChildAttr(enPr, "w:numFmt", "w:val");
+        if (fmt) props.numberFormat = fmt;
+        const startVal = extractChildAttr(enPr, "w:numStart", "w:val");
+        if (startVal) props.startNumber = parseInt(startVal, 10);
+        const restart = extractChildAttr(enPr, "w:numRestart", "w:val");
+        if (restart) props.restart = restart;
+        if (Object.keys(props).length > 0) sectionProps.endnotePr = props;
+      }
+
+      // Parse noEndnote
+      if (XMLParser.hasSelfClosingTag(sectPr, "w:noEndnote")) {
+        sectionProps.noEndnote = true;
+      }
+
+      // Parse form protection
+      if (XMLParser.hasSelfClosingTag(sectPr, "w:formProt")) {
+        sectionProps.formProt = true;
+      }
+
+      // Parse printer settings (w:printerSettings r:id)
+      const printerElements = XMLParser.extractElements(sectPr, "w:printerSettings");
+      if (printerElements.length > 0) {
+        const printer = printerElements[0];
+        if (printer) {
+          const rId = XMLParser.extractAttribute(printer, "r:id");
+          if (rId) sectionProps.printerSettingsId = rId;
+        }
+      }
+
       return new Section(sectionProps);
-    } catch (error) {
+    } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.parseErrors.push({ element: "sectPr", error: err });
 
@@ -7417,7 +7924,7 @@ export class DocumentParser {
     if (szElement) {
       const val = XMLParser.extractAttribute(`<w:sz${szElement}`, "w:val");
       if (val) {
-        formatting.size = parseInt(val, 10) / 2; // Convert half-points to points
+        formatting.size = halfPointsToPoints(parseInt(val, 10));
       }
     }
 
@@ -7984,7 +8491,7 @@ export class DocumentParser {
       }
 
       return null;
-    } catch (error) {
+    } catch (error: unknown) {
       return null;
     }
   }
@@ -8013,7 +8520,7 @@ export class DocumentParser {
         binary: true,
       });
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       return false;
     }
   }
@@ -8084,7 +8591,7 @@ export class DocumentParser {
       }
 
       return relationships;
-    } catch (error) {
+    } catch (error: unknown) {
       return [];
     }
   }
@@ -8129,6 +8636,14 @@ export class DocumentParser {
         if (match[1] && match[2]) {
           namespaces[`xmlns:${match[1]}`] = match[2];
         }
+      }
+
+      // Capture mc:Ignorable attribute (critical for w14/w15/etc. compatibility).
+      // Without this, Word treats extended namespace attributes (w14:paraId etc.)
+      // in raw XML passthrough zones as invalid content and reports corruption.
+      const ignorableMatch = attributes.match(/mc:Ignorable="([^"]+)"/);
+      if (ignorableMatch && ignorableMatch[1]) {
+        namespaces["mc:Ignorable"] = ignorableMatch[1];
       }
     }
 
@@ -8179,6 +8694,10 @@ export class DocumentParser {
     const sectionProps = section.getProperties();
 
     // Parse headers
+    // Track already-parsed headers by rId to avoid creating duplicates
+    // when multiple section property types (default, first, even) reference the same header file
+    const parsedHeadersByRId = new Map<string, import("../elements/Header").Header>();
+
     if (sectionProps.headers) {
       for (const [type, rId] of Object.entries(sectionProps.headers)) {
         if (!rId) continue;
@@ -8188,6 +8707,18 @@ export class DocumentParser {
         if (!rel) continue;
 
         const headerTarget = rel.getTarget();
+
+        // Reuse already-parsed header if same rId was already processed
+        const existingHeader = parsedHeadersByRId.get(rId);
+        if (existingHeader) {
+          headers.push({
+            header: existingHeader,
+            relationshipId: rId,
+            filename: headerTarget,
+          });
+          continue;
+        }
+
         const headerPath = `word/${headerTarget}`;
         const headerXml = zipHandler.getFileAsString(headerPath);
         if (!headerXml) continue;
@@ -8212,6 +8743,7 @@ export class DocumentParser {
             imageManager
           );
           if (header) {
+            parsedHeadersByRId.set(rId, header);
             headers.push({
               header,
               relationshipId: rId,
@@ -8225,6 +8757,10 @@ export class DocumentParser {
     }
 
     // Parse footers
+    // Track already-parsed footers by rId to avoid creating duplicates
+    // when multiple section property types (default, first, even) reference the same footer file
+    const parsedFootersByRId = new Map<string, import("../elements/Footer").Footer>();
+
     if (sectionProps.footers) {
       for (const [type, rId] of Object.entries(sectionProps.footers)) {
         if (!rId) continue;
@@ -8234,6 +8770,18 @@ export class DocumentParser {
         if (!rel) continue;
 
         const footerTarget = rel.getTarget();
+
+        // Reuse already-parsed footer if same rId was already processed
+        const existingFooter = parsedFootersByRId.get(rId);
+        if (existingFooter) {
+          footers.push({
+            footer: existingFooter,
+            relationshipId: rId,
+            filename: footerTarget,
+          });
+          continue;
+        }
+
         const footerPath = `word/${footerTarget}`;
         const footerXml = zipHandler.getFileAsString(footerPath);
         if (!footerXml) continue;
@@ -8258,6 +8806,7 @@ export class DocumentParser {
             imageManager
           );
           if (footer) {
+            parsedFootersByRId.set(rId, footer);
             footers.push({
               footer,
               relationshipId: rId,
@@ -8322,7 +8871,7 @@ export class DocumentParser {
       }
 
       return header;
-    } catch (error) {
+    } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.parseErrors.push({ element: "header", error: err });
 
@@ -8383,7 +8932,7 @@ export class DocumentParser {
       }
 
       return footer;
-    } catch (error) {
+    } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.parseErrors.push({ element: "footer", error: err });
 

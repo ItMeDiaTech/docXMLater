@@ -168,6 +168,8 @@ export interface TableFormatting {
   tableGrid?: number[]; // Column widths in twips
   caption?: string; // Table caption for accessibility
   description?: string; // Table description for accessibility
+  tblStyleRowBandSize?: number; // Number of rows in each row band for style alternation
+  tblStyleColBandSize?: number; // Number of columns in each column band for style alternation
 }
 
 /**
@@ -657,6 +659,28 @@ export class Table {
    */
   setTblLook(tblLook: string): this {
     this.formatting.tblLook = tblLook;
+    return this;
+  }
+
+  /**
+   * Sets the number of rows in each row band for table style alternation
+   * Per ECMA-376 Part 1 §17.4.52
+   * @param size - Number of rows per band (default: 1)
+   * @returns This table for chaining
+   */
+  setStyleRowBandSize(size: number): this {
+    this.formatting.tblStyleRowBandSize = size;
+    return this;
+  }
+
+  /**
+   * Sets the number of columns in each column band for table style alternation
+   * Per ECMA-376 Part 1 §17.4.51
+   * @param size - Number of columns per band (default: 1)
+   * @returns This table for chaining
+   */
+  setStyleColBandSize(size: number): this {
+    this.formatting.tblStyleColBandSize = size;
     return this;
   }
 
@@ -1427,6 +1451,20 @@ export class Table {
     if (this.formatting.tblLook) {
       tblPrChildren.push(
         XMLBuilder.wSelf("tblLook", { "w:val": this.formatting.tblLook })
+      );
+    }
+
+    // Add table style row band size per ECMA-376 Part 1 §17.4.52
+    if (this.formatting.tblStyleRowBandSize !== undefined) {
+      tblPrChildren.push(
+        XMLBuilder.wSelf("tblStyleRowBandSize", { "w:val": this.formatting.tblStyleRowBandSize })
+      );
+    }
+
+    // Add table style column band size per ECMA-376 Part 1 §17.4.51
+    if (this.formatting.tblStyleColBandSize !== undefined) {
+      tblPrChildren.push(
+        XMLBuilder.wSelf("tblStyleColBandSize", { "w:val": this.formatting.tblStyleColBandSize })
       );
     }
 

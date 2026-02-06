@@ -73,6 +73,13 @@ export interface RowFormatting {
   gridBefore?: number; // Grid columns before first cell
   gridAfter?: number; // Grid columns after last cell
   tablePropertyExceptions?: TablePropertyExceptions; // Table property exceptions for this row
+  wBefore?: number; // Width before row in twips (per ECMA-376 §17.4.83)
+  wBeforeType?: string; // Width before type (dxa, pct, auto)
+  wAfter?: number; // Width after row in twips (per ECMA-376 §17.4.82)
+  wAfterType?: string; // Width after type (dxa, pct, auto)
+  cellSpacing?: number; // Row-level cell spacing override in twips
+  cellSpacingType?: string; // Cell spacing type (dxa, pct)
+  cnfStyle?: string; // Conditional formatting bitmask (per ECMA-376 §17.3.1.8)
 }
 
 /**
@@ -357,6 +364,53 @@ export class TableRow {
   }
 
   /**
+   * Sets width before row (w:wBefore) per ECMA-376 Part 1 §17.4.83
+   * @param width - Width in twips
+   * @param type - Width type (dxa, pct, auto)
+   * @returns This row for chaining
+   */
+  setWBefore(width: number, type: string = 'dxa'): this {
+    this.formatting.wBefore = width;
+    this.formatting.wBeforeType = type;
+    return this;
+  }
+
+  /**
+   * Sets width after row (w:wAfter) per ECMA-376 Part 1 §17.4.82
+   * @param width - Width in twips
+   * @param type - Width type (dxa, pct, auto)
+   * @returns This row for chaining
+   */
+  setWAfter(width: number, type: string = 'dxa'): this {
+    this.formatting.wAfter = width;
+    this.formatting.wAfterType = type;
+    return this;
+  }
+
+  /**
+   * Sets row-level cell spacing override (w:tblCellSpacing on row)
+   * @param spacing - Cell spacing in twips
+   * @param type - Spacing type (dxa, pct)
+   * @returns This row for chaining
+   */
+  setRowCellSpacing(spacing: number, type: string = 'dxa'): this {
+    this.formatting.cellSpacing = spacing;
+    this.formatting.cellSpacingType = type;
+    return this;
+  }
+
+  /**
+   * Sets conditional formatting bitmask for this row (w:cnfStyle)
+   * Per ECMA-376 Part 1 §17.3.1.8
+   * @param cnfStyle - Binary string (e.g., '100000000000' for firstRow)
+   * @returns This row for chaining
+   */
+  setCnfStyle(cnfStyle: string): this {
+    this.formatting.cnfStyle = cnfStyle;
+    return this;
+  }
+
+  /**
    * Gets table property exceptions
    * @returns Table property exceptions or undefined
    */
@@ -576,6 +630,35 @@ export class TableRow {
     // Add grid after
     if (this.formatting.gridAfter !== undefined) {
       trPrChildren.push(XMLBuilder.wSelf('gridAfter', { 'w:val': this.formatting.gridAfter }));
+    }
+
+    // Add width before row (w:wBefore) per ECMA-376 Part 1 §17.4.83
+    if (this.formatting.wBefore !== undefined) {
+      trPrChildren.push(XMLBuilder.wSelf('wBefore', {
+        'w:w': this.formatting.wBefore,
+        'w:type': this.formatting.wBeforeType || 'dxa',
+      }));
+    }
+
+    // Add width after row (w:wAfter) per ECMA-376 Part 1 §17.4.82
+    if (this.formatting.wAfter !== undefined) {
+      trPrChildren.push(XMLBuilder.wSelf('wAfter', {
+        'w:w': this.formatting.wAfter,
+        'w:type': this.formatting.wAfterType || 'dxa',
+      }));
+    }
+
+    // Add row-level cell spacing (w:tblCellSpacing)
+    if (this.formatting.cellSpacing !== undefined) {
+      trPrChildren.push(XMLBuilder.wSelf('tblCellSpacing', {
+        'w:w': this.formatting.cellSpacing,
+        'w:type': this.formatting.cellSpacingType || 'dxa',
+      }));
+    }
+
+    // Add conditional formatting bitmask (w:cnfStyle) per ECMA-376 Part 1 §17.3.1.8
+    if (this.formatting.cnfStyle) {
+      trPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
     }
 
     // Build row element

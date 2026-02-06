@@ -271,6 +271,23 @@ describe('Phase 5.5 - Document Properties (Extended)', () => {
       const loadedDoc = await Document.load(outputPath);
       expect(loadedDoc.getCustomProperty('Description')).toBe('Text with <special> & "characters"');
     });
+
+    it('should preserve custom properties when using toBuffer()', async () => {
+      const doc = Document.create();
+      doc.setCustomProperty('Department', 'Engineering');
+      doc.setCustomProperty('BuildNumber', 42);
+      doc.setCustomProperty('IsRelease', true);
+      doc.createParagraph('Buffer custom properties test');
+
+      // Save via toBuffer() instead of save()
+      const buffer = await doc.toBuffer();
+
+      // Load from buffer and verify custom properties are preserved
+      const loadedDoc = await Document.loadFromBuffer(buffer);
+      expect(loadedDoc.getCustomProperty('Department')).toBe('Engineering');
+      expect(loadedDoc.getCustomProperty('BuildNumber')).toBe(42);
+      expect(loadedDoc.getCustomProperty('IsRelease')).toBe(true);
+    });
   });
 
   describe('Combined Properties Test', () => {

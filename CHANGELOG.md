@@ -5,6 +5,103 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.6.1] - 2026-02-05
+
+### Added
+
+- **Compatibility Mode Support (Phases 1-3)**
+  - Settings.xml round-trip preservation with schema-aware merge on save
+  - `getCompatibilityMode()` returns the document's Word version mode (11/12/14/15)
+  - `isCompatibilityMode()` checks if document targets a legacy Word version (pre-2013)
+  - `getCompatibilityInfo()` returns full parsed compat settings including legacy flags and modern entries
+  - `upgradeToModernFormat()` upgrades document to mode 15, equivalent to Word's File > Info > Convert
+  - `CompatibilityUpgrader` utility class for w:compat block manipulation
+  - `CompatibilityMode` enum, `CompatibilityInfo` and `CompatSetting` types
+  - Complete catalog of 65 legacy compat elements (`LEGACY_COMPAT_ELEMENTS`)
+  - 5 modern compat settings (`MODERN_COMPAT_SETTINGS`)
+  - 46 tests in SettingsRoundTrip.test.ts
+
+- **Preserved Element Types for Round-Trip Fidelity**
+  - `AlternateContent` preserves mc:AlternateContent blocks (Word 2010+ shapes/VML fallback)
+  - `MathParagraph` / `MathExpression` preserves m:oMathPara and m:oMath elements
+  - `CustomXmlBlock` preserves w:customXml block elements
+  - `PreservedElement` generic wrapper for w:proofErr, w:permStart, w:permEnd, w:altChunk, w:ruby
+  - All stored as raw XML for maximum fidelity; parsed at both body-level and inline contexts
+
+- **Expanded Run Content Types**
+  - 14 new run content types: lastRenderedPageBreak, separator, continuationSeparator, pageNumber, annotationRef, dayShort, dayLong, monthShort, monthLong, yearShort, yearLong, symbol, positionTab, embeddedObject
+  - Symbol support with font and character code (w:sym)
+  - Position tab support with alignment, relativeTo, and leader attributes (w:ptab)
+  - Embedded OLE object preservation (w:object)
+
+- **Run Formatting Properties**
+  - `complexScript` (w:cs) per ECMA-376 Part 1 section 17.3.2.7
+  - `webHidden` (w:webHidden) for web layout hidden text
+  - `fontHAnsi`, `fontEastAsia`, `fontCs`, `fontHint` for multi-font family support per w:rFonts
+
+- **Section Property Enhancements**
+  - Expanded `PageNumberFormat` type with 40+ formats per ECMA-376 ST_NumberFormat
+  - Footnote/endnote section-level properties (`NotePosition`, `NoteNumberRestart`)
+  - Chapter separator type (`ChapterSeparator`)
+  - 6 tests in SectionPropertiesParsing.test.ts
+
+- **Table Property Enhancements**
+  - `tblStyleRowBandSize` / `tblStyleColBandSize` for row/column band sizing in style alternation
+  - `setStyleRowBandSize()` / `setStyleColBandSize()` methods
+
+- **TableRow Property Enhancements**
+  - `wBefore` / `wAfter` for width before/after row per ECMA-376
+  - `cellSpacing` for row-level cell spacing override
+  - `cnfStyle` for conditional formatting bitmask
+
+- **Date Formatting Utility**
+  - `formatDateForXml()` strips milliseconds from ISO dates for OOXML w:date compliance
+
+### Fixed
+
+- **mc:Ignorable Auto-Generation**
+  - XMLBuilder.createDocument() now auto-generates mc:Ignorable attribute when extended namespaces (w14, w15, wp14, w16se, w16cid, etc.) are declared
+  - Prevents Word "unreadable content" error caused by w14:paraId in raw XML passthrough zones
+  - 15 regression tests in CorruptionFixes.test.ts
+
+- **Orphaned numId References**
+  - Numbered paragraphs pointing to removed numbering definitions are now detected and cleaned
+
+- **People.xml Tracked Change Authors**
+  - Missing tracked change authors are now added to people.xml during save
+
+- **pPrChange Attribute Order**
+  - Paragraph property change elements now use correct attribute ordering per ECMA-376
+
+### Changed
+
+- **index.ts Export Reorganization**
+  - Exports reorganized with clear section headers for better discoverability
+  - All new types, classes, and utilities properly exported
+
+- **Dependency Cleanup**
+  - Removed unused `all` and `tailwindcss` dependencies
+
+### Removed
+
+- **BaseManager Abstract Class** (`src/core/BaseManager.ts`)
+  - Removed unused abstract base class; managers operate independently
+  - No external API impact
+
+- **Document.normalizeTableLists() Method**
+  - List normalization moved to consumer applications
+  - `ListNormalizationOptions` and `ListNormalizationReport` no longer exported from Document
+
+---
+
+## [9.5.33] - 2026-01-28
+
+### Fixed
+
+- Repository cleanup and bug fixes
+
+---
+
 ## [9.5.31] - 2026-01-28
 
 ### Added

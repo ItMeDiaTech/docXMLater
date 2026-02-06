@@ -10,6 +10,7 @@
  */
 
 import { CharacterProperties, ParagraphProperties, BorderProperties, ShadingProperties } from '../types/DocTypes';
+import { UNITS } from '../../utils/units';
 
 /**
  * SPRM operand types (spra)
@@ -641,7 +642,7 @@ export class SPRMParser {
       width: dptLineWidth,
       style: this.getBorderStyle(brcType),
       color: this.getColorFromIndex(ico),
-      space: dptSpace * 20, // Convert to twips
+      space: dptSpace * UNITS.TWIPS_PER_POINT, // Convert to twips
     };
   }
 

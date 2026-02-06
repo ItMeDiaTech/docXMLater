@@ -45,12 +45,14 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 
 - Track changes (revisions for insertions, deletions, formatting)
 - Comments and annotations
+- Compatibility mode detection and upgrade (Word 2003/2007/2010/2013+ modes)
 - Table of contents generation with customizable heading levels
 - Fields: merge fields, date/time, page numbers, TOC fields
 - Footnotes and endnotes
 - Content controls (Structured Document Tags)
 - Multiple sections with different page layouts
 - Page orientation, size, and margins
+- Preserved element round-trip (math equations, alternate content, custom XML)
 
 ### Developer Tools
 
@@ -223,6 +225,31 @@ await doc.save("styled.docx");
 doc.dispose();
 ```
 
+### Compatibility Mode Detection and Upgrade
+
+```typescript
+import { Document, CompatibilityMode } from "docxmlater";
+
+const doc = await Document.load("legacy.docx");
+
+// Check compatibility mode
+console.log(`Mode: ${doc.getCompatibilityMode()}`); // e.g., 12 (Word 2007)
+
+if (doc.isCompatibilityMode()) {
+  // Get detailed compatibility info
+  const info = doc.getCompatibilityInfo();
+  console.log(`Legacy flags: ${info.legacyFlags.length}`);
+
+  // Upgrade to Word 2013+ mode (equivalent to File > Info > Convert)
+  const report = doc.upgradeToModernFormat();
+  console.log(`Removed ${report.removedFlags.length} legacy flags`);
+  console.log(`Added ${report.addedSettings.length} modern settings`);
+}
+
+await doc.save("modern.docx");
+doc.dispose();
+```
+
 ## API Overview
 
 ### Document Class
@@ -294,6 +321,13 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `getWordCount()` - Count words
 - `getCharacterCount(includeSpaces?)` - Count characters
 - `estimateSize()` - Estimate file size
+
+**Compatibility Mode:**
+
+- `getCompatibilityMode()` - Get document's Word version mode (11/12/14/15)
+- `isCompatibilityMode()` - Check if document targets a legacy Word version
+- `getCompatibilityInfo()` - Get full parsed compat settings
+- `upgradeToModernFormat()` - Upgrade to Word 2013+ mode (removes legacy flags)
 
 **Saving:**
 
@@ -517,7 +551,7 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 9.0.0**
+**Current Version: 9.6.1**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
@@ -525,7 +559,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 The framework includes comprehensive test coverage:
 
-- **1891+ test cases** across 60+ test files
+- **2260+ test cases** across 99 test suites
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks
@@ -557,6 +591,11 @@ src/
 ├── elements/      # Paragraph, Run, Table, Image, etc.
 ├── formatting/    # Style, Numbering managers
 ├── managers/      # Drawing, Image, Relationship managers
+├── constants/     # Compatibility mode constants, limits
+├── types/         # Type definitions (compatibility, formatting, lists)
+├── tracking/      # Change tracking context
+├── validation/    # Revision validation rules
+├── helpers/       # Cleanup utilities
 ├── xml/           # XML generation and parsing
 ├── zip/           # ZIP archive handling
 └── utils/         # Validation, units, error handling

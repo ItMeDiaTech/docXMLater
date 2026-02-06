@@ -105,7 +105,7 @@ export class RevisionAutoFixer {
         actions.push(...this.fixNonSequentialIds(revisions, options?.dryRun));
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       errors.push(`Fix error: ${error instanceof Error ? error.message : String(error)}`);
     }
 
@@ -306,7 +306,7 @@ export class RevisionAutoFixer {
    * @returns Array of fix actions
    */
   static fixOrphanedMoveMarkers(
-    revisionManager: any, // Type as any to avoid circular import
+    revisionManager: { removeById(id: number): boolean },
     revisions: Revision[],
     dryRun?: boolean
   ): FixAction[] {

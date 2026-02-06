@@ -9,6 +9,7 @@
  */
 
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { UNITS } from '../utils/units';
 import { Paragraph } from './Paragraph';
 import {
   ImagePosition,
@@ -555,12 +556,43 @@ export class TextBox {
     // Text box content
     children.push(this.createTextBoxContent());
 
+    // Body properties (margins/insets)
+    children.push(this.createBodyPr());
+
     return {
       name: 'wps:wsp',
       attributes: {
         'xmlns:wps': 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
       },
       children,
+    };
+  }
+
+  /**
+   * Creates the wps:bodyPr element (text body properties including margins)
+   * Per ECMA-376 Part 4, bodyPr specifies inset margins via lIns/tIns/rIns/bIns attributes
+   * @private
+   */
+  private createBodyPr(): XMLElement {
+    const attrs: Record<string, string> = {
+      rot: '0',
+      vert: 'horz',
+      wrap: 'square',
+      anchor: 't',
+    };
+
+    // Add margin insets if set
+    if (this.margins) {
+      if (this.margins.left !== undefined) attrs.lIns = this.margins.left.toString();
+      if (this.margins.top !== undefined) attrs.tIns = this.margins.top.toString();
+      if (this.margins.right !== undefined) attrs.rIns = this.margins.right.toString();
+      if (this.margins.bottom !== undefined) attrs.bIns = this.margins.bottom.toString();
+    }
+
+    return {
+      name: 'wps:bodyPr',
+      attributes: attrs,
+      selfClosing: true,
     };
   }
 
@@ -644,7 +676,7 @@ export class TextBox {
     // Borders
     if (this.borders && this.borders.size !== undefined) {
       const lnAttrs: Record<string, string> = {
-        w: (this.borders.size * 12700).toString(), // Convert points to EMUs
+        w: (this.borders.size * UNITS.EMUS_PER_POINT).toString(), // Convert points to EMUs
       };
 
       const lnChildren: XMLElement[] = [];

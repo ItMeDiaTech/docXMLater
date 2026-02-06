@@ -25,16 +25,12 @@ import {
   inferLevelFromRelativeIndentation,
 } from "../utils/list-detection";
 import { defaultLogger } from "../utils/logger";
+import { inchesToTwips } from "../utils/units";
 import { isRun } from "../elements/Paragraph";
 
 // =============================================================================
 // INDENTATION SETTINGS HELPERS
 // =============================================================================
-
-/** Helper to convert inches to twips (1 inch = 1440 twips) */
-function inchesToTwips(inches: number): number {
-  return Math.round(inches * 1440);
-}
 
 /**
  * Apply user's indentation settings to an abstract numbering definition.
@@ -653,7 +649,7 @@ export function normalizeListsInCell(
           reason: `Updated numId for consistent numbering at level ${targetLevel}`,
         });
       }
-    } catch (err) {
+    } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       report.errors.push(`Failed on "${text.substring(0, 30)}...": ${message}`);
       report.details.push({

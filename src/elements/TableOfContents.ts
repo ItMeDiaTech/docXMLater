@@ -125,6 +125,23 @@ export class TableOfContents {
   }
 
   /**
+   * Sets (or clears) the original field instruction preserved from a loaded document.
+   * When set, this instruction is used verbatim in XML generation instead of
+   * buildFieldInstruction(). Pass undefined to clear it and use computed instruction.
+   */
+  setOriginalFieldInstruction(instruction: string | undefined): this {
+    this.originalFieldInstruction = instruction;
+    return this;
+  }
+
+  /**
+   * Gets the original field instruction preserved from a loaded document, if any.
+   */
+  getOriginalFieldInstruction(): string | undefined {
+    return this.originalFieldInstruction;
+  }
+
+  /**
    * Gets whether page numbers are shown
    */
   getShowPageNumbers(): boolean {

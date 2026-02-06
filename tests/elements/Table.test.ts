@@ -545,8 +545,8 @@ describe('Table', () => {
     it('should set column widths', () => {
       const table = new Table(2, 3);
       table.setColumnWidths([2880, 2160, null]); // 2", 1.5", auto
-      const formatting = table.getFormatting() as any;
-      expect(formatting.columnWidths).toEqual([2880, 2160, null]);
+      const formatting = table.getFormatting();
+      expect(formatting.tableGrid).toEqual([2880, 2160, undefined]);
     });
   });
 

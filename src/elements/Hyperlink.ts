@@ -772,7 +772,7 @@ export class Hyperlink {
     checkAccessibility?: boolean;
     fixCommonIssues?: boolean;
     timeout?: number;
-    bookmarkManager?: any; // BookmarkManager for internal link validation
+    bookmarkManager?: { hasBookmark(name: string): boolean };
   }): Promise<{
     valid: boolean;
     issues: string[];

@@ -15,6 +15,11 @@ import { Section } from "../elements/Section";
 import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { Table } from "../elements/Table";
 import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { AlternateContent } from "../elements/AlternateContent";
+import { MathParagraph } from "../elements/MathElement";
+import { CustomXmlBlock } from "../elements/CustomXml";
+import { PreservedElement } from "../elements/PreservedElement";
+import { formatDateForXml } from "../utils/dateFormatting";
 import { getGlobalLogger, createScopedLogger, ILogger } from "../utils/logger";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { DocumentProperties } from "./Document";
@@ -44,7 +49,11 @@ type BodyElement =
   | Paragraph
   | Table
   | TableOfContentsElement
-  | StructuredDocumentTag;
+  | StructuredDocumentTag
+  | AlternateContent
+  | MathParagraph
+  | CustomXmlBlock
+  | PreservedElement;
 
 /**
  * Normalizes toXML() output to always return an array.
@@ -129,7 +138,7 @@ export class DocumentGenerator {
     const modified = properties.modified || now;
 
     const formatDate = (date: Date): string => {
-      return date.toISOString();
+      return formatDateForXml(date);
     };
 
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

@@ -145,7 +145,7 @@ export class ImageManager {
           `  - Splitting into multiple documents`
         );
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Image data not loaded yet - validation will happen during save
       // This is acceptable for lazy-loaded images
       if (error instanceof Error && !error.message.includes('not loaded')) {
@@ -280,10 +280,11 @@ export class ImageManager {
             if (onProgress) {
               onProgress(loaded, total);
             }
-          } catch (error) {
+          } catch (error: unknown) {
             // Log error but continue loading other images
+            const message = error instanceof Error ? error.message : String(error);
             defaultLogger.warn(
-              `Failed to load image data: ${error instanceof Error ? error.message : error}`
+              `Failed to load image data: ${message}`
             );
             loaded++; // Still count as processed
 

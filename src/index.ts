@@ -3,217 +3,22 @@
  * Main entry point
  */
 
-// Main ZIP handler
-export { ZipHandler } from './zip/ZipHandler';
-export { ZipReader } from './zip/ZipReader';
-export { ZipWriter } from './zip/ZipWriter';
+// =============================================================================
+// PUBLIC API — Core Document Classes
+// =============================================================================
 
-// Types
-export {
-  ZipFile,
-  FileMap,
-  LoadOptions,
-  SaveOptions,
-  AddFileOptions,
-  SizeLimitOptions,
-  DEFAULT_SIZE_LIMITS,
-  REQUIRED_DOCX_FILES,
-  DOCX_PATHS,
-} from './zip/types';
-
-// Errors
-export {
-  DocxError,
-  DocxNotFoundError,
-  InvalidDocxError,
-  CorruptedArchiveError,
-  MissingRequiredFileError,
-  FileOperationError,
-} from './zip/errors';
-
-// Utilities
-export {
-  validateDocxStructure,
-  isBinaryFile,
-  normalizePath,
-  isValidZipBuffer,
-  isTextContent,
-  validateTwips,
-  validateColor,
-  validateHexColor,
-  normalizeColor,
-  validateNumberingId,
-  validateLevel,
-  validateAlignment,
-  validateFontSize,
-  validateNonEmptyString,
-  validatePercentage,
-  validateEmus,
-  detectXmlInText,
-  cleanXmlFromText,
-  validateRunText,
-  TextValidationResult,
-} from './utils/validation';
-
-// Formatting utilities
-export {
-  mergeFormatting,
-  cloneFormatting,
-  hasFormatting,
-  cleanFormatting,
-  isEqualFormatting,
-  applyDefaults,
-} from './utils/formatting';
-
-// Corruption Detection
-export {
-  detectCorruptionInDocument,
-  detectCorruptionInText,
-  suggestFix,
-  looksCorrupted,
-  CorruptionReport,
-  CorruptionLocation,
-  CorruptionType,
-} from './utils/corruptionDetection';
-
-// Unit conversions
-export {
-  STANDARD_DPI,
-  UNITS,
-  PAGE_SIZES,
-  COMMON_MARGINS,
-  twipsToPoints,
-  twipsToInches,
-  twipsToCm,
-  twipsToEmus,
-  emusToTwips,
-  emusToInches,
-  emusToCm,
-  emusToPoints,
-  emusToPixels,
-  pointsToTwips,
-  pointsToEmus,
-  pointsToInches,
-  pointsToCm,
-  inchesToTwips,
-  inchesToEmus,
-  inchesToPoints,
-  inchesToCm,
-  inchesToPixels,
-  cmToTwips,
-  cmToEmus,
-  cmToInches,
-  cmToPoints,
-  cmToPixels,
-  pixelsToEmus,
-  pixelsToInches,
-  pixelsToTwips,
-  pixelsToCm,
-  pixelsToPoints,
-} from './utils/units';
-
-// Core classes
 export { Document, DocumentProperties, DocumentOptions, DocumentLoadOptions, DocumentPart } from './core/Document';
-export { Relationship, RelationshipType, RelationshipProperties } from './core/Relationship';
-export { RelationshipManager } from './core/RelationshipManager';
-export { DocumentParser, ParseError } from './core/DocumentParser';
-export { DocumentGenerator, IZipHandlerReader } from './core/DocumentGenerator';
-export { DocumentValidator, SizeEstimate, MemoryOptions } from './core/DocumentValidator';
-export { DocumentIdManager } from './core/DocumentIdManager';
 
-// Document subsystem classes (Phase 7 refactoring)
-export { DocumentMetadata, DocumentProperties as MetadataProperties } from './core/DocumentMetadata';
-export { DocumentContent, BodyElement } from './core/DocumentContent';
-export { DocumentFormatting } from './core/DocumentFormatting';
-export { DocumentTracking } from './core/DocumentTracking';
+// =============================================================================
+// PUBLIC API — Document Elements
+// =============================================================================
 
-// Style configuration types
-export {
-  StyleRunFormatting,
-  StyleParagraphFormatting,
-  Heading2TableOptions,
-  StyleConfig,
-  Heading2Config,
-  ApplyCustomFormattingOptions,
-} from './types/styleConfig';
-
-// Formatting classes
-export { Style, StyleType, StyleProperties } from './formatting/Style';
-export { StylesManager, ValidationResult } from './formatting/StylesManager';
-export {
-  NumberingLevel,
-  NumberFormat,
-  NumberAlignment,
-  NumberingLevelProperties,
-  WORD_NATIVE_BULLETS,
-  WordNativeBullet,
-} from './formatting/NumberingLevel';
-export {
-  AbstractNumbering,
-  AbstractNumberingProperties,
-} from './formatting/AbstractNumbering';
-export {
-  NumberingInstance,
-  NumberingInstanceProperties,
-} from './formatting/NumberingInstance';
-export { NumberingManager } from './formatting/NumberingManager';
-
-// Common types (consolidated type definitions)
-export {
-  // Shading patterns
-  ShadingPattern,
-  BasicShadingPattern,
-  // Border types
-  BorderStyle,
-  ExtendedBorderStyle,
-  FullBorderStyle,
-  BorderDefinition,
-  FourSidedBorders,
-  TableBorderDefinitions,
-  // Alignment types
-  HorizontalAlignment,
-  VerticalAlignment,
-  PageVerticalAlignment,
-  CellVerticalAlignment,
-  ParagraphAlignment as CommonParagraphAlignment,
-  TableAlignment as CommonTableAlignment,
-  RowJustification,
-  TextVerticalAlignment,
-  TabAlignment,
-  // Positioning
-  PositionAnchor,
-  HorizontalAnchor,
-  VerticalAnchor,
-  // Text direction
-  TextDirection,
-  SectionTextDirection,
-  // Width types
-  WidthType,
-  // Shading config
-  ShadingConfig,
-  // Tab stops
-  TabLeader,
-  TabStop,
-  // Type guards
-  isShadingPattern,
-  isBorderStyle,
-  isHorizontalAlignment,
-  isVerticalAlignment,
-  isParagraphAlignment,
-  isWidthType,
-  // Constants
-  DEFAULT_BORDER,
-  NO_BORDER,
-} from './elements/CommonTypes';
-
-// Document elements
 export {
   Paragraph,
   ParagraphAlignment,
   ParagraphFormatting,
   ParagraphContent,
   FieldLike,
-  // Type guards for ParagraphContent
   isRun,
   isField,
   isSimpleField,
@@ -249,7 +54,6 @@ export {
 export { TableRow, RowFormatting } from './elements/TableRow';
 export {
   TableCell,
-  // BorderStyle and CellVerticalAlignment are now exported from CommonTypes
   CellBorder,
   CellBorders,
   CellShading,
@@ -257,12 +61,17 @@ export {
 } from './elements/TableCell';
 export { TableGridChange, GridColumn, TableGridChangeProperties } from './elements/TableGridChange';
 export { Image, ImageFormat, ImageProperties } from './elements/Image';
-export { ImageManager } from './elements/ImageManager';
 export { ImageRun } from './elements/ImageRun';
 export { Shape, ShapeType, ShapeProperties, ShapeFill, ShapeOutline } from './elements/Shape';
 export { TextBox, TextBoxProperties, TextBoxFill, TextBoxMargins } from './elements/TextBox';
-export { DrawingManager, DrawingElement, DrawingType, PreservedDrawing } from './managers/DrawingManager';
-export { FontManager, FontFormat, FontEntry } from './elements/FontManager';
+export { Header, HeaderType, HeaderProperties } from './elements/Header';
+export { Footer, FooterType, FooterProperties } from './elements/Footer';
+export { Hyperlink, HyperlinkProperties } from './elements/Hyperlink';
+export { Bookmark, BookmarkProperties } from './elements/Bookmark';
+export { RangeMarker, RangeMarkerType, RangeMarkerProperties } from './elements/RangeMarker';
+export { Comment, CommentProperties } from './elements/Comment';
+export { Footnote, FootnoteType, FootnoteProperties } from './elements/Footnote';
+export { Endnote, EndnoteType, EndnoteProperties } from './elements/Endnote';
 export {
   Field,
   FieldType,
@@ -284,18 +93,20 @@ export {
   isHyperlinkInstruction,
   ParsedHyperlinkInstruction,
 } from './elements/FieldHelpers';
-export { Header, HeaderType, HeaderProperties } from './elements/Header';
-export { Footer, FooterType, FooterProperties } from './elements/Footer';
-export { HeaderFooterManager } from './elements/HeaderFooterManager';
-export { Hyperlink, HyperlinkProperties } from './elements/Hyperlink';
+export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent } from './elements/StructuredDocumentTag';
 export { TableOfContents, TOCProperties } from './elements/TableOfContents';
 export { TableOfContentsElement } from './elements/TableOfContentsElement';
-export { Bookmark, BookmarkProperties } from './elements/Bookmark';
-export { BookmarkManager } from './elements/BookmarkManager';
-export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent } from './elements/StructuredDocumentTag';
+export { AlternateContent } from './elements/AlternateContent';
+export { MathParagraph, MathExpression } from './elements/MathElement';
+export { CustomXmlBlock } from './elements/CustomXml';
+export { PreservedElement, PreservedElementContext } from './elements/PreservedElement';
+
+// =============================================================================
+// PUBLIC API — Track Changes / Revisions
+// =============================================================================
+
 export { Revision, RevisionType, RevisionProperties, FieldContext } from './elements/Revision';
 export { RevisionContent, isRunContent, isHyperlinkContent } from './elements/RevisionContent';
-export { RevisionManager, RevisionCategory, RevisionSummary } from './elements/RevisionManager';
 export {
   RevisionLocation,
   RunPropertyChange,
@@ -317,15 +128,33 @@ export {
   isSectionPropertyChange,
   isNumberingChange,
 } from './elements/PropertyChangeTypes';
-
-// Cleanup Helper
 export {
-  CleanupHelper,
-  CleanupOptions,
-  CleanupReport,
-} from './helpers/CleanupHelper';
-
-// Changelog Generation
+  acceptRevisionsInMemory,
+  AcceptRevisionsOptions,
+  AcceptRevisionsResult,
+  paragraphHasRevisions,
+  getRevisionsFromParagraph,
+  countRevisionsByType,
+  stripRevisionsFromXml,
+} from './utils/InMemoryRevisionAcceptor';
+export {
+  MoveOperationHelper,
+  MoveOperationOptions,
+  MoveOperationResult,
+} from './utils/MoveOperationHelper';
+export {
+  SelectiveRevisionAcceptor,
+  SelectiveAcceptResult,
+} from './utils/SelectiveRevisionAcceptor';
+export {
+  RevisionAwareProcessor,
+  RevisionHandlingMode,
+  RevisionProcessingOptions,
+  SelectionCriteria,
+  RevisionProcessingResult,
+  ConflictInfo,
+  ProcessingLogEntry,
+} from './utils/RevisionAwareProcessor';
 export {
   ChangelogGenerator,
   ChangeEntry,
@@ -337,7 +166,204 @@ export {
   ChangelogSummary,
 } from './utils/ChangelogGenerator';
 
-// Revision Validation and Auto-Fix
+// =============================================================================
+// PUBLIC API — Formatting / Styles / Numbering
+// =============================================================================
+
+export { Style, StyleType, StyleProperties } from './formatting/Style';
+export { StylesManager, ValidationResult } from './formatting/StylesManager';
+export {
+  NumberingLevel,
+  NumberFormat,
+  NumberAlignment,
+  NumberingLevelProperties,
+  WORD_NATIVE_BULLETS,
+  WordNativeBullet,
+} from './formatting/NumberingLevel';
+export {
+  AbstractNumbering,
+  AbstractNumberingProperties,
+} from './formatting/AbstractNumbering';
+export {
+  NumberingInstance,
+  NumberingInstanceProperties,
+} from './formatting/NumberingInstance';
+export { NumberingManager } from './formatting/NumberingManager';
+export {
+  StyleRunFormatting,
+  StyleParagraphFormatting,
+  Heading2TableOptions,
+  StyleConfig,
+  Heading2Config,
+  ApplyCustomFormattingOptions,
+} from './types/styleConfig';
+export {
+  FormatOptions,
+  StyleApplyOptions,
+  EmphasisType,
+  ListPrefix,
+} from './types/formatting';
+
+// =============================================================================
+// PUBLIC API — Managers
+// =============================================================================
+
+export { RevisionManager, RevisionCategory, RevisionSummary } from './elements/RevisionManager';
+export { ImageManager } from './elements/ImageManager';
+export { BookmarkManager } from './elements/BookmarkManager';
+export { CommentManager } from './elements/CommentManager';
+export { FootnoteManager } from './elements/FootnoteManager';
+export { EndnoteManager } from './elements/EndnoteManager';
+export { HeaderFooterManager } from './elements/HeaderFooterManager';
+export { FontManager, FontFormat, FontEntry } from './elements/FontManager';
+export { DrawingManager, DrawingElement, DrawingType, PreservedDrawing } from './managers/DrawingManager';
+
+// =============================================================================
+// TYPES — Common / Shared Type Definitions
+// =============================================================================
+
+export {
+  ShadingPattern,
+  BasicShadingPattern,
+  BorderStyle,
+  ExtendedBorderStyle,
+  FullBorderStyle,
+  BorderDefinition,
+  FourSidedBorders,
+  TableBorderDefinitions,
+  HorizontalAlignment,
+  VerticalAlignment,
+  PageVerticalAlignment,
+  CellVerticalAlignment,
+  ParagraphAlignment as CommonParagraphAlignment,
+  TableAlignment as CommonTableAlignment,
+  RowJustification,
+  TextVerticalAlignment,
+  TabAlignment,
+  PositionAnchor,
+  HorizontalAnchor,
+  VerticalAnchor,
+  TextDirection,
+  SectionTextDirection,
+  WidthType,
+  ShadingConfig,
+  TabLeader,
+  TabStop,
+  isShadingPattern,
+  isBorderStyle,
+  isHorizontalAlignment,
+  isVerticalAlignment,
+  isParagraphAlignment,
+  isWidthType,
+  DEFAULT_BORDER,
+  NO_BORDER,
+} from './elements/CommonTypes';
+export {
+  ListCategory,
+  NumberFormat as ListNumberFormat,
+  BulletFormat,
+  ListDetectionResult,
+  ListAnalysis,
+  ListNormalizationOptions,
+  ListNormalizationReport,
+  IndentationLevel,
+} from './types/list-types';
+
+export {
+  CompatibilityMode,
+  CompatibilityInfo,
+  CompatSetting,
+} from './types/compatibility-types';
+
+// =============================================================================
+// TYPES — Compatibility Upgrade
+// =============================================================================
+
+export { CompatibilityUpgrader, UpgradeReport } from './utils/CompatibilityUpgrader';
+export {
+  LEGACY_COMPAT_ELEMENTS,
+  LEGACY_COMPAT_ELEMENT_NAMES,
+  MODERN_COMPAT_SETTINGS,
+  MS_WORD_COMPAT_URI,
+} from './constants/legacyCompatFlags';
+
+// =============================================================================
+// UTILITIES — Unit Conversions
+// =============================================================================
+
+export {
+  STANDARD_DPI,
+  UNITS,
+  PAGE_SIZES,
+  COMMON_MARGINS,
+  twipsToPoints,
+  twipsToInches,
+  twipsToCm,
+  twipsToEmus,
+  emusToTwips,
+  emusToInches,
+  emusToCm,
+  emusToPoints,
+  emusToPixels,
+  pointsToTwips,
+  pointsToEmus,
+  pointsToInches,
+  pointsToCm,
+  pointsToHalfPoints,
+  halfPointsToPoints,
+  inchesToTwips,
+  inchesToEmus,
+  inchesToPoints,
+  inchesToCm,
+  inchesToPixels,
+  cmToTwips,
+  cmToEmus,
+  cmToInches,
+  cmToPoints,
+  cmToPixels,
+  pixelsToEmus,
+  pixelsToInches,
+  pixelsToTwips,
+  pixelsToCm,
+  pixelsToPoints,
+} from './utils/units';
+
+// =============================================================================
+// UTILITIES — Validation, Corruption Detection, Error Handling
+// =============================================================================
+
+export {
+  validateDocxStructure,
+  isBinaryFile,
+  normalizePath,
+  isValidZipBuffer,
+  isTextContent,
+  validateTwips,
+  validateColor,
+  validateHexColor,
+  normalizeColor,
+  validateNumberingId,
+  validateLevel,
+  validateAlignment,
+  validateFontSize,
+  validateNonEmptyString,
+  validatePercentage,
+  validateEmus,
+  detectXmlInText,
+  cleanXmlFromText,
+  validateRunText,
+  TextValidationResult,
+} from './utils/validation';
+export {
+  detectCorruptionInDocument,
+  detectCorruptionInText,
+  suggestFix,
+  looksCorrupted,
+  CorruptionReport,
+  CorruptionLocation,
+  CorruptionType,
+} from './utils/corruptionDetection';
+export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandling';
 export {
   REVISION_RULES,
   ValidationSeverity,
@@ -356,41 +382,25 @@ export {
   RevisionAutoFixer,
 } from './validation';
 
-// Revision-Aware Processing
-export {
-  RevisionAwareProcessor,
-  RevisionHandlingMode,
-  RevisionProcessingOptions,
-  SelectionCriteria,
-  RevisionProcessingResult,
-  ConflictInfo,
-  ProcessingLogEntry,
-} from './utils/RevisionAwareProcessor';
+// =============================================================================
+// UTILITIES — Formatting, Parsing, Sanitization
+// =============================================================================
 
-// Selective Revision Acceptance
 export {
-  SelectiveRevisionAcceptor,
-  SelectiveAcceptResult,
-} from './utils/SelectiveRevisionAcceptor';
-export { RangeMarker, RangeMarkerType, RangeMarkerProperties } from './elements/RangeMarker';
-export { Comment, CommentProperties } from './elements/Comment';
-export { CommentManager } from './elements/CommentManager';
-export { Footnote, FootnoteType, FootnoteProperties } from './elements/Footnote';
-export { FootnoteManager } from './elements/FootnoteManager';
-export { Endnote, EndnoteType, EndnoteProperties } from './elements/Endnote';
-export { EndnoteManager } from './elements/EndnoteManager';
-
-// XML Builder and Parser
-export { XMLBuilder, XMLElement } from './xml/XMLBuilder';
+  mergeFormatting,
+  cloneFormatting,
+  hasFormatting,
+  cleanFormatting,
+  isEqualFormatting,
+  applyDefaults,
+} from './utils/formatting';
 export {
-  XMLParser,
-  ParseToObjectOptions,
-  ParsedXMLValue,
-  ParsedXMLObject,
-  DEFAULT_MAX_NESTING_DEPTH,
-} from './xml/XMLParser';
-
-// XML Sanitization (XML 1.0 compliance)
+  safeParseInt,
+  parseOoxmlBoolean,
+  isExplicitlySet,
+  parseNumericAttribute,
+  parseOnOffAttribute,
+} from './utils/parsingHelpers';
 export {
   removeInvalidXmlChars,
   findInvalidXmlChars,
@@ -398,7 +408,27 @@ export {
   XML_CONTROL_CHARS,
 } from './utils/xmlSanitization';
 
-// Logging utilities
+// =============================================================================
+// UTILITIES — List Detection (kept for basic detection; normalization moved to consumer)
+// =============================================================================
+
+export {
+  detectTypedPrefix,
+  detectListType,
+  inferLevelFromIndentation,
+  getParagraphIndentation,
+  validateListSequence,
+  getListCategoryFromFormat,
+  getLevelFromFormat,
+  TYPED_LIST_PATTERNS,
+  PATTERN_TO_CATEGORY,
+  FORMAT_TO_LEVEL,
+} from './utils/list-detection';
+
+// =============================================================================
+// UTILITIES — Logging
+// =============================================================================
+
 export {
   ILogger,
   LogLevel,
@@ -414,82 +444,84 @@ export {
   resetGlobalLogger,
 } from './utils/logger';
 
-// Error handling utilities
-export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandling';
+// =============================================================================
+// UTILITIES — Revision Walker
+// =============================================================================
 
-// Parsing utilities
-export {
-  safeParseInt,
-  parseOoxmlBoolean,
-  isExplicitlySet,
-  parseNumericAttribute,
-  parseOnOffAttribute,
-} from './utils/parsingHelpers';
-
-// Revision utilities
 export { RevisionWalker, RevisionWalkerOptions } from './utils/RevisionWalker';
 
-// In-memory revision acceptance (industry-standard approach)
-export {
-  acceptRevisionsInMemory,
-  AcceptRevisionsOptions,
-  AcceptRevisionsResult,
-  paragraphHasRevisions,
-  getRevisionsFromParagraph,
-  countRevisionsByType,
-  stripRevisionsFromXml,
-} from './utils/InMemoryRevisionAcceptor';
+// =============================================================================
+// UTILITIES — Cleanup
+// =============================================================================
 
-// Move operation helper (creates complete move operations with range markers)
 export {
-  MoveOperationHelper,
-  MoveOperationOptions,
-  MoveOperationResult,
-} from './utils/MoveOperationHelper';
+  CleanupHelper,
+  CleanupOptions,
+  CleanupReport,
+} from './helpers/CleanupHelper';
 
-// Constants
+// =============================================================================
+// INTERNAL — ZIP Handling (advanced usage)
+// =============================================================================
+
+export { ZipHandler } from './zip/ZipHandler';
+export { ZipReader } from './zip/ZipReader';
+export { ZipWriter } from './zip/ZipWriter';
+export {
+  ZipFile,
+  FileMap,
+  LoadOptions,
+  SaveOptions,
+  AddFileOptions,
+  SizeLimitOptions,
+  DEFAULT_SIZE_LIMITS,
+  REQUIRED_DOCX_FILES,
+  DOCX_PATHS,
+} from './zip/types';
+export {
+  DocxError,
+  DocxNotFoundError,
+  InvalidDocxError,
+  CorruptedArchiveError,
+  MissingRequiredFileError,
+  FileOperationError,
+} from './zip/errors';
+
+// =============================================================================
+// INTERNAL — XML Builder and Parser (advanced usage)
+// =============================================================================
+
+export { XMLBuilder, XMLElement } from './xml/XMLBuilder';
+export {
+  XMLParser,
+  ParseToObjectOptions,
+  ParsedXMLValue,
+  ParsedXMLObject,
+  DEFAULT_MAX_NESTING_DEPTH,
+} from './xml/XMLParser';
+
+// =============================================================================
+// INTERNAL — Parser, Generator, Validator (advanced usage)
+// =============================================================================
+
+export { Relationship, RelationshipType, RelationshipProperties } from './core/Relationship';
+export { RelationshipManager } from './core/RelationshipManager';
+export { DocumentParser, ParseError } from './core/DocumentParser';
+export { DocumentGenerator, IZipHandlerReader } from './core/DocumentGenerator';
+export { DocumentValidator, SizeEstimate, MemoryOptions } from './core/DocumentValidator';
+export { DocumentIdManager } from './core/DocumentIdManager';
+
+// =============================================================================
+// INTERNAL — Document Subsystem Classes (advanced usage)
+// =============================================================================
+
+export { DocumentMetadata, DocumentProperties as MetadataProperties } from './core/DocumentMetadata';
+export { DocumentContent, BodyElement } from './core/DocumentContent';
+export { DocumentFormatting } from './core/DocumentFormatting';
+export { DocumentTracking } from './core/DocumentTracking';
+
+// =============================================================================
+// INTERNAL — Constants
+// =============================================================================
+
 export { LIMITS } from './constants/limits';
-
-// Formatting types
-export {
-  FormatOptions,
-  StyleApplyOptions,
-  EmphasisType,
-  ListPrefix,
-} from './types/formatting';
-
-// List normalization
-export {
-  ListNormalizer,
-  analyzeCellLists,
-  analyzeTableLists,
-  normalizeListsInCell,
-  normalizeListsInTable,
-  normalizeOrphanListLevelsInCell,
-  normalizeOrphanListLevelsInTable,
-  stripTypedPrefix,
-} from './core/ListNormalizer';
-
-export {
-  detectTypedPrefix,
-  detectListType,
-  inferLevelFromIndentation,
-  getParagraphIndentation,
-  validateListSequence,
-  getListCategoryFromFormat,
-  getLevelFromFormat,
-  TYPED_LIST_PATTERNS,
-  PATTERN_TO_CATEGORY,
-  FORMAT_TO_LEVEL,
-} from './utils/list-detection';
-
-export {
-  ListCategory,
-  NumberFormat as ListNumberFormat,
-  BulletFormat,
-  ListDetectionResult,
-  ListAnalysis,
-  ListNormalizationOptions,
-  ListNormalizationReport,
-  IndentationLevel,
-} from './types/list-types';
