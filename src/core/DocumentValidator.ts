@@ -5,14 +5,9 @@
 
 import { Paragraph } from '../elements/Paragraph';
 import { Table } from '../elements/Table';
-import { TableOfContentsElement } from '../elements/TableOfContentsElement';
-import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
-import { AlternateContent } from '../elements/AlternateContent';
-import { MathParagraph } from '../elements/MathElement';
-import { CustomXmlBlock } from '../elements/CustomXml';
-import { PreservedElement } from '../elements/PreservedElement';
 import { ImageManager } from '../elements/ImageManager';
 import { DocumentProperties } from './Document';
+import { BodyElement } from './DocumentContent';
 import { LIMITS } from '../constants/limits';
 import { defaultLogger } from '../utils/logger';
 import * as v8 from 'v8';
@@ -28,11 +23,6 @@ export interface MemoryOptions {
   /** Enable absolute RSS limit checking. Default: true */
   useAbsoluteLimit?: boolean;
 }
-
-/**
- * Body element types
- */
-type BodyElement = Paragraph | Table | TableOfContentsElement | StructuredDocumentTag | AlternateContent | MathParagraph | CustomXmlBlock | PreservedElement;
 
 /**
  * Size estimation result

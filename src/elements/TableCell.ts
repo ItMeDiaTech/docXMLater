@@ -1027,13 +1027,26 @@ export class TableCell {
         const itemText = (itemAny.getText as () => string)().trim();
         if (itemText !== "") return false;
 
-        // Also check if revision contains hyperlinks (may have empty display text)
+        // Also check if revision contains non-text elements (hyperlinks, images, shapes, textboxes)
         if (typeof itemAny.getContent === "function") {
           const revContent = (itemAny.getContent as () => unknown[])();
-          for (const content of revContent) {
+          for (const revItem of revContent) {
+            const revItemAny = revItem as Record<string, unknown>;
             // Check if revision content is a Hyperlink using duck typing (getUrl method)
-            if (content && typeof (content as Record<string, unknown>).getUrl === "function") {
+            if (revItem && typeof revItemAny.getUrl === "function") {
               return false; // Revision contains hyperlink - not blank
+            }
+            // Check if revision content is an ImageRun (getImageElement method)
+            if (revItem && typeof revItemAny.getImageElement === "function") {
+              return false; // Revision contains image - not blank
+            }
+            // Check if revision content is a Shape (getShapeType method)
+            if (revItem && typeof revItemAny.getShapeType === "function") {
+              return false; // Revision contains shape - not blank
+            }
+            // Check if revision content is a TextBox (getTextContent method)
+            if (revItem && typeof revItemAny.getTextContent === "function") {
+              return false; // Revision contains textbox - not blank
             }
           }
         }

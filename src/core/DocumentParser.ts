@@ -53,6 +53,7 @@ import { XMLParser } from "../xml/XMLParser";
 import { ZipHandler } from "../zip/ZipHandler";
 import { DOCX_PATHS } from "../zip/types";
 import { DocumentProperties } from "./Document";
+import { BodyElement } from "./DocumentContent";
 import { RelationshipManager } from "./RelationshipManager";
 
 /**
@@ -62,19 +63,6 @@ export interface ParseError {
   element: string;
   error: Error;
 }
-
-/**
- * Body element types
- */
-type BodyElement =
-  | Paragraph
-  | Table
-  | TableOfContentsElement
-  | StructuredDocumentTag
-  | AlternateContent
-  | MathParagraph
-  | CustomXmlBlock
-  | PreservedElement;
 
 /**
  * DocumentParser handles all document parsing logic
@@ -3793,8 +3781,8 @@ export class DocumentParser {
             if (this.bookmarkManager) {
               try {
                 this.bookmarkManager.registerExisting(bookmark);
-              } catch {
-                // Already registered
+              } catch (e) {
+                getLogger().debug('Bookmark already registered', { id: bookmark.getId?.() });
               }
             }
           }
@@ -4680,22 +4668,50 @@ export class DocumentParser {
         };
       }
 
-      // Extract name, description, title, and ID from wp:docPr
+      // --- Group A: Parse inline dist attributes ---
+      let inlineDistT = 0;
+      let inlineDistB = 0;
+      let inlineDistL = 0;
+      let inlineDistR = 0;
+      if (inlineObj) {
+        const toInt = (v: any) => v !== undefined && v !== null ? parseInt(String(v), 10) || 0 : 0;
+        inlineDistT = toInt(inlineObj["@_distT"]);
+        inlineDistB = toInt(inlineObj["@_distB"]);
+        inlineDistL = toInt(inlineObj["@_distL"]);
+        inlineDistR = toInt(inlineObj["@_distR"]);
+      }
+
+      // Extract name, description, title, hidden, and ID from wp:docPr
       const docPrObj = imageObj["wp:docPr"];
       let name = "image";
       let description = "Image";
       let title: string | undefined = undefined;
       let docPrId = 1;
+      let hidden = false;
       if (docPrObj) {
         name = docPrObj["@_name"] || "image";
         description = docPrObj["@_descr"] || "Image";
         if (docPrObj["@_title"]) {
           title = String(docPrObj["@_title"]);
         }
-        // Parse docPr id to preserve unique image IDs
         const idAttr = docPrObj["@_id"];
         if (idAttr) {
           docPrId = parseInt(String(idAttr), 10);
+        }
+        // Group A: hidden attribute
+        if (docPrObj["@_hidden"] === "1" || docPrObj["@_hidden"] === 1 || docPrObj["@_hidden"] === true) {
+          hidden = true;
+        }
+      }
+
+      // --- Group A: Parse noChangeAspect from wp:cNvGraphicFramePr ---
+      let noChangeAspect = true; // default
+      const cNvGfPrObj = imageObj["wp:cNvGraphicFramePr"];
+      if (cNvGfPrObj) {
+        const gfLocks = cNvGfPrObj["a:graphicFrameLocks"];
+        if (gfLocks) {
+          const val = gfLocks["@_noChangeAspect"];
+          noChangeAspect = val === "1" || val === 1 || val === true;
         }
       }
 
@@ -4714,7 +4730,6 @@ export class DocumentParser {
       // Parse anchor configuration (for floating images)
       let anchor = undefined;
       if (isFloating && anchorObj) {
-        // XMLParser converts attribute values - handle both string and number
         const toBool = (val: any) => val === "1" || val === 1 || val === true;
         const toOptInt = (val: any): number | undefined => {
           if (val === undefined || val === null) return undefined;
@@ -4737,101 +4752,226 @@ export class DocumentParser {
           distL: toOptInt(anchorObj["@_distL"]),
           distR: toOptInt(anchorObj["@_distR"]),
         };
+
+        // Also check anchor hidden attribute
+        if (anchorObj["@_hidden"] === "1" || anchorObj["@_hidden"] === 1 || anchorObj["@_hidden"] === true) {
+          hidden = true;
+        }
       }
 
       // Navigate through the graphic structure to find the relationship ID
-      // Structure: a:graphic → a:graphicData → pic:pic → pic:blipFill → a:blip
       const graphicObj = imageObj["a:graphic"];
-      if (!graphicObj) {
-        return null;
-      }
-
+      if (!graphicObj) return null;
       const graphicDataObj = graphicObj["a:graphicData"];
-      if (!graphicDataObj) {
-        return null;
-      }
-
+      if (!graphicDataObj) return null;
       const picPicObj = graphicDataObj["pic:pic"];
-      if (!picPicObj) {
-        return null;
-      }
-
+      if (!picPicObj) return null;
       const blipFillObj = picPicObj["pic:blipFill"];
-      if (!blipFillObj) {
-        return null;
-      }
-
+      if (!blipFillObj) return null;
       const blipObj = blipFillObj["a:blip"];
-      if (!blipObj) {
-        return null;
-      }
+      if (!blipObj) return null;
 
-      // Parse crop settings (a:srcRect is sibling of a:blip in blipFill, not child of blip)
+      // Parse crop settings
       const crop = this.parseImageCrop(blipFillObj);
 
-      // Parse effects (effects are children of a:blip)
+      // Parse effects (includes transparency via a:alphaModFix)
       const effects = this.parseImageEffects(blipObj);
 
-      // Parse border from pic:spPr (shape properties)
-      // Border is stored as a:ln element inside pic:spPr
-      const spPrObj = picPicObj["pic:spPr"];
-      let border: { width: number } | undefined = undefined;
-      let rotation = 0;
-      if (spPrObj) {
-        const lnObj = spPrObj["a:ln"];
-        if (lnObj) {
-          // Width is in EMUs, convert to points (1 point = 12700 EMUs)
-          const widthEmu = parseInt(lnObj["@_w"] || "0", 10);
-          if (widthEmu > 0) {
-            border = { width: widthEmu / 12700 };
+      // --- Group A: Parse blip attributes ---
+      const compressionState = blipObj["@_cstate"] || 'none';
+
+      // --- Group A: Parse blipFill attributes ---
+      const blipFillDpi = blipFillObj["@_dpi"] !== undefined ? parseInt(String(blipFillObj["@_dpi"]), 10) : undefined;
+      let blipFillRotWithShape: boolean | undefined;
+      if (blipFillObj["@_rotWithShape"] !== undefined) {
+        const rws = blipFillObj["@_rotWithShape"];
+        blipFillRotWithShape = rws === "1" || rws === 1 || rws === true;
+      }
+
+      // --- Group A: Parse pic:nvPicPr (non-visual properties and locks) ---
+      const nvPicPrObj = picPicObj["pic:nvPicPr"];
+      let picNonVisualProps = { id: '0', name: '', descr: '' };
+      let picLocks: Record<string, boolean> = { noChangeAspect: true, noChangeArrowheads: true };
+      if (nvPicPrObj) {
+        const cNvPr = nvPicPrObj["pic:cNvPr"];
+        if (cNvPr) {
+          picNonVisualProps = {
+            id: String(cNvPr["@_id"] ?? '0'),
+            name: String(cNvPr["@_name"] ?? ''),
+            descr: String(cNvPr["@_descr"] ?? ''),
+          };
+        }
+        const cNvPicPr = nvPicPrObj["pic:cNvPicPr"];
+        if (cNvPicPr) {
+          const locks = cNvPicPr["a:picLocks"];
+          if (locks) {
+            picLocks = {};
+            const lockAttrs = [
+              'noChangeAspect', 'noChangeArrowheads', 'noSelect', 'noMove',
+              'noResize', 'noEditPoints', 'noAdjustHandles', 'noRot',
+              'noChangeShapeType', 'noCrop', 'noGrp',
+            ];
+            for (const attr of lockAttrs) {
+              const val = locks[`@_${attr}`];
+              if (val === "1" || val === 1 || val === true) {
+                picLocks[attr] = true;
+              }
+            }
           }
         }
-        // Parse rotation from a:xfrm/@rot (ECMA-376 §20.1.7.6)
-        // Rotation is stored as 60000ths of a degree in OOXML
+      }
+
+      // --- Group A & C: Parse pic:spPr (shape properties) ---
+      const spPrObj = picPicObj["pic:spPr"];
+      let border: any = undefined;
+      let rotation = 0;
+      let flipH = false;
+      let flipV = false;
+      let presetGeometry = 'rect';
+      let bwMode = 'auto';
+      if (spPrObj) {
+        // Group A: bwMode
+        if (spPrObj["@_bwMode"]) {
+          bwMode = String(spPrObj["@_bwMode"]);
+        }
+
+        // Group A: presetGeometry
+        const prstGeom = spPrObj["a:prstGeom"];
+        if (prstGeom?.["@_prst"]) {
+          presetGeometry = String(prstGeom["@_prst"]);
+        }
+
+        // Group C: Enhanced border parsing (a:ln)
+        const lnObj = spPrObj["a:ln"];
+        if (lnObj) {
+          const widthEmu = parseInt(lnObj["@_w"] || "0", 10);
+          if (widthEmu > 0) {
+            border = { width: widthEmu / 12700 } as any;
+            // Parse additional a:ln attributes
+            if (lnObj["@_cap"]) border.cap = String(lnObj["@_cap"]);
+            if (lnObj["@_cmpd"]) border.compound = String(lnObj["@_cmpd"]);
+            if (lnObj["@_algn"]) border.alignment = String(lnObj["@_algn"]);
+            // Parse fill
+            const solidFill = lnObj["a:solidFill"];
+            if (solidFill) {
+              const srgbClr = solidFill["a:srgbClr"];
+              const schemeClr = solidFill["a:schemeClr"];
+              if (srgbClr) {
+                border.fill = { type: 'srgbClr', value: String(srgbClr["@_val"] || '') };
+                border.fill.modifiers = this.parseColorModifiers(srgbClr);
+              } else if (schemeClr) {
+                border.fill = { type: 'schemeClr', value: String(schemeClr["@_val"] || '') };
+                border.fill.modifiers = this.parseColorModifiers(schemeClr);
+              }
+            } else {
+              // Non-solid fill — store as raw XML passthrough
+              const fillKeys = ['a:gradFill', 'a:pattFill', 'a:noFill'];
+              for (const fk of fillKeys) {
+                if (lnObj[fk]) {
+                  border.rawFillXml = this.objectToXml({ [fk]: lnObj[fk] });
+                  break;
+                }
+              }
+            }
+            // Parse dash pattern
+            const prstDash = lnObj["a:prstDash"];
+            if (prstDash?.["@_val"]) border.dashPattern = String(prstDash["@_val"]);
+            // Parse join
+            if (lnObj["a:round"]) border.join = 'round';
+            else if (lnObj["a:bevel"]) border.join = 'bevel';
+            else if (lnObj["a:miter"]) {
+              border.join = 'miter';
+              if (lnObj["a:miter"]["@_lim"]) border.miterLimit = parseInt(String(lnObj["a:miter"]["@_lim"]), 10);
+            }
+            // Parse head/tail end
+            if (lnObj["a:headEnd"]) {
+              border.headEnd = {};
+              if (lnObj["a:headEnd"]["@_type"]) border.headEnd.type = String(lnObj["a:headEnd"]["@_type"]);
+              if (lnObj["a:headEnd"]["@_w"]) border.headEnd.width = String(lnObj["a:headEnd"]["@_w"]);
+              if (lnObj["a:headEnd"]["@_len"]) border.headEnd.length = String(lnObj["a:headEnd"]["@_len"]);
+            }
+            if (lnObj["a:tailEnd"]) {
+              border.tailEnd = {};
+              if (lnObj["a:tailEnd"]["@_type"]) border.tailEnd.type = String(lnObj["a:tailEnd"]["@_type"]);
+              if (lnObj["a:tailEnd"]["@_w"]) border.tailEnd.width = String(lnObj["a:tailEnd"]["@_w"]);
+              if (lnObj["a:tailEnd"]["@_len"]) border.tailEnd.length = String(lnObj["a:tailEnd"]["@_len"]);
+            }
+          }
+        }
+
+        // Parse rotation and flip from a:xfrm
         const xfrmObj = spPrObj["a:xfrm"];
         if (xfrmObj?.["@_rot"]) {
           rotation = parseInt(xfrmObj["@_rot"], 10) / 60000;
         }
+        if (xfrmObj?.["@_flipH"] === "1" || xfrmObj?.["@_flipH"] === 1 || xfrmObj?.["@_flipH"] === true) {
+          flipH = true;
+        }
+        if (xfrmObj?.["@_flipV"] === "1" || xfrmObj?.["@_flipV"] === 1 || xfrmObj?.["@_flipV"] === true) {
+          flipV = true;
+        }
       }
 
-      // Extract relationship ID (r:embed)
-      const relationshipId = blipObj["@_r:embed"];
+      // --- Linked vs embedded image (r:embed or r:link) ---
+      let relationshipId = blipObj["@_r:embed"];
+      let isLinked = false;
       if (!relationshipId) {
-        logger.debug('Drawing has no r:embed relationship ID');
-        return null;
+        relationshipId = blipObj["@_r:link"];
+        if (relationshipId) {
+          isLinked = true;
+        } else {
+          logger.debug('Drawing has no r:embed or r:link relationship ID');
+          return null;
+        }
+      }
+
+      // --- SVG detection: asvg:svgBlip in a:extLst ---
+      let svgRelationshipId: string | undefined;
+      const blipExtLst = blipObj["a:extLst"];
+      if (blipExtLst) {
+        const exts = Array.isArray(blipExtLst["a:ext"]) ? blipExtLst["a:ext"] : blipExtLst["a:ext"] ? [blipExtLst["a:ext"]] : [];
+        for (const ext of exts) {
+          const svgBlip = ext?.["asvg:svgBlip"];
+          if (svgBlip?.["@_r:embed"]) {
+            svgRelationshipId = String(svgBlip["@_r:embed"]);
+          }
+        }
       }
 
       // Get the image from the relationship
-      // Note: For headers/footers, we use their specific RelationshipManager
       const partContext = this.currentPartName ? ` (part: ${this.currentPartName})` : '';
-      const relationship = relationshipManager.getRelationship(relationshipId);
-      if (!relationship) {
-        logger.warn(`Image relationship not found: ${relationshipId}${partContext}`);
-        return null;
+
+      let imageData: Buffer;
+      let imagePath: string;
+      let originalFilename: string | undefined;
+
+      if (isLinked) {
+        // Linked image: no data in package, create empty buffer
+        imageData = Buffer.alloc(0);
+        imagePath = '';
+        originalFilename = undefined;
+      } else {
+        const relationship = relationshipManager.getRelationship(relationshipId);
+        if (!relationship) {
+          logger.warn(`Image relationship not found: ${relationshipId}${partContext}`);
+          return null;
+        }
+        const imageTarget = relationship.getTarget();
+        if (!imageTarget) {
+          logger.warn(`Image relationship has no target: ${relationshipId}${partContext}`);
+          return null;
+        }
+        imagePath = `word/${imageTarget}`;
+        const data = zipHandler.getFileAsBuffer(imagePath);
+        if (!data) {
+          logger.warn(`Image file not found in ZIP: ${imagePath}${partContext}`);
+          return null;
+        }
+        imageData = data;
+        originalFilename = imageTarget.split("/").pop();
       }
 
-      const imageTarget = relationship.getTarget();
-      if (!imageTarget) {
-        logger.warn(`Image relationship has no target: ${relationshipId}${partContext}`);
-        return null;
-      }
-
-      // Read image data from zip
-      const imagePath = `word/${imageTarget}`;
-      const imageData = zipHandler.getFileAsBuffer(imagePath);
-      if (!imageData) {
-        logger.warn(`Image file not found in ZIP: ${imagePath}${partContext}`);
-        return null;
-      }
-
-      logger.debug(`Parsing image: ${imagePath}, relId: ${relationshipId}${partContext}`);
-
-      // Extract original filename from relationship target (e.g., "media/image5.png" -> "image5.png")
-      // This preserves the original filename during round-trip to prevent relationship/file mismatches
-      const originalFilename = imageTarget.split("/").pop();
-
-      // Detect image extension from path
-      const extension = imagePath.split(".").pop()?.toLowerCase() || "png";
+      logger.debug(`Parsing image: ${imagePath || '(linked)'}, relId: ${relationshipId}${partContext}`);
 
       // Create image from buffer with all properties
       const { Image: ImageClass } = await import("../elements/Image");
@@ -4850,19 +4990,111 @@ export class DocumentParser {
         effects,
         border,
         rotation,
+        flipH,
+        flipV,
+        presetGeometry,
+        compressionState,
+        bwMode,
+        inlineDistT,
+        inlineDistB,
+        inlineDistL,
+        inlineDistR,
+        noChangeAspect,
+        hidden,
+        blipFillDpi,
+        blipFillRotWithShape,
+        picLocks,
+        picNonVisualProps,
+        isLinked,
+        svgRelationshipId,
       });
 
-      // Register image with ImageManager (preserve original filename for round-trip integrity)
-      // Pass currentPartName to distinguish header/footer images from body images
-      imageManager.registerImage(image, relationshipId, originalFilename, this.currentPartName);
-      image.setRelationshipId(relationshipId);
+      // --- Group B: Collect raw passthrough for unmodeled XML subtrees ---
+      // Blip effects (children of a:blip that aren't modeled)
+      const blipEffectsRaw = this.collectUnmodeledChildren(blipObj,
+        ['a:lum', 'a:grayscl', 'a:alphaModFix', 'a:extLst']);
+      if (blipEffectsRaw) image._setRawPassthrough('blip-effects', blipEffectsRaw);
 
-      // Preserve the original docPr ID to prevent corruption
+      // Blip extLst (must come last per schema)
+      if (blipExtLst && !svgRelationshipId) {
+        // Only pass through if we're not already handling SVG
+        const extLstXml = this.objectToXml({ 'a:extLst': blipExtLst });
+        if (extLstXml) image._setRawPassthrough('blip-extLst', extLstXml);
+      } else if (blipExtLst && svgRelationshipId) {
+        // Preserve the full extLst including SVG ref
+        const extLstXml = this.objectToXml({ 'a:extLst': blipExtLst });
+        if (extLstXml) image._setRawPassthrough('blip-extLst', extLstXml);
+      }
+
+      // BlipFill extras (a:tile instead of a:stretch)
+      if (blipFillObj["a:tile"]) {
+        const tileXml = this.objectToXml({ 'a:tile': blipFillObj['a:tile'] });
+        if (tileXml) image._setRawPassthrough('blipFill-extra', tileXml);
+      }
+
+      // Geometry passthrough (a:custGeom, or prstGeom with non-empty avLst)
+      if (spPrObj) {
+        if (spPrObj["a:custGeom"]) {
+          const geomXml = this.objectToXml({ 'a:custGeom': spPrObj['a:custGeom'] });
+          if (geomXml) image._setRawPassthrough('geometry', geomXml);
+        } else if (spPrObj["a:prstGeom"]) {
+          const prstGeom = spPrObj["a:prstGeom"];
+          const avLst = prstGeom["a:avLst"];
+          // Check if avLst has actual children (not just empty element)
+          if (avLst && typeof avLst === 'object' && Object.keys(avLst).some(k => !k.startsWith('@_') && k !== '_orderedChildren')) {
+            const geomXml = this.objectToXml({ 'a:prstGeom': prstGeom });
+            if (geomXml) image._setRawPassthrough('geometry', geomXml);
+          }
+        }
+
+        // spPr effects passthrough (effectLst, effectDag, scene3d, sp3d, extLst)
+        const spPrEffects = this.collectUnmodeledChildren(spPrObj,
+          ['a:xfrm', 'a:prstGeom', 'a:custGeom', 'a:noFill', 'a:solidFill', 'a:ln']);
+        if (spPrEffects) image._setRawPassthrough('spPr-effects', spPrEffects);
+      }
+
+      // Wrap polygon passthrough
+      if (isFloating) {
+        const wrapTypes = ['wp:wrapTight', 'wp:wrapThrough'];
+        for (const wt of wrapTypes) {
+          const wrapObj = anchorObj[wt];
+          if (wrapObj?.["wp:wrapPolygon"]) {
+            const polyXml = this.objectToXml({ 'wp:wrapPolygon': wrapObj['wp:wrapPolygon'] });
+            if (polyXml) image._setRawPassthrough('wrap-polygon', polyXml);
+            break;
+          }
+        }
+
+        // Anchor extras (wp14:sizeRelH, wp14:sizeRelV)
+        const anchorExtras = this.collectUnmodeledChildren(anchorObj, [
+          'wp:simplePos', 'wp:positionH', 'wp:positionV', 'wp:extent', 'wp:effectExtent',
+          'wp:wrapSquare', 'wp:wrapTight', 'wp:wrapThrough', 'wp:wrapTopAndBottom', 'wp:wrapNone',
+          'wp:docPr', 'wp:cNvGraphicFramePr', 'a:graphic',
+        ]);
+        if (anchorExtras) image._setRawPassthrough('anchor-extra', anchorExtras);
+      }
+
+      // DocPr extras (a:hlinkClick, a:hlinkHover, a:extLst)
+      if (docPrObj) {
+        const docPrExtras = this.collectUnmodeledChildren(docPrObj, []);
+        if (docPrExtras) image._setRawPassthrough('docPr-extra', docPrExtras);
+      }
+
+      // cNvPr extras from pic:nvPicPr > pic:cNvPr
+      if (nvPicPrObj?.["pic:cNvPr"]) {
+        const cNvPrExtras = this.collectUnmodeledChildren(nvPicPrObj["pic:cNvPr"], []);
+        if (cNvPrExtras) image._setRawPassthrough('cNvPr-extra', cNvPrExtras);
+      }
+
+      // Register image
+      if (!isLinked) {
+        imageManager.registerImage(image, relationshipId, originalFilename, this.currentPartName);
+      }
+      image.setRelationshipId(relationshipId);
       image.setDocPrId(docPrId);
 
-      logger.debug(`Image registered: ${originalFilename}, relId: ${relationshipId}${partContext}`);
+      logger.debug(`Image registered: ${originalFilename || '(linked)'}, relId: ${relationshipId}${partContext}`);
 
-      // Create and return ImageRun
       return new ImageRun(image);
     } catch (error: unknown) {
       const partContext = this.currentPartName ? ` (part: ${this.currentPartName})` : '';
@@ -5011,7 +5243,7 @@ export class DocumentParser {
     const lum = blipObj["a:lum"];
     if (lum) {
       if (lum["@_bright"]) {
-        effects.brightness = parseInt(lum["@_bright"], 10) / 1000; // Convert from per-mille
+        effects.brightness = parseInt(lum["@_bright"], 10) / 1000;
       }
       if (lum["@_contrast"]) {
         effects.contrast = parseInt(lum["@_contrast"], 10) / 1000;
@@ -5023,7 +5255,60 @@ export class DocumentParser {
       effects.grayscale = true;
     }
 
+    // Parse transparency via a:alphaModFix (ECMA-376 §20.1.8.4)
+    const alphaModFix = blipObj["a:alphaModFix"];
+    if (alphaModFix?.["@_amt"] !== undefined) {
+      // amt is in 1/1000ths of percent (e.g., 50000 = 50% opacity = 50% transparency)
+      const amt = parseInt(String(alphaModFix["@_amt"]), 10);
+      const transparency = Math.round(100 - amt / 1000);
+      if (transparency > 0) {
+        effects.transparency = transparency;
+      }
+    }
+
     return Object.keys(effects).length > 0 ? effects : undefined;
+  }
+
+  /**
+   * Collects unmodeled children from a parsed XML object as raw XML strings.
+   * Used for Group B passthrough — preserves XML subtrees that the framework
+   * doesn't model, preventing data loss during round-trip.
+   * @private
+   */
+  private collectUnmodeledChildren(parentObj: any, modeledKeys: string[]): string | null {
+    if (!parentObj || typeof parentObj !== 'object') return null;
+    const parts: string[] = [];
+    for (const key of Object.keys(parentObj)) {
+      if (key.startsWith('@_') || key === '#text' || key === '_orderedChildren') continue;
+      if (modeledKeys.includes(key)) continue;
+      const child = parentObj[key];
+      if (Array.isArray(child)) {
+        for (const item of child) {
+          parts.push(this.objectToXml({ [key]: item }));
+        }
+      } else {
+        parts.push(this.objectToXml({ [key]: child }));
+      }
+    }
+    return parts.length > 0 ? parts.join('') : null;
+  }
+
+  /**
+   * Parses color modifier children from a color element (a:srgbClr or a:schemeClr).
+   * Returns array of { name, val } for modifiers like lumMod, lumOff, satMod, etc.
+   * @private
+   */
+  private parseColorModifiers(colorObj: any): Array<{ name: string; val: string }> | undefined {
+    if (!colorObj || typeof colorObj !== 'object') return undefined;
+    const modifiers: Array<{ name: string; val: string }> = [];
+    const modNames = ['a:lumMod', 'a:lumOff', 'a:satMod', 'a:shade', 'a:tint', 'a:alpha'];
+    for (const mod of modNames) {
+      const modObj = colorObj[mod];
+      if (modObj?.["@_val"] !== undefined) {
+        modifiers.push({ name: mod.replace('a:', ''), val: String(modObj["@_val"]) });
+      }
+    }
+    return modifiers.length > 0 ? modifiers : undefined;
   }
 
   /**
@@ -7713,7 +7998,7 @@ export class DocumentParser {
     const formatting: ParagraphFormatting = {};
 
     // Parse alignment (w:jc)
-    const jcElement = XMLParser.extractBetweenTags(pPrXml, "<w:jc", "/>");
+    const jcElement = XMLParser.extractSelfClosingTag(pPrXml, "w:jc");
     if (jcElement) {
       const alignment = XMLParser.extractAttribute(
         `<w:jc${jcElement}`,
@@ -7729,11 +8014,7 @@ export class DocumentParser {
     }
 
     // Parse spacing (w:spacing)
-    const spacingElement = XMLParser.extractBetweenTags(
-      pPrXml,
-      "<w:spacing",
-      "/>"
-    );
+    const spacingElement = XMLParser.extractSelfClosingTag(pPrXml, "w:spacing");
     if (spacingElement) {
       const before = XMLParser.extractAttribute(
         `<w:spacing${spacingElement}`,
@@ -7771,7 +8052,7 @@ export class DocumentParser {
     }
 
     // Parse indentation (w:ind)
-    const indElement = XMLParser.extractBetweenTags(pPrXml, "<w:ind", "/>");
+    const indElement = XMLParser.extractSelfClosingTag(pPrXml, "w:ind");
     if (indElement) {
       const left = XMLParser.extractAttribute(`<w:ind${indElement}`, "w:left");
       const right = XMLParser.extractAttribute(

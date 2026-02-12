@@ -5,6 +5,7 @@
  * to a .docx document using the docxmlater API.
  */
 
+import { defaultLogger } from '../../utils/logger';
 import { CFBReader, CFBParseError } from '../cfb/CFBReader';
 import { FIBParser, FIBParseError } from '../fib/FIB';
 import { PieceTableParser, PieceTableError } from '../text/PieceTable';
@@ -192,8 +193,8 @@ export class DocToDocxConverter {
         for (const [index, style] of styleSheet.styles) {
           styles.set(index, style);
         }
-      } catch {
-        // Style parsing is optional, continue without styles
+      } catch (e) {
+        defaultLogger.debug(`[DocToDocxConverter] Style parsing failed: ${e}`);
       }
     }
 
@@ -203,8 +204,8 @@ export class DocToDocxConverter {
       try {
         const tableParser = new TableParser(fullText);
         tables.push(...tableParser.parseAllTables());
-      } catch {
-        // Table parsing is optional
+      } catch (e) {
+        defaultLogger.debug(`[DocToDocxConverter] Table parsing failed: ${e}`);
       }
     }
 
@@ -214,8 +215,8 @@ export class DocToDocxConverter {
     if (dataStream && this.options.includeImages) {
       try {
         images = PictureExtractor.extractAll(dataStream.data);
-      } catch {
-        // Image extraction is optional
+      } catch (e) {
+        defaultLogger.debug(`[DocToDocxConverter] Image extraction failed: ${e}`);
       }
     }
 
@@ -228,8 +229,8 @@ export class DocToDocxConverter {
           fib.rgFcLcb.fcPlcfSed + fib.rgFcLcb.lcbPlcfSed
         );
         sections = SectionParser.parse(plcfSedData, wordDocStream.data, tableStream.data);
-      } catch {
-        // Section parsing is optional
+      } catch (e) {
+        defaultLogger.debug(`[DocToDocxConverter] Section parsing failed: ${e}`);
       }
     }
 
@@ -238,8 +239,8 @@ export class DocToDocxConverter {
     if (this.options.includeHeadersFooters || this.options.includeNotes) {
       try {
         subdocuments = SubdocumentParser.parse(fib, fullText);
-      } catch {
-        // Subdocument parsing is optional
+      } catch (e) {
+        defaultLogger.debug(`[DocToDocxConverter] Subdocument parsing failed: ${e}`);
       }
     }
 
@@ -248,8 +249,8 @@ export class DocToDocxConverter {
     if (this.options.preserveFields && FieldParser.hasFields(fullText)) {
       try {
         fields = FieldParser.parse(fullText);
-      } catch {
-        // Field parsing is optional
+      } catch (e) {
+        defaultLogger.debug(`[DocToDocxConverter] Field parsing failed: ${e}`);
       }
     }
 
@@ -437,7 +438,8 @@ export class DocToDocxConverter {
         hasImages: cfbReader.hasStream('Data'),
         hasTables: fib.rgLw97.ccpText > 0, // Simplified check
       };
-    } catch {
+    } catch (e) {
+      defaultLogger.debug(`[DocToDocxConverter] Validation failed: ${e}`);
       return { isValid: false };
     }
   }

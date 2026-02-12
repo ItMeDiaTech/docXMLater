@@ -311,6 +311,8 @@ export class XMLBuilder {
       "xmlns:wne": "http://schemas.microsoft.com/office/word/2006/wordml",
       "xmlns:wps":
         "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+      "xmlns:asvg":
+        "http://schemas.microsoft.com/office/drawing/2016/SVG/main",
     };
   }
 
@@ -596,6 +598,7 @@ export class XMLBuilder {
       if (allNamespaces["xmlns:w16sdtdh"]) ignorable.push("w16sdtdh");
       if (allNamespaces["xmlns:w16sdtfl"]) ignorable.push("w16sdtfl");
       if (allNamespaces["xmlns:w16du"]) ignorable.push("w16du");
+      if (allNamespaces["xmlns:asvg"]) ignorable.push("asvg");
       if (ignorable.length > 0) {
         allNamespaces["mc:Ignorable"] = ignorable.join(" ");
       }

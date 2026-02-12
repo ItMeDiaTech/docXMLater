@@ -9,6 +9,7 @@ import { logSerialization, logTextDirection } from "../utils/diagnostics";
 import { defaultLogger } from "../utils/logger";
 import { normalizeColor, validateRunText } from "../utils/validation";
 import { pointsToHalfPoints } from "../utils/units";
+import { diffText, diffHasUnchangedParts } from "../utils/textDiff";
 import { getActiveConditionalsInPriorityOrder } from "../utils/cnfStyleDecoder";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import {
@@ -500,6 +501,14 @@ export class Run {
    * tabs (\t) and newlines (\n) are automatically converted to their
    * corresponding XML elements.
    *
+   * @remarks
+   * When change tracking is enabled and this run has a parent paragraph,
+   * calling `setText()` will replace this run in the paragraph's content
+   * array with multiple new elements (unchanged runs + revision wrappers).
+   * After this call, the original run reference may no longer be present
+   * in the paragraph — callers should re-query the paragraph content
+   * rather than continuing to use the original run reference.
+   *
    * @param text - The new text content
    *
    * @example
@@ -510,8 +519,9 @@ export class Run {
    * ```
    */
   setText(text: string): void {
-    // Capture old text for tracking before any changes
+    // Capture old text and content for tracking before any changes
     const oldText = this.getText();
+    const oldContent = [...this.content];
 
     // Warn about undefined/null text to help catch data quality issues
     if (text === undefined || text === null) {
@@ -562,29 +572,63 @@ export class Run {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { Revision } = require('./Revision');
 
-      // Create a clone of this run with the OLD text for the delete revision
-      const deleteRun = this.clone();
-      deleteRun.content = this.parseTextWithSpecialCharacters(oldText);
-
-      // Create delete revision for old text
-      const deleteRev = Revision.createDeletion(
-        this.trackingContext.getAuthor(),
-        deleteRun,
-        new Date()
+      // Check if original content had non-text types that getText() can't faithfully represent
+      // (VML, fieldChar, symbol, embeddedObject) — if so, fall back to whole-run replacement
+      const hasNonTextContent = oldContent.some(c =>
+        c.type === 'vml' || c.type === 'fieldChar' || c.type === 'symbol' || c.type === 'embeddedObject'
       );
-      this.trackingContext.getRevisionManager().register(deleteRev);
 
-      // Create insert revision for new text (this run with updated content)
-      const insertRev = Revision.createInsertion(
-        this.trackingContext.getAuthor(),
-        this,
-        new Date()
-      );
-      this.trackingContext.getRevisionManager().register(insertRev);
+      const segments = hasNonTextContent ? [] : diffText(oldText, normalizedText);
+      const useGranular = !hasNonTextContent && diffHasUnchangedParts(segments);
 
-      // Replace this run in parent's content with [delete, insert] revisions
-      // Note: replaceContent does its own indexOf check on this.content (not a copy)
-      this._parentParagraph.replaceContent(this, [deleteRev, insertRev]);
+      if (useGranular) {
+        // Fine-grained tracking: split into unchanged runs + delete/insert revisions
+        const author = this.trackingContext.getAuthor();
+        const revManager = this.trackingContext.getRevisionManager();
+        const now = new Date();
+        const newContent: (Run | RevisionType)[] = [];
+
+        for (const seg of segments) {
+          if (seg.type === 'equal') {
+            // Create a new run with the same formatting for the unchanged portion
+            const equalRun = this.clone();
+            equalRun.content = this.parseTextWithSpecialCharacters(seg.text);
+            equalRun._setTrackingContext(this.trackingContext);
+            equalRun._setParentParagraph(this._parentParagraph);
+            newContent.push(equalRun);
+          } else if (seg.type === 'delete') {
+            const delRun = this.clone();
+            delRun.content = this.parseTextWithSpecialCharacters(seg.text);
+            const delRev = Revision.createDeletion(author, delRun, now);
+            revManager.register(delRev);
+            newContent.push(delRev);
+          } else if (seg.type === 'insert') {
+            const insRun = this.clone();
+            insRun.content = this.parseTextWithSpecialCharacters(seg.text);
+            const insRev = Revision.createInsertion(author, insRun, now);
+            revManager.register(insRev);
+            newContent.push(insRev);
+          }
+        }
+
+        this._parentParagraph.replaceContent(this, newContent);
+      } else {
+        // Whole-run fallback: complete replacement (no shared text, or non-text content)
+        const author = this.trackingContext.getAuthor();
+        const revManager = this.trackingContext.getRevisionManager();
+        const now = new Date();
+
+        const deleteRun = this.clone();
+        deleteRun.content = this.parseTextWithSpecialCharacters(oldText);
+
+        const deleteRev = Revision.createDeletion(author, deleteRun, now);
+        revManager.register(deleteRev);
+
+        const insertRev = Revision.createInsertion(author, this, now);
+        revManager.register(insertRev);
+
+        this._parentParagraph.replaceContent(this, [deleteRev, insertRev]);
+      }
     }
   }
 

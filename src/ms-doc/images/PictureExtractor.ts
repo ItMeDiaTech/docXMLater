@@ -1,3 +1,5 @@
+import { defaultLogger } from '../../utils/logger';
+
 /**
  * Picture Extractor
  *
@@ -188,8 +190,8 @@ export class PictureExtractor {
         }
 
         offset += 8 + header.recLen;
-      } catch {
-        // Skip malformed records
+      } catch (e) {
+        defaultLogger.debug(`[PictureExtractor] Skipping malformed record at offset ${offset}: ${e}`);
         offset += 8;
       }
     }

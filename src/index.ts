@@ -60,7 +60,17 @@ export {
   CellFormatting,
 } from './elements/TableCell';
 export { TableGridChange, GridColumn, TableGridChangeProperties } from './elements/TableGridChange';
-export { Image, ImageFormat, ImageProperties } from './elements/Image';
+export {
+  Image,
+  ImageFormat,
+  ImageProperties,
+  ImageBorder,
+  ImageEffects,
+  PresetGeometry,
+  BlipCompressionState,
+  PicLockAttribute,
+  PicNonVisualProperties,
+} from './elements/Image';
 export { ImageRun } from './elements/ImageRun';
 export { Shape, ShapeType, ShapeProperties, ShapeFill, ShapeOutline } from './elements/Shape';
 export { TextBox, TextBoxProperties, TextBoxFill, TextBoxMargins } from './elements/TextBox';
@@ -274,6 +284,12 @@ export {
   CompatibilityInfo,
   CompatSetting,
 } from './types/compatibility-types';
+
+export {
+  DocumentProtection,
+  RevisionViewSettings,
+  TrackChangesSettings,
+} from './types/settings-types';
 
 // =============================================================================
 // TYPES — Compatibility Upgrade
@@ -515,10 +531,7 @@ export { DocumentIdManager } from './core/DocumentIdManager';
 // INTERNAL — Document Subsystem Classes (advanced usage)
 // =============================================================================
 
-export { DocumentMetadata, DocumentProperties as MetadataProperties } from './core/DocumentMetadata';
 export { DocumentContent, BodyElement } from './core/DocumentContent';
-export { DocumentFormatting } from './core/DocumentFormatting';
-export { DocumentTracking } from './core/DocumentTracking';
 
 // =============================================================================
 // INTERNAL — Constants

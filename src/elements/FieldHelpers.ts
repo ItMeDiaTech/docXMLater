@@ -3,6 +3,7 @@
  */
 
 import { ComplexField } from './Field';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Parsed components of a HYPERLINK field instruction
@@ -74,8 +75,8 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
     // Decode URL-encoded characters
     try {
       url = decodeURIComponent(url);
-    } catch {
-      // If decoding fails, use the original URL
+    } catch (e) {
+      defaultLogger.debug(`[FieldHelpers] Failed to decode URL: ${url}`);
     }
   }
 
@@ -87,8 +88,8 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
     // Decode anchor as well
     try {
       anchor = decodeURIComponent(anchor);
-    } catch {
-      // If decoding fails, use the original anchor
+    } catch (e) {
+      defaultLogger.debug(`[FieldHelpers] Failed to decode anchor: ${anchor}`);
     }
   }
 

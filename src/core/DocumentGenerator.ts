@@ -23,7 +23,9 @@ import { formatDateForXml } from "../utils/dateFormatting";
 import { getGlobalLogger, createScopedLogger, ILogger } from "../utils/logger";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { DocumentProperties } from "./Document";
+import { BodyElement } from "./DocumentContent";
 import { RelationshipManager } from "./RelationshipManager";
+import { TrackChangesSettings } from "../types/settings-types";
 
 // Create scoped logger for DocumentGenerator operations
 function getLogger(): ILogger {
@@ -41,19 +43,6 @@ export interface IZipHandlerReader {
   /** Check if a file exists in the archive */
   hasFile?(path: string): boolean;
 }
-
-/**
- * Body element types
- */
-type BodyElement =
-  | Paragraph
-  | Table
-  | TableOfContentsElement
-  | StructuredDocumentTag
-  | AlternateContent
-  | MathParagraph
-  | CustomXmlBlock
-  | PreservedElement;
 
 /**
  * Normalizes toXML() output to always return an array.
@@ -756,28 +745,7 @@ ${properties}
    * Required for DOCX compliance - defines document settings
    * @param trackChangesSettings - Optional track changes settings
    */
-  generateSettings(trackChangesSettings?: {
-    trackChangesEnabled?: boolean;
-    trackFormatting?: boolean;
-    revisionView?: {
-      showInsertionsAndDeletions: boolean;
-      showFormatting: boolean;
-      showInkAnnotations: boolean;
-    };
-    rsidRoot?: string;
-    rsids?: string[];
-    documentProtection?: {
-      edit: 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
-      enforcement: boolean;
-      cryptProviderType?: string;
-      cryptAlgorithmClass?: string;
-      cryptAlgorithmType?: string;
-      cryptAlgorithmSid?: number;
-      cryptSpinCount?: number;
-      hash?: string;
-      salt?: string;
-    };
-  }): string {
+  generateSettings(trackChangesSettings?: TrackChangesSettings): string {
     let xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">

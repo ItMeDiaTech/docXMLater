@@ -11,6 +11,7 @@
  * - [MS-DOC] 2.9.259 StdfPost2000
  */
 
+import { defaultLogger } from '../../utils/logger';
 import { StyleDefinition, StyleType, CharacterProperties, ParagraphProperties } from '../types/DocTypes';
 import { SPRMParser } from '../properties/SPRM';
 
@@ -206,8 +207,8 @@ export class StyleSheetParser {
             stylesByName.set(std.name, i);
           }
         }
-      } catch {
-        // Skip malformed style definitions
+      } catch (e) {
+        defaultLogger.debug(`[StyleSheet] Skipping malformed style definition at index ${i}: ${e}`);
       }
 
       this.offset += cbStd;
@@ -314,8 +315,8 @@ export class StyleSheetParser {
     if (nameOffset < startOffset + cbStd) {
       try {
         styleName = this.parseStyleName(nameOffset, startOffset + cbStd) || styleName;
-      } catch {
-        // Use built-in name or empty
+      } catch (e) {
+        defaultLogger.debug(`[StyleSheet] Failed to parse style name at index ${index}: ${e}`);
       }
     }
 

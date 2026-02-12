@@ -890,7 +890,8 @@ export class ChangelogGenerator {
         const json = JSON.stringify(value);
         // Truncate if too long
         return json.length > 100 ? json.substring(0, 97) + '...' : json;
-      } catch {
+      } catch (e) {
+        getLogger().debug('Failed to stringify value', { error: String(e) });
         return '[complex value]';
       }
     }

@@ -236,6 +236,9 @@ export class ImageManager {
       bmp: 'image/bmp',
       tiff: 'image/tiff',
       tif: 'image/tiff',
+      svg: 'image/svg+xml',
+      emf: 'image/x-emf',
+      wmf: 'image/x-wmf',
     };
 
     return mimeTypes[extension.toLowerCase()] || 'image/png';
@@ -318,8 +321,8 @@ export class ImageManager {
       try {
         const data = entry.image.getImageData();
         totalSize += data.length;
-      } catch {
-        // Image not loaded - skip (don't count unloaded images)
+      } catch (e) {
+        defaultLogger.debug(`[ImageManager] Image not loaded, skipping size count: ${entry.filename}`);
       }
     }
     return totalSize;
@@ -336,8 +339,8 @@ export class ImageManager {
       try {
         const data = await entry.image.getImageDataAsync();
         totalSize += data.length;
-      } catch {
-        // Image loading failed - skip
+      } catch (e) {
+        defaultLogger.debug(`[ImageManager] Image loading failed, skipping: ${entry.filename}`);
       }
     }
     return totalSize;

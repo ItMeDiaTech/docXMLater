@@ -15,7 +15,7 @@
  * cleanup.all(); // Run all cleanups
  */
 
-import { Document } from "../core/Document";
+import type { Document } from "../core/Document";
 import { Field, ComplexField } from "../elements/Field";
 import { Hyperlink } from "../elements/Hyperlink";
 import { Paragraph } from "../elements/Paragraph";

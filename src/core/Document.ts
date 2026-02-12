@@ -47,6 +47,7 @@ import { Style, StyleProperties } from "../formatting/Style";
 import { StylesManager } from "../formatting/StylesManager";
 import { FormatOptions, StyleApplyOptions } from "../types/formatting";
 import { CompatibilityMode, CompatibilityInfo, CompatSetting } from "../types/compatibility-types";
+import { DocumentProtection, RevisionViewSettings } from "../types/settings-types";
 import { CompatibilityUpgrader, UpgradeReport } from "../utils/CompatibilityUpgrader";
 import { MODERN_COMPAT_SETTINGS } from "../constants/legacyCompatFlags";
 // ListNormalizationOptions and ListNormalizationReport removed - normalizeTableLists moved to consumer
@@ -71,6 +72,7 @@ import { acceptAllRevisions, cleanupRevisionMetadata } from "../utils/acceptRevi
 // In-memory revision acceptance - used AFTER parsing, allows subsequent modifications
 import { acceptRevisionsInMemory, AcceptRevisionsResult } from "../utils/InMemoryRevisionAcceptor";
 import { stripTrackedChanges } from "../utils/stripTrackedChanges";
+import { diffText, diffHasUnchangedParts } from "../utils/textDiff";
 import { XMLBuilder } from "../xml/XMLBuilder";
 import { XMLParser } from "../xml/XMLParser";
 import { DocumentTrackingContext } from "../tracking/DocumentTrackingContext";
@@ -82,6 +84,7 @@ import { DocumentIdManager } from "./DocumentIdManager";
 import { DocumentParser } from "./DocumentParser";
 import { DocumentValidator } from "./DocumentValidator";
 import { RelationshipManager } from "./RelationshipManager";
+import { BodyElement } from "./DocumentContent";
 
 /**
  * Document properties (core and extended)
@@ -229,19 +232,6 @@ export interface DocumentLoadOptions extends DocumentOptions {
 }
 
 /**
- * Body element - can be a Paragraph, Table, or TableOfContentsElement
- */
-type BodyElement =
-  | Paragraph
-  | Table
-  | TableOfContentsElement
-  | StructuredDocumentTag
-  | AlternateContent
-  | MathParagraph
-  | CustomXmlBlock
-  | PreservedElement;
-
-/**
  * Represents a Word document
  */
 export class Document {
@@ -322,11 +312,7 @@ export class Document {
   // Track changes settings
   private trackChangesEnabled: boolean = false;
   private trackFormatting: boolean = true;
-  private revisionViewSettings: {
-    showInsertionsAndDeletions: boolean;
-    showFormatting: boolean;
-    showInkAnnotations: boolean;
-  } = {
+  private revisionViewSettings: RevisionViewSettings = {
     showInsertionsAndDeletions: true,
     showFormatting: true,
     showInkAnnotations: true,
@@ -368,17 +354,7 @@ export class Document {
 
   private rsidRoot?: string;
   private rsids: Set<string> = new Set();
-  private documentProtection?: {
-    edit: "readOnly" | "comments" | "trackedChanges" | "forms";
-    enforcement: boolean;
-    cryptProviderType?: string;
-    cryptAlgorithmClass?: string;
-    cryptAlgorithmType?: string;
-    cryptAlgorithmSid?: number;
-    cryptSpinCount?: number;
-    hash?: string;
-    salt?: string;
-  };
+  private documentProtection?: DocumentProtection;
 
   /**
    * Snapshot of save-related state for rollback on failure
@@ -516,74 +492,7 @@ export class Document {
     const zipHandler = new ZipHandler();
     await zipHandler.load(filePath);
 
-    // Determine revision handling strategy
-    // If acceptRevisions is true, we need to preserve revisions during parsing
-    // so they can be accepted using in-memory transformation after parsing
-    const useInMemoryAccept = options?.acceptRevisions === true;
-    const revisionHandling = useInMemoryAccept
-      ? 'preserve'  // Force preserve so revisions are parsed into model
-      : (options?.revisionHandling ?? 'accept'); // Default to accept
-
-    // Handle tracked changes BEFORE parsing (unless using in-memory accept)
-    if (revisionHandling === 'accept') {
-      // Accept all tracked changes to prevent corruption (raw XML approach)
-      await acceptAllRevisions(zipHandler);
-    } else if (revisionHandling === 'strip') {
-      // Strip all tracked changes completely
-      await stripTrackedChanges(zipHandler);
-    } else if (revisionHandling === 'preserve') {
-      // Check if document has tracked changes and warn (unless intentionally accepting later)
-      if (!useInMemoryAccept) {
-        const documentXml = zipHandler.getFileAsString('word/document.xml');
-        if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
-            documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
-          logger.warn('Document contains tracked changes in preserve mode');
-        }
-      }
-    }
-
-    // Create document without default relationships (will parse from file)
-    const doc = new Document(zipHandler, options, false);
-
-    // Parse and preserve original [Content_Types].xml entries for round-trip fidelity
-    const contentTypesXml = zipHandler.getFileAsString('[Content_Types].xml');
-    if (contentTypesXml) {
-      doc._originalContentTypes = doc.parseContentTypes(contentTypesXml);
-    }
-
-    // Parse and preserve original styles.xml and numbering.xml for formatting fidelity
-    const stylesXml = zipHandler.getFileAsString(DOCX_PATHS.STYLES);
-    if (stylesXml) {
-      doc._originalStylesXml = stylesXml;
-    }
-
-    const numberingXml = zipHandler.getFileAsString(DOCX_PATHS.NUMBERING);
-    if (numberingXml) {
-      doc._originalNumberingXml = numberingXml;
-    }
-
-    // Preserve original settings.xml and parse managed settings into in-memory state
-    // This ensures round-trip fidelity and accurate merge logic on save
-    const settingsXml = zipHandler.getFileAsString(DOCX_PATHS.SETTINGS);
-    if (settingsXml) {
-      doc._originalSettingsXml = settingsXml;
-      doc.parseSettingsFromXml(settingsXml);
-    }
-
-    await doc.parseDocument();
-
-    // If acceptRevisions option was set, accept revisions using in-memory transformation
-    // This happens AFTER parsing so revisions were available for inspection (e.g., ChangelogGenerator)
-    // and allows subsequent document modifications to be saved correctly
-    if (useInMemoryAccept) {
-      logger.info('Accepting revisions using in-memory transformation');
-      await doc.acceptAllRevisions();
-      logger.info('Revisions accepted', { paragraphs: doc.getParagraphCount() });
-    }
-
-    logger.info('Document loaded', { paragraphs: doc.getParagraphCount() });
-
-    return doc;
+    return Document.initializeFromZip(zipHandler, options);
   }
 
   /**
@@ -624,6 +533,19 @@ export class Document {
     const zipHandler = new ZipHandler();
     await zipHandler.loadFromBuffer(buffer);
 
+    return Document.initializeFromZip(zipHandler, options);
+  }
+
+  /**
+   * Common initialization logic for load() and loadFromBuffer().
+   * Handles revision strategy, preserves original XML, parses content, and optionally accepts revisions.
+   */
+  private static async initializeFromZip(
+    zipHandler: ZipHandler,
+    options?: DocumentLoadOptions
+  ): Promise<Document> {
+    const logger = getLogger();
+
     // Determine revision handling strategy
     // If acceptRevisions is true, we need to preserve revisions during parsing
     // so they can be accepted using in-memory transformation after parsing
@@ -680,6 +602,15 @@ export class Document {
 
     await doc.parseDocument();
 
+    // Surface parse warnings so users know about partial parsing issues
+    const parseWarnings = doc.getParseWarnings();
+    if (parseWarnings.length > 0) {
+      logger.warn('Document loaded with parse warnings', {
+        warningCount: parseWarnings.length,
+        elements: parseWarnings.map(w => w.element).join(', '),
+      });
+    }
+
     // If acceptRevisions option was set, accept revisions using in-memory transformation
     // This happens AFTER parsing so revisions were available for inspection (e.g., ChangelogGenerator)
     // and allows subsequent document modifications to be saved correctly
@@ -689,7 +620,7 @@ export class Document {
       logger.info('Revisions accepted', { paragraphs: doc.getParagraphCount() });
     }
 
-    logger.info('Document loaded from buffer', { paragraphs: doc.getParagraphCount() });
+    logger.info('Document loaded', { paragraphs: doc.getParagraphCount() });
 
     return doc;
   }
@@ -1364,6 +1295,39 @@ export class Document {
   }
 
   /**
+   * Walks all elements in the document recursively, calling the visitor for each.
+   *
+   * Traverses the full document tree including elements nested inside:
+   * - Tables (all cells in all rows)
+   * - Structured Document Tags (content controls)
+   * - Deeply nested SDTs and tables (unlimited depth)
+   *
+   * @param visitor - Callback invoked for each Paragraph, Table, or SDT encountered
+   */
+  walkElements(visitor: (element: Paragraph | Table | StructuredDocumentTag) => void): void {
+    const walk = (elements: BodyElement[]) => {
+      for (const element of elements) {
+        if (element instanceof Paragraph) {
+          visitor(element);
+        } else if (element instanceof Table) {
+          visitor(element);
+          for (const row of element.getRows()) {
+            for (const cell of row.getCells()) {
+              for (const para of cell.getParagraphs()) {
+                visitor(para);
+              }
+            }
+          }
+        } else if (element instanceof StructuredDocumentTag) {
+          visitor(element);
+          walk(element.getContent() as BodyElement[]);
+        }
+      }
+    };
+    walk(this.bodyElements);
+  }
+
+  /**
    * Gets all paragraphs in the document recursively
    *
    * Performs a deep search and returns ALL paragraphs in the document,
@@ -1392,36 +1356,11 @@ export class Document {
    */
   getAllParagraphs(): Paragraph[] {
     const result: Paragraph[] = [];
-
-    for (const element of this.bodyElements) {
+    this.walkElements((element) => {
       if (element instanceof Paragraph) {
         result.push(element);
-      } else if (element instanceof Table) {
-        // Recurse into table cells
-        for (const row of element.getRows()) {
-          for (const cell of row.getCells()) {
-            result.push(...cell.getParagraphs());
-          }
-        }
-      } else if (element instanceof StructuredDocumentTag) {
-        // Recurse into SDT content
-        for (const content of element.getContent()) {
-          if (content instanceof Paragraph) {
-            result.push(content);
-          } else if (content instanceof Table) {
-            // Recurse into tables inside SDTs
-            for (const row of content.getRows()) {
-              for (const cell of row.getCells()) {
-                result.push(...cell.getParagraphs());
-              }
-            }
-          }
-          // Handle nested SDTs recursively
-          // Note: This could be extended to handle deeply nested SDTs
-        }
       }
-    }
-
+    });
     return result;
   }
 
@@ -1530,21 +1469,11 @@ export class Document {
    */
   getAllTables(): Table[] {
     const result: Table[] = [];
-
-    for (const element of this.bodyElements) {
+    this.walkElements((element) => {
       if (element instanceof Table) {
         result.push(element);
-      } else if (element instanceof StructuredDocumentTag) {
-        // Recurse into SDT content
-        for (const content of element.getContent()) {
-          if (content instanceof Table) {
-            result.push(content);
-          }
-          // Note: Could extend to handle tables nested in SDTs inside SDTs
-        }
       }
-    }
-
+    });
     return result;
   }
 
@@ -1898,6 +1827,92 @@ export class Document {
    * await doc.save('document-with-toc.docx');
    * ```
    */
+  /**
+   * Common preparation logic shared by save() and toBuffer().
+   * Validates, loads images, flushes changes, accepts revisions, and updates all XML parts.
+   */
+  private async prepareSave(): Promise<void> {
+    // Validate before saving to prevent data loss
+    this.validator.validateBeforeSave(this.bodyElements);
+
+    // Check memory usage before starting
+    this.validator.checkMemoryThreshold();
+
+    // Load all image data before saving (now async)
+    await this.imageManager.loadAllImageData();
+
+    // Check memory again after loading images
+    this.validator.checkMemoryThreshold();
+
+    // Check document size and warn if too large
+    const sizeInfo = this.validator.estimateSize(
+      this.bodyElements,
+      this.imageManager
+    );
+    if (sizeInfo.warning) {
+      this.logger.warn(sizeInfo.warning, {
+        totalMB: sizeInfo.totalEstimatedMB,
+        paragraphs: sizeInfo.paragraphs,
+        tables: sizeInfo.tables,
+        images: sizeInfo.images,
+      });
+    }
+
+    // Clear preserve flags before final save (they're runtime-only)
+    this.clearAllPreserveFlags();
+
+    this.processHyperlinks();
+
+    // Flush pending tracked changes to create Revision objects before XML generation
+    if (this.trackChangesEnabled && this.trackingContext) {
+      this.flushPendingChanges();
+    }
+
+    // Consolidate adjacent revisions to match Word's behavior
+    // This merges adjacent same-author revisions within a 1-second window,
+    // preventing the "random insertions and deletions" problem in Word
+    if (this.trackChangesEnabled) {
+      this.consolidateAllRevisions();
+    }
+
+    // Accept all revisions if auto-accept is enabled
+    // This MUST happen after flushPendingChanges() to catch all revisions
+    // but BEFORE updateDocumentXml() so accepted changes are serialized correctly
+    if (this.acceptRevisionsBeforeSave) {
+      await this.acceptAllRevisions();
+      this.acceptRevisionsBeforeSave = false; // Reset flag after acceptance
+    }
+
+    // Validate numbering references before generating XML to prevent corruption
+    // from orphaned numId references pointing to removed definitions
+    this.validateNumberingReferences();
+
+    // Only regenerate document.xml if we haven't manually stripped tracked changes
+    // Stripping sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
+    if (this.skipDocumentXmlRegeneration) {
+      this.logger.warn(
+        'skipDocumentXmlRegeneration is set: in-memory content modifications will NOT be saved. ' +
+        'Use acceptAllRevisions() instead of acceptAllRevisionsRawXml() if you need to modify the document after accepting revisions.'
+      );
+    } else {
+      this.updateDocumentXml();
+    }
+
+    this.updateStylesXml();
+    this.updateNumberingXml();
+    this.updateSettingsXml();
+    this.updateCoreProps();
+    this.updateAppProps();
+    this.saveImages();
+    this.saveHeaders();
+    this.saveFooters();
+    this.saveComments();
+    this.updatePeopleXml();
+    this.saveCustomProperties();
+    this.updateRelationships();
+    this.updateContentTypesWithImagesHeadersFootersAndComments();
+  }
+
   async save(filePath: string): Promise<void> {
     const logger = getLogger();
     logger.info('Saving document', { path: filePath, paragraphs: this.getParagraphCount() });
@@ -1913,80 +1928,7 @@ export class Document {
     this.createSaveStateSnapshot();
 
     try {
-      // Validate before saving to prevent data loss
-      this.validator.validateBeforeSave(this.bodyElements);
-
-      // Check memory usage before starting
-      this.validator.checkMemoryThreshold();
-
-      // Load all image data before saving (now async)
-      await this.imageManager.loadAllImageData();
-
-      // Check memory again after loading images
-      this.validator.checkMemoryThreshold();
-
-      // Check document size and warn if too large
-      const sizeInfo = this.validator.estimateSize(
-        this.bodyElements,
-        this.imageManager
-      );
-      if (sizeInfo.warning) {
-        this.logger.warn(sizeInfo.warning, {
-          totalMB: sizeInfo.totalEstimatedMB,
-          paragraphs: sizeInfo.paragraphs,
-          tables: sizeInfo.tables,
-          images: sizeInfo.images,
-        });
-      }
-
-      // Clear preserve flags before final save (they're runtime-only)
-      this.clearAllPreserveFlags();
-
-      this.processHyperlinks();
-
-      // Flush pending tracked changes to create Revision objects before XML generation
-      if (this.trackChangesEnabled && this.trackingContext) {
-        this.flushPendingChanges();
-      }
-
-      // Consolidate adjacent revisions to match Word's behavior
-      // This merges adjacent same-author revisions within a 1-second window,
-      // preventing the "random insertions and deletions" problem in Word
-      if (this.trackChangesEnabled) {
-        this.consolidateAllRevisions();
-      }
-
-      // Accept all revisions if auto-accept is enabled
-      // This MUST happen after flushPendingChanges() to catch all revisions
-      // but BEFORE updateDocumentXml() so accepted changes are serialized correctly
-      if (this.acceptRevisionsBeforeSave) {
-        await this.acceptAllRevisions();
-        this.acceptRevisionsBeforeSave = false; // Reset flag after acceptance
-      }
-
-      // Validate numbering references before generating XML to prevent corruption
-      // from orphaned numId references pointing to removed definitions
-      this.validateNumberingReferences();
-
-      // Only regenerate document.xml if we haven't manually stripped tracked changes
-      // Stripping sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
-      if (!this.skipDocumentXmlRegeneration) {
-        this.updateDocumentXml();
-      }
-
-      this.updateStylesXml();
-      this.updateNumberingXml();
-      this.updateSettingsXml();
-      this.updateCoreProps();
-      this.updateAppProps(); // Update app.xml with current property values
-      this.saveImages();
-      this.saveHeaders();
-      this.saveFooters();
-      this.saveComments();
-      this.updatePeopleXml();
-      this.saveCustomProperties(); // Add custom.xml if custom properties exist
-      this.updateRelationships();
-      this.updateContentTypesWithImagesHeadersFootersAndComments();
+      await this.prepareSave();
 
       // Save to temporary file first
       await this.zipHandler.save(tempPath);
@@ -2012,8 +1954,8 @@ export class Document {
       try {
         const { promises: fs } = await import("fs");
         await fs.unlink(tempPath);
-      } catch {
-        // Ignore cleanup errors
+      } catch (cleanupErr) {
+        logger.debug('Failed to clean up temp file', { tempPath, error: String(cleanupErr) });
       }
       throw error; // Re-throw original error
     } finally {
@@ -2064,78 +2006,7 @@ export class Document {
     this.createSaveStateSnapshot();
 
     try {
-      // Validate before saving to prevent data loss
-      this.validator.validateBeforeSave(this.bodyElements);
-
-      // Check memory usage before starting
-      this.validator.checkMemoryThreshold();
-
-      // Load all image data before saving (now async)
-      await this.imageManager.loadAllImageData();
-
-      // Check memory again after loading images
-      this.validator.checkMemoryThreshold();
-
-      // Check document size and warn if too large
-      const sizeInfo = this.validator.estimateSize(
-        this.bodyElements,
-        this.imageManager
-      );
-      if (sizeInfo.warning) {
-        this.logger.warn(sizeInfo.warning, {
-          totalMB: sizeInfo.totalEstimatedMB,
-          paragraphs: sizeInfo.paragraphs,
-          tables: sizeInfo.tables,
-          images: sizeInfo.images,
-        });
-      }
-
-      // Clear preserve flags before final save (they're runtime-only)
-      this.clearAllPreserveFlags();
-
-      this.processHyperlinks();
-
-      // Flush pending tracked changes to create Revision objects before XML generation
-      if (this.trackChangesEnabled && this.trackingContext) {
-        this.flushPendingChanges();
-      }
-
-      // Consolidate adjacent revisions to match Word's behavior
-      // This merges adjacent same-author revisions within a 1-second window,
-      // preventing the "random insertions and deletions" problem in Word
-      if (this.trackChangesEnabled) {
-        this.consolidateAllRevisions();
-      }
-
-      // Accept all revisions if auto-accept is enabled
-      // This MUST happen after flushPendingChanges() to catch all revisions
-      // but BEFORE updateDocumentXml() so accepted changes are serialized correctly
-      if (this.acceptRevisionsBeforeSave) {
-        await this.acceptAllRevisions();
-        this.acceptRevisionsBeforeSave = false; // Reset flag after acceptance
-      }
-
-      // Validate numbering references before generating XML to prevent corruption
-      this.validateNumberingReferences();
-
-      // Only regenerate document.xml if we haven't manually stripped tracked changes
-      if (!this.skipDocumentXmlRegeneration) {
-        this.updateDocumentXml();
-      }
-
-      this.updateStylesXml();
-      this.updateNumberingXml();
-      this.updateSettingsXml();
-      this.updateCoreProps();
-      this.updateAppProps(); // Update app.xml with current property values
-      this.saveImages();
-      this.saveHeaders();
-      this.saveFooters();
-      this.saveComments();
-      this.updatePeopleXml();
-      this.saveCustomProperties(); // Add custom.xml if custom properties exist
-      this.updateRelationships();
-      this.updateContentTypesWithImagesHeadersFootersAndComments();
+      await this.prepareSave();
 
       // Auto-populate TOCs if enabled
       if (this.autoPopulateTOCs) {
@@ -2421,16 +2292,17 @@ export class Document {
       return xml;
     }
 
-    // Build protection element
+    // Build protection element (escape all attribute values to prevent XML injection)
     const prot = this.documentProtection;
-    let protXml = `\n  <w:documentProtection w:edit="${prot.edit}" w:enforcement="${prot.enforcement ? '1' : '0'}"`;
-    if (prot.cryptProviderType) protXml += ` w:cryptProviderType="${prot.cryptProviderType}"`;
-    if (prot.cryptAlgorithmClass) protXml += ` w:cryptAlgorithmClass="${prot.cryptAlgorithmClass}"`;
-    if (prot.cryptAlgorithmType) protXml += ` w:cryptAlgorithmType="${prot.cryptAlgorithmType}"`;
-    if (prot.cryptAlgorithmSid) protXml += ` w:cryptAlgorithmSid="${prot.cryptAlgorithmSid}"`;
-    if (prot.cryptSpinCount) protXml += ` w:cryptSpinCount="${prot.cryptSpinCount}"`;
-    if (prot.hash) protXml += ` w:hash="${prot.hash}"`;
-    if (prot.salt) protXml += ` w:salt="${prot.salt}"`;
+    const esc = XMLBuilder.escapeXmlAttribute;
+    let protXml = `\n  <w:documentProtection w:edit="${esc(prot.edit)}" w:enforcement="${prot.enforcement ? '1' : '0'}"`;
+    if (prot.cryptProviderType) protXml += ` w:cryptProviderType="${esc(prot.cryptProviderType)}"`;
+    if (prot.cryptAlgorithmClass) protXml += ` w:cryptAlgorithmClass="${esc(prot.cryptAlgorithmClass)}"`;
+    if (prot.cryptAlgorithmType) protXml += ` w:cryptAlgorithmType="${esc(prot.cryptAlgorithmType)}"`;
+    if (prot.cryptAlgorithmSid) protXml += ` w:cryptAlgorithmSid="${esc(String(prot.cryptAlgorithmSid))}"`;
+    if (prot.cryptSpinCount) protXml += ` w:cryptSpinCount="${esc(String(prot.cryptSpinCount))}"`;
+    if (prot.hash) protXml += ` w:hash="${esc(prot.hash)}"`;
+    if (prot.salt) protXml += ` w:salt="${esc(prot.salt)}"`;
     protXml += '/>';
 
     // Insert before w:autoFormatOverride (#36) if exists,
@@ -2462,13 +2334,14 @@ export class Document {
       return xml;
     }
 
-    // Build RSIDs block
+    // Build RSIDs block (escape all attribute values)
+    const esc = XMLBuilder.escapeXmlAttribute;
     let rsidsXml = '\n  <w:rsids>';
     if (this.rsidRoot) {
-      rsidsXml += `\n    <w:rsidRoot w:val="${this.rsidRoot}"/>`;
+      rsidsXml += `\n    <w:rsidRoot w:val="${esc(this.rsidRoot)}"/>`;
     }
     for (const rsid of this.rsids) {
-      rsidsXml += `\n    <w:rsid w:val="${rsid}"/>`;
+      rsidsXml += `\n    <w:rsid w:val="${esc(rsid)}"/>`;
     }
     rsidsXml += '\n  </w:rsids>';
 
@@ -5544,6 +5417,11 @@ export class Document {
    * @param options.run - Run (character) formatting to apply
    * @param options.paragraph - Paragraph formatting to apply
    * @param options.levels - Which TOC levels to format (default: 1-9)
+   * @param options.indentPerLevel - Relative indentation in twips per level position.
+   *   When set, the first level in the sorted `levels` array gets 0 indent, the second
+   *   gets `indentPerLevel`, the third gets `2 * indentPerLevel`, etc. This is useful
+   *   when the TOC only includes a subset of heading levels (e.g., 2-4) so the first
+   *   visible level is flush-left. Overrides `paragraph.indentation.left` if both are set.
    * @returns Object indicating which levels were formatted
    *
    * @example
@@ -5568,33 +5446,57 @@ export class Document {
    *   run: { font: 'Arial', size: 11 },
    *   levels: [1, 2, 3]
    * });
+   *
+   * // Relative indentation: Heading 2-4 -> TOC2=0, TOC3=360, TOC4=720
+   * doc.formatTOCStyles({
+   *   run: { font: 'Verdana', size: 12 },
+   *   levels: [2, 3, 4],
+   *   indentPerLevel: 360,
+   * });
    * ```
    */
   formatTOCStyles(options: {
     run?: StyleRunFormatting;
     paragraph?: StyleParagraphFormatting;
     levels?: number[];
+    indentPerLevel?: number;
   }): { formatted: number[] } {
-    const levels = options.levels ?? [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    // Filter valid levels, deduplicate, and sort
+    const validLevels = (options.levels ?? [1, 2, 3, 4, 5, 6, 7, 8, 9])
+      .filter((l) => l >= 1 && l <= 9);
+    const levels = [...new Set(validLevels)].sort((a, b) => a - b);
     const formatted: number[] = [];
 
-    for (const level of levels) {
-      if (level < 1 || level > 9) continue;
-
+    for (let i = 0; i < levels.length; i++) {
+      const level = levels[i]!;
       const styleId = `TOC${level}`;
+
+      // When indentPerLevel is defined, compute relative indent based on position
+      let paragraphOverride = options.paragraph;
+      if (options.indentPerLevel !== undefined) {
+        const relativeIndent = i * options.indentPerLevel;
+        paragraphOverride = {
+          ...options.paragraph,
+          indentation: {
+            ...options.paragraph?.indentation,
+            left: relativeIndent,
+          },
+        };
+      }
+
       let tocStyle = this.stylesManager.getStyle(styleId);
 
       if (!tocStyle) {
         // Create TOC style if it doesn't exist
         tocStyle = Style.createTOCStyle(level, {
           run: options.run,
-          paragraph: options.paragraph,
+          paragraph: paragraphOverride,
         });
         this.addStyle(tocStyle);
       } else {
         // Update existing style
         if (options.run) tocStyle.setRunFormatting(options.run);
-        if (options.paragraph) tocStyle.setParagraphFormatting(options.paragraph);
+        if (paragraphOverride) tocStyle.setParagraphFormatting(paragraphOverride);
         this.addStyle(tocStyle); // Mark as modified
       }
 
@@ -11701,24 +11603,67 @@ export class Document {
       if (matches && matches.length > 0) {
         const newText = originalText.replace(regex, replacement);
 
-        if (trackChanges) {
-          // Create deletion revision for original text
-          const deletionRun = new Run(originalText, run.getFormatting());
-          const deletion = Revision.createDeletion(author, deletionRun);
-          revisions.push(deletion);
+        if (trackChanges && !this.trackChangesEnabled) {
+          // Option-level tracking: global tracking is OFF, so we manually create
+          // and embed revisions into the paragraph content
+          const parentParagraph = run._getParentParagraph();
 
-          // Create insertion revision for new text
-          const insertionRun = new Run(newText, run.getFormatting());
-          const insertion = Revision.createInsertion(author, insertionRun);
-          revisions.push(insertion);
+          if (parentParagraph) {
+            const segments = diffText(originalText, newText);
+            const useGranular = diffHasUnchangedParts(segments);
+            const now = new Date();
+            const formatting = run.getFormatting();
+            const newContent: ParagraphContent[] = [];
 
-          // Register revisions with the document
-          this.revisionManager.register(deletion);
-          this.revisionManager.register(insertion);
+            if (useGranular) {
+              for (const seg of segments) {
+                if (seg.type === "equal") {
+                  newContent.push(new Run(seg.text, formatting));
+                } else if (seg.type === "delete") {
+                  const delRev = Revision.createDeletion(author, new Run(seg.text, formatting), now);
+                  this.revisionManager.register(delRev);
+                  revisions.push(delRev);
+                  newContent.push(delRev);
+                } else if (seg.type === "insert") {
+                  const insRev = Revision.createInsertion(author, new Run(seg.text, formatting), now);
+                  this.revisionManager.register(insRev);
+                  revisions.push(insRev);
+                  newContent.push(insRev);
+                }
+              }
+            } else {
+              // Whole-run delete + insert
+              const deletion = Revision.createDeletion(author, new Run(originalText, formatting), now);
+              this.revisionManager.register(deletion);
+              revisions.push(deletion);
+              newContent.push(deletion);
+
+              const insertion = Revision.createInsertion(author, new Run(newText, formatting), now);
+              this.revisionManager.register(insertion);
+              revisions.push(insertion);
+              newContent.push(insertion);
+            }
+
+            parentParagraph.replaceContent(run, newContent);
+          } else {
+            // No parent paragraph — just update text in-place as fallback
+            run.setText(newText);
+          }
+        } else {
+          // Global tracking path or no tracking: use setText()
+          const revCountBefore = this.revisionManager.getAllRevisions().length;
+
+          run.setText(newText);
+
+          // If global tracking is enabled and trackChanges was requested, collect the new revisions
+          if (trackChanges && this.trackChangesEnabled) {
+            const allRevs = this.revisionManager.getAllRevisions();
+            for (let i = revCountBefore; i < allRevs.length; i++) {
+              revisions.push(allRevs[i]!);
+            }
+          }
         }
 
-        // Update the run text
-        run.setText(newText);
         count += matches.length;
       }
     }
