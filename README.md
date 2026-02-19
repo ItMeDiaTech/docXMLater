@@ -11,6 +11,9 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - Buffer-based operations (load/save from memory)
 - Document properties (core, extended, custom)
 - Memory management with dispose pattern
+- Bookmark pair validation and auto-repair (`validateBookmarkPairs()`)
+- App.xml metadata preservation (HeadingPairs, TotalTime, etc.)
+- Document background color/theme support
 
 ### Text & Paragraph Formatting
 
@@ -20,6 +23,9 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - Paragraph alignment, indentation, spacing, borders, shading
 - Text search and replace with regex support
 - Custom styles (paragraph, character, table)
+- CJK/East Asian paragraph properties (kinsoku, wordWrap, overflowPunct, topLinePunct)
+- Underline color and theme color attributes
+- Theme font references (asciiTheme, hAnsiTheme, eastAsiaTheme, csTheme)
 
 ### Lists & Tables
 
@@ -29,36 +35,50 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - Tables with formatting, borders, shading
 - Cell spanning (merge cells horizontally and vertically)
 - Advanced table properties (margins, widths, alignment)
+- Table navigation helpers (`getFirstParagraph()`, `getLastParagraph()`)
+- Legacy horizontal merge (`hMerge`) support
+- Table layout parsing (`fixed`/`auto`)
 - Table style shading updates (modify styles.xml colors)
 - Cell content management (trailing blank removal with structure preservation)
 
 ### Rich Content
 
-- Images (PNG, JPEG, GIF, SVG) with positioning and text wrapping
+- Images (PNG, JPEG, GIF, SVG, EMF, WMF) with positioning, text wrapping, and full ECMA-376 DrawingML attribute coverage
 - Headers & footers (different first page, odd/even pages)
 - Hyperlinks (external URLs, internal bookmarks)
 - Hyperlink defragmentation utility (fixes fragmented links from Google Docs)
 - Bookmarks and cross-references
+- Body-level bookmark support (bookmarks between block elements)
 - Shapes and text boxes
 
 ### Advanced Features
 
 - Track changes (revisions for insertions, deletions, formatting)
+- Granular character-level tracked changes (text diff-based)
 - Comments and annotations
 - Compatibility mode detection and upgrade (Word 2003/2007/2010/2013+ modes)
-- Table of contents generation with customizable heading levels
+- Table of contents generation with customizable heading levels and relative indentation
 - Fields: merge fields, date/time, page numbers, TOC fields
-- Footnotes and endnotes
+- Footnotes and endnotes (full round-trip with save pipeline, parsing, and clear API)
 - Content controls (Structured Document Tags)
+- Form field data preservation (text input, checkbox, dropdown per ECMA-376 §17.16)
+- w14 run effects passthrough (Word 2010+ ligatures, numForm, textOutline, etc.)
+- Expanded document settings (evenAndOddHeaders, mirrorMargins, autoHyphenation, decimalSymbol)
+- People.xml auto-registration for tracked changes authors
+- Style default attribute preservation (`w:default="1"`)
+- Namespace order preservation in generated XML
 - Multiple sections with different page layouts
 - Page orientation, size, and margins
 - Preserved element round-trip (math equations, alternate content, custom XML)
+- Unified shading model with theme color support and inheritance resolution
 
 ### Developer Tools
 
 - Complete XML generation and parsing (ReDoS-safe, position-based parser)
 - 40+ unit conversion functions (twips, EMUs, points, pixels, inches, cm)
 - Validation utilities and corruption detection
+- Text diff utility for character-level comparisons
+- webSettings.xml auto-generation
 - Safe OOXML parsing helpers (zero-value handling, boolean parsing)
 - Full TypeScript support with comprehensive type definitions
 - Error handling utilities
@@ -329,6 +349,17 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `getCompatibilityInfo()` - Get full parsed compat settings
 - `upgradeToModernFormat()` - Upgrade to Word 2013+ mode (removes legacy flags)
 
+**Footnotes & Endnotes:**
+
+- `createFootnote(paragraph, text)` - Add footnote
+- `createEndnote(paragraph, text)` - Add endnote
+- `clearFootnotes()` / `clearEndnotes()` - Remove all notes
+- `getFootnoteManager()` / `getEndnoteManager()` - Access note managers
+
+**Shading:**
+
+- `getComputedCellShading(table, row, col)` - Resolve effective cell shading with inheritance
+
 **Saving:**
 
 - `save(filepath)` - Save to file
@@ -551,7 +582,7 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 9.6.2**
+**Current Version: 9.8.7**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
@@ -559,7 +590,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 The framework includes comprehensive test coverage:
 
-- **2260+ test cases** across 99 test suites
+- **2,683 test cases** across 121 test suites
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks

@@ -14,6 +14,8 @@ import { getActiveConditionalsInPriorityOrder } from "../utils/cnfStyleDecoder";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import {
   ShadingPattern as CommonShadingPattern,
+  ShadingConfig,
+  buildShadingAttributes,
   ExtendedBorderStyle,
   BorderDefinition,
 } from "./CommonTypes";
@@ -48,7 +50,9 @@ export type RunContentType =
   | "yearLong" // <w:yearLong/> - Long year field
   | "symbol" // <w:sym/> - Symbol character with font and char code
   | "positionTab" // <w:ptab/> - Absolute position tab
-  | "embeddedObject"; // <w:object> - Embedded OLE object (preserved as raw XML)
+  | "embeddedObject" // <w:object> - Embedded OLE object (preserved as raw XML)
+  | "footnoteReference" // <w:footnoteReference/> - Footnote reference marker
+  | "endnoteReference"; // <w:endnoteReference/> - Endnote reference marker
 
 /**
  * Break type for <w:br> elements
@@ -73,6 +77,8 @@ export interface RunContent {
   fieldCharDirty?: boolean;
   /** Whether the field char is locked */
   fieldCharLocked?: boolean;
+  /** Form field data (only for 'fieldChar' type with fieldCharType='begin') per ECMA-376 Part 1 §17.16.17 */
+  formFieldData?: FormFieldData;
   /** Raw XML content (for 'vml' type - preserves w:pict elements as-is) */
   rawXml?: string;
   /**
@@ -91,6 +97,10 @@ export interface RunContent {
   ptabRelativeTo?: string;
   /** Position tab leader character (only for 'positionTab' type, w:ptab w:leader) */
   ptabLeader?: string;
+  /** Footnote ID (only for 'footnoteReference' type, w:footnoteReference w:id) */
+  footnoteId?: number;
+  /** Endnote ID (only for 'endnoteReference' type, w:endnoteReference w:id) */
+  endnoteId?: number;
 }
 
 /**
@@ -121,15 +131,9 @@ export type ShadingPattern = CommonShadingPattern;
 
 /**
  * Character shading definition
+ * @see ShadingConfig in CommonTypes.ts for the canonical definition
  */
-export interface CharacterShading {
-  /** Background fill color in hex format (without #) */
-  fill?: string;
-  /** Foreground pattern color in hex format (without #) */
-  color?: string;
-  /** Shading pattern */
-  val?: ShadingPattern;
-}
+export type CharacterShading = ShadingConfig;
 
 /**
  * East Asian typography layout options
@@ -145,6 +149,69 @@ export interface EastAsianLayout {
   combine?: boolean;
   /** Bracket characters for combined text */
   combineBrackets?: "none" | "round" | "square" | "angle" | "curly";
+}
+
+/**
+ * Form field text input data per ECMA-376 Part 1 §17.16.33
+ */
+export interface FormFieldTextInput {
+  type: 'textInput';
+  /** Input type per ECMA-376 §17.16.34 (e.g., 'regular', 'number', 'date', 'currentDate', 'currentTime', 'calculated') */
+  inputType?: string;
+  /** Default text value */
+  defaultValue?: string;
+  /** Maximum length (0 = unlimited) */
+  maxLength?: number;
+  /** Text format (e.g., 'UPPERCASE', 'Lowercase', 'First capital') */
+  format?: string;
+}
+
+/**
+ * Form field checkbox data per ECMA-376 Part 1 §17.16.7
+ */
+export interface FormFieldCheckBox {
+  type: 'checkBox';
+  /** Default state */
+  defaultChecked?: boolean;
+  /** Current checked state */
+  checked?: boolean;
+  /** Size (auto or specific in half-points) */
+  size?: number | 'auto';
+}
+
+/**
+ * Form field dropdown list data per ECMA-376 Part 1 §17.16.12
+ */
+export interface FormFieldDropDownList {
+  type: 'dropDownList';
+  /** Selected item index (0-based) */
+  result?: number;
+  /** Default item index */
+  defaultResult?: number;
+  /** List entries */
+  listEntries?: string[];
+}
+
+/**
+ * Form field data per ECMA-376 Part 1 §17.16.17
+ */
+export interface FormFieldData {
+  /** Field name */
+  name?: string;
+  /** Whether the field is enabled */
+  enabled?: boolean;
+  /** Calculate on exit */
+  calcOnExit?: boolean;
+  /** Help text */
+  helpText?: string;
+  /** Status bar text */
+  statusText?: string;
+  /** Entry macro name */
+  entryMacro?: string;
+  /** Exit macro name */
+  exitMacro?: string;
+  /** Field-specific data */
+  fieldType?: FormFieldTextInput | FormFieldCheckBox | FormFieldDropDownList;
 }
 
 /**
@@ -206,6 +273,14 @@ export interface RunFormatting {
   language?: string;
   /** Underline text. Use "none" to explicitly override style underline. */
   underline?: boolean | "single" | "double" | "thick" | "dotted" | "dash" | "none";
+  /** Underline color in hex format (without #) per ECMA-376 Part 1 §17.3.2.40 */
+  underlineColor?: string;
+  /** Underline theme color reference per ECMA-376 Part 1 §17.3.2.40 */
+  underlineThemeColor?: ThemeColorValue;
+  /** Underline theme tint (0-255) per ECMA-376 Part 1 §17.3.2.40 */
+  underlineThemeTint?: number;
+  /** Underline theme shade (0-255) per ECMA-376 Part 1 §17.3.2.40 */
+  underlineThemeShade?: number;
   /** Strikethrough text */
   strike?: boolean;
   /** Double strikethrough */
@@ -304,6 +379,21 @@ export interface RunFormatting {
   fontCs?: string;
   /** Font hint (w:rFonts w:hint) - hint for font selection: 'default' | 'eastAsia' | 'cs' */
   fontHint?: string;
+  /** ASCII theme font reference (w:rFonts w:asciiTheme) per ECMA-376 Part 1 §17.3.2.26 */
+  fontAsciiTheme?: string;
+  /** High ANSI theme font reference (w:rFonts w:hAnsiTheme) per ECMA-376 Part 1 §17.3.2.26 */
+  fontHAnsiTheme?: string;
+  /** East Asian theme font reference (w:rFonts w:eastAsiaTheme) per ECMA-376 Part 1 §17.3.2.26 */
+  fontEastAsiaTheme?: string;
+  /** Complex script theme font reference (w:rFonts w:cstheme) per ECMA-376 Part 1 §17.3.2.26 */
+  fontCsTheme?: string;
+  /**
+   * Raw w14: namespace elements from rPr (Word 2010+ text effects)
+   * Stored as raw XML strings for passthrough round-trip fidelity.
+   * Includes: w14:textOutline, w14:shadow, w14:reflection, w14:glow,
+   * w14:ligatures, w14:numForm, w14:numSpacing, w14:cntxtAlts, w14:stylisticSets
+   */
+  rawW14Properties?: string[];
   /**
    * Automatically clean XML-like patterns from text content.
    * When true (default), removes XML tags like <w:t> from text to prevent display issues.
@@ -1269,6 +1359,30 @@ export class Run {
   }
 
   /**
+   * Sets underline color per ECMA-376 Part 1 §17.3.2.40
+   * @param color - Color in hex format (without #)
+   * @returns This run for method chaining
+   */
+  setUnderlineColor(color: string): this {
+    this.formatting.underlineColor = normalizeColor(color);
+    return this;
+  }
+
+  /**
+   * Sets underline theme color per ECMA-376 Part 1 §17.3.2.40
+   * @param themeColor - Theme color reference
+   * @param themeTint - Optional tint (0-255)
+   * @param themeShade - Optional shade (0-255)
+   * @returns This run for method chaining
+   */
+  setUnderlineThemeColor(themeColor: ThemeColorValue, themeTint?: number, themeShade?: number): this {
+    this.formatting.underlineThemeColor = themeColor;
+    if (themeTint !== undefined) this.formatting.underlineThemeTint = themeTint;
+    if (themeShade !== undefined) this.formatting.underlineThemeShade = themeShade;
+    return this;
+  }
+
+  /**
    * Sets strikethrough formatting
    *
    * Adds or removes a line through the text.
@@ -1806,6 +1920,64 @@ export class Run {
   }
 
   /**
+   * Sets the ASCII theme font reference (w:rFonts w:asciiTheme)
+   * @param theme - Theme font name (e.g., 'majorHAnsi', 'minorHAnsi')
+   * @returns This run for method chaining
+   */
+  setFontAsciiTheme(theme: string): this {
+    this.formatting.fontAsciiTheme = theme;
+    return this;
+  }
+
+  /**
+   * Sets the High ANSI theme font reference (w:rFonts w:hAnsiTheme)
+   * @param theme - Theme font name
+   * @returns This run for method chaining
+   */
+  setFontHAnsiTheme(theme: string): this {
+    this.formatting.fontHAnsiTheme = theme;
+    return this;
+  }
+
+  /**
+   * Sets the East Asian theme font reference (w:rFonts w:eastAsiaTheme)
+   * @param theme - Theme font name
+   * @returns This run for method chaining
+   */
+  setFontEastAsiaTheme(theme: string): this {
+    this.formatting.fontEastAsiaTheme = theme;
+    return this;
+  }
+
+  /**
+   * Sets the complex script theme font reference (w:rFonts w:cstheme)
+   * @param theme - Theme font name
+   * @returns This run for method chaining
+   */
+  setFontCsTheme(theme: string): this {
+    this.formatting.fontCsTheme = theme;
+    return this;
+  }
+
+  /**
+   * Adds a raw w14: property XML string for passthrough (Word 2010+ text effects).
+   *
+   * **Warning:** The input XML is embedded directly in the output without sanitization.
+   * Only pass trusted w14 namespace elements (e.g., w14:textOutline, w14:ligatures).
+   * Do not pass user-controlled or untrusted input to this method.
+   *
+   * @param rawXml - The raw XML string for a w14: element (e.g., '<w14:textOutline ...>...</w14:textOutline>')
+   * @returns This run for method chaining
+   */
+  addRawW14Property(rawXml: string): this {
+    if (!this.formatting.rawW14Properties) {
+      this.formatting.rawW14Properties = [];
+    }
+    this.formatting.rawW14Properties.push(rawXml);
+    return this;
+  }
+
+  /**
    * Sets text effect/animation
    * @param effect - Effect type (e.g., 'shimmer', 'sparkleText')
    * @returns This run for method chaining
@@ -1901,69 +2073,13 @@ export class Run {
       const rPrElement = rPr || { name: 'w:rPr', attributes: {}, children: [] };
 
       if (this.propertyChangeRevision) {
-        // Build w:rPrChange element
-        const rPrChangeChildren: XMLElement[] = [];
-
-        // Build previous properties as w:rPr child
-        const prevPropChildren: XMLElement[] = [];
-        const prevProps = this.propertyChangeRevision.previousProperties;
-
-        if (prevProps) {
-          // Generate XML for each previous property
-          if (prevProps.bold) {
-            prevPropChildren.push(XMLBuilder.wSelf("b", { "w:val": "1" }));
-          }
-          if (prevProps.italic) {
-            prevPropChildren.push(XMLBuilder.wSelf("i", { "w:val": "1" }));
-          }
-          if (prevProps.underline) {
-            const underlineValue = typeof prevProps.underline === 'string'
-              ? prevProps.underline : 'single';
-            prevPropChildren.push(XMLBuilder.wSelf("u", { "w:val": underlineValue }));
-          }
-          if (prevProps.strike) {
-            prevPropChildren.push(XMLBuilder.wSelf("strike", { "w:val": "1" }));
-          }
-          if (prevProps.font) {
-            prevPropChildren.push(XMLBuilder.wSelf("rFonts", {
-              "w:ascii": prevProps.font,
-              "w:hAnsi": prevProps.font,
-              "w:cs": prevProps.font,
-            }));
-          }
-          if (prevProps.size) {
-            const halfPoints = Math.round(pointsToHalfPoints(prevProps.size));
-            prevPropChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints.toString() }));
-            prevPropChildren.push(XMLBuilder.wSelf("szCs", { "w:val": halfPoints.toString() }));
-          }
-          if (prevProps.color) {
-            prevPropChildren.push(XMLBuilder.wSelf("color", { "w:val": prevProps.color }));
-          }
-          if (prevProps.highlight) {
-            prevPropChildren.push(XMLBuilder.wSelf("highlight", { "w:val": prevProps.highlight }));
-          }
-          if (prevProps.subscript) {
-            prevPropChildren.push(XMLBuilder.wSelf("vertAlign", { "w:val": "subscript" }));
-          }
-          if (prevProps.superscript) {
-            prevPropChildren.push(XMLBuilder.wSelf("vertAlign", { "w:val": "superscript" }));
-          }
-          if (prevProps.smallCaps) {
-            prevPropChildren.push(XMLBuilder.wSelf("smallCaps", { "w:val": "1" }));
-          }
-          if (prevProps.allCaps) {
-            prevPropChildren.push(XMLBuilder.wSelf("caps", { "w:val": "1" }));
-          }
-        }
-
-        // Only add w:rPr if there are previous properties
-        if (prevPropChildren.length > 0) {
-          rPrChangeChildren.push({
-            name: 'w:rPr',
-            attributes: {},
-            children: prevPropChildren,
-          });
-        }
+        // Reuse generateRunPropertiesXML for full ECMA-376 property coverage
+        // This ensures all 30+ run properties are serialized in correct schema order,
+        // rather than the subset previously handled by manual serialization.
+        const prevRPr = this.propertyChangeRevision.previousProperties
+          ? Run.generateRunPropertiesXML(this.propertyChangeRevision.previousProperties as RunFormatting)
+          : null;
+        const rPrChangeChildren: XMLElement[] = prevRPr ? [prevRPr] : [];
 
         // Create w:rPrChange element with attributes
         const rPrChange: XMLElement = {
@@ -2047,21 +2163,108 @@ export class Run {
           if (!contentElement.fieldCharType) {
             break;
           }
-          const attrs: Record<string, string> = {
+          const fldCharAttrs: Record<string, string> = {
             "w:fldCharType": contentElement.fieldCharType,
           };
           if (contentElement.fieldCharDirty !== undefined) {
-            attrs["w:dirty"] = contentElement.fieldCharDirty ? "1" : "0";
+            fldCharAttrs["w:dirty"] = contentElement.fieldCharDirty ? "1" : "0";
           }
           if (contentElement.fieldCharLocked !== undefined) {
-            attrs["w:fldLock"] = contentElement.fieldCharLocked ? "1" : "0";
+            fldCharAttrs["w:fldLock"] = contentElement.fieldCharLocked ? "1" : "0";
           }
-          runChildren.push(
-            XMLBuilder.wSelf(
-              "fldChar",
-              Object.keys(attrs).length > 0 ? attrs : undefined
-            )
-          );
+          // Generate ffData for begin field chars with form field data
+          if (contentElement.formFieldData && contentElement.fieldCharType === "begin") {
+            const ffDataChildren: (string | XMLElement)[] = [];
+            const ffd = contentElement.formFieldData;
+            if (ffd.name !== undefined) {
+              ffDataChildren.push(XMLBuilder.wSelf("name", { "w:val": ffd.name }));
+            }
+            if (ffd.enabled !== undefined) {
+              if (ffd.enabled) {
+                ffDataChildren.push(XMLBuilder.wSelf("enabled"));
+              } else {
+                ffDataChildren.push(XMLBuilder.wSelf("enabled", { "w:val": "0" }));
+              }
+            }
+            if (ffd.calcOnExit !== undefined) {
+              ffDataChildren.push(XMLBuilder.wSelf("calcOnExit", { "w:val": ffd.calcOnExit ? "1" : "0" }));
+            }
+            if (ffd.helpText) {
+              ffDataChildren.push(XMLBuilder.wSelf("helpText", { "w:type": "text", "w:val": ffd.helpText }));
+            }
+            if (ffd.statusText) {
+              ffDataChildren.push(XMLBuilder.wSelf("statusText", { "w:type": "text", "w:val": ffd.statusText }));
+            }
+            if (ffd.entryMacro) {
+              ffDataChildren.push(XMLBuilder.wSelf("entryMacro", { "w:val": ffd.entryMacro }));
+            }
+            if (ffd.exitMacro) {
+              ffDataChildren.push(XMLBuilder.wSelf("exitMacro", { "w:val": ffd.exitMacro }));
+            }
+            if (ffd.fieldType) {
+              switch (ffd.fieldType.type) {
+                case 'textInput': {
+                  const tiChildren: (string | XMLElement)[] = [];
+                  if (ffd.fieldType.inputType) {
+                    tiChildren.push(XMLBuilder.wSelf("type", { "w:val": ffd.fieldType.inputType }));
+                  }
+                  if (ffd.fieldType.defaultValue !== undefined) {
+                    tiChildren.push(XMLBuilder.wSelf("default", { "w:val": ffd.fieldType.defaultValue }));
+                  }
+                  if (ffd.fieldType.maxLength !== undefined) {
+                    tiChildren.push(XMLBuilder.wSelf("maxLength", { "w:val": ffd.fieldType.maxLength.toString() }));
+                  }
+                  if (ffd.fieldType.format) {
+                    tiChildren.push(XMLBuilder.wSelf("format", { "w:val": ffd.fieldType.format }));
+                  }
+                  ffDataChildren.push(XMLBuilder.w("textInput", {}, tiChildren));
+                  break;
+                }
+                case 'checkBox': {
+                  const cbChildren: (string | XMLElement)[] = [];
+                  if (ffd.fieldType.size !== undefined && ffd.fieldType.size !== 'auto') {
+                    cbChildren.push(XMLBuilder.wSelf("size", { "w:val": ffd.fieldType.size.toString() }));
+                  } else {
+                    cbChildren.push(XMLBuilder.wSelf("sizeAuto"));
+                  }
+                  if (ffd.fieldType.defaultChecked !== undefined) {
+                    cbChildren.push(XMLBuilder.wSelf("default", { "w:val": ffd.fieldType.defaultChecked ? "1" : "0" }));
+                  }
+                  if (ffd.fieldType.checked !== undefined) {
+                    cbChildren.push(XMLBuilder.wSelf("checked", { "w:val": ffd.fieldType.checked ? "1" : "0" }));
+                  }
+                  ffDataChildren.push(XMLBuilder.w("checkBox", {}, cbChildren));
+                  break;
+                }
+                case 'dropDownList': {
+                  const ddChildren: (string | XMLElement)[] = [];
+                  if (ffd.fieldType.result !== undefined) {
+                    ddChildren.push(XMLBuilder.wSelf("result", { "w:val": ffd.fieldType.result.toString() }));
+                  }
+                  if (ffd.fieldType.defaultResult !== undefined) {
+                    ddChildren.push(XMLBuilder.wSelf("default", { "w:val": ffd.fieldType.defaultResult.toString() }));
+                  }
+                  if (ffd.fieldType.listEntries) {
+                    for (const entry of ffd.fieldType.listEntries) {
+                      ddChildren.push(XMLBuilder.wSelf("listEntry", { "w:val": entry }));
+                    }
+                  }
+                  ffDataChildren.push(XMLBuilder.w("ddList", {}, ddChildren));
+                  break;
+                }
+              }
+            }
+            runChildren.push(
+              XMLBuilder.w("fldChar", fldCharAttrs, [XMLBuilder.w("ffData", {}, ffDataChildren)])
+            );
+          } else {
+            runChildren.push(
+              XMLBuilder.wSelf(
+                "fldChar",
+                Object.keys(fldCharAttrs).length > 0 ? fldCharAttrs : undefined
+              )
+            );
+          }
           break;
         }
 
@@ -2126,6 +2329,22 @@ export class Run {
           if (contentElement.ptabRelativeTo) ptabAttrs["w:relativeTo"] = contentElement.ptabRelativeTo;
           if (contentElement.ptabLeader) ptabAttrs["w:leader"] = contentElement.ptabLeader;
           runChildren.push(XMLBuilder.wSelf("ptab", ptabAttrs));
+          break;
+        }
+
+        // Footnote reference (w:footnoteReference) per ECMA-376 Part 1 §17.11.13
+        case "footnoteReference": {
+          const fnAttrs: Record<string, string | number> = {};
+          if (contentElement.footnoteId !== undefined) fnAttrs["w:id"] = contentElement.footnoteId;
+          runChildren.push(XMLBuilder.wSelf("footnoteReference", fnAttrs));
+          break;
+        }
+
+        // Endnote reference (w:endnoteReference) per ECMA-376 Part 1 §17.11.2
+        case "endnoteReference": {
+          const enAttrs: Record<string, string | number> = {};
+          if (contentElement.endnoteId !== undefined) enAttrs["w:id"] = contentElement.endnoteId;
+          runChildren.push(XMLBuilder.wSelf("endnoteReference", enAttrs));
           break;
         }
 
@@ -2340,7 +2559,10 @@ export class Run {
   ): XMLElement | null {
     const rPrChildren: XMLElement[] = [];
 
-    // 1. Character style reference (must be absolutely first per ECMA-376 §17.3.2.36)
+    // ECMA-376 Part 1 §17.3.2.28 CT_RPr element ordering
+    // Elements MUST appear in this exact sequence for Word compatibility
+
+    // 1. w:rStyle — Character style reference
     if (formatting.characterStyle) {
       rPrChildren.push(
         XMLBuilder.wSelf("rStyle", {
@@ -2349,14 +2571,20 @@ export class Run {
       );
     }
 
-    // 2. Font family (must be second per ECMA-376 §17.3.2.28)
-    if (formatting.font || formatting.fontHAnsi || formatting.fontEastAsia || formatting.fontCs || formatting.fontHint) {
+    // 2. w:rFonts — Font family
+    if (formatting.font || formatting.fontHAnsi || formatting.fontEastAsia || formatting.fontCs || formatting.fontHint ||
+        formatting.fontAsciiTheme || formatting.fontHAnsiTheme || formatting.fontEastAsiaTheme || formatting.fontCsTheme) {
       const rFontsAttrs: Record<string, string> = {};
       if (formatting.font) rFontsAttrs["w:ascii"] = formatting.font;
       rFontsAttrs["w:hAnsi"] = formatting.fontHAnsi || formatting.font || "";
       if (formatting.fontEastAsia) rFontsAttrs["w:eastAsia"] = formatting.fontEastAsia;
       rFontsAttrs["w:cs"] = formatting.fontCs || formatting.font || "";
       if (formatting.fontHint) rFontsAttrs["w:hint"] = formatting.fontHint;
+      // Theme font references per ECMA-376 Part 1 §17.3.2.26
+      if (formatting.fontAsciiTheme) rFontsAttrs["w:asciiTheme"] = formatting.fontAsciiTheme;
+      if (formatting.fontHAnsiTheme) rFontsAttrs["w:hAnsiTheme"] = formatting.fontHAnsiTheme;
+      if (formatting.fontEastAsiaTheme) rFontsAttrs["w:eastAsiaTheme"] = formatting.fontEastAsiaTheme;
+      if (formatting.fontCsTheme) rFontsAttrs["w:cstheme"] = formatting.fontCsTheme;
 
       // Remove empty string values (only include attributes that have actual values)
       for (const key of Object.keys(rFontsAttrs)) {
@@ -2368,7 +2596,183 @@ export class Run {
       }
     }
 
-    // 2.5. Text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5
+    // 3. w:b — Bold
+    if (formatting.bold) {
+      rPrChildren.push(XMLBuilder.wSelf("b", { "w:val": "1" }));
+    }
+
+    // 4. w:bCs — Bold complex script
+    if (formatting.complexScriptBold) {
+      rPrChildren.push(XMLBuilder.wSelf("bCs", { "w:val": "1" }));
+    }
+
+    // 5. w:i — Italic
+    if (formatting.italic) {
+      rPrChildren.push(XMLBuilder.wSelf("i", { "w:val": "1" }));
+    }
+
+    // 6. w:iCs — Italic complex script
+    if (formatting.complexScriptItalic) {
+      rPrChildren.push(XMLBuilder.wSelf("iCs", { "w:val": "1" }));
+    }
+
+    // 7. w:caps — All caps
+    if (formatting.allCaps) {
+      rPrChildren.push(XMLBuilder.wSelf("caps", { "w:val": "1" }));
+    }
+
+    // 8. w:smallCaps — Small caps
+    if (formatting.smallCaps) {
+      rPrChildren.push(XMLBuilder.wSelf("smallCaps", { "w:val": "1" }));
+    }
+
+    // 9. w:strike — Single strikethrough
+    if (formatting.strike) {
+      rPrChildren.push(XMLBuilder.wSelf("strike", { "w:val": "1" }));
+    }
+
+    // 10. w:dstrike — Double strikethrough
+    if (formatting.dstrike) {
+      rPrChildren.push(XMLBuilder.wSelf("dstrike", { "w:val": "1" }));
+    }
+
+    // 11. w:outline — Outline text effect
+    if (formatting.outline) {
+      rPrChildren.push(XMLBuilder.wSelf("outline", { "w:val": "1" }));
+    }
+
+    // 12. w:shadow — Shadow text effect
+    if (formatting.shadow) {
+      rPrChildren.push(XMLBuilder.wSelf("shadow", { "w:val": "1" }));
+    }
+
+    // 13. w:emboss — Emboss text effect
+    if (formatting.emboss) {
+      rPrChildren.push(XMLBuilder.wSelf("emboss", { "w:val": "1" }));
+    }
+
+    // 14. w:imprint — Imprint/engrave text effect
+    if (formatting.imprint) {
+      rPrChildren.push(XMLBuilder.wSelf("imprint", { "w:val": "1" }));
+    }
+
+    // 15. w:noProof — No proofing
+    if (formatting.noProof) {
+      rPrChildren.push(XMLBuilder.wSelf("noProof", { "w:val": "1" }));
+    }
+
+    // 16. w:snapToGrid — Snap to grid
+    if (formatting.snapToGrid) {
+      rPrChildren.push(XMLBuilder.wSelf("snapToGrid", { "w:val": "1" }));
+    }
+
+    // 17. w:vanish — Hidden text
+    if (formatting.vanish) {
+      rPrChildren.push(XMLBuilder.wSelf("vanish", { "w:val": "1" }));
+    }
+
+    // 18. w:webHidden — Web hidden
+    if (formatting.webHidden) {
+      rPrChildren.push(XMLBuilder.wSelf("webHidden", { "w:val": "1" }));
+    }
+
+    // 19. w:color — Text color
+    // Supports both hex colors and theme color references
+    if (formatting.color || formatting.themeColor) {
+      const colorAttrs: Record<string, string> = {};
+
+      if (formatting.color) {
+        colorAttrs["w:val"] = formatting.color;
+      }
+      if (formatting.themeColor) {
+        colorAttrs["w:themeColor"] = formatting.themeColor;
+      }
+      if (formatting.themeTint !== undefined) {
+        colorAttrs["w:themeTint"] = formatting.themeTint
+          .toString(16)
+          .toUpperCase()
+          .padStart(2, "0");
+      }
+      if (formatting.themeShade !== undefined) {
+        colorAttrs["w:themeShade"] = formatting.themeShade
+          .toString(16)
+          .toUpperCase()
+          .padStart(2, "0");
+      }
+
+      rPrChildren.push(XMLBuilder.wSelf("color", colorAttrs));
+    }
+
+    // 20. w:spacing — Character spacing
+    if (formatting.characterSpacing !== undefined) {
+      rPrChildren.push(
+        XMLBuilder.wSelf("spacing", { "w:val": formatting.characterSpacing })
+      );
+    }
+
+    // 21. w:w — Horizontal scaling
+    if (formatting.scaling !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf("w", { "w:val": formatting.scaling }));
+    }
+
+    // 22. w:kern — Kerning
+    if (formatting.kerning !== undefined && formatting.kerning !== null) {
+      rPrChildren.push(
+        XMLBuilder.wSelf("kern", { "w:val": formatting.kerning })
+      );
+    }
+
+    // 23. w:position — Vertical position
+    if (formatting.position !== undefined) {
+      rPrChildren.push(
+        XMLBuilder.wSelf("position", { "w:val": formatting.position })
+      );
+    }
+
+    // 24/25. w:sz / w:szCs — Font size / Font size complex script
+    if (formatting.size !== undefined) {
+      const halfPoints = pointsToHalfPoints(formatting.size);
+      rPrChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints }));
+      const csHalfPoints = formatting.sizeCs !== undefined ? pointsToHalfPoints(formatting.sizeCs) : halfPoints;
+      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
+    } else if (formatting.sizeCs !== undefined) {
+      const csHalfPoints = pointsToHalfPoints(formatting.sizeCs);
+      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
+    }
+
+    // 26. w:highlight — Highlight color
+    if (formatting.highlight) {
+      rPrChildren.push(
+        XMLBuilder.wSelf("highlight", { "w:val": formatting.highlight })
+      );
+    }
+
+    // 27. w:u — Underline
+    // When a character style is applied (e.g., Hyperlink) and underline is explicitly false,
+    // we need to output <w:u w:val="none"/> to prevent the style's underline from being inherited.
+    if (formatting.underline) {
+      const underlineValue =
+        typeof formatting.underline === "string"
+          ? formatting.underline
+          : "single";
+      const uAttrs: Record<string, string | number> = { "w:val": underlineValue };
+      if (formatting.underlineColor) uAttrs["w:color"] = formatting.underlineColor;
+      if (formatting.underlineThemeColor) uAttrs["w:themeColor"] = formatting.underlineThemeColor;
+      if (formatting.underlineThemeTint !== undefined) uAttrs["w:themeTint"] = formatting.underlineThemeTint.toString(16).toUpperCase().padStart(2, '0');
+      if (formatting.underlineThemeShade !== undefined) uAttrs["w:themeShade"] = formatting.underlineThemeShade.toString(16).toUpperCase().padStart(2, '0');
+      rPrChildren.push(XMLBuilder.wSelf("u", uAttrs));
+    } else if (formatting.underline === false && formatting.characterStyle) {
+      rPrChildren.push(XMLBuilder.wSelf("u", { "w:val": "none" }));
+    }
+
+    // 28. w:effect — Text effect/animation
+    if (formatting.effect) {
+      rPrChildren.push(
+        XMLBuilder.wSelf("effect", { "w:val": formatting.effect })
+      );
+    }
+
+    // 29. w:bdr — Text border
     if (formatting.border) {
       const bdrAttrs: Record<string, string | number> = {};
       if (formatting.border.style) bdrAttrs["w:val"] = formatting.border.style;
@@ -2384,168 +2788,56 @@ export class Run {
       }
     }
 
-    // 3. Bold
-    if (formatting.bold) {
-      rPrChildren.push(XMLBuilder.wSelf("b", { "w:val": "1" }));
-    }
-
-    // 3.5. Bold for complex scripts (w:bCs) per ECMA-376 Part 1 §17.3.2.3
-    if (formatting.complexScriptBold) {
-      rPrChildren.push(XMLBuilder.wSelf("bCs", { "w:val": "1" }));
-    }
-
-    // 4. Italic
-    if (formatting.italic) {
-      rPrChildren.push(XMLBuilder.wSelf("i", { "w:val": "1" }));
-    }
-
-    // 4.5. Italic for complex scripts (w:iCs) per ECMA-376 Part 1 §17.3.2.17
-    if (formatting.complexScriptItalic) {
-      rPrChildren.push(XMLBuilder.wSelf("iCs", { "w:val": "1" }));
-    }
-
-    // 5. Capitalization (caps/smallCaps)
-    if (formatting.allCaps) {
-      rPrChildren.push(XMLBuilder.wSelf("caps", { "w:val": "1" }));
-    }
-    if (formatting.smallCaps) {
-      rPrChildren.push(XMLBuilder.wSelf("smallCaps", { "w:val": "1" }));
-    }
-
-    // 6. Character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
+    // 30. w:shd — Character shading
     if (formatting.shading) {
-      const shdAttrs: Record<string, string> = {};
-      if (formatting.shading.val) shdAttrs["w:val"] = formatting.shading.val;
-      if (formatting.shading.fill) shdAttrs["w:fill"] = formatting.shading.fill;
-      if (formatting.shading.color)
-        shdAttrs["w:color"] = formatting.shading.color;
-
+      const shdAttrs = buildShadingAttributes(formatting.shading);
       if (Object.keys(shdAttrs).length > 0) {
         rPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
       }
     }
 
-    // 6.5. Emphasis marks (w:em) per ECMA-376 Part 1 §17.3.2.13
+    // 31. w:fitText — Fit text to width
+    if (formatting.fitText !== undefined) {
+      rPrChildren.push(
+        XMLBuilder.wSelf("fitText", { "w:val": formatting.fitText })
+      );
+    }
+
+    // 32. w:vertAlign — Subscript/superscript
+    if (formatting.subscript) {
+      rPrChildren.push(XMLBuilder.wSelf("vertAlign", { "w:val": "subscript" }));
+    }
+    if (formatting.superscript) {
+      rPrChildren.push(
+        XMLBuilder.wSelf("vertAlign", { "w:val": "superscript" })
+      );
+    }
+
+    // 33. w:rtl — Right-to-left text
+    if (formatting.rtl) {
+      rPrChildren.push(XMLBuilder.wSelf("rtl", { "w:val": "1" }));
+    }
+
+    // 34. w:cs — Complex script flag
+    if (formatting.complexScript) {
+      rPrChildren.push(XMLBuilder.wSelf("cs", { "w:val": "1" }));
+    }
+
+    // 35. w:em — Emphasis marks
     if (formatting.emphasis) {
       rPrChildren.push(
         XMLBuilder.wSelf("em", { "w:val": formatting.emphasis })
       );
     }
 
-    // 6.6. Outline text effect (w:outline) per ECMA-376 Part 1 §17.3.2.23
-    if (formatting.outline) {
-      rPrChildren.push(XMLBuilder.wSelf("outline", { "w:val": "1" }));
-    }
-
-    // 6.7. Shadow text effect (w:shadow) per ECMA-376 Part 1 §17.3.2.32
-    if (formatting.shadow) {
-      rPrChildren.push(XMLBuilder.wSelf("shadow", { "w:val": "1" }));
-    }
-
-    // 6.8. Emboss text effect (w:emboss) per ECMA-376 Part 1 §17.3.2.13
-    if (formatting.emboss) {
-      rPrChildren.push(XMLBuilder.wSelf("emboss", { "w:val": "1" }));
-    }
-
-    // 6.9. Imprint/engrave text effect (w:imprint) per ECMA-376 Part 1 §17.3.2.18
-    if (formatting.imprint) {
-      rPrChildren.push(XMLBuilder.wSelf("imprint", { "w:val": "1" }));
-    }
-
-    // 6.10. No proofing (w:noProof) per ECMA-376 Part 1 §17.3.2.21
-    if (formatting.noProof) {
-      rPrChildren.push(XMLBuilder.wSelf("noProof", { "w:val": "1" }));
-    }
-
-    // 6.11. Snap to grid (w:snapToGrid) per ECMA-376 Part 1 §17.3.2.35
-    if (formatting.snapToGrid) {
-      rPrChildren.push(XMLBuilder.wSelf("snapToGrid", { "w:val": "1" }));
-    }
-
-    // 6.12. Vanish/hidden (w:vanish) per ECMA-376 Part 1 §17.3.2.42
-    if (formatting.vanish) {
-      rPrChildren.push(XMLBuilder.wSelf("vanish", { "w:val": "1" }));
-    }
-
-    // 6.12.3. Web hidden (w:webHidden) per ECMA-376 Part 1 §17.3.2.44
-    if (formatting.webHidden) {
-      rPrChildren.push(XMLBuilder.wSelf("webHidden", { "w:val": "1" }));
-    }
-
-    // 6.12.5. Special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
-    if (formatting.specVanish) {
-      rPrChildren.push(XMLBuilder.wSelf("specVanish", { "w:val": "1" }));
-    }
-
-    // 6.13. RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
-    // FIX: Must include w:val="1" to explicitly enable RTL, otherwise Word interprets empty tag incorrectly
-    if (formatting.rtl) {
-      rPrChildren.push(XMLBuilder.wSelf("rtl", { "w:val": "1" }));
-    }
-
-    // 6.14. Complex script flag (w:cs) per ECMA-376 Part 1 §17.3.2.7
-    if (formatting.complexScript) {
-      rPrChildren.push(XMLBuilder.wSelf("cs", { "w:val": "1" }));
-    }
-
-    // 7. Strikethrough
-    if (formatting.strike) {
-      rPrChildren.push(XMLBuilder.wSelf("strike", { "w:val": "1" }));
-    }
-    if (formatting.dstrike) {
-      rPrChildren.push(XMLBuilder.wSelf("dstrike", { "w:val": "1" }));
-    }
-
-    // 8. Underline
-    // When a character style is applied (e.g., Hyperlink) and underline is explicitly false,
-    // we need to output <w:u w:val="none"/> to prevent the style's underline from being inherited.
-    // Without this, setting underline=false on a run with characterStyle="Hyperlink" would
-    // result in no w:u element, causing the Hyperlink style's underline to apply.
-    if (formatting.underline) {
-      const underlineValue =
-        typeof formatting.underline === "string"
-          ? formatting.underline
-          : "single";
-      rPrChildren.push(XMLBuilder.wSelf("u", { "w:val": underlineValue }));
-    } else if (formatting.underline === false && formatting.characterStyle) {
-      // Explicit "no underline" to override character style that may have underline
-      rPrChildren.push(XMLBuilder.wSelf("u", { "w:val": "none" }));
-    }
-
-    // 8.5. Character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.33
-    if (formatting.characterSpacing !== undefined) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("spacing", { "w:val": formatting.characterSpacing })
-      );
-    }
-
-    // 8.6. Horizontal scaling (w:w) per ECMA-376 Part 1 §17.3.2.43
-    if (formatting.scaling !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf("w", { "w:val": formatting.scaling }));
-    }
-
-    // 8.7. Vertical position (w:position) per ECMA-376 Part 1 §17.3.2.31
-    if (formatting.position !== undefined) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("position", { "w:val": formatting.position })
-      );
-    }
-
-    // 8.8. Kerning (w:kern) per ECMA-376 Part 1 §17.3.2.20
-    if (formatting.kerning !== undefined && formatting.kerning !== null) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("kern", { "w:val": formatting.kerning })
-      );
-    }
-
-    // 8.9. Language (w:lang) per ECMA-376 Part 1 §17.3.2.20
+    // 36. w:lang — Language
     if (formatting.language) {
       rPrChildren.push(
         XMLBuilder.wSelf("lang", { "w:val": formatting.language })
       );
     }
 
-    // 8.9.5. East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
+    // 37. w:eastAsianLayout — East Asian layout
     if (formatting.eastAsianLayout) {
       const layout = formatting.eastAsianLayout;
       const attrs: Record<string, string | number> = {};
@@ -2561,78 +2853,18 @@ export class Run {
       }
     }
 
-    // 8.10. Fit text to width (w:fitText) per ECMA-376 Part 1 §17.3.2.15
-    if (formatting.fitText !== undefined) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("fitText", { "w:val": formatting.fitText })
-      );
+    // 38. w:specVanish — Special vanish
+    if (formatting.specVanish) {
+      rPrChildren.push(XMLBuilder.wSelf("specVanish", { "w:val": "1" }));
     }
 
-    // 8.11. Text effect/animation (w:effect) per ECMA-376 Part 1 §17.3.2.12
-    if (formatting.effect) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("effect", { "w:val": formatting.effect })
-      );
-    }
+    // 39. w:oMath — (not currently generated)
 
-    // 9. Font size (w:sz for regular text, w:szCs for complex scripts)
-    // Per ECMA-376 Part 1 §17.3.2.39 (sz) and §17.3.2.40 (szCs)
-    if (formatting.size !== undefined) {
-      const halfPoints = pointsToHalfPoints(formatting.size);
-      rPrChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints }));
-      // Use sizeCs if specified, otherwise fall back to size for backwards compatibility
-      const csHalfPoints = formatting.sizeCs !== undefined ? pointsToHalfPoints(formatting.sizeCs) : halfPoints;
-      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
-    } else if (formatting.sizeCs !== undefined) {
-      // Only complex script size specified (unusual but valid)
-      const csHalfPoints = pointsToHalfPoints(formatting.sizeCs);
-      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
-    }
-
-    // 10. Text color (per ECMA-376 Part 1 Section 17.3.2.6)
-    // Supports both hex colors and theme color references
-    if (formatting.color || formatting.themeColor) {
-      const colorAttrs: Record<string, string> = {};
-
-      if (formatting.color) {
-        colorAttrs["w:val"] = formatting.color;
+    // 40. Raw w14: namespace elements (Word 2010+ text effects, after all schema elements)
+    if (formatting.rawW14Properties && formatting.rawW14Properties.length > 0) {
+      for (const rawXml of formatting.rawW14Properties) {
+        rPrChildren.push({ name: "__rawXml", rawXml } as XMLElement);
       }
-      if (formatting.themeColor) {
-        colorAttrs["w:themeColor"] = formatting.themeColor;
-      }
-      if (formatting.themeTint !== undefined) {
-        // Convert to hex string (2 characters, uppercase)
-        colorAttrs["w:themeTint"] = formatting.themeTint
-          .toString(16)
-          .toUpperCase()
-          .padStart(2, "0");
-      }
-      if (formatting.themeShade !== undefined) {
-        // Convert to hex string (2 characters, uppercase)
-        colorAttrs["w:themeShade"] = formatting.themeShade
-          .toString(16)
-          .toUpperCase()
-          .padStart(2, "0");
-      }
-
-      rPrChildren.push(XMLBuilder.wSelf("color", colorAttrs));
-    }
-
-    // 11. Highlight color
-    if (formatting.highlight) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("highlight", { "w:val": formatting.highlight })
-      );
-    }
-
-    // 12. Vertical alignment (subscript/superscript) - must be last
-    if (formatting.subscript) {
-      rPrChildren.push(XMLBuilder.wSelf("vertAlign", { "w:val": "subscript" }));
-    }
-    if (formatting.superscript) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("vertAlign", { "w:val": "superscript" })
-      );
     }
 
     // Return null if no properties (prevents empty <w:rPr/> elements)

@@ -11,15 +11,12 @@ import { Revision, RevisionType } from '../elements/Revision';
 import { RevisionManager } from '../elements/RevisionManager';
 import { Run } from '../elements/Run';
 import { Paragraph } from '../elements/Paragraph';
+import { Table } from '../elements/Table';
+import { TableRow } from '../elements/TableRow';
+import { TableCell } from '../elements/TableCell';
+import { Section } from '../elements/Section';
 import type { TrackingContext, PendingChange, TrackableElement } from './TrackingContext';
 import { formatDateForXml } from '../utils/dateFormatting';
-
-/**
- * Time window in milliseconds for consolidating adjacent revisions.
- * Revisions from the same author within this window will be merged.
- * Default: 1000ms (1 second) to match typical Word behavior.
- */
-const CONSOLIDATION_TIME_WINDOW_MS = 1000;
 
 /**
  * Enable options for tracking context
@@ -39,6 +36,11 @@ export class DocumentTrackingContext implements TrackingContext {
   private trackFormatting = true;
   private author = 'DocHub';
   private revisionManager: RevisionManager;
+
+  /** Counter for assigning stable element IDs */
+  private elementIdCounter = 0;
+  /** Stable element identity map (WeakMap so elements can be GC'd) */
+  private elementIdMap = new WeakMap<object, number>();
 
   /** Pending changes waiting to be flushed */
   private pendingChanges = new Map<string, PendingChange>();
@@ -139,7 +141,7 @@ export class DocumentTrackingContext implements TrackingContext {
     newValue: unknown
   ): void {
     if (!this.enabled) return;
-    if (oldValue === newValue) return;
+    if (this.valuesEqual(oldValue, newValue)) return;
 
     // Skip formatting changes if not tracking them
     if (
@@ -149,8 +151,8 @@ export class DocumentTrackingContext implements TrackingContext {
       return;
     }
 
-    // Create consolidation key
-    const key = `runProp:${property}:${this.stringifyValue(newValue)}`;
+    // Create consolidation key with element identity
+    const key = `runProp:${property}:${this.stringifyValue(newValue)}@${this.getElementId(run)}`;
 
     this.addPendingChange(key, {
       type: 'runPropertiesChange',
@@ -169,9 +171,9 @@ export class DocumentTrackingContext implements TrackingContext {
     newValue: unknown
   ): void {
     if (!this.enabled) return;
-    if (oldValue === newValue) return;
+    if (this.valuesEqual(oldValue, newValue)) return;
 
-    const key = `paraProp:${property}:${this.stringifyValue(newValue)}`;
+    const key = `paraProp:${property}:${this.stringifyValue(newValue)}@${this.getElementId(paragraph)}`;
 
     this.addPendingChange(key, {
       type: 'paragraphPropertiesChange',
@@ -190,10 +192,10 @@ export class DocumentTrackingContext implements TrackingContext {
     newValue: unknown
   ): void {
     if (!this.enabled) return;
-    if (oldValue === newValue) return;
+    if (this.valuesEqual(oldValue, newValue)) return;
 
     // Hyperlink changes use dedicated type for proper categorization
-    const key = `hyperlink:${changeType}:${this.stringifyValue(newValue)}`;
+    const key = `hyperlink:${changeType}:${this.stringifyValue(newValue)}@${this.getElementId(hyperlink)}`;
 
     this.addPendingChange(key, {
       type: 'hyperlinkChange',
@@ -212,19 +214,21 @@ export class DocumentTrackingContext implements TrackingContext {
     newValue: unknown
   ): void {
     if (!this.enabled) return;
-    if (oldValue === newValue) return;
+    if (this.valuesEqual(oldValue, newValue)) return;
 
-    // Determine revision type based on element type
+    // Determine revision type based on element type using instanceof (minification-safe)
     let type: RevisionType = 'tablePropertiesChange';
-    const elementType = element?.constructor?.name || 'unknown';
+    let elementType = 'Table';
 
-    if (elementType === 'TableRow') {
+    if (element instanceof TableRow) {
       type = 'tableRowPropertiesChange';
-    } else if (elementType === 'TableCell') {
+      elementType = 'TableRow';
+    } else if (element instanceof TableCell) {
       type = 'tableCellPropertiesChange';
+      elementType = 'TableCell';
     }
 
-    const key = `table:${elementType}:${property}:${this.stringifyValue(newValue)}`;
+    const key = `table:${elementType}:${property}:${this.stringifyValue(newValue)}@${this.getElementId(element)}`;
 
     this.addPendingChange(key, {
       type,
@@ -232,6 +236,27 @@ export class DocumentTrackingContext implements TrackingContext {
       previousValue: oldValue,
       newValue,
       element,
+      timestamp: Date.now(),
+    });
+  }
+
+  trackSectionChange(
+    section: TrackableElement,
+    property: string,
+    oldValue: unknown,
+    newValue: unknown
+  ): void {
+    if (!this.enabled) return;
+    if (this.valuesEqual(oldValue, newValue)) return;
+
+    const key = `section:${property}:${this.stringifyValue(newValue)}@${this.getElementId(section)}`;
+
+    this.addPendingChange(key, {
+      type: 'sectionPropertiesChange',
+      property,
+      previousValue: oldValue,
+      newValue,
+      element: section,
       timestamp: Date.now(),
     });
   }
@@ -271,91 +296,97 @@ export class DocumentTrackingContext implements TrackingContext {
   flushPendingChanges(): Revision[] {
     const revisions: Revision[] = [];
 
-    // Group pending changes by paragraph for consolidation
+    // Group pending changes by element for consolidation
     const paragraphChanges = new Map<Paragraph, PendingChange[]>();
+    const tableChanges = new Map<Table, PendingChange[]>();
+    const rowChanges = new Map<TableRow, PendingChange[]>();
+    const cellChanges = new Map<TableCell, PendingChange[]>();
+    const sectionChanges = new Map<Section, PendingChange[]>();
 
     for (const [, pending] of this.pendingChanges) {
       const revision = this.createRevision(pending);
       this.revisionManager.register(revision);
       revisions.push(revision);
 
-      // For paragraph property changes, collect changes by paragraph
+      // Collect changes by element type for *PrChange application
       if (pending.type === 'paragraphPropertiesChange' && pending.element instanceof Paragraph) {
         const changes = paragraphChanges.get(pending.element) || [];
         changes.push(pending);
         paragraphChanges.set(pending.element, changes);
+      } else if (pending.type === 'tablePropertiesChange' && pending.element instanceof Table) {
+        const changes = tableChanges.get(pending.element) || [];
+        changes.push(pending);
+        tableChanges.set(pending.element, changes);
+      } else if (pending.type === 'tableRowPropertiesChange' && pending.element instanceof TableRow) {
+        const changes = rowChanges.get(pending.element) || [];
+        changes.push(pending);
+        rowChanges.set(pending.element, changes);
+      } else if (pending.type === 'tableCellPropertiesChange' && pending.element instanceof TableCell) {
+        const changes = cellChanges.get(pending.element) || [];
+        changes.push(pending);
+        cellChanges.set(pending.element, changes);
+      } else if (pending.type === 'sectionPropertiesChange' && pending.element instanceof Section) {
+        const changes = sectionChanges.get(pending.element) || [];
+        changes.push(pending);
+        sectionChanges.set(pending.element, changes);
       }
     }
 
     // Apply pPrChange to each paragraph that has property changes
     for (const [paragraph, changes] of paragraphChanges) {
-      // Build previous properties from all changes to this paragraph
-      const newPreviousProperties: Record<string, unknown> = {};
-      let latestTimestamp = 0;
+      this.applyParagraphPrChange(paragraph, changes);
+    }
 
-      for (const change of changes) {
-        if (change.previousValue !== undefined) {
-          newPreviousProperties[change.property] = change.previousValue;
-        }
-        if (change.timestamp > latestTimestamp) {
-          latestTimestamp = change.timestamp;
-        }
-      }
-
-      // CRITICAL: Merge with existing pPrChange if present to avoid nested tracked changes
-      // When a document already has tracked changes, we need to preserve the original
-      // "previous" state for properties that aren't changing now, while updating
-      // properties that ARE changing now with their current (pre-change) values
-      const existingChange = paragraph.formatting.pPrChange;
-
-      if (existingChange) {
-        // Preserve the original pPrChange - this represents what accepting ALL changes would revert to
-        // We only update the previousProperties for properties we're NEWLY changing
-        const mergedPreviousProperties: Record<string, unknown> = {
-          // Start with existing previous properties (original state before any tracked changes)
-          ...(existingChange.previousProperties || {}),
-        };
-
-        // For properties we're changing NOW, the "previous" state is their current value
-        // (which may already reflect the original tracked change)
-        for (const [prop, value] of Object.entries(newPreviousProperties)) {
-          // Only update if this property wasn't already in the original pPrChange
-          // OR if we're changing the same property again (update the "before" state)
-          mergedPreviousProperties[prop] = value;
-        }
-
-        // Keep the original author/date/id - represents the first tracked change
-        // This ensures Word only requires ONE "Accept" to accept all changes
-        // Per ECMA-376 Part 1 §17.13.5.29, w:pPrChange MUST contain a w:pPr child element.
-        // Only keep pPrChange if there are properties to track.
-        if (Object.keys(mergedPreviousProperties).length > 0) {
-          paragraph.formatting.pPrChange = {
-            author: existingChange.author,
-            date: existingChange.date,
-            id: existingChange.id,
-            previousProperties: mergedPreviousProperties,
-          };
+    // Apply tblPrChange to each Table
+    for (const [table, changes] of tableChanges) {
+      this.applyElementPrChange(changes, (prevProps, getNextId, date) => {
+        const existing = table.getTblPrChange();
+        if (existing) {
+          const merged = { ...(existing.previousProperties || {}), ...prevProps };
+          table.setTblPrChange({ ...existing, previousProperties: merged });
         } else {
-          // No properties to track - remove the pPrChange to avoid empty element corruption
-          delete paragraph.formatting.pPrChange;
+          table.setTblPrChange({ author: this.author, date, id: String(getNextId()), previousProperties: prevProps });
         }
-      } else {
-        // No existing pPrChange - create a new one ONLY if there are previous properties to record
-        // Per ECMA-376 Part 1 §17.13.5.29, w:pPrChange MUST contain a w:pPr child element.
-        // Creating pPrChange without previousProperties results in empty <w:pPrChange/> which
-        // causes Word to report "unreadable content" corruption.
-        if (Object.keys(newPreviousProperties).length > 0) {
-          // Use consumeNextId() to ensure unique IDs - peekNextId() was causing duplicate IDs
-          const revisionId = this.revisionManager.consumeNextId();
-          paragraph.formatting.pPrChange = {
-            author: this.author,
-            date: formatDateForXml(new Date(latestTimestamp)),
-            id: String(revisionId),
-            previousProperties: newPreviousProperties,
-          };
+      });
+    }
+
+    // Apply trPrChange to each TableRow
+    for (const [row, changes] of rowChanges) {
+      this.applyElementPrChange(changes, (prevProps, getNextId, date) => {
+        const existing = row.getTrPrChange();
+        if (existing) {
+          const merged = { ...(existing.previousProperties || {}), ...prevProps };
+          row.setTrPrChange({ ...existing, previousProperties: merged });
+        } else {
+          row.setTrPrChange({ author: this.author, date, id: String(getNextId()), previousProperties: prevProps });
         }
-        // If no previous properties, don't create pPrChange at all
-      }
+      });
+    }
+
+    // Apply tcPrChange to each TableCell
+    for (const [cell, changes] of cellChanges) {
+      this.applyElementPrChange(changes, (prevProps, getNextId, date) => {
+        const existing = cell.getTcPrChange();
+        if (existing) {
+          const merged = { ...(existing.previousProperties || {}), ...prevProps };
+          cell.setTcPrChange({ ...existing, previousProperties: merged });
+        } else {
+          cell.setTcPrChange({ author: this.author, date, id: String(getNextId()), previousProperties: prevProps });
+        }
+      });
+    }
+
+    // Apply sectPrChange to each Section
+    for (const [section, changes] of sectionChanges) {
+      this.applyElementPrChange(changes, (prevProps, getNextId, date) => {
+        const existing = section.getSectPrChange();
+        if (existing) {
+          const merged = { ...(existing.previousProperties || {}), ...prevProps };
+          section.setSectPrChange({ ...existing, previousProperties: merged });
+        } else {
+          section.setSectPrChange({ author: this.author, date, id: String(getNextId()), previousProperties: prevProps });
+        }
+      });
     }
 
     this.pendingChanges.clear();
@@ -365,6 +396,69 @@ export class DocumentTrackingContext implements TrackingContext {
   // ═══════════════════════════════════════════════════════════════════════════
   // Private Methods
   // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Apply pPrChange to a paragraph (extracted from flushPendingChanges for readability)
+   */
+  private applyParagraphPrChange(paragraph: Paragraph, changes: PendingChange[]): void {
+    const newPreviousProperties: Record<string, unknown> = {};
+    let latestTimestamp = 0;
+
+    for (const change of changes) {
+      // Record previous value even if undefined (property wasn't set before)
+      newPreviousProperties[change.property] = change.previousValue;
+      if (change.timestamp > latestTimestamp) {
+        latestTimestamp = change.timestamp;
+      }
+    }
+
+    const existingChange = paragraph.formatting.pPrChange;
+
+    if (existingChange) {
+      const mergedPreviousProperties: Record<string, unknown> = {
+        ...(existingChange.previousProperties || {}),
+      };
+      for (const [prop, value] of Object.entries(newPreviousProperties)) {
+        mergedPreviousProperties[prop] = value;
+      }
+      paragraph.formatting.pPrChange = {
+        author: existingChange.author,
+        date: existingChange.date,
+        id: existingChange.id,
+        previousProperties: mergedPreviousProperties,
+      };
+    } else {
+      const revisionId = this.revisionManager.consumeNextId();
+      paragraph.formatting.pPrChange = {
+        author: this.author,
+        date: formatDateForXml(new Date(latestTimestamp)),
+        id: String(revisionId),
+        previousProperties: newPreviousProperties,
+      };
+    }
+  }
+
+  /**
+   * Generic helper to apply *PrChange to table/row/cell/section elements
+   */
+  private applyElementPrChange(
+    changes: PendingChange[],
+    applier: (prevProps: Record<string, unknown>, getNextId: () => number, date: string) => void
+  ): void {
+    const prevProps: Record<string, unknown> = {};
+    let latestTimestamp = 0;
+
+    for (const change of changes) {
+      // Record previous value even if undefined (property wasn't set before)
+      prevProps[change.property] = change.previousValue;
+      if (change.timestamp > latestTimestamp) {
+        latestTimestamp = change.timestamp;
+      }
+    }
+
+    const date = formatDateForXml(new Date(latestTimestamp));
+    applier(prevProps, () => this.revisionManager.consumeNextId(), date);
+  }
 
   /**
    * Add a pending change, consolidating with existing if same key
@@ -415,12 +509,41 @@ export class DocumentTrackingContext implements TrackingContext {
       return element;
     }
 
-    // For other elements, create a placeholder Run with description
+    // Use instanceof for type-safe element identification (minification-safe)
+    if (element instanceof Table) return new Run('Table');
+    if (element instanceof TableRow) return new Run('TableRow');
+    if (element instanceof TableCell) return new Run('TableCell');
+    if (element instanceof Section) return new Run('Section');
+    if (element instanceof Paragraph) return new Run('Paragraph');
+
+    // Fallback for other elements (e.g., Hyperlink)
     const hasGetText = 'getText' in element && typeof (element as { getText?: () => string }).getText === 'function';
     const text = hasGetText
       ? (element as { getText: () => string }).getText()
       : element?.constructor?.name || 'Unknown element';
     return new Run(typeof text === 'string' ? text : String(text));
+  }
+
+  /**
+   * Get a stable unique ID for an element (used in consolidation keys)
+   */
+  private getElementId(element: TrackableElement): number {
+    let id = this.elementIdMap.get(element as object);
+    if (id === undefined) {
+      id = this.elementIdCounter++;
+      this.elementIdMap.set(element as object, id);
+    }
+    return id;
+  }
+
+  /**
+   * Deep equality check for tracking values (handles objects, primitives, null/undefined)
+   */
+  private valuesEqual(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    if (typeof a !== 'object' || typeof b !== 'object') return false;
+    return JSON.stringify(a) === JSON.stringify(b);
   }
 
   /**

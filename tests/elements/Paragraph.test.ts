@@ -6,7 +6,7 @@ import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';
 import { Hyperlink } from '../../src/elements/Hyperlink';
 import { Revision } from '../../src/elements/Revision';
-import { XMLBuilder } from '../../src/xml/XMLBuilder';
+import { XMLBuilder, XMLElement } from '../../src/xml/XMLBuilder';
 
 describe('Run', () => {
   describe('Basic functionality', () => {
@@ -898,6 +898,88 @@ describe('Paragraph', () => {
         expect(runs[1]!.getText()).toBe('Revision run');
         expect(runs[2]!.getText()).toBe('Link text');
       });
+    });
+  });
+
+  describe('CT_PPr element ordering (ECMA-376)', () => {
+    function getPPrChildNames(para: Paragraph): string[] {
+      const xml = para.toXML();
+      const pPr = (xml.children as (XMLElement | string)[])?.find(
+        (c): c is XMLElement => typeof c !== 'string' && c.name === 'w:pPr'
+      );
+      if (!pPr || !pPr.children) return [];
+      return (pPr.children as (XMLElement | string)[])
+        .filter((c): c is XMLElement => typeof c !== 'string')
+        .map(c => c.name);
+    }
+
+    it('should place w:rPr after w:numPr in pPr', () => {
+      const para = new Paragraph();
+      para.addText('Test');
+      para.setNumbering(1, 0);
+      para.formatting.paragraphMarkRunProperties = { bold: true };
+
+      const names = getPPrChildNames(para);
+      const numPrIdx = names.indexOf('w:numPr');
+      const rPrIdx = names.indexOf('w:rPr');
+
+      expect(numPrIdx).toBeGreaterThanOrEqual(0);
+      expect(rPrIdx).toBeGreaterThanOrEqual(0);
+      expect(rPrIdx).toBeGreaterThan(numPrIdx);
+    });
+
+    it('should place w:rPr after w:cnfStyle in pPr', () => {
+      const para = new Paragraph();
+      para.addText('Test');
+      para.formatting.cnfStyle = '100000000000';
+      para.formatting.paragraphMarkRunProperties = { bold: true };
+
+      const names = getPPrChildNames(para);
+      const cnfIdx = names.indexOf('w:cnfStyle');
+      const rPrIdx = names.indexOf('w:rPr');
+
+      expect(cnfIdx).toBeGreaterThanOrEqual(0);
+      expect(rPrIdx).toBeGreaterThanOrEqual(0);
+      expect(rPrIdx).toBeGreaterThan(cnfIdx);
+    });
+
+    it('should place w:rPr before w:pPrChange in pPr', () => {
+      const para = new Paragraph();
+      para.addText('Test');
+      para.formatting.paragraphMarkRunProperties = { bold: true };
+      para.formatting.pPrChange = {
+        id: '1',
+        author: 'Test',
+        date: '2026-01-01T00:00:00Z',
+        previousProperties: { alignment: 'left' },
+      };
+
+      const names = getPPrChildNames(para);
+      const rPrIdx = names.indexOf('w:rPr');
+      const pPrChangeIdx = names.indexOf('w:pPrChange');
+
+      expect(rPrIdx).toBeGreaterThanOrEqual(0);
+      expect(pPrChangeIdx).toBeGreaterThanOrEqual(0);
+      expect(rPrIdx).toBeLessThan(pPrChangeIdx);
+    });
+
+    it('should place w:rPr after all CT_PPrBase elements when numPr and cnfStyle both exist', () => {
+      const para = new Paragraph();
+      para.addText('Test');
+      para.setNumbering(1, 0);
+      para.formatting.cnfStyle = '100000000000';
+      para.formatting.paragraphMarkRunProperties = { italic: true };
+
+      const names = getPPrChildNames(para);
+      const rPrIdx = names.indexOf('w:rPr');
+
+      // rPr should be the last element (no pPrChange in this case)
+      // or at least after numPr and cnfStyle
+      const numPrIdx = names.indexOf('w:numPr');
+      const cnfIdx = names.indexOf('w:cnfStyle');
+
+      expect(rPrIdx).toBeGreaterThan(numPrIdx);
+      expect(rPrIdx).toBeGreaterThan(cnfIdx);
     });
   });
 });

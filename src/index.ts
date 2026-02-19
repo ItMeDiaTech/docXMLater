@@ -257,6 +257,7 @@ export {
   SectionTextDirection,
   WidthType,
   ShadingConfig,
+  buildShadingAttributes,
   TabLeader,
   TabStop,
   isShadingPattern,
@@ -465,6 +466,8 @@ export {
 // =============================================================================
 
 export { RevisionWalker, RevisionWalkerOptions } from './utils/RevisionWalker';
+export { resolveCellShading } from './utils/ShadingResolver';
+export { decodeCnfStyle, getActiveConditionalsInPriorityOrder } from './utils/cnfStyleDecoder';
 
 // =============================================================================
 // UTILITIES — Cleanup

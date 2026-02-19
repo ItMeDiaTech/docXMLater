@@ -1019,4 +1019,41 @@ describe('Table', () => {
       expect(exceptions?.borders?.top?.color).toBe('AAAAAA');
     });
   });
+
+  describe('Table layout normalization (ST_TblLayoutType)', () => {
+    it('should normalize "auto" to "autofit" per ECMA-376 §17.18.87', () => {
+      const table = new Table(2, 2);
+      table.setLayout('auto');
+      expect(table.getLayout()).toBe('autofit');
+    });
+
+    it('should accept "autofit" directly', () => {
+      const table = new Table(2, 2);
+      table.setLayout('autofit');
+      expect(table.getLayout()).toBe('autofit');
+    });
+
+    it('should pass "fixed" through unchanged', () => {
+      const table = new Table(2, 2);
+      table.setLayout('fixed');
+      expect(table.getLayout()).toBe('fixed');
+    });
+
+    it('should output "autofit" in XML when "auto" was set', () => {
+      const table = new Table(2, 2);
+      table.setLayout('auto');
+      const xml = table.toXML();
+      const xmlStr = JSON.stringify(xml);
+      expect(xmlStr).toContain('"autofit"');
+      expect(xmlStr).not.toMatch(/"auto"(?!fit)/);
+    });
+
+    it('should output "autofit" in XML when "autofit" was set', () => {
+      const table = new Table(2, 2);
+      table.setLayout('autofit');
+      const xml = table.toXML();
+      const xmlStr = JSON.stringify(xml);
+      expect(xmlStr).toContain('"autofit"');
+    });
+  });
 });

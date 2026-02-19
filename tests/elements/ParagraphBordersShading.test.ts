@@ -121,7 +121,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       const doc = Document.create();
       const para = new Paragraph();
       para.addText('Paragraph with yellow background');
-      para.setShading({ fill: 'FFFF00', val: 'solid' });
+      para.setShading({ fill: 'FFFF00', pattern: 'solid' });
       doc.addParagraph(para);
 
       const buffer = await doc.toBuffer();
@@ -131,7 +131,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       const formatting = paragraphs[0]?.getFormatting();
       expect(formatting?.shading).toBeDefined();
       expect(formatting?.shading?.fill).toBe('FFFF00');
-      expect(formatting?.shading?.val).toBe('solid');
+      expect(formatting?.shading?.pattern).toBe('solid');
     });
 
     it('should round-trip paragraph with pattern shading', async () => {
@@ -141,7 +141,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.setShading({
         fill: 'FFFF00',
         color: '000000',
-        val: 'diagStripe'
+        pattern: 'diagStripe'
       });
       doc.addParagraph(para);
 
@@ -152,7 +152,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       const formatting = paragraphs[0]?.getFormatting();
       expect(formatting?.shading?.fill).toBe('FFFF00');
       expect(formatting?.shading?.color).toBe('000000');
-      expect(formatting?.shading?.val).toBe('diagStripe');
+      expect(formatting?.shading?.pattern).toBe('diagStripe');
     });
 
     it('should round-trip paragraph with horizontal cross pattern', async () => {
@@ -162,7 +162,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.setShading({
         fill: '00FF00',
         color: '0000FF',
-        val: 'horzCross'
+        pattern: 'horzCross'
       });
       doc.addParagraph(para);
 
@@ -171,14 +171,14 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       const paragraphs = loadedDoc.getParagraphs();
 
       const formatting = paragraphs[0]?.getFormatting();
-      expect(formatting?.shading?.val).toBe('horzCross');
+      expect(formatting?.shading?.pattern).toBe('horzCross');
     });
 
     it('should save shading to file and load correctly', async () => {
       const doc = Document.create();
       const para = new Paragraph();
       para.addText('Testing file save/load with shading');
-      para.setShading({ fill: 'FF00FF', val: 'solid' });
+      para.setShading({ fill: 'FF00FF', pattern: 'solid' });
       doc.addParagraph(para);
 
       const filePath = path.join(testOutputDir, 'paragraph-shading.docx');
@@ -293,7 +293,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
         top: { style: 'single', size: 4, color: '000000' },
         bottom: { style: 'single', size: 4, color: '000000' }
       });
-      para.setShading({ fill: 'FFFF00', val: 'solid' });
+      para.setShading({ fill: 'FFFF00', pattern: 'solid' });
       para.setTabs([
         { position: 720, val: 'left' },
         { position: 1440, val: 'center' }
@@ -332,7 +332,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       // Paragraph 2: Shading only
       const para2 = new Paragraph();
       para2.addText('Paragraph 2: With shading');
-      para2.setShading({ fill: '00FF00', val: 'solid' });
+      para2.setShading({ fill: '00FF00', pattern: 'solid' });
       doc.addParagraph(para2);
 
       // Paragraph 3: Tabs only
@@ -347,7 +347,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para4.setBorder({
         left: { style: 'single', size: 4, color: '0000FF' }
       });
-      para4.setShading({ fill: 'FFFF00', val: 'solid' });
+      para4.setShading({ fill: 'FFFF00', pattern: 'solid' });
       para4.setTabs([{ position: 720, val: 'left' }]);
       doc.addParagraph(para4);
 

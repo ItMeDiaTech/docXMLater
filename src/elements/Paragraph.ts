@@ -22,6 +22,8 @@ import {
   TextVerticalAlignment,
   BorderDefinition as CommonBorderDefinition,
   TabStop as CommonTabStop,
+  ShadingConfig,
+  buildShadingAttributes,
 } from "./CommonTypes";
 import { ComplexField, Field } from "./Field";
 import { Hyperlink } from "./Hyperlink";
@@ -219,14 +221,7 @@ export interface ParagraphFormatting {
     bar?: BorderDefinition;
   };
   /** Paragraph shading (background color and pattern) */
-  shading?: {
-    /** Background fill color (hex without #) */
-    fill?: string;
-    /** Foreground color for patterns (hex without #) */
-    color?: string;
-    /** Shading pattern type */
-    val?: ShadingPattern;
-  };
+  shading?: ShadingConfig;
   /** Tab stops */
   tabs?: TabStop[];
   /** Widow/orphan control - prevents single lines at top/bottom of pages */
@@ -249,6 +244,18 @@ export interface ParagraphFormatting {
   framePr?: FrameProperties;
   /** Suppress automatic hyphenation for this paragraph */
   suppressAutoHyphens?: boolean;
+  /** Kinsoku rules - CJK line-breaking rules per ECMA-376 Part 1 §17.3.1.16 */
+  kinsoku?: boolean;
+  /** Word wrap - allow CJK text to wrap mid-word per ECMA-376 Part 1 §17.3.1.45 */
+  wordWrap?: boolean;
+  /** Overflow punctuation - allow CJK punctuation to overhang margins per ECMA-376 Part 1 §17.3.1.24 */
+  overflowPunct?: boolean;
+  /** Top line punctuation - compress CJK punctuation at start of line per ECMA-376 Part 1 §17.3.1.43 */
+  topLinePunct?: boolean;
+  /** Auto space between East Asian and numeric text per ECMA-376 Part 1 §17.3.1.2 */
+  autoSpaceDE?: boolean;
+  /** Auto space between East Asian and Western text per ECMA-376 Part 1 §17.3.1.3 */
+  autoSpaceDN?: boolean;
   /** Prevent text frames from overlapping */
   suppressOverlap?: boolean;
   /** Tight wrapping mode for text boxes */
@@ -272,6 +279,8 @@ export interface ParagraphFormatting {
     /** Date when the paragraph mark was deleted */
     date: Date;
   };
+  /** True when the original XML had numId=0 (explicitly suppressed numbering) */
+  numberingSuppressed?: boolean;
 }
 
 /**
@@ -836,6 +845,20 @@ export class Paragraph {
    */
   getBookmarksEnd(): Bookmark[] {
     return [...this.bookmarksEnd];
+  }
+
+  /**
+   * Removes a bookmark end marker by its ID
+   * @param id - The bookmark ID to remove
+   * @returns true if a bookmark was removed, false if not found
+   */
+  removeBookmarkEnd(id: number): boolean {
+    const index = this.bookmarksEnd.findIndex(bm => bm.getId() === id);
+    if (index !== -1) {
+      this.bookmarksEnd.splice(index, 1);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1575,6 +1598,16 @@ export class Paragraph {
   }
 
   /**
+   * Checks if numbering was explicitly suppressed in the original XML (numId=0).
+   * This is different from having no numbering — it means the document author
+   * intentionally overrode style-inherited numbering.
+   * @returns True if numbering is explicitly suppressed
+   */
+  isNumberingSuppressed(): boolean {
+    return this.formatting.numberingSuppressed === true;
+  }
+
+  /**
    * Checks if the paragraph contains any fields
    * @returns True if paragraph has fields
    */
@@ -2240,6 +2273,7 @@ export class Paragraph {
 
     const previousValue = this.formatting.numbering;
     this.formatting.numbering = { numId, level };
+    delete this.formatting.numberingSuppressed;
 
     // Clear conflicting indentation properties
     // Per ECMA-376 §17.3.1.12, paragraph indentation overrides numbering indentation
@@ -2282,6 +2316,7 @@ export class Paragraph {
    */
   removeNumbering(): this {
     delete this.formatting.numbering;
+    delete this.formatting.numberingSuppressed;
     return this;
   }
 
@@ -2475,6 +2510,72 @@ export class Paragraph {
     if (this.trackingContext?.isEnabled() && previousValue !== suppress) {
       this.trackingContext.trackParagraphPropertyChange(this, 'suppressAutoHyphens', previousValue, suppress);
     }
+    return this;
+  }
+
+  /**
+   * Sets CJK kinsoku line-breaking rules
+   * Per ECMA-376 Part 1 §17.3.1.16
+   * @param enable - Whether to enable kinsoku rules (default: true)
+   * @returns This paragraph for chaining
+   */
+  setKinsoku(enable: boolean = true): this {
+    this.formatting.kinsoku = enable;
+    return this;
+  }
+
+  /**
+   * Sets CJK word wrap behavior
+   * Per ECMA-376 Part 1 §17.3.1.45
+   * @param enable - Whether to allow wrapping mid-word (default: true)
+   * @returns This paragraph for chaining
+   */
+  setWordWrap(enable: boolean = true): this {
+    this.formatting.wordWrap = enable;
+    return this;
+  }
+
+  /**
+   * Sets CJK overflow punctuation
+   * Per ECMA-376 Part 1 §17.3.1.24
+   * @param enable - Whether to allow punctuation overhang (default: true)
+   * @returns This paragraph for chaining
+   */
+  setOverflowPunct(enable: boolean = true): this {
+    this.formatting.overflowPunct = enable;
+    return this;
+  }
+
+  /**
+   * Sets CJK top line punctuation compression
+   * Per ECMA-376 Part 1 §17.3.1.43
+   * @param enable - Whether to compress punctuation at line start (default: true)
+   * @returns This paragraph for chaining
+   */
+  setTopLinePunct(enable: boolean = true): this {
+    this.formatting.topLinePunct = enable;
+    return this;
+  }
+
+  /**
+   * Sets auto space between East Asian and numeric text
+   * Per ECMA-376 Part 1 §17.3.1.2
+   * @param enable - Whether to auto-space (default: true)
+   * @returns This paragraph for chaining
+   */
+  setAutoSpaceDE(enable: boolean = true): this {
+    this.formatting.autoSpaceDE = enable;
+    return this;
+  }
+
+  /**
+   * Sets auto space between East Asian and Western text
+   * Per ECMA-376 Part 1 §17.3.1.3
+   * @param enable - Whether to auto-space (default: true)
+   * @returns This paragraph for chaining
+   */
+  setAutoSpaceDN(enable: boolean = true): this {
+    this.formatting.autoSpaceDN = enable;
     return this;
   }
 
@@ -2728,48 +2829,6 @@ export class Paragraph {
       );
     }
 
-    // 1.5. Paragraph mark run properties per ECMA-376 Part 1 §17.3.1.29
-    // Controls formatting of the paragraph mark (¶ symbol) itself
-    if (
-      this.formatting.paragraphMarkRunProperties ||
-      this.formatting.paragraphMarkDeletion
-    ) {
-      const rPrChildren: XMLElement[] = [];
-
-      // Add run properties for the paragraph mark if they exist
-      if (this.formatting.paragraphMarkRunProperties) {
-        const rPr = Run.generateRunPropertiesXML(
-          this.formatting.paragraphMarkRunProperties
-        );
-        if (rPr && rPr.children) {
-          // Filter to only XMLElement types (children can be XMLElement or string)
-          for (const child of rPr.children) {
-            if (typeof child !== "string") {
-              rPrChildren.push(child);
-            }
-          }
-        }
-      }
-
-      // Add deletion marker if the paragraph mark is deleted (w:del)
-      // Per ECMA-376 Part 1 §17.13.5.14 - tracks deletion of paragraph mark
-      if (this.formatting.paragraphMarkDeletion) {
-        const del = this.formatting.paragraphMarkDeletion;
-        rPrChildren.push(
-          XMLBuilder.wSelf("del", {
-            "w:id": del.id.toString(),
-            "w:author": del.author,
-            "w:date": formatDateForXml(del.date),
-          })
-        );
-      }
-
-      // Add w:rPr element if there are any run properties
-      if (rPrChildren.length > 0) {
-        pPrChildren.push(XMLBuilder.w("rPr", undefined, rPrChildren));
-      }
-    }
-
     // 2. Keep with next paragraph
     if (this.formatting.keepNext) {
       pPrChildren.push(XMLBuilder.wSelf("keepNext"));
@@ -2815,6 +2874,26 @@ export class Paragraph {
     // 7a. Suppress automatic hyphenation per ECMA-376 Part 1 §17.3.1.33
     if (this.formatting.suppressAutoHyphens) {
       pPrChildren.push(XMLBuilder.wSelf("suppressAutoHyphens"));
+    }
+
+    // 7b. CJK paragraph properties per ECMA-376 Part 1
+    if (this.formatting.kinsoku !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf("kinsoku", { "w:val": this.formatting.kinsoku ? "1" : "0" }));
+    }
+    if (this.formatting.wordWrap !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf("wordWrap", { "w:val": this.formatting.wordWrap ? "1" : "0" }));
+    }
+    if (this.formatting.overflowPunct !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf("overflowPunct", { "w:val": this.formatting.overflowPunct ? "1" : "0" }));
+    }
+    if (this.formatting.topLinePunct !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf("topLinePunct", { "w:val": this.formatting.topLinePunct ? "1" : "0" }));
+    }
+    if (this.formatting.autoSpaceDE !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf("autoSpaceDE", { "w:val": this.formatting.autoSpaceDE ? "1" : "0" }));
+    }
+    if (this.formatting.autoSpaceDN !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf("autoSpaceDN", { "w:val": this.formatting.autoSpaceDN ? "1" : "0" }));
     }
 
     // 8. Spacing (before/after/line) per ECMA-376 Part 1 §17.3.1.33
@@ -2904,13 +2983,9 @@ export class Paragraph {
 
     // 9. Paragraph shading per ECMA-376 Part 1 §17.3.1.32
     if (this.formatting.shading) {
-      const shd = this.formatting.shading;
-      const attributes: Record<string, string> = {};
-      if (shd.fill) attributes["w:fill"] = shd.fill;
-      if (shd.color) attributes["w:color"] = shd.color;
-      if (shd.val) attributes["w:val"] = shd.val;
-      if (Object.keys(attributes).length > 0) {
-        pPrChildren.push(XMLBuilder.wSelf("shd", attributes));
+      const shdAttrs = buildShadingAttributes(this.formatting.shading);
+      if (Object.keys(shdAttrs).length > 0) {
+        pPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
       }
     }
 
@@ -3035,7 +3110,49 @@ export class Paragraph {
       );
     }
 
-    // 19. Paragraph property change tracking per ECMA-376 Part 1 §17.3.1.27
+    // 19. Paragraph mark run properties per ECMA-376 Part 1 §17.3.1.29
+    // Per CT_PPr, w:rPr comes after all CT_PPrBase elements and before w:sectPr/w:pPrChange
+    if (
+      this.formatting.paragraphMarkRunProperties ||
+      this.formatting.paragraphMarkDeletion
+    ) {
+      const rPrChildren: XMLElement[] = [];
+
+      // Add run properties for the paragraph mark if they exist
+      if (this.formatting.paragraphMarkRunProperties) {
+        const rPr = Run.generateRunPropertiesXML(
+          this.formatting.paragraphMarkRunProperties
+        );
+        if (rPr && rPr.children) {
+          // Filter to only XMLElement types (children can be XMLElement or string)
+          for (const child of rPr.children) {
+            if (typeof child !== "string") {
+              rPrChildren.push(child);
+            }
+          }
+        }
+      }
+
+      // Add deletion marker if the paragraph mark is deleted (w:del)
+      // Per ECMA-376 Part 1 §17.13.5.14 - tracks deletion of paragraph mark
+      if (this.formatting.paragraphMarkDeletion) {
+        const del = this.formatting.paragraphMarkDeletion;
+        rPrChildren.push(
+          XMLBuilder.wSelf("del", {
+            "w:id": del.id.toString(),
+            "w:author": del.author,
+            "w:date": formatDateForXml(del.date),
+          })
+        );
+      }
+
+      // Add w:rPr element if there are any run properties
+      if (rPrChildren.length > 0) {
+        pPrChildren.push(XMLBuilder.w("rPr", undefined, rPrChildren));
+      }
+    }
+
+    // 20. Paragraph property change tracking per ECMA-376 Part 1 §17.3.1.27
     /**
      * Per OOXML spec, w:pPrChange contains:
      * - Attributes: w:id (required), w:author (required), w:date (optional)
@@ -3057,17 +3174,22 @@ export class Paragraph {
       if (change.date) attrs["w:date"] = change.date;
 
       // Build child w:pPr element with previous properties
+      // Per CT_PPrBase schema order: pStyle, keepNext, keepLines, pageBreakBefore,
+      // widowControl, numPr, suppressLineNumbers, pBdr, shd, tabs,
+      // suppressAutoHyphens, bidi, adjustRightInd, spacing, ind,
+      // contextualSpacing, mirrorIndents, jc, textDirection, textAlignment, outlineLvl
       const prevPPrChildren: XMLElement[] = [];
       if (change.previousProperties) {
         const prev = change.previousProperties;
 
-        // Serialize previous properties in ECMA-376 order
-        // Only include properties that were explicitly set
+        // 1. pStyle
         if (prev.style) {
           prevPPrChildren.push(
             XMLBuilder.wSelf("pStyle", { "w:val": prev.style })
           );
         }
+
+        // 2. keepNext
         if (prev.keepNext !== undefined) {
           prevPPrChildren.push(
             XMLBuilder.wSelf(
@@ -3076,6 +3198,8 @@ export class Paragraph {
             )
           );
         }
+
+        // 3. keepLines
         if (prev.keepLines !== undefined) {
           prevPPrChildren.push(
             XMLBuilder.wSelf(
@@ -3084,6 +3208,8 @@ export class Paragraph {
             )
           );
         }
+
+        // 4. pageBreakBefore
         if (prev.pageBreakBefore !== undefined) {
           prevPPrChildren.push(
             XMLBuilder.wSelf(
@@ -3092,39 +3218,17 @@ export class Paragraph {
             )
           );
         }
-        if (prev.alignment) {
+
+        // 5. widowControl
+        if (prev.widowControl !== undefined) {
           prevPPrChildren.push(
-            XMLBuilder.wSelf("jc", { "w:val": prev.alignment })
+            XMLBuilder.wSelf("widowControl", {
+              "w:val": prev.widowControl ? "1" : "0",
+            })
           );
         }
-        if (prev.indentation) {
-          const indAttrs: Record<string, string> = {};
-          if (prev.indentation.left !== undefined)
-            indAttrs["w:left"] = prev.indentation.left.toString();
-          if (prev.indentation.right !== undefined)
-            indAttrs["w:right"] = prev.indentation.right.toString();
-          if (prev.indentation.firstLine !== undefined)
-            indAttrs["w:firstLine"] = prev.indentation.firstLine.toString();
-          if (prev.indentation.hanging !== undefined)
-            indAttrs["w:hanging"] = prev.indentation.hanging.toString();
-          prevPPrChildren.push(XMLBuilder.wSelf("ind", indAttrs));
-        }
-        if (prev.spacing) {
-          const spacingAttrs: Record<string, string> = {};
-          if (prev.spacing.before !== undefined)
-            spacingAttrs["w:before"] = prev.spacing.before.toString();
-          if (prev.spacing.after !== undefined)
-            spacingAttrs["w:after"] = prev.spacing.after.toString();
-          if (prev.spacing.line !== undefined)
-            spacingAttrs["w:line"] = prev.spacing.line.toString();
-          if (prev.spacing.lineRule)
-            spacingAttrs["w:lineRule"] = prev.spacing.lineRule;
-          if (Object.keys(spacingAttrs).length > 0) {
-            prevPPrChildren.push(XMLBuilder.wSelf("spacing", spacingAttrs));
-          }
-        }
-        // Serialize previous numbering properties (w:numPr)
-        // Critical for proper track changes when list formatting changes
+
+        // 6. numPr
         if (prev.numbering) {
           const numPrChildren: XMLElement[] = [];
           if (prev.numbering.level !== undefined) {
@@ -3142,52 +3246,14 @@ export class Paragraph {
           }
         }
 
-        // Additional properties per ECMA-376 Part 1 §17.3.1
-
-        // widowControl per §17.3.1.44
-        if (prev.widowControl !== undefined) {
-          prevPPrChildren.push(
-            XMLBuilder.wSelf("widowControl", {
-              "w:val": prev.widowControl ? "1" : "0",
-            })
-          );
-        }
-
-        // suppressLineNumbers per §17.3.1.34
+        // 7. suppressLineNumbers
         if (prev.suppressLineNumbers !== undefined) {
           if (prev.suppressLineNumbers) {
             prevPPrChildren.push(XMLBuilder.wSelf("suppressLineNumbers"));
           }
         }
 
-        // suppressAutoHyphens per §17.3.1.33
-        if (prev.suppressAutoHyphens !== undefined) {
-          if (prev.suppressAutoHyphens) {
-            prevPPrChildren.push(
-              XMLBuilder.wSelf("suppressAutoHyphens", { "w:val": "1" })
-            );
-          }
-        }
-
-        // contextualSpacing per §17.3.1.9
-        if (prev.contextualSpacing !== undefined) {
-          prevPPrChildren.push(
-            XMLBuilder.wSelf("contextualSpacing", {
-              "w:val": prev.contextualSpacing ? "1" : "0",
-            })
-          );
-        }
-
-        // mirrorIndents per §17.3.1.18
-        if (prev.mirrorIndents !== undefined) {
-          prevPPrChildren.push(
-            XMLBuilder.wSelf("mirrorIndents", {
-              "w:val": prev.mirrorIndents ? "1" : "0",
-            })
-          );
-        }
-
-        // pBdr (paragraph borders) per §17.3.1.24
+        // 8. pBdr (paragraph borders)
         if (prev.borders) {
           const borderChildren: XMLElement[] = [];
           const borderSides = ["top", "left", "bottom", "right", "between", "bar"] as const;
@@ -3209,18 +3275,15 @@ export class Paragraph {
           }
         }
 
-        // shd (paragraph shading) per §17.3.1.31
+        // 9. shd (paragraph shading)
         if (prev.shading) {
-          const shdAttrs: Record<string, string> = {};
-          if (prev.shading.fill) shdAttrs["w:fill"] = prev.shading.fill;
-          if (prev.shading.color) shdAttrs["w:color"] = prev.shading.color;
-          if (prev.shading.val) shdAttrs["w:val"] = prev.shading.val;
+          const shdAttrs = buildShadingAttributes(prev.shading);
           if (Object.keys(shdAttrs).length > 0) {
             prevPPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
           }
         }
 
-        // tabs per §17.3.1.38
+        // 10. tabs
         if (prev.tabs && prev.tabs.length > 0) {
           const tabChildren: XMLElement[] = prev.tabs.map((tab) => {
             const tabAttrs: Record<string, string> = {
@@ -3233,14 +3296,23 @@ export class Paragraph {
           prevPPrChildren.push(XMLBuilder.w("tabs", undefined, tabChildren));
         }
 
-        // bidi per §17.3.1.6
+        // 11. suppressAutoHyphens
+        if (prev.suppressAutoHyphens !== undefined) {
+          if (prev.suppressAutoHyphens) {
+            prevPPrChildren.push(
+              XMLBuilder.wSelf("suppressAutoHyphens", { "w:val": "1" })
+            );
+          }
+        }
+
+        // 12. bidi
         if (prev.bidi !== undefined) {
           prevPPrChildren.push(
             XMLBuilder.wSelf("bidi", { "w:val": prev.bidi ? "1" : "0" })
           );
         }
 
-        // adjustRightInd per §17.3.1.1
+        // 13. adjustRightInd
         if (prev.adjustRightInd !== undefined) {
           prevPPrChildren.push(
             XMLBuilder.wSelf("adjustRightInd", {
@@ -3249,21 +3321,76 @@ export class Paragraph {
           );
         }
 
-        // textAlignment per §17.3.1.39
-        if (prev.textAlignment) {
+        // 14. spacing
+        if (prev.spacing) {
+          const spacingAttrs: Record<string, string> = {};
+          if (prev.spacing.before !== undefined)
+            spacingAttrs["w:before"] = prev.spacing.before.toString();
+          if (prev.spacing.after !== undefined)
+            spacingAttrs["w:after"] = prev.spacing.after.toString();
+          if (prev.spacing.line !== undefined)
+            spacingAttrs["w:line"] = prev.spacing.line.toString();
+          if (prev.spacing.lineRule)
+            spacingAttrs["w:lineRule"] = prev.spacing.lineRule;
+          if (Object.keys(spacingAttrs).length > 0) {
+            prevPPrChildren.push(XMLBuilder.wSelf("spacing", spacingAttrs));
+          }
+        }
+
+        // 15. ind (indentation)
+        if (prev.indentation) {
+          const indAttrs: Record<string, string> = {};
+          if (prev.indentation.left !== undefined)
+            indAttrs["w:left"] = prev.indentation.left.toString();
+          if (prev.indentation.right !== undefined)
+            indAttrs["w:right"] = prev.indentation.right.toString();
+          if (prev.indentation.firstLine !== undefined)
+            indAttrs["w:firstLine"] = prev.indentation.firstLine.toString();
+          if (prev.indentation.hanging !== undefined)
+            indAttrs["w:hanging"] = prev.indentation.hanging.toString();
+          prevPPrChildren.push(XMLBuilder.wSelf("ind", indAttrs));
+        }
+
+        // 16. contextualSpacing
+        if (prev.contextualSpacing !== undefined) {
           prevPPrChildren.push(
-            XMLBuilder.wSelf("textAlignment", { "w:val": prev.textAlignment })
+            XMLBuilder.wSelf("contextualSpacing", {
+              "w:val": prev.contextualSpacing ? "1" : "0",
+            })
           );
         }
 
-        // textDirection per §17.3.1.40
+        // 17. mirrorIndents
+        if (prev.mirrorIndents !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("mirrorIndents", {
+              "w:val": prev.mirrorIndents ? "1" : "0",
+            })
+          );
+        }
+
+        // 18. jc (alignment)
+        if (prev.alignment) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("jc", { "w:val": prev.alignment })
+          );
+        }
+
+        // 19. textDirection
         if (prev.textDirection) {
           prevPPrChildren.push(
             XMLBuilder.wSelf("textDirection", { "w:val": prev.textDirection })
           );
         }
 
-        // outlineLvl per §17.3.1.20
+        // 20. textAlignment
+        if (prev.textAlignment) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf("textAlignment", { "w:val": prev.textAlignment })
+          );
+        }
+
+        // 21. outlineLvl
         if (prev.outlineLevel !== undefined) {
           prevPPrChildren.push(
             XMLBuilder.wSelf("outlineLvl", { "w:val": prev.outlineLevel.toString() })
@@ -3527,26 +3654,27 @@ export class Paragraph {
    * @example
    * ```typescript
    * // Solid background
-   * para.setShading({ fill: 'FFFF00', val: 'solid' });
+   * para.setShading({ fill: 'FFFF00', pattern: 'solid' });
    *
    * // Pattern with colors
    * para.setShading({
    *   fill: 'FFFF00',
    *   color: '000000',
-   *   val: 'diagStripe'
+   *   pattern: 'diagStripe'
    * });
    * ```
    */
-  setShading(shading: {
-    fill?: string;
-    color?: string;
-    val?: ShadingPattern;
-  }): this {
+  setShading(shading: ShadingConfig): this {
     if (!this.formatting) {
       this.formatting = {};
     }
 
+    const previousValue = this.formatting.shading;
     this.formatting.shading = shading;
+
+    if (this.trackingContext?.isEnabled() && previousValue !== shading) {
+      this.trackingContext.trackParagraphPropertyChange(this, 'shading', previousValue, shading);
+    }
 
     return this;
   }

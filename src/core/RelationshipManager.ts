@@ -144,6 +144,15 @@ export class RelationshipManager {
   }
 
   /**
+   * Adds a webSettings relationship
+   * @returns The created relationship
+   */
+  addWebSettings(): Relationship {
+    const id = this.generateId();
+    return this.addRelationship(Relationship.createWebSettings(id));
+  }
+
+  /**
    * Adds a theme relationship
    * @returns The created relationship
    */
@@ -314,6 +323,15 @@ export class RelationshipManager {
   }
 
   /**
+   * Adds a people relationship (track changes authors)
+   * @returns The created relationship
+   */
+  addPeople(): Relationship {
+    const id = this.generateId();
+    return this.addRelationship(Relationship.createPeople(id));
+  }
+
+  /**
    * Generates the relationships XML file content
    * @returns Complete XML string for .rels file
    */
@@ -342,6 +360,7 @@ export class RelationshipManager {
     manager.addNumbering();
     manager.addFontTable();
     manager.addSettings();
+    manager.addWebSettings();
     manager.addTheme();
     return manager;
   }

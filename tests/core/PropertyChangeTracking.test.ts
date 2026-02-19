@@ -112,13 +112,13 @@ function parseRunPropertyChange(xml: string): Partial<RunFormatting> {
     };
   }
 
-  // Shading - matches CharacterShading interface (fill, color, val)
+  // Shading - matches CharacterShading interface (fill, color, pattern)
   if (prevRPr["w:shd"]) {
     const shd = prevRPr["w:shd"];
     prevProps.shading = {
       fill: shd["@_w:fill"],
       color: shd["@_w:color"],
-      val: shd["@_w:val"],
+      pattern: shd["@_w:val"],
     };
   }
 
@@ -218,7 +218,7 @@ function parseParagraphPropertyChange(xml: string): Partial<ParagraphFormattingP
     prevProps.shading = {
       fill: shd["@_w:fill"],
       color: shd["@_w:color"],
-      val: shd["@_w:val"],
+      pattern: shd["@_w:val"],
       themeFill: shd["@_w:themeFill"],
       themeColor: shd["@_w:themeColor"],
     };
@@ -519,7 +519,7 @@ describe("Property Change Tracking", () => {
         </w:rPrChange>`;
         const props = parseRunPropertyChange(xml);
         expect(props.shading).toEqual({
-          val: "clear",
+          pattern: "clear",
           fill: "FFFF00",
           color: undefined,
         });
@@ -734,7 +734,7 @@ describe("Property Change Tracking", () => {
         </w:pPrChange>`;
         const props = parseParagraphPropertyChange(xml);
         expect(props.shading).toEqual({
-          val: "clear",
+          pattern: "clear",
           fill: "E6E6E6",
           color: "auto",
           themeFill: undefined,

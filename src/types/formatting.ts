@@ -42,39 +42,16 @@ export interface ParagraphBorder {
 }
 
 /**
- * Shading patterns
+ * Shading patterns — re-exported from CommonTypes for backward compatibility.
+ * @see CommonTypes.ShadingPattern for the canonical definition
  */
-export type ShadingPattern =
-  | 'clear'
-  | 'solid'
-  | 'pct5'
-  | 'pct10'
-  | 'pct20'
-  | 'pct25'
-  | 'pct30'
-  | 'pct40'
-  | 'pct50'
-  | 'pct60'
-  | 'pct70'
-  | 'pct75'
-  | 'pct80'
-  | 'pct90'
-  | 'horzStripe'
-  | 'vertStripe'
-  | 'diagStripe'
-  | 'diagCross';
+export type { ShadingPattern } from '../elements/CommonTypes';
 
 /**
- * Paragraph shading configuration
+ * Paragraph shading configuration — re-exported from CommonTypes for backward compatibility.
+ * @see CommonTypes.ShadingConfig for the canonical definition (includes theme attributes)
  */
-export interface ParagraphShading {
-  /** Fill color in hex format */
-  fill: string;
-  /** Shading pattern */
-  pattern?: ShadingPattern;
-  /** Pattern color in hex format */
-  color?: string;
-}
+export type { ShadingConfig as ParagraphShading } from '../elements/CommonTypes';
 
 /**
  * Tab stop alignment

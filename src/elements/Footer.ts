@@ -140,10 +140,11 @@ export class Footer {
   }
 
   /**
-   * Clears all elements
+   * Clears all elements and resets raw XML so toXML() regenerates an empty footer
    */
   clear(): this {
     this.elements = [];
+    this.rawXML = undefined;
     return this;
   }
 

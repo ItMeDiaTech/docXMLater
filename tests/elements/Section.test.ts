@@ -491,4 +491,94 @@ describe('Section', () => {
       expect(props.pageSize?.height).toBe(PAGE_SIZES.LETTER.width);
     });
   });
+
+  describe('Margin preservation (pgMar header/footer)', () => {
+    it('should preserve existing header/footer margins when not explicitly set', () => {
+      const section = new Section({
+        margins: { top: 1440, bottom: 1440, left: 1440, right: 1440, header: 500, footer: 600 },
+      });
+
+      // Update only top/bottom/left/right
+      section.setMargins({ top: 720, bottom: 720, left: 720, right: 720 } as any);
+
+      const props = section.getProperties();
+      expect(props.margins?.top).toBe(720);
+      expect(props.margins?.bottom).toBe(720);
+      expect(props.margins?.header).toBe(500);
+      expect(props.margins?.footer).toBe(600);
+    });
+
+    it('should apply defaults when no existing header/footer and not explicitly set', () => {
+      const section = new Section();
+      // Clear existing margins to simulate no prior header/footer
+      (section as any).properties.margins = undefined;
+
+      section.setMargins({ top: 1440, bottom: 1440, left: 1440, right: 1440 } as any);
+
+      const props = section.getProperties();
+      expect(props.margins?.header).toBe(720);
+      expect(props.margins?.footer).toBe(720);
+    });
+
+    it('should allow explicit header/footer override', () => {
+      const section = new Section({
+        margins: { top: 1440, bottom: 1440, left: 1440, right: 1440, header: 500, footer: 600 },
+      });
+
+      section.setMargins({ top: 720, bottom: 720, left: 720, right: 720, header: 360, footer: 360 });
+
+      const props = section.getProperties();
+      expect(props.margins?.header).toBe(360);
+      expect(props.margins?.footer).toBe(360);
+    });
+
+    it('should preserve gutter from existing margins', () => {
+      const section = new Section({
+        margins: { top: 1440, bottom: 1440, left: 1440, right: 1440, gutter: 288 } as any,
+      });
+
+      section.setMargins({ top: 720, bottom: 720, left: 720, right: 720 } as any);
+
+      const props = section.getProperties();
+      expect((props.margins as any)?.gutter).toBe(288);
+    });
+
+    it('should output header and footer in pgMar XML', () => {
+      const section = new Section({
+        margins: { top: 1440, bottom: 1440, left: 1440, right: 1440, header: 720, footer: 720 },
+      });
+
+      section.setMargins({ top: 720, bottom: 720, left: 720, right: 720 } as any);
+
+      const xml = section.toXML();
+      const xmlStr = JSON.stringify(xml);
+      expect(xmlStr).toContain('w:header');
+      expect(xmlStr).toContain('w:footer');
+    });
+
+    it('should output default 720 for header/footer when parsed as undefined', () => {
+      const section = new Section({
+        margins: { top: 1440, bottom: 1440, left: 1440, right: 1440 },
+      });
+      // Simulate parser leaving header/footer undefined
+      (section as any).properties.margins.header = undefined;
+      (section as any).properties.margins.footer = undefined;
+
+      const xml = section.toXML();
+      const xmlStr = JSON.stringify(xml);
+      expect(xmlStr).toContain('"w:header":"720"');
+      expect(xmlStr).toContain('"w:footer":"720"');
+    });
+
+    it('should output explicit header/footer values when set', () => {
+      const section = new Section({
+        margins: { top: 1440, bottom: 1440, left: 1440, right: 1440, header: 360, footer: 500 },
+      });
+
+      const xml = section.toXML();
+      const xmlStr = JSON.stringify(xml);
+      expect(xmlStr).toContain('"w:header":"360"');
+      expect(xmlStr).toContain('"w:footer":"500"');
+    });
+  });
 });

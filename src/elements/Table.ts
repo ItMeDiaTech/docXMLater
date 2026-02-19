@@ -2,8 +2,11 @@
  * Table - Represents a table in a document
  */
 
+import { Paragraph } from "./Paragraph";
 import { TableRow, RowFormatting } from "./TableRow";
 import { TableCell, CellFormatting } from "./TableCell";
+import { Run } from "./Run";
+import { Revision } from "./Revision";
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { deepClone } from "../utils/deepClone";
 import {
@@ -17,6 +20,8 @@ import {
   VerticalAlignment,
   WidthType,
   ShadingPattern,
+  ShadingConfig,
+  buildShadingAttributes,
 } from "./CommonTypes";
 
 // ============================================================================
@@ -32,7 +37,7 @@ export type TableAlignment = CommonTableAlignment;
 /**
  * Table layout type
  */
-export type TableLayout = "auto" | "fixed";
+export type TableLayout = "auto" | "autofit" | "fixed";
 
 /**
  * Table border definition (same as cell borders)
@@ -116,16 +121,9 @@ export type TableWidthType = "auto" | "dxa" | "pct";
 
 /**
  * Table shading/background
- * Per ECMA-376 Part 1 §17.4.56 (w:shd inside w:tblPr)
+ * @see ShadingConfig in CommonTypes.ts for the canonical definition
  */
-export interface TableShading {
-  /** Background fill color in hex (e.g., 'F0F0F0') */
-  fill?: string;
-  /** Foreground/pattern color in hex */
-  color?: string;
-  /** Pattern type (solid, pct12, horzStripe, etc.) */
-  pattern?: ShadingPattern;
-}
+export type TableShading = ShadingConfig;
 
 /**
  * Table formatting options
@@ -195,11 +193,26 @@ export interface FirstRowFormattingOptions {
 /**
  * Represents a table
  */
+/**
+ * Table property change tracking (w:tblPrChange)
+ * Per ECMA-376 Part 1 §17.13.5.36
+ */
+export interface TblPrChange {
+  author: string;
+  date: string;
+  id: string;
+  previousProperties: Record<string, any>;
+}
+
 export class Table {
   private rows: TableRow[] = [];
   private formatting: TableFormatting;
   /** StylesManager reference for conditional formatting resolution */
   private _stylesManager?: import("../formatting/StylesManager").StylesManager;
+  /** Tracking context for automatic change tracking */
+  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  /** Table property change tracking (w:tblPrChange) */
+  private tblPrChange?: TblPrChange;
 
   /**
    * Creates a new Table
@@ -233,6 +246,36 @@ export class Table {
         this.rows.push(row);
       }
     }
+  }
+
+  /**
+   * Sets the tracking context for automatic change tracking.
+   * Called by Document when track changes is enabled.
+   * @internal
+   */
+  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+    this.trackingContext = context;
+  }
+
+  /**
+   * Gets the table property change tracking info
+   */
+  getTblPrChange(): TblPrChange | undefined {
+    return this.tblPrChange;
+  }
+
+  /**
+   * Sets the table property change tracking info
+   */
+  setTblPrChange(change: TblPrChange | undefined): void {
+    this.tblPrChange = change;
+  }
+
+  /**
+   * Clears the table property change tracking
+   */
+  clearTblPrChange(): void {
+    this.tblPrChange = undefined;
   }
 
   /**
@@ -319,6 +362,41 @@ export class Table {
   }
 
   /**
+   * Gets the first paragraph in the table (first cell of first row)
+   * @returns The first paragraph, or null if the table is empty
+   */
+  getFirstParagraph(): Paragraph | null {
+    if (this.rows.length === 0) return null;
+    const firstRow = this.rows[0];
+    if (!firstRow) return null;
+    const cells = firstRow.getCells();
+    if (cells.length === 0) return null;
+    const paras = cells[0]?.getParagraphs();
+    return paras && paras.length > 0 ? paras[0] ?? null : null;
+  }
+
+  /**
+   * Gets the last paragraph in the table (last cell of last row)
+   * @returns The last paragraph, or null if the table is empty
+   */
+  getLastParagraph(): Paragraph | null {
+    for (let r = this.rows.length - 1; r >= 0; r--) {
+      const row = this.rows[r];
+      if (!row) continue;
+      const cells = row.getCells();
+      for (let c = cells.length - 1; c >= 0; c--) {
+        const cell = cells[c];
+        if (!cell) continue;
+        const paras = cell.getParagraphs();
+        if (paras.length > 0) {
+          return paras[paras.length - 1] ?? null;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Gets the total number of rows in the table
    *
    * @returns Number of rows
@@ -374,7 +452,11 @@ export class Table {
    * ```
    */
   setWidth(twips: number): this {
+    const prev = this.formatting.width;
     this.formatting.width = twips;
+    if (this.trackingContext?.isEnabled() && prev !== twips) {
+      this.trackingContext.trackTableChange(this, 'width', prev, twips);
+    }
     return this;
   }
 
@@ -393,7 +475,11 @@ export class Table {
    * ```
    */
   setAlignment(alignment: TableAlignment): this {
+    const prev = this.formatting.alignment;
     this.formatting.alignment = alignment;
+    if (this.trackingContext?.isEnabled() && prev !== alignment) {
+      this.trackingContext.trackTableChange(this, 'alignment', prev, alignment);
+    }
     return this;
   }
 
@@ -414,7 +500,12 @@ export class Table {
    * ```
    */
   setLayout(layout: TableLayout): this {
-    this.formatting.layout = layout;
+    const prev = this.formatting.layout;
+    // Normalize "auto" to "autofit" per ECMA-376 ST_TblLayoutType (§17.18.87)
+    this.formatting.layout = layout === "auto" ? "autofit" : layout;
+    if (this.trackingContext?.isEnabled() && prev !== this.formatting.layout) {
+      this.trackingContext.trackTableChange(this, 'layout', prev, this.formatting.layout);
+    }
     return this;
   }
 
@@ -450,8 +541,12 @@ export class Table {
    * ```
    */
   setBorders(borders: TableBorders, options?: { applyToCells?: boolean }): this {
+    const prev = this.formatting.borders;
     // Set table-level borders (w:tblBorders)
     this.formatting.borders = borders;
+    if (this.trackingContext?.isEnabled() && prev !== borders) {
+      this.trackingContext.trackTableChange(this, 'borders', prev, borders);
+    }
 
     // Also apply to all cells for consistency (default: true)
     if (options?.applyToCells !== false) {
@@ -628,7 +723,11 @@ export class Table {
    * @returns This table for chaining
    */
   setCellSpacing(twips: number): this {
+    const prev = this.formatting.cellSpacing;
     this.formatting.cellSpacing = twips;
+    if (this.trackingContext?.isEnabled() && prev !== twips) {
+      this.trackingContext.trackTableChange(this, 'cellSpacing', prev, twips);
+    }
     return this;
   }
 
@@ -638,7 +737,11 @@ export class Table {
    * @returns This table for chaining
    */
   setIndent(twips: number): this {
+    const prev = this.formatting.indent;
     this.formatting.indent = twips;
+    if (this.trackingContext?.isEnabled() && prev !== twips) {
+      this.trackingContext.trackTableChange(this, 'indent', prev, twips);
+    }
     return this;
   }
 
@@ -648,7 +751,11 @@ export class Table {
    * @returns This table for chaining
    */
   setStyle(style: string): this {
+    const prev = this.formatting.style;
     this.formatting.style = style;
+    if (this.trackingContext?.isEnabled() && prev !== style) {
+      this.trackingContext.trackTableChange(this, 'style', prev, style);
+    }
     return this;
   }
 
@@ -658,7 +765,11 @@ export class Table {
    * @returns This table for chaining
    */
   setTblLook(tblLook: string): this {
+    const prev = this.formatting.tblLook;
     this.formatting.tblLook = tblLook;
+    if (this.trackingContext?.isEnabled() && prev !== tblLook) {
+      this.trackingContext.trackTableChange(this, 'tblLook', prev, tblLook);
+    }
     return this;
   }
 
@@ -669,7 +780,11 @@ export class Table {
    * @returns This table for chaining
    */
   setStyleRowBandSize(size: number): this {
+    const prev = this.formatting.tblStyleRowBandSize;
     this.formatting.tblStyleRowBandSize = size;
+    if (this.trackingContext?.isEnabled() && prev !== size) {
+      this.trackingContext.trackTableChange(this, 'tblStyleRowBandSize', prev, size);
+    }
     return this;
   }
 
@@ -680,7 +795,11 @@ export class Table {
    * @returns This table for chaining
    */
   setStyleColBandSize(size: number): this {
+    const prev = this.formatting.tblStyleColBandSize;
     this.formatting.tblStyleColBandSize = size;
+    if (this.trackingContext?.isEnabled() && prev !== size) {
+      this.trackingContext.trackTableChange(this, 'tblStyleColBandSize', prev, size);
+    }
     return this;
   }
 
@@ -902,7 +1021,11 @@ export class Table {
    * ```
    */
   setPosition(position: TablePositionProperties): this {
+    const prev = this.formatting.position;
     this.formatting.position = position;
+    if (this.trackingContext?.isEnabled() && prev !== position) {
+      this.trackingContext.trackTableChange(this, 'position', prev, position);
+    }
     return this;
   }
 
@@ -913,7 +1036,11 @@ export class Table {
    * @returns This table for chaining
    */
   setOverlap(overlap: boolean): this {
+    const prev = this.formatting.overlap;
     this.formatting.overlap = overlap;
+    if (this.trackingContext?.isEnabled() && prev !== overlap) {
+      this.trackingContext.trackTableChange(this, 'overlap', prev, overlap);
+    }
     return this;
   }
 
@@ -924,7 +1051,11 @@ export class Table {
    * @returns This table for chaining
    */
   setBidiVisual(bidi: boolean): this {
+    const prev = this.formatting.bidiVisual;
     this.formatting.bidiVisual = bidi;
+    if (this.trackingContext?.isEnabled() && prev !== bidi) {
+      this.trackingContext.trackTableChange(this, 'bidiVisual', prev, bidi);
+    }
     return this;
   }
 
@@ -940,7 +1071,11 @@ export class Table {
    * ```
    */
   setTableGrid(widths: number[]): this {
+    const prev = this.formatting.tableGrid;
     this.formatting.tableGrid = widths;
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackTableChange(this, 'tableGrid', prev, widths);
+    }
     return this;
   }
 
@@ -951,7 +1086,11 @@ export class Table {
    * @returns This table for chaining
    */
   setCaption(caption: string): this {
+    const prev = this.formatting.caption;
     this.formatting.caption = caption;
+    if (this.trackingContext?.isEnabled() && prev !== caption) {
+      this.trackingContext.trackTableChange(this, 'caption', prev, caption);
+    }
     return this;
   }
 
@@ -962,7 +1101,11 @@ export class Table {
    * @returns This table for chaining
    */
   setDescription(description: string): this {
+    const prev = this.formatting.description;
     this.formatting.description = description;
+    if (this.trackingContext?.isEnabled() && prev !== description) {
+      this.trackingContext.trackTableChange(this, 'description', prev, description);
+    }
     return this;
   }
 
@@ -983,7 +1126,11 @@ export class Table {
    * ```
    */
   setShading(shading: TableShading): this {
+    const prev = this.formatting.shading;
     this.formatting.shading = shading;
+    if (this.trackingContext?.isEnabled() && prev !== shading) {
+      this.trackingContext.trackTableChange(this, 'shading', prev, shading);
+    }
     return this;
   }
 
@@ -1015,7 +1162,11 @@ export class Table {
    * ```
    */
   setWidthType(type: TableWidthType): this {
+    const prev = this.formatting.widthType;
     this.formatting.widthType = type;
+    if (this.trackingContext?.isEnabled() && prev !== type) {
+      this.trackingContext.trackTableChange(this, 'widthType', prev, type);
+    }
     return this;
   }
 
@@ -1025,7 +1176,11 @@ export class Table {
    * @returns This table for chaining
    */
   setCellSpacingType(type: TableWidthType): this {
+    const prev = this.formatting.cellSpacingType;
     this.formatting.cellSpacingType = type;
+    if (this.trackingContext?.isEnabled() && prev !== type) {
+      this.trackingContext.trackTableChange(this, 'cellSpacingType', prev, type);
+    }
     return this;
   }
 
@@ -1136,7 +1291,11 @@ export class Table {
    * ```
    */
   setCellMargins(margins: TableCellMargins): this {
+    const prev = this.formatting.cellMargins;
     this.formatting.cellMargins = margins;
+    if (this.trackingContext?.isEnabled() && prev !== margins) {
+      this.trackingContext.trackTableChange(this, 'cellMargins', prev, margins);
+    }
     return this;
   }
 
@@ -1470,13 +1629,7 @@ export class Table {
 
     // Add table shading (background) per ECMA-376 Part 1 §17.4.56
     if (this.formatting.shading) {
-      const shdAttrs: Record<string, string> = {};
-      if (this.formatting.shading.pattern)
-        shdAttrs["w:val"] = this.formatting.shading.pattern;
-      if (this.formatting.shading.fill)
-        shdAttrs["w:fill"] = this.formatting.shading.fill;
-      if (this.formatting.shading.color)
-        shdAttrs["w:color"] = this.formatting.shading.color;
+      const shdAttrs = buildShadingAttributes(this.formatting.shading);
       if (Object.keys(shdAttrs).length > 0) {
         tblPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
       }
@@ -1496,6 +1649,100 @@ export class Table {
           "w:val": this.formatting.description,
         })
       );
+    }
+
+    // Add table property change (w:tblPrChange) per ECMA-376 Part 1 §17.13.5.36
+    // Must be last child of w:tblPr
+    if (this.tblPrChange) {
+      const changeAttrs: Record<string, string | number> = {
+        "w:id": this.tblPrChange.id,
+        "w:author": this.tblPrChange.author,
+        "w:date": this.tblPrChange.date,
+      };
+      const prevTblPrChildren: XMLElement[] = [];
+      const prev = this.tblPrChange.previousProperties;
+      if (prev) {
+        if (prev.style) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblStyle", { "w:val": prev.style }));
+        }
+        if (prev.width !== undefined) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblW", {
+            "w:w": prev.width,
+            "w:type": prev.widthType || "dxa",
+          }));
+        }
+        if (prev.alignment) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("jc", { "w:val": prev.alignment }));
+        }
+        if (prev.indent !== undefined) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblInd", { "w:w": prev.indent, "w:type": "dxa" }));
+        }
+        if (prev.borders) {
+          const borderChildren: XMLElement[] = [];
+          const bNames = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'] as const;
+          for (const name of bNames) {
+            const b = prev.borders[name];
+            if (b) {
+              const bAttrs: Record<string, string | number> = {};
+              if (b.style) bAttrs['w:val'] = b.style;
+              if (b.size !== undefined) bAttrs['w:sz'] = b.size;
+              if (b.color) bAttrs['w:color'] = b.color;
+              borderChildren.push(XMLBuilder.wSelf(name, bAttrs));
+            }
+          }
+          if (borderChildren.length > 0) {
+            prevTblPrChildren.push(XMLBuilder.w("tblBorders", undefined, borderChildren));
+          }
+        }
+        if (prev.shading) {
+          const shadingAttrs = buildShadingAttributes(prev.shading);
+          if (Object.keys(shadingAttrs).length > 0) {
+            prevTblPrChildren.push(XMLBuilder.wSelf("shd", shadingAttrs));
+          }
+        }
+        if (prev.layout) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblLayout", { "w:type": prev.layout }));
+        }
+        if (prev.cellSpacing !== undefined) {
+          const csAttrs: Record<string, string | number> = { "w:w": prev.cellSpacing, "w:type": prev.cellSpacingType || "dxa" };
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblCellSpacing", csAttrs));
+        }
+        if (prev.bidiVisual) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("bidiVisual"));
+        }
+        if (prev.cellMargins) {
+          const cmChildren: XMLElement[] = [];
+          for (const side of ['top', 'start', 'bottom', 'end'] as const) {
+            const val = (prev.cellMargins as Record<string, number | undefined>)[side];
+            if (val !== undefined) {
+              cmChildren.push(XMLBuilder.wSelf(side, { "w:w": val, "w:type": "dxa" }));
+            }
+          }
+          if (cmChildren.length > 0) {
+            prevTblPrChildren.push(XMLBuilder.w("tblCellMar", undefined, cmChildren));
+          }
+        }
+        if (prev.tblLook) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblLook", { "w:val": prev.tblLook }));
+        }
+        if (prev.tblStyleRowBandSize !== undefined) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblStyleRowBandSize", { "w:val": prev.tblStyleRowBandSize }));
+        }
+        if (prev.tblStyleColBandSize !== undefined) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblStyleColBandSize", { "w:val": prev.tblStyleColBandSize }));
+        }
+        if (prev.overlap) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblOverlap", { "w:val": prev.overlap }));
+        }
+        if (prev.caption) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblCaption", { "w:val": prev.caption }));
+        }
+        if (prev.description) {
+          prevTblPrChildren.push(XMLBuilder.wSelf("tblDescription", { "w:val": prev.description }));
+        }
+      }
+      const prevTblPr = XMLBuilder.w("tblPr", undefined, prevTblPrChildren);
+      tblPrChildren.push(XMLBuilder.w("tblPrChange", changeAttrs, [prevTblPr]));
     }
 
     // Build table element
@@ -1556,6 +1803,24 @@ export class Table {
    */
   removeRow(index: number): boolean {
     if (index >= 0 && index < this.rows.length) {
+      // When tracking enabled, mark cells with cellDel and wrap content in w:del
+      if (this.trackingContext?.isEnabled()) {
+        const author = this.trackingContext.getAuthor();
+        const row = this.rows[index]!;
+        for (const cell of row.getCells()) {
+          const cellDelRevision = Revision.createTableCellDelete(author, []);
+          cell.setCellRevision(cellDelRevision);
+          // Wrap paragraph runs in w:del so content appears as deleted
+          for (const para of cell.getParagraphs()) {
+            const runs = para.getRuns();
+            if (runs.length > 0) {
+              const deletion = Revision.createDeletion(author, runs);
+              para.addRevision(deletion);
+            }
+          }
+        }
+        return true;
+      }
       this.rows.splice(index, 1);
       return true;
     }
@@ -1595,6 +1860,16 @@ export class Table {
 
     // Insert the row
     this.rows.splice(index, 0, row);
+
+    // When tracking enabled, mark every cell in the new row with cellIns
+    if (this.trackingContext?.isEnabled()) {
+      const author = this.trackingContext.getAuthor();
+      for (const cell of row.getCells()) {
+        const revision = Revision.createTableCellInsert(author, []);
+        cell.setCellRevision(revision);
+      }
+    }
+
     return row;
   }
 
@@ -1615,8 +1890,18 @@ export class Table {
    * ```
    */
   addColumn(index?: number): this {
+    const isTracking = this.trackingContext?.isEnabled();
+    const author = isTracking ? this.trackingContext!.getAuthor() : '';
+
     for (const row of this.rows) {
       const cell = new TableCell();
+
+      // Mark cell as inserted when tracking
+      if (isTracking) {
+        const revision = Revision.createTableCellInsert(author, []);
+        cell.setCellRevision(revision);
+      }
+
       const cells = row.getCells();
 
       if (index === undefined || index >= cells.length) {
@@ -1625,11 +1910,7 @@ export class Table {
       } else {
         // Insert at specific position
         const idx = Math.max(0, index);
-        // We need to rebuild the row with cells in the correct order
-        const newCells = [...cells.slice(0, idx), cell, ...cells.slice(idx)];
-
-        // Clear existing cells and add in new order
-        (row as any).cells = newCells;
+        row.insertCellAt(idx, cell);
       }
     }
     return this;
@@ -1654,12 +1935,26 @@ export class Table {
       return false;
     }
 
+    // When tracking enabled, mark cells with cellDel instead of removing
+    if (this.trackingContext?.isEnabled()) {
+      const author = this.trackingContext.getAuthor();
+      let marked = false;
+      for (const row of this.rows) {
+        const cells = row.getCells();
+        if (index < cells.length) {
+          const revision = Revision.createTableCellDelete(author, []);
+          cells[index]!.setCellRevision(revision);
+          marked = true;
+        }
+      }
+      return marked;
+    }
+
     let removed = false;
     for (const row of this.rows) {
       const cells = row.getCells();
       if (index < cells.length) {
-        // Remove the cell at the specified index
-        (row as any).cells.splice(index, 1);
+        row.removeCellAt(index);
         removed = true;
       }
     }
@@ -1829,6 +2124,22 @@ export class Table {
           // If also merging horizontally, set column span on all merged cells
           if (endCol > startCol) {
             mergeCell.setColumnSpan(endCol - startCol + 1);
+          }
+        }
+      }
+    }
+
+    // When tracking, mark absorbed cells with cellMerge
+    if (this.trackingContext?.isEnabled()) {
+      const author = this.trackingContext.getAuthor();
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+          // Skip the start cell
+          if (row === startRow && col === startCol) continue;
+          const absorbedCell = this.getCell(row, col);
+          if (absorbedCell) {
+            const revision = Revision.createTableCellMerge(author, []);
+            absorbedCell.setCellRevision(revision);
           }
         }
       }
@@ -2074,6 +2385,27 @@ export class Table {
     }
 
     const actualCount = Math.min(count, this.rows.length - startIndex);
+
+    // When tracking enabled, mark each row's cells with cellDel + w:del
+    if (this.trackingContext?.isEnabled()) {
+      const author = this.trackingContext.getAuthor();
+      for (let i = startIndex; i < startIndex + actualCount; i++) {
+        const row = this.rows[i]!;
+        for (const cell of row.getCells()) {
+          const cellDelRevision = Revision.createTableCellDelete(author, []);
+          cell.setCellRevision(cellDelRevision);
+          for (const para of cell.getParagraphs()) {
+            const runs = para.getRuns();
+            if (runs.length > 0) {
+              const deletion = Revision.createDeletion(author, runs);
+              para.addRevision(deletion);
+            }
+          }
+        }
+      }
+      return true;
+    }
+
     this.rows.splice(startIndex, actualCount);
     return actualCount > 0;
   }

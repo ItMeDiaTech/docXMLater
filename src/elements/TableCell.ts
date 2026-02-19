@@ -13,6 +13,7 @@ import {
   CellVerticalAlignment as CommonCellVerticalAlignment,
   ShadingConfig,
   ShadingPattern,
+  buildShadingAttributes,
   WidthType,
 } from "./CommonTypes";
 
@@ -49,13 +50,9 @@ export interface CellBorders {
 
 /**
  * Cell shading/background
- * @see CommonTypes.ShadingConfig
+ * @see ShadingConfig in CommonTypes.ts for the canonical definition
  */
-export interface CellShading {
-  fill?: string; // Background color in hex
-  color?: string; // Foreground/pattern color in hex
-  pattern?: ShadingPattern; // Pattern type (pct12, solid, horzStripe, etc.)
-}
+export type CellShading = ShadingConfig;
 
 /**
  * Vertical alignment in cell
@@ -104,6 +101,7 @@ export interface CellFormatting {
   hideMark?: boolean; // Hide end-of-cell mark
   cnfStyle?: string; // Conditional formatting style (14-char binary string)
   vMerge?: VerticalMerge; // Vertical cell merge
+  hMerge?: 'restart' | 'continue'; // Legacy horizontal merge (w:hMerge) per ECMA-376 Part 1 §17.4.22
 }
 
 /**
@@ -114,6 +112,17 @@ export interface RawNestedContent {
   position: number; // Content appears after this paragraph index
   xml: string; // Raw XML content
   type: "table" | "sdt"; // Type of nested content
+}
+
+/**
+ * Table cell property change tracking (w:tcPrChange)
+ * Per ECMA-376 Part 1 §17.13.5.37
+ */
+export interface TcPrChange {
+  author: string;
+  date: string;
+  id: string;
+  previousProperties: Record<string, any>;
 }
 
 /**
@@ -128,6 +137,10 @@ export class TableCell {
   private _parentRow?: import('./TableRow').TableRow;
   /** Table cell revision (w:cellIns, w:cellDel, w:cellMerge) per ECMA-376 Part 1 §17.13.5.4-5.6 */
   private cellRevision?: Revision;
+  /** Tracking context for automatic change tracking */
+  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  /** Table cell property change tracking (w:tcPrChange) */
+  private tcPrChange?: TcPrChange;
 
   /**
    * Creates a new TableCell
@@ -135,6 +148,38 @@ export class TableCell {
    */
   constructor(formatting: CellFormatting = {}) {
     this.formatting = formatting;
+  }
+
+  /**
+   * Sets the tracking context for automatic change tracking.
+   * Called by Document when track changes is enabled.
+   * @internal
+   */
+  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+    this.trackingContext = context;
+  }
+
+  /**
+   * Gets the table cell property change tracking info
+   * @returns tcPrChange or undefined
+   */
+  getTcPrChange(): TcPrChange | undefined {
+    return this.tcPrChange;
+  }
+
+  /**
+   * Sets the table cell property change tracking info
+   * @param change - Property change info or undefined to clear
+   */
+  setTcPrChange(change: TcPrChange | undefined): void {
+    this.tcPrChange = change;
+  }
+
+  /**
+   * Clears the table cell property change tracking
+   */
+  clearTcPrChange(): void {
+    this.tcPrChange = undefined;
   }
 
   /**
@@ -190,6 +235,20 @@ export class TableCell {
     if (index < 0 || index >= this.paragraphs.length) {
       return false;
     }
+
+    // When tracking enabled, wrap content in w:del instead of removing
+    if (this.trackingContext?.isEnabled()) {
+      const paragraph = this.paragraphs[index]!;
+      const runs = paragraph.getRuns();
+      if (runs.length > 0) {
+        const author = this.trackingContext.getAuthor();
+        const deletion = Revision.createDeletion(author, runs);
+        this.trackingContext.getRevisionManager().register(deletion);
+        paragraph.addRevision(deletion);
+      }
+      return true;
+    }
+
     const removed = this.paragraphs.splice(index, 1);
     const removedPara = removed[0];
     if (removedPara) {
@@ -243,6 +302,18 @@ export class TableCell {
     if (stylesManager) {
       paragraph._setStylesManager(stylesManager);
     }
+
+    // When tracking enabled, wrap paragraph content in w:ins revision
+    if (this.trackingContext?.isEnabled()) {
+      const runs = paragraph.getRuns();
+      if (runs.length > 0) {
+        const author = this.trackingContext.getAuthor();
+        const insertion = Revision.createInsertion(author, runs);
+        this.trackingContext.getRevisionManager().register(insertion);
+        paragraph.addRevision(insertion);
+      }
+    }
+
     return this;
   }
 
@@ -337,7 +408,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setWidth(twips: number): this {
+    const prev = this.formatting.width;
     this.formatting.width = twips;
+    if (this.trackingContext?.isEnabled() && prev !== twips) {
+      this.trackingContext.trackTableChange(this, 'width', prev, twips);
+    }
     return this;
   }
 
@@ -347,7 +422,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setBorders(borders: CellBorders): this {
+    const prev = this.formatting.borders;
     this.formatting.borders = borders;
+    if (this.trackingContext?.isEnabled() && prev !== borders) {
+      this.trackingContext.trackTableChange(this, 'borders', prev, borders);
+    }
     return this;
   }
 
@@ -357,7 +436,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setShading(shading: CellShading): this {
+    const prev = this.formatting.shading;
     this.formatting.shading = shading;
+    if (this.trackingContext?.isEnabled() && prev !== shading) {
+      this.trackingContext.trackTableChange(this, 'shading', prev, shading);
+    }
     return this;
   }
 
@@ -367,7 +450,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setVerticalAlignment(alignment: CellVerticalAlignment): this {
+    const prev = this.formatting.verticalAlignment;
     this.formatting.verticalAlignment = alignment;
+    if (this.trackingContext?.isEnabled() && prev !== alignment) {
+      this.trackingContext.trackTableChange(this, 'verticalAlignment', prev, alignment);
+    }
     return this;
   }
 
@@ -377,7 +464,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setColumnSpan(span: number): this {
+    const prev = this.formatting.columnSpan;
     this.formatting.columnSpan = span;
+    if (this.trackingContext?.isEnabled() && prev !== span) {
+      this.trackingContext.trackTableChange(this, 'columnSpan', prev, span);
+    }
     return this;
   }
 
@@ -462,7 +553,11 @@ export class TableCell {
     this.validateMargin(margins.left, "left");
     this.validateMargin(margins.right, "right");
 
+    const prev = this.formatting.margins;
     this.formatting.margins = margins;
+    if (this.trackingContext?.isEnabled() && prev !== margins) {
+      this.trackingContext.trackTableChange(this, 'margins', prev, margins);
+    }
     return this;
   }
 
@@ -473,16 +568,8 @@ export class TableCell {
    * @throws {Error} If margin value is negative or exceeds maximum
    */
   setAllMargins(margin: number): this {
-    // Validate the margin value
     this.validateMargin(margin, "all");
-
-    this.formatting.margins = {
-      top: margin,
-      bottom: margin,
-      left: margin,
-      right: margin,
-    };
-    return this;
+    return this.setMargins({ top: margin, bottom: margin, left: margin, right: margin });
   }
 
   /**
@@ -498,7 +585,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setTextDirection(direction: TextDirection): this {
+    const prev = this.formatting.textDirection;
     this.formatting.textDirection = direction;
+    if (this.trackingContext?.isEnabled() && prev !== direction) {
+      this.trackingContext.trackTableChange(this, 'textDirection', prev, direction);
+    }
     return this;
   }
 
@@ -509,7 +600,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setFitText(fit: boolean = true): this {
+    const prev = this.formatting.fitText;
     this.formatting.fitText = fit;
+    if (this.trackingContext?.isEnabled() && prev !== fit) {
+      this.trackingContext.trackTableChange(this, 'fitText', prev, fit);
+    }
     return this;
   }
 
@@ -520,7 +615,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setNoWrap(noWrap: boolean = true): this {
+    const prev = this.formatting.noWrap;
     this.formatting.noWrap = noWrap;
+    if (this.trackingContext?.isEnabled() && prev !== noWrap) {
+      this.trackingContext.trackTableChange(this, 'noWrap', prev, noWrap);
+    }
     return this;
   }
 
@@ -531,7 +630,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setHideMark(hide: boolean = true): this {
+    const prev = this.formatting.hideMark;
     this.formatting.hideMark = hide;
+    if (this.trackingContext?.isEnabled() && prev !== hide) {
+      this.trackingContext.trackTableChange(this, 'hideMark', prev, hide);
+    }
     return this;
   }
 
@@ -543,7 +646,11 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setConditionalStyle(cnfStyle: string): this {
+    const prev = this.formatting.cnfStyle;
     this.formatting.cnfStyle = cnfStyle;
+    if (this.trackingContext?.isEnabled() && prev !== cnfStyle) {
+      this.trackingContext.trackTableChange(this, 'cnfStyle', prev, cnfStyle);
+    }
     return this;
   }
 
@@ -555,8 +662,18 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setWidthType(width: number, type: CellWidthType = "dxa"): this {
+    const prevWidth = this.formatting.width;
+    const prevType = this.formatting.widthType;
     this.formatting.width = width;
     this.formatting.widthType = type;
+    if (this.trackingContext?.isEnabled()) {
+      if (prevWidth !== width) {
+        this.trackingContext.trackTableChange(this, 'width', prevWidth, width);
+      }
+      if (prevType !== type) {
+        this.trackingContext.trackTableChange(this, 'widthType', prevType, type);
+      }
+    }
     return this;
   }
 
@@ -569,7 +686,25 @@ export class TableCell {
    * @returns This cell for chaining
    */
   setVerticalMerge(merge: VerticalMerge | undefined): this {
+    const prev = this.formatting.vMerge;
     this.formatting.vMerge = merge;
+    if (this.trackingContext?.isEnabled() && prev !== merge) {
+      this.trackingContext.trackTableChange(this, 'vMerge', prev, merge);
+    }
+    return this;
+  }
+
+  /**
+   * Sets the legacy horizontal merge state per ECMA-376 Part 1 §17.4.22
+   * @param merge - 'restart' to start a new merge region, 'continue' to continue, or undefined to clear
+   * @returns This cell for chaining
+   */
+  setHorizontalMerge(merge: 'restart' | 'continue' | undefined): this {
+    const prev = this.formatting.hMerge;
+    this.formatting.hMerge = merge;
+    if (this.trackingContext?.isEnabled() && prev !== merge) {
+      this.trackingContext.trackTableChange(this, 'hMerge', prev, merge);
+    }
     return this;
   }
 
@@ -804,6 +939,14 @@ export class TableCell {
    */
   getVerticalMerge(): VerticalMerge | undefined {
     return this.formatting.vMerge;
+  }
+
+  /**
+   * Gets the legacy horizontal merge state
+   * @returns Horizontal merge state ('restart', 'continue') or undefined
+   */
+  getHorizontalMerge(): 'restart' | 'continue' | undefined {
+    return this.formatting.hMerge;
   }
 
   /**
@@ -1157,18 +1300,7 @@ export class TableCell {
 
     // Add shading
     if (this.formatting.shading) {
-      const shadingAttrs: Record<string, string> = {};
-
-      if (this.formatting.shading.pattern) {
-        shadingAttrs["w:val"] = this.formatting.shading.pattern;
-      }
-      if (this.formatting.shading.fill) {
-        shadingAttrs["w:fill"] = this.formatting.shading.fill;
-      }
-      if (this.formatting.shading.color) {
-        shadingAttrs["w:color"] = this.formatting.shading.color;
-      }
-
+      const shadingAttrs = buildShadingAttributes(this.formatting.shading);
       if (Object.keys(shadingAttrs).length > 0) {
         tcPrChildren.push(XMLBuilder.wSelf("shd", shadingAttrs));
       }
@@ -1267,6 +1399,15 @@ export class TableCell {
       }
     }
 
+    // Add legacy horizontal merge (hMerge) per ECMA-376 Part 1 §17.4.22
+    if (this.formatting.hMerge) {
+      if (this.formatting.hMerge === "restart") {
+        tcPrChildren.push(XMLBuilder.wSelf("hMerge", { "w:val": "restart" }));
+      } else {
+        tcPrChildren.push(XMLBuilder.wSelf("hMerge"));
+      }
+    }
+
     // Add cell revision markers (w:cellIns, w:cellDel, w:cellMerge) per ECMA-376 Part 1 §17.13.5.4-5.6
     if (this.cellRevision) {
       const revType = this.cellRevision.getType();
@@ -1291,6 +1432,82 @@ export class TableCell {
         }
         tcPrChildren.push(XMLBuilder.wSelf("cellMerge", attrs));
       }
+    }
+
+    // Add table cell property change (w:tcPrChange) per ECMA-376 Part 1 §17.13.5.37
+    // Must be last child of w:tcPr
+    if (this.tcPrChange) {
+      const changeAttrs: Record<string, string | number> = {
+        "w:id": this.tcPrChange.id,
+        "w:author": this.tcPrChange.author,
+        "w:date": this.tcPrChange.date,
+      };
+      const prevTcPrChildren: XMLElement[] = [];
+      const prev = this.tcPrChange.previousProperties;
+      if (prev) {
+        if (prev.width !== undefined) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("tcW", {
+            "w:w": prev.width,
+            "w:type": prev.widthType || "dxa",
+          }));
+        }
+        if (prev.cnfStyle) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("cnfStyle", { "w:val": prev.cnfStyle }));
+        }
+        if (prev.shading) {
+          const shadingAttrs = buildShadingAttributes(prev.shading);
+          if (Object.keys(shadingAttrs).length > 0) {
+            prevTcPrChildren.push(XMLBuilder.wSelf("shd", shadingAttrs));
+          }
+        }
+        if (prev.margins) {
+          const marginChildren: XMLElement[] = [];
+          if (prev.margins.top !== undefined) {
+            marginChildren.push(XMLBuilder.wSelf("top", { "w:w": prev.margins.top.toString(), "w:type": "dxa" }));
+          }
+          if (prev.margins.bottom !== undefined) {
+            marginChildren.push(XMLBuilder.wSelf("bottom", { "w:w": prev.margins.bottom.toString(), "w:type": "dxa" }));
+          }
+          if (prev.margins.left !== undefined) {
+            marginChildren.push(XMLBuilder.wSelf("left", { "w:w": prev.margins.left.toString(), "w:type": "dxa" }));
+          }
+          if (prev.margins.right !== undefined) {
+            marginChildren.push(XMLBuilder.wSelf("right", { "w:w": prev.margins.right.toString(), "w:type": "dxa" }));
+          }
+          if (marginChildren.length > 0) {
+            prevTcPrChildren.push(XMLBuilder.w("tcMar", undefined, marginChildren));
+          }
+        }
+        if (prev.verticalAlignment) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("vAlign", { "w:val": prev.verticalAlignment }));
+        }
+        if (prev.borders) {
+          const borderElements: XMLElement[] = [];
+          if (prev.borders.top) borderElements.push(XMLBuilder.createBorder("top", prev.borders.top));
+          if (prev.borders.bottom) borderElements.push(XMLBuilder.createBorder("bottom", prev.borders.bottom));
+          if (prev.borders.left) borderElements.push(XMLBuilder.createBorder("left", prev.borders.left));
+          if (prev.borders.right) borderElements.push(XMLBuilder.createBorder("right", prev.borders.right));
+          if (borderElements.length > 0) {
+            prevTcPrChildren.push(XMLBuilder.w("tcBorders", undefined, borderElements));
+          }
+        }
+        if (prev.textDirection) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("textDirection", { "w:val": prev.textDirection }));
+        }
+        if (prev.noWrap) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("noWrap"));
+        }
+        if (prev.hideMark) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("hideMark"));
+        }
+        if (prev.fitText) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("tcFitText"));
+        }
+      }
+      const prevTcPr = prevTcPrChildren.length > 0
+        ? XMLBuilder.w("tcPr", undefined, prevTcPrChildren)
+        : XMLBuilder.w("tcPr", undefined, []);
+      tcPrChildren.push(XMLBuilder.w("tcPrChange", changeAttrs, [prevTcPr]));
     }
 
     // Build cell element

@@ -11,8 +11,10 @@ import { CustomXmlBlock } from "../elements/CustomXml";
 import { PreservedElement } from "../elements/PreservedElement";
 import { MathParagraph } from "../elements/MathElement";
 import { CommentManager } from "../elements/CommentManager";
+import { Endnote } from "../elements/Endnote";
 import { EndnoteManager } from "../elements/EndnoteManager";
 import { Field } from "../elements/Field";
+import { Footnote } from "../elements/Footnote";
 import { FootnoteManager } from "../elements/FootnoteManager";
 import { Footer } from "../elements/Footer";
 import { Header } from "../elements/Header";
@@ -42,6 +44,7 @@ import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
 import { Table, TableBorder } from "../elements/Table";
 import { TableCell } from "../elements/TableCell";
 import { TableOfContentsElement } from "../elements/TableOfContentsElement";
+import { resolveCellShading } from "../utils/ShadingResolver";
 import { NumberingManager } from "../formatting/NumberingManager";
 import { Style, StyleProperties } from "../formatting/Style";
 import { StylesManager } from "../formatting/StylesManager";
@@ -84,6 +87,7 @@ import { DocumentIdManager } from "./DocumentIdManager";
 import { DocumentParser } from "./DocumentParser";
 import { DocumentValidator } from "./DocumentValidator";
 import { RelationshipManager } from "./RelationshipManager";
+import { RelationshipType } from "./Relationship";
 import { BodyElement } from "./DocumentContent";
 
 /**
@@ -249,6 +253,8 @@ export class Document {
     this.bookmarkManager = BookmarkManager.create();
     this.revisionManager = RevisionManager.create();
     this.commentManager = CommentManager.create();
+    this.footnoteManager = FootnoteManager.create();
+    this.endnoteManager = EndnoteManager.create();
     this.documentIdManager = DocumentIdManager.create();
 
     // Wire up centralized ID allocation for all annotation managers
@@ -299,9 +305,8 @@ export class Document {
   private commentManager: CommentManager;
   private documentIdManager: DocumentIdManager;
   private trackingContext: DocumentTrackingContext;
-  // Reserved for future implementation - using proper types from existing managers
-  private _footnoteManager?: FootnoteManager;
-  private _endnoteManager?: EndnoteManager;
+  private footnoteManager: FootnoteManager;
+  private endnoteManager: EndnoteManager;
 
   // Helper classes for parsing, generation, and validation
   private parser: DocumentParser;
@@ -343,6 +348,19 @@ export class Document {
   private _originalStylesXml?: string;
   private _originalNumberingXml?: string;
   private _originalSettingsXml?: string;
+  private _originalAppPropsXml?: string;
+  private _originalFootnotesXml?: string;
+  private _originalEndnotesXml?: string;
+  private _originalCommentsXml?: string;
+  private _commentsModified: boolean = false;
+  private _originalCommentCompanionFiles: Map<string, string> = new Map();
+
+  // Track whether app properties have been programmatically modified since load
+  private _appPropsModified: boolean = false;
+
+  // Track whether footnotes/endnotes have been programmatically modified since load
+  private _footnotesModified: boolean = false;
+  private _endnotesModified: boolean = false;
 
   // Track whether settings have been programmatically modified since load
   // When true, mergeSettingsWithOriginal() will apply in-memory state to the preserved XML
@@ -355,6 +373,20 @@ export class Document {
   private rsidRoot?: string;
   private rsids: Set<string> = new Set();
   private documentProtection?: DocumentProtection;
+
+  /** Document background (w:background) per ECMA-376 Part 1 §17.2.1 */
+  private _documentBackground?: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string };
+
+  /** Even and odd headers setting (w:evenAndOddHeaders) per ECMA-376 Part 1 §17.15.1.28 */
+  private _evenAndOddHeaders?: boolean;
+  /** Mirror margins setting (w:mirrorMargins) per ECMA-376 Part 1 §17.15.1.57 */
+  private _mirrorMargins?: boolean;
+  /** Auto hyphenation setting (w:autoHyphenation) per ECMA-376 Part 1 §17.15.1.10 */
+  private _autoHyphenation?: boolean;
+  /** Decimal symbol for locale (w:decimalSymbol) per ECMA-376 Part 1 §17.15.1.23 */
+  private _decimalSymbol?: string;
+  /** List separator for locale (w:listSeparator) per ECMA-376 Part 1 §17.15.1.55 */
+  private _listSeparator?: string;
 
   /**
    * Snapshot of save-related state for rollback on failure
@@ -600,6 +632,12 @@ export class Document {
       doc.parseSettingsFromXml(settingsXml);
     }
 
+    // Preserve original app.xml for round-trip fidelity (HeadingPairs, TotalTime, etc.)
+    const appPropsXml = zipHandler.getFileAsString(DOCX_PATHS.APP_PROPS);
+    if (appPropsXml) {
+      doc._originalAppPropsXml = appPropsXml;
+    }
+
     await doc.parseDocument();
 
     // Surface parse warnings so users know about partial parsing issues
@@ -739,6 +777,33 @@ export class Document {
       }
     }
 
+    // Parse w:evenAndOddHeaders per ECMA-376 Part 1 §17.15.1.28
+    if (/<w:evenAndOddHeaders\b[^>]*\/?>/.test(settingsXml)) {
+      this._evenAndOddHeaders = true;
+    }
+
+    // Parse w:mirrorMargins per ECMA-376 Part 1 §17.15.1.57
+    if (/<w:mirrorMargins\b[^>]*\/?>/.test(settingsXml)) {
+      this._mirrorMargins = true;
+    }
+
+    // Parse w:autoHyphenation per ECMA-376 Part 1 §17.15.1.10
+    if (/<w:autoHyphenation\b[^>]*\/?>/.test(settingsXml)) {
+      this._autoHyphenation = true;
+    }
+
+    // Parse w:decimalSymbol per ECMA-376 Part 1 §17.15.1.23
+    const decimalMatch = settingsXml.match(/<w:decimalSymbol\s+w:val\s*=\s*"([^"]*)"\s*\/?>/);
+    if (decimalMatch?.[1]) {
+      this._decimalSymbol = decimalMatch[1];
+    }
+
+    // Parse w:listSeparator per ECMA-376 Part 1 §17.15.1.55
+    const listSepMatch = settingsXml.match(/<w:listSeparator\s+w:val\s*=\s*"([^"]*)"\s*\/?>/);
+    if (listSepMatch?.[1]) {
+      this._listSeparator = listSepMatch[1];
+    }
+
     // Parse w:compat block for compatibility mode detection
     this._compatInfo = this.parseCompatBlock(settingsXml);
   }
@@ -830,6 +895,7 @@ export class Document {
     this.relationshipManager = result.relationshipManager;
     this.namespaces = result.namespaces;
     this.properties = result.properties;
+    this._documentBackground = result.documentBackground;
 
     // Populate styles manager
     for (const style of result.styles) {
@@ -910,6 +976,8 @@ export class Document {
     // Parse and register comments from comments.xml
     // Must be called AFTER initializeGlobalAnnotationIds() to properly handle ID synchronization
     this.parseAndRegisterComments();
+    this.parseAndRegisterFootnotes();
+    this.parseAndRegisterEndnotes();
 
     // Populate revision locations for changelog/tracking purposes
     this.populateRevisionLocations();
@@ -957,6 +1025,17 @@ export class Document {
       return; // No comments.xml file, nothing to parse
     }
 
+    // Preserve original for passthrough (same pattern as footnotes)
+    this._originalCommentsXml = commentsXml;
+
+    // Also preserve companion files from the ZIP
+    for (const path of [DOCX_PATHS.COMMENTS_EXTENDED, DOCX_PATHS.COMMENTS_IDS, DOCX_PATHS.COMMENTS_EXTENSIBLE]) {
+      const content = this.zipHandler.getFileAsString(path);
+      if (content) {
+        this._originalCommentCompanionFiles.set(path, content);
+      }
+    }
+
     const parser = new DocumentParser();
     const comments = parser.parseCommentsXml(commentsXml);
 
@@ -967,6 +1046,58 @@ export class Document {
 
     // Link replies to their parent comments
     this.commentManager.linkReplies();
+  }
+
+  private parseAndRegisterFootnotes(): void {
+    const footnotesXml = this.zipHandler.getFileAsString(DOCX_PATHS.FOOTNOTES);
+    if (!footnotesXml) {
+      return;
+    }
+
+    // Always preserve original for passthrough, even if parsing fails
+    this._originalFootnotesXml = footnotesXml;
+
+    try {
+      const parser = new DocumentParser();
+      const footnotes = parser.parseFootnotesXml(footnotesXml);
+
+      for (const footnote of footnotes) {
+        const id = footnote.getId();
+        // Special footnotes (separator=-1, continuation=0) are already in the manager
+        if (!this.footnoteManager.hasFootnote(id)) {
+          this.footnoteManager.register(footnote);
+        }
+      }
+    } catch (error) {
+      this.logger.warn('Failed to parse footnotes - preserving original XML for passthrough', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private parseAndRegisterEndnotes(): void {
+    const endnotesXml = this.zipHandler.getFileAsString(DOCX_PATHS.ENDNOTES);
+    if (!endnotesXml) {
+      return;
+    }
+
+    this._originalEndnotesXml = endnotesXml;
+
+    try {
+      const parser = new DocumentParser();
+      const endnotes = parser.parseEndnotesXml(endnotesXml);
+
+      for (const endnote of endnotes) {
+        const id = endnote.getId();
+        if (!this.endnoteManager.hasEndnote(id)) {
+          this.endnoteManager.register(endnote);
+        }
+      }
+    } catch (error) {
+      this.logger.warn('Failed to parse endnotes - preserving original XML for passthrough', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /**
@@ -1036,7 +1167,8 @@ export class Document {
       this.generator.generateDocumentXml(
         this.bodyElements,
         this.section,
-        this.namespaces
+        this.namespaces,
+        this._documentBackground
       )
     );
 
@@ -1062,6 +1194,12 @@ export class Document {
     this.zipHandler.addFile(
       "word/fontTable.xml",
       this.generator.generateFontTable()
+    );
+
+    // word/webSettings.xml
+    this.zipHandler.addFile(
+      "word/webSettings.xml",
+      this.generator.generateWebSettings()
     );
 
     // word/settings.xml (REQUIRED for DOCX compliance)
@@ -1138,6 +1276,19 @@ export class Document {
    */
   addParagraph(paragraph: Paragraph): this {
     paragraph._setStylesManager(this.stylesManager);
+
+    // When tracking enabled, bind context and wrap existing content in w:ins revisions
+    if (this.trackChangesEnabled && this.trackingContext.isEnabled()) {
+      this.bindTrackingToElement(paragraph);
+      const runs = paragraph.getRuns();
+      if (runs.length > 0) {
+        const author = this.trackingContext.getAuthor();
+        const insertion = Revision.createInsertion(author, runs);
+        this.trackingContext.getRevisionManager().register(insertion);
+        paragraph.addRevision(insertion);
+      }
+    }
+
     this.bodyElements.push(paragraph);
     return this;
   }
@@ -1202,6 +1353,12 @@ export class Document {
    */
   addTable(table: Table): this {
     table._setStylesManager(this.stylesManager);
+
+    // When tracking enabled, bind context to table and its children
+    if (this.trackChangesEnabled && this.trackingContext.isEnabled()) {
+      this.bindTrackingToElement(table);
+    }
+
     this.bodyElements.push(table);
     return this;
   }
@@ -1697,6 +1854,7 @@ export class Document {
    */
   setApplication(application: string): this {
     this.properties.application = application;
+    this._appPropsModified = true;
     return this;
   }
 
@@ -1707,6 +1865,7 @@ export class Document {
    */
   setAppVersion(version: string): this {
     this.properties.appVersion = version;
+    this._appPropsModified = true;
     return this;
   }
 
@@ -1717,6 +1876,7 @@ export class Document {
    */
   setCompany(company: string): this {
     this.properties.company = company;
+    this._appPropsModified = true;
     return this;
   }
 
@@ -1727,6 +1887,7 @@ export class Document {
    */
   setManager(manager: string): this {
     this.properties.manager = manager;
+    this._appPropsModified = true;
     return this;
   }
 
@@ -1887,6 +2048,10 @@ export class Document {
     // from orphaned numId references pointing to removed definitions
     this.validateNumberingReferences();
 
+    // Validate bookmark pairs — add missing bookmarkEnd markers and remove orphaned ends
+    // This prevents Word "unreadable content" errors from unbalanced bookmark pairs
+    this.validateBookmarkPairs();
+
     // Only regenerate document.xml if we haven't manually stripped tracked changes
     // Stripping sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
     if (this.skipDocumentXmlRegeneration) {
@@ -1907,6 +2072,8 @@ export class Document {
     this.saveHeaders();
     this.saveFooters();
     this.saveComments();
+    this.saveFootnotes();
+    this.saveEndnotes();
     this.updatePeopleXml();
     this.saveCustomProperties();
     this.updateRelationships();
@@ -2046,7 +2213,8 @@ export class Document {
     let xml = this.generator.generateDocumentXml(
       this.bodyElements,
       this.section,
-      this.namespaces
+      this.namespaces,
+      this._documentBackground
     );
 
     // Sync TOC field instructions with actual style names
@@ -2066,10 +2234,71 @@ export class Document {
 
   /**
    * Updates the app properties with current values
+   * Uses preservation strategy to maintain original metadata when unmodified
    */
   private updateAppProps(): void {
-    const xml = this.generator.generateAppProps(this.properties);
-    this.zipHandler.updateFile(DOCX_PATHS.APP_PROPS, xml);
+    if (this._originalAppPropsXml && !this._appPropsModified) {
+      // Preserve original as-is — no changes to app properties
+      return;
+    }
+    if (this._originalAppPropsXml && this._appPropsModified) {
+      // Merge: update only changed fields in original XML
+      const mergedXml = this.mergeAppPropsWithOriginal();
+      this.zipHandler.updateFile(DOCX_PATHS.APP_PROPS, mergedXml);
+    } else {
+      // New document — generate from scratch
+      const xml = this.generator.generateAppProps(this.properties);
+      this.zipHandler.updateFile(DOCX_PATHS.APP_PROPS, xml);
+    }
+  }
+
+  /**
+   * Merges modified app properties with the original app.xml
+   * Updates only fields that have been programmatically changed,
+   * preserving HeadingPairs, TotalTime, Pages, Words, etc.
+   */
+  private mergeAppPropsWithOriginal(): string {
+    if (!this._originalAppPropsXml) {
+      return this.generator.generateAppProps(this.properties);
+    }
+
+    let xml = this._originalAppPropsXml;
+
+    // Update Company if changed
+    if (this.properties.company !== undefined) {
+      const escaped = XMLBuilder.sanitizeXmlContent(this.properties.company);
+      if (xml.includes('<Company>')) {
+        xml = xml.replace(/<Company>[^<]*<\/Company>/, `<Company>${escaped}</Company>`);
+      } else if (xml.includes('<Company/>')) {
+        xml = xml.replace(/<Company\/>/, `<Company>${escaped}</Company>`);
+      }
+    }
+
+    // Update Application if changed
+    if (this.properties.application !== undefined) {
+      const escaped = XMLBuilder.sanitizeXmlContent(this.properties.application);
+      if (xml.includes('<Application>')) {
+        xml = xml.replace(/<Application>[^<]*<\/Application>/, `<Application>${escaped}</Application>`);
+      }
+    }
+
+    // Update AppVersion if changed
+    if (this.properties.appVersion !== undefined) {
+      const escaped = XMLBuilder.sanitizeXmlContent(this.properties.appVersion);
+      if (xml.includes('<AppVersion>')) {
+        xml = xml.replace(/<AppVersion>[^<]*<\/AppVersion>/, `<AppVersion>${escaped}</AppVersion>`);
+      }
+    }
+
+    // Update Manager if changed
+    if (this.properties.manager !== undefined) {
+      const escaped = XMLBuilder.sanitizeXmlContent(this.properties.manager);
+      if (xml.includes('<Manager>')) {
+        xml = xml.replace(/<Manager>[^<]*<\/Manager>/, `<Manager>${escaped}</Manager>`);
+      }
+    }
+
+    return xml;
   }
 
   /**
@@ -2129,7 +2358,10 @@ export class Document {
       // Pattern to match existing style with this ID (handles various attribute orders)
       // Matches: <w:style w:type="..." w:styleId="StyleId">...</w:style>
       // or: <w:style w:styleId="StyleId" w:type="...">...</w:style>
-      const escapedStyleId = styleId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Note: The regex escape includes `"` because the escaped value is interpolated
+      // inside a "..." pattern in the regex — protects against IDs containing quotes.
+      // Search/replace methods omit `"` since their patterns don't quote the value.
+      const escapedStyleId = styleId.replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
       const stylePattern = new RegExp(
         `<w:style[^>]*\\sw:styleId="${escapedStyleId}"[^>]*>[\\s\\S]*?</w:style>`
       );
@@ -2154,13 +2386,128 @@ export class Document {
    * Preserves original XML if numbering hasn't been modified (formatting preservation)
    */
   private updateNumberingXml(): void {
-    // Preserve original if numbering wasn't modified
     if (this._originalNumberingXml && !this.numberingManager.isModified()) {
+      // Unmodified — preserve original as-is
       this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, this._originalNumberingXml);
+    } else if (this._originalNumberingXml) {
+      // Modified — merge changes into original XML to preserve namespaces/attributes
+      const mergedXml = this.mergeNumberingWithOriginal();
+      this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, mergedXml);
     } else {
+      // New document — generate from scratch
       const xml = this.numberingManager.generateNumberingXml();
       this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
     }
+  }
+
+  /**
+   * Merges modified numbering definitions with the original numbering.xml
+   *
+   * This preserves the original root element (namespaces, mc:Ignorable) and all
+   * unmodified definitions while only updating definitions that have been explicitly
+   * modified via addAbstractNumbering() or addInstance().
+   *
+   * @returns Merged XML string with original structure + modified definitions
+   * @private
+   */
+  private mergeNumberingWithOriginal(): string {
+    if (!this._originalNumberingXml) {
+      return this.numberingManager.generateNumberingXml();
+    }
+
+    const modifiedAbstractNumIds = this.numberingManager.getModifiedAbstractNumIds();
+    const modifiedNumIds = this.numberingManager.getModifiedNumIds();
+    const removedAbstractNumIds = this.numberingManager.getRemovedAbstractNumIds();
+    const removedNumIds = this.numberingManager.getRemovedNumIds();
+
+    // If nothing was modified or removed, return original as-is
+    if (modifiedAbstractNumIds.size === 0 && modifiedNumIds.size === 0 &&
+        removedAbstractNumIds.size === 0 && removedNumIds.size === 0) {
+      return this._originalNumberingXml;
+    }
+
+    let resultXml = this._originalNumberingXml;
+
+    // Replace or append modified abstractNum definitions
+    for (const abstractNumId of modifiedAbstractNumIds) {
+      const abstractNum = this.numberingManager.getAbstractNumbering(abstractNumId);
+      if (!abstractNum) continue;
+
+      const newXml = XMLBuilder.elementToString(abstractNum.toXML());
+
+      // Pattern to match existing abstractNum with this ID (handles any attribute order)
+      const escapedId = String(abstractNumId).replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
+      const pattern = new RegExp(
+        `<w:abstractNum[^>]*\\sw:abstractNumId="${escapedId}"[^>]*>[\\s\\S]*?</w:abstractNum>`
+      );
+
+      if (pattern.test(resultXml)) {
+        // Replace existing definition
+        resultXml = resultXml.replace(pattern, newXml);
+      } else {
+        // New definition — insert before the first <w:num> or before </w:numbering>
+        const numPos = resultXml.indexOf('<w:num ');
+        if (numPos !== -1) {
+          resultXml = resultXml.slice(0, numPos) + newXml + '\n' + resultXml.slice(numPos);
+        } else {
+          resultXml = this.insertBeforeNumberingEnd(resultXml, newXml);
+        }
+      }
+    }
+
+    // Replace or append modified num instances
+    for (const numId of modifiedNumIds) {
+      const instance = this.numberingManager.getInstance(numId);
+      if (!instance) continue;
+
+      const newXml = XMLBuilder.elementToString(instance.toXML());
+
+      // Pattern to match existing num with this ID (handles any attribute order)
+      const escapedNumId = String(numId).replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
+      const pattern = new RegExp(
+        `<w:num[^>]*\\sw:numId="${escapedNumId}"[^>]*>[\\s\\S]*?</w:num>`
+      );
+
+      if (pattern.test(resultXml)) {
+        // Replace existing instance
+        resultXml = resultXml.replace(pattern, newXml);
+      } else {
+        // New instance — insert before numIdMacAtCleanup or </w:numbering>
+        resultXml = this.insertBeforeNumberingEnd(resultXml, newXml);
+      }
+    }
+
+    // Remove deleted abstractNum definitions
+    for (const abstractNumId of removedAbstractNumIds) {
+      const escapedId = String(abstractNumId).replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
+      const pattern = new RegExp(
+        `\\s*<w:abstractNum[^>]*\\sw:abstractNumId="${escapedId}"[^>]*>[\\s\\S]*?</w:abstractNum>`
+      );
+      resultXml = resultXml.replace(pattern, '');
+    }
+
+    // Remove deleted num instances
+    for (const numId of removedNumIds) {
+      const escapedNumId = String(numId).replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
+      const pattern = new RegExp(
+        `\\s*<w:num[^>]*\\sw:numId="${escapedNumId}"[^>]*>[\\s\\S]*?</w:num>`
+      );
+      resultXml = resultXml.replace(pattern, '');
+    }
+
+    return resultXml;
+  }
+
+  /**
+   * Inserts content before `<w:numIdMacAtCleanup>` if present, otherwise before `</w:numbering>`.
+   * Per ECMA-376 CT_Numbering, the order is: abstractNum* → num* → numIdMacAtCleanup?
+   */
+  private insertBeforeNumberingEnd(xml: string, content: string): string {
+    const macPos = xml.indexOf('<w:numIdMacAtCleanup');
+    if (macPos !== -1) {
+      return xml.slice(0, macPos) + content + '\n' + xml.slice(macPos);
+    }
+    return xml.replace('</w:numbering>', `${content}\n</w:numbering>`);
   }
 
   /**
@@ -2212,6 +2559,7 @@ export class Document {
     xml = this.mergeTrackChangesIntoSettings(xml);
     xml = this.mergeProtectionIntoSettings(xml);
     xml = this.mergeRsidsIntoSettings(xml);
+    xml = this.mergeBooleanSettingsIntoSettings(xml);
 
     return xml;
   }
@@ -2360,6 +2708,54 @@ export class Document {
   }
 
   /**
+   * Merges boolean settings (evenAndOddHeaders, mirrorMargins, autoHyphenation)
+   * into the settings.xml preserving schema order.
+   * @private
+   */
+  private mergeBooleanSettingsIntoSettings(xml: string): string {
+    // Merge evenAndOddHeaders
+    const hasEOH = /<w:evenAndOddHeaders\b[^>]*\/?>/.test(xml);
+    if (this._evenAndOddHeaders && !hasEOH) {
+      // Insert before w:footnotePr or w:endnotePr or fallback before </w:settings>
+      if (/<w:footnotePr\b/.test(xml)) {
+        xml = xml.replace(/<w:footnotePr\b/, '<w:evenAndOddHeaders/>\n  <w:footnotePr');
+      } else if (/<w:endnotePr\b/.test(xml)) {
+        xml = xml.replace(/<w:endnotePr\b/, '<w:evenAndOddHeaders/>\n  <w:endnotePr');
+      } else {
+        xml = xml.replace(/<\/w:settings>/, '  <w:evenAndOddHeaders/>\n</w:settings>');
+      }
+    } else if (!this._evenAndOddHeaders && hasEOH) {
+      xml = xml.replace(/<w:evenAndOddHeaders\b[^>]*\/?>\s*/g, '');
+    }
+
+    // Merge mirrorMargins
+    const hasMM = /<w:mirrorMargins\b[^>]*\/?>/.test(xml);
+    if (this._mirrorMargins && !hasMM) {
+      if (/<w:defaultTabStop\b/.test(xml)) {
+        xml = xml.replace(/<w:defaultTabStop\b/, '<w:mirrorMargins/>\n  <w:defaultTabStop');
+      } else {
+        xml = xml.replace(/<\/w:settings>/, '  <w:mirrorMargins/>\n</w:settings>');
+      }
+    } else if (!this._mirrorMargins && hasMM) {
+      xml = xml.replace(/<w:mirrorMargins\b[^>]*\/?>\s*/g, '');
+    }
+
+    // Merge autoHyphenation
+    const hasAH = /<w:autoHyphenation\b[^>]*\/?>/.test(xml);
+    if (this._autoHyphenation && !hasAH) {
+      if (/<w:defaultTabStop\b/.test(xml)) {
+        xml = xml.replace(/<w:defaultTabStop\b/, '<w:autoHyphenation/>\n  <w:defaultTabStop');
+      } else {
+        xml = xml.replace(/<\/w:settings>/, '  <w:autoHyphenation/>\n</w:settings>');
+      }
+    } else if (!this._autoHyphenation && hasAH) {
+      xml = xml.replace(/<w:autoHyphenation\b[^>]*\/?>\s*/g, '');
+    }
+
+    return xml;
+  }
+
+  /**
    * Gets the StylesManager for advanced style operations
    *
    * Provides direct access to the StylesManager for advanced scenarios
@@ -2395,6 +2791,29 @@ export class Document {
    */
   styles(): StylesManager {
     return this.stylesManager;
+  }
+
+  /**
+   * Resolves the effective shading for a table cell through the ECMA-376 style hierarchy.
+   *
+   * Resolution order (highest priority first):
+   * 1. Direct cell shading
+   * 2. Row table property exceptions
+   * 3. Conditional table style (tblStylePr) based on cnfStyle
+   * 4. Table style default cell shading
+   * 5. Direct table shading
+   *
+   * @param table - The table containing the cell
+   * @param row - Row index (0-based)
+   * @param col - Column index (0-based)
+   * @returns The resolved ShadingConfig, or undefined if no shading applies
+   */
+  getComputedCellShading(table: Table, row: number, col: number): import("../elements/CommonTypes").ShadingConfig | undefined {
+    const tableRow = table.getRow(row);
+    if (!tableRow) return undefined;
+    const cell = tableRow.getCell(col);
+    if (!cell) return undefined;
+    return resolveCellShading(cell, table, this.stylesManager);
   }
 
   /**
@@ -3739,6 +4158,143 @@ export class Document {
   }
 
   /**
+   * Validates bookmark pairs — ensures every bookmarkStart has a matching bookmarkEnd
+   * and vice versa. Adds synthetic bookmarkEnd markers for orphaned starts and removes
+   * orphaned ends. This prevents Word "unreadable content" errors from unbalanced pairs.
+   *
+   * Scans body-level paragraphs and table cell paragraphs.
+   * @returns Number of repairs made
+   */
+  validateBookmarkPairs(): number {
+    const startIds = new Set<number>();
+    const endIds = new Set<number>();
+
+    // Collect all bookmark start/end IDs from all reachable paragraphs
+    const collectFromParagraph = (para: Paragraph) => {
+      for (const bm of para.getBookmarksStart()) {
+        startIds.add(bm.getId());
+      }
+      for (const bm of para.getBookmarksEnd()) {
+        endIds.add(bm.getId());
+      }
+    };
+
+    const collectFromTable = (table: Table) => {
+      for (let r = 0; r < table.getRowCount(); r++) {
+        const row = table.getRow(r);
+        if (!row) continue;
+        for (let c = 0; c < row.getCellCount(); c++) {
+          const cell = row.getCell(c);
+          if (!cell) continue;
+          for (const para of cell.getParagraphs()) {
+            collectFromParagraph(para);
+          }
+        }
+      }
+    };
+
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        collectFromParagraph(element);
+      } else if (element instanceof Table) {
+        collectFromTable(element);
+      } else if (element instanceof StructuredDocumentTag) {
+        for (const content of element.getContent()) {
+          if (content instanceof Paragraph) {
+            collectFromParagraph(content);
+          } else if (content instanceof Table) {
+            collectFromTable(content as Table);
+          }
+        }
+      }
+    }
+
+    let repairs = 0;
+
+    // Fix orphaned starts (start without matching end)
+    for (const id of startIds) {
+      if (!endIds.has(id)) {
+        // Add synthetic bookmarkEnd to the last paragraph in the document body
+        const lastPara = this.getLastParagraph();
+        if (lastPara) {
+          lastPara.addBookmarkEnd(new Bookmark({ id, name: `_repair_${id}`, skipNormalization: true }));
+          this.logger.warn(`Bookmark validation: added missing bookmarkEnd for ID ${id}`);
+          repairs++;
+        }
+      }
+    }
+
+    // Fix orphaned ends (end without matching start)
+    for (const id of endIds) {
+      if (!startIds.has(id)) {
+        // Remove orphaned bookmarkEnd from all paragraphs
+        this.removeOrphanedBookmarkEnd(id);
+        this.logger.warn(`Bookmark validation: removed orphaned bookmarkEnd for ID ${id}`);
+        repairs++;
+      }
+    }
+
+    return repairs;
+  }
+
+  /**
+   * Gets the last paragraph in the document body (including inside tables)
+   */
+  private getLastParagraph(): Paragraph | null {
+    // Walk backwards through body elements to find last paragraph
+    for (let i = this.bodyElements.length - 1; i >= 0; i--) {
+      const element = this.bodyElements[i];
+      if (element instanceof Paragraph) {
+        return element;
+      }
+      if (element instanceof Table) {
+        const para = element.getLastParagraph();
+        if (para) return para;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Removes an orphaned bookmarkEnd with the given ID from all paragraphs
+   */
+  private removeOrphanedBookmarkEnd(id: number): void {
+    const removeFromParagraph = (para: Paragraph) => {
+      para.removeBookmarkEnd(id);
+    };
+
+    const removeFromTable = (table: Table) => {
+      for (let r = 0; r < table.getRowCount(); r++) {
+        const row = table.getRow(r);
+        if (!row) continue;
+        for (let c = 0; c < row.getCellCount(); c++) {
+          const cell = row.getCell(c);
+          if (!cell) continue;
+          for (const para of cell.getParagraphs()) {
+            removeFromParagraph(para);
+          }
+        }
+      }
+    };
+
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        removeFromParagraph(element);
+      } else if (element instanceof Table) {
+        removeFromTable(element);
+      } else if (element instanceof StructuredDocumentTag) {
+        for (const content of element.getContent()) {
+          if (content instanceof Paragraph) {
+            removeFromParagraph(content);
+          } else if (content instanceof Table) {
+            removeFromTable(content as Table);
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Collects numId references from raw nested content in a table's cells.
    * Nested tables are stored as raw XML passthrough and may contain
    * numbering references not captured by the in-memory paragraph model.
@@ -3899,7 +4455,53 @@ export class Document {
       sectionProps.titlePage = false;
     }
 
+    // Step 4: Strip header/footer references from inline sectPr in paragraphs
+    // Multi-section documents store section breaks as raw XML strings on paragraphs.
+    // These contain w:headerReference and w:footerReference elements that must also be removed.
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph && typeof element.formatting.sectPr === 'string') {
+        let sectPrXml = element.formatting.sectPr;
+        // Remove w:headerReference elements
+        sectPrXml = sectPrXml.replace(/<w:headerReference[^/]*\/>/g, '');
+        sectPrXml = sectPrXml.replace(/<w:headerReference[^>]*>[\s\S]*?<\/w:headerReference>/g, '');
+        // Remove w:footerReference elements
+        sectPrXml = sectPrXml.replace(/<w:footerReference[^/]*\/>/g, '');
+        sectPrXml = sectPrXml.replace(/<w:footerReference[^>]*>[\s\S]*?<\/w:footerReference>/g, '');
+        // Remove w:titlePg (only relevant for first-page header/footer differentiation)
+        sectPrXml = sectPrXml.replace(/<w:titlePg[^/]*\/>/g, '');
+        sectPrXml = sectPrXml.replace(/<w:titlePg[^>]*>[\s\S]*?<\/w:titlePg>/g, '');
+        element.setSectionProperties(sectPrXml);
+      }
+    }
+
     return totalCount;
+  }
+
+  /**
+   * Clears the content of all headers and footers, leaving them as empty parts.
+   *
+   * Unlike removeAllHeadersFooters() which deletes the header/footer parts entirely,
+   * this method preserves the structural elements (files, relationships, section references)
+   * and only empties the content. Each header/footer will contain a single empty paragraph.
+   *
+   * This is safer for multi-section documents because it avoids dangling references.
+   *
+   * @returns Number of headers and footers cleared
+   */
+  clearAllHeaderFooterContent(): number {
+    let count = 0;
+
+    for (const entry of this.headerFooterManager.getAllHeaders()) {
+      entry.header.clear();
+      count++;
+    }
+
+    for (const entry of this.headerFooterManager.getAllFooters()) {
+      entry.footer.clear();
+      count++;
+    }
+
+    return count;
   }
 
   /**
@@ -7844,13 +8446,104 @@ export class Document {
    * Saves all comments to the ZIP archive
    */
   private saveComments(): void {
-    // Only save comments.xml if there are comments
-    if (this.commentManager.getCount() > 0) {
+    if (this._commentsModified) {
+      // Comments were modified — regenerate from in-memory model
+      if (this.commentManager.getCount() > 0) {
+        const xml = this.commentManager.generateCommentsXml();
+        this.zipHandler.addFile("word/comments.xml", xml);
+
+        const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.COMMENTS);
+        if (existingRels.length === 0) {
+          this.relationshipManager.addComments();
+        }
+      } else {
+        // All comments removed — clean up comments.xml and its relationship
+        this.zipHandler.removeFile("word/comments.xml");
+        const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.COMMENTS);
+        for (const rel of existingRels) {
+          this.relationshipManager.removeRelationship(rel.getId());
+        }
+      }
+      // Remove companion files since regenerated comments lack w14:paraId
+      this.removeCommentCompanionFiles();
+
+    } else if (this._originalCommentsXml) {
+      // Passthrough — preserve original comments.xml exactly
+      this.zipHandler.addFile("word/comments.xml", this._originalCommentsXml);
+
+      // Preserve companion files as-is
+      for (const [path, content] of this._originalCommentCompanionFiles) {
+        this.zipHandler.addFile(path, content);
+      }
+
+      // Ensure comments relationship exists
+      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.COMMENTS);
+      if (existingRels.length === 0) {
+        this.relationshipManager.addComments();
+      }
+
+    } else if (this.commentManager.getCount() > 0) {
+      // New comments created on a document that had no original comments
       const xml = this.commentManager.generateCommentsXml();
       this.zipHandler.addFile("word/comments.xml", xml);
 
-      // Add comments relationship
-      this.relationshipManager.addComments();
+      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.COMMENTS);
+      if (existingRels.length === 0) {
+        this.relationshipManager.addComments();
+      }
+    }
+  }
+
+  private removeCommentCompanionFiles(): void {
+    const companionPaths = [DOCX_PATHS.COMMENTS_EXTENDED, DOCX_PATHS.COMMENTS_IDS, DOCX_PATHS.COMMENTS_EXTENSIBLE];
+    for (const filePath of companionPaths) {
+      this.zipHandler.removeFile(filePath);
+      const fileName = filePath.replace('word/', '');
+      for (const rel of this.relationshipManager.getAllRelationships()) {
+        if (rel.getTarget() === fileName) {
+          this.relationshipManager.removeRelationship(rel.getId());
+        }
+      }
+    }
+  }
+
+  private saveFootnotes(): void {
+    if (this._footnotesModified || this.footnoteManager.getCount() > 0) {
+      const xml = this.footnoteManager.generateFootnotesXml();
+      this.zipHandler.addFile(DOCX_PATHS.FOOTNOTES, xml);
+
+      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.FOOTNOTES);
+      if (existingRels.length === 0) {
+        this.relationshipManager.addFootnotes();
+      }
+    } else if (this._originalFootnotesXml) {
+      // Passthrough — preserve original XML exactly
+      this.zipHandler.addFile(DOCX_PATHS.FOOTNOTES, this._originalFootnotesXml);
+
+      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.FOOTNOTES);
+      if (existingRels.length === 0) {
+        this.relationshipManager.addFootnotes();
+      }
+    }
+  }
+
+  private saveEndnotes(): void {
+    if (this._endnotesModified || this.endnoteManager.getCount() > 0) {
+      const xml = this.endnoteManager.generateEndnotesXml();
+      this.zipHandler.addFile(DOCX_PATHS.ENDNOTES, xml);
+
+      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.ENDNOTES);
+      if (existingRels.length === 0) {
+        this.relationshipManager.addEndnotes();
+      }
+    } else if (this._originalEndnotesXml) {
+      // Passthrough — preserve original XML exactly
+      this.zipHandler.addFile(DOCX_PATHS.ENDNOTES, this._originalEndnotesXml);
+
+      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.ENDNOTES);
+      if (existingRels.length === 0) {
+        this.relationshipManager.addEndnotes();
+      }
     }
   }
 
@@ -7870,6 +8563,13 @@ export class Document {
         if (item instanceof Revision) {
           const author = item.getAuthor();
           if (author) authors.add(author);
+        }
+      }
+      // Check rPrChange authors from runs
+      for (const run of para.getRuns()) {
+        const rPrChange = run.getPropertyChangeRevision();
+        if (rPrChange?.author) {
+          authors.add(rPrChange.author);
         }
       }
       // Check pPrChange author
@@ -7925,6 +8625,13 @@ export class Document {
       this.zipHandler.addFile('word/people.xml', newPeopleXml);
     }
 
+    // Ensure people.xml has a relationship entry
+    const peopleType = RelationshipType.PEOPLE;
+    const existingPeopleRels = this.relationshipManager.getRelationshipsByType(peopleType);
+    if (existingPeopleRels.length === 0) {
+      this.relationshipManager.addPeople();
+    }
+
     this.logger.info('Updated people.xml with missing authors', { added: missingAuthors.length, authors: missingAuthors });
   }
 
@@ -7943,6 +8650,13 @@ export class Document {
             if (item instanceof Revision) {
               const author = item.getAuthor();
               if (author) authors.add(author);
+            }
+          }
+          // Check rPrChange authors from runs
+          for (const run of para.getRuns()) {
+            const rPrChange = run.getPropertyChangeRevision();
+            if (rPrChange?.author) {
+              authors.add(rPrChange.author);
             }
           }
           if (para.formatting.pPrChange?.author) {
@@ -8014,7 +8728,9 @@ export class Document {
         this.zipHandler, // Pass zipHandler to check file existence
         undefined, // fontManager (optional)
         hasCustomProps, // Flag to include custom.xml override
-        this._originalContentTypes // Pass preserved original entries for round-trip fidelity
+        this._originalContentTypes, // Pass preserved original entries for round-trip fidelity
+        this.footnoteManager,
+        this.endnoteManager
       );
     this.zipHandler.updateFile(DOCX_PATHS.CONTENT_TYPES, contentTypes);
   }
@@ -8847,6 +9563,8 @@ export class Document {
     for (const element of this.bodyElements) {
       this.bindTrackingToElement(element);
     }
+    // Bind tracking to section
+    this.bindTrackingToElement(this.section);
   }
 
   /**
@@ -9039,6 +9757,81 @@ export class Document {
    */
   getCompatibilityMode(): CompatibilityMode {
     return this._compatInfo?.mode ?? CompatibilityMode.Word2007;
+  }
+
+  /**
+   * Gets the document background per ECMA-376 Part 1 §17.2.1
+   * @returns Background properties or undefined
+   */
+  getDocumentBackground(): { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } | undefined {
+    return this._documentBackground ? { ...this._documentBackground } : undefined;
+  }
+
+  /**
+   * Sets the document background per ECMA-376 Part 1 §17.2.1
+   * @param background - Background properties (color, themeColor, etc.) or undefined to remove
+   */
+  setDocumentBackground(background: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } | undefined): void {
+    this._documentBackground = background ? { ...background } : undefined;
+  }
+
+  /**
+   * Gets whether even and odd headers/footers are enabled (w:evenAndOddHeaders)
+   */
+  getEvenAndOddHeaders(): boolean {
+    return this._evenAndOddHeaders ?? false;
+  }
+
+  /**
+   * Sets even and odd headers/footers mode (w:evenAndOddHeaders)
+   */
+  setEvenAndOddHeaders(enabled: boolean): void {
+    this._evenAndOddHeaders = enabled;
+    this._settingsModified = true;
+  }
+
+  /**
+   * Gets whether mirror margins are enabled (w:mirrorMargins)
+   */
+  getMirrorMargins(): boolean {
+    return this._mirrorMargins ?? false;
+  }
+
+  /**
+   * Sets mirror margins mode (w:mirrorMargins)
+   */
+  setMirrorMargins(enabled: boolean): void {
+    this._mirrorMargins = enabled;
+    this._settingsModified = true;
+  }
+
+  /**
+   * Gets whether auto hyphenation is enabled (w:autoHyphenation)
+   */
+  getAutoHyphenation(): boolean {
+    return this._autoHyphenation ?? false;
+  }
+
+  /**
+   * Sets auto hyphenation (w:autoHyphenation)
+   */
+  setAutoHyphenation(enabled: boolean): void {
+    this._autoHyphenation = enabled;
+    this._settingsModified = true;
+  }
+
+  /**
+   * Gets the decimal symbol for locale (w:decimalSymbol)
+   */
+  getDecimalSymbol(): string | undefined {
+    return this._decimalSymbol;
+  }
+
+  /**
+   * Gets the list separator for locale (w:listSeparator)
+   */
+  getListSeparator(): string | undefined {
+    return this._listSeparator;
   }
 
   /**
@@ -9399,6 +10192,10 @@ export class Document {
    * Provides access to the CommentManager for creating, managing, and
    * querying document comments and comment threads.
    *
+   * **Important:** For mutations (create, reply, remove), prefer the Document-level
+   * wrapper methods (`createComment`, `createReply`, `removeComment`) which set the
+   * internal dirty flag needed for correct companion file handling during save.
+   *
    * @returns The CommentManager instance managing this document's comments
    *
    * @example
@@ -9444,6 +10241,7 @@ export class Document {
     content: string | Run | Run[],
     initials?: string
   ): Comment {
+    this._commentsModified = true;
     return this.commentManager.createComment(author, content, initials);
   }
 
@@ -9461,6 +10259,7 @@ export class Document {
     content: string | Run | Run[],
     initials?: string
   ): Comment {
+    this._commentsModified = true;
     return this.commentManager.createReply(
       parentCommentId,
       author,
@@ -9484,6 +10283,42 @@ export class Document {
    */
   getAllComments(): Comment[] {
     return this.commentManager.getAllComments();
+  }
+
+  getFootnoteManager(): FootnoteManager {
+    return this.footnoteManager;
+  }
+
+  getEndnoteManager(): EndnoteManager {
+    return this.endnoteManager;
+  }
+
+  createFootnote(text: string): Footnote {
+    this._footnotesModified = true;
+    return this.footnoteManager.createFootnote(text);
+  }
+
+  createEndnote(text: string): Endnote {
+    this._endnotesModified = true;
+    return this.endnoteManager.createEndnote(text);
+  }
+
+  /**
+   * Clears all footnotes (except special separators).
+   * On save, generates a footnotes.xml with only separator entries.
+   */
+  clearFootnotes(): void {
+    this.footnoteManager.clear();
+    this._footnotesModified = true;
+  }
+
+  /**
+   * Clears all endnotes (except special separators).
+   * On save, generates an endnotes.xml with only separator entries.
+   */
+  clearEndnotes(): void {
+    this.endnoteManager.clear();
+    this._endnotesModified = true;
   }
 
   /**
@@ -9644,7 +10479,11 @@ export class Document {
    * @returns True if the comment was removed
    */
   removeComment(id: number): boolean {
-    return this.commentManager.removeComment(id);
+    const removed = this.commentManager.removeComment(id);
+    if (removed) {
+      this._commentsModified = true;
+    }
+    return removed;
   }
 
   /**
@@ -10256,6 +11095,8 @@ export class Document {
     this.bookmarkManager.clear();
     this.revisionManager.clear();
     this.commentManager.clear();
+    this.footnoteManager.clear();
+    this.endnoteManager.clear();
 
     // Clear ZIP handler to free compressed data
     this.zipHandler.clear();
@@ -10268,9 +11109,24 @@ export class Document {
     this._originalStylesXml = undefined;
     this._originalNumberingXml = undefined;
     this._originalSettingsXml = undefined;
+    this._originalAppPropsXml = undefined;
+    this._originalFootnotesXml = undefined;
+    this._originalEndnotesXml = undefined;
+    this._originalCommentsXml = undefined;
+    this._commentsModified = false;
+    this._originalCommentCompanionFiles.clear();
     this._originalContentTypes = undefined;
     this._settingsModified = false;
+    this._appPropsModified = false;
+    this._footnotesModified = false;
+    this._endnotesModified = false;
     this._compatInfo = undefined;
+    this._documentBackground = undefined;
+    this._evenAndOddHeaders = undefined;
+    this._mirrorMargins = undefined;
+    this._autoHyphenation = undefined;
+    this._decimalSymbol = undefined;
+    this._listSeparator = undefined;
     this.saveStateSnapshot = undefined;
 
     // Reset track changes and settings-managed fields
@@ -11810,6 +12666,17 @@ export class Document {
     if (index >= 0 && index < this.bodyElements.length) {
       const element = this.bodyElements[index];
       if (element instanceof Paragraph) {
+        // When tracking enabled, wrap content in w:del instead of removing
+        if (this.trackChangesEnabled && this.trackingContext.isEnabled()) {
+          const runs = element.getRuns();
+          if (runs.length > 0) {
+            const author = this.trackingContext.getAuthor();
+            const deletion = Revision.createDeletion(author, runs);
+            this.trackingContext.getRevisionManager().register(deletion);
+            element.addRevision(deletion);
+          }
+          return true;
+        }
         this.bodyElements.splice(index, 1);
         return true;
       }

@@ -66,7 +66,8 @@ export type ShadingPattern =
   | "pct85"
   | "pct87"
   | "pct90"
-  | "pct95";
+  | "pct95"
+  | "nil"; // Explicitly clear inherited shading (ECMA-376 §17.18.78)
 
 /**
  * Basic shading patterns (without percentage fills)
@@ -353,12 +354,24 @@ export type WidthType =
  * Consolidated from: Run.ts (CharacterShading), TableRow.ts (Shading), TableCell.ts (CellShading)
  */
 export interface ShadingConfig {
-  /** Background fill color in hex format (without #) */
+  /** Background fill color in hex format (without #), or "auto" to inherit from style/parent */
   fill?: string;
-  /** Foreground/pattern color in hex format (without #) */
+  /** Foreground/pattern color in hex format (without #), or "auto" to inherit from style/parent */
   color?: string;
-  /** Shading pattern type */
+  /** Shading pattern type (maps to w:val in XML) */
   pattern?: ShadingPattern;
+  /** Theme fill color reference (e.g., "accent1") */
+  themeFill?: string;
+  /** Theme foreground color reference */
+  themeColor?: string;
+  /** Tint on theme fill (hex 00-FF) */
+  themeFillTint?: string;
+  /** Shade on theme fill (hex 00-FF) */
+  themeFillShade?: string;
+  /** Tint on theme color (hex 00-FF) */
+  themeTint?: string;
+  /** Shade on theme color (hex 00-FF) */
+  themeShade?: string;
 }
 
 // ============================================================================
@@ -438,6 +451,7 @@ export function isShadingPattern(value: string): value is ShadingPattern {
     "pct87",
     "pct90",
     "pct95",
+    "nil",
   ];
   return patterns.includes(value);
 }
@@ -506,3 +520,29 @@ export const NO_BORDER: BorderDefinition = {
   color: "auto",
   space: 0,
 };
+
+// ============================================================================
+// SHADING UTILITIES
+// ============================================================================
+
+/**
+ * Builds XML attributes for a w:shd element from a ShadingConfig.
+ * Shared across all element types for consistent shading generation.
+ */
+export function buildShadingAttributes(
+  shading: ShadingConfig
+): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  if (shading.pattern) attrs["w:val"] = shading.pattern;
+  if (shading.fill) attrs["w:fill"] = shading.fill;
+  if (shading.color) attrs["w:color"] = shading.color;
+  if (shading.themeFill) attrs["w:themeFill"] = shading.themeFill;
+  if (shading.themeColor) attrs["w:themeColor"] = shading.themeColor;
+  if (shading.themeFillTint)
+    attrs["w:themeFillTint"] = shading.themeFillTint;
+  if (shading.themeFillShade)
+    attrs["w:themeFillShade"] = shading.themeFillShade;
+  if (shading.themeTint) attrs["w:themeTint"] = shading.themeTint;
+  if (shading.themeShade) attrs["w:themeShade"] = shading.themeShade;
+  return attrs;
+}

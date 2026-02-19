@@ -114,6 +114,28 @@ export class StylesManager {
    * @returns This manager for chaining
    */
   addStyle(style: Style): this {
+    const existing = this.styles.get(style.getStyleId());
+    if (existing) {
+      // Preserve isDefault flag if replacing an existing default style
+      if (existing.getIsDefault() && !style.getIsDefault()) {
+        style.setIsDefault(true);
+      }
+      // Preserve structural properties from existing style if not explicitly set on new
+      const newProps = style.getProperties();
+      const existingProps = existing.getProperties();
+      if (newProps.basedOn === undefined && existingProps.basedOn !== undefined) {
+        style.setBasedOn(existingProps.basedOn);
+      }
+      if (newProps.next === undefined && existingProps.next !== undefined) {
+        style.setNext(existingProps.next);
+      }
+      if (newProps.link === undefined && existingProps.link !== undefined) {
+        style.setLink(existingProps.link);
+      }
+      if (newProps.uiPriority === undefined && existingProps.uiPriority !== undefined) {
+        style.setUiPriority(existingProps.uiPriority);
+      }
+    }
     this.styles.set(style.getStyleId(), style);
     this._modifiedStyleIds.add(style.getStyleId());
     this._modified = true;
@@ -191,7 +213,7 @@ export class StylesManager {
    * @returns Set of modified style IDs
    */
   getModifiedStyleIds(): Set<string> {
-    return this._modifiedStyleIds;
+    return new Set(this._modifiedStyleIds);
   }
 
   /**

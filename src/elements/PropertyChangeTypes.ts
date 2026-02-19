@@ -16,6 +16,7 @@
  */
 
 import type { RunFormatting } from './Run';
+import type { ShadingConfig } from './CommonTypes';
 
 /**
  * Common base for all property change types
@@ -90,20 +91,9 @@ export interface ParagraphBorders {
 
 /**
  * Paragraph shading (w:shd)
- * Per ECMA-376 Part 1 Section 17.3.1.32
+ * @see ShadingConfig in CommonTypes.ts for the canonical definition
  */
-export interface ParagraphShading {
-  /** Fill color (hex RGB without #) */
-  fill?: string;
-  /** Pattern color (hex RGB without #) */
-  color?: string;
-  /** Shading pattern value (clear, solid, pct10, etc.) */
-  val?: string;
-  /** Theme fill color reference */
-  themeFill?: string;
-  /** Theme color reference */
-  themeColor?: string;
-}
+export type ParagraphShading = ShadingConfig;
 
 /**
  * Tab stop definition
@@ -196,6 +186,13 @@ export interface ParagraphFormattingPartial {
    * Values: lrTb, tbRl, btLr, lrTbV, tbRlV, tbLrV
    */
   textDirection?: string;
+
+  /**
+   * Text alignment (w:textAlignment)
+   * Per ECMA-376 Part 1 Section 17.3.1.39
+   * Values: auto, top, center, baseline, bottom
+   */
+  textAlignment?: string;
 
   /**
    * Suppress line numbers (w:suppressLineNumbers)

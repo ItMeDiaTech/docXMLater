@@ -6,6 +6,7 @@
 import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { ParagraphFormatting } from "../elements/Paragraph";
 import { RunFormatting } from "../elements/Run";
+import { ShadingConfig, ShadingPattern, buildShadingAttributes } from "../elements/CommonTypes";
 import { Heading2TableOptions } from "../types/styleConfig";
 import { deepClone } from "../utils/deepClone";
 import { pointsToHalfPoints } from "../utils/units";
@@ -60,35 +61,9 @@ export interface CellBorders extends TableBorders {
 
 /**
  * Shading properties
+ * @see ShadingConfig in CommonTypes.ts for the canonical definition
  */
-export interface ShadingProperties {
-  /** Background fill color (hex without #) */
-  fill?: string;
-  /** Foreground color for patterns (hex without #) */
-  color?: string;
-  /** Shading pattern */
-  val?:
-    | "clear"
-    | "solid"
-    | "pct5"
-    | "pct10"
-    | "pct20"
-    | "pct25"
-    | "pct30"
-    | "pct40"
-    | "pct50"
-    | "pct60"
-    | "pct70"
-    | "pct75"
-    | "pct80"
-    | "pct90"
-    | "diagStripe"
-    | "horzStripe"
-    | "vertStripe"
-    | "reverseDiagStripe"
-    | "horzCross"
-    | "diagCross";
-}
+export type ShadingProperties = ShadingConfig;
 
 /**
  * Cell margins
@@ -307,6 +282,24 @@ export class Style {
    */
   getProperties(): StyleProperties {
     return { ...this.properties };
+  }
+
+  /**
+   * Gets whether this is a default style
+   * @returns True if this is a default style for its type
+   */
+  getIsDefault(): boolean {
+    return this.properties.isDefault ?? false;
+  }
+
+  /**
+   * Sets whether this is a default style
+   * @param value - True to mark as default style
+   * @returns This style for chaining
+   */
+  setIsDefault(value: boolean): this {
+    this.properties.isDefault = value;
+    return this;
   }
 
   /**
@@ -1387,11 +1380,7 @@ export class Style {
    * Generates shading element - Phase 5.1
    */
   private generateShadingElement(shading: ShadingProperties): XMLElement {
-    const attrs: Record<string, string> = {};
-    if (shading.val) attrs["w:val"] = shading.val;
-    if (shading.color) attrs["w:color"] = shading.color;
-    if (shading.fill) attrs["w:fill"] = shading.fill;
-
+    const attrs = buildShadingAttributes(shading);
     return XMLBuilder.wSelf("shd", attrs);
   }
 

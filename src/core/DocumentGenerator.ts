@@ -4,7 +4,9 @@
  */
 
 import { CommentManager } from "../elements/CommentManager";
+import { EndnoteManager } from "../elements/EndnoteManager";
 import { FontManager } from "../elements/FontManager";
+import { FootnoteManager } from "../elements/FootnoteManager";
 import { HeaderFooterManager } from "../elements/HeaderFooterManager";
 import { Hyperlink } from "../elements/Hyperlink";
 import { ImageManager } from "../elements/ImageManager";
@@ -73,6 +75,7 @@ export class DocumentGenerator {
   <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
   <Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/>
   <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+  <Override PartName="/word/webSettings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml"/>
   <Override PartName="/word/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
   <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
@@ -97,7 +100,8 @@ export class DocumentGenerator {
   generateDocumentXml(
     bodyElements: BodyElement[],
     section: Section,
-    namespaces: Record<string, string>
+    namespaces: Record<string, string>,
+    documentBackground?: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string }
   ): string {
     const logger = getLogger();
     logger.info('Generating document.xml', { elementCount: bodyElements.length });
@@ -113,7 +117,19 @@ export class DocumentGenerator {
 
     // Add section properties at the end
     bodyXmls.push(section.toXML());
-    const result = XMLBuilder.createDocument(bodyXmls, namespaces);
+
+    // Build pre-body content (w:background) per ECMA-376 Part 1 §17.2.1
+    let preBodyContent: XMLElement[] | undefined;
+    if (documentBackground) {
+      const bgAttrs: Record<string, string> = {};
+      if (documentBackground.color) bgAttrs["w:color"] = documentBackground.color;
+      if (documentBackground.themeColor) bgAttrs["w:themeColor"] = documentBackground.themeColor;
+      if (documentBackground.themeTint) bgAttrs["w:themeTint"] = documentBackground.themeTint;
+      if (documentBackground.themeShade) bgAttrs["w:themeShade"] = documentBackground.themeShade;
+      preBodyContent = [XMLBuilder.wSelf("background", bgAttrs)];
+    }
+
+    const result = XMLBuilder.createDocument(bodyXmls, namespaces, preBodyContent);
     logger.info('Document.xml generated', { xmlSize: result.length });
     return result;
   }
@@ -275,7 +291,9 @@ ${properties}
     zipHandler: IZipHandlerReader,
     fontManager?: FontManager,
     hasCustomProperties: boolean = false,
-    originalContentTypes?: { defaults: Set<string>; overrides: Set<string> }
+    originalContentTypes?: { defaults: Set<string>; overrides: Set<string> },
+    footnoteManager?: FootnoteManager,
+    endnoteManager?: EndnoteManager
   ): string {
     const images = imageManager.getAllImages();
     const headers = headerFooterManager.getAllHeaders();
@@ -325,6 +343,7 @@ ${properties}
     generatedOverrides.add('/word/numbering.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml');
     generatedOverrides.add('/word/fontTable.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml');
     generatedOverrides.add('/word/settings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml');
+    generatedOverrides.add('/word/webSettings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml');
     generatedOverrides.add('/word/theme/theme1.xml|application/vnd.openxmlformats-officedocument.theme+xml');
 
     // Headers - only add if file actually exists in archive
@@ -348,6 +367,23 @@ ${properties}
     // Comments
     if (hasComments) {
       generatedOverrides.add('/word/comments.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml');
+    }
+
+    // Footnotes
+    const hasFootnotes = (footnoteManager && footnoteManager.getCount() > 0) || filesInArchive.has('word/footnotes.xml');
+    if (hasFootnotes) {
+      generatedOverrides.add('/word/footnotes.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml');
+    }
+
+    // Endnotes
+    const hasEndnotes = (endnoteManager && endnoteManager.getCount() > 0) || filesInArchive.has('word/endnotes.xml');
+    if (hasEndnotes) {
+      generatedOverrides.add('/word/endnotes.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml');
+    }
+
+    // People (track changes authors)
+    if (filesInArchive.has('word/people.xml')) {
+      generatedOverrides.add('/word/people.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml');
     }
 
     // Core properties (always needed)
@@ -738,6 +774,19 @@ ${properties}
     <w:sig w:usb0="E0002AFF" w:usb1="00000000" w:usb2="00000000" w:usb3="00000000" w:csb0="000001FF" w:csb1="00000000"/>
   </w:font>
 </w:fonts>`;
+  }
+
+  /**
+   * Generates word/webSettings.xml
+   * Minimal web settings for DOCX compliance
+   */
+  generateWebSettings(): string {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:webSettings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:optimizeForBrowser/>
+  <w:allowPNG/>
+</w:webSettings>`;
   }
 
   /**

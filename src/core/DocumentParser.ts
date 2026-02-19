@@ -5,6 +5,8 @@
 
 import { AlternateContent } from "../elements/AlternateContent";
 import { Bookmark } from "../elements/Bookmark";
+import { Endnote, EndnoteType } from "../elements/Endnote";
+import { Footnote, FootnoteType } from "../elements/Footnote";
 import { BookmarkManager } from "../elements/BookmarkManager";
 import { Comment } from "../elements/Comment";
 import { CustomXmlBlock } from "../elements/CustomXml";
@@ -19,7 +21,7 @@ import { ImageManager } from "../elements/ImageManager";
 import { ImageRun } from "../elements/ImageRun";
 import { Paragraph, ParagraphFormatting, ParagraphContent } from "../elements/Paragraph";
 import { Revision } from "../elements/Revision";
-import { BreakType, Run, RunContent, RunFormatting } from "../elements/Run";
+import { BreakType, FormFieldCheckBox, FormFieldData, FormFieldDropDownList, FormFieldTextInput, Run, RunContent, RunFormatting } from "../elements/Run";
 import {
   PageNumberFormat,
   Section,
@@ -43,6 +45,7 @@ import {
 import { getGlobalLogger, createScopedLogger, ILogger, defaultLogger } from "../utils/logger";
 import { safeParseInt, isExplicitlySet, parseOoxmlBoolean } from "../utils/parsingHelpers";
 import { halfPointsToPoints } from "../utils/units";
+import type { ShadingConfig } from "../elements/CommonTypes";
 
 // Create scoped logger for DocumentParser operations
 function getLogger(): ILogger {
@@ -117,6 +120,7 @@ export class DocumentParser {
     numberingInstances: NumberingInstance[];
     section: Section | null;
     namespaces: Record<string, string>;
+    documentBackground?: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string };
   }> {
     const logger = getLogger();
     logger.info('Parsing document');
@@ -165,6 +169,9 @@ export class DocumentParser {
     // Parse section properties from document.xml
     const section = this.parseSectionProperties(docXml);
 
+    // Parse document background (w:background) per ECMA-376 Part 1 §17.2.1
+    const documentBackground = this.parseDocumentBackground(docXml);
+
     // Parse and preserve namespaces from the root <w:document> tag
     const namespaces = this.parseNamespaces(docXml);
 
@@ -195,6 +202,7 @@ export class DocumentParser {
       numberingInstances: numbering.numberingInstances,
       section,
       namespaces,
+      documentBackground,
     };
   }
 
@@ -221,6 +229,7 @@ export class DocumentParser {
     }
 
     let pos = 0;
+    let pendingBookmarkStarts: Bookmark[] = [];
     while (pos < bodyContent.length) {
       const nextP = this.findNextTopLevelTag(bodyContent, "w:p", pos);
       const nextTbl = this.findNextTopLevelTag(bodyContent, "w:tbl", pos);
@@ -262,22 +271,28 @@ export class DocumentParser {
               }
             } else if (prevElement instanceof Table) {
               // For tables, attach to the last paragraph in the last cell
-              const rows = prevElement.getRows();
-              const lastRow = rows[rows.length - 1];
-              if (lastRow) {
-                const cells = lastRow.getCells();
-                const lastCell = cells[cells.length - 1];
-                if (lastCell) {
-                  const cellParas = lastCell.getParagraphs();
-                  const lastPara = cellParas[cellParas.length - 1];
-                  if (lastPara) {
-                    for (const bookmark of bookmarkEnds) {
-                      lastPara.addBookmarkEnd(bookmark);
-                    }
-                  }
+              const lastPara = prevElement.getLastParagraph();
+              if (lastPara) {
+                for (const bookmark of bookmarkEnds) {
+                  lastPara.addBookmarkEnd(bookmark);
                 }
               }
             }
+          }
+        }
+
+        // Check for body-level bookmarkStart elements BEFORE this element
+        // These appear between the previous element and this one
+        // Unlike bookmarkEnds (attached to previous), bookmarkStarts are
+        // collected as pending and attached to the NEXT parsed element
+        if (next.pos > pos) {
+          const bookmarkStarts = this.extractBodyLevelBookmarkStarts(
+            bodyContent,
+            pos,
+            next.pos
+          );
+          if (bookmarkStarts.length > 0) {
+            pendingBookmarkStarts.push(...bookmarkStarts);
           }
         }
 
@@ -414,6 +429,25 @@ export class DocumentParser {
             pos = next.pos + 1;
           }
         }
+
+        // Attach any pending body-level bookmarkStarts to the just-parsed element
+        if (pendingBookmarkStarts.length > 0 && bodyElements.length > 0) {
+          const currentElement = bodyElements[bodyElements.length - 1];
+          if (currentElement instanceof Paragraph) {
+            for (const bookmark of pendingBookmarkStarts) {
+              currentElement.addBookmarkStart(bookmark);
+            }
+          } else if (currentElement instanceof Table) {
+            // For tables, attach to the first paragraph of the first cell
+            const firstPara = currentElement.getFirstParagraph();
+            if (firstPara) {
+              for (const bookmark of pendingBookmarkStarts) {
+                firstPara.addBookmarkStart(bookmark);
+              }
+            }
+          }
+          pendingBookmarkStarts = [];
+        }
       }
     }
 
@@ -431,19 +465,34 @@ export class DocumentParser {
             lastElement.addBookmarkEnd(bookmark);
           }
         } else if (lastElement instanceof Table) {
-          const rows = lastElement.getRows();
-          const lastRow = rows[rows.length - 1];
-          if (lastRow) {
-            const cells = lastRow.getCells();
-            const lastCell = cells[cells.length - 1];
-            if (lastCell) {
-              const cellParas = lastCell.getParagraphs();
-              const lastPara = cellParas[cellParas.length - 1];
-              if (lastPara) {
-                for (const bookmark of trailingBookmarkEnds) {
-                  lastPara.addBookmarkEnd(bookmark);
-                }
-              }
+          const lastPara = lastElement.getLastParagraph();
+          if (lastPara) {
+            for (const bookmark of trailingBookmarkEnds) {
+              lastPara.addBookmarkEnd(bookmark);
+            }
+          }
+        }
+      }
+    }
+
+    // Check for any trailing body-level bookmarkStart elements after the last element
+    if (bodyElements.length > 0 && pos < bodyContent.length) {
+      const trailingBookmarkStarts = this.extractBodyLevelBookmarkStarts(
+        bodyContent,
+        pos,
+        -1
+      );
+      if (trailingBookmarkStarts.length > 0) {
+        const lastElement = bodyElements[bodyElements.length - 1];
+        if (lastElement instanceof Paragraph) {
+          for (const bookmark of trailingBookmarkStarts) {
+            lastElement.addBookmarkStart(bookmark);
+          }
+        } else if (lastElement instanceof Table) {
+          const lastPara = lastElement.getLastParagraph();
+          if (lastPara) {
+            for (const bookmark of trailingBookmarkStarts) {
+              lastPara.addBookmarkStart(bookmark);
             }
           }
         }
@@ -504,6 +553,48 @@ export class DocumentParser {
           });
           bookmarks.push(bookmark);
         }
+      }
+    }
+
+    return bookmarks;
+  }
+
+  /**
+   * Extracts body-level bookmarkStart elements between two positions in the content.
+   * These are bookmarkStart elements that appear outside of paragraphs/tables.
+   * @param content - The body content XML
+   * @param startPos - Start position to search from
+   * @param endPos - End position to search to (or end of content if -1)
+   * @returns Array of Bookmark objects for the bookmarkStart elements
+   */
+  private extractBodyLevelBookmarkStarts(
+    content: string,
+    startPos: number,
+    endPos: number
+  ): Bookmark[] {
+    const searchContent = endPos === -1
+      ? content.slice(startPos)
+      : content.slice(startPos, endPos);
+
+    return this.extractBookmarkStartsFromContent(searchContent);
+  }
+
+  /**
+   * Extracts bookmarkStart elements from any XML content string.
+   * Uses position-based parsing via XMLParser (ECMA-376 compliant, ReDoS-safe).
+   * Reuses the existing parseBookmarkStart() method for consistent parsing.
+   * @param content - The XML content to search
+   * @returns Array of Bookmark objects for the bookmarkStart elements
+   */
+  private extractBookmarkStartsFromContent(content: string): Bookmark[] {
+    const bookmarks: Bookmark[] = [];
+
+    const bookmarkStartXmls = XMLParser.extractElements(content, "w:bookmarkStart");
+
+    for (const bookmarkStartXml of bookmarkStartXmls) {
+      const bookmark = this.parseBookmarkStart(bookmarkStartXml);
+      if (bookmark) {
+        bookmarks.push(bookmark);
       }
     }
 
@@ -953,7 +1044,7 @@ export class DocumentParser {
 
     // Track children by scanning XML for opening tags
     interface ChildMarker {
-      type: "w:r" | "w:hyperlink" | "w:fldSimple" | "w:ins" | "w:del" | "w:moveFrom" | "w:moveTo" | "w:bookmarkStart" | "w:bookmarkEnd" | "w:proofErr" | "w:permStart" | "w:permEnd" | "m:oMath" | "w:ruby";
+      type: "w:r" | "w:hyperlink" | "w:fldSimple" | "w:ins" | "w:del" | "w:moveFrom" | "w:moveTo" | "w:bookmarkStart" | "w:bookmarkEnd" | "w:proofErr" | "w:permStart" | "w:permEnd" | "m:oMath" | "w:ruby" | "w:commentRangeStart" | "w:commentRangeEnd";
       pos: number;
       index: number;
     }
@@ -973,6 +1064,8 @@ export class DocumentParser {
     let permEndIndex = 0;
     let oMathIndex = 0;
     let rubyIndex = 0;
+    let commentRangeStartIndex = 0;
+    let commentRangeEndIndex = 0;
 
     // Helper to find closing tag position for a given tag name starting from position
     const findClosingTagEnd = (content: string, tagName: string, startPos: number): number => {
@@ -1070,6 +1163,22 @@ export class DocumentParser {
           index: bookmarkEndIndex++,
         });
         searchPos = tagEnd + 1;
+      } else if (tagName === "w:commentRangeStart") {
+        // Comment range start markers - always self-closing
+        children.push({
+          type: "w:commentRangeStart",
+          pos: tagStart,
+          index: commentRangeStartIndex++,
+        });
+        searchPos = tagEnd + 1;
+      } else if (tagName === "w:commentRangeEnd") {
+        // Comment range end markers - always self-closing
+        children.push({
+          type: "w:commentRangeEnd",
+          pos: tagStart,
+          index: commentRangeEndIndex++,
+        });
+        searchPos = tagEnd + 1;
       } else if (tagName === "w:proofErr") {
         // Proofing error markers - always self-closing
         children.push({
@@ -1158,7 +1267,15 @@ export class DocumentParser {
         const runArray = Array.isArray(runs) ? runs : runs ? [runs] : [];
         if (child.index < runArray.length) {
           const runObj = runArray[child.index];
-          if (runObj["w:drawing"]) {
+          if (runObj["w:commentReference"]) {
+            // Comment reference run — preserve as raw XML so the
+            // w:commentReference element inside survives round-trip.
+            // Without this, Word can't link comment ranges to comments.xml.
+            const runXml = extractRunXmlAtPosition(child.pos);
+            if (runXml) {
+              paragraph.addContent(new PreservedElement(runXml, 'w:r', 'inline'));
+            }
+          } else if (runObj["w:drawing"]) {
             if (zipHandler && imageManager) {
               const imageRun = await this.parseDrawingFromObject(
                 runObj["w:drawing"],
@@ -1353,6 +1470,15 @@ export class DocumentParser {
               paragraph.addBookmarkEnd(bookmark);
             }
           }
+        }
+      } else if (child.type === "w:commentRangeStart" || child.type === "w:commentRangeEnd") {
+        // Preserve comment range markers as raw XML for round-trip fidelity.
+        // Without these, comments.xml references become orphaned and Word
+        // flags the document as corrupt ("unreadable content").
+        const selfCloseEnd = paraContent.indexOf(">", child.pos);
+        if (selfCloseEnd !== -1) {
+          const rawXml = paraContent.substring(child.pos, selfCloseEnd + 1);
+          paragraph.addContent(new PreservedElement(rawXml, child.type, 'inline'));
         }
       } else if (child.type === "w:proofErr" || child.type === "w:permStart" || child.type === "w:permEnd") {
         // Preserve proofing errors and permission ranges as raw XML
@@ -1623,6 +1749,146 @@ export class DocumentParser {
           ? { message: error.message }
           : { error: String(error) }
       );
+      return null;
+    }
+  }
+
+  /**
+   * Parses footnotes.xml into Footnote array
+   */
+  parseFootnotesXml(footnotesXml: string): Footnote[] {
+    const footnotes: Footnote[] = [];
+    const footnoteXmls = XMLParser.extractElements(footnotesXml, "w:footnote");
+
+    for (const footnoteXml of footnoteXmls) {
+      const footnote = this.parseFootnoteFromXml(footnoteXml);
+      if (footnote) {
+        footnotes.push(footnote);
+      }
+    }
+
+    return footnotes;
+  }
+
+  private parseFootnoteFromXml(footnoteXml: string): Footnote | null {
+    try {
+      const idAttr = XMLParser.extractAttribute(footnoteXml, "w:id");
+      const typeAttr = XMLParser.extractAttribute(footnoteXml, "w:type");
+
+      if (idAttr === undefined) {
+        return null;
+      }
+
+      const id = parseInt(idAttr, 10);
+
+      let type: FootnoteType | undefined;
+      if (typeAttr === "separator") {
+        type = FootnoteType.Separator;
+      } else if (typeAttr === "continuationSeparator") {
+        type = FootnoteType.ContinuationSeparator;
+      } else if (typeAttr === "continuationNotice") {
+        type = FootnoteType.ContinuationNotice;
+      }
+
+      const footnote = new Footnote({ id, type });
+
+      const paraXmls = XMLParser.extractElements(footnoteXml, "w:p");
+      for (const paraXml of paraXmls) {
+        const para = this.parseNoteParaFromXml(paraXml);
+        if (para) {
+          footnote.addParagraph(para);
+        }
+      }
+
+      return footnote;
+    } catch (error: unknown) {
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse footnote:",
+        error instanceof Error
+          ? { message: error.message }
+          : { error: String(error) }
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Parses endnotes.xml into Endnote array
+   */
+  parseEndnotesXml(endnotesXml: string): Endnote[] {
+    const endnotes: Endnote[] = [];
+    const endnoteXmls = XMLParser.extractElements(endnotesXml, "w:endnote");
+
+    for (const endnoteXml of endnoteXmls) {
+      const endnote = this.parseEndnoteFromXml(endnoteXml);
+      if (endnote) {
+        endnotes.push(endnote);
+      }
+    }
+
+    return endnotes;
+  }
+
+  private parseEndnoteFromXml(endnoteXml: string): Endnote | null {
+    try {
+      const idAttr = XMLParser.extractAttribute(endnoteXml, "w:id");
+      const typeAttr = XMLParser.extractAttribute(endnoteXml, "w:type");
+
+      if (idAttr === undefined) {
+        return null;
+      }
+
+      const id = parseInt(idAttr, 10);
+
+      let type: EndnoteType | undefined;
+      if (typeAttr === "separator") {
+        type = EndnoteType.Separator;
+      } else if (typeAttr === "continuationSeparator") {
+        type = EndnoteType.ContinuationSeparator;
+      } else if (typeAttr === "continuationNotice") {
+        type = EndnoteType.ContinuationNotice;
+      }
+
+      const endnote = new Endnote({ id, type });
+
+      const paraXmls = XMLParser.extractElements(endnoteXml, "w:p");
+      for (const paraXml of paraXmls) {
+        const para = this.parseNoteParaFromXml(paraXml);
+        if (para) {
+          endnote.addParagraph(para);
+        }
+      }
+
+      return endnote;
+    } catch (error: unknown) {
+      defaultLogger.warn(
+        "[DocumentParser] Failed to parse endnote:",
+        error instanceof Error
+          ? { message: error.message }
+          : { error: String(error) }
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Parses a paragraph from a footnote or endnote element.
+   * Uses run-level parsing (like comments) to avoid async dependency on relationship manager.
+   */
+  private parseNoteParaFromXml(paraXml: string): Paragraph | null {
+    try {
+      const para = new Paragraph();
+      const runXmls = XMLParser.extractElements(paraXml, "w:r");
+      for (const runXml of runXmls) {
+        const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const run = this.parseRunFromObject(runObj["w:r"] as any);
+        if (run) {
+          para.addRun(run);
+        }
+      }
+      return para;
+    } catch {
       return null;
     }
   }
@@ -1975,8 +2241,16 @@ export class DocumentParser {
       const numPr = Array.isArray(numPrRaw) ? numPrRaw[0] : numPrRaw;
       const numId = numPr?.["w:numId"]?.["@_w:val"];
       const ilvl = numPr?.["w:ilvl"]?.["@_w:val"] || "0";
-      if (numId) {
-        paragraph.setNumbering(parseInt(numId, 10), parseInt(ilvl, 10));
+      if (numId !== undefined && numId !== null) {
+        const parsedNumId = parseInt(numId, 10);
+        const parsedIlvl = parseInt(ilvl, 10);
+        if (!isNaN(parsedNumId) && !isNaN(parsedIlvl)) {
+          if (parsedNumId === 0) {
+            paragraph.formatting.numberingSuppressed = true;
+          } else {
+            paragraph.setNumbering(parsedNumId, parsedIlvl);
+          }
+        }
       }
     }
 
@@ -1990,11 +2264,11 @@ export class DocumentParser {
         if (!borderObj) return undefined;
         const border: any = {};
         if (borderObj["@_w:val"]) border.style = borderObj["@_w:val"];
-        if (borderObj["@_w:sz"])
-          border.size = parseInt(borderObj["@_w:sz"], 10);
+        if (borderObj["@_w:sz"] !== undefined)
+          border.size = safeParseInt(borderObj["@_w:sz"]);
         if (borderObj["@_w:color"]) border.color = borderObj["@_w:color"];
-        if (borderObj["@_w:space"])
-          border.space = parseInt(borderObj["@_w:space"], 10);
+        if (borderObj["@_w:space"] !== undefined)
+          border.space = safeParseInt(borderObj["@_w:space"]);
         return Object.keys(border).length > 0 ? border : undefined;
       };
 
@@ -2013,13 +2287,8 @@ export class DocumentParser {
 
     // Shading per ECMA-376 Part 1 §17.3.1.32
     if (pPrObj["w:shd"]) {
-      const shd = pPrObj["w:shd"];
-      const shading: any = {};
-      if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
-      if (shd["@_w:color"]) shading.color = shd["@_w:color"];
-      if (shd["@_w:val"]) shading.val = shd["@_w:val"];
-
-      if (Object.keys(shading).length > 0) {
+      const shading = this.parseShadingFromObj(pPrObj["w:shd"]);
+      if (shading) {
         paragraph.setShading(shading);
       }
     }
@@ -2169,6 +2438,26 @@ export class DocumentParser {
       paragraph.setSuppressAutoHyphens(true);
     }
 
+    // CJK paragraph properties per ECMA-376 Part 1
+    if (pPrObj["w:kinsoku"]) {
+      paragraph.setKinsoku(parseOoxmlBoolean(pPrObj["w:kinsoku"]));
+    }
+    if (pPrObj["w:wordWrap"]) {
+      paragraph.setWordWrap(parseOoxmlBoolean(pPrObj["w:wordWrap"]));
+    }
+    if (pPrObj["w:overflowPunct"]) {
+      paragraph.setOverflowPunct(parseOoxmlBoolean(pPrObj["w:overflowPunct"]));
+    }
+    if (pPrObj["w:topLinePunct"]) {
+      paragraph.setTopLinePunct(parseOoxmlBoolean(pPrObj["w:topLinePunct"]));
+    }
+    if (pPrObj["w:autoSpaceDE"]) {
+      paragraph.setAutoSpaceDE(parseOoxmlBoolean(pPrObj["w:autoSpaceDE"]));
+    }
+    if (pPrObj["w:autoSpaceDN"]) {
+      paragraph.setAutoSpaceDN(parseOoxmlBoolean(pPrObj["w:autoSpaceDN"]));
+    }
+
     // Suppress text frame overlap per ECMA-376 Part 1 §17.3.1.34
     if (pPrObj["w:suppressOverlap"]) {
       paragraph.setSuppressOverlap(true);
@@ -2225,10 +2514,16 @@ export class DocumentParser {
           const numPr = prevPPr["w:numPr"];
           previousProperties.numbering = {};
           if (numPr["w:ilvl"]?.["@_w:val"] !== undefined) {
-            previousProperties.numbering.level = parseInt(numPr["w:ilvl"]["@_w:val"], 10);
+            const parsedLevel = parseInt(numPr["w:ilvl"]["@_w:val"], 10);
+            if (!isNaN(parsedLevel)) {
+              previousProperties.numbering.level = parsedLevel;
+            }
           }
           if (numPr["w:numId"]?.["@_w:val"] !== undefined) {
-            previousProperties.numbering.numId = parseInt(numPr["w:numId"]["@_w:val"], 10);
+            const parsedNumId = parseInt(numPr["w:numId"]["@_w:val"], 10);
+            if (!isNaN(parsedNumId)) {
+              previousProperties.numbering.numId = parsedNumId;
+            }
           }
         }
 
@@ -2335,6 +2630,11 @@ export class DocumentParser {
           previousProperties.textDirection = String(prevPPr["w:textDirection"]["@_w:val"]);
         }
 
+        // Parse textAlignment (w:textAlignment @w:val) per ECMA-376 Part 1 §17.3.1.39
+        if (prevPPr["w:textAlignment"]?.["@_w:val"]) {
+          previousProperties.textAlignment = String(prevPPr["w:textAlignment"]["@_w:val"]);
+        }
+
         // Parse paragraph borders (w:pBdr) per ECMA-376 Part 1 §17.3.1.24
         if (prevPPr["w:pBdr"]) {
           const pBdr = prevPPr["w:pBdr"];
@@ -2366,14 +2666,10 @@ export class DocumentParser {
 
         // Parse paragraph shading (w:shd) per ECMA-376 Part 1 §17.3.1.32
         if (prevPPr["w:shd"]) {
-          const shd = prevPPr["w:shd"];
-          previousProperties.shading = {
-            fill: shd["@_w:fill"],
-            color: shd["@_w:color"],
-            val: shd["@_w:val"],
-            themeFill: shd["@_w:themeFill"],
-            themeColor: shd["@_w:themeColor"],
-          };
+          const shading = this.parseShadingFromObj(prevPPr["w:shd"]);
+          if (shading) {
+            previousProperties.shading = shading;
+          }
         }
 
         // Parse tab stops (w:tabs) per ECMA-376 Part 1 §17.3.1.38
@@ -2438,6 +2734,9 @@ export class DocumentParser {
       | "result"
       | "end"
       | null = null;
+    let nestingDepth = 0;
+    let hasNestedFields = false;
+    let fieldStartIndex = -1;
 
     for (let i = 0; i < content.length; i++) {
       const item = content[i];
@@ -2456,16 +2755,50 @@ export class DocumentParser {
           if (fieldChar) {
             switch (fieldChar.fieldCharType) {
               case "begin":
-                fieldState = "begin";
+                nestingDepth++;
+                if (nestingDepth === 1) {
+                  fieldState = "begin";
+                  fieldStartIndex = i;
+                } else {
+                  hasNestedFields = true;
+                }
                 break;
               case "separate":
-                fieldState = "separate";
+                if (nestingDepth <= 1) {
+                  fieldState = "separate";
+                }
                 break;
               case "end":
+                nestingDepth--;
+                if (nestingDepth > 0) {
+                  // Still inside a nested field - continue collecting
+                  break;
+                }
                 fieldState = "end";
 
                 // Complete field assembly
-                if (fieldState === "end" && fieldRuns.length > 0) {
+                if (fieldRuns.length > 0) {
+                  // NESTED FIELD: preserve raw structure to maintain field balance
+                  // Nested fields (e.g. INCLUDEPICTURE multiplication from email-pasted images)
+                  // have properly balanced begin/separate/end markers across nesting levels.
+                  // Flattening them into a single ComplexField would collapse all instrTexts
+                  // into one instruction and orphan the inner end markers, corrupting the document.
+                  if (hasNestedFields) {
+                    for (let j = fieldStartIndex; j <= i; j++) {
+                      groupedContent.push(content[j]);
+                    }
+                    defaultLogger.debug(
+                      `Preserved raw structure for nested field spanning ${i - fieldStartIndex + 1} content items`
+                    );
+                    fieldRuns = [];
+                    instructionRevisions = [];
+                    fieldRevisions = [];
+                    fieldState = null;
+                    hasNestedFields = false;
+                    fieldStartIndex = -1;
+                    nestingDepth = 0;
+                    break;
+                  }
                   // If there are revisions in the instruction area, we MUST preserve raw structure
                   // The instruction text is INSIDE the revisions, so we can't extract it
                   // This happens with field code hyperlinks inside tracked changes (w:ins/w:del)
@@ -2653,7 +2986,10 @@ export class DocumentParser {
           }
         } else {
           // Regular run - check if we're inside a field result section
-          if (fieldState === "separate" || fieldState === "result") {
+          if (nestingDepth > 0) {
+            // Inside a nested field - collect all runs to preserve raw structure
+            fieldRuns.push(item);
+          } else if (fieldState === "separate" || fieldState === "result") {
             // This run is part of the field result - collect it
             fieldRuns.push(item);
             fieldState = "result";
@@ -2682,7 +3018,10 @@ export class DocumentParser {
         }
       } else if (item instanceof Revision) {
         // Handle Revision objects (w:ins, w:del) that may appear inside field sections
-        if (fieldState === "separate" || fieldState === "result") {
+        if (nestingDepth > 1) {
+          // Inside a nested field (depth 2+) - collect revision to preserve raw structure
+          fieldRevisions.push(item);
+        } else if (fieldState === "separate" || fieldState === "result") {
           // This revision is inside the field result section - track it
           // Set preliminary field context (field reference will be set when ComplexField is created)
           item.setFieldContext({ position: 'result' });
@@ -2723,7 +3062,10 @@ export class DocumentParser {
         }
       } else {
         // Non-run content (hyperlinks, images, etc.)
-        if (fieldRuns.length > 0) {
+        if (nestingDepth > 0) {
+          // Inside a nested field - keep collecting
+          fieldRuns.push(item as any);
+        } else if (fieldRuns.length > 0) {
           // Incomplete field - add as individual runs
           fieldRuns.forEach((run) => groupedContent.push(run));
           for (const revision of instructionRevisions) {
@@ -3195,6 +3537,7 @@ export class DocumentParser {
     let hasBegin = false;
     let hasEnd = false;
     let hasSeparate = false;
+    let formFieldData: any = undefined;
 
     for (const run of fieldRuns) {
       const runContent = run.getContent();
@@ -3209,6 +3552,10 @@ export class DocumentParser {
             hasBegin = true;
             // Capture formatting from begin run
             instructionFormatting = run.getFormatting();
+            // Capture form field data from begin field char
+            if (fieldCharToken.formFieldData) {
+              formFieldData = fieldCharToken.formFieldData;
+            }
             break;
           case "separate":
             hasSeparate = true;
@@ -3290,6 +3637,7 @@ export class DocumentParser {
       resultFormatting,
       multiParagraph: false, // Default - can be set later if needed
       hasResult: hasSeparate, // Track if field had a separator/result section per ECMA-376
+      formFieldData,
     };
 
     return new ComplexField(properties);
@@ -3325,6 +3673,86 @@ export class DocumentParser {
         return (
           value === "1" || value === 1 || value === true || value === "true"
         );
+      };
+
+      // Parse w:ffData from a fldChar object (form field data per ECMA-376 §17.16.17)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      type XmlNode = Record<string, any>;
+
+      const parseFormFieldData = (fldCharObj: XmlNode): FormFieldData | undefined => {
+        const ffDataObj: XmlNode | undefined = fldCharObj["w:ffData"];
+        if (!ffDataObj || typeof ffDataObj !== "object") return undefined;
+        const ffd: FormFieldData = {};
+        // w:name
+        if (ffDataObj["w:name"]?.["@_w:val"] !== undefined) {
+          ffd.name = String(ffDataObj["w:name"]["@_w:val"]);
+        }
+        // w:enabled (presence = true, w:val="0" = false)
+        if (ffDataObj["w:enabled"] !== undefined) {
+          const enabledVal = ffDataObj["w:enabled"]?.["@_w:val"];
+          ffd.enabled = enabledVal === "0" || enabledVal === 0 ? false : true;
+        }
+        // w:calcOnExit
+        if (ffDataObj["w:calcOnExit"] !== undefined) {
+          const calcVal = ffDataObj["w:calcOnExit"]?.["@_w:val"];
+          ffd.calcOnExit = calcVal === "1" || calcVal === 1 || calcVal === true;
+        }
+        // w:helpText
+        if (ffDataObj["w:helpText"]?.["@_w:val"] !== undefined) {
+          ffd.helpText = String(ffDataObj["w:helpText"]["@_w:val"]);
+        }
+        // w:statusText
+        if (ffDataObj["w:statusText"]?.["@_w:val"] !== undefined) {
+          ffd.statusText = String(ffDataObj["w:statusText"]["@_w:val"]);
+        }
+        // w:entryMacro
+        if (ffDataObj["w:entryMacro"]?.["@_w:val"] !== undefined) {
+          ffd.entryMacro = String(ffDataObj["w:entryMacro"]["@_w:val"]);
+        }
+        // w:exitMacro
+        if (ffDataObj["w:exitMacro"]?.["@_w:val"] !== undefined) {
+          ffd.exitMacro = String(ffDataObj["w:exitMacro"]["@_w:val"]);
+        }
+        // w:textInput
+        if (ffDataObj["w:textInput"] !== undefined) {
+          const ti: XmlNode = ffDataObj["w:textInput"];
+          const textInput: FormFieldTextInput = { type: 'textInput' };
+          if (ti["w:type"]?.["@_w:val"] !== undefined) textInput.inputType = String(ti["w:type"]["@_w:val"]);
+          if (ti["w:default"]?.["@_w:val"] !== undefined) textInput.defaultValue = String(ti["w:default"]["@_w:val"]);
+          if (ti["w:maxLength"]?.["@_w:val"] !== undefined) textInput.maxLength = Number(ti["w:maxLength"]["@_w:val"]);
+          if (ti["w:format"]?.["@_w:val"] !== undefined) textInput.format = String(ti["w:format"]["@_w:val"]);
+          ffd.fieldType = textInput;
+        }
+        // w:checkBox
+        if (ffDataObj["w:checkBox"] !== undefined) {
+          const cb: XmlNode = ffDataObj["w:checkBox"];
+          const checkBox: FormFieldCheckBox = { type: 'checkBox' };
+          if (cb["w:default"]?.["@_w:val"] !== undefined) {
+            checkBox.defaultChecked = cb["w:default"]["@_w:val"] === "1" || cb["w:default"]["@_w:val"] === 1;
+          }
+          if (cb["w:checked"]?.["@_w:val"] !== undefined) {
+            checkBox.checked = cb["w:checked"]["@_w:val"] === "1" || cb["w:checked"]["@_w:val"] === 1;
+          }
+          if (cb["w:size"]?.["@_w:val"] !== undefined) {
+            checkBox.size = Number(cb["w:size"]["@_w:val"]);
+          } else if (cb["w:sizeAuto"] !== undefined) {
+            checkBox.size = 'auto';
+          }
+          ffd.fieldType = checkBox;
+        }
+        // w:ddList
+        if (ffDataObj["w:ddList"] !== undefined) {
+          const dd: XmlNode = ffDataObj["w:ddList"];
+          const ddList: FormFieldDropDownList = { type: 'dropDownList' };
+          if (dd["w:result"]?.["@_w:val"] !== undefined) ddList.result = Number(dd["w:result"]["@_w:val"]);
+          if (dd["w:default"]?.["@_w:val"] !== undefined) ddList.defaultResult = Number(dd["w:default"]["@_w:val"]);
+          if (dd["w:listEntry"] !== undefined) {
+            const entries = Array.isArray(dd["w:listEntry"]) ? dd["w:listEntry"] : [dd["w:listEntry"]];
+            ddList.listEntries = entries.map((e: XmlNode) => String(e?.["@_w:val"] ?? e ?? ""));
+          }
+          ffd.fieldType = ddList;
+        }
+        return Object.keys(ffd).length > 0 ? ffd : undefined;
       };
 
       // Use _orderedChildren to preserve element order (critical for TOC entries)
@@ -3435,14 +3863,19 @@ export class DocumentParser {
                   | "end"
                   | undefined;
                 if (charType) {
-                  content.push({
+                  const fldContent: any = {
                     type: "fieldChar",
                     fieldCharType: charType,
                     fieldCharDirty: parseBooleanAttr(fldChar["@_w:dirty"]),
                     fieldCharLocked: parseBooleanAttr(
                       fldChar["@_w:fldLock"] ?? fldChar["@_w:lock"]
                     ),
-                  });
+                  };
+                  if (charType === "begin") {
+                    const ffData = parseFormFieldData(fldChar);
+                    if (ffData) fldContent.formFieldData = ffData;
+                  }
+                  content.push(fldContent);
                 }
               }
               break;
@@ -3494,6 +3927,30 @@ export class DocumentParser {
             case "w:annotationRef":
               content.push({ type: "annotationRef" });
               break;
+
+            // Footnote reference (w:footnoteReference) per ECMA-376 Part 1 §17.11.13
+            case "w:footnoteReference": {
+              const fnRefElements = toArray(runObj["w:footnoteReference"]);
+              const fnRef = fnRefElements[elementIndex] || fnRefElements[0];
+              const fnId = fnRef?.["@_w:id"];
+              content.push({
+                type: "footnoteReference",
+                footnoteId: fnId !== undefined ? parseInt(fnId, 10) : undefined,
+              });
+              break;
+            }
+
+            // Endnote reference (w:endnoteReference) per ECMA-376 Part 1 §17.11.2
+            case "w:endnoteReference": {
+              const enRefElements = toArray(runObj["w:endnoteReference"]);
+              const enRef = enRefElements[elementIndex] || enRefElements[0];
+              const enId = enRef?.["@_w:id"];
+              content.push({
+                type: "endnoteReference",
+                endnoteId: enId !== undefined ? parseInt(enId, 10) : undefined,
+              });
+              break;
+            }
 
             case "w:dayShort":
               content.push({ type: "dayShort" });
@@ -3618,14 +4075,19 @@ export class DocumentParser {
                 | "end"
                 | undefined;
               if (charType) {
-                content.push({
+                const fldContent: any = {
                   type: "fieldChar",
                   fieldCharType: charType,
                   fieldCharDirty: parseBooleanAttr(fldChar["@_w:dirty"]),
                   fieldCharLocked: parseBooleanAttr(
                     fldChar["@_w:fldLock"] ?? fldChar["@_w:lock"]
                   ),
-                });
+                };
+                if (charType === "begin") {
+                  const ffData = parseFormFieldData(fldChar);
+                  if (ffData) fldContent.formFieldData = ffData;
+                }
+                content.push(fldContent);
               }
             }
           }
@@ -3669,6 +4131,27 @@ export class DocumentParser {
         }
         if (runObj["w:annotationRef"] !== undefined) {
           content.push({ type: "annotationRef" });
+        }
+        // Footnote/endnote reference fallback
+        if (runObj["w:footnoteReference"] !== undefined) {
+          const fnRefElements = toArray(runObj["w:footnoteReference"]);
+          for (const fnRef of fnRefElements) {
+            const fnId = fnRef?.["@_w:id"];
+            content.push({
+              type: "footnoteReference",
+              footnoteId: fnId !== undefined ? parseInt(fnId, 10) : undefined,
+            });
+          }
+        }
+        if (runObj["w:endnoteReference"] !== undefined) {
+          const enRefElements = toArray(runObj["w:endnoteReference"]);
+          for (const enRef of enRefElements) {
+            const enId = enRef?.["@_w:id"];
+            content.push({
+              type: "endnoteReference",
+              endnoteId: enId !== undefined ? parseInt(enId, 10) : undefined,
+            });
+          }
         }
         if (runObj["w:dayShort"] !== undefined) {
           content.push({ type: "dayShort" });
@@ -4184,12 +4667,8 @@ export class DocumentParser {
 
     // Parse character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
     if (rPrObj["w:shd"]) {
-      const shd = rPrObj["w:shd"];
-      const shading: any = {};
-      if (shd["@_w:val"]) shading.val = shd["@_w:val"];
-      if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
-      if (shd["@_w:color"]) shading.color = shd["@_w:color"];
-      if (Object.keys(shading).length > 0) {
+      const shading = this.parseShadingFromObj(rPrObj["w:shd"]);
+      if (shading) {
         run.setShading(shading);
       }
     }
@@ -4249,6 +4728,15 @@ export class DocumentParser {
       // XMLParser adds @_ prefix to attributes
       const uVal = rPrObj["w:u"]["@_w:val"];
       run.setUnderline(uVal || true);
+      // Parse underline color attributes per ECMA-376 Part 1 §17.3.2.40
+      const uColor = rPrObj["w:u"]["@_w:color"];
+      if (uColor) run.setUnderlineColor(uColor);
+      const uThemeColor = rPrObj["w:u"]["@_w:themeColor"];
+      if (uThemeColor) run.setUnderlineThemeColor(
+        uThemeColor,
+        rPrObj["w:u"]["@_w:themeTint"] ? parseInt(rPrObj["w:u"]["@_w:themeTint"], 16) : undefined,
+        rPrObj["w:u"]["@_w:themeShade"] ? parseInt(rPrObj["w:u"]["@_w:themeShade"], 16) : undefined
+      );
     }
 
     // Parse character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.33
@@ -4324,6 +4812,11 @@ export class DocumentParser {
       if (rFonts["@_w:eastAsia"]) run.setFontEastAsia(rFonts["@_w:eastAsia"]);
       if (rFonts["@_w:cs"]) run.setFontCs(rFonts["@_w:cs"]);
       if (rFonts["@_w:hint"]) run.setFontHint(rFonts["@_w:hint"]);
+      // Parse theme font references per ECMA-376 Part 1 §17.3.2.26
+      if (rFonts["@_w:asciiTheme"]) run.setFontAsciiTheme(rFonts["@_w:asciiTheme"]);
+      if (rFonts["@_w:hAnsiTheme"]) run.setFontHAnsiTheme(rFonts["@_w:hAnsiTheme"]);
+      if (rFonts["@_w:eastAsiaTheme"]) run.setFontEastAsiaTheme(rFonts["@_w:eastAsiaTheme"]);
+      if (rFonts["@_w:cstheme"]) run.setFontCsTheme(rFonts["@_w:cstheme"]);
     }
 
     if (rPrObj["w:sz"]) {
@@ -4368,6 +4861,18 @@ export class DocumentParser {
       run.setHighlight(rPrObj["w:highlight"]["@_w:val"]);
     }
 
+    // Collect w14: namespace elements from rPr for passthrough (Word 2010+ text effects)
+    // w14:textOutline, w14:shadow, w14:reflection, w14:glow, w14:ligatures,
+    // w14:numForm, w14:numSpacing, w14:cntxtAlts, w14:stylisticSets
+    for (const key of Object.keys(rPrObj)) {
+      if (key.startsWith("w14:")) {
+        const rawXml = this.objectToXml({ [key]: rPrObj[key] });
+        if (rawXml) {
+          run.addRawW14Property(rawXml);
+        }
+      }
+    }
+
     // Parse run property change tracking (w:rPrChange) per ECMA-376 Part 1 §17.13.5.30
     // This records what the run formatting was BEFORE a change was made
     if (rPrObj["w:rPrChange"]) {
@@ -4405,9 +4910,14 @@ export class DocumentParser {
           prevProps.strike = parseOoxmlBoolean(prevRPr["w:strike"]);
         }
 
-        // Parse previous font
+        // Parse previous font (all w:rFonts attributes per ECMA-376 Part 1 §17.3.2.26)
         if (prevRPr["w:rFonts"]) {
-          prevProps.font = prevRPr["w:rFonts"]["@_w:ascii"];
+          const rFonts = prevRPr["w:rFonts"];
+          if (rFonts["@_w:ascii"]) prevProps.font = rFonts["@_w:ascii"];
+          if (rFonts["@_w:hAnsi"]) prevProps.fontHAnsi = rFonts["@_w:hAnsi"];
+          if (rFonts["@_w:eastAsia"]) prevProps.fontEastAsia = rFonts["@_w:eastAsia"];
+          if (rFonts["@_w:cs"]) prevProps.fontCs = rFonts["@_w:cs"];
+          if (rFonts["@_w:hint"]) prevProps.fontHint = rFonts["@_w:hint"];
         }
 
         // Parse previous size (half-points to points)
@@ -4492,6 +5002,11 @@ export class DocumentParser {
           prevProps.specVanish = parseOoxmlBoolean(prevRPr["w:specVanish"]);
         }
 
+        // Parse web hidden (w:webHidden) per ECMA-376 Part 1 §17.3.2.44
+        if (prevRPr["w:webHidden"]) {
+          prevProps.webHidden = parseOoxmlBoolean(prevRPr["w:webHidden"]);
+        }
+
         // Parse RTL and no-proofing (w:rtl, w:noProof)
         if (prevRPr["w:rtl"]) {
           prevProps.rtl = parseOoxmlBoolean(prevRPr["w:rtl"]);
@@ -4511,6 +5026,11 @@ export class DocumentParser {
         }
         if (prevRPr["w:iCs"]) {
           prevProps.complexScriptItalic = parseOoxmlBoolean(prevRPr["w:iCs"]);
+        }
+
+        // Parse complex script flag (w:cs) per ECMA-376 Part 1 §17.3.2.7
+        if (prevRPr["w:cs"]) {
+          prevProps.complexScript = parseOoxmlBoolean(prevRPr["w:cs"]);
         }
 
         // Parse character spacing (w:spacing @w:val in twips)
@@ -4598,14 +5118,11 @@ export class DocumentParser {
         }
 
         // Parse character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
-        // Maps to CharacterShading interface: fill, color, val
         if (prevRPr["w:shd"]) {
-          const shdObj = prevRPr["w:shd"];
-          prevProps.shading = {
-            fill: shdObj["@_w:fill"],
-            color: shdObj["@_w:color"],
-            val: shdObj["@_w:val"] as import("../elements/Run").ShadingPattern,
-          };
+          const shading = this.parseShadingFromObj(prevRPr["w:shd"]);
+          if (shading) {
+            prevProps.shading = shading;
+          }
         }
 
         // Parse East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
@@ -5320,8 +5837,8 @@ export class DocumentParser {
     const border: TableBorder = {
       style: (borderObj["@_w:val"] || "single") as TableBorder["style"],
     };
-    if (borderObj["@_w:sz"]) border.size = parseInt(borderObj["@_w:sz"], 10);
-    if (borderObj["@_w:space"]) border.space = parseInt(borderObj["@_w:space"], 10);
+    if (borderObj["@_w:sz"] !== undefined) border.size = safeParseInt(borderObj["@_w:sz"]);
+    if (borderObj["@_w:space"] !== undefined) border.space = safeParseInt(borderObj["@_w:space"]);
     if (borderObj["@_w:color"]) border.color = borderObj["@_w:color"];
     return border;
   }
@@ -5417,8 +5934,8 @@ export class DocumentParser {
                 const cells = row.getCells();
                 const lastCell = cells[cells.length - 1];
                 if (lastCell) {
-                  const cellParas = lastCell.getParagraphs();
-                  const lastPara = cellParas[cellParas.length - 1];
+                  const paras = lastCell.getParagraphs();
+                  const lastPara = paras[paras.length - 1];
                   if (lastPara) {
                     for (const bookmark of bookmarkEnds) {
                       lastPara.addBookmarkEnd(bookmark);
@@ -5555,6 +6072,14 @@ export class DocumentParser {
       }
     }
 
+    // Parse table layout (w:tblLayout) per ECMA-376 Part 1 §17.4.52
+    if (tblPrObj["w:tblLayout"]) {
+      const layoutType = tblPrObj["w:tblLayout"]["@_w:type"];
+      if (layoutType) {
+        table.setLayout(layoutType as any);
+      }
+    }
+
     // Parse table cell margins (w:tblCellMar) per ECMA-376 Part 1 §17.4.42
     if (tblPrObj["w:tblCellMar"]) {
       const cellMar = tblPrObj["w:tblCellMar"];
@@ -5608,12 +6133,8 @@ export class DocumentParser {
 
     // Parse table shading (w:shd) per ECMA-376 Part 1 §17.4.56
     if (tblPrObj["w:shd"]) {
-      const shd = tblPrObj["w:shd"];
-      const shading: any = {};
-      if (shd["@_w:val"]) shading.pattern = shd["@_w:val"];
-      if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
-      if (shd["@_w:color"]) shading.color = shd["@_w:color"];
-      if (Object.keys(shading).length > 0) {
+      const shading = this.parseShadingFromObj(tblPrObj["w:shd"]);
+      if (shading) {
         table.setShading(shading);
       }
     }
@@ -5633,6 +6154,17 @@ export class DocumentParser {
       if (Object.keys(borders).length > 0) {
         table.setBorders(borders);
       }
+    }
+
+    // Parse table property change (w:tblPrChange) per ECMA-376 Part 1 §17.13.5.36
+    if (tblPrObj["w:tblPrChange"]) {
+      const changeObj = tblPrObj["w:tblPrChange"];
+      table.setTblPrChange({
+        id: String(changeObj["@_w:id"] || "0"),
+        author: changeObj["@_w:author"] || "",
+        date: changeObj["@_w:date"] || "",
+        previousProperties: this.parseGenericPreviousProperties(changeObj["w:tblPr"]),
+      });
     }
   }
 
@@ -5789,6 +6321,17 @@ export class DocumentParser {
         row.setCnfStyle(val);
       }
     }
+
+    // Parse table row property change (w:trPrChange) per ECMA-376 Part 1 §17.13.5.38
+    if (trPrObj["w:trPrChange"]) {
+      const changeObj = trPrObj["w:trPrChange"];
+      row.setTrPrChange({
+        id: String(changeObj["@_w:id"] || "0"),
+        author: changeObj["@_w:author"] || "",
+        date: changeObj["@_w:date"] || "",
+        previousProperties: this.parseGenericPreviousProperties(changeObj["w:trPr"]),
+      });
+    }
   }
 
   /**
@@ -5842,11 +6385,10 @@ export class DocumentParser {
 
     // Parse shading exception (w:shd)
     if (tblPrExObj["w:shd"]) {
-      const shdObj = tblPrExObj["w:shd"];
-      exceptions.shading = {};
-      if (shdObj["@_w:fill"]) exceptions.shading.fill = shdObj["@_w:fill"];
-      if (shdObj["@_w:color"]) exceptions.shading.color = shdObj["@_w:color"];
-      if (shdObj["@_w:val"]) exceptions.shading.pattern = shdObj["@_w:val"];
+      const shading = this.parseShadingFromObj(tblPrExObj["w:shd"]);
+      if (shading) {
+        exceptions.shading = shading;
+      }
     }
 
     return Object.keys(exceptions).length > 0 ? exceptions : undefined;
@@ -5940,12 +6482,8 @@ export class DocumentParser {
 
         // Parse cell shading (w:shd)
         if (tcPr["w:shd"]) {
-          const shd = tcPr["w:shd"];
-          const shading: any = {};
-          if (shd["@_w:val"]) shading.pattern = shd["@_w:val"];
-          if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
-          if (shd["@_w:color"]) shading.color = shd["@_w:color"];
-          if (Object.keys(shading).length > 0) {
+          const shading = this.parseShadingFromObj(tcPr["w:shd"]);
+          if (shading) {
             cell.setShading(shading);
           }
         }
@@ -6026,6 +6564,16 @@ export class DocumentParser {
           }
         }
 
+        // Parse legacy horizontal merge (w:hMerge) per ECMA-376 Part 1 §17.4.22
+        if (tcPr["w:hMerge"]) {
+          const hMergeVal = tcPr["w:hMerge"]["@_w:val"];
+          if (hMergeVal === "restart") {
+            cell.setHorizontalMerge("restart");
+          } else {
+            cell.setHorizontalMerge("continue");
+          }
+        }
+
         // Parse table cell insertion marker (w:cellIns) per ECMA-376 Part 1 §17.13.5.5
         if (tcPr["w:cellIns"]) {
           const cellIns = tcPr["w:cellIns"];
@@ -6084,6 +6632,17 @@ export class DocumentParser {
             },
           });
           cell.setCellRevision(revision);
+        }
+
+        // Parse table cell property change (w:tcPrChange) per ECMA-376 Part 1 §17.13.5.37
+        if (tcPr["w:tcPrChange"]) {
+          const changeObj = tcPr["w:tcPrChange"];
+          cell.setTcPrChange({
+            id: String(changeObj["@_w:id"] || "0"),
+            author: changeObj["@_w:author"] || "",
+            date: changeObj["@_w:date"] || "",
+            previousProperties: this.parseGenericPreviousProperties(changeObj["w:tcPr"]),
+          });
         }
       }
 
@@ -7493,6 +8052,56 @@ export class DocumentParser {
         }
       }
 
+      // Parse page borders (w:pgBorders) per ECMA-376 Part 1 §17.6.10
+      const pgBordersElements = XMLParser.extractElements(sectPr, "w:pgBorders");
+      if (pgBordersElements.length > 0) {
+        const pgBordersXml = pgBordersElements[0];
+        if (pgBordersXml) {
+          const pageBorders: any = {};
+          const offsetFrom = XMLParser.extractAttribute(pgBordersXml, "w:offsetFrom");
+          if (offsetFrom) pageBorders.offsetFrom = offsetFrom;
+          const display = XMLParser.extractAttribute(pgBordersXml, "w:display");
+          if (display) pageBorders.display = display;
+          const zOrder = XMLParser.extractAttribute(pgBordersXml, "w:zOrder");
+          if (zOrder) pageBorders.zOrder = zOrder;
+
+          const parseBorder = (sideXml: string): any | undefined => {
+            if (!sideXml) return undefined;
+            const border: any = {};
+            const val = XMLParser.extractAttribute(sideXml, "w:val");
+            if (val) border.style = val;
+            const sz = XMLParser.extractAttribute(sideXml, "w:sz");
+            if (sz) border.size = parseInt(sz.toString(), 10);
+            const color = XMLParser.extractAttribute(sideXml, "w:color");
+            if (color) border.color = color;
+            const space = XMLParser.extractAttribute(sideXml, "w:space");
+            if (space) border.space = parseInt(space.toString(), 10);
+            const shadow = XMLParser.extractAttribute(sideXml, "w:shadow");
+            if (shadow === "1" || shadow === "true") border.shadow = true;
+            const frame = XMLParser.extractAttribute(sideXml, "w:frame");
+            if (frame === "1" || frame === "true") border.frame = true;
+            const themeColor = XMLParser.extractAttribute(sideXml, "w:themeColor");
+            if (themeColor) border.themeColor = themeColor;
+            const artId = XMLParser.extractAttribute(sideXml, "w:id");
+            if (artId) border.artId = parseInt(artId.toString(), 10);
+            return Object.keys(border).length > 0 ? border : undefined;
+          };
+
+          const sides = ["top", "left", "bottom", "right"];
+          for (const side of sides) {
+            const sideElements = XMLParser.extractElements(pgBordersXml, `w:${side}`);
+            if (sideElements.length > 0 && sideElements[0]) {
+              const border = parseBorder(sideElements[0]);
+              if (border) pageBorders[side] = border;
+            }
+          }
+
+          if (Object.keys(pageBorders).length > 0) {
+            sectionProps.pageBorders = pageBorders;
+          }
+        }
+      }
+
       // Parse columns (enhanced with separator and custom widths)
       const colsElements = XMLParser.extractElements(sectPr, "w:cols");
       if (colsElements.length > 0) {
@@ -7759,7 +8368,27 @@ export class DocumentParser {
         }
       }
 
-      return new Section(sectionProps);
+      const section = new Section(sectionProps);
+
+      // Parse section property change (w:sectPrChange) per ECMA-376 Part 1 §17.13.5.32
+      const sectPrChangeElements = XMLParser.extractElements(sectPr, "w:sectPrChange");
+      if (sectPrChangeElements.length > 0 && sectPrChangeElements[0]) {
+        const changeXml = sectPrChangeElements[0];
+        const id = XMLParser.extractAttribute(changeXml, "w:id") || "0";
+        const author = XMLParser.extractAttribute(changeXml, "w:author") || "";
+        const date = XMLParser.extractAttribute(changeXml, "w:date") || "";
+
+        // Extract the previous w:sectPr child
+        const prevSectPrElements = XMLParser.extractElements(changeXml, "w:sectPr");
+        const prevSectPrXml = prevSectPrElements.length > 0 ? prevSectPrElements[0] : undefined;
+        const prevProps = prevSectPrXml
+          ? this.parsePreviousSectionProperties(prevSectPrXml)
+          : {};
+
+        section.setSectPrChange({ id, author, date, previousProperties: prevProps });
+      }
+
+      return section;
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.parseErrors.push({ element: "sectPr", error: err });
@@ -8118,6 +8747,12 @@ export class DocumentParser {
       }
     }
 
+    // Parse shading (w:shd) per ECMA-376 Part 1 §17.3.1.32
+    const shading = this.parseShadingFromXml(pPrXml);
+    if (shading) {
+      formatting.shading = shading;
+    }
+
     return formatting;
   }
 
@@ -8271,6 +8906,12 @@ export class DocumentParser {
             | "white";
         }
       }
+    }
+
+    // Parse shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
+    const shading = this.parseShadingFromXml(rPrXml);
+    if (shading) {
+      formatting.shading = shading;
     }
 
     return formatting;
@@ -8702,22 +9343,53 @@ export class DocumentParser {
   }
 
   /**
+   * Parses shading from an object-based XML representation (parseToObject format).
+   * Extracts all 9 ECMA-376 shading attributes including theme colors.
+   */
+  private parseShadingFromObj(shd: any): ShadingConfig | undefined {
+    const shading: ShadingConfig = {};
+    if (shd["@_w:val"]) shading.pattern = shd["@_w:val"];
+    if (shd["@_w:fill"]) shading.fill = shd["@_w:fill"];
+    if (shd["@_w:color"]) shading.color = shd["@_w:color"];
+    if (shd["@_w:themeFill"]) shading.themeFill = shd["@_w:themeFill"];
+    if (shd["@_w:themeColor"]) shading.themeColor = shd["@_w:themeColor"];
+    if (shd["@_w:themeFillTint"]) shading.themeFillTint = shd["@_w:themeFillTint"];
+    if (shd["@_w:themeFillShade"]) shading.themeFillShade = shd["@_w:themeFillShade"];
+    if (shd["@_w:themeTint"]) shading.themeTint = shd["@_w:themeTint"];
+    if (shd["@_w:themeShade"]) shading.themeShade = shd["@_w:themeShade"];
+    return Object.keys(shading).length > 0 ? shading : undefined;
+  }
+
+  /**
    * Parses shading from XML (Phase 5.1)
    */
   private parseShadingFromXml(
     xml: string
-  ): import("../formatting/Style").ShadingProperties | undefined {
+  ): ShadingConfig | undefined {
     const tag = XMLParser.extractSelfClosingTag(xml, "w:shd");
     if (!tag) return undefined;
 
-    const shading: import("../formatting/Style").ShadingProperties = {};
-    const val = XMLParser.extractAttribute(`<w:shd${tag}`, "w:val");
-    const color = XMLParser.extractAttribute(`<w:shd${tag}`, "w:color");
-    const fill = XMLParser.extractAttribute(`<w:shd${tag}`, "w:fill");
+    const shading: ShadingConfig = {};
+    const fullTag = `<w:shd${tag}`;
+    const val = XMLParser.extractAttribute(fullTag, "w:val");
+    const color = XMLParser.extractAttribute(fullTag, "w:color");
+    const fill = XMLParser.extractAttribute(fullTag, "w:fill");
+    const themeFill = XMLParser.extractAttribute(fullTag, "w:themeFill");
+    const themeColor = XMLParser.extractAttribute(fullTag, "w:themeColor");
+    const themeFillTint = XMLParser.extractAttribute(fullTag, "w:themeFillTint");
+    const themeFillShade = XMLParser.extractAttribute(fullTag, "w:themeFillShade");
+    const themeTint = XMLParser.extractAttribute(fullTag, "w:themeTint");
+    const themeShade = XMLParser.extractAttribute(fullTag, "w:themeShade");
 
-    if (val) shading.val = val as any;
+    if (val) shading.pattern = val as ShadingConfig['pattern'];
     if (color) shading.color = color;
     if (fill) shading.fill = fill;
+    if (themeFill) shading.themeFill = themeFill;
+    if (themeColor) shading.themeColor = themeColor;
+    if (themeFillTint) shading.themeFillTint = themeFillTint;
+    if (themeFillShade) shading.themeFillShade = themeFillShade;
+    if (themeTint) shading.themeTint = themeTint;
+    if (themeShade) shading.themeShade = themeShade;
 
     return Object.keys(shading).length > 0 ? shading : undefined;
   }
@@ -8929,6 +9601,32 @@ export class DocumentParser {
     }
 
     return namespaces;
+  }
+
+  /**
+   * Parses document background (w:background) per ECMA-376 Part 1 §17.2.1
+   * The w:background element appears as a child of w:document, before w:body
+   */
+  private parseDocumentBackground(docXml: string): { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } | undefined {
+    const bgMatch = docXml.match(/<w:background([^>]*?)\/>/);
+    if (!bgMatch || !bgMatch[1]) return undefined;
+
+    const attrStr = bgMatch[1];
+    const result: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } = {};
+
+    const colorMatch = attrStr.match(/w:color="([^"]+)"/);
+    if (colorMatch && colorMatch[1]) result.color = colorMatch[1];
+
+    const themeColorMatch = attrStr.match(/w:themeColor="([^"]+)"/);
+    if (themeColorMatch && themeColorMatch[1]) result.themeColor = themeColorMatch[1];
+
+    const themeTintMatch = attrStr.match(/w:themeTint="([^"]+)"/);
+    if (themeTintMatch && themeTintMatch[1]) result.themeTint = themeTintMatch[1];
+
+    const themeShadeMatch = attrStr.match(/w:themeShade="([^"]+)"/);
+    if (themeShadeMatch && themeShadeMatch[1]) result.themeShade = themeShadeMatch[1];
+
+    return Object.keys(result).length > 0 ? result : undefined;
   }
 
   /**
@@ -9223,5 +9921,162 @@ export class DocumentParser {
 
       return null;
     }
+  }
+
+  /**
+   * Parse previous properties from a *PrChange child element (parsed object format).
+   * Handles w:tblPr, w:trPr, and w:tcPr children by extracting known property keys
+   * into the Record<string, any> format expected by toXML() serialization.
+   * Per ECMA-376 Part 1 §17.13.5.36-38
+   */
+  private parseGenericPreviousProperties(propsObj: any): Record<string, any> {
+    if (!propsObj) return {};
+    const result: Record<string, any> = {};
+
+    // Table-level properties (w:tblPr context)
+    if (propsObj["w:tblStyle"]) {
+      result.style = propsObj["w:tblStyle"]["@_w:val"] || "";
+    }
+    if (propsObj["w:tblW"]) {
+      result.width = parseInt(propsObj["w:tblW"]["@_w:w"] || "0", 10);
+      result.widthType = propsObj["w:tblW"]["@_w:type"] || "dxa";
+    }
+    if (propsObj["w:tblLayout"]) {
+      result.layout = propsObj["w:tblLayout"]["@_w:type"];
+    }
+    if (propsObj["w:tblInd"]) {
+      result.indent = parseInt(propsObj["w:tblInd"]["@_w:w"] || "0", 10);
+    }
+    if (propsObj["w:tblCellSpacing"]) {
+      result.cellSpacing = parseInt(propsObj["w:tblCellSpacing"]["@_w:w"] || "0", 10);
+    }
+    if (propsObj["w:tblBorders"]) {
+      const borders: any = {};
+      const bordersObj = propsObj["w:tblBorders"];
+      for (const side of ['top', 'bottom', 'left', 'right', 'insideH', 'insideV']) {
+        if (bordersObj[`w:${side}`]) {
+          borders[side] = this.parseBorderElement(bordersObj[`w:${side}`]);
+        }
+      }
+      if (Object.keys(borders).length > 0) result.borders = borders;
+    }
+
+    // Row-level properties (w:trPr context)
+    if (propsObj["w:trHeight"]) {
+      result.height = parseInt(propsObj["w:trHeight"]["@_w:val"] || "0", 10);
+      const rule = propsObj["w:trHeight"]["@_w:hRule"];
+      if (rule) result.heightRule = rule;
+    }
+    if (propsObj["w:tblHeader"]) {
+      result.isHeader = true;
+    }
+    if (propsObj["w:cantSplit"]) {
+      result.cantSplit = true;
+    }
+    if (propsObj["w:hidden"]) {
+      result.hidden = true;
+    }
+
+    // Cell-level properties (w:tcPr context)
+    if (propsObj["w:tcW"]) {
+      result.width = parseInt(propsObj["w:tcW"]["@_w:w"] || "0", 10);
+      result.widthType = propsObj["w:tcW"]["@_w:type"] || "dxa";
+    }
+    if (propsObj["w:vAlign"]) {
+      result.verticalAlignment = propsObj["w:vAlign"]["@_w:val"];
+    }
+    if (propsObj["w:tcBorders"]) {
+      const borders: any = {};
+      const bordersObj = propsObj["w:tcBorders"];
+      for (const side of ['top', 'bottom', 'left', 'right']) {
+        if (bordersObj[`w:${side}`]) {
+          borders[side] = this.parseBorderElement(bordersObj[`w:${side}`]);
+        }
+      }
+      if (Object.keys(borders).length > 0) result.borders = borders;
+    }
+
+    // Shared properties (appear in multiple contexts)
+    if (propsObj["w:jc"]) {
+      const val = propsObj["w:jc"]["@_w:val"];
+      if (val) {
+        result.alignment = val;     // Table context
+        result.justification = val; // Row context
+      }
+    }
+    if (propsObj["w:shd"]) {
+      const shading = this.parseShadingFromObj(propsObj["w:shd"]);
+      if (shading) result.shading = shading;
+    }
+
+    return result;
+  }
+
+  /**
+   * Parse previous section properties from raw XML within w:sectPrChange.
+   * Per ECMA-376 Part 1 §17.13.5.32
+   */
+  private parsePreviousSectionProperties(sectPrXml: string): Record<string, any> {
+    if (!sectPrXml) return {};
+    const result: Record<string, any> = {};
+
+    // Page size
+    const pgSzElements = XMLParser.extractElements(sectPrXml, "w:pgSz");
+    if (pgSzElements.length > 0 && pgSzElements[0]) {
+      const pgSz = pgSzElements[0];
+      const width = XMLParser.extractAttribute(pgSz, "w:w");
+      const height = XMLParser.extractAttribute(pgSz, "w:h");
+      const orient = XMLParser.extractAttribute(pgSz, "w:orient");
+      if (width || height) {
+        result.pageSize = {
+          width: width ? parseInt(width, 10) : undefined,
+          height: height ? parseInt(height, 10) : undefined,
+          orientation: orient === "landscape" ? "landscape" : "portrait",
+        };
+      }
+    }
+
+    // Margins
+    const pgMarElements = XMLParser.extractElements(sectPrXml, "w:pgMar");
+    if (pgMarElements.length > 0 && pgMarElements[0]) {
+      const pgMar = pgMarElements[0];
+      const margins: any = {};
+      const top = XMLParser.extractAttribute(pgMar, "w:top");
+      if (top) margins.top = parseInt(top, 10);
+      const bottom = XMLParser.extractAttribute(pgMar, "w:bottom");
+      if (bottom) margins.bottom = parseInt(bottom, 10);
+      const left = XMLParser.extractAttribute(pgMar, "w:left");
+      if (left) margins.left = parseInt(left, 10);
+      const right = XMLParser.extractAttribute(pgMar, "w:right");
+      if (right) margins.right = parseInt(right, 10);
+      const header = XMLParser.extractAttribute(pgMar, "w:header");
+      if (header) margins.header = parseInt(header, 10);
+      const footer = XMLParser.extractAttribute(pgMar, "w:footer");
+      if (footer) margins.footer = parseInt(footer, 10);
+      if (Object.keys(margins).length > 0) result.margins = margins;
+    }
+
+    // Section type
+    const typeElements = XMLParser.extractElements(sectPrXml, "w:type");
+    if (typeElements.length > 0 && typeElements[0]) {
+      const val = XMLParser.extractAttribute(typeElements[0], "w:val");
+      if (val) result.type = val;
+    }
+
+    // Columns
+    const colsElements = XMLParser.extractElements(sectPrXml, "w:cols");
+    if (colsElements.length > 0 && colsElements[0]) {
+      const cols = colsElements[0];
+      const num = XMLParser.extractAttribute(cols, "w:num");
+      const space = XMLParser.extractAttribute(cols, "w:space");
+      if (num) {
+        result.columns = {
+          count: parseInt(num, 10),
+          space: space ? parseInt(space, 10) : undefined,
+        };
+      }
+    }
+
+    return result;
   }
 }

@@ -108,7 +108,7 @@ describe('TableStyles - Phase 5.1', () => {
         .setTableFormatting({
           shading: {
             fill: 'F0F0F0',
-            val: 'clear',
+            pattern: 'clear',
           },
         });
 
@@ -458,7 +458,7 @@ describe('TableStyles - Phase 5.1', () => {
         .setTableCellFormatting({
           shading: {
             fill: 'F0F0F0',
-            val: 'clear',
+            pattern: 'clear',
             color: 'auto',
           },
         });

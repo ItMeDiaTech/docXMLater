@@ -23,6 +23,14 @@ export class NumberingManager {
   // Track if numbering has been modified (for XML preservation)
   private _modified: boolean = false;
 
+  // Track which specific definitions have been modified (for selective merging)
+  private _modifiedAbstractNumIds: Set<number> = new Set();
+  private _modifiedNumIds: Set<number> = new Set();
+
+  // Track which definitions have been removed (for removal from original XML during merge)
+  private _removedAbstractNumIds: Set<number> = new Set();
+  private _removedNumIds: Set<number> = new Set();
+
   /**
    * Creates a new numbering manager
    * @param initializeDefaults Whether to initialize with default numbering definitions
@@ -65,6 +73,7 @@ export class NumberingManager {
     }
 
     this._modified = true;
+    this._modifiedAbstractNumIds.add(id);
     return this;
   }
 
@@ -106,9 +115,17 @@ export class NumberingManager {
       }
     });
 
-    instancesToRemove.forEach(numId => this.instances.delete(numId));
+    instancesToRemove.forEach(numId => {
+      this.instances.delete(numId);
+      this._removedNumIds.add(numId);
+    });
 
-    return this.abstractNumberings.delete(abstractNumId);
+    const deleted = this.abstractNumberings.delete(abstractNumId);
+    if (deleted) {
+      this._modified = true;
+      this._removedAbstractNumIds.add(abstractNumId);
+    }
+    return deleted;
   }
 
   /**
@@ -126,6 +143,7 @@ export class NumberingManager {
 
     this.instances.set(numId, instance);
     this._modified = true;
+    this._modifiedNumIds.add(numId);
 
     // Update next ID if necessary
     if (numId >= this.nextNumId) {
@@ -183,6 +201,42 @@ export class NumberingManager {
    */
   resetModified(): void {
     this._modified = false;
+    this._modifiedAbstractNumIds.clear();
+    this._modifiedNumIds.clear();
+    this._removedAbstractNumIds.clear();
+    this._removedNumIds.clear();
+  }
+
+  /**
+   * Gets the IDs of abstract numberings that have been modified since loading
+   * Used for selective merging with original numbering.xml
+   */
+  getModifiedAbstractNumIds(): Set<number> {
+    return new Set(this._modifiedAbstractNumIds);
+  }
+
+  /**
+   * Gets the IDs of numbering instances that have been modified since loading
+   * Used for selective merging with original numbering.xml
+   */
+  getModifiedNumIds(): Set<number> {
+    return new Set(this._modifiedNumIds);
+  }
+
+  /**
+   * Gets the IDs of abstract numberings that have been removed since loading
+   * Used for removal from original numbering.xml during merge
+   */
+  getRemovedAbstractNumIds(): Set<number> {
+    return new Set(this._removedAbstractNumIds);
+  }
+
+  /**
+   * Gets the IDs of numbering instances that have been removed since loading
+   * Used for removal from original numbering.xml during merge
+   */
+  getRemovedNumIds(): Set<number> {
+    return new Set(this._removedNumIds);
   }
 
   /**
@@ -205,7 +259,12 @@ export class NumberingManager {
    * @param numId The numbering instance ID
    */
   removeInstance(numId: number): boolean {
-    return this.instances.delete(numId);
+    const deleted = this.instances.delete(numId);
+    if (deleted) {
+      this._modified = true;
+      this._removedNumIds.add(numId);
+    }
+    return deleted;
   }
 
   /**

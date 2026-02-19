@@ -4,6 +4,8 @@
  */
 
 import { removeInvalidXmlChars } from "../utils/xmlSanitization";
+import type { ShadingConfig } from "../elements/CommonTypes";
+import { buildShadingAttributes } from "../elements/CommonTypes";
 
 /** Represents a parsed XML object from XMLParser.parseToObject() */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed XML has dynamic keys and recursive structure
@@ -576,11 +578,21 @@ export class XMLBuilder {
    */
   static createDocument(
     bodyContent: XMLElement[],
-    namespaces: Record<string, string> = {}
+    namespaces: Record<string, string> = {},
+    preBodyContent?: XMLElement[]
   ): string {
     const builder = new XMLBuilder();
 
-    const allNamespaces = { ...XMLBuilder.createNamespaces(), ...namespaces };
+    // Preserve document's original namespace order, then fill in framework defaults
+    const allNamespaces: Record<string, string> = {};
+    for (const [key, value] of Object.entries(namespaces)) {
+      allNamespaces[key] = value;
+    }
+    for (const [key, value] of Object.entries(XMLBuilder.createNamespaces())) {
+      if (!(key in allNamespaces)) {
+        allNamespaces[key] = value;
+      }
+    }
 
     // Ensure mc:Ignorable is present when extended namespaces are declared.
     // Per ECMA-376, mc:Ignorable tells Word which namespace prefixes can be
@@ -604,9 +616,12 @@ export class XMLBuilder {
       }
     }
 
-    builder.element("w:document", allNamespaces, [
-      XMLBuilder.w("body", undefined, bodyContent),
-    ]);
+    const documentChildren: XMLElement[] = [];
+    if (preBodyContent) {
+      documentChildren.push(...preBodyContent);
+    }
+    documentChildren.push(XMLBuilder.w("body", undefined, bodyContent));
+    builder.element("w:document", allNamespaces, documentChildren);
 
     return builder.build(true);
   }
@@ -761,29 +776,24 @@ export class XMLBuilder {
    * Creates a shading element for WordprocessingML
    * Used for paragraph shading, table shading, and cell shading
    *
-   * @param shading - Shading definition
+   * @param shading - Shading definition (ShadingConfig with theme support)
    * @returns XML element for shading, or null if no shading properties
    *
    * @example
    * ```typescript
    * const shading = XMLBuilder.createShading({
    *   fill: 'FFFF00',
-   *   val: 'clear',
+   *   pattern: 'clear',
    *   color: '000000'
    * });
    * ```
    */
-  static createShading(shading: {
-    fill?: string;
-    val?: string;
-    color?: string;
-  }): XMLElement | null {
-    const attrs = XMLBuilder.buildAttributes({
-      'w:val': shading.val || 'clear',
-      'w:fill': shading.fill,
-      'w:color': shading.color
-    });
-
+  static createShading(shading: ShadingConfig): XMLElement | null {
+    const attrs = buildShadingAttributes(shading);
+    // Default w:val to "clear" if not specified but other attrs exist
+    if (!attrs['w:val'] && Object.keys(attrs).length > 0) {
+      attrs['w:val'] = 'clear';
+    }
     if (Object.keys(attrs).length > 0) {
       return XMLBuilder.wSelf('shd', attrs);
     }

@@ -5,7 +5,7 @@
  * Maintains unique IDs and proper ordering.
  */
 
-import { Endnote } from './Endnote';
+import { Endnote, EndnoteType } from './Endnote';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { XMLParser } from '../xml/XMLParser';
 
@@ -37,6 +37,19 @@ export class EndnoteManager {
     // Continuation separator (ID 0)
     const continuationSep = Endnote.createContinuationSeparator(0);
     this.endnotes.set(0, continuationSep);
+  }
+
+  /**
+   * Checks if an endnote is a special/system type (separator, continuationSeparator,
+   * continuationNotice) that should be preserved across clear() operations.
+   * Uses type-based detection rather than ID-based, because continuationNotice
+   * has a positive ID (typically 1) but is still a system endnote.
+   */
+  private isSpecialEndnote(endnote: Endnote): boolean {
+    const type = endnote.getType();
+    return type === EndnoteType.Separator ||
+           type === EndnoteType.ContinuationSeparator ||
+           type === EndnoteType.ContinuationNotice;
   }
 
   /**
@@ -90,11 +103,12 @@ export class EndnoteManager {
   }
 
   /**
-   * Gets all endnotes (excluding special ones)
+   * Gets all user endnotes (excluding special system types: separator,
+   * continuationSeparator, continuationNotice)
    */
   getAllEndnotes(): Endnote[] {
     return Array.from(this.endnotes.values())
-      .filter(e => e.getId() > 0)
+      .filter(e => !this.isSpecialEndnote(e))
       .sort((a, b) => a.getId() - b.getId());
   }
 
@@ -117,11 +131,11 @@ export class EndnoteManager {
   /**
    * Removes an endnote
    * @param id Endnote ID
-   * @returns True if removed, false if not found
+   * @returns True if removed, false if not found or if it's a special type
    */
   removeEndnote(id: number): boolean {
-    // Don't allow removing special endnotes
-    if (id <= 0) {
+    const endnote = this.endnotes.get(id);
+    if (!endnote || this.isSpecialEndnote(endnote)) {
       return false;
     }
     return this.endnotes.delete(id);
@@ -149,20 +163,25 @@ export class EndnoteManager {
   }
 
   /**
-   * Clears all endnotes (except special ones)
+   * Clears all user endnotes (preserves special system types: separator,
+   * continuationSeparator, continuationNotice)
    */
   clear(): void {
     const specialEndnotes = new Map<number, Endnote>();
+    let maxSpecialId = 0;
 
-    // Preserve special endnotes
     for (const [id, endnote] of this.endnotes) {
-      if (id <= 0) {
+      if (this.isSpecialEndnote(endnote)) {
         specialEndnotes.set(id, endnote);
+        if (id > maxSpecialId) {
+          maxSpecialId = id;
+        }
       }
     }
 
     this.endnotes = specialEndnotes;
-    this.nextId = 1;
+    // Ensure nextId doesn't collide with special endnotes that have positive IDs
+    this.nextId = Math.max(maxSpecialId + 1, 1);
   }
 
   /**

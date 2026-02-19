@@ -134,14 +134,27 @@ export class Footnote {
 
     const children: XMLElement[] = [];
 
-    // Add paragraphs
-    for (const para of this.paragraphs) {
-      children.push(para.toXML());
-    }
+    // Separator types require specific child elements per ECMA-376
+    if (this.type === FootnoteType.Separator) {
+      // <w:p><w:r><w:separator/></w:r></w:p>
+      children.push(XMLBuilder.w('p', undefined, [
+        XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('separator')])
+      ]));
+    } else if (this.type === FootnoteType.ContinuationSeparator) {
+      // <w:p><w:r><w:continuationSeparator/></w:r></w:p>
+      children.push(XMLBuilder.w('p', undefined, [
+        XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('continuationSeparator')])
+      ]));
+    } else {
+      // Add paragraphs
+      for (const para of this.paragraphs) {
+        children.push(para.toXML());
+      }
 
-    // If no paragraphs, add an empty one (required)
-    if (children.length === 0) {
-      children.push(XMLBuilder.w('p'));
+      // If no paragraphs, add an empty one (required)
+      if (children.length === 0) {
+        children.push(XMLBuilder.w('p'));
+      }
     }
 
     return XMLBuilder.w('footnote', attrs, children);

@@ -6,7 +6,7 @@
  */
 
 import { XMLElement } from '../xml/XMLBuilder';
-import { RunFormatting } from './Run';
+import { RunFormatting, FormFieldData } from './Run';
 import { ParsedHyperlinkInstruction, parseHyperlinkInstruction, isHyperlinkInstruction } from './FieldHelpers';
 import type { Revision } from './Revision';
 import { pointsToHalfPoints } from '../utils/units';
@@ -595,6 +595,9 @@ export interface ComplexFieldProperties {
    * - hasResult=false, result="" → Field never had a result section (empty field)
    */
   hasResult?: boolean;
+
+  /** Form field data (w:ffData) from begin field char per ECMA-376 §17.16.17 */
+  formFieldData?: FormFieldData;
 }
 
 /**
@@ -624,6 +627,7 @@ export class ComplexField {
    * Per ECMA-376, fields without results skip the separator element.
    */
   private _hasResultSection: boolean = false;
+  private _formFieldData?: FormFieldData;
 
   /**
    * Creates a new complex field
@@ -638,6 +642,7 @@ export class ComplexField {
     this.resultContent = properties.resultContent || [];
     this.multiParagraph = properties.multiParagraph || false;
     this._hasResultSection = properties.hasResult ?? false;
+    this._formFieldData = properties.formFieldData;
 
     // Auto-parse HYPERLINK instruction if provided or detected
     if (properties.parsedHyperlink) {
@@ -660,6 +665,13 @@ export class ComplexField {
   setInstruction(instruction: string): this {
     this.instruction = instruction;
     return this;
+  }
+
+  /**
+   * Gets form field data (w:ffData) if present
+   */
+  getFormFieldData(): FormFieldData | undefined {
+    return this._formFieldData;
   }
 
   /**
@@ -886,15 +898,16 @@ export class ComplexField {
     const runs: XMLElement[] = [];
 
     // 1. Begin marker run
-    runs.push({
-      name: 'w:r',
-      children: [
-        {
+    const beginFldChar: XMLElement = this._formFieldData
+      ? this.buildFldCharWithFfData()
+      : {
           name: 'w:fldChar',
           attributes: { 'w:fldCharType': 'begin' },
           selfClosing: true,
-        },
-      ],
+        };
+    runs.push({
+      name: 'w:r',
+      children: [beginFldChar],
     });
 
     // 2. Instruction run
@@ -1049,6 +1062,84 @@ export class ComplexField {
     }
 
     return { name: 'w:rPr', children };
+  }
+
+  /**
+   * Builds a w:fldChar begin element with w:ffData child
+   */
+  private buildFldCharWithFfData(): XMLElement {
+    const ffd = this._formFieldData!;
+    const ffDataChildren: (string | XMLElement)[] = [];
+
+    if (ffd.name) {
+      ffDataChildren.push({ name: 'w:name', attributes: { 'w:val': ffd.name }, selfClosing: true });
+    }
+    if (ffd.enabled !== undefined) {
+      if (ffd.enabled) {
+        ffDataChildren.push({ name: 'w:enabled', selfClosing: true });
+      } else {
+        ffDataChildren.push({ name: 'w:enabled', attributes: { 'w:val': '0' }, selfClosing: true });
+      }
+    }
+    if (ffd.calcOnExit !== undefined) {
+      ffDataChildren.push({ name: 'w:calcOnExit', attributes: { 'w:val': ffd.calcOnExit ? '1' : '0' }, selfClosing: true });
+    }
+    if (ffd.helpText) {
+      ffDataChildren.push({ name: 'w:helpText', attributes: { 'w:type': 'text', 'w:val': ffd.helpText }, selfClosing: true });
+    }
+    if (ffd.statusText) {
+      ffDataChildren.push({ name: 'w:statusText', attributes: { 'w:type': 'text', 'w:val': ffd.statusText }, selfClosing: true });
+    }
+    if (ffd.entryMacro) {
+      ffDataChildren.push({ name: 'w:entryMacro', attributes: { 'w:val': ffd.entryMacro }, selfClosing: true });
+    }
+    if (ffd.exitMacro) {
+      ffDataChildren.push({ name: 'w:exitMacro', attributes: { 'w:val': ffd.exitMacro }, selfClosing: true });
+    }
+
+    if (ffd.fieldType) {
+      switch (ffd.fieldType.type) {
+        case 'textInput': {
+          const tiChildren: (string | XMLElement)[] = [];
+          if (ffd.fieldType.inputType) tiChildren.push({ name: 'w:type', attributes: { 'w:val': ffd.fieldType.inputType }, selfClosing: true });
+          if (ffd.fieldType.defaultValue) tiChildren.push({ name: 'w:default', attributes: { 'w:val': ffd.fieldType.defaultValue }, selfClosing: true });
+          if (ffd.fieldType.maxLength !== undefined) tiChildren.push({ name: 'w:maxLength', attributes: { 'w:val': String(ffd.fieldType.maxLength) }, selfClosing: true });
+          if (ffd.fieldType.format) tiChildren.push({ name: 'w:format', attributes: { 'w:val': ffd.fieldType.format }, selfClosing: true });
+          ffDataChildren.push({ name: 'w:textInput', children: tiChildren });
+          break;
+        }
+        case 'checkBox': {
+          const cbChildren: (string | XMLElement)[] = [];
+          if (ffd.fieldType.size === 'auto') {
+            cbChildren.push({ name: 'w:sizeAuto', selfClosing: true });
+          } else if (ffd.fieldType.size !== undefined) {
+            cbChildren.push({ name: 'w:size', attributes: { 'w:val': String(ffd.fieldType.size) }, selfClosing: true });
+          }
+          if (ffd.fieldType.defaultChecked !== undefined) cbChildren.push({ name: 'w:default', attributes: { 'w:val': ffd.fieldType.defaultChecked ? '1' : '0' }, selfClosing: true });
+          if (ffd.fieldType.checked !== undefined) cbChildren.push({ name: 'w:checked', attributes: { 'w:val': ffd.fieldType.checked ? '1' : '0' }, selfClosing: true });
+          ffDataChildren.push({ name: 'w:checkBox', children: cbChildren });
+          break;
+        }
+        case 'dropDownList': {
+          const ddChildren: (string | XMLElement)[] = [];
+          if (ffd.fieldType.result !== undefined) ddChildren.push({ name: 'w:result', attributes: { 'w:val': String(ffd.fieldType.result) }, selfClosing: true });
+          if (ffd.fieldType.defaultResult !== undefined) ddChildren.push({ name: 'w:default', attributes: { 'w:val': String(ffd.fieldType.defaultResult) }, selfClosing: true });
+          if (ffd.fieldType.listEntries) {
+            for (const entry of ffd.fieldType.listEntries) {
+              ddChildren.push({ name: 'w:listEntry', attributes: { 'w:val': entry }, selfClosing: true });
+            }
+          }
+          ffDataChildren.push({ name: 'w:ddList', children: ddChildren });
+          break;
+        }
+      }
+    }
+
+    return {
+      name: 'w:fldChar',
+      attributes: { 'w:fldCharType': 'begin' },
+      children: [{ name: 'w:ffData', children: ffDataChildren }],
+    };
   }
 }
 

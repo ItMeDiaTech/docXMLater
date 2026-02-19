@@ -194,6 +194,50 @@ export interface NoteProperties {
 }
 
 /**
+ * Page border definition for a single side
+ * Per ECMA-376 Part 1 §17.6.10
+ */
+export interface PageBorderDef {
+  /** Border style (single, double, dashed, etc.) */
+  style?: string;
+  /** Border size in eighths of a point */
+  size?: number;
+  /** Border color in hex format (without #) */
+  color?: string;
+  /** Space between border and page edge/text in points */
+  space?: number;
+  /** Whether to show shadow */
+  shadow?: boolean;
+  /** Whether to include frame around page */
+  frame?: boolean;
+  /** Theme color reference */
+  themeColor?: string;
+  /** Art border ID (for decorative borders) */
+  artId?: number;
+}
+
+/**
+ * Page borders configuration
+ * Per ECMA-376 Part 1 §17.6.10
+ */
+export interface PageBorders {
+  /** Top page border */
+  top?: PageBorderDef;
+  /** Bottom page border */
+  bottom?: PageBorderDef;
+  /** Left page border */
+  left?: PageBorderDef;
+  /** Right page border */
+  right?: PageBorderDef;
+  /** Whether border is measured from page edge or text edge */
+  offsetFrom?: 'page' | 'text';
+  /** Display on all pages, first page only, or not first page */
+  display?: 'allPages' | 'firstPage' | 'notFirstPage';
+  /** Z-ordering relative to text */
+  zOrder?: 'front' | 'back';
+}
+
+/**
  * Section properties
  */
 export interface SectionProperties {
@@ -243,6 +287,8 @@ export interface SectionProperties {
   noEndnote?: boolean;
   /** Form protection for this section (w:formProt) */
   formProt?: boolean;
+  /** Page borders per ECMA-376 Part 1 §17.6.10 */
+  pageBorders?: PageBorders;
   /** Printer settings relationship ID (w:printerSettings r:id) */
   printerSettingsId?: string;
   /** Chapter style heading level for page numbering (w:pgNumType w:chapStyle) */
@@ -254,8 +300,23 @@ export interface SectionProperties {
 /**
  * Represents a document section
  */
+/**
+ * Section property change tracking (w:sectPrChange)
+ * Per ECMA-376 Part 1 §17.13.5.32
+ */
+export interface SectPrChange {
+  author: string;
+  date: string;
+  id: string;
+  previousProperties: Record<string, any>;
+}
+
 export class Section {
   private properties: SectionProperties;
+  /** Tracking context for automatic change tracking */
+  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  /** Section property change tracking (w:sectPrChange) */
+  private sectPrChange?: SectPrChange;
 
   /**
    * Creates a new section
@@ -291,7 +352,38 @@ export class Section {
       verticalAlignment: properties.verticalAlignment,
       paperSource: properties.paperSource,
       textDirection: properties.textDirection,
+      pageBorders: properties.pageBorders,
     };
+  }
+
+  /**
+   * Sets the tracking context for automatic change tracking.
+   * Called by Document when track changes is enabled.
+   * @internal
+   */
+  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+    this.trackingContext = context;
+  }
+
+  /**
+   * Gets the section property change tracking info
+   */
+  getSectPrChange(): SectPrChange | undefined {
+    return this.sectPrChange;
+  }
+
+  /**
+   * Sets the section property change tracking info
+   */
+  setSectPrChange(change: SectPrChange | undefined): void {
+    this.sectPrChange = change;
+  }
+
+  /**
+   * Clears the section property change tracking
+   */
+  clearSectPrChange(): void {
+    this.sectPrChange = undefined;
   }
 
   /**
@@ -470,7 +562,11 @@ export class Section {
    * @param orientation Page orientation
    */
   setPageSize(width: number, height: number, orientation: PageOrientation = 'portrait'): this {
+    const prev = this.properties.pageSize ? { ...this.properties.pageSize } : undefined;
     this.properties.pageSize = { width, height, orientation };
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'pageSize', prev, this.properties.pageSize);
+    }
     return this;
   }
 
@@ -479,6 +575,7 @@ export class Section {
    * @param orientation Page orientation
    */
   setOrientation(orientation: PageOrientation): this {
+    const prev = this.properties.pageSize?.orientation;
     if (!this.properties.pageSize) {
       this.properties.pageSize = {
         width: PAGE_SIZES.LETTER.width,
@@ -494,6 +591,9 @@ export class Section {
       this.properties.pageSize.height = temp;
     }
 
+    if (this.trackingContext?.isEnabled() && prev !== orientation) {
+      this.trackingContext.trackSectionChange(this, 'orientation', prev, orientation);
+    }
     return this;
   }
 
@@ -502,7 +602,20 @@ export class Section {
    * @param margins Margin properties
    */
   setMargins(margins: Margins): this {
-    this.properties.margins = { ...margins };
+    const prev = this.properties.margins ? { ...this.properties.margins } : undefined;
+    const existing = this.properties.margins;
+    this.properties.margins = {
+      top: margins.top,
+      bottom: margins.bottom,
+      left: margins.left,
+      right: margins.right,
+      header: margins.header ?? existing?.header ?? 720,
+      footer: margins.footer ?? existing?.footer ?? 720,
+      gutter: margins.gutter ?? existing?.gutter,
+    };
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'margins', prev, this.properties.margins);
+    }
     return this;
   }
 
@@ -512,11 +625,15 @@ export class Section {
    * @param space Space between columns in twips
    */
   setColumns(count: number, space: number = 720): this {
+    const prev = this.properties.columns ? { ...this.properties.columns } : undefined;
     this.properties.columns = {
       count,
       space,
       equalWidth: true,
     };
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'columns', prev, this.properties.columns);
+    }
     return this;
   }
 
@@ -525,7 +642,11 @@ export class Section {
    * @param type Section break type
    */
   setSectionType(type: SectionType): this {
+    const prev = this.properties.type;
     this.properties.type = type;
+    if (this.trackingContext?.isEnabled() && prev !== type) {
+      this.trackingContext.trackSectionChange(this, 'type', prev, type);
+    }
     return this;
   }
 
@@ -535,7 +656,11 @@ export class Section {
    * @param format Number format
    */
   setPageNumbering(start?: number, format?: PageNumberFormat): this {
+    const prev = this.properties.pageNumbering ? { ...this.properties.pageNumbering } : undefined;
     this.properties.pageNumbering = { start, format };
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'pageNumbering', prev, this.properties.pageNumbering);
+    }
     return this;
   }
 
@@ -544,7 +669,11 @@ export class Section {
    * @param titlePage Whether this section has a different first page
    */
   setTitlePage(titlePage: boolean = true): this {
+    const prev = this.properties.titlePage;
     this.properties.titlePage = titlePage;
+    if (this.trackingContext?.isEnabled() && prev !== titlePage) {
+      this.trackingContext.trackSectionChange(this, 'titlePage', prev, titlePage);
+    }
     return this;
   }
 
@@ -554,10 +683,14 @@ export class Section {
    * @param rId Relationship ID
    */
   setHeaderReference(type: 'default' | 'first' | 'even', rId: string): this {
+    const prev = this.properties.headers?.[type];
     if (!this.properties.headers) {
       this.properties.headers = {};
     }
     this.properties.headers[type] = rId;
+    if (this.trackingContext?.isEnabled() && prev !== rId) {
+      this.trackingContext.trackSectionChange(this, `headerReference:${type}`, prev, rId);
+    }
     return this;
   }
 
@@ -567,10 +700,14 @@ export class Section {
    * @param rId Relationship ID
    */
   setFooterReference(type: 'default' | 'first' | 'even', rId: string): this {
+    const prev = this.properties.footers?.[type];
     if (!this.properties.footers) {
       this.properties.footers = {};
     }
     this.properties.footers[type] = rId;
+    if (this.trackingContext?.isEnabled() && prev !== rId) {
+      this.trackingContext.trackSectionChange(this, `footerReference:${type}`, prev, rId);
+    }
     return this;
   }
 
@@ -580,7 +717,11 @@ export class Section {
    * @param alignment Vertical alignment (top, center, bottom, both=justified)
    */
   setVerticalAlignment(alignment: VerticalAlignment): this {
+    const prev = this.properties.verticalAlignment;
     this.properties.verticalAlignment = alignment;
+    if (this.trackingContext?.isEnabled() && prev !== alignment) {
+      this.trackingContext.trackSectionChange(this, 'verticalAlignment', prev, alignment);
+    }
     return this;
   }
 
@@ -590,7 +731,11 @@ export class Section {
    * @param other Other pages tray number
    */
   setPaperSource(first?: number, other?: number): this {
+    const prev = this.properties.paperSource ? { ...this.properties.paperSource } : undefined;
     this.properties.paperSource = { first, other };
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'paperSource', prev, this.properties.paperSource);
+    }
     return this;
   }
 
@@ -600,10 +745,14 @@ export class Section {
    * @param separator Whether to show column separator line
    */
   setColumnSeparator(separator: boolean = true): this {
+    const prev = this.properties.columns?.separator;
     if (!this.properties.columns) {
       this.properties.columns = { count: 1 };
     }
     this.properties.columns.separator = separator;
+    if (this.trackingContext?.isEnabled() && prev !== separator) {
+      this.trackingContext.trackSectionChange(this, 'columnSeparator', prev, separator);
+    }
     return this;
   }
 
@@ -612,12 +761,16 @@ export class Section {
    * @param widths Array of column widths in twips
    */
   setColumnWidths(widths: number[]): this {
+    const prev = this.properties.columns ? { ...this.properties.columns } : undefined;
     if (!this.properties.columns) {
       this.properties.columns = { count: widths.length };
     }
     this.properties.columns.columnWidths = widths;
     this.properties.columns.equalWidth = false;
     this.properties.columns.count = widths.length;
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'columns', prev, { ...this.properties.columns });
+    }
     return this;
   }
 
@@ -626,7 +779,11 @@ export class Section {
    * @param direction Text direction (ltr=left-to-right, rtl=right-to-left, tbRl=top-to-bottom-right-to-left, btLr=bottom-to-top-left-to-right)
    */
   setTextDirection(direction: TextDirection): this {
+    const prev = this.properties.textDirection;
     this.properties.textDirection = direction;
+    if (this.trackingContext?.isEnabled() && prev !== direction) {
+      this.trackingContext.trackSectionChange(this, 'textDirection', prev, direction);
+    }
     return this;
   }
 
@@ -636,7 +793,11 @@ export class Section {
    * @param options Line numbering configuration
    */
   setLineNumbering(options: LineNumbering): this {
+    const prev = this.properties.lineNumbering ? { ...this.properties.lineNumbering } : undefined;
     this.properties.lineNumbering = { ...options };
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'lineNumbering', prev, this.properties.lineNumbering);
+    }
     return this;
   }
 
@@ -661,7 +822,11 @@ export class Section {
    * Per ECMA-376 Part 1 §17.11.6
    */
   setFootnoteProperties(props: NoteProperties): this {
+    const prev = this.properties.footnotePr ? { ...this.properties.footnotePr } : undefined;
     this.properties.footnotePr = { ...props };
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'footnotePr', prev, this.properties.footnotePr);
+    }
     return this;
   }
 
@@ -670,7 +835,11 @@ export class Section {
    * Per ECMA-376 Part 1 §17.11.7
    */
   setEndnoteProperties(props: NoteProperties): this {
+    const prev = this.properties.endnotePr ? { ...this.properties.endnotePr } : undefined;
     this.properties.endnotePr = { ...props };
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'endnotePr', prev, this.properties.endnotePr);
+    }
     return this;
   }
 
@@ -679,7 +848,11 @@ export class Section {
    * Per ECMA-376 Part 1 §17.6.14
    */
   setNoEndnote(noEndnote: boolean = true): this {
+    const prev = this.properties.noEndnote;
     this.properties.noEndnote = noEndnote;
+    if (this.trackingContext?.isEnabled() && prev !== noEndnote) {
+      this.trackingContext.trackSectionChange(this, 'noEndnote', prev, noEndnote);
+    }
     return this;
   }
 
@@ -688,7 +861,11 @@ export class Section {
    * Per ECMA-376 Part 1 §17.6.4
    */
   setFormProtection(formProt: boolean = true): this {
+    const prev = this.properties.formProt;
     this.properties.formProt = formProt;
+    if (this.trackingContext?.isEnabled() && prev !== formProt) {
+      this.trackingContext.trackSectionChange(this, 'formProt', prev, formProt);
+    }
     return this;
   }
 
@@ -697,7 +874,11 @@ export class Section {
    * Per ECMA-376 Part 1 §17.6.6
    */
   setPrinterSettings(rId: string): this {
+    const prev = this.properties.printerSettingsId;
     this.properties.printerSettingsId = rId;
+    if (this.trackingContext?.isEnabled() && prev !== rId) {
+      this.trackingContext.trackSectionChange(this, 'printerSettings', prev, rId);
+    }
     return this;
   }
 
@@ -708,8 +889,15 @@ export class Section {
    * @param chapSep - Separator between chapter and page number
    */
   setChapterNumbering(chapStyle: number, chapSep?: ChapterSeparator): this {
+    const prevStyle = this.properties.chapStyle;
+    const prevSep = this.properties.chapSep;
     this.properties.chapStyle = chapStyle;
     if (chapSep) this.properties.chapSep = chapSep;
+    if (this.trackingContext?.isEnabled()) {
+      this.trackingContext.trackSectionChange(this, 'chapterNumbering',
+        { chapStyle: prevStyle, chapSep: prevSep },
+        { chapStyle, chapSep: chapSep || prevSep });
+    }
     return this;
   }
 
@@ -802,16 +990,44 @@ export class Section {
         'w:bottom': this.properties.margins.bottom.toString(),
         'w:left': this.properties.margins.left.toString(),
       };
-      if (this.properties.margins.header !== undefined) {
-        attrs['w:header'] = this.properties.margins.header.toString();
-      }
-      if (this.properties.margins.footer !== undefined) {
-        attrs['w:footer'] = this.properties.margins.footer.toString();
-      }
+      attrs['w:header'] = (this.properties.margins.header ?? 720).toString();
+      attrs['w:footer'] = (this.properties.margins.footer ?? 720).toString();
       if (this.properties.margins.gutter !== undefined) {
         attrs['w:gutter'] = this.properties.margins.gutter.toString();
       }
       children.push(XMLBuilder.wSelf('pgMar', attrs));
+    }
+
+    // Page borders per ECMA-376 Part 1 §17.6.10
+    if (this.properties.pageBorders) {
+      const pgBorders = this.properties.pageBorders;
+      const pgBordersAttrs: Record<string, string> = {};
+      if (pgBorders.offsetFrom) pgBordersAttrs['w:offsetFrom'] = pgBorders.offsetFrom;
+      if (pgBorders.display) pgBordersAttrs['w:display'] = pgBorders.display;
+      if (pgBorders.zOrder) pgBordersAttrs['w:zOrder'] = pgBorders.zOrder;
+
+      const borderChildren: XMLElement[] = [];
+      const buildBorder = (side: string, def: PageBorderDef) => {
+        const bAttrs: Record<string, string | number> = {};
+        if (def.style) bAttrs['w:val'] = def.style;
+        // ECMA-376 Part 1 §17.18.2: sz valid range 2-96 (eighths of a point)
+        if (def.size !== undefined) bAttrs['w:sz'] = Math.max(2, Math.min(96, def.size));
+        if (def.color) bAttrs['w:color'] = def.color;
+        // ECMA-376 Part 1 §17.18.88: space valid range 0-31680 (points)
+        if (def.space !== undefined) bAttrs['w:space'] = Math.max(0, Math.min(31680, def.space));
+        if (def.shadow) bAttrs['w:shadow'] = '1';
+        if (def.frame) bAttrs['w:frame'] = '1';
+        if (def.themeColor) bAttrs['w:themeColor'] = def.themeColor;
+        if (def.artId !== undefined) bAttrs['w:id'] = def.artId;
+        borderChildren.push(XMLBuilder.wSelf(side, bAttrs));
+      };
+
+      if (pgBorders.top) buildBorder('top', pgBorders.top);
+      if (pgBorders.left) buildBorder('left', pgBorders.left);
+      if (pgBorders.bottom) buildBorder('bottom', pgBorders.bottom);
+      if (pgBorders.right) buildBorder('right', pgBorders.right);
+
+      children.push(XMLBuilder.w('pgBorders', pgBordersAttrs, borderChildren));
     }
 
     // Columns - output when set (including single column)
@@ -1001,6 +1217,80 @@ export class Section {
       children.push(XMLBuilder.wSelf('printerSettings', {
         'r:id': this.properties.printerSettingsId,
       }));
+    }
+
+    // Add section property change (w:sectPrChange) per ECMA-376 Part 1 §17.13.5.32
+    // Must be last child of w:sectPr
+    if (this.sectPrChange) {
+      const changeAttrs: Record<string, string | number> = {
+        'w:id': this.sectPrChange.id,
+        'w:author': this.sectPrChange.author,
+        'w:date': this.sectPrChange.date,
+      };
+      const prevChildren: XMLElement[] = [];
+      const prev = this.sectPrChange.previousProperties;
+      if (prev) {
+        if (prev.pageSize) {
+          const pgSzAttrs: Record<string, string> = {
+            'w:w': prev.pageSize.width?.toString() || '12240',
+            'w:h': prev.pageSize.height?.toString() || '15840',
+          };
+          if (prev.pageSize.orientation === 'landscape') {
+            pgSzAttrs['w:orient'] = 'landscape';
+          }
+          prevChildren.push(XMLBuilder.wSelf('pgSz', pgSzAttrs));
+        }
+        if (prev.margins) {
+          const pgMarAttrs: Record<string, string> = {};
+          if (prev.margins.top !== undefined) pgMarAttrs['w:top'] = prev.margins.top.toString();
+          if (prev.margins.bottom !== undefined) pgMarAttrs['w:bottom'] = prev.margins.bottom.toString();
+          if (prev.margins.left !== undefined) pgMarAttrs['w:left'] = prev.margins.left.toString();
+          if (prev.margins.right !== undefined) pgMarAttrs['w:right'] = prev.margins.right.toString();
+          if (prev.margins.header !== undefined) pgMarAttrs['w:header'] = prev.margins.header.toString();
+          if (prev.margins.footer !== undefined) pgMarAttrs['w:footer'] = prev.margins.footer.toString();
+          prevChildren.push(XMLBuilder.wSelf('pgMar', pgMarAttrs));
+        }
+        if (prev.type) {
+          prevChildren.push(XMLBuilder.wSelf('type', { 'w:val': prev.type }));
+        }
+        if (prev.columns) {
+          const colAttrs: Record<string, string> = { 'w:num': prev.columns.count?.toString() || '1' };
+          if (prev.columns.space !== undefined) colAttrs['w:space'] = prev.columns.space.toString();
+          prevChildren.push(XMLBuilder.wSelf('cols', colAttrs));
+        }
+        if (prev.titlePage) {
+          prevChildren.push(XMLBuilder.wSelf('titlePg'));
+        }
+        if (prev.pageNumbering) {
+          const pnAttrs: Record<string, string> = {};
+          if (prev.pageNumbering.start !== undefined) pnAttrs['w:start'] = prev.pageNumbering.start.toString();
+          if (prev.pageNumbering.format) pnAttrs['w:fmt'] = prev.pageNumbering.format;
+          if (Object.keys(pnAttrs).length > 0) {
+            prevChildren.push(XMLBuilder.wSelf('pgNumType', pnAttrs));
+          }
+        }
+        if (prev.verticalAlignment) {
+          prevChildren.push(XMLBuilder.wSelf('vAlign', { 'w:val': prev.verticalAlignment }));
+        }
+        if (prev.textDirection) {
+          prevChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': prev.textDirection }));
+        }
+        if (prev.lineNumbering) {
+          const lnAttrs: Record<string, string> = {};
+          if (prev.lineNumbering.countBy !== undefined) lnAttrs['w:countBy'] = prev.lineNumbering.countBy.toString();
+          if (prev.lineNumbering.start !== undefined) lnAttrs['w:start'] = prev.lineNumbering.start.toString();
+          if (prev.lineNumbering.restart) lnAttrs['w:restart'] = prev.lineNumbering.restart;
+          if (prev.lineNumbering.distance !== undefined) lnAttrs['w:distance'] = prev.lineNumbering.distance.toString();
+          if (Object.keys(lnAttrs).length > 0) {
+            prevChildren.push(XMLBuilder.wSelf('lnNumType', lnAttrs));
+          }
+        }
+        if (prev.formProt) {
+          prevChildren.push(XMLBuilder.wSelf('formProt'));
+        }
+      }
+      const prevSectPr = XMLBuilder.w('sectPr', undefined, prevChildren);
+      children.push(XMLBuilder.w('sectPrChange', changeAttrs, [prevSectPr]));
     }
 
     return XMLBuilder.w('sectPr', undefined, children);

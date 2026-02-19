@@ -689,3 +689,579 @@ describe('Image Properties - Edge Cases', () => {
     expect(wrap3?.type).toBe('square');
   });
 });
+
+describe('Image Properties - Flip (flipH/flipV)', () => {
+  it('should default flipH and flipV to false', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    expect(image.getFlipH()).toBe(false);
+    expect(image.getFlipV()).toBe(false);
+  });
+
+  it('should set and get flipH', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setFlipH(true);
+    expect(image.getFlipH()).toBe(true);
+    image.setFlipH(false);
+    expect(image.getFlipH()).toBe(false);
+  });
+
+  it('should set and get flipV', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setFlipV(true);
+    expect(image.getFlipV()).toBe(true);
+  });
+
+  it('should support fluent API for flip setters', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    const result = image.setFlipH(true).setFlipV(true);
+    expect(result).toBe(image);
+    expect(image.getFlipH()).toBe(true);
+    expect(image.getFlipV()).toBe(true);
+  });
+
+  it('should include flipH in XML output when true', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setFlipH(true);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const reloaded = await Document.loadFromBuffer(buffer);
+    const images = reloaded.getImages();
+    expect(images.length).toBe(1);
+    expect(images[0]?.image.getFlipH()).toBe(true);
+    expect(images[0]?.image.getFlipV()).toBe(false);
+    reloaded.dispose();
+  });
+
+  it('should include flipV in XML output when true', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setFlipV(true);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const reloaded = await Document.loadFromBuffer(buffer);
+    const images = reloaded.getImages();
+    expect(images.length).toBe(1);
+    expect(images[0]?.image.getFlipH()).toBe(false);
+    expect(images[0]?.image.getFlipV()).toBe(true);
+    reloaded.dispose();
+  });
+
+  it('should preserve both flipH and flipV during round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setFlipH(true);
+    image.setFlipV(true);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const reloaded = await Document.loadFromBuffer(buffer);
+    const images = reloaded.getImages();
+    expect(images.length).toBe(1);
+    expect(images[0]?.image.getFlipH()).toBe(true);
+    expect(images[0]?.image.getFlipV()).toBe(true);
+    reloaded.dispose();
+  });
+
+  it('should not add flip attributes to XML when false', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    // No flip set — defaults to false
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const reloaded = await Document.loadFromBuffer(buffer);
+    const images = reloaded.getImages();
+    expect(images.length).toBe(1);
+    expect(images[0]?.image.getFlipH()).toBe(false);
+    expect(images[0]?.image.getFlipV()).toBe(false);
+    reloaded.dispose();
+  });
+
+  it('should preserve flipH with rotation during round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.rotate(45);
+    image.setFlipH(true);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const reloaded = await Document.loadFromBuffer(buffer);
+    const images = reloaded.getImages();
+    expect(images.length).toBe(1);
+    expect(images[0]?.image.getRotation()).toBe(45);
+    expect(images[0]?.image.getFlipH()).toBe(true);
+    expect(images[0]?.image.getFlipV()).toBe(false);
+    reloaded.dispose();
+  });
+
+  it('should initialize flipH/flipV from ImageProperties', async () => {
+    const image = await Image.create({
+      source: createTestImageBuffer(),
+      width: 914400,
+      height: 914400,
+      flipH: true,
+      flipV: true,
+    });
+    expect(image.getFlipH()).toBe(true);
+    expect(image.getFlipV()).toBe(true);
+  });
+});
+
+// ============================================================================
+// Group A: Simple Attribute Preservation
+// ============================================================================
+
+describe('Image Properties - Group A: Simple Attributes', () => {
+  it('should preserve presetGeometry through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setPresetGeometry('ellipse');
+    expect(image.getPresetGeometry()).toBe('ellipse');
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const images = doc2.getImages();
+    expect(images[0]?.image.getPresetGeometry()).toBe('ellipse');
+    doc2.dispose();
+  });
+
+  it('should preserve compressionState through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setCompressionState('print');
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    expect(doc2.getImages()[0]?.image.getCompressionState()).toBe('print');
+    doc2.dispose();
+  });
+
+  it('should preserve bwMode through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBwMode('clr');
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    expect(doc2.getImages()[0]?.image.getBwMode()).toBe('clr');
+    doc2.dispose();
+  });
+
+  it('should preserve inline dist attributes through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setInlineDist(1000, 2000, 3000, 4000);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const img = doc2.getImages()[0]!.image;
+    expect(img.getInlineDistT()).toBe(1000);
+    expect(img.getInlineDistB()).toBe(2000);
+    expect(img.getInlineDistL()).toBe(3000);
+    expect(img.getInlineDistR()).toBe(4000);
+    doc2.dispose();
+  });
+
+  it('should preserve picNonVisualProps through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setPicNonVisualProps({ id: '5', name: 'test-pic', descr: 'My pic' });
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const props = doc2.getImages()[0]!.image.getPicNonVisualProps();
+    expect(props.id).toBe('5');
+    expect(props.name).toBe('test-pic');
+    expect(props.descr).toBe('My pic');
+    doc2.dispose();
+  });
+
+  it('should preserve picLocks through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setPicLocks({ noChangeAspect: true, noCrop: true, noRot: true });
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const locks = doc2.getImages()[0]!.image.getPicLocks();
+    expect(locks.noChangeAspect).toBe(true);
+    expect(locks.noCrop).toBe(true);
+    expect(locks.noRot).toBe(true);
+    expect(locks.noMove).toBeUndefined();
+    doc2.dispose();
+  });
+
+  it('should preserve hidden attribute through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setHidden(true);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    expect(doc2.getImages()[0]?.image.getHidden()).toBe(true);
+    doc2.dispose();
+  });
+
+  it('should preserve blipFillDpi through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBlipFillDpi(150);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    expect(doc2.getImages()[0]?.image.getBlipFillDpi()).toBe(150);
+    doc2.dispose();
+  });
+
+  it('should preserve blipFillRotWithShape through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBlipFillRotWithShape(true);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    expect(doc2.getImages()[0]?.image.getBlipFillRotWithShape()).toBe(true);
+    doc2.dispose();
+  });
+
+  it('should preserve transparency effect through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setEffects({ transparency: 50 });
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    expect(doc2.getImages()[0]?.image.getEffects()?.transparency).toBe(50);
+    doc2.dispose();
+  });
+
+  it('should preserve noChangeAspect=false through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setNoChangeAspect(false);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    // noChangeAspect false means the attribute is "0"
+    expect(doc2.getImages()[0]?.image.getNoChangeAspect()).toBe(false);
+    doc2.dispose();
+  });
+
+  it('should default presetGeometry to rect', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    expect(image.getPresetGeometry()).toBe('rect');
+  });
+
+  it('should default compressionState to none', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    expect(image.getCompressionState()).toBe('none');
+  });
+
+  it('should default bwMode to auto', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    expect(image.getBwMode()).toBe('auto');
+  });
+
+  it('should initialize all Group A properties from ImageProperties', async () => {
+    const image = await Image.create({
+      source: createTestImageBuffer(),
+      width: 914400,
+      height: 914400,
+      presetGeometry: 'roundRect',
+      compressionState: 'email',
+      bwMode: 'gray',
+      inlineDistT: 100,
+      inlineDistB: 200,
+      inlineDistL: 300,
+      inlineDistR: 400,
+      noChangeAspect: false,
+      hidden: true,
+      blipFillDpi: 300,
+      blipFillRotWithShape: false,
+      picLocks: { noChangeAspect: true, noGrp: true },
+      picNonVisualProps: { id: '10', name: 'myPic', descr: 'desc' },
+    });
+    expect(image.getPresetGeometry()).toBe('roundRect');
+    expect(image.getCompressionState()).toBe('email');
+    expect(image.getBwMode()).toBe('gray');
+    expect(image.getInlineDistT()).toBe(100);
+    expect(image.getNoChangeAspect()).toBe(false);
+    expect(image.getHidden()).toBe(true);
+    expect(image.getBlipFillDpi()).toBe(300);
+    expect(image.getBlipFillRotWithShape()).toBe(false);
+    expect(image.getPicLocks().noGrp).toBe(true);
+    expect(image.getPicNonVisualProps().id).toBe('10');
+  });
+});
+
+// ============================================================================
+// Group B: Raw XML Passthrough
+// ============================================================================
+
+describe('Image Properties - Group B: Raw Passthrough', () => {
+  it('should store and retrieve raw passthrough slots', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image._setRawPassthrough('blip-effects', '<a:clrChange/>');
+    expect(image._getRawPassthrough('blip-effects')).toBe('<a:clrChange/>');
+    expect(image._hasRawPassthrough('blip-effects')).toBe(true);
+    expect(image._hasRawPassthrough('nonexistent')).toBe(false);
+  });
+
+  it('should include blip-effects passthrough in XML output', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image._setRawPassthrough('blip-effects', '<a:biLevel thresh="50000"/>');
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    // The biLevel element should be preserved as raw passthrough
+    const img = doc2.getImages()[0]!.image;
+    expect(img._getRawPassthrough('blip-effects')).toContain('a:biLevel');
+    doc2.dispose();
+  });
+
+  it('should include spPr-effects passthrough in XML output', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image._setRawPassthrough('spPr-effects', '<a:effectLst><a:outerShdw dist="50000" dir="5400000"><a:srgbClr val="000000"/></a:outerShdw></a:effectLst>');
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const img = doc2.getImages()[0]!.image;
+    expect(img._getRawPassthrough('spPr-effects')).toContain('a:effectLst');
+    doc2.dispose();
+  });
+});
+
+// ============================================================================
+// Group C: Enhanced Border Model
+// ============================================================================
+
+describe('Image Properties - Group C: Enhanced Border', () => {
+  it('should accept number for backward-compatible setBorder()', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBorder(3);
+    const border = image.getBorder();
+    expect(border).toBeDefined();
+    expect(border!.width).toBe(3);
+  });
+
+  it('should accept full ImageBorder object', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBorder({
+      width: 2,
+      cap: 'rnd',
+      compound: 'dbl',
+      fill: { type: 'srgbClr', value: 'FF0000' },
+      dashPattern: 'dash',
+      join: 'round',
+    });
+    const border = image.getBorder();
+    expect(border!.cap).toBe('rnd');
+    expect(border!.compound).toBe('dbl');
+    expect(border!.fill?.value).toBe('FF0000');
+    expect(border!.dashPattern).toBe('dash');
+    expect(border!.join).toBe('round');
+  });
+
+  it('should preserve basic border through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBorder(4);
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const border = doc2.getImages()[0]?.image.getBorder();
+    expect(border).toBeDefined();
+    expect(border!.width).toBe(4);
+    doc2.dispose();
+  });
+
+  it('should preserve enhanced border attributes through round-trip', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBorder({
+      width: 3,
+      cap: 'sq',
+      dashPattern: 'lgDash',
+      join: 'bevel',
+      fill: { type: 'srgbClr', value: 'FF0000' },
+    });
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const border = doc2.getImages()[0]?.image.getBorder();
+    expect(border).toBeDefined();
+    expect(border!.width).toBe(3);
+    expect(border!.cap).toBe('sq');
+    expect(border!.dashPattern).toBe('lgDash');
+    expect(border!.join).toBe('bevel');
+    expect(border!.fill?.type).toBe('srgbClr');
+    expect(border!.fill?.value).toBe('FF0000');
+    doc2.dispose();
+  });
+
+  it('should preserve border with scheme color and modifiers', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBorder({
+      width: 2,
+      fill: {
+        type: 'schemeClr',
+        value: 'accent1',
+        modifiers: [{ name: 'lumMod', val: '75000' }],
+      },
+    });
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const border = doc2.getImages()[0]?.image.getBorder();
+    expect(border!.fill?.type).toBe('schemeClr');
+    expect(border!.fill?.value).toBe('accent1');
+    expect(border!.fill?.modifiers).toBeDefined();
+    expect(border!.fill?.modifiers![0]?.name).toBe('lumMod');
+    expect(border!.fill?.modifiers![0]?.val).toBe('75000');
+    doc2.dispose();
+  });
+});
+
+// ============================================================================
+// Group D: Image Format Support
+// ============================================================================
+
+describe('Image Properties - Group D: Format Detection', () => {
+  it('should detect PNG format from buffer', async () => {
+    const image = await Image.fromBuffer(createTestImageBuffer());
+    expect(image.getExtension()).toBe('png');
+  });
+
+  it('should detect SVG format from buffer', async () => {
+    const svgBuffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100"/></svg>');
+    const image = await Image.fromBuffer(svgBuffer);
+    expect(image.getExtension()).toBe('svg');
+  });
+
+  it('should detect EMF format from buffer', async () => {
+    // Create minimal EMF buffer with signature at offset 40
+    const emfBuffer = Buffer.alloc(48);
+    emfBuffer[0] = 0x01; // Record type
+    // ' EMF' at offset 40
+    emfBuffer[40] = 0x20;
+    emfBuffer[41] = 0x45;
+    emfBuffer[42] = 0x4D;
+    emfBuffer[43] = 0x46;
+    const image = await Image.fromBuffer(emfBuffer);
+    expect(image.getExtension()).toBe('emf');
+  });
+
+  it('should detect WMF placeable format from buffer', async () => {
+    const wmfBuffer = Buffer.alloc(22);
+    wmfBuffer[0] = 0xD7;
+    wmfBuffer[1] = 0xCD;
+    wmfBuffer[2] = 0xC6;
+    wmfBuffer[3] = 0x9A;
+    const image = await Image.fromBuffer(wmfBuffer);
+    expect(image.getExtension()).toBe('wmf');
+  });
+
+  it('should validate SVG image data', async () => {
+    const svgBuffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    const image = await Image.fromBuffer(svgBuffer);
+    await image.ensureDataLoaded();
+    expect(image.validateImageData().valid).toBe(true);
+  });
+
+  it('should validate EMF image data', async () => {
+    const emfBuffer = Buffer.alloc(48);
+    emfBuffer[0] = 0x01;
+    emfBuffer[40] = 0x20;
+    emfBuffer[41] = 0x45;
+    emfBuffer[42] = 0x4D;
+    emfBuffer[43] = 0x46;
+    const image = await Image.fromBuffer(emfBuffer);
+    await image.ensureDataLoaded();
+    expect(image.validateImageData().valid).toBe(true);
+  });
+
+  it('should validate WMF image data', async () => {
+    const wmfBuffer = Buffer.alloc(22);
+    wmfBuffer[0] = 0xD7;
+    wmfBuffer[1] = 0xCD;
+    wmfBuffer[2] = 0xC6;
+    wmfBuffer[3] = 0x9A;
+    const image = await Image.fromBuffer(wmfBuffer);
+    await image.ensureDataLoaded();
+    expect(image.validateImageData().valid).toBe(true);
+  });
+
+  it('should detect SVG dimensions from width/height attributes', async () => {
+    const svgBuffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect/></svg>');
+    const image = await Image.fromBuffer(svgBuffer);
+    // SVG dimensions are detected and converted to EMUs
+    // If no explicit dimensions passed, it auto-detects
+    expect(image.getWidth()).toBeGreaterThan(0);
+    expect(image.getHeight()).toBeGreaterThan(0);
+  });
+});
+
+describe('Image Properties - MIME Types', () => {
+  it('should return correct MIME type for SVG', () => {
+    const { ImageManager } = require('../../src/elements/ImageManager');
+    expect(ImageManager.getMimeType('svg')).toBe('image/svg+xml');
+  });
+
+  it('should return correct MIME type for EMF', () => {
+    const { ImageManager } = require('../../src/elements/ImageManager');
+    expect(ImageManager.getMimeType('emf')).toBe('image/x-emf');
+  });
+
+  it('should return correct MIME type for WMF', () => {
+    const { ImageManager } = require('../../src/elements/ImageManager');
+    expect(ImageManager.getMimeType('wmf')).toBe('image/x-wmf');
+  });
+});
+
+describe('Image Properties - Floating Image cNvGraphicFramePr', () => {
+  it('should include cNvGraphicFramePr for floating images', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setAnchor({
+      behindDoc: false,
+      locked: false,
+      layoutInCell: true,
+      allowOverlap: false,
+      relativeHeight: 251658240,
+    });
+    image.setPosition(
+      { anchor: 'page', alignment: 'center' },
+      { anchor: 'page', alignment: 'center' }
+    );
+    doc.addImage(image);
+
+    const buffer = await doc.toBuffer();
+    const doc2 = await Document.loadFromBuffer(buffer);
+    // If cNvGraphicFramePr is properly generated, noChangeAspect should be parsed
+    const img = doc2.getImages()[0]!.image;
+    expect(img.getNoChangeAspect()).toBe(true);
+    doc2.dispose();
+  });
+});

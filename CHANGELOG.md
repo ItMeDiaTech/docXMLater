@@ -5,6 +5,119 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.8.7] - 2026-02-19
+
+### Added
+
+- **ECMA-376 Image Attribute Coverage**
+  - Group A: 14 typed properties (presetGeometry, compressionState, bwMode, inline distances, noChangeAspect, hidden, blipFillDpi, blipFillRotWithShape, picLocks, picNonVisualProps, isLinked, transparency)
+  - Group B: 9 raw XML passthrough slots via `_rawPassthrough` Map for complex DrawingML subtrees; `collectUnmodeledChildren()` helper in parser
+  - Group C: Enhanced `ImageBorder` interface replacing `{ width: number }` with full `a:ln` support (cap, compound, alignment, fill with srgbClr/schemeClr modifiers, dashPattern, join, headEnd, tailEnd)
+  - Group D: SVG/EMF/WMF format support with buffer-based detection, dimension detection, MIME types, `xmlns:asvg` namespace, and linked images via `r:link`
+  - 69 tests in ImageProperties.test.ts
+
+- **ECMA-376 Gap A: CJK Paragraph Properties**
+  - `setKinsoku()`, `setWordWrap()`, `setOverflowPunct()`, `setTopLinePunct()`, `setAutoSpaceDE()`, `setAutoSpaceDN()` on Paragraph
+  - Parsed during document load and round-tripped on save
+
+- **ECMA-376 Gap A: Document Background**
+  - `getDocumentBackground()` / `setDocumentBackground()` on Document
+  - Supports color, themeColor, themeTint, themeShade per ECMA-376 Part 1 Section 17.2.1
+
+- **ECMA-376 Gap B: Form Field Data Preservation**
+  - `w:fldChar` elements with `w:ffData` now parsed and round-tripped
+  - Covers text input, checkbox, and dropdown form fields per ECMA-376 Section 17.16
+  - `FormFieldData` type with name, enabled, calcOnExit, textInput, checkBox, ddList
+
+- **ECMA-376 Gap C: Expanded Document Settings**
+  - `getEvenAndOddHeaders()` / `setEvenAndOddHeaders()` for different odd/even headers
+  - `getMirrorMargins()` / `setMirrorMargins()` for binding margins
+  - `getAutoHyphenation()` / `setAutoHyphenation()` for automatic hyphenation
+  - `getDecimalSymbol()` and `getListSeparator()` accessors
+
+- **w14 Run Effects Passthrough**
+  - `addRawW14Property(rawXml: string)` on Run for Word 2010+ effects (ligatures, numForm, textOutline, shadow, reflection, glow, etc.)
+  - Stored in `formatting.rawW14Properties` array; output in `w:rPr` during generation
+
+- **Tracked Changes: Full Property Round-Trip**
+  - Run property changes (`w:rPrChange`): 30+ properties including dstrike, shadow, outline, emboss, imprint, vanish, RTL, complex scripts, spacing, kerning, border, shading, East Asian layout
+  - Paragraph property changes (`w:pPrChange`): 25+ properties including widowControl, contextualSpacing, outlineLevel, bidi, borders, shading, tabs, textDirection
+  - New types: `ParagraphBorderDef`, `ParagraphBorders`, `ParagraphShading`, `TabStopDef`, `ParagraphFormattingPartial`
+
+- **Granular Character-Level Tracked Changes**
+  - `diffText(oldText, newText): DiffSegment[]` prefix/suffix diff algorithm for minimal edits
+  - `diffHasUnchangedParts(segments): boolean` for detecting partial text changes
+  - Integration with `Run.setText()` when change tracking is enabled
+
+- **Bookmark System: Body-Level Bookmarks**
+  - Support for bookmarks appearing between block elements (paragraphs/tables) in document body
+  - `extractBodyLevelBookmarkEnds()` and `extractBodyLevelBookmarkStarts()` in DocumentParser
+
+- **Bookmark Validation and Auto-Repair**
+  - `validateBookmarkPairs(): number` on Document returns count of repairs
+  - Adds missing `w:bookmarkEnd` markers for orphaned starts
+  - Removes orphaned `w:bookmarkEnd` without matching starts
+  - Automatically called during `save()` / `toBuffer()`
+
+- **Footnote/Endnote Round-Trip Pipeline**
+  - Full round-trip: parse on load, regenerate on save, passthrough if unmodified
+  - Dirty flag tracking (`_footnotesModified`, `_endnotesModified`)
+  - Public API: `createFootnote()`, `createEndnote()`, `clearFootnotes()`, `clearEndnotes()`, `getFootnoteManager()`, `getEndnoteManager()`
+  - Duplicate relationship prevention on round-trip
+
+- **Unified Shading Model (ECMA-376 Closure)**
+  - `ShadingConfig` type with 9 attributes: pattern, fill, color, themeFill, themeColor, themeFillTint, themeFillShade, themeTint, themeShade
+  - `buildShadingAttributes()` shared XML generation helper
+  - `parseShadingFromObj()` unified parser across 7 parse sites
+  - Type aliases: `CharacterShading`, `TableShading`, `CellShading`, `ShadingProperties`, `ParagraphShading` all unified as `ShadingConfig`
+  - Paragraph `setShading()` now integrates with change tracking
+  - `resolveCellShading()` inheritance resolver (direct cell, tblPrEx, conditional style, default cell, table shading)
+  - `decodeCnfStyle()` / `getActiveConditionalsInPriorityOrder()` utilities
+  - `Document.getComputedCellShading(table, row, col)` convenience method
+
+- **Run Enhancements**
+  - `setUnderlineColor(color)` and `setUnderlineThemeColor(themeColor, themeTint?, themeShade?)` for underline styling
+  - Theme font references: `setFontAsciiTheme()`, `setFontHAnsiTheme()`, `setFontEastAsiaTheme()`, `setFontCsTheme()`
+
+- **Table Enhancements**
+  - `getFirstParagraph()` / `getLastParagraph()` navigation helpers
+  - Legacy horizontal merge (`hMerge`) via `setHorizontalMerge()` / `getHorizontalMerge()` on TableCell
+  - `getLayout()` on Table returns `fixed` or `auto`
+
+- **TOC Relative Indentation**
+  - `indentPerLevel` option in `applyTocStyles()` for relative indentation calculation
+  - First visible level gets 0 indent; each subsequent level adds `indentPerLevel` twips
+
+- **Document Fidelity**
+  - App.xml metadata preservation during round-trip (HeadingPairs, TotalTime, Pages, Words, etc.)
+  - Namespace order preservation in generated XML
+  - Style default attribute preservation (`w:default="1"`) with `setIsDefault()` / `getIsDefault()` on Style
+  - Numbering definition preservation with Word 2013+ attributes (`w15:restartNumberingAfterBreak`, `w16cid:durableId`)
+  - Style property preservation through load/modify/save cycles
+
+- **Infrastructure**
+  - webSettings.xml auto-generation with `optimizeForBrowser` and `allowPNG`
+  - People.xml auto-registration for tracked change authors during save
+  - `Paragraph.removeBookmarkEnd(id)` method
+
+### Fixed
+
+- **Border Parsing**: `space="0"` and `sz="0"` attributes on borders now correctly parsed as zero instead of being ignored as falsy
+- **Duplicate Relationship Prevention**: `saveComments()` now checks before adding relationship, preventing Word freeze with duplicate comments.xml entries
+- **Singleton Relationship Guards**: Footnotes, endnotes, and people.xml relationships now have check-before-add guards preventing duplicates on round-trip
+
+### Changed
+
+- **Breaking**: `val` removed from all shading interfaces; use `pattern` everywhere. All shading types unified as `ShadingConfig`
+
+### Statistics
+
+- 121 test suites, 2,683 tests passing
+- 118 source files
+- 24 new/modified test files added in this release
+
+---
+
 ## [9.6.2] - 2026-02-05
 
 ### Added

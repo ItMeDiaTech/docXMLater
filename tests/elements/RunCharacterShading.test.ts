@@ -21,12 +21,12 @@ describe('Run Character Shading - Round Trip Tests', () => {
   describe('Character Shading', () => {
     it('should set character shading with solid fill', () => {
       const run = new Run('Shaded text');
-      run.setShading({ fill: 'FFFF00', val: 'solid' });
+      run.setShading({ fill: 'FFFF00', pattern: 'solid' });
 
       const formatting = run.getFormatting();
       expect(formatting.shading).toEqual({
         fill: 'FFFF00',
-        val: 'solid',
+        pattern: 'solid',
       });
     });
 
@@ -35,7 +35,7 @@ describe('Run Character Shading - Round Trip Tests', () => {
       const para = new Paragraph();
 
       const run = new Run('Yellow background', {
-        shading: { fill: 'FFFF00', val: 'solid' },
+        shading: { fill: 'FFFF00', pattern: 'solid' },
       });
       para.addRun(run);
 
@@ -47,7 +47,7 @@ describe('Run Character Shading - Round Trip Tests', () => {
 
       const loadedRun = paragraphs[0]?.getRuns()[0];
       expect(loadedRun?.getFormatting().shading?.fill).toBe('FFFF00');
-      expect(loadedRun?.getFormatting().shading?.val).toBe('solid');
+      expect(loadedRun?.getFormatting().shading?.pattern).toBe('solid');
     });
 
     it('should round-trip pattern shading', async () => {
@@ -58,7 +58,7 @@ describe('Run Character Shading - Round Trip Tests', () => {
       run.setShading({
         fill: 'FFFF00',
         color: '000000',
-        val: 'diagStripe',
+        pattern: 'diagStripe',
       });
       para.addRun(run);
 
@@ -70,7 +70,7 @@ describe('Run Character Shading - Round Trip Tests', () => {
 
       expect(loadedRun?.getFormatting().shading?.fill).toBe('FFFF00');
       expect(loadedRun?.getFormatting().shading?.color).toBe('000000');
-      expect(loadedRun?.getFormatting().shading?.val).toBe('diagStripe');
+      expect(loadedRun?.getFormatting().shading?.pattern).toBe('diagStripe');
     });
 
     it('should round-trip cross pattern shading', async () => {
@@ -81,7 +81,7 @@ describe('Run Character Shading - Round Trip Tests', () => {
         shading: {
           fill: '00FF00',
           color: '0000FF',
-          val: 'horzCross',
+          pattern: 'horzCross',
         },
       });
       para.addRun(run);
@@ -94,7 +94,7 @@ describe('Run Character Shading - Round Trip Tests', () => {
 
       expect(loadedRun?.getFormatting().shading?.fill).toBe('00FF00');
       expect(loadedRun?.getFormatting().shading?.color).toBe('0000FF');
-      expect(loadedRun?.getFormatting().shading?.val).toBe('horzCross');
+      expect(loadedRun?.getFormatting().shading?.pattern).toBe('horzCross');
     });
 
     it('should save shading to file and load correctly', async () => {
@@ -102,7 +102,7 @@ describe('Run Character Shading - Round Trip Tests', () => {
       const para = new Paragraph();
 
       const run = new Run('File test');
-      run.setShading({ fill: 'FF00FF', val: 'solid' });
+      run.setShading({ fill: 'FF00FF', pattern: 'solid' });
       para.addRun(run);
 
       doc.addParagraph(para);
@@ -115,7 +115,7 @@ describe('Run Character Shading - Round Trip Tests', () => {
       const loadedRun = paragraphs[0]?.getRuns()[0];
 
       expect(loadedRun?.getFormatting().shading?.fill).toBe('FF00FF');
-      expect(loadedRun?.getFormatting().shading?.val).toBe('solid');
+      expect(loadedRun?.getFormatting().shading?.pattern).toBe('solid');
 
       // Cleanup
       if (fs.existsSync(filePath)) {
@@ -125,7 +125,7 @@ describe('Run Character Shading - Round Trip Tests', () => {
 
     it('should support method chaining with shading', () => {
       const run = new Run('Chained')
-        .setShading({ fill: 'FFFF00', val: 'solid' })
+        .setShading({ fill: 'FFFF00', pattern: 'solid' })
         .setBold()
         .setItalic();
 
@@ -140,9 +140,9 @@ describe('Run Character Shading - Round Trip Tests', () => {
       const para = new Paragraph();
 
       para.addRun(new Run('Normal '));
-      para.addRun(new Run('Yellow', { shading: { fill: 'FFFF00', val: 'solid' } }));
+      para.addRun(new Run('Yellow', { shading: { fill: 'FFFF00', pattern: 'solid' } }));
       para.addRun(new Run(' and '));
-      para.addRun(new Run('Green', { shading: { fill: '00FF00', val: 'solid' } }));
+      para.addRun(new Run('Green', { shading: { fill: '00FF00', pattern: 'solid' } }));
 
       doc.addParagraph(para);
 

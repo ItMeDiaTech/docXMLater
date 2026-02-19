@@ -1219,4 +1219,121 @@ describe('Numbering Parsing Fixes', () => {
       expect(level.getProperties().text).toBe('%1)');
     });
   });
+
+  describe('Number format auto-correction (Fix 5)', () => {
+    it('should normalize "a." to "lowerLetter"', () => {
+      const level = new NumberingLevel({ level: 0, format: 'decimal', text: '%1.' });
+      level.setFormat('a.' as NumberFormat);
+      expect(level.getFormat()).toBe('lowerLetter');
+    });
+
+    it('should normalize "A." to "upperLetter"', () => {
+      const level = new NumberingLevel({ level: 0, format: 'decimal', text: '%1.' });
+      level.setFormat('A.' as NumberFormat);
+      expect(level.getFormat()).toBe('upperLetter');
+    });
+
+    it('should normalize "i." to "lowerRoman"', () => {
+      const level = new NumberingLevel({ level: 0, format: 'decimal', text: '%1.' });
+      level.setFormat('i.' as NumberFormat);
+      expect(level.getFormat()).toBe('lowerRoman');
+    });
+
+    it('should normalize "I." to "upperRoman"', () => {
+      const level = new NumberingLevel({ level: 0, format: 'decimal', text: '%1.' });
+      level.setFormat('I.' as NumberFormat);
+      expect(level.getFormat()).toBe('upperRoman');
+    });
+
+    it('should normalize "1." to "decimal"', () => {
+      const level = new NumberingLevel({ level: 0, format: 'bullet', text: '•' });
+      level.setFormat('1.' as NumberFormat);
+      expect(level.getFormat()).toBe('decimal');
+    });
+
+    it('should pass through valid ECMA-376 format names unchanged', () => {
+      const level = new NumberingLevel({ level: 0, format: 'decimal', text: '%1.' });
+      level.setFormat('lowerLetter');
+      expect(level.getFormat()).toBe('lowerLetter');
+    });
+
+    it('should normalize display formats in fromXML()', () => {
+      // Simulate XML with a display-string format
+      const xml = `<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="a."/><w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl>`;
+      const level = NumberingLevel.fromXML(xml);
+      expect(level.getFormat()).toBe('lowerLetter');
+    });
+  });
+
+  describe('CT_Lvl element ordering (Fix 6)', () => {
+    function getLvlChildNames(level: NumberingLevel): string[] {
+      const xml = level.toXML();
+      if (!xml.children) return [];
+      return (xml.children as (any)[])
+        .filter((c: any) => typeof c !== 'string')
+        .map((c: any) => c.name);
+    }
+
+    it('should output elements in ECMA-376 CT_Lvl order', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+        suffix: 'tab',
+        isLegalNumberingStyle: true,
+      });
+
+      const names = getLvlChildNames(level);
+      // Expected per spec: start, numFmt, [lvlRestart], [isLgl], [suff], lvlText, lvlJc, pPr, rPr
+      const startIdx = names.indexOf('w:start');
+      const numFmtIdx = names.indexOf('w:numFmt');
+      const isLglIdx = names.indexOf('w:isLgl');
+      const suffIdx = names.indexOf('w:suff');
+      const lvlTextIdx = names.indexOf('w:lvlText');
+      const lvlJcIdx = names.indexOf('w:lvlJc');
+      const pPrIdx = names.indexOf('w:pPr');
+      const rPrIdx = names.indexOf('w:rPr');
+
+      expect(startIdx).toBe(0);
+      expect(numFmtIdx).toBe(1);
+      expect(isLglIdx).toBeGreaterThan(numFmtIdx);
+      expect(suffIdx).toBeGreaterThan(isLglIdx);
+      expect(lvlTextIdx).toBeGreaterThan(suffIdx);
+      expect(lvlJcIdx).toBeGreaterThan(lvlTextIdx);
+      expect(pPrIdx).toBeGreaterThan(lvlJcIdx);
+      expect(rPrIdx).toBeGreaterThan(pPrIdx);
+    });
+
+    it('should place isLgl before suff', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+        suffix: 'space',
+        isLegalNumberingStyle: true,
+      });
+
+      const names = getLvlChildNames(level);
+      const isLglIdx = names.indexOf('w:isLgl');
+      const suffIdx = names.indexOf('w:suff');
+      expect(isLglIdx).toBeLessThan(suffIdx);
+    });
+
+    it('should place lvlText before lvlJc and after suff when no isLgl', () => {
+      const level = new NumberingLevel({
+        level: 0,
+        format: 'decimal',
+        text: '%1.',
+        suffix: 'tab',
+      });
+
+      const names = getLvlChildNames(level);
+      const suffIdx = names.indexOf('w:suff');
+      const lvlTextIdx = names.indexOf('w:lvlText');
+      const lvlJcIdx = names.indexOf('w:lvlJc');
+
+      expect(lvlTextIdx).toBeGreaterThan(suffIdx);
+      expect(lvlJcIdx).toBeGreaterThan(lvlTextIdx);
+    });
+  });
 });

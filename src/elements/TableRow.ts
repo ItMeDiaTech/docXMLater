@@ -9,6 +9,7 @@ import {
   BasicShadingPattern,
   RowJustification as CommonRowJustification,
   ShadingConfig,
+  buildShadingAttributes,
 } from './CommonTypes';
 import { defaultLogger } from '../utils/logger';
 
@@ -30,16 +31,9 @@ export type ShadingPattern = BasicShadingPattern;
 
 /**
  * Shading configuration
- * @see CommonTypes.ShadingConfig for the canonical definition
+ * @see ShadingConfig in CommonTypes.ts for the canonical definition
  */
-export interface Shading {
-  /** Fill color in hex (e.g., 'FFFF00' for yellow) */
-  fill?: string;
-  /** Pattern color in hex */
-  color?: string;
-  /** Shading pattern type */
-  pattern?: ShadingPattern;
-}
+export type Shading = ShadingConfig;
 
 /**
  * Table property exceptions - overrides table-level properties for this row
@@ -83,6 +77,17 @@ export interface RowFormatting {
 }
 
 /**
+ * Table row property change tracking (w:trPrChange)
+ * Per ECMA-376 Part 1 §17.13.5.38
+ */
+export interface TrPrChange {
+  author: string;
+  date: string;
+  id: string;
+  previousProperties: Record<string, any>;
+}
+
+/**
  * Represents a table row
  */
 export class TableRow {
@@ -90,6 +95,10 @@ export class TableRow {
   private formatting: RowFormatting;
   /** Parent table reference (if row is inside a table) */
   private _parentTable?: import('./Table').Table;
+  /** Tracking context for automatic change tracking */
+  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  /** Table row property change tracking (w:trPrChange) */
+  private trPrChange?: TrPrChange;
 
   /**
    * Creates a new TableRow
@@ -106,6 +115,36 @@ export class TableRow {
         this.cells.push(cell);
       }
     }
+  }
+
+  /**
+   * Sets the tracking context for automatic change tracking.
+   * Called by Document when track changes is enabled.
+   * @internal
+   */
+  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+    this.trackingContext = context;
+  }
+
+  /**
+   * Gets the table row property change tracking info
+   */
+  getTrPrChange(): TrPrChange | undefined {
+    return this.trPrChange;
+  }
+
+  /**
+   * Sets the table row property change tracking info
+   */
+  setTrPrChange(change: TrPrChange | undefined): void {
+    this.trPrChange = change;
+  }
+
+  /**
+   * Clears the table row property change tracking
+   */
+  clearTrPrChange(): void {
+    this.trPrChange = undefined;
   }
 
   /**
@@ -141,6 +180,29 @@ export class TableRow {
    */
   getCell(index: number): TableCell | undefined {
     return this.cells[index];
+  }
+
+  /**
+   * Inserts a cell at the specified index
+   * @param index - Position to insert (0-based)
+   * @param cell - Cell to insert
+   */
+  insertCellAt(index: number, cell: TableCell): void {
+    this.cells.splice(index, 0, cell);
+    cell._setParentRow(this);
+  }
+
+  /**
+   * Removes and returns the cell at the specified index
+   * @param index - Position to remove (0-based)
+   * @returns The removed cell, or undefined if index is out of bounds
+   */
+  removeCellAt(index: number): TableCell | undefined {
+    if (index < 0 || index >= this.cells.length) return undefined;
+    const removed = this.cells.splice(index, 1);
+    const cell = removed[0];
+    if (cell) cell._setParentRow(undefined);
+    return cell;
   }
 
   /**
@@ -240,8 +302,18 @@ export class TableRow {
    * @returns This row for chaining
    */
   setHeight(twips: number, rule: RowFormatting['heightRule'] = 'atLeast'): this {
+    const prevHeight = this.formatting.height;
+    const prevRule = this.formatting.heightRule;
     this.formatting.height = twips;
     this.formatting.heightRule = rule;
+    if (this.trackingContext?.isEnabled()) {
+      if (prevHeight !== twips) {
+        this.trackingContext.trackTableChange(this, 'height', prevHeight, twips);
+      }
+      if (prevRule !== rule) {
+        this.trackingContext.trackTableChange(this, 'heightRule', prevRule, rule);
+      }
+    }
     return this;
   }
 
@@ -261,7 +333,11 @@ export class TableRow {
    * @returns This row for chaining
    */
   setHeader(isHeader: boolean = true): this {
+    const prev = this.formatting.isHeader;
     this.formatting.isHeader = isHeader;
+    if (this.trackingContext?.isEnabled() && prev !== isHeader) {
+      this.trackingContext.trackTableChange(this, 'isHeader', prev, isHeader);
+    }
     return this;
   }
 
@@ -271,7 +347,11 @@ export class TableRow {
    * @returns This row for chaining
    */
   setCantSplit(cantSplit: boolean = true): this {
+    const prev = this.formatting.cantSplit;
     this.formatting.cantSplit = cantSplit;
+    if (this.trackingContext?.isEnabled() && prev !== cantSplit) {
+      this.trackingContext.trackTableChange(this, 'cantSplit', prev, cantSplit);
+    }
     return this;
   }
 
@@ -286,7 +366,11 @@ export class TableRow {
    * ```
    */
   setJustification(alignment: RowJustification): this {
+    const prev = this.formatting.justification;
     this.formatting.justification = alignment;
+    if (this.trackingContext?.isEnabled() && prev !== alignment) {
+      this.trackingContext.trackTableChange(this, 'justification', prev, alignment);
+    }
     return this;
   }
 
@@ -301,7 +385,11 @@ export class TableRow {
    * ```
    */
   setHidden(hidden: boolean = true): this {
+    const prev = this.formatting.hidden;
     this.formatting.hidden = hidden;
+    if (this.trackingContext?.isEnabled() && prev !== hidden) {
+      this.trackingContext.trackTableChange(this, 'hidden', prev, hidden);
+    }
     return this;
   }
 
@@ -317,7 +405,11 @@ export class TableRow {
    * ```
    */
   setGridBefore(columns: number): this {
+    const prev = this.formatting.gridBefore;
     this.formatting.gridBefore = columns;
+    if (this.trackingContext?.isEnabled() && prev !== columns) {
+      this.trackingContext.trackTableChange(this, 'gridBefore', prev, columns);
+    }
     return this;
   }
 
@@ -333,7 +425,11 @@ export class TableRow {
    * ```
    */
   setGridAfter(columns: number): this {
+    const prev = this.formatting.gridAfter;
     this.formatting.gridAfter = columns;
+    if (this.trackingContext?.isEnabled() && prev !== columns) {
+      this.trackingContext.trackTableChange(this, 'gridAfter', prev, columns);
+    }
     return this;
   }
 
@@ -359,7 +455,11 @@ export class TableRow {
    * ```
    */
   setTablePropertyExceptions(exceptions: TablePropertyExceptions): this {
+    const prev = this.formatting.tablePropertyExceptions;
     this.formatting.tablePropertyExceptions = exceptions;
+    if (this.trackingContext?.isEnabled() && prev !== exceptions) {
+      this.trackingContext.trackTableChange(this, 'tablePropertyExceptions', prev, exceptions);
+    }
     return this;
   }
 
@@ -370,8 +470,18 @@ export class TableRow {
    * @returns This row for chaining
    */
   setWBefore(width: number, type: string = 'dxa'): this {
+    const prevWidth = this.formatting.wBefore;
+    const prevType = this.formatting.wBeforeType;
     this.formatting.wBefore = width;
     this.formatting.wBeforeType = type;
+    if (this.trackingContext?.isEnabled()) {
+      if (prevWidth !== width) {
+        this.trackingContext.trackTableChange(this, 'wBefore', prevWidth, width);
+      }
+      if (prevType !== type) {
+        this.trackingContext.trackTableChange(this, 'wBeforeType', prevType, type);
+      }
+    }
     return this;
   }
 
@@ -382,8 +492,18 @@ export class TableRow {
    * @returns This row for chaining
    */
   setWAfter(width: number, type: string = 'dxa'): this {
+    const prevWidth = this.formatting.wAfter;
+    const prevType = this.formatting.wAfterType;
     this.formatting.wAfter = width;
     this.formatting.wAfterType = type;
+    if (this.trackingContext?.isEnabled()) {
+      if (prevWidth !== width) {
+        this.trackingContext.trackTableChange(this, 'wAfter', prevWidth, width);
+      }
+      if (prevType !== type) {
+        this.trackingContext.trackTableChange(this, 'wAfterType', prevType, type);
+      }
+    }
     return this;
   }
 
@@ -394,8 +514,18 @@ export class TableRow {
    * @returns This row for chaining
    */
   setRowCellSpacing(spacing: number, type: string = 'dxa'): this {
+    const prevSpacing = this.formatting.cellSpacing;
+    const prevType = this.formatting.cellSpacingType;
     this.formatting.cellSpacing = spacing;
     this.formatting.cellSpacingType = type;
+    if (this.trackingContext?.isEnabled()) {
+      if (prevSpacing !== spacing) {
+        this.trackingContext.trackTableChange(this, 'cellSpacing', prevSpacing, spacing);
+      }
+      if (prevType !== type) {
+        this.trackingContext.trackTableChange(this, 'cellSpacingType', prevType, type);
+      }
+    }
     return this;
   }
 
@@ -406,7 +536,11 @@ export class TableRow {
    * @returns This row for chaining
    */
   setCnfStyle(cnfStyle: string): this {
+    const prev = this.formatting.cnfStyle;
     this.formatting.cnfStyle = cnfStyle;
+    if (this.trackingContext?.isEnabled() && prev !== cnfStyle) {
+      this.trackingContext.trackTableChange(this, 'cnfStyle', prev, cnfStyle);
+    }
     return this;
   }
 
@@ -542,11 +676,7 @@ export class TableRow {
 
     // Add shading exception (w:shd)
     if (exceptions.shading) {
-      const attrs: Record<string, string> = {};
-      if (exceptions.shading.fill) attrs['w:fill'] = exceptions.shading.fill;
-      if (exceptions.shading.color) attrs['w:color'] = exceptions.shading.color;
-      if (exceptions.shading.pattern) attrs['w:val'] = exceptions.shading.pattern;
-
+      const attrs = buildShadingAttributes(exceptions.shading);
       if (Object.keys(attrs).length > 0) {
         children.push(XMLBuilder.wSelf('shd', attrs));
       }
@@ -659,6 +789,66 @@ export class TableRow {
     // Add conditional formatting bitmask (w:cnfStyle) per ECMA-376 Part 1 §17.3.1.8
     if (this.formatting.cnfStyle) {
       trPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
+    }
+
+    // Add table row property change (w:trPrChange) per ECMA-376 Part 1 §17.13.5.38
+    // Must be last child of w:trPr
+    if (this.trPrChange) {
+      const changeAttrs: Record<string, string | number> = {
+        'w:id': this.trPrChange.id,
+        'w:author': this.trPrChange.author,
+        'w:date': this.trPrChange.date,
+      };
+      const prevTrPrChildren: XMLElement[] = [];
+      const prev = this.trPrChange.previousProperties;
+      if (prev) {
+        if (prev.height !== undefined) {
+          const heightAttrs: Record<string, string | number> = { 'w:val': prev.height };
+          if (prev.heightRule) heightAttrs['w:hRule'] = prev.heightRule;
+          prevTrPrChildren.push(XMLBuilder.wSelf('trHeight', heightAttrs));
+        }
+        if (prev.isHeader) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('tblHeader'));
+        }
+        if (prev.cantSplit) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('cantSplit'));
+        }
+        if (prev.justification) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': prev.justification }));
+        }
+        if (prev.hidden) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('hidden'));
+        }
+        if (prev.gridBefore !== undefined) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('gridBefore', { 'w:val': prev.gridBefore }));
+        }
+        if (prev.gridAfter !== undefined) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('gridAfter', { 'w:val': prev.gridAfter }));
+        }
+        if (prev.wBefore !== undefined) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('wBefore', {
+            'w:w': prev.wBefore,
+            'w:type': prev.wBeforeType || 'dxa',
+          }));
+        }
+        if (prev.wAfter !== undefined) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('wAfter', {
+            'w:w': prev.wAfter,
+            'w:type': prev.wAfterType || 'dxa',
+          }));
+        }
+        if (prev.cellSpacing !== undefined) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('tblCellSpacing', {
+            'w:w': prev.cellSpacing,
+            'w:type': prev.cellSpacingType || 'dxa',
+          }));
+        }
+        if (prev.cnfStyle) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': prev.cnfStyle }));
+        }
+      }
+      const prevTrPr = XMLBuilder.w('trPr', undefined, prevTrPrChildren);
+      trPrChildren.push(XMLBuilder.w('trPrChange', changeAttrs, [prevTrPr]));
     }
 
     // Build row element

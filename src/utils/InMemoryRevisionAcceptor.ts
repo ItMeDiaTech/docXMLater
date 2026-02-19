@@ -23,6 +23,7 @@ import type { Hyperlink } from '../elements/Hyperlink';
 import { isRunContent, isHyperlinkContent, isImageRunContent } from '../elements/RevisionContent';
 import type { ImageRun } from '../elements/ImageRun';
 import { Table } from '../elements/Table';
+import { Section } from '../elements/Section';
 import { getGlobalLogger, createScopedLogger, ILogger } from './logger';
 
 /**
@@ -243,11 +244,35 @@ export function acceptRevisionsInMemory(
     result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
   }
 
-  // Process paragraphs in tables
+  // Process paragraphs in tables and clear table/row/cell property changes
   const tables = doc.getTables();
   for (const table of tables) {
+    // Clear tblPrChange on table
+    if (opts.acceptPropertyChanges && table.getTblPrChange()) {
+      table.clearTblPrChange();
+      result.propertyChangesAccepted++;
+    }
+
     for (const row of table.getRows()) {
+      // Clear trPrChange on row
+      if (opts.acceptPropertyChanges && row.getTrPrChange()) {
+        row.clearTrPrChange();
+        result.propertyChangesAccepted++;
+      }
+
       for (const cell of row.getCells()) {
+        // Clear tcPrChange on cell
+        if (opts.acceptPropertyChanges && cell.getTcPrChange()) {
+          cell.clearTcPrChange();
+          result.propertyChangesAccepted++;
+        }
+
+        // Clear cell structural revision markers (cellIns/cellDel/cellMerge)
+        if (opts.acceptPropertyChanges && cell.getCellRevision()) {
+          cell.clearCellRevision();
+          result.propertyChangesAccepted++;
+        }
+
         // Process paragraphs in the cell
         for (const paragraph of cell.getParagraphs()) {
           const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
@@ -370,6 +395,15 @@ export function acceptRevisionsInMemory(
           }
         }
       }
+    }
+  }
+
+  // Clear sectPrChange on document section
+  if (opts.acceptPropertyChanges) {
+    const section = doc.getSection();
+    if (section && section.getSectPrChange()) {
+      section.clearSectPrChange();
+      result.propertyChangesAccepted++;
     }
   }
 

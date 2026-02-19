@@ -236,4 +236,145 @@ describe('Style Round-Trip Tests', () => {
       expect(props.paragraphFormatting?.contextualSpacing).toBeFalsy();
     });
   });
+
+  describe('Paragraph Formatting Round-Trip (self-closing tags)', () => {
+    it('should preserve indentation, spacing, and alignment through round-trip', async () => {
+      const doc = Document.create();
+
+      const style = new Style({
+        type: 'paragraph',
+        styleId: 'IndentedCenter',
+        name: 'Indented Center',
+        paragraphFormatting: {
+          indentation: { left: 720, right: 360, firstLine: 240 },
+          spacing: { before: 120, after: 0 },
+          alignment: 'center',
+        },
+      });
+
+      doc.addStyle(style);
+
+      const tempFile = path.join(TEMP_DIR, 'para-formatting-roundtrip.docx');
+      await doc.save(tempFile);
+
+      const doc2 = await Document.load(tempFile);
+      const reloaded = doc2.getStyles().find((s) => s.getStyleId() === 'IndentedCenter');
+
+      expect(reloaded).toBeDefined();
+      const props = reloaded!.getProperties();
+      expect(props.paragraphFormatting?.indentation?.left).toBe(720);
+      expect(props.paragraphFormatting?.indentation?.right).toBe(360);
+      expect(props.paragraphFormatting?.indentation?.firstLine).toBe(240);
+      expect(props.paragraphFormatting?.spacing?.before).toBe(120);
+      expect(props.paragraphFormatting?.spacing?.after).toBe(0);
+      expect(props.paragraphFormatting?.alignment).toBe('center');
+    });
+
+    it('should preserve zero-value indentation through round-trip', async () => {
+      const doc = Document.create();
+
+      const style = new Style({
+        type: 'paragraph',
+        styleId: 'ZeroIndent',
+        name: 'Zero Indent',
+        paragraphFormatting: {
+          indentation: { left: 0 },
+        },
+      });
+
+      doc.addStyle(style);
+
+      const tempFile = path.join(TEMP_DIR, 'zero-indent-roundtrip.docx');
+      await doc.save(tempFile);
+
+      const doc2 = await Document.load(tempFile);
+      const reloaded = doc2.getStyles().find((s) => s.getStyleId() === 'ZeroIndent');
+
+      expect(reloaded).toBeDefined();
+      const props = reloaded!.getProperties();
+      expect(props.paragraphFormatting?.indentation?.left).toBe(0);
+    });
+
+    it('should preserve hanging indentation through round-trip', async () => {
+      const doc = Document.create();
+
+      const style = new Style({
+        type: 'paragraph',
+        styleId: 'HangingIndent',
+        name: 'Hanging Indent',
+        paragraphFormatting: {
+          indentation: { left: 720, hanging: 360 },
+        },
+      });
+
+      doc.addStyle(style);
+
+      const tempFile = path.join(TEMP_DIR, 'hanging-indent-roundtrip.docx');
+      await doc.save(tempFile);
+
+      const doc2 = await Document.load(tempFile);
+      const reloaded = doc2.getStyles().find((s) => s.getStyleId() === 'HangingIndent');
+
+      expect(reloaded).toBeDefined();
+      const props = reloaded!.getProperties();
+      expect(props.paragraphFormatting?.indentation?.left).toBe(720);
+      expect(props.paragraphFormatting?.indentation?.hanging).toBe(360);
+    });
+
+    it('should preserve line spacing through round-trip', async () => {
+      const doc = Document.create();
+
+      const style = new Style({
+        type: 'paragraph',
+        styleId: 'DoubleSpaced',
+        name: 'Double Spaced',
+        paragraphFormatting: {
+          spacing: { line: 480, lineRule: 'auto' },
+        },
+      });
+
+      doc.addStyle(style);
+
+      const tempFile = path.join(TEMP_DIR, 'line-spacing-roundtrip.docx');
+      await doc.save(tempFile);
+
+      const doc2 = await Document.load(tempFile);
+      const reloaded = doc2.getStyles().find((s) => s.getStyleId() === 'DoubleSpaced');
+
+      expect(reloaded).toBeDefined();
+      const props = reloaded!.getProperties();
+      expect(props.paragraphFormatting?.spacing?.line).toBe(480);
+      expect(props.paragraphFormatting?.spacing?.lineRule).toBe('auto');
+    });
+
+    it('should preserve all alignment values through round-trip', async () => {
+      const doc = Document.create();
+      // OOXML uses "both" for justify (w:val="both"), so test both API values
+      const alignments: Array<{ input: 'left' | 'center' | 'right' | 'justify'; expected: string }> = [
+        { input: 'left', expected: 'left' },
+        { input: 'center', expected: 'center' },
+        { input: 'right', expected: 'right' },
+        { input: 'justify', expected: 'both' },  // OOXML maps justify -> both
+      ];
+
+      for (const { input } of alignments) {
+        doc.addStyle(new Style({
+          type: 'paragraph',
+          styleId: `Align${input}`,
+          name: `Align ${input}`,
+          paragraphFormatting: { alignment: input },
+        }));
+      }
+
+      const tempFile = path.join(TEMP_DIR, 'alignment-roundtrip.docx');
+      await doc.save(tempFile);
+
+      const doc2 = await Document.load(tempFile);
+      for (const { input, expected } of alignments) {
+        const reloaded = doc2.getStyles().find((s) => s.getStyleId() === `Align${input}`);
+        expect(reloaded).toBeDefined();
+        expect(reloaded!.getProperties().paragraphFormatting?.alignment).toBe(expected);
+      }
+    });
+  });
 });

@@ -140,10 +140,11 @@ export class Header {
   }
 
   /**
-   * Clears all elements
+   * Clears all elements and resets raw XML so toXML() regenerates an empty header
    */
   clear(): this {
     this.elements = [];
+    this.rawXML = undefined;
     return this;
   }
 

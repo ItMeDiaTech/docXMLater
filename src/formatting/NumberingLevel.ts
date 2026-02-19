@@ -404,45 +404,74 @@ export class NumberingLevel {
    * @param format The numbering format
    */
   setFormat(format: NumberFormat): this {
-    this.properties.format = format;
+    this.properties.format = NumberingLevel.normalizeFormat(format);
     return this;
+  }
+
+  /**
+   * Normalizes display-string format values to ECMA-376 ST_NumberFormat names.
+   * Accepts both standard format names and common display shortcuts.
+   */
+  static normalizeFormat(format: string): NumberFormat {
+    const corrections: Record<string, NumberFormat> = {
+      "a.": "lowerLetter",
+      "A.": "upperLetter",
+      "i.": "lowerRoman",
+      "I.": "upperRoman",
+      "1.": "decimal",
+    };
+    return (corrections[format] ?? format) as NumberFormat;
   }
 
   /**
    * Generates the WordprocessingML XML for this level
    */
   toXML(): XMLElement {
+    // ECMA-376 CT_Lvl element order: start, numFmt, lvlRestart, pStyle, isLgl, suff, lvlText, lvlJc, pPr, rPr
     const children: XMLElement[] = [];
 
-    // Start value
+    // 1. Start value
     children.push(
       XMLBuilder.wSelf("start", { "w:val": this.properties.start.toString() })
     );
 
-    // Number format
+    // 2. Number format
     children.push(
       XMLBuilder.wSelf("numFmt", { "w:val": this.properties.format })
     );
 
-    // Level restart (w:lvlRestart per ECMA-376 Part 1 §17.9.11)
-    // Only output if explicitly set (undefined = default behavior)
+    // 3. Level restart (w:lvlRestart per ECMA-376 Part 1 §17.9.11)
     if (this.properties.lvlRestart !== undefined) {
       children.push(
         XMLBuilder.wSelf("lvlRestart", { "w:val": this.properties.lvlRestart.toString() })
       );
     }
 
-    // Level text (e.g., "%1." or "•")
+    // 4. pStyle — not modeled, skipped
+
+    // 5. Legal numbering style
+    if (this.properties.isLegalNumberingStyle) {
+      children.push(XMLBuilder.wSelf("isLgl"));
+    }
+
+    // 6. Suffix (what comes after the number)
+    if (this.properties.suffix) {
+      children.push(
+        XMLBuilder.wSelf("suff", { "w:val": this.properties.suffix })
+      );
+    }
+
+    // 7. Level text (e.g., "%1." or "•")
     children.push(
       XMLBuilder.wSelf("lvlText", { "w:val": this.properties.text })
     );
 
-    // Alignment
+    // 8. Alignment
     children.push(
       XMLBuilder.wSelf("lvlJc", { "w:val": this.properties.alignment })
     );
 
-    // Paragraph properties (indentation)
+    // 9. Paragraph properties (indentation)
     const ind = XMLBuilder.wSelf("ind", {
       "w:left": this.properties.leftIndent.toString(),
       "w:hanging": this.properties.hangingIndent.toString(),
@@ -450,7 +479,7 @@ export class NumberingLevel {
     const pPr = XMLBuilder.w("pPr", undefined, [ind]);
     children.push(pPr);
 
-    // Run properties (font)
+    // 10. Run properties (font)
     const rPrChildren: XMLElement[] = [];
 
     // Font
@@ -499,18 +528,6 @@ export class NumberingLevel {
 
     const rPr = XMLBuilder.w("rPr", undefined, rPrChildren);
     children.push(rPr);
-
-    // Suffix (what comes after the number)
-    if (this.properties.suffix) {
-      children.push(
-        XMLBuilder.wSelf("suff", { "w:val": this.properties.suffix })
-      );
-    }
-
-    // Legal numbering style
-    if (this.properties.isLegalNumberingStyle) {
-      children.push(XMLBuilder.wSelf("isLgl"));
-    }
 
     return XMLBuilder.w(
       "lvl",
@@ -898,7 +915,7 @@ export class NumberingLevel {
     if (!numFmtMatch || !numFmtMatch[1]) {
       throw new Error("Missing required w:numFmt element");
     }
-    const format = numFmtMatch[1] as NumberFormat;
+    const format = NumberingLevel.normalizeFormat(numFmtMatch[1]);
 
     // Extract level text (optional - can be empty for placeholder levels)
     const lvlTextMatch = xml.match(/<w:lvlText[^>]*w:val="([^"]*)"/);

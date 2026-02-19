@@ -10,9 +10,14 @@
 import type { Revision, RevisionType } from '../elements/Revision';
 import type { RevisionManager } from '../elements/RevisionManager';
 import type { Run } from '../elements/Run';
+import type { Paragraph } from '../elements/Paragraph';
+import type { Table } from '../elements/Table';
+import type { TableRow } from '../elements/TableRow';
+import type { TableCell } from '../elements/TableCell';
+import type { Section } from '../elements/Section';
 
 /** Union of element types that can be tracked */
-export type TrackableElement = Run | { constructor: { name: string } };
+export type TrackableElement = Run | Paragraph | Table | TableRow | TableCell | Section | { constructor: { name: string } };
 
 /**
  * Pending change entry before flushing to RevisionManager
@@ -112,6 +117,20 @@ export interface TrackingContext {
    */
   trackTableChange(
     element: TrackableElement,
+    property: string,
+    oldValue: unknown,
+    newValue: unknown
+  ): void;
+
+  /**
+   * Track a Section property change
+   * @param section - The Section that was modified
+   * @param property - Property name (e.g., 'pageSize', 'margins')
+   * @param oldValue - Value before the change
+   * @param newValue - Value after the change
+   */
+  trackSectionChange(
+    section: TrackableElement,
     property: string,
     oldValue: unknown,
     newValue: unknown

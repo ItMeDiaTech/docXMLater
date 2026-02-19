@@ -160,7 +160,7 @@ describe("Content Tracking", () => {
   });
 
   describe("Run.setText() with tracking", () => {
-    it("should create delete/insert revisions when text changes with tracking", async () => {
+    it("should create fine-grained revisions when text changes with tracking", async () => {
       const doc = new Document();
       const para = doc.createParagraph();
       para.addText("Original text");
@@ -174,26 +174,25 @@ describe("Content Tracking", () => {
 
       runs[0]!.setText("New text");
 
-      // The paragraph content should now have delete + insert revisions
+      // "Original text" → "New text" shares suffix " text"
+      // Fine-grained: delete("Original") + insert("New") + equal(" text")
       const content = para.getContent();
-      expect(content.length).toBe(2);
-      expect(content[0]).toBeInstanceOf(Revision);
-      expect(content[1]).toBeInstanceOf(Revision);
+      expect(content.length).toBe(3);
 
       const deleteRev = content[0] as Revision;
       const insertRev = content[1] as Revision;
+      const equalRun = content[2] as Run;
+
+      expect(deleteRev).toBeInstanceOf(Revision);
       expect(deleteRev.getType()).toBe("delete");
+      expect(deleteRev.getRuns()[0]!.getText()).toBe("Original");
+
+      expect(insertRev).toBeInstanceOf(Revision);
       expect(insertRev.getType()).toBe("insert");
+      expect(insertRev.getRuns()[0]!.getText()).toBe("New");
 
-      // Delete revision should contain original text
-      const deletedRuns = deleteRev.getRuns();
-      expect(deletedRuns.length).toBe(1);
-      expect(deletedRuns[0]!.getText()).toBe("Original text");
-
-      // Insert revision should contain new text
-      const insertedRuns = insertRev.getRuns();
-      expect(insertedRuns.length).toBe(1);
-      expect(insertedRuns[0]!.getText()).toBe("New text");
+      expect(equalRun).toBeInstanceOf(Run);
+      expect(equalRun.getText()).toBe(" text");
     });
 
     it("should not create revisions when text changes without tracking", () => {

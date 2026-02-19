@@ -49,6 +49,9 @@ export enum RelationshipType {
 
   /** Link to web settings */
   WEB_SETTINGS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings',
+
+  /** Link to people.xml (track changes authors) */
+  PEOPLE = 'http://schemas.microsoft.com/office/2011/relationships/people',
 }
 
 /**
@@ -238,10 +241,22 @@ export class Relationship {
   }
 
   /**
-   * Creates a theme relationship
+   * Creates a webSettings relationship
    * @param id Relationship ID (defaults to 'rId5')
    */
-  static createTheme(id: string = 'rId5'): Relationship {
+  static createWebSettings(id: string = 'rId5'): Relationship {
+    return new Relationship({
+      id,
+      type: RelationshipType.WEB_SETTINGS,
+      target: 'webSettings.xml',
+    });
+  }
+
+  /**
+   * Creates a theme relationship
+   * @param id Relationship ID (defaults to 'rId6')
+   */
+  static createTheme(id: string = 'rId6'): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.THEME,
@@ -335,6 +350,18 @@ export class Relationship {
       id,
       type: RelationshipType.ENDNOTES,
       target: 'endnotes.xml',
+    });
+  }
+
+  /**
+   * Creates a people relationship (track changes authors)
+   * @param id Relationship ID (required - use RelationshipManager.generateId())
+   */
+  static createPeople(id: string): Relationship {
+    return new Relationship({
+      id,
+      type: RelationshipType.PEOPLE,
+      target: 'people.xml',
     });
   }
 }

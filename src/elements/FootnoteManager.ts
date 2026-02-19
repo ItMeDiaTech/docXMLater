@@ -5,7 +5,7 @@
  * Maintains unique IDs and proper ordering.
  */
 
-import { Footnote } from './Footnote';
+import { Footnote, FootnoteType } from './Footnote';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { XMLParser } from '../xml/XMLParser';
 
@@ -37,6 +37,19 @@ export class FootnoteManager {
     // Continuation separator (ID 0)
     const continuationSep = Footnote.createContinuationSeparator(0);
     this.footnotes.set(0, continuationSep);
+  }
+
+  /**
+   * Checks if a footnote is a special/system type (separator, continuationSeparator,
+   * continuationNotice) that should be preserved across clear() operations.
+   * Uses type-based detection rather than ID-based, because continuationNotice
+   * has a positive ID (typically 1) but is still a system footnote.
+   */
+  private isSpecialFootnote(footnote: Footnote): boolean {
+    const type = footnote.getType();
+    return type === FootnoteType.Separator ||
+           type === FootnoteType.ContinuationSeparator ||
+           type === FootnoteType.ContinuationNotice;
   }
 
   /**
@@ -90,11 +103,12 @@ export class FootnoteManager {
   }
 
   /**
-   * Gets all footnotes (excluding special ones)
+   * Gets all user footnotes (excluding special system types: separator,
+   * continuationSeparator, continuationNotice)
    */
   getAllFootnotes(): Footnote[] {
     return Array.from(this.footnotes.values())
-      .filter(f => f.getId() > 0)
+      .filter(f => !this.isSpecialFootnote(f))
       .sort((a, b) => a.getId() - b.getId());
   }
 
@@ -117,11 +131,11 @@ export class FootnoteManager {
   /**
    * Removes a footnote
    * @param id Footnote ID
-   * @returns True if removed, false if not found
+   * @returns True if removed, false if not found or if it's a special type
    */
   removeFootnote(id: number): boolean {
-    // Don't allow removing special footnotes
-    if (id <= 0) {
+    const footnote = this.footnotes.get(id);
+    if (!footnote || this.isSpecialFootnote(footnote)) {
       return false;
     }
     return this.footnotes.delete(id);
@@ -149,20 +163,25 @@ export class FootnoteManager {
   }
 
   /**
-   * Clears all footnotes (except special ones)
+   * Clears all user footnotes (preserves special system types: separator,
+   * continuationSeparator, continuationNotice)
    */
   clear(): void {
     const specialFootnotes = new Map<number, Footnote>();
+    let maxSpecialId = 0;
 
-    // Preserve special footnotes
     for (const [id, footnote] of this.footnotes) {
-      if (id <= 0) {
+      if (this.isSpecialFootnote(footnote)) {
         specialFootnotes.set(id, footnote);
+        if (id > maxSpecialId) {
+          maxSpecialId = id;
+        }
       }
     }
 
     this.footnotes = specialFootnotes;
-    this.nextId = 1;
+    // Ensure nextId doesn't collide with special footnotes that have positive IDs
+    this.nextId = Math.max(maxSpecialId + 1, 1);
   }
 
   /**

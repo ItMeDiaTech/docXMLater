@@ -6,6 +6,7 @@
  */
 
 import { Run } from './Run';
+import type { RunFormatting } from './Run';
 import { XMLElement } from '../xml/XMLBuilder';
 import type { RevisionLocation } from './PropertyChangeTypes';
 import type { RevisionContent } from './RevisionContent';
@@ -635,6 +636,13 @@ export class Revision {
    * @see ECMA-376 Part 1 §17.13.5.29 (Paragraph Properties Change)
    */
   private createPropertiesElement(): XMLElement {
+    // For runPropertiesChange, delegate to Run.generateRunPropertiesXML for correct
+    // ECMA-376 element names and ordering (e.g., bold→w:b, font→w:rFonts, size→w:sz)
+    if (this.type === 'runPropertiesChange' && this.previousProperties) {
+      const rPr = Run.generateRunPropertiesXML(this.previousProperties as RunFormatting);
+      return rPr || { name: 'w:rPr', attributes: {}, children: [] };
+    }
+
     // The property element name depends on the revision type
     let propElementName = 'w:rPr';
 

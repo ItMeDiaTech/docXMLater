@@ -5,6 +5,9 @@
 
 import { TableCell } from "../../src/elements/TableCell";
 import { Paragraph } from "../../src/elements/Paragraph";
+import { Revision } from "../../src/elements/Revision";
+import { ImageRun } from "../../src/elements/ImageRun";
+import { Image } from "../../src/elements/Image";
 
 describe("TableCell Position Tracking", () => {
   describe("removeParagraph position updates", () => {
@@ -200,6 +203,94 @@ describe("TableCell Position Tracking", () => {
 
       expect(removed).toBe(1);
       expect(cell.getParagraphs().length).toBe(1);
+    });
+
+    it("should NOT remove paragraph with revision containing ImageRun", async () => {
+      const cell = new TableCell();
+
+      cell.createParagraph("Content");
+
+      // Create a paragraph that only contains a revision with an ImageRun
+      const imagePara = new Paragraph();
+      // 1x1 transparent PNG
+      const imageBuffer = Buffer.from([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+      ]);
+      const image = await Image.fromBuffer(imageBuffer, 'png', 914400, 914400);
+      const imageRun = new ImageRun(image);
+      const revision = new Revision({
+        id: 1,
+        author: "Test Author",
+        date: new Date(),
+        type: "insert",
+        content: [imageRun],
+      });
+      imagePara.addRevision(revision);
+      cell.addParagraph(imagePara);
+
+      expect(cell.getParagraphs().length).toBe(2);
+
+      const removed = cell.removeTrailingBlankParagraphs({ ignorePreserveFlag: true });
+
+      // Should NOT remove the paragraph because it contains a revision with an image
+      expect(removed).toBe(0);
+      expect(cell.getParagraphs().length).toBe(2);
+    });
+
+    it("should NOT remove paragraph with both insert and delete revisions containing images", async () => {
+      const cell = new TableCell();
+
+      cell.createParagraph("Content");
+
+      // Simulate the real-world pattern: deleted old image + inserted new image
+      const imagePara = new Paragraph();
+      const imageBuffer = Buffer.from([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+      ]);
+      const newImage = await Image.fromBuffer(imageBuffer, 'png', 914400, 914400);
+      const oldImage = await Image.fromBuffer(imageBuffer, 'png', 914400, 914400);
+
+      // w:ins with new image
+      imagePara.addRevision(new Revision({
+        id: 1,
+        author: "Test Author",
+        date: new Date(),
+        type: "insert",
+        content: [new ImageRun(newImage)],
+      }));
+      // w:del with old image
+      imagePara.addRevision(new Revision({
+        id: 2,
+        author: "Test Author",
+        date: new Date(),
+        type: "delete",
+        content: [new ImageRun(oldImage)],
+      }));
+
+      cell.addParagraph(imagePara);
+
+      expect(cell.getParagraphs().length).toBe(2);
+
+      const removed = cell.removeTrailingBlankParagraphs({ ignorePreserveFlag: true });
+
+      expect(removed).toBe(0);
+      expect(cell.getParagraphs().length).toBe(2);
     });
 
     it("should NOT remove blank if raw nested content is positioned after it", () => {

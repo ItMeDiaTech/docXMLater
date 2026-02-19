@@ -345,13 +345,13 @@ describe('Paragraph Helper Methods', () => {
     it('should set paragraph shading', () => {
       para.setShading({
         fill: 'FFFF00',
-        val: 'solid'
+        pattern: 'solid'
       });
 
       const formatting = para.getFormatting() as any;
       expect(formatting.shading).toBeDefined();
       expect(formatting.shading.fill).toBe('FFFF00');
-      expect(formatting.shading.val).toBe('solid');
+      expect(formatting.shading.pattern).toBe('solid');
     });
   });
 

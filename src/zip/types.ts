@@ -106,4 +106,9 @@ export const DOCX_PATHS = {
   CORE_PROPS: 'docProps/core.xml',
   APP_PROPS: 'docProps/app.xml',
   MEDIA_DIR: 'word/media/',
+  FOOTNOTES: 'word/footnotes.xml',
+  ENDNOTES: 'word/endnotes.xml',
+  COMMENTS_EXTENDED: 'word/commentsExtended.xml',
+  COMMENTS_IDS: 'word/commentsIds.xml',
+  COMMENTS_EXTENSIBLE: 'word/commentsExtensible.xml',
 } as const;
