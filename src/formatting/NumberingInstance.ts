@@ -77,6 +77,18 @@ export class NumberingInstance {
   }
 
   /**
+   * Sets the abstract numbering ID this instance references
+   * @param abstractNumId The new abstract numbering ID
+   */
+  setAbstractNumId(abstractNumId: number): this {
+    if (abstractNumId < 0) {
+      throw new Error('Abstract numbering ID must be non-negative');
+    }
+    this.abstractNumId = abstractNumId;
+    return this;
+  }
+
+  /**
    * Alias for getNumId for backward compatibility
    */
   getId(): number {

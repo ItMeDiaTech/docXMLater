@@ -12,6 +12,23 @@ import { NumberingLevel } from './NumberingLevel';
 import { defaultLogger } from '../utils/logger';
 
 /**
+ * Options for numbering consolidation
+ */
+export interface NumberingConsolidationOptions {
+  /** AbstractNumIds to exclude from consolidation (e.g., HLP/row-number lists) */
+  protectedAbstractNumIds?: Set<number>;
+}
+
+/**
+ * Result of numbering consolidation
+ */
+export interface NumberingConsolidationResult {
+  abstractNumsRemoved: number;
+  instancesRemapped: number;
+  groupsConsolidated: number;
+}
+
+/**
  * Manages numbering definitions and instances for a document
  */
 export class NumberingManager {
@@ -601,6 +618,8 @@ export class NumberingManager {
 
     for (const numId of instancesToRemove) {
       this.instances.delete(numId);
+      this._modified = true;
+      this._removedNumIds.add(numId);
       instancesRemoved++;
     }
 
@@ -620,10 +639,108 @@ export class NumberingManager {
 
     for (const abstractNumId of abstractsToRemove) {
       this.abstractNumberings.delete(abstractNumId);
+      this._modified = true;
+      this._removedAbstractNumIds.add(abstractNumId);
       abstractsRemoved++;
     }
 
     return { instancesRemoved, abstractsRemoved };
+  }
+
+  /**
+   * Consolidates duplicate abstract numbering definitions
+   *
+   * Groups abstractNums by a deterministic fingerprint of their level properties
+   * (format, text, font, fontSize, color, indentation, alignment, etc.).
+   * For each group with >1 member, picks the lowest abstractNumId as canonical,
+   * remaps all instances pointing to non-canonical IDs, and removes duplicates.
+   *
+   * This is safe because multiple num instances can reference the same abstractNum —
+   * each instance maintains its own independent counter via level overrides.
+   *
+   * @param options Optional configuration (e.g., protected IDs to skip)
+   * @returns Summary of what was consolidated
+   */
+  consolidateNumbering(options?: NumberingConsolidationOptions): NumberingConsolidationResult {
+    const protectedIds = options?.protectedAbstractNumIds ?? new Set<number>();
+
+    // 1. Compute fingerprint for each non-protected abstractNum
+    const fingerprintGroups = new Map<string, number[]>();
+    for (const abstractNum of this.abstractNumberings.values()) {
+      const id = abstractNum.getAbstractNumId();
+      if (protectedIds.has(id)) continue;
+
+      const fingerprint = this._fingerprintAbstractNum(abstractNum);
+      const group = fingerprintGroups.get(fingerprint);
+      if (group) {
+        group.push(id);
+      } else {
+        fingerprintGroups.set(fingerprint, [id]);
+      }
+    }
+
+    // 2. For each group with >1 member, consolidate
+    let abstractNumsRemoved = 0;
+    let instancesRemapped = 0;
+    let groupsConsolidated = 0;
+
+    for (const [, ids] of fingerprintGroups) {
+      if (ids.length <= 1) continue;
+
+      // Sort to pick lowest ID as canonical
+      ids.sort((a, b) => a - b);
+      const canonicalId = ids[0]!;
+      const duplicateIds = new Set(ids.slice(1));
+
+      groupsConsolidated++;
+
+      // Remap instances pointing to duplicate abstractNums
+      for (const instance of this.instances.values()) {
+        if (duplicateIds.has(instance.getAbstractNumId())) {
+          instance.setAbstractNumId(canonicalId);
+          this._modifiedNumIds.add(instance.getNumId());
+          instancesRemapped++;
+        }
+      }
+
+      // Remove duplicate abstractNums
+      for (const dupId of duplicateIds) {
+        this.abstractNumberings.delete(dupId);
+        this._removedAbstractNumIds.add(dupId);
+        abstractNumsRemoved++;
+      }
+    }
+
+    if (abstractNumsRemoved > 0) {
+      this._modified = true;
+    }
+
+    return { abstractNumsRemoved, instancesRemapped, groupsConsolidated };
+  }
+
+  /**
+   * Computes a deterministic fingerprint for an abstract numbering definition
+   * based on its multiLevelType and all level properties. Name and abstractNumId
+   * are excluded since they don't affect rendering.
+   */
+  private _fingerprintAbstractNum(abstractNum: AbstractNumbering): string {
+    const parts: string[] = [
+      abstractNum.getNumStyleLink() ?? '',
+      abstractNum.getStyleLink() ?? '',
+      abstractNum.getMultiLevelType(),
+    ];
+
+    for (const level of abstractNum.getAllLevels()) {
+      const props = level.getProperties();
+      parts.push(
+        `${props.level}|${props.format}|${props.text}|${props.font}|${props.fontSize}|` +
+        `${props.color}|${props.leftIndent}|${props.hangingIndent}|${props.alignment}|` +
+        `${props.start}|${props.bold}|${props.italic}|${props.underline ?? ''}|` +
+        `${props.suffix}|${props.isLegalNumberingStyle}|${props.lvlRestart ?? ''}`
+      );
+    }
+
+    return parts.join('::');
   }
 
   /**

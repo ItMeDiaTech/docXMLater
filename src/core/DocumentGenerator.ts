@@ -778,14 +778,45 @@ ${properties}
 
   /**
    * Generates word/webSettings.xml
-   * Minimal web settings for DOCX compliance
+   * When called with no argument, produces the minimal static template.
+   * When called with settings, generates XML reflecting in-memory state.
    */
-  generateWebSettings(): string {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  generateWebSettings(settings?: {
+    optimizeForBrowser?: boolean;
+    allowPNG?: boolean;
+    relyOnVML?: boolean;
+    doNotRelyOnCSS?: boolean;
+    doNotSaveAsSingleFile?: boolean;
+    doNotOrganizeInFolder?: boolean;
+    doNotUseLongFileNames?: boolean;
+    pixelsPerInch?: number;
+    targetScreenSz?: string;
+    encoding?: string;
+  }): string {
+    if (!settings) {
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:webSettings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <w:optimizeForBrowser/>
   <w:allowPNG/>
+</w:webSettings>`;
+    }
+
+    let children = '';
+    if (settings.optimizeForBrowser) children += '\n  <w:optimizeForBrowser/>';
+    if (settings.allowPNG) children += '\n  <w:allowPNG/>';
+    if (settings.relyOnVML) children += '\n  <w:relyOnVML/>';
+    if (settings.doNotRelyOnCSS) children += '\n  <w:doNotRelyOnCSS/>';
+    if (settings.doNotSaveAsSingleFile) children += '\n  <w:doNotSaveAsSingleFile/>';
+    if (settings.doNotOrganizeInFolder) children += '\n  <w:doNotOrganizeInFolder/>';
+    if (settings.doNotUseLongFileNames) children += '\n  <w:doNotUseLongFileNames/>';
+    if (settings.pixelsPerInch !== undefined) children += `\n  <w:pixelsPerInch w:val="${settings.pixelsPerInch}"/>`;
+    if (settings.targetScreenSz) children += `\n  <w:targetScreenSz w:val="${settings.targetScreenSz}"/>`;
+    if (settings.encoding) children += `\n  <w:encoding w:val="${settings.encoding}"/>`;
+
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:webSettings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${children}
 </w:webSettings>`;
   }
 

@@ -5,6 +5,48 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.9.3] - 2026-02-19
+
+### Added
+
+- **Numbering Cleanup Pipeline: Header/Footer/Footnote/Endnote Scanning**
+  - `cleanupUnusedNumbering()` now scans headers, footers, footnotes, and endnotes for numId references
+  - Previously only scanned body paragraphs and document.xml, which could incorrectly delete numbering definitions used exclusively in headers/footers/notes
+  - New private helpers: `collectNumIdsFromParagraphs()`, `collectNumIdsFromElements()`
+  - Raw XML safety net extended to scan `word/header*.xml`, `word/footer*.xml`, `word/footnotes.xml`, and `word/endnotes.xml`
+
+- **AbstractNumbering: numStyleLink and styleLink Support (ECMA-376 §17.9.21, §17.9.27)**
+  - `getNumStyleLink()` / `setNumStyleLink()` for numbering style definition references
+  - `getStyleLink()` / `setStyleLink()` for style association references
+  - Parsed from XML in `fromXML()` and serialized in `toXML()`
+  - `AbstractNumberingProperties` interface extended with optional `numStyleLink` and `styleLink` fields
+
+- **Numbering Consolidation: Style Link Fingerprint**
+  - `consolidateNumbering()` fingerprint now includes `numStyleLink` and `styleLink`
+  - Prevents incorrect merging of abstractNums with different style associations but identical level properties
+  - AbstractNums with the same style links and levels are still correctly consolidated
+
+- **Document Sanitization Pipeline**
+  - `flattenFieldCodes()` strips INCLUDEPICTURE field markup while preserving embedded images
+  - `stripOrphanRSIDs()` removes orphan RSIDs from settings.xml (can reduce settings size by 80%+)
+  - `_postProcessDocumentXml()` private pipeline step with zero overhead when unused
+
+- **webSettings.xml Round-Trip Preservation**
+  - Existing webSettings.xml files are now preserved during round-trip instead of being overwritten
+  - New documents still get auto-generated webSettings.xml with `optimizeForBrowser` and `allowPNG`
+
+### Fixed
+
+- **Numbering Cleanup False Positives**: Numbering definitions referenced only in headers, footers, footnotes, or endnotes are no longer incorrectly removed by `cleanupUnusedNumbering()`
+- **Consolidation Style Association Bug**: Two abstractNums with different `numStyleLink` or `styleLink` values but identical level properties are no longer incorrectly consolidated
+
+### Statistics
+
+- 124 test suites, 2,752 tests passing
+- 9 new tests for numbering cleanup pipeline improvements
+
+---
+
 ## [9.8.8] - 2026-02-19
 
 ### Added

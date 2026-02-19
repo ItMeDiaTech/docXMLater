@@ -45,12 +45,12 @@ import { Table, TableBorder } from "../elements/Table";
 import { TableCell } from "../elements/TableCell";
 import { TableOfContentsElement } from "../elements/TableOfContentsElement";
 import { resolveCellShading } from "../utils/ShadingResolver";
-import { NumberingManager } from "../formatting/NumberingManager";
+import { NumberingManager, NumberingConsolidationOptions, NumberingConsolidationResult } from "../formatting/NumberingManager";
 import { Style, StyleProperties } from "../formatting/Style";
 import { StylesManager } from "../formatting/StylesManager";
 import { FormatOptions, StyleApplyOptions } from "../types/formatting";
 import { CompatibilityMode, CompatibilityInfo, CompatSetting } from "../types/compatibility-types";
-import { DocumentProtection, RevisionViewSettings } from "../types/settings-types";
+import { DocumentProtection, RevisionViewSettings, WebSettingsInfo } from "../types/settings-types";
 import { CompatibilityUpgrader, UpgradeReport } from "../utils/CompatibilityUpgrader";
 import { MODERN_COMPAT_SETTINGS } from "../constants/legacyCompatFlags";
 // ListNormalizationOptions and ListNormalizationReport removed - normalizeTableLists moved to consumer
@@ -366,6 +366,30 @@ export class Document {
   // When true, mergeSettingsWithOriginal() will apply in-memory state to the preserved XML
   private _settingsModified: boolean = false;
 
+  // webSettings.xml round-trip preservation
+  private _originalWebSettingsXml?: string;
+  private _webSettingsModified: boolean = false;
+  private _webSettings: {
+    optimizeForBrowser: boolean;
+    allowPNG: boolean;
+    relyOnVML: boolean;
+    doNotRelyOnCSS: boolean;
+    doNotSaveAsSingleFile: boolean;
+    doNotOrganizeInFolder: boolean;
+    doNotUseLongFileNames: boolean;
+    pixelsPerInch?: number;
+    targetScreenSz?: string;
+    encoding?: string;
+  } = {
+    optimizeForBrowser: true,
+    allowPNG: true,
+    relyOnVML: false,
+    doNotRelyOnCSS: false,
+    doNotSaveAsSingleFile: false,
+    doNotOrganizeInFolder: false,
+    doNotUseLongFileNames: false,
+  };
+
   // Parsed compatibility mode info from w:compat block in settings.xml
   // Per MS-DOCX spec, default when absent is mode 12 (Word 2007)
   private _compatInfo?: CompatibilityInfo;
@@ -387,6 +411,13 @@ export class Document {
   private _decimalSymbol?: string;
   /** List separator for locale (w:listSeparator) per ECMA-376 Part 1 §17.15.1.55 */
   private _listSeparator?: string;
+
+  /** When true, _postProcessDocumentXml() strips INCLUDEPICTURE field markup from document.xml */
+  private _flattenIncludePictureFields: boolean = false;
+  /** When true, _postProcessDocumentXml() removes RSIDs not referenced in document.xml */
+  private _stripOrphanRSIDs: boolean = false;
+  /** Tracks numPicBullet IDs removed during numbering merge, for rels cleanup */
+  private _removedNumPicBulletIds: Set<number> = new Set();
 
   /**
    * Snapshot of save-related state for rollback on failure
@@ -636,6 +667,13 @@ export class Document {
     const appPropsXml = zipHandler.getFileAsString(DOCX_PATHS.APP_PROPS);
     if (appPropsXml) {
       doc._originalAppPropsXml = appPropsXml;
+    }
+
+    // Preserve original webSettings.xml for round-trip fidelity (w:divs, flags, etc.)
+    const webSettingsXml = zipHandler.getFileAsString(DOCX_PATHS.WEB_SETTINGS);
+    if (webSettingsXml) {
+      doc._originalWebSettingsXml = webSettingsXml;
+      doc.parseWebSettingsFromXml(webSettingsXml);
     }
 
     await doc.parseDocument();
@@ -1198,7 +1236,7 @@ export class Document {
 
     // word/webSettings.xml
     this.zipHandler.addFile(
-      "word/webSettings.xml",
+      DOCX_PATHS.WEB_SETTINGS,
       this.generator.generateWebSettings()
     );
 
@@ -2055,19 +2093,27 @@ export class Document {
     // Only regenerate document.xml if we haven't manually stripped tracked changes
     // Stripping sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
     if (this.skipDocumentXmlRegeneration) {
-      this.logger.warn(
-        'skipDocumentXmlRegeneration is set: in-memory content modifications will NOT be saved. ' +
-        'Use acceptAllRevisions() instead of acceptAllRevisionsRawXml() if you need to modify the document after accepting revisions.'
-      );
+      if (!this._flattenIncludePictureFields) {
+        this.logger.warn(
+          'skipDocumentXmlRegeneration is set: in-memory content modifications will NOT be saved. ' +
+          'Use acceptAllRevisions() instead of acceptAllRevisionsRawXml() if you need to modify the document after accepting revisions.'
+        );
+      }
     } else {
       this.updateDocumentXml();
     }
+
+    // Post-process document.xml for sanitization (field flattening, RSID cleanup)
+    // Must run AFTER updateDocumentXml() so we have the final XML,
+    // and BEFORE updateSettingsXml() so RSID filtering affects the merge
+    this._postProcessDocumentXml();
 
     this.updateStylesXml();
     this.updateNumberingXml();
     this.updateSettingsXml();
     this.updateCoreProps();
     this.updateAppProps();
+    this.updateWebSettingsXml();
     this.saveImages();
     this.saveHeaders();
     this.saveFooters();
@@ -2225,6 +2271,275 @@ export class Document {
   }
 
   /**
+   * Post-processes document.xml after generation for sanitization tasks.
+   * Runs only when explicitly enabled via flattenFieldCodes() or stripOrphanRSIDs().
+   * Zero overhead when neither flag is set.
+   * @private
+   */
+  private _postProcessDocumentXml(): void {
+    if (!this._flattenIncludePictureFields && !this._stripOrphanRSIDs) {
+      return;
+    }
+
+    let docXml = this.zipHandler.getFileAsString(DOCX_PATHS.DOCUMENT);
+    if (!docXml) {
+      return;
+    }
+
+    // Step 1: Flatten INCLUDEPICTURE fields
+    if (this._flattenIncludePictureFields) {
+      docXml = this._flattenIncludePictureFieldsInXml(docXml);
+      this._flattenIncludePictureFields = false; // Reset after use
+    }
+
+    // Step 2: Strip orphan RSIDs (uses final document.xml to determine which are referenced)
+    if (this._stripOrphanRSIDs) {
+      this._stripOrphanRSIDsFromSettings(docXml);
+      this._stripOrphanRSIDs = false; // Reset after use
+    }
+
+    this.zipHandler.updateFile(DOCX_PATHS.DOCUMENT, docXml);
+  }
+
+  /**
+   * Strips INCLUDEPICTURE field markup from document.xml while preserving
+   * the field result content (w:drawing elements with embedded images).
+   *
+   * Uses a token-based state machine to track field depth and identify
+   * INCLUDEPICTURE fields. Removes the w:r elements containing fldChar
+   * begin/separate/end and instrText, preserving everything else.
+   *
+   * @param xml - The document.xml content
+   * @returns Modified XML with INCLUDEPICTURE field markup removed
+   * @private
+   */
+  private _flattenIncludePictureFieldsInXml(xml: string): string {
+    // Phase 1: Scan for all fldChar and instrText positions to build field structure
+    interface FieldToken {
+      type: 'begin' | 'separate' | 'end';
+      /** Start of the containing <w:r> element */
+      runStart: number;
+      /** End of the containing </w:r> (exclusive) */
+      runEnd: number;
+    }
+
+    interface InstrToken {
+      /** The instrText content */
+      text: string;
+      /** Start of the containing <w:r> element */
+      runStart: number;
+      /** End of the containing </w:r> (exclusive) */
+      runEnd: number;
+    }
+
+    // Find all <w:r>...</w:r> runs that contain fldChar or instrText
+    const fieldTokens: FieldToken[] = [];
+    const instrTokens: InstrToken[] = [];
+
+    // Match all <w:r> elements (non-greedy, handling nested elements)
+    const runRegex = /<w:r[\s>]/g;
+    let runMatch: RegExpExecArray | null;
+
+    while ((runMatch = runRegex.exec(xml)) !== null) {
+      const runStart = runMatch.index;
+
+      // Find the closing </w:r> tag, accounting for depth
+      const runEnd = this._findClosingWrTag(xml, runStart);
+      if (runEnd === -1) continue;
+
+      const runContent = xml.substring(runStart, runEnd);
+
+      // Check for fldChar
+      const fldCharMatch = runContent.match(/<w:fldChar\s+w:fldCharType\s*=\s*"(begin|separate|end)"/);
+      if (fldCharMatch) {
+        fieldTokens.push({
+          type: fldCharMatch[1] as 'begin' | 'separate' | 'end',
+          runStart,
+          runEnd,
+        });
+      }
+
+      // Check for instrText
+      const instrMatch = runContent.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
+      if (instrMatch) {
+        instrTokens.push({
+          text: instrMatch[1]!.trim(),
+          runStart,
+          runEnd,
+        });
+      }
+    }
+
+    // Phase 2: Use a depth-tracking state machine to identify INCLUDEPICTURE fields
+    // and collect the runs to remove
+    const runsToRemove: Array<{ start: number; end: number }> = [];
+    const fieldStack: Array<{
+      tokenIndex: number;
+      instrRuns: Array<{ start: number; end: number }>;
+      separateRun?: { start: number; end: number };
+      isIncludePicture: boolean;
+    }> = [];
+
+    let instrTokenIdx = 0;
+
+    for (let i = 0; i < fieldTokens.length; i++) {
+      const token = fieldTokens[i]!;
+
+      if (token.type === 'begin') {
+        fieldStack.push({
+          tokenIndex: i,
+          instrRuns: [],
+          isIncludePicture: false,
+        });
+        const stackTop = fieldStack[fieldStack.length - 1]!;
+
+        // Collect any instrText runs between this begin and the next fldChar
+        const nextFldCharIdx = i + 1 < fieldTokens.length ? fieldTokens[i + 1]!.runStart : Infinity;
+        while (instrTokenIdx < instrTokens.length && instrTokens[instrTokenIdx]!.runStart < nextFldCharIdx && instrTokens[instrTokenIdx]!.runStart > token.runStart) {
+          const instr = instrTokens[instrTokenIdx]!;
+          stackTop.instrRuns.push({ start: instr.runStart, end: instr.runEnd });
+
+          // Check if this is an INCLUDEPICTURE instruction
+          if (/^\s*INCLUDEPICTURE\b/i.test(instr.text)) {
+            stackTop.isIncludePicture = true;
+          }
+          instrTokenIdx++;
+        }
+      } else if (token.type === 'separate') {
+        if (fieldStack.length > 0) {
+          const current = fieldStack[fieldStack.length - 1]!;
+          current.separateRun = { start: token.runStart, end: token.runEnd };
+
+          // Also collect instrText runs between begin and separate that we may have missed
+          // (when instrText spans multiple runs between begin and separate)
+          const beginToken = fieldTokens[current.tokenIndex]!;
+          while (instrTokenIdx < instrTokens.length &&
+                 instrTokens[instrTokenIdx]!.runStart > beginToken.runStart &&
+                 instrTokens[instrTokenIdx]!.runStart < token.runStart) {
+            const instr = instrTokens[instrTokenIdx]!;
+            current.instrRuns.push({ start: instr.runStart, end: instr.runEnd });
+            if (/^\s*INCLUDEPICTURE\b/i.test(instr.text)) {
+              current.isIncludePicture = true;
+            }
+            instrTokenIdx++;
+          }
+        }
+      } else if (token.type === 'end') {
+        if (fieldStack.length > 0) {
+          const field = fieldStack.pop()!;
+          if (field.isIncludePicture) {
+            // Remove: begin run, instrText runs, separate run, end run
+            const beginFieldToken = fieldTokens[field.tokenIndex]!;
+            runsToRemove.push({ start: beginFieldToken.runStart, end: beginFieldToken.runEnd });
+            for (const instrRun of field.instrRuns) {
+              runsToRemove.push(instrRun);
+            }
+            if (field.separateRun) {
+              runsToRemove.push(field.separateRun);
+            }
+            runsToRemove.push({ start: token.runStart, end: token.runEnd });
+          }
+        }
+      }
+    }
+
+    if (runsToRemove.length === 0) {
+      return xml;
+    }
+
+    // Phase 3: Remove runs in reverse order to preserve offsets
+    runsToRemove.sort((a, b) => b.start - a.start);
+
+    // Deduplicate overlapping ranges
+    const uniqueRuns: Array<{ start: number; end: number }> = [];
+    for (const run of runsToRemove) {
+      const isDuplicate = uniqueRuns.some(u => u.start === run.start && u.end === run.end);
+      if (!isDuplicate) {
+        uniqueRuns.push(run);
+      }
+    }
+
+    let result = xml;
+    for (const run of uniqueRuns) {
+      result = result.substring(0, run.start) + result.substring(run.end);
+    }
+
+    return result;
+  }
+
+  /**
+   * Finds the closing </w:r> tag for a <w:r> element starting at the given position,
+   * accounting for nested depth (though w:r shouldn't nest, this is defensive).
+   * @private
+   */
+  private _findClosingWrTag(xml: string, startPos: number): number {
+    let depth = 0;
+    const tagRegex = /<(\/?)w:r([\s>\/])/g;
+    tagRegex.lastIndex = startPos;
+
+    let match: RegExpExecArray | null;
+    while ((match = tagRegex.exec(xml)) !== null) {
+      const isClosing = match[1] === '/';
+
+      if (!isClosing) {
+        // Check for self-closing
+        const restOfTag = xml.substring(match.index, xml.indexOf('>', match.index) + 1);
+        if (restOfTag.endsWith('/>')) {
+          if (depth === 0 && match.index === startPos) {
+            return xml.indexOf('>', match.index) + 1;
+          }
+          continue;
+        }
+        depth++;
+      } else {
+        depth--;
+        if (depth === 0) {
+          return xml.indexOf('>', match.index) + 1;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Scans document.xml for all w:rsid* attribute values and filters
+   * this.rsids to only keep referenced ones + rsidRoot.
+   * @private
+   */
+  private _stripOrphanRSIDsFromSettings(documentXml: string): void {
+    // Collect all rsid values referenced in document.xml
+    // Matches: w:rsidR="00AABB11", w:rsidRPr="...", w:rsidRDefault="...",
+    //          w:rsidP="...", w:rsidDel="...", w:rsidSect="...", etc.
+    const referencedRsids = new Set<string>();
+    const rsidAttrRegex = /w:rsid\w*\s*=\s*"([0-9A-Fa-f]{8})"/g;
+    let rsidMatch: RegExpExecArray | null;
+
+    while ((rsidMatch = rsidAttrRegex.exec(documentXml)) !== null) {
+      referencedRsids.add(rsidMatch[1]!.toUpperCase());
+    }
+
+    // Always preserve rsidRoot (required by spec even if not in document.xml)
+    if (this.rsidRoot) {
+      referencedRsids.add(this.rsidRoot);
+    }
+
+    // Filter: keep only referenced RSIDs
+    const originalSize = this.rsids.size;
+    const newRsids = new Set<string>();
+    for (const rsid of this.rsids) {
+      if (referencedRsids.has(rsid)) {
+        newRsids.add(rsid);
+      }
+    }
+    this.rsids = newRsids;
+
+    // Mark settings as modified so mergeSettingsWithOriginal() runs the merge path
+    if (newRsids.size !== originalSize) {
+      this._settingsModified = true;
+    }
+  }
+
+  /**
    * Updates the core properties with current values
    */
   private updateCoreProps(): void {
@@ -2299,6 +2614,133 @@ export class Document {
     }
 
     return xml;
+  }
+
+  /**
+   * Parse webSettings.xml into in-memory state.
+   * Uses regex matching consistent with parseSettingsFromXml().
+   */
+  private parseWebSettingsFromXml(xml: string): void {
+    this._webSettings.optimizeForBrowser = /<w:optimizeForBrowser\b/.test(xml);
+    this._webSettings.allowPNG = /<w:allowPNG\b/.test(xml);
+    this._webSettings.relyOnVML = /<w:relyOnVML\b/.test(xml);
+    this._webSettings.doNotRelyOnCSS = /<w:doNotRelyOnCSS\b/.test(xml);
+    this._webSettings.doNotSaveAsSingleFile = /<w:doNotSaveAsSingleFile\b/.test(xml);
+    this._webSettings.doNotOrganizeInFolder = /<w:doNotOrganizeInFolder\b/.test(xml);
+    this._webSettings.doNotUseLongFileNames = /<w:doNotUseLongFileNames\b/.test(xml);
+
+    const pixelsMatch = xml.match(/<w:pixelsPerInch\b[^>]*w:val\s*=\s*"(\d+)"/);
+    this._webSettings.pixelsPerInch = pixelsMatch?.[1] ? parseInt(pixelsMatch[1], 10) : undefined;
+
+    const screenMatch = xml.match(/<w:targetScreenSz\b[^>]*w:val\s*=\s*"([^"]*)"/);
+    this._webSettings.targetScreenSz = screenMatch?.[1] ?? undefined;
+
+    const encodingMatch = xml.match(/<w:encoding\b[^>]*w:val\s*=\s*"([^"]*)"/);
+    this._webSettings.encoding = encodingMatch?.[1] ?? undefined;
+  }
+
+  /**
+   * Save pipeline for webSettings.xml.
+   * Preserves original XML when unmodified; writes modified or regenerated XML otherwise.
+   */
+  private updateWebSettingsXml(): void {
+    if (!this._webSettingsModified) {
+      // Original XML already in ZIP from load, or static template from initializeRequiredFiles
+      return;
+    }
+    if (this._originalWebSettingsXml) {
+      // In-place edit path (e.g., stripWebDivs mutated _originalWebSettingsXml)
+      this.zipHandler.updateFile(DOCX_PATHS.WEB_SETTINGS, this._originalWebSettingsXml);
+    } else {
+      // Sanitize or setter path — regenerate from in-memory state
+      this.zipHandler.updateFile(
+        DOCX_PATHS.WEB_SETTINGS,
+        this.generator.generateWebSettings(this._webSettings)
+      );
+    }
+  }
+
+  /**
+   * Returns information about the current webSettings.xml state.
+   */
+  getWebSettingsInfo(): WebSettingsInfo {
+    let divCount = 0;
+    if (this._originalWebSettingsXml) {
+      const matches = this._originalWebSettingsXml.match(/<w:div\b/g);
+      divCount = matches ? matches.length : 0;
+    }
+    return {
+      divCount,
+      ...this._webSettings,
+    };
+  }
+
+  /**
+   * Removes all w:divs from webSettings.xml.
+   * Returns the number of divs that were removed.
+   */
+  stripWebDivs(): number {
+    if (!this._originalWebSettingsXml) {
+      return 0;
+    }
+    const matches = this._originalWebSettingsXml.match(/<w:div\b/g);
+    const count = matches ? matches.length : 0;
+    if (count === 0) {
+      return 0;
+    }
+    this._originalWebSettingsXml = this._originalWebSettingsXml.replace(
+      /<w:divs>[\s\S]*?<\/w:divs>/g,
+      ''
+    );
+    this._webSettingsModified = true;
+    return count;
+  }
+
+  /**
+   * Resets webSettings to minimal defaults, removing all original content including w:divs.
+   * Returns the number of divs that were present before sanitization.
+   */
+  sanitizeWebSettings(): number {
+    let divCount = 0;
+    if (this._originalWebSettingsXml) {
+      const matches = this._originalWebSettingsXml.match(/<w:div\b/g);
+      divCount = matches ? matches.length : 0;
+    }
+    this._webSettings = {
+      optimizeForBrowser: true,
+      allowPNG: true,
+      relyOnVML: false,
+      doNotRelyOnCSS: false,
+      doNotSaveAsSingleFile: false,
+      doNotOrganizeInFolder: false,
+      doNotUseLongFileNames: false,
+    };
+    this._originalWebSettingsXml = undefined;
+    this._webSettingsModified = true;
+    return divCount;
+  }
+
+  getOptimizeForBrowser(): boolean {
+    return this._webSettings.optimizeForBrowser;
+  }
+
+  setOptimizeForBrowser(value: boolean): this {
+    this._webSettings.optimizeForBrowser = value;
+    this._webSettingsModified = true;
+    // Also update original XML if present (for flag removal/addition)
+    this._originalWebSettingsXml = undefined;
+    return this;
+  }
+
+  getAllowPNG(): boolean {
+    return this._webSettings.allowPNG;
+  }
+
+  setAllowPNG(value: boolean): this {
+    this._webSettings.allowPNG = value;
+    this._webSettingsModified = true;
+    this._originalWebSettingsXml = undefined;
+    return this;
   }
 
   /**
@@ -2393,10 +2835,64 @@ export class Document {
       // Modified — merge changes into original XML to preserve namespaces/attributes
       const mergedXml = this.mergeNumberingWithOriginal();
       this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, mergedXml);
+      // Clean up numbering.xml.rels if numPicBullets were removed
+      this.cleanupNumberingRels(mergedXml);
     } else {
       // New document — generate from scratch
       const xml = this.numberingManager.generateNumberingXml();
       this.zipHandler.updateFile(DOCX_PATHS.NUMBERING, xml);
+    }
+  }
+
+  /**
+   * Cleans up `word/_rels/numbering.xml.rels` by removing relationship entries
+   * that are no longer referenced in the merged numbering.xml.
+   *
+   * numPicBullet elements contain `<a:blip r:embed="rIdX"/>` references to images.
+   * When numPicBullets are removed, their image relationships become orphaned.
+   * This method removes those orphaned entries from the rels file.
+   *
+   * Note: The media files themselves (word/media/imageX.png) are NOT removed because
+   * they may still be referenced by document.xml.rels for inline display.
+   *
+   * @param mergedXml The final numbering XML after all modifications
+   * @private
+   */
+  private cleanupNumberingRels(mergedXml: string): void {
+    const relsXml = this.zipHandler.getFileAsString(DOCX_PATHS.NUMBERING_RELS);
+    if (!relsXml) return;
+
+    // Collect all rId references still present in the merged numbering.xml
+    const usedRIds = new Set<string>();
+    const rIdPattern = /r:(?:embed|link)="(rId\d+)"/g;
+    let match: RegExpExecArray | null;
+    while ((match = rIdPattern.exec(mergedXml)) !== null) {
+      if (match[1]) usedRIds.add(match[1]);
+    }
+
+    // Remove Relationship entries from the rels file if their Id is not referenced
+    let cleanedRels = relsXml;
+    const relPattern = /<Relationship\s+[^>]*Id="(rId\d+)"[^>]*\/>/g;
+    const entriesToRemove: string[] = [];
+    while ((match = relPattern.exec(relsXml)) !== null) {
+      const relId = match[1];
+      if (relId && !usedRIds.has(relId)) {
+        entriesToRemove.push(match[0]);
+      }
+    }
+
+    for (const entry of entriesToRemove) {
+      cleanedRels = cleanedRels.replace(new RegExp(`\\s*${entry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '');
+    }
+
+    if (entriesToRemove.length > 0) {
+      // Check if all relationships were removed — if so, remove the rels file entirely
+      if (!/<Relationship\s/.test(cleanedRels)) {
+        this.zipHandler.removeFile(DOCX_PATHS.NUMBERING_RELS);
+      } else {
+        this.zipHandler.updateFile(DOCX_PATHS.NUMBERING_RELS, cleanedRels);
+      }
+      this.logger.info(`Removed ${entriesToRemove.length} orphaned numbering relationship(s)`);
     }
   }
 
@@ -2465,7 +2961,7 @@ export class Document {
       // Pattern to match existing num with this ID (handles any attribute order)
       const escapedNumId = String(numId).replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
       const pattern = new RegExp(
-        `<w:num[^>]*\\sw:numId="${escapedNumId}"[^>]*>[\\s\\S]*?</w:num>`
+        `<w:num\\b[^>]*\\sw:numId="${escapedNumId}"[^>]*>[\\s\\S]*?</w:num>`
       );
 
       if (pattern.test(resultXml)) {
@@ -2490,9 +2986,60 @@ export class Document {
     for (const numId of removedNumIds) {
       const escapedNumId = String(numId).replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
       const pattern = new RegExp(
-        `\\s*<w:num[^>]*\\sw:numId="${escapedNumId}"[^>]*>[\\s\\S]*?</w:num>`
+        `\\s*<w:num\\b[^>]*\\sw:numId="${escapedNumId}"[^>]*>[\\s\\S]*?</w:num>`
       );
       resultXml = resultXml.replace(pattern, '');
+    }
+
+    // Remove orphaned numPicBullet definitions (Step 1.3 of numbering bloat fix)
+    // numPicBullets are only referenced via <w:numPicBulletId w:val="X"/> inside abstractNums.
+    // After removing abstractNums, check if any remaining abstractNum still references each picBullet.
+    resultXml = this.removeOrphanedNumPicBullets(resultXml);
+
+    return resultXml;
+  }
+
+  /**
+   * Removes `<w:numPicBullet>` definitions whose numPicBulletId is not referenced
+   * by any remaining `<w:abstractNum>` in the numbering XML.
+   *
+   * numPicBullets define picture-based bullet characters. They are referenced by
+   * `<w:lvlPicBulletId w:val="X"/>` elements inside abstractNum levels. When all
+   * abstractNums that reference a picBullet have been removed, the picBullet itself
+   * becomes dead weight.
+   *
+   * @param xml The numbering XML string
+   * @returns The XML with orphaned numPicBullets removed
+   * @private
+   */
+  private removeOrphanedNumPicBullets(xml: string): string {
+    // Find all numPicBullet IDs defined in the XML
+    const picBulletPattern = /<w:numPicBullet\s+w:numPicBulletId="(\d+)"[^>]*>/g;
+    const definedPicBulletIds: number[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = picBulletPattern.exec(xml)) !== null) {
+      if (match[1]) definedPicBulletIds.push(parseInt(match[1], 10));
+    }
+
+    if (definedPicBulletIds.length === 0) return xml;
+
+    // Find all referenced picBullet IDs (via lvlPicBulletId inside abstractNums)
+    const refPattern = /<w:lvlPicBulletId\s+w:val="(\d+)"/g;
+    const referencedIds = new Set<number>();
+    while ((match = refPattern.exec(xml)) !== null) {
+      if (match[1]) referencedIds.add(parseInt(match[1], 10));
+    }
+
+    // Remove unreferenced numPicBullet definitions
+    let resultXml = xml;
+    for (const id of definedPicBulletIds) {
+      if (!referencedIds.has(id)) {
+        const removePattern = new RegExp(
+          `\\s*<w:numPicBullet\\s+w:numPicBulletId="${id}"[^>]*>[\\s\\S]*?</w:numPicBullet>`
+        );
+        resultXml = resultXml.replace(removePattern, '');
+        this._removedNumPicBulletIds.add(id);
+      }
     }
 
     return resultXml;
@@ -4074,6 +4621,25 @@ export class Document {
   }
 
   /**
+   * Consolidates duplicate abstract numbering definitions
+   *
+   * Groups abstractNums by a deterministic fingerprint of their level properties.
+   * For each group with >1 member, picks the lowest abstractNumId as canonical,
+   * remaps all instances, and removes duplicates. This reduces numbering.xml bloat
+   * caused by copy-paste accumulation.
+   *
+   * Typically called after uniformity methods have made definitions identical,
+   * and before cleanupUnusedNumbering() to remove any orphaned leftovers.
+   *
+   * @param options Optional configuration (e.g., protected IDs to skip)
+   * @returns Summary of what was consolidated
+   * @public
+   */
+  consolidateNumbering(options?: NumberingConsolidationOptions): NumberingConsolidationResult {
+    return this.numberingManager.consolidateNumbering(options);
+  }
+
+  /**
    * Cleans up unused numbering definitions
    *
    * Removes numbering instances and abstract numberings that are no longer
@@ -4090,22 +4656,11 @@ export class Document {
   cleanupUnusedNumbering(): void {
     const usedNumIds = new Set<number>();
 
-    // 1. Scan all parsed paragraphs for current numbering
+    // 1. Scan all body paragraphs for current numbering
     const paragraphs = this.getAllParagraphs();
-    for (const para of paragraphs) {
-      const numbering = para.getNumbering();
-      if (numbering) {
-        usedNumIds.add(numbering.numId);
-      }
+    this.collectNumIdsFromParagraphs(paragraphs, usedNumIds);
 
-      // 2. Scan pPrChange for previous numbering references
-      const pPrChange = para.getFormatting().pPrChange;
-      if (pPrChange?.previousProperties?.numbering?.numId !== undefined) {
-        usedNumIds.add(pPrChange.previousProperties.numbering.numId);
-      }
-    }
-
-    // 3. Scan raw nested content in table cells for numId references
+    // 2. Scan raw nested content in table cells for numId references
     for (const element of this.bodyElements) {
       if (element instanceof Table) {
         this.collectNumIdsFromTable(element, usedNumIds);
@@ -4118,11 +4673,44 @@ export class Document {
       }
     }
 
-    // 4. Scan original document XML for numId references in body-level w:del
-    //    blocks (deleted paragraphs skipped during parsing)
+    // 3. Scan headers and footers for numId references
+    this.collectNumIdsFromElements(
+      this.headerFooterManager.getAllHeaders().flatMap(entry => entry.header.getElements()),
+      usedNumIds
+    );
+    this.collectNumIdsFromElements(
+      this.headerFooterManager.getAllFooters().flatMap(entry => entry.footer.getElements()),
+      usedNumIds
+    );
+
+    // 4. Scan footnotes and endnotes for numId references
+    for (const footnote of this.footnoteManager.getAllFootnotes()) {
+      this.collectNumIdsFromParagraphs(footnote.getParagraphs(), usedNumIds);
+    }
+    for (const endnote of this.endnoteManager.getAllEndnotes()) {
+      this.collectNumIdsFromParagraphs(endnote.getParagraphs(), usedNumIds);
+    }
+
+    // 5. Scan original document XML for any numId references not captured by
+    //    the in-memory model (e.g., body-level w:del blocks, nested structures)
     const documentXml = this.zipHandler.getFileAsString('word/document.xml');
     if (documentXml) {
       this.collectNumIdsFromXml(documentXml, usedNumIds);
+    }
+
+    // 6. Scan header/footer/footnote/endnote XML files for raw numId references
+    for (const filePath of this.zipHandler.getFilePaths()) {
+      if (
+        filePath.startsWith('word/header') ||
+        filePath.startsWith('word/footer') ||
+        filePath === DOCX_PATHS.FOOTNOTES ||
+        filePath === DOCX_PATHS.ENDNOTES
+      ) {
+        const xml = this.zipHandler.getFileAsString(filePath);
+        if (xml) {
+          this.collectNumIdsFromXml(xml, usedNumIds);
+        }
+      }
     }
 
     // Clean up numbering definitions not found in any of the above scans
@@ -4155,6 +4743,54 @@ export class Document {
       this.logger.warn(`Fixed ${fixed} orphaned numId references (numbering definitions missing)`);
     }
     return fixed;
+  }
+
+  /**
+   * Enables flattening of INCLUDEPICTURE field codes during the next save.
+   * Removes all INCLUDEPICTURE field markup (begin/instrText/separate/end)
+   * while preserving the embedded image content (w:drawing elements).
+   *
+   * This fixes nested INCLUDEPICTURE stacks from Outlook copy-paste that
+   * cause Word to freeze due to recursive field resolution.
+   *
+   * Note: This preserves the original document.xml (skips regeneration from
+   * the in-memory model) to ensure field markup and embedded images are
+   * intact for processing. Other document parts (styles, numbering, settings)
+   * are still regenerated normally.
+   *
+   * @returns this for chaining
+   * @example
+   * ```typescript
+   * const doc = await Document.loadFromBuffer(buffer);
+   * doc.flattenFieldCodes();
+   * const output = await doc.toBuffer();
+   * ```
+   */
+  flattenFieldCodes(): this {
+    this._flattenIncludePictureFields = true;
+    this.skipDocumentXmlRegeneration = true;
+    return this;
+  }
+
+  /**
+   * Enables removal of orphan RSIDs from settings.xml during the next save.
+   * RSIDs not referenced anywhere in document.xml are removed, while
+   * rsidRoot is always preserved (required by ECMA-376 spec).
+   *
+   * Typical documents accumulate thousands of orphan RSIDs over editing
+   * sessions; this can account for 80%+ of settings.xml size.
+   *
+   * @returns this for chaining
+   * @example
+   * ```typescript
+   * const doc = await Document.loadFromBuffer(buffer);
+   * doc.stripOrphanRSIDs();
+   * const output = await doc.toBuffer();
+   * ```
+   */
+  stripOrphanRSIDs(): this {
+    this._stripOrphanRSIDs = true;
+    return this;
   }
 
   /**
@@ -4290,6 +4926,45 @@ export class Document {
             removeFromTable(content as Table);
           }
         }
+      }
+    }
+  }
+
+  /**
+   * Scans paragraphs for current numbering and pPrChange numbering references.
+   * @private
+   */
+  private collectNumIdsFromParagraphs(paragraphs: Paragraph[], usedNumIds: Set<number>): void {
+    for (const para of paragraphs) {
+      const numbering = para.getNumbering();
+      if (numbering) {
+        usedNumIds.add(numbering.numId);
+      }
+      const pPrChange = para.getFormatting().pPrChange;
+      if (pPrChange?.previousProperties?.numbering?.numId !== undefined) {
+        usedNumIds.add(pPrChange.previousProperties.numbering.numId);
+      }
+    }
+  }
+
+  /**
+   * Scans an array of Paragraph | Table elements for numId references.
+   * Handles both paragraph numbering and raw nested content in tables.
+   * @private
+   */
+  private collectNumIdsFromElements(elements: (Paragraph | Table)[], usedNumIds: Set<number>): void {
+    for (const element of elements) {
+      if (element instanceof Paragraph) {
+        this.collectNumIdsFromParagraphs([element], usedNumIds);
+      } else if (element instanceof Table) {
+        // Scan parsed paragraphs in table cells
+        for (const row of element.getRows()) {
+          for (const cell of row.getCells()) {
+            this.collectNumIdsFromParagraphs(cell.getParagraphs(), usedNumIds);
+          }
+        }
+        // Scan raw nested content
+        this.collectNumIdsFromTable(element, usedNumIds);
       }
     }
   }
@@ -11120,6 +11795,17 @@ export class Document {
     this._appPropsModified = false;
     this._footnotesModified = false;
     this._endnotesModified = false;
+    this._originalWebSettingsXml = undefined;
+    this._webSettingsModified = false;
+    this._webSettings = {
+      optimizeForBrowser: true,
+      allowPNG: true,
+      relyOnVML: false,
+      doNotRelyOnCSS: false,
+      doNotSaveAsSingleFile: false,
+      doNotOrganizeInFolder: false,
+      doNotUseLongFileNames: false,
+    };
     this._compatInfo = undefined;
     this._documentBackground = undefined;
     this._evenAndOddHeaders = undefined;
@@ -11127,6 +11813,9 @@ export class Document {
     this._autoHyphenation = undefined;
     this._decimalSymbol = undefined;
     this._listSeparator = undefined;
+    this._flattenIncludePictureFields = false;
+    this._stripOrphanRSIDs = false;
+    this._removedNumPicBulletIds.clear();
     this.saveStateSnapshot = undefined;
 
     // Reset track changes and settings-managed fields

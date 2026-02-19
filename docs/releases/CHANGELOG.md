@@ -5,6 +5,36 @@ All notable changes to DocXML will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.9.3] - 2026-02-19
+
+### Added
+
+- **Numbering Cleanup Pipeline: Header/Footer/Footnote/Endnote Scanning**
+  - `cleanupUnusedNumbering()` now scans headers, footers, footnotes, and endnotes for numId references
+  - Previously only scanned body paragraphs and document.xml, which could incorrectly delete numbering definitions used exclusively in headers/footers/notes
+  - Raw XML safety net extended to scan all header/footer/footnote/endnote XML files
+
+- **AbstractNumbering: numStyleLink and styleLink Support (ECMA-376 §17.9.21, §17.9.27)**
+  - `getNumStyleLink()` / `setNumStyleLink()` and `getStyleLink()` / `setStyleLink()` on AbstractNumbering
+  - Parsed from XML and serialized in output
+
+- **Numbering Consolidation: Style Link Fingerprint**
+  - Fingerprint now includes `numStyleLink` and `styleLink` to prevent incorrect merging
+
+- **Document Sanitization Pipeline**
+  - `flattenFieldCodes()`, `stripOrphanRSIDs()`, `_postProcessDocumentXml()`
+
+### Fixed
+
+- Numbering cleanup false positives for definitions referenced only in headers/footers/notes
+- Consolidation style association bug for abstractNums with different style links
+
+### Statistics
+
+- 124 test suites, 2,752 tests passing
+
+---
+
 ## [9.2.0] - 2025-01-22
 
 ### Added

@@ -25,6 +25,12 @@ export interface AbstractNumberingProperties {
 
   /** Optional multiLevel type (0 = single level, 1 = multilevel) */
   multiLevelType?: number;
+
+  /** Optional link to a numbering style definition (ECMA-376 §17.9.21) */
+  numStyleLink?: string;
+
+  /** Optional link to a style that uses this abstract numbering (ECMA-376 §17.9.27) */
+  styleLink?: string;
 }
 
 /**
@@ -38,6 +44,8 @@ export class AbstractNumbering {
   private name?: string;
   private levels: Map<number, NumberingLevel>;
   private multiLevelType: number;
+  private numStyleLink?: string;
+  private styleLink?: string;
 
   /**
    * Creates a new abstract numbering definition
@@ -60,6 +68,8 @@ export class AbstractNumbering {
       this.levels = new Map();
       this.multiLevelType =
         properties.multiLevelType !== undefined ? properties.multiLevelType : 1;
+      this.numStyleLink = properties.numStyleLink;
+      this.styleLink = properties.styleLink;
 
       if (properties.levels) {
         properties.levels.forEach((level) => {
@@ -141,6 +151,38 @@ export class AbstractNumbering {
     } else {
       this.multiLevelType = 0;
     }
+    return this;
+  }
+
+  /**
+   * Gets the numStyleLink (reference to a numbering style definition)
+   */
+  getNumStyleLink(): string | undefined {
+    return this.numStyleLink;
+  }
+
+  /**
+   * Sets the numStyleLink
+   * @param link The numbering style name
+   */
+  setNumStyleLink(link: string | undefined): this {
+    this.numStyleLink = link;
+    return this;
+  }
+
+  /**
+   * Gets the styleLink (reference to a style that uses this abstract numbering)
+   */
+  getStyleLink(): string | undefined {
+    return this.styleLink;
+  }
+
+  /**
+   * Sets the styleLink
+   * @param link The style name
+   */
+  setStyleLink(link: string | undefined): this {
+    this.styleLink = link;
     return this;
   }
 
@@ -241,6 +283,14 @@ export class AbstractNumbering {
         "w:val": multiLevelTypeValue,
       })
     );
+
+    // Add styleLink / numStyleLink if present (before levels per ECMA-376 schema)
+    if (this.styleLink) {
+      children.push(XMLBuilder.wSelf("styleLink", { "w:val": this.styleLink }));
+    }
+    if (this.numStyleLink) {
+      children.push(XMLBuilder.wSelf("numStyleLink", { "w:val": this.numStyleLink }));
+    }
 
     // Add all levels in order
     const sortedLevels = this.getAllLevels();
@@ -464,11 +514,21 @@ export class AbstractNumbering {
       else if (value === "hybridMultilevel") multiLevelType = 2;
     }
 
+    // Extract numStyleLink (optional, ECMA-376 §17.9.21)
+    const numStyleLinkMatch = xml.match(/<w:numStyleLink[^>]*w:val="([^"]+)"/);
+    const numStyleLink = numStyleLinkMatch?.[1] || undefined;
+
+    // Extract styleLink (optional, ECMA-376 §17.9.27)
+    const styleLinkMatch = xml.match(/<w:styleLink[^>]*w:val="([^"]+)"/);
+    const styleLink = styleLinkMatch?.[1] || undefined;
+
     // Create abstract numbering
     const abstractNum = new AbstractNumbering({
       abstractNumId,
       name,
       multiLevelType,
+      numStyleLink,
+      styleLink,
     });
 
     // Extract and parse all levels

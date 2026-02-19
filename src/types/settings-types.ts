@@ -40,3 +40,20 @@ export interface TrackChangesSettings {
   rsids?: string[];
   documentProtection?: DocumentProtection;
 }
+
+/**
+ * Information about webSettings.xml per ECMA-376 CT_WebSettings
+ */
+export interface WebSettingsInfo {
+  divCount: number;
+  optimizeForBrowser: boolean;
+  allowPNG: boolean;
+  relyOnVML: boolean;
+  doNotRelyOnCSS: boolean;
+  doNotSaveAsSingleFile: boolean;
+  doNotOrganizeInFolder: boolean;
+  doNotUseLongFileNames: boolean;
+  pixelsPerInch?: number;
+  targetScreenSz?: string;
+  encoding?: string;
+}

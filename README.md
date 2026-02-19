@@ -356,9 +356,20 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `clearFootnotes()` / `clearEndnotes()` - Remove all notes
 - `getFootnoteManager()` / `getEndnoteManager()` - Access note managers
 
+**Numbering Cleanup:**
+
+- `cleanupUnusedNumbering()` - Remove unused numbering definitions (scans body, headers, footers, footnotes, endnotes)
+- `consolidateNumbering(options?)` - Merge duplicate abstract numbering definitions
+- `validateNumberingReferences()` - Fix orphaned numId references
+
 **Shading:**
 
 - `getComputedCellShading(table, row, col)` - Resolve effective cell shading with inheritance
+
+**Document Sanitization:**
+
+- `flattenFieldCodes()` - Strip INCLUDEPICTURE field markup, preserving embedded images
+- `stripOrphanRSIDs()` - Remove orphan RSIDs from settings.xml
 
 **Saving:**
 
@@ -582,7 +593,7 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 9.8.8**
+**Current Version: 9.9.3**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
@@ -590,7 +601,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 The framework includes comprehensive test coverage:
 
-- **2,683 test cases** across 121 test suites
+- **2,752 test cases** across 124 test suites
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks

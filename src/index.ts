@@ -198,7 +198,11 @@ export {
   NumberingInstance,
   NumberingInstanceProperties,
 } from './formatting/NumberingInstance';
-export { NumberingManager } from './formatting/NumberingManager';
+export {
+  NumberingManager,
+  NumberingConsolidationOptions,
+  NumberingConsolidationResult,
+} from './formatting/NumberingManager';
 export {
   StyleRunFormatting,
   StyleParagraphFormatting,
@@ -290,6 +294,7 @@ export {
   DocumentProtection,
   RevisionViewSettings,
   TrackChangesSettings,
+  WebSettingsInfo,
 } from './types/settings-types';
 
 // =============================================================================

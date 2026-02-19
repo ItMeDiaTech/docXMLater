@@ -100,6 +100,7 @@ export const DOCX_PATHS = {
   DOCUMENT_RELS: 'word/_rels/document.xml.rels',
   STYLES: 'word/styles.xml',
   NUMBERING: 'word/numbering.xml',
+  NUMBERING_RELS: 'word/_rels/numbering.xml.rels',
   SETTINGS: 'word/settings.xml',
   FONT_TABLE: 'word/fontTable.xml',
   THEME: 'word/theme/theme1.xml',
@@ -111,4 +112,5 @@ export const DOCX_PATHS = {
   COMMENTS_EXTENDED: 'word/commentsExtended.xml',
   COMMENTS_IDS: 'word/commentsIds.xml',
   COMMENTS_EXTENSIBLE: 'word/commentsExtensible.xml',
+  WEB_SETTINGS: 'word/webSettings.xml',
 } as const;
