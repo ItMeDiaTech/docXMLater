@@ -582,7 +582,7 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 9.8.7**
+**Current Version: 9.8.8**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
