@@ -943,6 +943,12 @@ export class ComplexField {
     });
 
     // 4. Result content (prioritize custom XML content, then simple text)
+    // Design note: For INCLUDEPICTURE fields, the parser stores the w:drawing
+    // content in resultContent so it survives the parser→generator round-trip.
+    // When flattenFieldCodes() is active, the full field structure is emitted
+    // here, then _postProcessDocumentXml() strips the INCLUDEPICTURE scaffolding
+    // (fldChar/instrText runs) from the final XML while preserving the drawing.
+    // Non-INCLUDEPICTURE fields emit their complete structure unchanged.
     if (this.resultContent.length > 0) {
       // Use custom XML content
       runs.push(...this.resultContent);

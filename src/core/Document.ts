@@ -89,6 +89,7 @@ import { DocumentValidator } from "./DocumentValidator";
 import { RelationshipManager } from "./RelationshipManager";
 import { RelationshipType } from "./Relationship";
 import { BodyElement } from "./DocumentContent";
+import { optimizeImage, ImageOptimizationResult } from "../images/ImageOptimizer";
 
 /**
  * Document properties (core and extended)
@@ -416,6 +417,8 @@ export class Document {
   private _flattenIncludePictureFields: boolean = false;
   /** When true, _postProcessDocumentXml() removes RSIDs not referenced in document.xml */
   private _stripOrphanRSIDs: boolean = false;
+  /** When set, _postProcessDocumentXml() removes direct w:spacing from paragraphs with these styles */
+  private _clearDirectSpacingStyles: string[] | null = null;
   /** Tracks numPicBullet IDs removed during numbering merge, for rels cleanup */
   private _removedNumPicBulletIds: Set<number> = new Set();
 
@@ -426,6 +429,9 @@ export class Document {
   private saveStateSnapshot?: {
     preservedParagraphs: Set<Paragraph>;
     acceptRevisionsBeforeSave: boolean;
+    flattenIncludePictureFields: boolean;
+    stripOrphanRSIDs: boolean;
+    clearDirectSpacingStyles: string[] | null;
   };
 
   /**
@@ -443,6 +449,9 @@ export class Document {
     this.saveStateSnapshot = {
       preservedParagraphs,
       acceptRevisionsBeforeSave: this.acceptRevisionsBeforeSave,
+      flattenIncludePictureFields: this._flattenIncludePictureFields,
+      stripOrphanRSIDs: this._stripOrphanRSIDs,
+      clearDirectSpacingStyles: this._clearDirectSpacingStyles,
     };
   }
 
@@ -460,6 +469,11 @@ export class Document {
 
     // Restore acceptRevisionsBeforeSave flag
     this.acceptRevisionsBeforeSave = this.saveStateSnapshot.acceptRevisionsBeforeSave;
+
+    // Restore post-processing flags (consumed during _postProcessDocumentXml)
+    this._flattenIncludePictureFields = this.saveStateSnapshot.flattenIncludePictureFields;
+    this._stripOrphanRSIDs = this.saveStateSnapshot.stripOrphanRSIDs;
+    this._clearDirectSpacingStyles = this.saveStateSnapshot.clearDirectSpacingStyles;
 
     // Clear snapshot
     this.saveStateSnapshot = undefined;
@@ -2091,14 +2105,12 @@ export class Document {
     this.validateBookmarkPairs();
 
     // Only regenerate document.xml if we haven't manually stripped tracked changes
-    // Stripping sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
+    // acceptAllRevisionsRawXml() sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
     if (this.skipDocumentXmlRegeneration) {
-      if (!this._flattenIncludePictureFields) {
-        this.logger.warn(
-          'skipDocumentXmlRegeneration is set: in-memory content modifications will NOT be saved. ' +
-          'Use acceptAllRevisions() instead of acceptAllRevisionsRawXml() if you need to modify the document after accepting revisions.'
-        );
-      }
+      this.logger.warn(
+        'skipDocumentXmlRegeneration is set: in-memory content modifications will NOT be saved. ' +
+        'Use acceptAllRevisions() instead of acceptAllRevisionsRawXml() if you need to modify the document after accepting revisions.'
+      );
     } else {
       this.updateDocumentXml();
     }
@@ -2272,12 +2284,32 @@ export class Document {
 
   /**
    * Post-processes document.xml after generation for sanitization tasks.
-   * Runs only when explicitly enabled via flattenFieldCodes() or stripOrphanRSIDs().
+   * Runs only when explicitly enabled via flattenFieldCodes(), stripOrphanRSIDs(), or clearDirectSpacingForStyles().
    * Zero overhead when neither flag is set.
+   *
+   * IMPORTANT — INTENTIONAL REMOVAL BEHAVIOR (NOT A BUG):
+   * These sanitization methods deliberately remove XML elements and attributes from
+   * the document. This is their entire purpose — they clean up bloat and redundancy:
+   *
+   * - flattenFieldCodes(): Removes INCLUDEPICTURE field markup (fldChar, instrText runs).
+   *   Only the w:drawing content is preserved. The field wrapper is bloat from Outlook
+   *   copy-paste that causes Word to freeze.
+   *
+   * - stripOrphanRSIDs(): Removes RSIDs from settings.xml that are not referenced in
+   *   document.xml. Orphan RSIDs accumulate over editing sessions and can account for
+   *   80%+ of settings.xml size. They serve no purpose.
+   *
+   * - clearDirectSpacingForStyles(): Removes direct w:spacing overrides from paragraphs
+   *   whose style already defines spacing. The direct overrides prevent style-based
+   *   spacing from taking effect.
+   *
+   * These methods are explicitly called by user code — they never run automatically.
+   * The elements they remove are genuinely unwanted. Do not "fix" these removals.
+   *
    * @private
    */
   private _postProcessDocumentXml(): void {
-    if (!this._flattenIncludePictureFields && !this._stripOrphanRSIDs) {
+    if (!this._flattenIncludePictureFields && !this._stripOrphanRSIDs && !this._clearDirectSpacingStyles) {
       return;
     }
 
@@ -2296,6 +2328,12 @@ export class Document {
     if (this._stripOrphanRSIDs) {
       this._stripOrphanRSIDsFromSettings(docXml);
       this._stripOrphanRSIDs = false; // Reset after use
+    }
+
+    // Step 3: Clear direct w:spacing from styled paragraphs
+    if (this._clearDirectSpacingStyles && this._clearDirectSpacingStyles.length > 0) {
+      docXml = this._clearDirectSpacingFromStyledParagraphs(docXml, this._clearDirectSpacingStyles);
+      this._clearDirectSpacingStyles = null;
     }
 
     this.zipHandler.updateFile(DOCX_PATHS.DOCUMENT, docXml);
@@ -2499,6 +2537,116 @@ export class Document {
       }
     }
     return -1;
+  }
+
+  /**
+   * Removes direct w:spacing elements from w:pPr blocks that contain a w:pStyle
+   * matching one of the specified style IDs.
+   *
+   * This operates on raw XML so it works alongside skipDocumentXmlRegeneration.
+   * Only affects paragraphs with an explicit w:pStyle — paragraphs without a
+   * style reference are left unchanged (they need direct formatting).
+   * @private
+   */
+  private _clearDirectSpacingFromStyledParagraphs(xml: string, styleIds: string[]): string {
+    const styleSet = new Set(styleIds);
+    let cleared = 0;
+
+    // Use depth-aware matching to find top-level <w:pPr>...</w:pPr> blocks.
+    // A simple non-greedy regex would incorrectly terminate at nested </w:pPr>
+    // inside <w:pPrChange> (ECMA-376 §17.13.5.29), producing malformed XML.
+    const pPrOpenTag = '<w:pPr>';
+    const pPrCloseTag = '</w:pPr>';
+    let searchPos = 0;
+    let result = '';
+    let lastCopyPos = 0;
+
+    while (searchPos < xml.length) {
+      const openIdx = xml.indexOf(pPrOpenTag, searchPos);
+      if (openIdx === -1) break;
+
+      // Find the matching close tag using depth counting
+      let depth = 1;
+      let scanPos = openIdx + pPrOpenTag.length;
+      while (depth > 0 && scanPos < xml.length) {
+        const nextOpen = xml.indexOf(pPrOpenTag, scanPos);
+        const nextClose = xml.indexOf(pPrCloseTag, scanPos);
+        if (nextClose === -1) break; // Malformed XML — bail out
+
+        if (nextOpen !== -1 && nextOpen < nextClose) {
+          depth++;
+          scanPos = nextOpen + pPrOpenTag.length;
+        } else {
+          depth--;
+          if (depth === 0) {
+            // Found the matching close tag
+            const innerStart = openIdx + pPrOpenTag.length;
+            const innerEnd = nextClose;
+            const inner = xml.substring(innerStart, innerEnd);
+
+            // Protect nested blocks (w:pPrChange, w:rPr) from modification.
+            // w:pPrChange contains a child w:pPr with historical property values.
+            // w:rPr may contain w:spacing for paragraph mark character spacing.
+            // Protection must run BEFORE style check so we don't match styles
+            // inside pPrChange (which represent historical, not current, state).
+            const protectedBlocks: string[] = [];
+            // Protect pPrChange and rPr blocks separately to prevent cross-tag
+            // mismatch (e.g., <w:rPr> matching </w:pPrChange> in the alternation).
+            let safeInner = inner.replace(
+              /<w:pPrChange\b[\s\S]*?<\/w:pPrChange>/g,
+              (block) => {
+                protectedBlocks.push(block);
+                return `\x00PROTECTED_${protectedBlocks.length - 1}\x00`;
+              }
+            );
+            safeInner = safeInner.replace(
+              /<w:rPr\b[\s\S]*?<\/w:rPr>/g,
+              (block) => {
+                protectedBlocks.push(block);
+                return `\x00PROTECTED_${protectedBlocks.length - 1}\x00`;
+              }
+            );
+
+            // Check if this pPr contains a pStyle matching our list
+            // (checked against safeInner to avoid matching styles inside pPrChange)
+            const styleMatch = safeInner.match(/<w:pStyle\s+w:val="([^"]+)"/);
+            if (styleMatch && styleSet.has(styleMatch[1]!)) {
+              // Remove direct <w:spacing .../> (self-closing) from the safe region
+              let cleaned = safeInner.replace(/<w:spacing\b[^/]*\/>\s*/g, '');
+
+              if (cleaned !== safeInner) {
+                // Restore protected blocks
+                for (let i = 0; i < protectedBlocks.length; i++) {
+                  cleaned = cleaned.replace(`\x00PROTECTED_${i}\x00`, protectedBlocks[i]!);
+                }
+                cleared++;
+                result += xml.substring(lastCopyPos, openIdx);
+                result += `${pPrOpenTag}${cleaned}${pPrCloseTag}`;
+                lastCopyPos = nextClose + pPrCloseTag.length;
+              }
+            }
+
+            scanPos = nextClose + pPrCloseTag.length;
+          } else {
+            scanPos = nextClose + pPrCloseTag.length;
+          }
+        }
+      }
+
+      searchPos = scanPos;
+    }
+
+    // Append remaining content
+    if (lastCopyPos === 0) {
+      // No modifications made — return original string (avoids allocation)
+      if (cleared === 0) return xml;
+    }
+    result += xml.substring(lastCopyPos);
+
+    if (cleared > 0) {
+      this.logger.info(`Cleared direct w:spacing from ${cleared} styled paragraphs`);
+    }
+    return result;
   }
 
   /**
@@ -4353,7 +4501,8 @@ export class Document {
           const relId = image.getRelationshipId();
 
           if (relId && largeImageIds.has(relId)) {
-            // Center this paragraph
+            // Remove indentation before centering
+            paragraph.formatting.indentation = undefined;
             paragraph.setAlignment("center");
             count++;
             break; // Only count paragraph once
@@ -4454,6 +4603,8 @@ export class Document {
 
       // If paragraph has a large image, center it
       if (hasLargeImage) {
+        // Remove indentation before centering
+        paragraph.formatting.indentation = undefined;
         paragraph.setAlignment("center");
         count++;
       }
@@ -4623,10 +4774,16 @@ export class Document {
   /**
    * Consolidates duplicate abstract numbering definitions
    *
-   * Groups abstractNums by a deterministic fingerprint of their level properties.
+   * INTENTIONAL REMOVAL (NOT A BUG): This method deliberately removes duplicate
+   * abstract numbering definitions and remaps their instances to a single canonical
+   * definition. DOCX files routinely accumulate 10-50+ identical copies of the same
+   * numbering definition through copy-paste — this is pure bloat that inflates
+   * numbering.xml and can cause Word performance issues.
+   *
+   * Groups abstractNums by a deterministic fingerprint of their level properties
+   * (including numStyleLink, styleLink, multiLevelType, and all level attributes).
    * For each group with >1 member, picks the lowest abstractNumId as canonical,
-   * remaps all instances, and removes duplicates. This reduces numbering.xml bloat
-   * caused by copy-paste accumulation.
+   * remaps all instances, and removes duplicates.
    *
    * Typically called after uniformity methods have made definitions identical,
    * and before cleanupUnusedNumbering() to remove any orphaned leftovers.
@@ -4642,14 +4799,24 @@ export class Document {
   /**
    * Cleans up unused numbering definitions
    *
-   * Removes numbering instances and abstract numberings that are no longer
-   * referenced by any paragraphs in the document. Performs a comprehensive
-   * scan that includes:
-   * - Current paragraph numbering properties
+   * INTENTIONAL REMOVAL (NOT A BUG): This method deliberately removes numbering
+   * instances and abstract numberings that are no longer referenced by any paragraph
+   * in the document. DOCX files accumulate orphaned numbering definitions through
+   * copy-paste, style normalization, and editing — they serve no purpose and bloat
+   * numbering.xml. This method is always called explicitly by user code or internally
+   * after normalizeNumberedLists()/normalizeBulletLists() which reassign all paragraphs
+   * to new definitions, making old ones orphans by design.
+   *
+   * Performs a comprehensive scan before removing anything:
+   * - Current paragraph numbering properties (w:numPr)
    * - Previous numbering from paragraph property changes (w:pPrChange)
    * - numId references inside raw nested content (nested tables/SDTs)
    * - numId references inside body-level tracked deletions (w:del blocks
    *   that were skipped during parsing)
+   * - Header, footer, footnote, and endnote XML files
+   * - Raw XML safety net scan of all relevant ZIP entries
+   *
+   * A definition is only removed if it appears in NONE of these sources.
    *
    * @public
    */
@@ -4750,13 +4917,15 @@ export class Document {
    * Removes all INCLUDEPICTURE field markup (begin/instrText/separate/end)
    * while preserving the embedded image content (w:drawing elements).
    *
-   * This fixes nested INCLUDEPICTURE stacks from Outlook copy-paste that
-   * cause Word to freeze due to recursive field resolution.
+   * INTENTIONAL REMOVAL (NOT A BUG): The removed fldChar/instrText runs are
+   * field wrapper bloat from Outlook copy-paste. They cause Word to freeze
+   * due to recursive field resolution. The actual image content (w:drawing)
+   * is always preserved — only the INCLUDEPICTURE field scaffolding is stripped.
+   * Other field types (HYPERLINK, TOC, MERGEFIELD, etc.) are never touched.
    *
-   * Note: This preserves the original document.xml (skips regeneration from
-   * the in-memory model) to ensure field markup and embedded images are
-   * intact for processing. Other document parts (styles, numbering, settings)
-   * are still regenerated normally.
+   * The document.xml is regenerated from the in-memory model (preserving all
+   * in-memory changes like style application), then _postProcessDocumentXml()
+   * strips any remaining INCLUDEPICTURE field markup as a safety net.
    *
    * @returns this for chaining
    * @example
@@ -4768,17 +4937,45 @@ export class Document {
    */
   flattenFieldCodes(): this {
     this._flattenIncludePictureFields = true;
-    this.skipDocumentXmlRegeneration = true;
+    return this;
+  }
+
+  /**
+   * Enables removal of direct w:spacing from paragraphs with specified styles
+   * during the next save. This operates at the raw XML level in the
+   * post-processing pipeline (after document.xml regeneration).
+   *
+   * INTENTIONAL REMOVAL (NOT A BUG): Per OOXML precedence rules, direct
+   * paragraph formatting overrides style definitions. When a document has
+   * style-defined spacing (e.g., Normal style → 8pt after), but also has
+   * direct w:spacing on every paragraph, the style spacing is ignored. This
+   * method removes the direct overrides so the style's spacing takes effect.
+   * Historical spacing inside w:pPrChange (revision tracking) is never touched.
+   *
+   * @param styleIds - Array of style IDs whose paragraphs should have direct spacing removed
+   * @returns this for chaining
+   * @example
+   * ```typescript
+   * const doc = await Document.loadFromBuffer(buffer);
+   * doc.flattenFieldCodes();
+   * doc.clearDirectSpacingForStyles(['Normal', 'Heading1', 'ListParagraph']);
+   * const output = await doc.toBuffer();
+   * ```
+   */
+  clearDirectSpacingForStyles(styleIds: string[]): this {
+    this._clearDirectSpacingStyles = styleIds;
     return this;
   }
 
   /**
    * Enables removal of orphan RSIDs from settings.xml during the next save.
-   * RSIDs not referenced anywhere in document.xml are removed, while
-   * rsidRoot is always preserved (required by ECMA-376 spec).
    *
-   * Typical documents accumulate thousands of orphan RSIDs over editing
-   * sessions; this can account for 80%+ of settings.xml size.
+   * INTENTIONAL REMOVAL (NOT A BUG): RSIDs (Revision Session Identifiers)
+   * accumulate in settings.xml over editing sessions. Once the paragraphs or
+   * runs that referenced them are deleted, the RSIDs become orphans — they
+   * serve no purpose and bloat settings.xml (often 80%+ of its size). This
+   * method scans document.xml for actually-referenced RSIDs and removes the
+   * rest. rsidRoot is always preserved (required by ECMA-376 spec).
    *
    * @returns this for chaining
    * @example
@@ -5975,8 +6172,21 @@ export class Document {
     if (listParagraph && listParaConfig.run && listParaConfig.paragraph) {
       if (listParaConfig.run)
         listParagraph.setRunFormatting(listParaConfig.run);
-      if (listParaConfig.paragraph)
+      if (listParaConfig.paragraph) {
+        // Validate indentation: hanging must not exceed left to prevent negative bullet position
+        const indent = listParaConfig.paragraph.indentation;
+        if (indent?.hanging !== undefined && indent?.left !== undefined) {
+          if (indent.hanging > indent.left) {
+            const logger = getGlobalLogger();
+            logger.warn(
+              `[Document] ListParagraph indentation: hanging (${indent.hanging}) > left (${indent.left}). ` +
+              `Capping hanging to left to prevent negative bullet position.`
+            );
+            indent.hanging = indent.left;
+          }
+        }
         listParagraph.setParagraphFormatting(listParaConfig.paragraph);
+      }
       // Mark style as modified so it gets included in mergeStylesWithOriginal()
       this.addStyle(listParagraph);
       results.listParagraph = true;
@@ -6567,7 +6777,8 @@ export class Document {
       }
 
       // Process Normal paragraphs (including undefined style which defaults to Normal)
-      else if ((styleId === "Normal" || styleId === undefined) && normal) {
+      // Also process NormalWeb paragraphs when linkNormalWebToNormal is enabled (default: true)
+      else if ((styleId === "Normal" || styleId === undefined || (styleId === "NormalWeb" && options?.linkNormalWebToNormal !== false)) && normal) {
         // Save formatting that should be preserved BEFORE clearing
         const allRuns = this.getAllRunsFromParagraph(para);
         const preservedFormatting = allRuns.map((run) => {
@@ -11815,6 +12026,8 @@ export class Document {
     this._listSeparator = undefined;
     this._flattenIncludePictureFields = false;
     this._stripOrphanRSIDs = false;
+    this._clearDirectSpacingStyles = null;
+    this.skipDocumentXmlRegeneration = false;
     this._removedNumPicBulletIds.clear();
     this.saveStateSnapshot = undefined;
 
@@ -14104,6 +14317,112 @@ export class Document {
     filename: string;
   }> {
     return this.imageManager.getAllImages();
+  }
+
+  /**
+   * Performs lossless image optimization on all images in the document.
+   *
+   * - PNG images: re-compressed at zlib level 9, metadata chunks stripped
+   * - BMP images: converted to PNG format (lossless, typically 10-50x smaller)
+   * - JPEG, EMF, WMF, SVG, GIF, TIFF: skipped (cannot be losslessly optimized further)
+   *
+   * @returns Optimization results including count and bytes saved
+   *
+   * @example
+   * ```typescript
+   * const doc = await Document.load('document.docx');
+   * const result = await doc.optimizeImages();
+   * console.log(`Optimized ${result.optimizedCount} images, saved ${result.totalSavedBytes} bytes`);
+   * await doc.save('document-optimized.docx');
+   * ```
+   */
+  async optimizeImages(): Promise<ImageOptimizationResult> {
+    // 1. Ensure all image data is loaded
+    await this.imageManager.loadAllImageData();
+
+    // 2. Group images by filename (avoid processing same file twice)
+    const imagesByFilename = new Map<string, Array<{ image: Image; relationshipId: string; filename: string }>>();
+    for (const entry of this.imageManager.getAllImages()) {
+      const group = imagesByFilename.get(entry.filename) || [];
+      group.push(entry);
+      imagesByFilename.set(entry.filename, group);
+    }
+
+    // 3. Optimize each unique image file
+    let totalSaved = 0;
+    let optimizedCount = 0;
+
+    for (const [filename, entries] of imagesByFilename) {
+      const firstEntry = entries[0];
+      if (!firstEntry) continue;
+
+      const image = firstEntry.image;
+      let originalData: Buffer;
+      try {
+        originalData = image.getImageData();
+      } catch {
+        continue; // Image data not available
+      }
+      const extension = image.getExtension();
+
+      const result = optimizeImage(originalData, extension);
+      if (!result) continue;
+
+      const saved = originalData.length - result.data.length;
+      if (saved <= 0) continue;
+
+      // 4. Update all Image objects sharing this file
+      for (const entry of entries) {
+        await entry.image.updateImageData(result.data);
+      }
+
+      // 5. If format changed (e.g., bmp → png), update filename + relationships
+      if (result.newExtension !== extension) {
+        const newFilename = filename.replace(/\.[^.]+$/, `.${result.newExtension}`);
+        this.imageManager.updateEntryFilename(image, newFilename);
+
+        // Update relationship targets across all relationship managers
+        for (const entry of entries) {
+          this.updateImageRelationshipTarget(entry.relationshipId, filename, newFilename);
+        }
+      }
+
+      totalSaved += saved;
+      optimizedCount++;
+    }
+
+    return { optimizedCount, totalSavedBytes: totalSaved };
+  }
+
+  /**
+   * Updates an image relationship target when the image format changes.
+   * Handles both document body and header/footer relationships.
+   * @private
+   */
+  private updateImageRelationshipTarget(relId: string, oldFilename: string, newFilename: string): void {
+    // Try document body relationship manager first
+    const rel = this.relationshipManager.getRelationship(relId);
+    if (rel) {
+      const oldTarget = rel.getTarget();
+      const newTarget = oldTarget.replace(oldFilename, newFilename);
+      rel.setTarget(newTarget);
+      return;
+    }
+
+    // For header/footer images, update .rels files in the ZIP directly
+    const oldTarget = `media/${oldFilename}`;
+    const newTarget = `media/${newFilename}`;
+    const escapedOldTarget = oldTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const filePaths = this.zipHandler.getFilePaths();
+    for (const path of filePaths) {
+      if (!path.endsWith('.rels') || path === 'word/_rels/document.xml.rels') continue;
+      const content = this.zipHandler.getFileAsString(path);
+      if (content && content.includes(oldTarget)) {
+        const updated = content.replace(new RegExp(escapedOldTarget, 'g'), newTarget);
+        this.zipHandler.updateFile(path, updated);
+      }
+    }
   }
 
   /**

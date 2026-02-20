@@ -14,6 +14,7 @@ import { Document } from '../../src/core/Document';
 import { Image } from '../../src/elements/Image';
 import { ImageRun } from '../../src/elements/ImageRun';
 import { Table } from '../../src/elements/Table';
+import { ImageManager } from '../../src/elements/ImageManager';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
@@ -1225,17 +1226,14 @@ describe('Image Properties - Group D: Format Detection', () => {
 
 describe('Image Properties - MIME Types', () => {
   it('should return correct MIME type for SVG', () => {
-    const { ImageManager } = require('../../src/elements/ImageManager');
     expect(ImageManager.getMimeType('svg')).toBe('image/svg+xml');
   });
 
   it('should return correct MIME type for EMF', () => {
-    const { ImageManager } = require('../../src/elements/ImageManager');
     expect(ImageManager.getMimeType('emf')).toBe('image/x-emf');
   });
 
   it('should return correct MIME type for WMF', () => {
-    const { ImageManager } = require('../../src/elements/ImageManager');
     expect(ImageManager.getMimeType('wmf')).toBe('image/x-wmf');
   });
 });

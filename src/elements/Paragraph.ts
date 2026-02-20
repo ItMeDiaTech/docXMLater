@@ -2128,6 +2128,26 @@ export class Paragraph {
   }
 
   /**
+   * Clears all direct spacing properties from the paragraph.
+   *
+   * Removes the spacing object (before, after, line, lineRule) so the paragraph
+   * inherits spacing from its style definition. This is different from setting
+   * spacing to 0 — clearing means "use style value", while 0 means "no spacing".
+   *
+   * @returns This paragraph instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // Clear direct spacing so Normal style's 3pt/3pt takes effect
+   * para.clearSpacing();
+   * ```
+   */
+  clearSpacing(): this {
+    delete this.formatting.spacing;
+    return this;
+  }
+
+  /**
    * Sets the paragraph style
    *
    * Applies a style definition to the paragraph. The style must exist
@@ -4096,8 +4116,7 @@ export class Paragraph {
         continue;
       }
 
-      // Special handling for indentation - preserve intentional overrides
-      // A left indent of 0 is an explicit override to cancel style indentation
+      // Special handling for indentation - strip direct formatting so style/numbering values take effect
       if (propKey === "indentation") {
         const paraIndent = this.formatting.indentation;
         const styleIndent = styleParagraphFormatting.indentation as typeof paraIndent;
@@ -4106,13 +4125,11 @@ export class Paragraph {
         // When style has left indent > 0 and paragraph explicitly sets left to 0,
         // this is an intentional override to remove the indent - preserve it
         if (paraIndent?.left === 0 && styleIndent?.left && styleIndent.left > 0) {
-          continue; // Preserve this override, don't clear it
+          continue;
         }
 
-        // Only clear if it matches the style exactly (redundant formatting)
-        if (JSON.stringify(paraIndent) === JSON.stringify(styleIndent)) {
-          conflictingParaProps.push(propKey);
-        }
+        // Clear direct indentation so style value takes effect (consistent with other properties)
+        conflictingParaProps.push(propKey);
         continue;
       }
 

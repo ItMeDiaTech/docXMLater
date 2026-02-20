@@ -9,7 +9,7 @@
  * and relationship registration in updatePeopleXml().
  */
 
-import { describe, it, expect } from '@jest/globals';
+
 import { Document } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';

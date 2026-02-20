@@ -213,6 +213,19 @@ export class NumberingManager {
   }
 
   /**
+   * Marks an abstract numbering as modified for XML regeneration.
+   * Use when modifying NumberingLevel properties directly (setLeftIndent, etc.)
+   * which don't automatically trigger the modified flag.
+   * @param abstractNumId The abstract numbering ID to mark as modified
+   */
+  markAbstractNumberingModified(abstractNumId: number): void {
+    if (this.abstractNumberings.has(abstractNumId)) {
+      this._modified = true;
+      this._modifiedAbstractNumIds.add(abstractNumId);
+    }
+  }
+
+  /**
    * Resets the modified flag
    * Called after parsing to indicate that loaded numbering doesn't count as modifications
    */

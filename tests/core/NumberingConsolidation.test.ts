@@ -19,6 +19,7 @@ import { Paragraph } from '../../src/elements/Paragraph';
 import { Header } from '../../src/elements/Header';
 import { Footer } from '../../src/elements/Footer';
 import { ZipHandler } from '../../src/zip/ZipHandler';
+import { XMLBuilder } from '../../src/xml/XMLBuilder';
 import { DOCX_PATHS } from '../../src/zip/types';
 
 /**
@@ -824,7 +825,6 @@ describe('numStyleLink / styleLink support', () => {
 
     const xmlElement = abstractNum.toXML();
     // Convert to string for assertion — use XMLBuilder to render
-    const { XMLBuilder } = require('../../src/xml/XMLBuilder');
     const builder = new XMLBuilder();
     builder.element(xmlElement.name, xmlElement.attributes, xmlElement.children);
     const xmlStr = builder.build(false);

@@ -658,10 +658,6 @@ export class Run {
 
     // Track text change if tracking is enabled and text actually changed
     if (this.trackingContext?.isEnabled() && this._parentParagraph && oldText !== normalizedText && oldText) {
-      // Lazy load Revision to avoid circular dependency
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { Revision } = require('./Revision');
-
       // Check if original content had non-text types that getText() can't faithfully represent
       // (VML, fieldChar, symbol, embeddedObject) — if so, fall back to whole-run replacement
       const hasNonTextContent = oldContent.some(c =>
@@ -673,7 +669,6 @@ export class Run {
 
       if (useGranular) {
         // Fine-grained tracking: split into unchanged runs + delete/insert revisions
-        const author = this.trackingContext.getAuthor();
         const revManager = this.trackingContext.getRevisionManager();
         const now = new Date();
         const newContent: (Run | RevisionType)[] = [];
@@ -689,13 +684,13 @@ export class Run {
           } else if (seg.type === 'delete') {
             const delRun = this.clone();
             delRun.content = this.parseTextWithSpecialCharacters(seg.text);
-            const delRev = Revision.createDeletion(author, delRun, now);
+            const delRev = this.trackingContext.createDeletion(delRun, now);
             revManager.register(delRev);
             newContent.push(delRev);
           } else if (seg.type === 'insert') {
             const insRun = this.clone();
             insRun.content = this.parseTextWithSpecialCharacters(seg.text);
-            const insRev = Revision.createInsertion(author, insRun, now);
+            const insRev = this.trackingContext.createInsertion(insRun, now);
             revManager.register(insRev);
             newContent.push(insRev);
           }
@@ -704,17 +699,16 @@ export class Run {
         this._parentParagraph.replaceContent(this, newContent);
       } else {
         // Whole-run fallback: complete replacement (no shared text, or non-text content)
-        const author = this.trackingContext.getAuthor();
         const revManager = this.trackingContext.getRevisionManager();
         const now = new Date();
 
         const deleteRun = this.clone();
         deleteRun.content = this.parseTextWithSpecialCharacters(oldText);
 
-        const deleteRev = Revision.createDeletion(author, deleteRun, now);
+        const deleteRev = this.trackingContext.createDeletion(deleteRun, now);
         revManager.register(deleteRev);
 
-        const insertRev = Revision.createInsertion(author, this, now);
+        const insertRev = this.trackingContext.createInsertion(this, now);
         revManager.register(insertRev);
 
         this._parentParagraph.replaceContent(this, [deleteRev, insertRev]);
@@ -3001,6 +2995,55 @@ export class Run {
 
     // Clear conflicting properties
     for (const prop of conflictingProperties) {
+      delete this.formatting[prop];
+    }
+
+    return this;
+  }
+
+  /**
+   * Clears run formatting properties that MATCH a style definition.
+   * The inverse of clearFormattingConflicts: removes properties whose values
+   * are identical to the style, so the run inherits those values from the style.
+   * Preserves properties that differ from the style (direct overrides) and
+   * properties not defined in the style.
+   *
+   * This enables style inheritance: when direct formatting matches the style,
+   * removing it allows future style definition changes to propagate automatically.
+   *
+   * @param styleRunFormatting - Run formatting from the style definition to compare against
+   * @returns This run for method chaining
+   * @example
+   * ```typescript
+   * // Style says: black, 12pt Verdana
+   * // Run has: black, 12pt Verdana, bold
+   * run.clearMatchingFormatting({
+   *   color: '000000',
+   *   size: 12,
+   *   font: 'Verdana'
+   * });
+   * // Result: color/size/font cleared (inherit from style), bold kept (not in style)
+   * ```
+   */
+  clearMatchingFormatting(styleRunFormatting: Partial<RunFormatting>): this {
+    const matchingProperties: (keyof RunFormatting)[] = [];
+
+    for (const key in this.formatting) {
+      const propKey = key as keyof RunFormatting;
+
+      // Skip if style doesn't define this property (preserve run's property)
+      if (styleRunFormatting[propKey] === undefined) {
+        continue;
+      }
+
+      // If run's value matches the style, it's redundant direct formatting
+      if (this.formatting[propKey] === styleRunFormatting[propKey]) {
+        matchingProperties.push(propKey);
+      }
+    }
+
+    // Clear matching properties so run inherits from style
+    for (const prop of matchingProperties) {
       delete this.formatting[prop];
     }
 

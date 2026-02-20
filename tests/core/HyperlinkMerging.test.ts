@@ -8,7 +8,7 @@
  * are merged. Non-consecutive hyperlinks with the same URL should remain separate.
  */
 
-import { describe, it, expect } from "@jest/globals";
+
 import { Paragraph } from "../../src/elements/Paragraph";
 import { Run } from "../../src/elements/Run";
 import { Hyperlink } from "../../src/elements/Hyperlink";

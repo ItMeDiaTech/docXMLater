@@ -5,7 +5,7 @@
  * that appear inside the result section of complex fields like HYPERLINK
  */
 
-import { describe, it, expect, beforeAll } from '@jest/globals';
+
 import { join } from 'path';
 import { Document } from '../../src/core/Document';
 import { ComplexField } from '../../src/elements/Field';

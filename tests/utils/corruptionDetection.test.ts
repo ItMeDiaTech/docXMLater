@@ -3,7 +3,7 @@
  * Validates that we can detect when users pass XML strings to text methods
  */
 
-import { describe, it, expect } from '@jest/globals';
+
 import {
   detectCorruptionInText,
   suggestFix,

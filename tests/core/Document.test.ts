@@ -8,6 +8,7 @@ import { Document, DocumentProperties } from '../../src/core/Document';
 import { Hyperlink } from '../../src/elements/Hyperlink';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Table } from '../../src/elements/Table';
+import { Style } from '../../src/formatting/Style';
 import { DOCX_PATHS } from '../../src/zip/types';
 
 const TEST_OUTPUT_DIR = path.join(__dirname, '../../test-output');
@@ -1133,6 +1134,72 @@ describe('Document', () => {
       });
     });
 
+  });
+
+  describe('applyStyles ListParagraph indentation validation', () => {
+    test('should cap hanging indent to left indent when hanging > left', () => {
+      const doc = Document.create();
+
+      // Create a ListParagraph style in the document
+      const style = Style.create({
+        styleId: 'ListParagraph',
+        name: 'List Paragraph',
+        type: 'paragraph',
+      });
+      doc.addStyle(style);
+
+      // Add a ListParagraph paragraph
+      const para = doc.createParagraph('Test list item');
+      para.setStyle('ListParagraph');
+
+      // Apply styles with hanging (720) > left (360) — should be capped
+      doc.applyStyles({
+        listParagraph: {
+          run: { font: 'Verdana', size: 12, color: '000000' },
+          paragraph: {
+            indentation: { left: 360, hanging: 720 },
+            spacing: { before: 0, after: 120, line: 240, lineRule: 'auto' as const },
+          },
+        },
+      });
+
+      // Verify the style definition was updated with capped hanging
+      const listParaStyle = doc.getStylesManager().getStyle('ListParagraph');
+      const props = listParaStyle?.getProperties();
+      expect(props?.paragraphFormatting?.indentation?.hanging).toBeLessThanOrEqual(
+        props?.paragraphFormatting?.indentation?.left ?? 0
+      );
+    });
+
+    test('should not modify hanging when hanging <= left', () => {
+      const doc = Document.create();
+
+      const style = Style.create({
+        styleId: 'ListParagraph',
+        name: 'List Paragraph',
+        type: 'paragraph',
+      });
+      doc.addStyle(style);
+
+      const para = doc.createParagraph('Test list item');
+      para.setStyle('ListParagraph');
+
+      // Apply styles with hanging (360) <= left (720) — should be kept as-is
+      doc.applyStyles({
+        listParagraph: {
+          run: { font: 'Verdana', size: 12, color: '000000' },
+          paragraph: {
+            indentation: { left: 720, hanging: 360 },
+            spacing: { before: 0, after: 120, line: 240, lineRule: 'auto' as const },
+          },
+        },
+      });
+
+      const listParaStyle = doc.getStylesManager().getStyle('ListParagraph');
+      const props = listParaStyle?.getProperties();
+      expect(props?.paragraphFormatting?.indentation?.hanging).toBe(360);
+      expect(props?.paragraphFormatting?.indentation?.left).toBe(720);
+    });
   });
 
   describe('Revision Registration', () => {

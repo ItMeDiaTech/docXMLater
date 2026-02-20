@@ -6,7 +6,7 @@
  * independent of the text runs in the paragraph.
  */
 
-import { describe, test, expect } from "@jest/globals";
+
 import { Paragraph } from "../../src/elements/Paragraph";
 import { Document } from "../../src/core/Document";
 import * as path from "path";

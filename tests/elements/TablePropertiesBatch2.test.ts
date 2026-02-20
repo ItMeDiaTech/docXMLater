@@ -12,7 +12,7 @@
  * 8. gridSpan - Already exists as columnSpan (verification tests)
  */
 
-import { describe, test, expect } from "@jest/globals";
+
 import { Table } from "../../src/elements/Table";
 import { Document } from "../../src/core/Document";
 import * as path from "path";

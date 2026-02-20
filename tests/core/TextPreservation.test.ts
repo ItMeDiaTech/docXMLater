@@ -3,7 +3,6 @@
  * Ensures that text content is never lost during load/save cycles
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Document } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';

@@ -233,6 +233,12 @@ export { FontManager, FontFormat, FontEntry } from './elements/FontManager';
 export { DrawingManager, DrawingElement, DrawingType, PreservedDrawing } from './managers/DrawingManager';
 
 // =============================================================================
+// PUBLIC API — Image Optimization
+// =============================================================================
+
+export type { ImageOptimizationResult } from './images/ImageOptimizer';
+
+// =============================================================================
 // TYPES — Common / Shared Type Definitions
 // =============================================================================
 

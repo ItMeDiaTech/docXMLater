@@ -38,6 +38,7 @@ build/
 coverage/
 .nyc_output/
 *.log
+E_*
 
 # IDE
 .vscode/

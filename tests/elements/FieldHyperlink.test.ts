@@ -10,7 +10,7 @@
  * - Full URL construction with anchors
  */
 
-import { describe, it, expect } from '@jest/globals';
+
 import {
   parseHyperlinkInstruction,
   buildHyperlinkInstruction,

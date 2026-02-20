@@ -5,7 +5,7 @@
  * should be skipped during parsing, not parsed as empty elements.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+
 import { Document } from "../../src/core/Document";
 import { ZipHandler } from "../../src/zip/ZipHandler";
 

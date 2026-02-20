@@ -9,7 +9,6 @@
  * - Round-trip preservation
  */
 
-import { describe, it, expect, beforeAll } from '@jest/globals';
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import { Document } from '../../src/core/Document';

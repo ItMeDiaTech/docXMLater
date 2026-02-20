@@ -9,7 +9,7 @@
  * - Text direction
  */
 
-import { describe, it, expect } from '@jest/globals';
+
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import { Document } from '../../src/core/Document';

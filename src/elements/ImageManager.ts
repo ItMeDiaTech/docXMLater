@@ -198,6 +198,29 @@ export class ImageManager {
   }
 
   /**
+   * Updates the filename for an image and all other entries sharing the same old filename.
+   * Used when image format changes (e.g., BMP → PNG) require a new filename.
+   * @param image The image whose filename to update
+   * @param newFilename The new filename
+   * @returns The old filename, or undefined if image not registered
+   */
+  updateEntryFilename(image: Image, newFilename: string): string | undefined {
+    const entry = this.images.get(image);
+    if (!entry) return undefined;
+    const oldFilename = entry.filename;
+    if (oldFilename === newFilename) return oldFilename;
+
+    // Update all entries sharing the old filename
+    for (const e of this.images.values()) {
+      if (e.filename === oldFilename) e.filename = newFilename;
+    }
+    for (const e of this.imagesByRelId.values()) {
+      if (e.filename === oldFilename) e.filename = newFilename;
+    }
+    return oldFilename;
+  }
+
+  /**
    * Gets all registered images
    * @returns Array of image entries
    */

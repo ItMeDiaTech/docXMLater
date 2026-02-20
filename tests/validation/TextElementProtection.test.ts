@@ -3,7 +3,6 @@
  * Ensures critical protections from the error analysis report are working
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { XMLBuilder, XMLElement } from '../../src/xml/XMLBuilder';
 import { Run } from '../../src/elements/Run';
 import { Document } from '../../src/core/Document';

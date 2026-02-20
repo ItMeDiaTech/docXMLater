@@ -5,6 +5,85 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.0] - 2026-02-20
+
+### Added
+
+- **Document Sanitization: `clearDirectSpacingForStyles()`**
+  - Removes direct `w:spacing` overrides from paragraphs whose style already defines spacing
+  - Operates on raw XML during save for compatibility with `skipDocumentXmlRegeneration`
+  - Protects `w:pPrChange` (revision history) and `w:rPr` (paragraph mark spacing) blocks
+  - Only matches styles in the outer (current) `w:pPr`, never inside `w:pPrChange`
+  - Integrated into `_postProcessDocumentXml()` pipeline alongside `flattenFieldCodes()` and `stripOrphanRSIDs()`
+  - Save state snapshot/rollback support for retry safety
+
+- **Image Optimization: `optimizeImages()`**
+  - Lossless PNG re-compression at zlib level 9 with metadata stripping
+  - Lossless BMP-to-PNG conversion (typically 10-50x size reduction)
+  - Zero external dependencies (uses Node.js built-in `zlib`)
+  - Automatically updates ZIP entries, content types, and relationship targets
+  - New `src/images/ImageOptimizer.ts` module with `optimizePng()`, `convertBmpToPng()`, and `optimizeImage()` functions
+  - `ImageOptimizationResult` type exported from main index
+
+- **Run Property Change Tracking API**
+  - `Run.getPropertyChangeRevision()` / `setPropertyChangeRevision()` / `clearPropertyChangeRevision()` / `hasPropertyChangeRevision()`
+  - `DocumentTrackingContext.applyRunPrChange()` applies `w:rPrChange` to runs with pending formatting changes
+  - Automatic `rPrChange` creation when run formatting changes with tracking enabled
+  - Merge support for existing `rPrChange` (preserves original author/date, adds new previous properties)
+  - Per-property no-op detection (no false `rPrChange` when value is unchanged)
+
+- **Run Formatting Cleanup: `clearMatchingFormatting()`**
+  - Removes direct formatting properties that match a style definition, enabling style inheritance
+  - Preserves properties that differ from the style (direct overrides) and properties not in the style
+  - Enables future style definition changes to propagate automatically
+
+- **Paragraph: `clearSpacing()`**
+  - Removes the spacing object so the paragraph inherits spacing from its style
+  - Different from setting spacing to 0 (clear = "use style value", 0 = "no spacing")
+
+- **Normal/NormalWeb Style Linking in `applyStyles()`**
+  - `linkNormalWebToNormal` option (default: `true`) applies Normal style changes to NormalWeb paragraphs
+  - Paragraph mark run properties (`paragraphMarkRunProperties`) handling on NormalWeb
+  - Preservation flags: `preserveWhiteFont`, `preserveBold`, `preserveCenterAlignment`
+
+- **ImageManager: `updateEntryFilename()`**
+  - Updates filename for an image and all other entries sharing the same old filename
+  - Used when image format changes (e.g., BMP to PNG) require a new filename
+
+- **NumberingManager: `markAbstractNumberingModified()`**
+  - Marks an abstract numbering as modified for XML regeneration
+  - Use when modifying `NumberingLevel` properties directly which don't automatically trigger the modified flag
+
+- **TrackingContext: Revision Factory Methods**
+  - `createInsertion()` and `createDeletion()` on `TrackingContext` interface
+  - Eliminates circular dependency between `Run` and `Revision` modules
+
+### Changed
+
+- **`clearDirectFormattingConflicts()` Indentation Handling**
+  - Direct indentation is now cleared so style/numbering values take effect (consistent with other properties)
+  - Previously only cleared when indentation exactly matched the style; now always clears (except explicit `left: 0` overrides)
+
+- **`centerLargeImages()` Indentation Clearing**
+  - Now removes direct indentation before centering image paragraphs to prevent left-shifted alignment
+
+- **`applyStyles()` ListParagraph Hanging Indent Validation**
+  - Caps hanging indent to left indent when hanging exceeds left, preventing negative effective indent
+
+### Fixed
+
+- **Save State Rollback**: Post-processing flags (`flattenIncludePictureFields`, `stripOrphanRSIDs`, `clearDirectSpacingStyles`) are now restored on save failure, allowing retry without re-calling sanitization methods
+
+- **Circular Dependency in Run Tracked Changes**: `Run.setText()` no longer uses `require('./Revision')` for lazy loading; instead uses `TrackingContext.createInsertion()`/`createDeletion()` factory methods
+
+### Statistics
+
+- 128 test suites, 2,819 tests passing
+- 121 source files
+- 3 new test files, 67 new tests
+
+---
+
 ## [9.9.3] - 2026-02-19
 
 ### Added

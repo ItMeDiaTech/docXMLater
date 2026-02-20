@@ -3,7 +3,7 @@
  * Phase 5.2: All 9 content control types
  */
 
-import { describe, test, expect } from '@jest/globals';
+
 import { StructuredDocumentTag, ListItem } from '../../src/elements/StructuredDocumentTag';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Document } from '../../src/core/Document';

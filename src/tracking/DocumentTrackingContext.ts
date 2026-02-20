@@ -9,7 +9,7 @@
 
 import { Revision, RevisionType } from '../elements/Revision';
 import { RevisionManager } from '../elements/RevisionManager';
-import { Run } from '../elements/Run';
+import { Run, type RunFormatting } from '../elements/Run';
 import { Paragraph } from '../elements/Paragraph';
 import { Table } from '../elements/Table';
 import { TableRow } from '../elements/TableRow';
@@ -302,6 +302,7 @@ export class DocumentTrackingContext implements TrackingContext {
     const rowChanges = new Map<TableRow, PendingChange[]>();
     const cellChanges = new Map<TableCell, PendingChange[]>();
     const sectionChanges = new Map<Section, PendingChange[]>();
+    const runChanges = new Map<Run, PendingChange[]>();
 
     for (const [, pending] of this.pendingChanges) {
       const revision = this.createRevision(pending);
@@ -329,6 +330,10 @@ export class DocumentTrackingContext implements TrackingContext {
         const changes = sectionChanges.get(pending.element) || [];
         changes.push(pending);
         sectionChanges.set(pending.element, changes);
+      } else if (pending.type === 'runPropertiesChange' && pending.element instanceof Run) {
+        const changes = runChanges.get(pending.element) || [];
+        changes.push(pending);
+        runChanges.set(pending.element, changes);
       }
     }
 
@@ -389,6 +394,11 @@ export class DocumentTrackingContext implements TrackingContext {
       });
     }
 
+    // Apply rPrChange to each Run that has property changes
+    for (const [run, changes] of runChanges) {
+      this.applyRunPrChange(run, changes);
+    }
+
     this.pendingChanges.clear();
     return revisions;
   }
@@ -435,6 +445,44 @@ export class DocumentTrackingContext implements TrackingContext {
         id: String(revisionId),
         previousProperties: newPreviousProperties,
       };
+    }
+  }
+
+  /**
+   * Apply rPrChange to a run (mirrors applyParagraphPrChange for runs)
+   */
+  private applyRunPrChange(run: Run, changes: PendingChange[]): void {
+    const newPreviousProperties: Partial<RunFormatting> = {};
+    let latestTimestamp = 0;
+
+    for (const change of changes) {
+      (newPreviousProperties as Record<string, unknown>)[change.property] = change.previousValue;
+      if (change.timestamp > latestTimestamp) {
+        latestTimestamp = change.timestamp;
+      }
+    }
+
+    const existingChange = run.getPropertyChangeRevision();
+
+    if (existingChange) {
+      // Merge with existing rPrChange — preserve original author/date,
+      // add new previous properties
+      const mergedPreviousProperties: Partial<RunFormatting> = {
+        ...(existingChange.previousProperties || {}),
+        ...newPreviousProperties,
+      };
+      run.setPropertyChangeRevision({
+        ...existingChange,
+        previousProperties: mergedPreviousProperties,
+      });
+    } else {
+      const revisionId = this.revisionManager.consumeNextId();
+      run.setPropertyChangeRevision({
+        id: revisionId,
+        author: this.author,
+        date: new Date(latestTimestamp),
+        previousProperties: newPreviousProperties,
+      });
     }
   }
 
@@ -556,6 +604,20 @@ export class DocumentTrackingContext implements TrackingContext {
       return JSON.stringify(value);
     }
     return String(value);
+  }
+
+  /**
+   * Create an insertion revision (factory to avoid circular dependency in Run)
+   */
+  createInsertion(content: Run, date?: Date): Revision {
+    return Revision.createInsertion(this.author, content, date);
+  }
+
+  /**
+   * Create a deletion revision (factory to avoid circular dependency in Run)
+   */
+  createDeletion(content: Run, date?: Date): Revision {
+    return Revision.createDeletion(this.author, content, date);
   }
 
   /**

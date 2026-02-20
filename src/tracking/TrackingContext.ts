@@ -156,4 +156,18 @@ export interface TrackingContext {
    * @returns Array of created revisions
    */
   flushPendingChanges(): Revision[];
+
+  /**
+   * Create an insertion revision (factory to avoid circular dependency in Run)
+   * @param content - Run or array of content for the insertion
+   * @param date - Optional date for the revision
+   */
+  createInsertion(content: Run, date?: Date): Revision;
+
+  /**
+   * Create a deletion revision (factory to avoid circular dependency in Run)
+   * @param content - Run or array of content for the deletion
+   * @param date - Optional date for the revision
+   */
+  createDeletion(content: Run, date?: Date): Revision;
 }

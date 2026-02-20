@@ -1,9 +1,40 @@
 # Changelog
 
-All notable changes to DocXML will be documented in this file.
+All notable changes to docxmlater will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [10.0.0] - 2026-02-20
+
+### Added
+
+- **Document Sanitization: `clearDirectSpacingForStyles()`** - Removes direct `w:spacing` overrides from styled paragraphs so style spacing takes effect
+- **Image Optimization: `optimizeImages()`** - Lossless PNG re-compression and BMP-to-PNG conversion (zero dependencies)
+- **Run Property Change Tracking API** - `getPropertyChangeRevision()`, `setPropertyChangeRevision()`, `clearPropertyChangeRevision()`, `hasPropertyChangeRevision()`
+- **Run: `clearMatchingFormatting()`** - Removes formatting matching a style definition for style inheritance
+- **Paragraph: `clearSpacing()`** - Clears direct spacing for style inheritance
+- **Normal/NormalWeb Style Linking** in `applyStyles()` with preservation flags
+- **ImageManager: `updateEntryFilename()`** - Update image filenames after format conversion
+- **NumberingManager: `markAbstractNumberingModified()`** - Manual dirty flag for direct level modifications
+- **TrackingContext: `createInsertion()`/`createDeletion()`** - Factory methods eliminating circular dependencies
+
+### Changed
+
+- `clearDirectFormattingConflicts()` now clears direct indentation consistently (was conditional)
+- `centerLargeImages()` clears direct indentation before centering
+- `applyStyles()` caps ListParagraph hanging indent to left indent
+
+### Fixed
+
+- Save state rollback now restores post-processing flags on failure
+- Circular dependency in Run tracked changes resolved via TrackingContext factory methods
+
+### Statistics
+
+- 128 test suites, 2,819 tests passing
+
+---
 
 ## [9.9.3] - 2026-02-19
 

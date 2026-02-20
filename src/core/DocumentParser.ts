@@ -51,7 +51,7 @@ import type { ShadingConfig } from "../elements/CommonTypes";
 function getLogger(): ILogger {
   return createScopedLogger(getGlobalLogger(), 'DocumentParser');
 }
-import { XMLBuilder } from "../xml/XMLBuilder";
+import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
 import { XMLParser } from "../xml/XMLParser";
 import { ZipHandler } from "../zip/ZipHandler";
 import { DOCX_PATHS } from "../zip/types";
@@ -3582,6 +3582,27 @@ export class DocumentParser {
       }
     }
 
+    // Second pass: collect non-text result content (e.g., ImageRuns with drawings)
+    // These runs are in the result section (past separator) but don't contribute text.
+    // Their XML representation must be stored as resultContent so it survives round-trip.
+    const resultContentElements: XMLElement[] = [];
+    let pastSeparator = false;
+    for (const run of fieldRuns) {
+      const rc = run.getContent();
+      const fc = rc.find((c: any) => c.type === "fieldChar");
+      if (fc?.fieldCharType === "separate") { pastSeparator = true; continue; }
+      if (fc?.fieldCharType === "end") break;
+      if (fc) continue; // skip begin runs
+      if (rc.some((c: any) => c.type === "instructionText")) continue; // skip instrText runs
+      if (pastSeparator) {
+        // Check if this is a non-text result run (e.g., ImageRun with drawing content)
+        const hasNonEmptyText = rc.some((c: any) => c.type === "text" && c.value && c.value.length > 0);
+        if (!hasNonEmptyText && run instanceof ImageRun) {
+          resultContentElements.push(run.toXML());
+        }
+      }
+    }
+
     // Validate field structure with detailed diagnostics
     if (!hasBegin) {
       const instrPreview = instruction
@@ -3633,6 +3654,7 @@ export class DocumentParser {
     const properties: any = {
       instruction,
       result: resultText,
+      resultContent: resultContentElements.length > 0 ? resultContentElements : undefined,
       instructionFormatting,
       resultFormatting,
       multiParagraph: false, // Default - can be set later if needed

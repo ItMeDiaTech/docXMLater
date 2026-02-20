@@ -9,7 +9,7 @@
  * and attach them to the NEXT parsed element (mirroring bookmarkEnd → PREVIOUS).
  */
 
-import { describe, it, expect } from '@jest/globals';
+
 import { Document } from '../../src/core/Document';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 

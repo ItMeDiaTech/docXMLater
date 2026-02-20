@@ -911,7 +911,7 @@ export class Image {
     this.source = newSource;
     this.imageData = undefined;
     await this.loadImageDataForDimensions();
-    if (typeof newSource === 'string') this.extension = this.detectExtension();
+    this.extension = this.detectExtension();
     this.dpi = this.detectDPI() || 96;
   }
 

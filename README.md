@@ -71,6 +71,9 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - Page orientation, size, and margins
 - Preserved element round-trip (math equations, alternate content, custom XML)
 - Unified shading model with theme color support and inheritance resolution
+- Lossless image optimization (PNG re-compression, BMP-to-PNG conversion)
+- Run property change tracking (w:rPrChange) with direct API access
+- Normal/NormalWeb style linking with preservation flags
 
 ### Developer Tools
 
@@ -370,6 +373,11 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 
 - `flattenFieldCodes()` - Strip INCLUDEPICTURE field markup, preserving embedded images
 - `stripOrphanRSIDs()` - Remove orphan RSIDs from settings.xml
+- `clearDirectSpacingForStyles(styleIds)` - Remove direct spacing overrides from styled paragraphs
+
+**Image Optimization:**
+
+- `optimizeImages()` - Lossless PNG re-compression and BMP-to-PNG conversion (zero dependencies)
 
 **Saving:**
 
@@ -400,6 +408,7 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `setKeepNext(value)` - Keep with next paragraph
 - `setKeepLines(value)` - Keep lines together
 - `setPageBreakBefore(value)` - Page break before
+- `clearSpacing()` - Remove direct spacing (inherit from style)
 
 **Numbering:**
 
@@ -429,6 +438,9 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `setSuperscript(value)` - Superscript
 - `setSmallCaps(value)` - Small capitals
 - `setAllCaps(value)` - All capitals
+- `clearMatchingFormatting(styleFormatting)` - Remove formatting matching a style (for inheritance)
+- `getPropertyChangeRevision()` - Get run property change revision (w:rPrChange)
+- `setPropertyChangeRevision(propChange)` - Set run property change revision
 
 ### Table Class
 
@@ -593,7 +605,7 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 9.9.3**
+**Current Version: 10.0.0**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
@@ -601,7 +613,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 The framework includes comprehensive test coverage:
 
-- **2,752 test cases** across 124 test suites
+- **2,819 test cases** across 128 test suites
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks

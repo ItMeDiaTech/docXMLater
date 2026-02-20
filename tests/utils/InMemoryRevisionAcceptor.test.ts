@@ -22,6 +22,7 @@ import {
   countRevisionsByType,
   stripRevisionsFromXml,
 } from '../../src/utils/InMemoryRevisionAcceptor';
+import { Hyperlink } from '../../src/elements/Hyperlink';
 import { isImageRunContent, isRunContent } from '../../src/elements/RevisionContent';
 
 describe('InMemoryRevisionAcceptor', () => {
@@ -818,7 +819,6 @@ describe('InMemoryRevisionAcceptor', () => {
       const para = doc.createParagraph();
 
       // Create a hyperlink with proper properties object
-      const { Hyperlink } = require('../../src/elements/Hyperlink');
       const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Example Link' });
 
       // Add insertion revision containing a hyperlink
@@ -856,7 +856,6 @@ describe('InMemoryRevisionAcceptor', () => {
       para.addRun(new Run('Keep this. '));
 
       // Create a hyperlink for deletion with proper properties object
-      const { Hyperlink } = require('../../src/elements/Hyperlink');
       const hyperlink = new Hyperlink({ url: 'https://delete-me.com', text: 'Delete Link' });
 
       // Add deletion revision containing the hyperlink
@@ -879,7 +878,6 @@ describe('InMemoryRevisionAcceptor', () => {
 
       // Create mixed content with proper properties object
       const run1 = new Run('Before link. ');
-      const { Hyperlink } = require('../../src/elements/Hyperlink');
       const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
       const run2 = new Run(' After link.');
 
