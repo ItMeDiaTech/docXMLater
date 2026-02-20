@@ -290,13 +290,9 @@ export class CleanupHelper {
     }
 
   private cleanupRelationships(): number {
-    // Collect referenced IDs
-    const referencedIds = new Set<string>();
-    const hyperlinks = this.doc.getHyperlinks();
-    for (const { hyperlink } of hyperlinks) {
-      const relId = hyperlink.getRelationshipId();
-      if (relId) referencedIds.add(relId);
-    }
+    // Use comprehensive scanning that includes raw nested content (nested tables),
+    // headers/footers, footnotes, and endnotes — not just in-memory hyperlinks
+    const referencedIds = this.doc.collectAllReferencedHyperlinkIds();
 
     // Remove orphaned hyperlink relationships
     return this.doc.getRelationshipManager().removeOrphanedHyperlinks(referencedIds);

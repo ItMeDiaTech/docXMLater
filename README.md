@@ -338,6 +338,7 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `getHyperlinks()` - Get all hyperlinks
 - `updateHyperlinkUrls(oldUrl, newUrl)` - Batch URL update
 - `defragmentHyperlinks(options?)` - Fix fragmented links
+- `collectAllReferencedHyperlinkIds()` - Comprehensive scan of all hyperlink relationship IDs (includes nested tables, headers/footers, footnotes/endnotes)
 
 **Statistics:**
 
@@ -605,7 +606,7 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 10.0.0**
+**Current Version: 10.0.2**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
@@ -613,7 +614,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 The framework includes comprehensive test coverage:
 
-- **2,819 test cases** across 128 test suites
+- **2,825 test cases** across 129 test suites
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks

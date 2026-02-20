@@ -475,7 +475,9 @@ ${properties}
   private clearOrphanedHyperlinkRelationships(
     bodyElements: BodyElement[],
     headerFooterManager: HeaderFooterManager,
-    relationshipManager: RelationshipManager
+    relationshipManager: RelationshipManager,
+    footnoteManager?: FootnoteManager,
+    endnoteManager?: EndnoteManager
   ): void {
     // Step 1: Collect all relationship IDs currently used by hyperlinks
     const usedRelIds = new Set<string>();
@@ -524,6 +526,15 @@ ${properties}
               for (const para of paragraphs) {
                 scanParagraph(para);
               }
+              // Scan raw nested content (nested tables, SDTs stored as raw XML)
+              // Extract any relationship IDs referenced in the raw XML to prevent orphan removal
+              for (const nested of cell.getRawNestedContent()) {
+                const rIdPattern = /r:id="(rId\d+)"/g;
+                let rIdMatch: RegExpExecArray | null;
+                while ((rIdMatch = rIdPattern.exec(nested.xml)) !== null) {
+                  usedRelIds.add(rIdMatch[1]!);
+                }
+              }
             }
           }
         }
@@ -559,6 +570,24 @@ ${properties}
       }
     }
 
+    // Scan footnotes for hyperlink relationship IDs
+    if (footnoteManager) {
+      for (const footnote of footnoteManager.getAllFootnotes()) {
+        for (const para of footnote.getParagraphs()) {
+          scanParagraph(para);
+        }
+      }
+    }
+
+    // Scan endnotes for hyperlink relationship IDs
+    if (endnoteManager) {
+      for (const endnote of endnoteManager.getAllEndnotes()) {
+        for (const para of endnote.getParagraphs()) {
+          scanParagraph(para);
+        }
+      }
+    }
+
     // Step 2: Remove ONLY orphaned relationships (not used by any hyperlink)
     const allHyperlinkRels = relationshipManager.getRelationshipsByType(
       "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
@@ -589,7 +618,9 @@ ${properties}
   processHyperlinks(
     bodyElements: BodyElement[],
     headerFooterManager: HeaderFooterManager,
-    relationshipManager: RelationshipManager
+    relationshipManager: RelationshipManager,
+    footnoteManager?: FootnoteManager,
+    endnoteManager?: EndnoteManager
   ): void {
     const logger = getLogger();
     logger.info('Processing hyperlinks');
@@ -600,7 +631,9 @@ ${properties}
     this.clearOrphanedHyperlinkRelationships(
       bodyElements,
       headerFooterManager,
-      relationshipManager
+      relationshipManager,
+      footnoteManager,
+      endnoteManager
     );
 
     // Helper to recursively process any element type for hyperlinks
@@ -652,6 +685,24 @@ ${properties}
     for (const footer of footers) {
       for (const element of footer.footer.getElements()) {
         processElement(element);
+      }
+    }
+
+    // Process footnotes for hyperlinks that need relationship registration
+    if (footnoteManager) {
+      for (const footnote of footnoteManager.getAllFootnotes()) {
+        for (const para of footnote.getParagraphs()) {
+          this.processHyperlinksInParagraph(para, relationshipManager);
+        }
+      }
+    }
+
+    // Process endnotes for hyperlinks that need relationship registration
+    if (endnoteManager) {
+      for (const endnote of endnoteManager.getAllEndnotes()) {
+        for (const para of endnote.getParagraphs()) {
+          this.processHyperlinksInParagraph(para, relationshipManager);
+        }
       }
     }
 

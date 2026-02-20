@@ -5,6 +5,28 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.2] - 2026-02-20
+
+### Fixed
+
+- **Hyperlink Relationship Corruption in Nested Tables**: Fixed a bug where hyperlinks in nested tables (stored as `rawNestedContent`) had their relationship IDs incorrectly removed during pre-save cleanup, causing Word "unreadable content" errors
+  - `CleanupHelper.cleanupRelationships()` now uses comprehensive scanning instead of only checking in-memory hyperlinks
+  - `Document.defragmentHyperlinks()` cleanup now scans raw nested content, headers/footers, footnotes, and endnotes
+  - `DocumentGenerator.clearOrphanedHyperlinkRelationships()` extended to scan footnotes, endnotes, and raw nested content in table cells
+  - `DocumentGenerator.processHyperlinks()` extended to register hyperlinks in footnotes and endnotes
+
+### Added
+
+- **`Document.collectAllReferencedHyperlinkIds()`**: Comprehensive scan of all hyperlink relationship IDs across the entire document (body, nested tables, headers/footers, footnotes/endnotes, SDTs, revisions). Used internally by cleanup paths to prevent incorrect orphan removal.
+
+### Statistics
+
+- 129 test suites, 2,825 tests passing
+- 120 source files
+- 1 new test file, 6 new tests
+
+---
+
 ## [10.0.0] - 2026-02-20
 
 ### Added

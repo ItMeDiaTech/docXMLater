@@ -9274,7 +9274,9 @@ export class Document {
     this.generator.processHyperlinks(
       this.bodyElements,
       this.headerFooterManager,
-      this.relationshipManager
+      this.relationshipManager,
+      this.footnoteManager,
+      this.endnoteManager
     );
   }
 
@@ -14097,6 +14099,95 @@ export class Document {
   }
 
   /**
+   * Collects ALL hyperlink relationship IDs referenced anywhere in the document,
+   * including raw nested content (nested tables stored as raw XML), headers/footers,
+   * footnotes, and endnotes. This is the comprehensive version of getHyperlinks()
+   * for relationship cleanup purposes.
+   */
+  collectAllReferencedHyperlinkIds(): Set<string> {
+    const ids = new Set<string>();
+
+    const scanParagraph = (para: Paragraph): void => {
+      for (const item of para.getContent()) {
+        if (item instanceof Hyperlink) {
+          const relId = item.getRelationshipId();
+          if (relId) ids.add(relId);
+        }
+        if (item instanceof Revision) {
+          for (const revContent of item.getContent()) {
+            if (revContent instanceof Hyperlink) {
+              const relId = revContent.getRelationshipId();
+              if (relId) ids.add(relId);
+            }
+          }
+        }
+      }
+    };
+
+    const scanElement = (element: BodyElement | Paragraph | Table | StructuredDocumentTag): void => {
+      if (element instanceof Paragraph) {
+        scanParagraph(element);
+      } else if (element instanceof Table) {
+        for (let row = 0; row < element.getRowCount(); row++) {
+          for (let col = 0; col < element.getColumnCount(); col++) {
+            const cell = element.getCell(row, col);
+            if (cell) {
+              for (const para of cell.getParagraphs()) {
+                scanParagraph(para);
+              }
+              // Scan raw nested content (nested tables/SDTs stored as raw XML)
+              for (const nested of cell.getRawNestedContent()) {
+                const rIdPattern = /r:id="(rId\d+)"/g;
+                let rIdMatch: RegExpExecArray | null;
+                while ((rIdMatch = rIdPattern.exec(nested.xml)) !== null) {
+                  ids.add(rIdMatch[1]!);
+                }
+              }
+            }
+          }
+        }
+      } else if (element instanceof StructuredDocumentTag) {
+        for (const item of element.getContent()) {
+          scanElement(item);
+        }
+      }
+    };
+
+    // Body elements
+    for (const element of this.bodyElements) {
+      scanElement(element);
+    }
+
+    // Headers and footers
+    for (const header of this.headerFooterManager.getAllHeaders()) {
+      for (const el of header.header.getElements()) {
+        scanElement(el);
+      }
+    }
+    for (const footer of this.headerFooterManager.getAllFooters()) {
+      for (const el of footer.footer.getElements()) {
+        scanElement(el);
+      }
+    }
+
+    // Footnotes
+    for (const fn of this.footnoteManager.getAllFootnotes()) {
+      for (const para of fn.getParagraphs()) {
+        scanParagraph(para);
+      }
+    }
+
+    // Endnotes
+    for (const en of this.endnoteManager.getAllEndnotes()) {
+      for (const para of en.getParagraphs()) {
+        scanParagraph(para);
+      }
+    }
+
+    return ids;
+  }
+
+  /**
    * Defragments and optimizes hyperlinks in the document
    * This merges fragmented hyperlinks with the same URL (common in Google Docs exports)
    * and optionally resets their formatting to standard style
@@ -14177,17 +14268,8 @@ export class Document {
 
     // Optionally clean up orphaned relationships
     if (cleanupRelationships && mergedCount > 0) {
-      // Collect all referenced hyperlink relationship IDs
-      const referencedIds = new Set<string>();
-
-      // Collect IDs from all hyperlinks in the document
-      const allHyperlinks = this.getHyperlinks();
-      for (const { hyperlink } of allHyperlinks) {
-        const relId = hyperlink.getRelationshipId();
-        if (relId) {
-          referencedIds.add(relId);
-        }
-      }
+      // Use comprehensive scanning that includes raw nested content
+      const referencedIds = this.collectAllReferencedHyperlinkIds();
 
       // Remove orphaned hyperlink relationships
       const removedCount =
