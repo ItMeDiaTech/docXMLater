@@ -343,16 +343,47 @@ export class DocumentTrackingContext implements TrackingContext {
     }
 
     // Apply tblPrChange to each Table
+    // Per ECMA-376 §17.13.5.36, tblPrChange must contain FULL previous tblPr,
+    // not just the delta of changed properties.
     for (const [table, changes] of tableChanges) {
-      this.applyElementPrChange(changes, (prevProps, getNextId, date) => {
-        const existing = table.getTblPrChange();
-        if (existing) {
-          const merged = { ...(existing.previousProperties || {}), ...prevProps };
-          table.setTblPrChange({ ...existing, previousProperties: merged });
-        } else {
-          table.setTblPrChange({ author: this.author, date, id: String(getNextId()), previousProperties: prevProps });
+      // Build full snapshot: start from current formatting, roll back changed properties
+      const currentFormatting = table.getFormatting();
+      const fullPrevProps: Record<string, unknown> = {};
+
+      for (const [key, value] of Object.entries(currentFormatting)) {
+        if (value !== undefined) {
+          fullPrevProps[key] = value;
         }
-      });
+      }
+
+      // Roll back changed properties to their previous values
+      let latestTimestamp = 0;
+      for (const change of changes) {
+        if (change.previousValue !== undefined) {
+          fullPrevProps[change.property] = change.previousValue;
+        } else {
+          delete fullPrevProps[change.property];
+        }
+        if (change.timestamp > latestTimestamp) {
+          latestTimestamp = change.timestamp;
+        }
+      }
+
+      const date = formatDateForXml(new Date(latestTimestamp));
+
+      const existing = table.getTblPrChange();
+      if (existing) {
+        // Merge: existing previous state takes precedence (it's the ORIGINAL baseline)
+        const merged = { ...fullPrevProps, ...(existing.previousProperties || {}) };
+        table.setTblPrChange({ ...existing, previousProperties: merged });
+      } else {
+        table.setTblPrChange({
+          author: this.author,
+          date,
+          id: String(this.revisionManager.consumeNextId()),
+          previousProperties: fullPrevProps,
+        });
+      }
     }
 
     // Apply trPrChange to each TableRow

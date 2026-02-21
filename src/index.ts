@@ -103,7 +103,7 @@ export {
   isHyperlinkInstruction,
   ParsedHyperlinkInstruction,
 } from './elements/FieldHelpers';
-export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent } from './elements/StructuredDocumentTag';
+export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent, SDTPlaceholder, SDTDataBinding, ContentControlType } from './elements/StructuredDocumentTag';
 export { TableOfContents, TOCProperties } from './elements/TableOfContents';
 export { TableOfContentsElement } from './elements/TableOfContentsElement';
 export { AlternateContent } from './elements/AlternateContent';
@@ -181,7 +181,7 @@ export {
 // =============================================================================
 
 export { Style, StyleType, StyleProperties } from './formatting/Style';
-export { StylesManager, ValidationResult } from './formatting/StylesManager';
+export { StylesManager, ValidationResult, LatentStylesConfig, LatentStyleException } from './formatting/StylesManager';
 export {
   NumberingLevel,
   NumberFormat,

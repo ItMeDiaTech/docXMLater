@@ -46,6 +46,10 @@ export interface CellBorders {
   bottom?: CellBorder;
   left?: CellBorder;
   right?: CellBorder;
+  /** Diagonal border from top-left to bottom-right per ECMA-376 Part 1 §17.4.84 */
+  tl2br?: CellBorder;
+  /** Diagonal border from top-right to bottom-left per ECMA-376 Part 1 §17.4.85 */
+  tr2bl?: CellBorder;
 }
 
 /**
@@ -102,6 +106,8 @@ export interface CellFormatting {
   cnfStyle?: string; // Conditional formatting style (14-char binary string)
   vMerge?: VerticalMerge; // Vertical cell merge
   hMerge?: 'restart' | 'continue'; // Legacy horizontal merge (w:hMerge) per ECMA-376 Part 1 §17.4.22
+  /** Cell headers attribute for accessibility per ECMA-376 Part 1 §17.4.26 */
+  headers?: string;
 }
 
 /**
@@ -948,6 +954,25 @@ export class TableCell {
   }
 
   /**
+   * Sets the cell headers attribute for accessibility
+   * Links data cells to header cells per ECMA-376 Part 1 §17.4.26
+   * @param headers - Space-separated list of header cell IDs
+   * @returns This cell for chaining
+   */
+  setHeaders(headers: string): this {
+    this.formatting.headers = headers;
+    return this;
+  }
+
+  /**
+   * Gets the cell headers attribute
+   * @returns Headers string or undefined
+   */
+  getHeaders(): string | undefined {
+    return this.formatting.headers;
+  }
+
+  /**
    * Gets the cell margins
    * @returns Margins object with top, right, bottom, left or undefined
    */
@@ -1306,7 +1331,7 @@ export class TableCell {
       const borderElements: XMLElement[] = [];
       const borders = this.formatting.borders;
 
-      // Ordered per ECMA-376 CT_TcBorders: top, left, bottom, right
+      // Ordered per ECMA-376 CT_TcBorders: top, left, bottom, right, insideH, insideV, tl2br, tr2bl
       if (borders.top) {
         borderElements.push(XMLBuilder.createBorder("top", borders.top));
       }
@@ -1318,6 +1343,12 @@ export class TableCell {
       }
       if (borders.right) {
         borderElements.push(XMLBuilder.createBorder("right", borders.right));
+      }
+      if (borders.tl2br) {
+        borderElements.push(XMLBuilder.createBorder("tl2br", borders.tl2br));
+      }
+      if (borders.tr2bl) {
+        borderElements.push(XMLBuilder.createBorder("tr2bl", borders.tr2bl));
       }
 
       if (borderElements.length > 0) {
@@ -1408,6 +1439,10 @@ export class TableCell {
     if (this.formatting.hideMark) {
       tcPrChildren.push(XMLBuilder.wSelf("hideMark"));
     }
+
+    // Note: w:headers (cell headers for accessibility) is defined in ECMA-376 Part 1 §17.4.26
+    // but is NOT included in the Transitional schema and fails OOXML validation.
+    // The property is preserved in memory for reading but not generated in XML.
 
     // Add cell revision markers (w:cellIns, w:cellDel, w:cellMerge) per ECMA-376 Part 1 §17.13.5.4-5.6
     if (this.cellRevision) {

@@ -111,13 +111,16 @@ export interface NumberingLevelProperties {
    * - undefined (default): Restart when level-1 changes (standard behavior)
    */
   lvlRestart?: number;
+
+  /** Paragraph style ID linked to this numbering level (w:pStyle per ECMA-376 §17.9.23) */
+  pStyle?: string;
 }
 
 /**
  * Represents a single level in a numbering definition
  */
 export class NumberingLevel {
-  private properties: Required<Omit<NumberingLevelProperties, 'lvlRestart' | 'underline'>> & Pick<NumberingLevelProperties, 'lvlRestart' | 'underline'>;
+  private properties: Required<Omit<NumberingLevelProperties, 'lvlRestart' | 'underline' | 'pStyle'>> & Pick<NumberingLevelProperties, 'lvlRestart' | 'underline' | 'pStyle'>;
 
   /**
    * Creates a new numbering level
@@ -149,6 +152,7 @@ export class NumberingLevel {
       italic: properties.italic !== undefined ? properties.italic : false,
       underline: properties.underline,
       lvlRestart: properties.lvlRestart, // undefined means default behavior (restart on level-1 change)
+      pStyle: properties.pStyle,
     };
 
     this.validate();
@@ -247,7 +251,7 @@ export class NumberingLevel {
   /**
    * Gets the level properties
    */
-  getProperties(): Required<Omit<NumberingLevelProperties, 'lvlRestart' | 'underline'>> & Pick<NumberingLevelProperties, 'lvlRestart' | 'underline'> {
+  getProperties(): Required<Omit<NumberingLevelProperties, 'lvlRestart' | 'underline' | 'pStyle'>> & Pick<NumberingLevelProperties, 'lvlRestart' | 'underline' | 'pStyle'> {
     return { ...this.properties };
   }
 
@@ -400,6 +404,23 @@ export class NumberingLevel {
   }
 
   /**
+   * Sets the paragraph style ID linked to this numbering level
+   * Links this level to a paragraph style definition (w:pStyle per ECMA-376 §17.9.23)
+   * @param styleId The paragraph style ID
+   */
+  setParagraphStyle(styleId: string): this {
+    this.properties.pStyle = styleId;
+    return this;
+  }
+
+  /**
+   * Gets the paragraph style ID linked to this numbering level
+   */
+  getParagraphStyle(): string | undefined {
+    return this.properties.pStyle;
+  }
+
+  /**
    * Sets the numbering format (decimal, lowerLetter, bullet, etc.)
    * @param format The numbering format
    */
@@ -447,7 +468,12 @@ export class NumberingLevel {
       );
     }
 
-    // 4. pStyle — not modeled, skipped
+    // 4. pStyle (paragraph style link)
+    if (this.properties.pStyle) {
+      children.push(
+        XMLBuilder.wSelf("pStyle", { "w:val": this.properties.pStyle })
+      );
+    }
 
     // 5. Legal numbering style
     if (this.properties.isLegalNumberingStyle) {
@@ -945,6 +971,13 @@ export class NumberingLevel {
       lvlRestart = parseInt(lvlRestartMatch[1], 10);
     }
 
+    // Extract pStyle (paragraph style link)
+    let pStyle: string | undefined;
+    const pStyleMatch = /<w:pStyle[^>]*w:val="([^"]+)"/.exec(xml);
+    if (pStyleMatch?.[1]) {
+      pStyle = pStyleMatch[1];
+    }
+
     // Extract indentation from <w:pPr><w:ind>
     let leftIndent = 720 + level * 360; // default
     let hangingIndent = 360; // default
@@ -1001,6 +1034,7 @@ export class NumberingLevel {
       underline,
       color,
       lvlRestart,
+      pStyle,
     });
   }
 }

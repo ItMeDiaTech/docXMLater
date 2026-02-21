@@ -238,6 +238,76 @@ export class SelectiveRevisionAcceptor {
 
     // Replace paragraph content with the transformed content
     paragraph.setContent(newContent);
+
+    // Handle paragraph mark revision markers (w:del/w:ins in w:pPr/w:rPr)
+    // Both accept and reject clear the marker — these are metadata-only markers (no content),
+    // so there is no content to add or remove, only the marker itself to clear.
+    const formatting = paragraph.getFormatting();
+    if (formatting.paragraphMarkDeletion) {
+      const del = formatting.paragraphMarkDeletion;
+      if (this.matchesMarkerCriteria(del, criteria)) {
+        paragraph.clearParagraphMarkDeletion();
+        processedIds.push(del.id.toString());
+      } else {
+        remainingIds.push(del.id.toString());
+      }
+    }
+    if (formatting.paragraphMarkInsertion) {
+      const ins = formatting.paragraphMarkInsertion;
+      if (this.matchesMarkerCriteria(ins, criteria)) {
+        paragraph.clearParagraphMarkInsertion();
+        processedIds.push(ins.id.toString());
+      } else {
+        remainingIds.push(ins.id.toString());
+      }
+    }
+  }
+
+  /**
+   * Check if a paragraph mark revision marker matches the given criteria.
+   * Simplified version of matchesCriteria for non-Revision marker objects.
+   */
+  private static matchesMarkerCriteria(
+    marker: { id: number; author: string; date: Date },
+    criteria: SelectionCriteria
+  ): boolean {
+    // If no criteria specified, match nothing
+    if (
+      !criteria.ids &&
+      !criteria.types &&
+      !criteria.authors &&
+      !criteria.dateRange &&
+      !criteria.categories &&
+      !criteria.custom
+    ) {
+      return false;
+    }
+
+    // Filter by IDs
+    if (criteria.ids && !criteria.ids.includes(marker.id)) {
+      return false;
+    }
+
+    // Filter by authors
+    if (criteria.authors && !criteria.authors.includes(marker.author)) {
+      return false;
+    }
+
+    // Filter by date range
+    if (criteria.dateRange) {
+      if (marker.date < criteria.dateRange.start || marker.date > criteria.dateRange.end) {
+        return false;
+      }
+    }
+
+    // types, categories, and custom filters don't apply to paragraph mark markers
+    // (they are not Revision objects with a type/category)
+    // If criteria only specifies types/categories/custom, markers won't match
+    if (criteria.types || criteria.categories || criteria.custom) {
+      return false;
+    }
+
+    return true;
   }
 
   /**

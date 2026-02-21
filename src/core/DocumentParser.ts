@@ -2170,11 +2170,44 @@ export class DocumentParser {
     // Paragraph mark run properties (w:rPr within w:pPr) per ECMA-376 Part 1 §17.3.1.29
     // This controls formatting of the paragraph mark (¶ symbol) itself
     if (pPrObj["w:rPr"]) {
+      const rPrObj = pPrObj["w:rPr"];
       // Create a temporary Run to use the existing parseRunPropertiesFromObject method
       const tempRun = new Run("");
-      this.parseRunPropertiesFromObject(pPrObj["w:rPr"], tempRun);
+      this.parseRunPropertiesFromObject(rPrObj, tempRun);
       // Extract the formatting and set it as paragraph mark properties
       paragraph.setParagraphMarkFormatting(tempRun.getFormatting());
+
+      // Parse paragraph mark deletion tracking (w:del in w:pPr/w:rPr)
+      // Per ECMA-376 Part 1 §17.13.5.14 - indicates the paragraph mark was deleted
+      if (rPrObj["w:del"]) {
+        // Handle array case (malformed XML with duplicate w:del elements)
+        const rawDel = rPrObj["w:del"];
+        const delObj = Array.isArray(rawDel) ? rawDel[0] : rawDel;
+        if (delObj && typeof delObj === "object") {
+          const id = parseInt(delObj["@_w:id"] || "0", 10) || 0;
+          const author = String(delObj["@_w:author"] ?? "");
+          const dateStr = delObj["@_w:date"];
+          const parsedDate = dateStr ? new Date(String(dateStr)) : new Date();
+          const date = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+          paragraph.markParagraphMarkAsDeleted(id, author, date);
+        }
+      }
+
+      // Parse paragraph mark insertion tracking (w:ins in w:pPr/w:rPr)
+      // Per ECMA-376 Part 1 §17.13.5.18 - indicates the paragraph mark was inserted
+      if (rPrObj["w:ins"]) {
+        // Handle array case (malformed XML with duplicate w:ins elements)
+        const rawIns = rPrObj["w:ins"];
+        const insObj = Array.isArray(rawIns) ? rawIns[0] : rawIns;
+        if (insObj && typeof insObj === "object") {
+          const id = parseInt(insObj["@_w:id"] || "0", 10) || 0;
+          const author = String(insObj["@_w:author"] ?? "");
+          const dateStr = insObj["@_w:date"];
+          const parsedDate = dateStr ? new Date(String(dateStr)) : new Date();
+          const date = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+          paragraph.markParagraphMarkAsInserted(id, author, date);
+        }
+      }
     }
 
     // Alignment
@@ -4319,6 +4352,7 @@ export class DocumentParser {
       const tooltip = hyperlinkObj["@_w:tooltip"];
       const tgtFrame = hyperlinkObj["@_w:tgtFrame"];
       const history = hyperlinkObj["@_w:history"];
+      const docLocation = hyperlinkObj["@_w:docLocation"];
 
       // Parse runs inside the hyperlink
       const runs = hyperlinkObj["w:r"];
@@ -4437,6 +4471,7 @@ export class DocumentParser {
         relationshipId: finalRelationshipId,
         tgtFrame,
         history,
+        docLocation,
       });
 
       // If we successfully parsed a run with tabs/breaks, use it instead of the default run
@@ -4739,6 +4774,9 @@ export class DocumentParser {
     if (parseOoxmlBoolean(rPrObj["w:i"])) run.setItalic(true);
     if (parseOoxmlBoolean(rPrObj["w:iCs"])) run.setComplexScriptItalic(true);
     if (parseOoxmlBoolean(rPrObj["w:strike"])) run.setStrike(true);
+    if (parseOoxmlBoolean(rPrObj["w:dstrike"])) {
+      (run as any).formatting.dstrike = true;
+    }
     if (parseOoxmlBoolean(rPrObj["w:smallCaps"])) run.setSmallCaps(true);
     if (parseOoxmlBoolean(rPrObj["w:caps"])) run.setAllCaps(true);
 
@@ -6346,6 +6384,14 @@ export class DocumentParser {
       }
     }
 
+    // Parse divId (w:divId) per ECMA-376 Part 1 §17.4.9
+    if (trPrObj["w:divId"]) {
+      const val = parseInt(trPrObj["w:divId"]["@_w:val"] || "0", 10);
+      if (val > 0) {
+        row.setDivId(val);
+      }
+    }
+
     // Parse table row property change (w:trPrChange) per ECMA-376 Part 1 §17.13.5.38
     if (trPrObj["w:trPrChange"]) {
       const changeObj = trPrObj["w:trPrChange"];
@@ -6498,6 +6544,10 @@ export class DocumentParser {
             borders.left = this.parseBorderElement(bordersObj["w:left"]);
           if (bordersObj["w:right"])
             borders.right = this.parseBorderElement(bordersObj["w:right"]);
+          if (bordersObj["w:tl2br"])
+            borders.tl2br = this.parseBorderElement(bordersObj["w:tl2br"]);
+          if (bordersObj["w:tr2bl"])
+            borders.tr2bl = this.parseBorderElement(bordersObj["w:tr2bl"]);
 
           if (Object.keys(borders).length > 0) {
             cell.setBorders(borders);
@@ -6570,6 +6620,14 @@ export class DocumentParser {
         // Parse hide mark (w:hideMark) per ECMA-376 Part 1 §17.4.24
         if (tcPr["w:hideMark"]) {
           cell.setHideMark(true);
+        }
+
+        // Parse headers (w:headers) per ECMA-376 Part 1 §17.4.26
+        if (tcPr["w:headers"]) {
+          const headersVal = tcPr["w:headers"]["@_w:val"];
+          if (headersVal) {
+            cell.setHeaders(headersVal);
+          }
         }
 
         // Parse fit text (w:tcFitText) per ECMA-376 Part 1 §17.4.68
@@ -7002,6 +7060,46 @@ export class DocumentParser {
           };
         } else if (sdtPr["w:group"]) {
           properties.controlType = "group";
+        } else if (sdtPr["w:citation"]) {
+          properties.controlType = "citation";
+        } else if (sdtPr["w:bibliography"]) {
+          properties.controlType = "bibliography";
+        } else if (sdtPr["w:equation"]) {
+          properties.controlType = "equation";
+        } else if (sdtPr["w:docPartList"]) {
+          properties.controlType = "docPartList";
+          const docPartList = sdtPr["w:docPartList"];
+          properties.buildingBlock = {
+            gallery: docPartList?.["w:docPartGallery"]?.["@_w:val"],
+            category: docPartList?.["w:docPartCategory"]?.["@_w:val"],
+            isList: true,
+          };
+        }
+
+        // Parse placeholder (w:placeholder/w:docPart)
+        const placeholderElement = sdtPr["w:placeholder"];
+        if (placeholderElement) {
+          const docPartVal = placeholderElement?.["w:docPart"]?.["@_w:val"];
+          if (docPartVal) {
+            properties.placeholder = { docPart: docPartVal };
+          }
+        }
+
+        // Parse data binding (w:dataBinding)
+        const dataBindingElement = sdtPr["w:dataBinding"];
+        if (dataBindingElement) {
+          properties.dataBinding = {
+            xpath: dataBindingElement["@_w:xpath"] || "",
+            prefixMappings: dataBindingElement["@_w:prefixMappings"],
+            storeItemId: dataBindingElement["@_w:storeItemID"],
+          };
+        }
+
+        // Parse showing placeholder flag (w:showingPlcHdr)
+        const showingPlcHdr = sdtPr["w:showingPlcHdr"];
+        if (showingPlcHdr) {
+          const val = showingPlcHdr["@_w:val"];
+          properties.showingPlcHdr = val === "1" || val === "true" || val === true;
         }
       }
 
@@ -8569,6 +8667,14 @@ export class DocumentParser {
     const personal =
       styleXml.includes("<w:personal/>") || styleXml.includes("<w:personal ");
 
+    // personalCompose - Style for composing new messages
+    const personalCompose =
+      styleXml.includes("<w:personalCompose/>") || styleXml.includes("<w:personalCompose ");
+
+    // personalReply - Style for replying to messages
+    const personalReply =
+      styleXml.includes("<w:personalReply/>") || styleXml.includes("<w:personalReply ");
+
     // autoRedefine - Update style from formatting
     const autoRedefine =
       styleXml.includes("<w:autoRedefine/>") ||
@@ -8640,6 +8746,8 @@ export class DocumentParser {
       unhideWhenUsed: unhideWhenUsed || undefined,
       locked: locked || undefined,
       personal: personal || undefined,
+      personalCompose: personalCompose || undefined,
+      personalReply: personalReply || undefined,
       autoRedefine: autoRedefine || undefined,
       uiPriority,
       link,
@@ -10013,7 +10121,7 @@ export class DocumentParser {
     if (propsObj["w:tcBorders"]) {
       const borders: any = {};
       const bordersObj = propsObj["w:tcBorders"];
-      for (const side of ['top', 'bottom', 'left', 'right']) {
+      for (const side of ['top', 'bottom', 'left', 'right', 'tl2br', 'tr2bl']) {
         if (bordersObj[`w:${side}`]) {
           borders[side] = this.parseBorderElement(bordersObj[`w:${side}`]);
         }

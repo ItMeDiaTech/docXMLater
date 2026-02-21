@@ -7,6 +7,7 @@
  */
 
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { NumberingLevel } from './NumberingLevel';
 
 /**
  * Properties for creating a numbering instance
@@ -29,6 +30,7 @@ export class NumberingInstance {
   private numId: number;
   private abstractNumId: number;
   private levelOverrides = new Map<number, number>();
+  private fullLevelOverrides = new Map<number, NumberingLevel>();
 
   /**
    * Creates a new numbering instance
@@ -145,6 +147,44 @@ export class NumberingInstance {
   }
 
   /**
+   * Sets a full level definition override for a specific level
+   * This replaces the entire level definition from the abstract numbering
+   * (ECMA-376 §17.9.8 - w:lvlOverride with full w:lvl child)
+   *
+   * @param level The level index (0-based)
+   * @param levelDef The full NumberingLevel definition to use as override
+   */
+  setFullLevelOverride(level: number, levelDef: NumberingLevel): this {
+    if (level < 0) {
+      throw new Error('Level index must be non-negative');
+    }
+    this.fullLevelOverrides.set(level, levelDef);
+    return this;
+  }
+
+  /**
+   * Gets a full level definition override for a specific level
+   */
+  getFullLevelOverride(level: number): NumberingLevel | undefined {
+    return this.fullLevelOverrides.get(level);
+  }
+
+  /**
+   * Gets all full level definition overrides
+   */
+  getFullLevelOverrides(): Map<number, NumberingLevel> {
+    return new Map(this.fullLevelOverrides);
+  }
+
+  /**
+   * Clears a full level override
+   */
+  clearFullLevelOverride(level: number): this {
+    this.fullLevelOverrides.delete(level);
+    return this;
+  }
+
+  /**
    * Generates the WordprocessingML XML for this numbering instance
    */
   toXML(): XMLElement {
@@ -157,12 +197,31 @@ export class NumberingInstance {
 
     // Add level overrides if any are set
     for (const [level, startValue] of this.levelOverrides) {
+      // Skip levels that have a full level override (they take precedence)
+      if (this.fullLevelOverrides.has(level)) continue;
       children.push({
         name: 'w:lvlOverride',
         attributes: { 'w:ilvl': level.toString() },
         children: [
           XMLBuilder.wSelf('startOverride', { 'w:val': startValue.toString() })
         ]
+      });
+    }
+
+    // Add full level overrides
+    for (const [level, levelDef] of this.fullLevelOverrides) {
+      const overrideChildren: XMLElement[] = [];
+      // Include startOverride if also set for this level
+      if (this.levelOverrides.has(level)) {
+        overrideChildren.push(
+          XMLBuilder.wSelf('startOverride', { 'w:val': this.levelOverrides.get(level)!.toString() })
+        );
+      }
+      overrideChildren.push(levelDef.toXML());
+      children.push({
+        name: 'w:lvlOverride',
+        attributes: { 'w:ilvl': level.toString() },
+        children: overrideChildren,
       });
     }
 
@@ -204,9 +263,37 @@ export class NumberingInstance {
     }
     const abstractNumId = parseInt(abstractNumIdMatch[1], 10);
 
-    return new NumberingInstance({
+    const instance = new NumberingInstance({
       numId,
       abstractNumId,
     });
+
+    // Parse level overrides (w:lvlOverride)
+    const lvlOverrideRegex = /<w:lvlOverride[^>]*w:ilvl="(\d+)"[^>]*>([\s\S]*?)<\/w:lvlOverride>/g;
+    let match: RegExpExecArray | null;
+    while ((match = lvlOverrideRegex.exec(xml)) !== null) {
+      const levelStr = match[1]!;
+      const content = match[2]!;
+      const level = parseInt(levelStr, 10);
+
+      // Check for startOverride
+      const startOverrideMatch = /<w:startOverride[^>]*w:val="([^"]+)"/.exec(content);
+      if (startOverrideMatch?.[1]) {
+        instance.setLevelOverride(level, parseInt(startOverrideMatch[1], 10));
+      }
+
+      // Check for full w:lvl element
+      const lvlMatch = /<w:lvl[^>]*>[\s\S]*?<\/w:lvl>/.exec(content);
+      if (lvlMatch) {
+        try {
+          const levelDef = NumberingLevel.fromXML(lvlMatch[0]);
+          instance.setFullLevelOverride(level, levelDef);
+        } catch {
+          // Skip invalid level definitions
+        }
+      }
+    }
+
+    return instance;
   }
 }

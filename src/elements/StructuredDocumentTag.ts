@@ -31,7 +31,11 @@ export type ContentControlType =
   | "checkbox"
   | "picture"
   | "buildingBlock"
-  | "group";
+  | "group"
+  | "citation"
+  | "bibliography"
+  | "docPartList"
+  | "equation";
 
 /**
  * List item for combo box or dropdown
@@ -112,6 +116,28 @@ export interface BuildingBlockProperties {
   gallery?: string;
   /** Building block category */
   category?: string;
+  /** Whether to use docPartList (true) or docPartObj (false, default) */
+  isList?: boolean;
+}
+
+/**
+ * Placeholder properties for SDT
+ */
+export interface SDTPlaceholder {
+  /** Name of the document part to use as placeholder */
+  docPart: string;
+}
+
+/**
+ * Data binding properties for SDT
+ */
+export interface SDTDataBinding {
+  /** XPath expression for the data binding */
+  xpath: string;
+  /** Namespace prefix mappings */
+  prefixMappings?: string;
+  /** Custom XML data store item ID */
+  storeItemId?: string;
 }
 
 /**
@@ -142,6 +168,12 @@ export interface SDTProperties {
   checkbox?: CheckboxProperties;
   /** Building block properties */
   buildingBlock?: BuildingBlockProperties;
+  /** Placeholder (w:placeholder) */
+  placeholder?: SDTPlaceholder;
+  /** Data binding (w:dataBinding) */
+  dataBinding?: SDTDataBinding;
+  /** Whether SDT is currently showing placeholder content */
+  showingPlcHdr?: boolean;
 }
 
 /**
@@ -490,6 +522,38 @@ export class StructuredDocumentTag {
       );
     }
 
+    // Add placeholder
+    if (this.properties.placeholder) {
+      sdtPrChildren.push(
+        XMLBuilder.w("placeholder", {}, [
+          XMLBuilder.wSelf("docPart", { "w:val": this.properties.placeholder.docPart }),
+        ])
+      );
+    }
+
+    // Add showing placeholder flag
+    if (this.properties.showingPlcHdr !== undefined) {
+      sdtPrChildren.push(
+        XMLBuilder.wSelf("showingPlcHdr", {
+          "w:val": this.properties.showingPlcHdr ? "true" : "false",
+        })
+      );
+    }
+
+    // Add data binding
+    if (this.properties.dataBinding) {
+      const dbAttrs: Record<string, string> = {
+        "w:xpath": this.properties.dataBinding.xpath,
+      };
+      if (this.properties.dataBinding.prefixMappings) {
+        dbAttrs["w:prefixMappings"] = this.properties.dataBinding.prefixMappings;
+      }
+      if (this.properties.dataBinding.storeItemId) {
+        dbAttrs["w:storeItemID"] = this.properties.dataBinding.storeItemId;
+      }
+      sdtPrChildren.push(XMLBuilder.wSelf("dataBinding", dbAttrs));
+    }
+
     // Add control type-specific XML
     if (this.properties.controlType) {
       switch (this.properties.controlType) {
@@ -642,6 +706,39 @@ export class StructuredDocumentTag {
 
         case "group":
           sdtPrChildren.push(XMLBuilder.wSelf("group", {}));
+          break;
+
+        case "citation":
+          sdtPrChildren.push(XMLBuilder.wSelf("citation", {}));
+          break;
+
+        case "bibliography":
+          sdtPrChildren.push(XMLBuilder.wSelf("bibliography", {}));
+          break;
+
+        case "equation":
+          sdtPrChildren.push(XMLBuilder.wSelf("equation", {}));
+          break;
+
+        case "docPartList":
+          if (this.properties.buildingBlock) {
+            const dplChildren: XMLElement[] = [];
+            if (this.properties.buildingBlock.gallery) {
+              dplChildren.push(
+                XMLBuilder.wSelf("docPartGallery", {
+                  "w:val": this.properties.buildingBlock.gallery,
+                })
+              );
+            }
+            if (this.properties.buildingBlock.category) {
+              dplChildren.push(
+                XMLBuilder.wSelf("docPartCategory", {
+                  "w:val": this.properties.buildingBlock.category,
+                })
+              );
+            }
+            sdtPrChildren.push(XMLBuilder.w("docPartList", {}, dplChildren));
+          }
           break;
       }
     }
@@ -974,5 +1071,137 @@ export class StructuredDocumentTag {
   isContentEditable(): boolean {
     const lock = this.properties.lock;
     return lock !== "contentLocked" && lock !== "sdtContentLocked";
+  }
+
+  /**
+   * Get the placeholder configuration
+   */
+  getPlaceholder(): SDTPlaceholder | undefined {
+    return this.properties.placeholder;
+  }
+
+  /**
+   * Set the placeholder (w:placeholder/w:docPart)
+   * @param docPart - Name of the document part to use as placeholder
+   */
+  setPlaceholder(docPart: string): this {
+    this.properties.placeholder = { docPart };
+    return this;
+  }
+
+  /**
+   * Get the data binding configuration
+   */
+  getDataBinding(): SDTDataBinding | undefined {
+    return this.properties.dataBinding;
+  }
+
+  /**
+   * Set the data binding (w:dataBinding)
+   * @param xpath - XPath expression
+   * @param prefixMappings - Namespace prefix mappings
+   * @param storeItemId - Custom XML data store item ID
+   */
+  setDataBinding(xpath: string, prefixMappings?: string, storeItemId?: string): this {
+    this.properties.dataBinding = { xpath, prefixMappings, storeItemId };
+    return this;
+  }
+
+  /**
+   * Get whether the SDT is currently showing placeholder content
+   */
+  isShowingPlaceholder(): boolean {
+    return this.properties.showingPlcHdr === true;
+  }
+
+  /**
+   * Set whether the SDT is showing placeholder content
+   * @param val - Whether placeholder is showing
+   */
+  setShowingPlaceholder(val: boolean): this {
+    this.properties.showingPlcHdr = val;
+    return this;
+  }
+
+  /**
+   * Create a citation content control
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   */
+  static createCitation(
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: "citation",
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a bibliography content control
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   */
+  static createBibliography(
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: "bibliography",
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create a document part list content control
+   * Uses w:docPartList instead of w:docPartObj
+   * @param gallery - Building block gallery name
+   * @param category - Building block category
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   */
+  static createDocPartList(
+    gallery: string,
+    category: string,
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: "docPartList",
+        buildingBlock: { gallery, category, isList: true },
+        ...properties,
+      },
+      content
+    );
+  }
+
+  /**
+   * Create an equation content control
+   * @param content - Initial content
+   * @param properties - Additional SDT properties
+   */
+  static createEquation(
+    content: SDTContent[] = [],
+    properties: Partial<SDTProperties> = {}
+  ): StructuredDocumentTag {
+    return new StructuredDocumentTag(
+      {
+        id: Date.now() % 1000000000,
+        controlType: "equation",
+        ...properties,
+      },
+      content
+    );
   }
 }

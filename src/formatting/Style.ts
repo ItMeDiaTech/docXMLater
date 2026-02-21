@@ -222,6 +222,10 @@ export interface StyleProperties {
   locked?: boolean;
   /** Personal - user-specific style */
   personal?: boolean;
+  /** Personal compose - style for composing new messages */
+  personalCompose?: boolean;
+  /** Personal reply - style for replying to messages */
+  personalReply?: boolean;
   /** Link - linked character/paragraph style ID */
   link?: string;
   /** Auto-redefine - update style from manual formatting */
@@ -438,6 +442,38 @@ export class Style {
   setPersonal(personal: boolean): this {
     this.properties.personal = personal;
     return this;
+  }
+
+  /**
+   * Sets whether this is a personal compose style (for composing new messages)
+   * @param enabled - True to mark as personal compose
+   */
+  setPersonalCompose(enabled: boolean): this {
+    this.properties.personalCompose = enabled;
+    return this;
+  }
+
+  /**
+   * Gets whether this is a personal compose style
+   */
+  getPersonalCompose(): boolean {
+    return this.properties.personalCompose === true;
+  }
+
+  /**
+   * Sets whether this is a personal reply style (for replying to messages)
+   * @param enabled - True to mark as personal reply
+   */
+  setPersonalReply(enabled: boolean): this {
+    this.properties.personalReply = enabled;
+    return this;
+  }
+
+  /**
+   * Gets whether this is a personal reply style
+   */
+  getPersonalReply(): boolean {
+    return this.properties.personalReply === true;
   }
 
   /**
@@ -792,6 +828,16 @@ export class Style {
     // personal - User-specific style
     if (this.properties.personal) {
       styleChildren.push(XMLBuilder.wSelf("personal"));
+    }
+
+    // personalCompose - Style for composing new messages
+    if (this.properties.personalCompose) {
+      styleChildren.push(XMLBuilder.wSelf("personalCompose"));
+    }
+
+    // personalReply - Style for replying to messages
+    if (this.properties.personalReply) {
+      styleChildren.push(XMLBuilder.wSelf("personalReply"));
     }
 
     // Add paragraph properties

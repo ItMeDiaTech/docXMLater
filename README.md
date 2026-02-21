@@ -73,6 +73,7 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - Unified shading model with theme color support and inheritance resolution
 - Lossless image optimization (PNG re-compression, BMP-to-PNG conversion)
 - Run property change tracking (w:rPrChange) with direct API access
+- Paragraph mark revision tracking (w:del/w:ins in w:pPr/w:rPr) for full tracked-changes fidelity
 - Normal/NormalWeb style linking with preservation flags
 
 ### Developer Tools
@@ -606,7 +607,7 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 10.0.3**
+**Current Version: 10.0.4**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
@@ -614,7 +615,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 The framework includes comprehensive test coverage:
 
-- **2,811 test cases** across 129 test suites
+- **2,823 test cases** across 129 test suites
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks

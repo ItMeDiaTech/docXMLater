@@ -76,6 +76,8 @@ export interface HyperlinkProperties {
   tgtFrame?: string;
   /** History tracking attribute */
   history?: string;
+  /** Document location for within-document navigation in external files (ECMA-376 §17.16.22) */
+  docLocation?: string;
 }
 
 /**
@@ -95,6 +97,8 @@ export class Hyperlink {
   private tgtFrame?: string;
   /** History tracking attribute */
   private history?: string;
+  /** Document location for within-document navigation in external files */
+  private docLocation?: string;
   /** Tracking context for automatic change tracking */
   private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
   /** Parent paragraph reference for automatic tracking */
@@ -115,6 +119,7 @@ export class Hyperlink {
     this.relationshipId = properties.relationshipId;
     this.tgtFrame = properties.tgtFrame;
     this.history = properties.history;
+    this.docLocation = properties.docLocation;
     this._isEmpty = properties.isEmpty ?? false;
 
     // VALIDATION: Warn about hybrid links (url + anchor)
@@ -261,6 +266,40 @@ export class Hyperlink {
    */
   getHistory(): string | undefined {
     return this.history;
+  }
+
+  /**
+   * Sets the target frame attribute
+   * @param tgtFrame Target frame (e.g., "_blank" for new window)
+   */
+  setTgtFrame(tgtFrame: string | undefined): this {
+    this.tgtFrame = tgtFrame;
+    return this;
+  }
+
+  /**
+   * Sets the history tracking attribute
+   * @param history History value (e.g., "1" to add to history)
+   */
+  setHistory(history: string | undefined): this {
+    this.history = history;
+    return this;
+  }
+
+  /**
+   * Gets the document location attribute (ECMA-376 §17.16.22)
+   */
+  getDocLocation(): string | undefined {
+    return this.docLocation;
+  }
+
+  /**
+   * Sets the document location for within-document navigation in external files
+   * @param docLocation Location string
+   */
+  setDocLocation(docLocation: string | undefined): this {
+    this.docLocation = docLocation;
+    return this;
   }
 
   /**
@@ -983,6 +1022,9 @@ export class Hyperlink {
       tooltip: this.tooltip,
       relationshipId: this.relationshipId,
       formatting: { ...this.formatting },
+      tgtFrame: this.tgtFrame,
+      history: this.history,
+      docLocation: this.docLocation,
     });
 
     // Copy the run with its formatting
@@ -1051,6 +1093,11 @@ export class Hyperlink {
     // History tracking attribute
     if (this.history) {
       attributes["w:history"] = this.history;
+    }
+
+    // Document location attribute (ECMA-376 §17.16.22)
+    if (this.docLocation) {
+      attributes["w:docLocation"] = this.docLocation;
     }
 
     // Empty/invisible hyperlinks have no children (self-closing element)

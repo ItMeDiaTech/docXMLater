@@ -31,6 +31,9 @@ export interface AbstractNumberingProperties {
 
   /** Optional link to a style that uses this abstract numbering (ECMA-376 §17.9.27) */
   styleLink?: string;
+
+  /** Template code (ECMA-376 §17.9.30) - 8-char hex string identifying the template */
+  tmpl?: string;
 }
 
 /**
@@ -46,6 +49,7 @@ export class AbstractNumbering {
   private multiLevelType: number;
   private numStyleLink?: string;
   private styleLink?: string;
+  private tmpl?: string;
 
   /**
    * Creates a new abstract numbering definition
@@ -70,6 +74,7 @@ export class AbstractNumbering {
         properties.multiLevelType !== undefined ? properties.multiLevelType : 1;
       this.numStyleLink = properties.numStyleLink;
       this.styleLink = properties.styleLink;
+      this.tmpl = properties.tmpl;
 
       if (properties.levels) {
         properties.levels.forEach((level) => {
@@ -187,6 +192,22 @@ export class AbstractNumbering {
   }
 
   /**
+   * Gets the template code (w:tmpl per ECMA-376 §17.9.30)
+   */
+  getTemplate(): string | undefined {
+    return this.tmpl;
+  }
+
+  /**
+   * Sets the template code
+   * @param tmpl 8-char hex string identifying the template
+   */
+  setTemplate(tmpl: string): this {
+    this.tmpl = tmpl;
+    return this;
+  }
+
+  /**
    * Adds a numbering level
    * @param level The numbering level to add
    */
@@ -280,6 +301,11 @@ export class AbstractNumbering {
         "w:val": multiLevelTypeValue,
       })
     );
+
+    // Add template code (position 3 per CT_AbstractNum)
+    if (this.tmpl) {
+      children.push(XMLBuilder.wSelf("tmpl", { "w:val": this.tmpl }));
+    }
 
     // Add name if present
     if (this.name) {
@@ -518,6 +544,10 @@ export class AbstractNumbering {
     const styleLinkMatch = /<w:styleLink[^>]*w:val="([^"]+)"/.exec(xml);
     const styleLink = styleLinkMatch?.[1] || undefined;
 
+    // Extract template code (optional, ECMA-376 §17.9.30)
+    const tmplMatch = /<w:tmpl[^>]*w:val="([^"]+)"/.exec(xml);
+    const tmpl = tmplMatch?.[1] || undefined;
+
     // Create abstract numbering
     const abstractNum = new AbstractNumbering({
       abstractNumId,
@@ -525,6 +555,7 @@ export class AbstractNumbering {
       multiLevelType,
       numStyleLink,
       styleLink,
+      tmpl,
     });
 
     // Extract and parse all levels

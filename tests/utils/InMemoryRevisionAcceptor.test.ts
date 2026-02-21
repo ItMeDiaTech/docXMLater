@@ -907,4 +907,217 @@ describe('InMemoryRevisionAcceptor', () => {
       expect((content[2] as Run).getText()).toBe(' After link.');
     });
   });
+
+  describe('paragraph mark revision markers', () => {
+    it('should accept paragraph mark deletion by clearing the marker', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+      para.addRun(new Run('Some text'));
+      para.markParagraphMarkAsDeleted(1, 'Author', new Date('2024-01-01'));
+
+      expect(para.isParagraphMarkDeleted()).toBe(true);
+      expect(paragraphHasRevisions(para)).toBe(true);
+
+      const result = acceptRevisionsInMemory(doc, { acceptDeletions: true });
+
+      expect(para.isParagraphMarkDeleted()).toBe(false);
+      expect(result.deletionsAccepted).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should accept paragraph mark insertion by clearing the marker', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+      para.addRun(new Run('Some text'));
+      para.markParagraphMarkAsInserted(8, 'Author', new Date('2024-01-01'));
+
+      expect(para.isParagraphMarkInserted()).toBe(true);
+      expect(paragraphHasRevisions(para)).toBe(true);
+
+      const result = acceptRevisionsInMemory(doc, { acceptInsertions: true });
+
+      expect(para.isParagraphMarkInserted()).toBe(false);
+      expect(result.insertionsAccepted).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should preserve paragraph mark deletion when acceptDeletions is false', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+      para.addRun(new Run('Some text'));
+      para.markParagraphMarkAsDeleted(1, 'Author', new Date('2024-01-01'));
+
+      const result = acceptRevisionsInMemory(doc, { acceptDeletions: false });
+
+      expect(para.isParagraphMarkDeleted()).toBe(true);
+      expect(result.deletionsAccepted).toBe(0);
+    });
+
+    it('should preserve paragraph mark insertion when acceptInsertions is false', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+      para.addRun(new Run('Some text'));
+      para.markParagraphMarkAsInserted(8, 'Author', new Date('2024-01-01'));
+
+      const result = acceptRevisionsInMemory(doc, { acceptInsertions: false });
+
+      expect(para.isParagraphMarkInserted()).toBe(true);
+      expect(result.insertionsAccepted).toBe(0);
+    });
+
+    it('paragraphHasRevisions detects paragraph mark deletion', () => {
+      const para = new Paragraph();
+      expect(paragraphHasRevisions(para)).toBe(false);
+
+      para.markParagraphMarkAsDeleted(1, 'Author');
+      expect(paragraphHasRevisions(para)).toBe(true);
+    });
+
+    it('paragraphHasRevisions detects paragraph mark insertion', () => {
+      const para = new Paragraph();
+      expect(paragraphHasRevisions(para)).toBe(false);
+
+      para.markParagraphMarkAsInserted(8, 'Author');
+      expect(paragraphHasRevisions(para)).toBe(true);
+    });
+
+    it('should round-trip paragraph mark deletion via toXML', () => {
+      const para = new Paragraph();
+      const date = new Date('2024-01-15T10:00:00Z');
+      para.markParagraphMarkAsDeleted(5, 'TestAuthor', date);
+
+      const xml = para.toXML();
+      // Find w:pPr > w:rPr > w:del
+      const pPr = xml?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:pPr'
+      ) as any;
+      expect(pPr).toBeDefined();
+
+      const rPr = pPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:rPr'
+      ) as any;
+      expect(rPr).toBeDefined();
+
+      const del = rPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:del'
+      ) as any;
+      expect(del).toBeDefined();
+      expect(del.attributes['w:id']).toBe('5');
+      expect(del.attributes['w:author']).toBe('TestAuthor');
+      expect(del.attributes['w:date']).toContain('2024-01-15');
+    });
+
+    it('should round-trip paragraph mark insertion via toXML', () => {
+      const para = new Paragraph();
+      const date = new Date('2024-02-20T14:30:00Z');
+      para.markParagraphMarkAsInserted(8, 'InsertAuthor', date);
+
+      const xml = para.toXML();
+      // Find w:pPr > w:rPr > w:ins
+      const pPr = xml?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:pPr'
+      ) as any;
+      expect(pPr).toBeDefined();
+
+      const rPr = pPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:rPr'
+      ) as any;
+      expect(rPr).toBeDefined();
+
+      const ins = rPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:ins'
+      ) as any;
+      expect(ins).toBeDefined();
+      expect(ins.attributes['w:id']).toBe('8');
+      expect(ins.attributes['w:author']).toBe('InsertAuthor');
+      expect(ins.attributes['w:date']).toContain('2024-02-20');
+    });
+
+    it('should serialize both deletion and insertion markers together', () => {
+      const para = new Paragraph();
+      para.markParagraphMarkAsDeleted(1, 'DelAuthor', new Date('2024-01-01'));
+      para.markParagraphMarkAsInserted(2, 'InsAuthor', new Date('2024-01-02'));
+
+      const xml = para.toXML();
+      const pPr = xml?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:pPr'
+      ) as any;
+      const rPr = pPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:rPr'
+      ) as any;
+      expect(rPr).toBeDefined();
+
+      const del = rPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:del'
+      );
+      const ins = rPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:ins'
+      );
+      expect(del).toBeDefined();
+      expect(ins).toBeDefined();
+    });
+
+    it('should emit w:ins before w:del per CT_ParaRPr schema order', () => {
+      const para = new Paragraph();
+      para.markParagraphMarkAsDeleted(1, 'Author', new Date('2024-01-01'));
+      para.markParagraphMarkAsInserted(2, 'Author', new Date('2024-01-02'));
+
+      const xml = para.toXML();
+      const pPr = xml?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:pPr'
+      ) as any;
+      const rPr = pPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:rPr'
+      ) as any;
+
+      // Find indices of w:ins and w:del in the children array
+      const insIdx = rPr?.children?.findIndex(
+        (c: any) => typeof c === 'object' && c.name === 'w:ins'
+      );
+      const delIdx = rPr?.children?.findIndex(
+        (c: any) => typeof c === 'object' && c.name === 'w:del'
+      );
+      expect(insIdx).toBeLessThan(delIdx);
+    });
+
+    it('should handle author names with XML special characters in toXML round-trip', () => {
+      const para = new Paragraph();
+      const specialAuthor = 'O"Brien & <Co>';
+      para.markParagraphMarkAsDeleted(1, specialAuthor, new Date('2024-01-01'));
+
+      // Verify the marker stores the raw author name
+      const formatting = para.getFormatting();
+      expect(formatting.paragraphMarkDeletion?.author).toBe(specialAuthor);
+
+      // Verify toXML produces the marker (actual XML escaping tested in XMLBuilder tests)
+      const xml = para.toXML();
+      const pPr = xml?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:pPr'
+      ) as any;
+      const rPr = pPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:rPr'
+      ) as any;
+      const del = rPr?.children?.find(
+        (c: any) => typeof c === 'object' && c.name === 'w:del'
+      ) as any;
+      expect(del).toBeDefined();
+      expect(del.attributes['w:author']).toBe(specialAuthor);
+    });
+
+    it('should accept both markers with mixed options', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+      para.addRun(new Run('Text'));
+      para.markParagraphMarkAsDeleted(1, 'Author', new Date('2024-01-01'));
+      para.markParagraphMarkAsInserted(2, 'Author', new Date('2024-01-02'));
+
+      // Accept deletions only, preserve insertions
+      const result = acceptRevisionsInMemory(doc, {
+        acceptDeletions: true,
+        acceptInsertions: false,
+      });
+
+      expect(para.isParagraphMarkDeleted()).toBe(false);
+      expect(para.isParagraphMarkInserted()).toBe(true);
+      expect(result.deletionsAccepted).toBeGreaterThanOrEqual(1);
+    });
+  });
 });

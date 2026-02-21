@@ -5,6 +5,51 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.1.0] - 2026-02-21
+
+### Added
+
+- **Settings API Expansion**: New getter/setter pairs on Document for `hideSpellingErrors`, `hideGrammaticalErrors`, `defaultTabStop`, `updateFields`, `embedTrueTypeFonts`, `saveSubsetFonts`, `doNotTrackMoves`. All round-trip through save/load with proper CT_Settings schema ordering.
+- **Hyperlink Attributes**: `setDocLocation()`, `setTgtFrame()`, `setHistory()` with getters, XML generation, clone support, and DocumentParser integration for round-trip fidelity.
+- **Table Property Gap Tests**: Dedicated test coverage for `setPosition()`, `setOverlap()`, `setBidiVisual()`, `setShading()`, `setCellMargins()`, `setTblLook()`, `setStyleRowBandSize()`, `setStyleColBandSize()`, `setCaption()`, `setDescription()`.
+- **Table Row Property Gap Tests**: Test coverage for `setHeight()`, `setCantSplit()`, `setHeader()`, `setHidden()`, `setJustification()`, `setGridBefore()`, `setGridAfter()`, `setWBefore()`, `setWAfter()`, `setRowCellSpacing()`, `setCnfStyle()`.
+- **Table Cell Property Gap Tests**: Test coverage for `setNoWrap()`, `setHideMark()`, `setFitText()`, `setHorizontalMerge()`, diagonal cell borders (`tl2br`, `tr2bl`), cell `headers` attribute.
+- **Run Property Gap Tests**: Test coverage for `setAllCaps()`, `setSmallCaps()`, `setStrike()`, `setDoubleStrike()`, `setNoProof()`, `setVanish()`, `setWebHidden()`, `setHighlight()` (16 colors), `setFitText()`, `setVerticalAlignment()`, `setRtl()`, `setComplexScript()`, `setEastAsianLayout()`, `setSpecVanish()`, `setOmath()`.
+- **Run Content Gap Tests**: Test coverage for `addTab()`, `addBreak()`, `addCarriageReturn()`, `addSoftHyphen()`, `addNoBreakHyphen()`, `addSymbol()`, `addPageNumber()`, `addPositionTab()`, `addLastRenderedPageBreak()`, `addSeparator()`, `addContinuationSeparator()`, `addAnnotationRef()`, date fields, `addFieldChar()`.
+- **Paragraph Property Gap Tests**: Test coverage for `setContextualSpacing()`, `setBidi()`, `setTextDirection()`, `setTextAlignment()`, `setSuppressLineNumbers()`, `setSuppressAutoHyphens()`, `setAdjustRightInd()`, `setSnapToGrid()`, `setMirrorIndents()`, `setSuppressOverlap()`, `setDivId()`, `setWidowControl()`, `setFrameProperties()`, `setParagraphMarkRunProperties()`.
+- **Settings Round-Trip Gap Tests**: Verification of hardcoded defaults (zoom, defaultTabStop, characterSpacingControl), preservation of unmanaged settings (writeProtection, proofState, mathPr, docVars), and managed settings (trackRevisions, documentProtection, revisionView, compat, rsids).
+- **SDT Enhancements**: Placeholder, data binding, showingPlaceholder support; group and inline SDT types.
+- **Numbering Enhancements**: Level pStyle association, full level override in NumberingInstance, AbstractNumbering template (tmpl).
+- **Styles Enhancements**: Latent styles with `setLatentStyles()` and `addLatentStyleException()` on StylesManager; `setPersonalCompose()` and `setPersonalReply()` on Style.
+- **Dirty-tracking for settings**: `_modifiedBooleanSettings` Set ensures loaded documents preserve original settings XML while only merging user-modified settings in correct CT_Settings schema order.
+
+### Statistics
+
+- 142 test suites, 3,038 tests passing
+- 120 source files
+
+---
+
+## [10.0.4] - 2026-02-21
+
+### Fixed
+
+- **Tracked Deletions Leaving Blank Lines in Simple Markup View**: Documents with pre-existing tracked deletions now preserve paragraph mark revision markers (`w:del`/`w:ins` in `w:pPr/w:rPr`) through round-trip processing. Previously these markers were silently dropped during parsing, causing Word to display blank lines and empty list items in Simple Markup view and incorrect rendering in Original view.
+
+### Added
+
+- **Paragraph Mark Insertion Tracking**: New `paragraphMarkInsertion` field on `ParagraphFormatting` with full API: `markParagraphMarkAsInserted()`, `clearParagraphMarkInsertion()`, `isParagraphMarkInserted()`. Mirrors the existing `paragraphMarkDeletion` support.
+- **Paragraph Mark Revision Parsing**: `DocumentParser` now extracts `w:del` and `w:ins` elements from `w:pPr/w:rPr` during document loading, with defensive guards for malformed XML (array duplicates, invalid dates, non-numeric IDs).
+- **Paragraph Mark Revision Acceptance**: `acceptRevisionsInMemory()` clears paragraph mark deletion/insertion markers when accepting deletions/insertions respectively. `SelectiveRevisionAcceptor` supports criteria-based clearing by author, ID, and date range.
+- **`paragraphHasRevisions()` Enhancement**: Now detects paragraph mark revision markers (`paragraphMarkDeletion`, `paragraphMarkInsertion`) in addition to content-level `Revision` objects.
+
+### Statistics
+
+- 129 test suites, 2,823 tests passing
+- 120 source files
+
+---
+
 ## [10.0.3] - 2026-02-21
 
 ### Fixed

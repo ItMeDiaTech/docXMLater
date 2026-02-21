@@ -74,6 +74,7 @@ export interface RowFormatting {
   cellSpacing?: number; // Row-level cell spacing override in twips
   cellSpacingType?: string; // Cell spacing type (dxa, pct)
   cnfStyle?: string; // Conditional formatting bitmask (per ECMA-376 §17.3.1.8)
+  divId?: number; // HTML div association (per ECMA-376 §17.4.9)
 }
 
 /**
@@ -545,6 +546,25 @@ export class TableRow {
   }
 
   /**
+   * Sets the HTML div ID for web round-trip
+   * Per ECMA-376 Part 1 §17.4.9
+   * @param id - Div ID number
+   * @returns This row for chaining
+   */
+  setDivId(id: number): this {
+    this.formatting.divId = id;
+    return this;
+  }
+
+  /**
+   * Gets the HTML div ID
+   * @returns Div ID or undefined
+   */
+  getDivId(): number | undefined {
+    return this.formatting.divId;
+  }
+
+  /**
    * Gets table property exceptions
    * @returns Table property exceptions or undefined
    */
@@ -735,7 +755,10 @@ export class TableRow {
       trPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
     }
 
-    // 2. (divId not supported)
+    // 2. divId
+    if (this.formatting.divId !== undefined) {
+      trPrChildren.push(XMLBuilder.wSelf('divId', { 'w:val': this.formatting.divId }));
+    }
 
     // 3. gridBefore
     if (this.formatting.gridBefore !== undefined) {

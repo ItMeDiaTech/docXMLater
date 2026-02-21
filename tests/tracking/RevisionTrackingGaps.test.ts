@@ -60,54 +60,64 @@ describe('Table property change tracking', () => {
     expect(change!.author).toBe('TestAuthor');
   });
 
-  it('should track setLayout changes', () => {
+  it('should track setLayout changes with full snapshot', () => {
     table.setLayout('fixed');
     doc.flushPendingChanges();
     const change = table.getTblPrChange();
     expect(change).toBeDefined();
+    // Full snapshot: layout was not set before, so it's absent from previousProperties
     expect(change!.previousProperties.layout).toBeUndefined();
+    // Full snapshot includes pre-existing properties (default width)
+    expect(change!.previousProperties.width).toBe(9360);
   });
 
-  it('should track setBorders changes', () => {
+  it('should track setBorders changes with full snapshot', () => {
     table.setBorders({
       top: { style: 'single', size: 4, color: '000000' },
     });
     doc.flushPendingChanges();
     const change = table.getTblPrChange();
     expect(change).toBeDefined();
+    // Borders were not set before, so absent from full snapshot
     expect(change!.previousProperties.borders).toBeUndefined();
+    // Full snapshot includes pre-existing properties
+    expect(change!.previousProperties.width).toBe(9360);
   });
 
-  it('should track setStyle changes', () => {
+  it('should track setStyle changes with full snapshot', () => {
     table.setStyle('TableGrid');
     doc.flushPendingChanges();
     const change = table.getTblPrChange();
     expect(change).toBeDefined();
     expect(change!.previousProperties.style).toBeUndefined();
+    expect(change!.previousProperties.width).toBe(9360);
   });
 
-  it('should track setShading changes', () => {
+  it('should track setShading changes with full snapshot', () => {
     table.setShading({ fill: 'FF0000', pattern: 'clear' });
     doc.flushPendingChanges();
     const change = table.getTblPrChange();
     expect(change).toBeDefined();
     expect(change!.previousProperties.shading).toBeUndefined();
+    expect(change!.previousProperties.width).toBe(9360);
   });
 
-  it('should track setIndent changes', () => {
+  it('should track setIndent changes with full snapshot', () => {
     table.setIndent(720);
     doc.flushPendingChanges();
     const change = table.getTblPrChange();
     expect(change).toBeDefined();
     expect(change!.previousProperties.indent).toBeUndefined();
+    expect(change!.previousProperties.width).toBe(9360);
   });
 
-  it('should track setBidiVisual changes', () => {
+  it('should track setBidiVisual changes with full snapshot', () => {
     table.setBidiVisual(true);
     doc.flushPendingChanges();
     const change = table.getTblPrChange();
     expect(change).toBeDefined();
     expect(change!.previousProperties.bidiVisual).toBeUndefined();
+    expect(change!.previousProperties.width).toBe(9360);
   });
 
   it('should consolidate multiple property changes into single tblPrChange', () => {
@@ -117,12 +127,39 @@ describe('Table property change tracking', () => {
     doc.flushPendingChanges();
     const change = table.getTblPrChange();
     expect(change).toBeDefined();
-    // All changes consolidated into one tblPrChange with previous values
     expect(change!.previousProperties).toBeDefined();
     expect(change!.author).toBe('TestAuthor');
-    expect('width' in change!.previousProperties).toBe(true);
-    expect('alignment' in change!.previousProperties).toBe(true);
-    expect('layout' in change!.previousProperties).toBe(true);
+    // Full snapshot: width is rolled back to original default (9360)
+    expect(change!.previousProperties.width).toBe(9360);
+    // Alignment and layout were not set before, so absent from full snapshot
+    expect('alignment' in change!.previousProperties).toBe(false);
+    expect('layout' in change!.previousProperties).toBe(false);
+  });
+
+  it('should include full previous formatting in tblPrChange (ECMA-376 §17.13.5.36)', () => {
+    // Set up a table with multiple properties BEFORE enabling tracking
+    doc.disableTrackChanges();
+    table.setWidth(5000);
+    table.setWidthType('pct');
+    table.setAlignment('center');
+    table.setBorders({
+      top: { style: 'single', size: 4, color: '000000' },
+    });
+    doc.enableTrackChanges({ author: 'TestAuthor' });
+
+    // Change only the layout
+    table.setLayout('auto');
+    doc.flushPendingChanges();
+
+    const change = table.getTblPrChange();
+    expect(change).toBeDefined();
+    // Full snapshot should include ALL pre-existing properties
+    expect(change!.previousProperties.width).toBe(5000);
+    expect(change!.previousProperties.widthType).toBe('pct');
+    expect(change!.previousProperties.alignment).toBe('center');
+    expect(change!.previousProperties.borders).toBeDefined();
+    // Layout was not set before, so absent from snapshot
+    expect('layout' in change!.previousProperties).toBe(false);
   });
 
   it('should not create tblPrChange when tracking is disabled', () => {

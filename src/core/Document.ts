@@ -368,6 +368,8 @@ export class Document {
   // Track whether settings have been programmatically modified since load
   // When true, mergeSettingsWithOriginal() will apply in-memory state to the preserved XML
   private _settingsModified = false;
+  /** Tracks which individual boolean settings were modified via setters (not just parsed) */
+  private _modifiedBooleanSettings = new Set<string>();
 
   // webSettings.xml round-trip preservation
   private _originalWebSettingsXml?: string;
@@ -410,6 +412,20 @@ export class Document {
   private _mirrorMargins?: boolean;
   /** Auto hyphenation setting (w:autoHyphenation) per ECMA-376 Part 1 §17.15.1.10 */
   private _autoHyphenation?: boolean;
+  /** Hide spelling errors (w:hideSpellingErrors) per ECMA-376 Part 1 §17.15.1.43 */
+  private _hideSpellingErrors?: boolean;
+  /** Hide grammatical errors (w:hideGrammaticalErrors) per ECMA-376 Part 1 §17.15.1.42 */
+  private _hideGrammaticalErrors?: boolean;
+  /** Default tab stop (w:defaultTabStop) per ECMA-376 Part 1 §17.15.1.25 */
+  private _defaultTabStop?: number;
+  /** Update fields on open (w:updateFields) per ECMA-376 Part 1 §17.15.1.85 */
+  private _updateFields?: boolean;
+  /** Embed TrueType fonts (w:embedTrueTypeFonts) per ECMA-376 Part 1 §17.15.1.24 */
+  private _embedTrueTypeFonts?: boolean;
+  /** Save subset of fonts (w:saveSubsetFonts) per ECMA-376 Part 1 §17.15.1.78 */
+  private _saveSubsetFonts?: boolean;
+  /** Do not track moves (w:doNotTrackMoves) per ECMA-376 Part 1 §17.15.1.35 */
+  private _doNotTrackMoves?: boolean;
   /** Decimal symbol for locale (w:decimalSymbol) per ECMA-376 Part 1 §17.15.1.23 */
   private _decimalSymbol?: string;
   /** List separator for locale (w:listSeparator) per ECMA-376 Part 1 §17.15.1.55 */
@@ -844,6 +860,42 @@ export class Document {
     // Parse w:autoHyphenation per ECMA-376 Part 1 §17.15.1.10
     if (/<w:autoHyphenation\b[^>]*\/?>/.test(settingsXml)) {
       this._autoHyphenation = true;
+    }
+
+    // Parse w:hideSpellingErrors per ECMA-376 Part 1 §17.15.1.43
+    if (/<w:hideSpellingErrors\b[^>]*\/?>/.test(settingsXml)) {
+      this._hideSpellingErrors = true;
+    }
+
+    // Parse w:hideGrammaticalErrors per ECMA-376 Part 1 §17.15.1.42
+    if (/<w:hideGrammaticalErrors\b[^>]*\/?>/.test(settingsXml)) {
+      this._hideGrammaticalErrors = true;
+    }
+
+    // Parse w:defaultTabStop per ECMA-376 Part 1 §17.15.1.25
+    const defaultTabStopMatch = /<w:defaultTabStop\s+w:val\s*=\s*"(\d+)"\s*\/?>/.exec(settingsXml);
+    if (defaultTabStopMatch?.[1]) {
+      this._defaultTabStop = parseInt(defaultTabStopMatch[1], 10);
+    }
+
+    // Parse w:updateFields per ECMA-376 Part 1 §17.15.1.85
+    if (/<w:updateFields\b[^>]*\/?>/.test(settingsXml)) {
+      this._updateFields = true;
+    }
+
+    // Parse w:embedTrueTypeFonts per ECMA-376 Part 1 §17.15.1.24
+    if (/<w:embedTrueTypeFonts\b[^>]*\/?>/.test(settingsXml)) {
+      this._embedTrueTypeFonts = true;
+    }
+
+    // Parse w:saveSubsetFonts per ECMA-376 Part 1 §17.15.1.78
+    if (/<w:saveSubsetFonts\b[^>]*\/?>/.test(settingsXml)) {
+      this._saveSubsetFonts = true;
+    }
+
+    // Parse w:doNotTrackMoves per ECMA-376 Part 1 §17.15.1.35
+    if (/<w:doNotTrackMoves\b[^>]*\/?>/.test(settingsXml)) {
+      this._doNotTrackMoves = true;
     }
 
     // Parse w:decimalSymbol per ECMA-376 Part 1 §17.15.1.23
@@ -3240,8 +3292,8 @@ export class Document {
    */
   private mergeSettingsWithOriginal(): string {
     if (!this._originalSettingsXml) {
-      // New document — generate from scratch (existing behavior)
-      return this.generator.generateSettings({
+      // New document — generate base from scratch, then apply any modified settings
+      let xml = this.generator.generateSettings({
         trackChangesEnabled: this.trackChangesEnabled,
         trackFormatting: this.trackFormatting,
         revisionView: this.revisionViewSettings,
@@ -3249,6 +3301,12 @@ export class Document {
         rsids: this.getRsids(),
         documentProtection: this.documentProtection,
       });
+      // Apply settings merges to the generated XML for new documents
+      if (this._settingsModified) {
+        xml = this.mergeTrackChangesIntoSettings(xml);
+        xml = this.mergeBooleanSettingsIntoSettings(xml);
+      }
+      return xml;
     }
 
     // If nothing was modified, return original as-is for perfect round-trip
@@ -3280,6 +3338,8 @@ export class Document {
     // Remove existing track changes elements (will re-insert if needed)
     xml = xml.replace(/<w:trackRevisions\b[^>]*\/>/g, '');
     xml = xml.replace(/<w:trackRevisions\b[^>]*>[\s\S]*?<\/w:trackRevisions>/g, '');
+    xml = xml.replace(/<w:doNotTrackMoves\b[^>]*\/>/g, '');
+    xml = xml.replace(/<w:doNotTrackMoves\b[^>]*>[\s\S]*?<\/w:doNotTrackMoves>/g, '');
     xml = xml.replace(/<w:doNotTrackFormatting\b[^>]*\/>/g, '');
     xml = xml.replace(/<w:doNotTrackFormatting\b[^>]*>[\s\S]*?<\/w:doNotTrackFormatting>/g, '');
     xml = xml.replace(/<w:trackFormatting\b[^>]*\/>/g, '');
@@ -3300,6 +3360,11 @@ export class Document {
     // w:trackRevisions (#32)
     if (this.trackChangesEnabled) {
       trackBlock += '\n  <w:trackRevisions/>';
+    }
+
+    // w:doNotTrackMoves (#33) — only if explicitly set
+    if (this._doNotTrackMoves) {
+      trackBlock += '\n  <w:doNotTrackMoves/>';
     }
 
     // w:doNotTrackFormatting (#34) — only if explicitly disabled
@@ -3410,48 +3475,116 @@ export class Document {
   }
 
   /**
-   * Merges boolean settings (evenAndOddHeaders, mirrorMargins, autoHyphenation)
-   * into the settings.xml preserving schema order.
+   * Merges boolean settings into the settings.xml preserving CT_Settings schema order.
+   *
+   * CT_Settings element order (relevant managed elements):
+   *   #11 embedTrueTypeFonts, #13 saveSubsetFonts, #15 mirrorMargins,
+   *   #20 hideSpellingErrors, #21 hideGrammaticalErrors,
+   *   #39 defaultTabStop, #40 autoHyphenation,
+   *   #48 evenAndOddHeaders, #61 characterSpacingControl,
+   *   #77 updateFields
+   *
+   * Strategy: Remove all managed elements, then re-insert a correctly ordered block
+   * before the defaultTabStop anchor. This avoids ordering issues from incremental insertion.
+   *
+   * Only removes elements when explicitly set to false (not when undefined/unset).
    * @private
    */
   private mergeBooleanSettingsIntoSettings(xml: string): string {
-    // Merge evenAndOddHeaders
-    const hasEOH = /<w:evenAndOddHeaders\b[^>]*\/?>/.test(xml);
-    if (this._evenAndOddHeaders && !hasEOH) {
-      // Insert before w:footnotePr or w:endnotePr or fallback before </w:settings>
-      if (/<w:footnotePr\b/.test(xml)) {
-        xml = xml.replace(/<w:footnotePr\b/, '<w:evenAndOddHeaders/>\n  <w:footnotePr');
-      } else if (/<w:endnotePr\b/.test(xml)) {
-        xml = xml.replace(/<w:endnotePr\b/, '<w:evenAndOddHeaders/>\n  <w:endnotePr');
-      } else {
-        xml = xml.replace(/<\/w:settings>/, '  <w:evenAndOddHeaders/>\n</w:settings>');
-      }
-    } else if (!this._evenAndOddHeaders && hasEOH) {
-      xml = xml.replace(/<w:evenAndOddHeaders\b[^>]*\/?>\s*/g, '');
-    }
+    // =========================================================================
+    // BEFORE defaultTabStop (#39) — remove-and-rebuild approach
+    // Only removes elements that were EXPLICITLY set by the user.
+    // Unset (undefined) elements are left in their original position.
+    //
+    // CT_Settings order: #11 embedTrueTypeFonts, #13 saveSubsetFonts,
+    //   #15 mirrorMargins, #20 hideSpellingErrors, #21 hideGrammaticalErrors
+    // =========================================================================
 
-    // Merge mirrorMargins
-    const hasMM = /<w:mirrorMargins\b[^>]*\/?>/.test(xml);
-    if (this._mirrorMargins && !hasMM) {
-      if (/<w:defaultTabStop\b/.test(xml)) {
-        xml = xml.replace(/<w:defaultTabStop\b/, '<w:mirrorMargins/>\n  <w:defaultTabStop');
-      } else {
-        xml = xml.replace(/<\/w:settings>/, '  <w:mirrorMargins/>\n</w:settings>');
-      }
-    } else if (!this._mirrorMargins && hasMM) {
+    // Collect explicitly-set elements to add (in schema order)
+    const preElements: string[] = [];
+    const mod = this._modifiedBooleanSettings;
+
+    // Only remove and process elements that were explicitly set via setters
+    if (mod.has('embedTrueTypeFonts')) {
+      xml = xml.replace(/<w:embedTrueTypeFonts\b[^>]*\/?>\s*/g, '');
+      if (this._embedTrueTypeFonts) preElements.push('<w:embedTrueTypeFonts/>');
+    }
+    if (mod.has('saveSubsetFonts')) {
+      xml = xml.replace(/<w:saveSubsetFonts\b[^>]*\/?>\s*/g, '');
+      if (this._saveSubsetFonts) preElements.push('<w:saveSubsetFonts/>');
+    }
+    if (mod.has('mirrorMargins')) {
       xml = xml.replace(/<w:mirrorMargins\b[^>]*\/?>\s*/g, '');
+      if (this._mirrorMargins) preElements.push('<w:mirrorMargins/>');
+    }
+    if (mod.has('hideSpellingErrors')) {
+      xml = xml.replace(/<w:hideSpellingErrors\b[^>]*\/?>\s*/g, '');
+      if (this._hideSpellingErrors) preElements.push('<w:hideSpellingErrors/>');
+    }
+    if (mod.has('hideGrammaticalErrors')) {
+      xml = xml.replace(/<w:hideGrammaticalErrors\b[^>]*\/?>\s*/g, '');
+      if (this._hideGrammaticalErrors) preElements.push('<w:hideGrammaticalErrors/>');
     }
 
-    // Merge autoHyphenation
-    const hasAH = /<w:autoHyphenation\b[^>]*\/?>/.test(xml);
-    if (this._autoHyphenation && !hasAH) {
+    // Insert the block before defaultTabStop (schema order preserved since array is ordered)
+    if (preElements.length > 0) {
+      const preBlock = preElements.map(e => '\n  ' + e).join('');
       if (/<w:defaultTabStop\b/.test(xml)) {
-        xml = xml.replace(/<w:defaultTabStop\b/, '<w:autoHyphenation/>\n  <w:defaultTabStop');
+        xml = xml.replace(/<w:defaultTabStop\b/, preBlock + '\n  <w:defaultTabStop');
       } else {
-        xml = xml.replace(/<\/w:settings>/, '  <w:autoHyphenation/>\n</w:settings>');
+        xml = xml.replace(/<\/w:settings>/, preBlock + '\n</w:settings>');
       }
-    } else if (!this._autoHyphenation && hasAH) {
+    }
+
+    // =========================================================================
+    // defaultTabStop (#39) — value attribute, not just boolean
+    // =========================================================================
+    if (mod.has('defaultTabStop') && this._defaultTabStop !== undefined) {
+      const hasDTS = /<w:defaultTabStop\b[^>]*\/?>/.test(xml);
+      if (hasDTS) {
+        xml = xml.replace(/<w:defaultTabStop\b[^>]*\/?>/, `<w:defaultTabStop w:val="${this._defaultTabStop}"/>`);
+      } else {
+        xml = xml.replace(/<\/w:settings>/, `  <w:defaultTabStop w:val="${this._defaultTabStop}"/>\n</w:settings>`);
+      }
+    }
+
+    // =========================================================================
+    // AFTER defaultTabStop (#39) — only process explicitly set elements
+    // #40 autoHyphenation, #48 evenAndOddHeaders
+    // =========================================================================
+
+    const postElements: string[] = [];
+
+    if (mod.has('autoHyphenation')) {
       xml = xml.replace(/<w:autoHyphenation\b[^>]*\/?>\s*/g, '');
+      if (this._autoHyphenation) postElements.push('<w:autoHyphenation/>');
+    }
+    if (mod.has('evenAndOddHeaders')) {
+      xml = xml.replace(/<w:evenAndOddHeaders\b[^>]*\/?>\s*/g, '');
+      if (this._evenAndOddHeaders) postElements.push('<w:evenAndOddHeaders/>');
+    }
+
+    if (postElements.length > 0) {
+      const postBlock = postElements.map(e => '\n  ' + e).join('');
+      if (/<w:characterSpacingControl\b/.test(xml)) {
+        xml = xml.replace(/<w:characterSpacingControl\b/, postBlock + '\n  <w:characterSpacingControl');
+      } else {
+        xml = xml.replace(/<\/w:settings>/, postBlock + '\n</w:settings>');
+      }
+    }
+
+    // =========================================================================
+    // #77: updateFields (near end of CT_Settings) — only if explicitly set via setter
+    // =========================================================================
+    if (mod.has('updateFields')) {
+      xml = xml.replace(/<w:updateFields\b[^>]*\/?>\s*/g, '');
+      if (this._updateFields) {
+        if (/<w:compat\b/.test(xml)) {
+          xml = xml.replace(/<w:compat\b/, '<w:updateFields w:val="true"/>\n  <w:compat');
+        } else {
+          xml = xml.replace(/<\/w:settings>/, '  <w:updateFields w:val="true"/>\n</w:settings>');
+        }
+      }
     }
 
     return xml;
@@ -10826,6 +10959,7 @@ export class Document {
   setEvenAndOddHeaders(enabled: boolean): void {
     this._evenAndOddHeaders = enabled;
     this._settingsModified = true;
+    this._modifiedBooleanSettings.add('evenAndOddHeaders');
   }
 
   /**
@@ -10841,6 +10975,7 @@ export class Document {
   setMirrorMargins(enabled: boolean): void {
     this._mirrorMargins = enabled;
     this._settingsModified = true;
+    this._modifiedBooleanSettings.add('mirrorMargins');
   }
 
   /**
@@ -10856,6 +10991,119 @@ export class Document {
   setAutoHyphenation(enabled: boolean): void {
     this._autoHyphenation = enabled;
     this._settingsModified = true;
+    this._modifiedBooleanSettings.add('autoHyphenation');
+  }
+
+  /**
+   * Gets whether spelling errors are hidden (w:hideSpellingErrors)
+   */
+  getHideSpellingErrors(): boolean {
+    return this._hideSpellingErrors ?? false;
+  }
+
+  /**
+   * Sets whether to hide spelling errors (w:hideSpellingErrors)
+   */
+  setHideSpellingErrors(enabled: boolean): void {
+    this._hideSpellingErrors = enabled;
+    this._settingsModified = true;
+    this._modifiedBooleanSettings.add('hideSpellingErrors');
+  }
+
+  /**
+   * Gets whether grammatical errors are hidden (w:hideGrammaticalErrors)
+   */
+  getHideGrammaticalErrors(): boolean {
+    return this._hideGrammaticalErrors ?? false;
+  }
+
+  /**
+   * Sets whether to hide grammatical errors (w:hideGrammaticalErrors)
+   */
+  setHideGrammaticalErrors(enabled: boolean): void {
+    this._hideGrammaticalErrors = enabled;
+    this._settingsModified = true;
+    this._modifiedBooleanSettings.add('hideGrammaticalErrors');
+  }
+
+  /**
+   * Gets the default tab stop value in twips (w:defaultTabStop)
+   */
+  getDefaultTabStop(): number | undefined {
+    return this._defaultTabStop;
+  }
+
+  /**
+   * Sets the default tab stop value in twips (w:defaultTabStop)
+   */
+  setDefaultTabStop(twips: number): void {
+    this._defaultTabStop = twips;
+    this._settingsModified = true;
+    this._modifiedBooleanSettings.add('defaultTabStop');
+  }
+
+  /**
+   * Gets whether fields are updated on document open (w:updateFields)
+   */
+  getUpdateFields(): boolean {
+    return this._updateFields ?? false;
+  }
+
+  /**
+   * Sets whether fields should be updated on document open (w:updateFields)
+   */
+  setUpdateFields(enabled: boolean): void {
+    this._updateFields = enabled;
+    this._settingsModified = true;
+    this._modifiedBooleanSettings.add('updateFields');
+  }
+
+  /**
+   * Gets whether TrueType fonts are embedded (w:embedTrueTypeFonts)
+   */
+  getEmbedTrueTypeFonts(): boolean {
+    return this._embedTrueTypeFonts ?? false;
+  }
+
+  /**
+   * Sets whether to embed TrueType fonts (w:embedTrueTypeFonts)
+   */
+  setEmbedTrueTypeFonts(enabled: boolean): void {
+    this._embedTrueTypeFonts = enabled;
+    this._settingsModified = true;
+    this._modifiedBooleanSettings.add('embedTrueTypeFonts');
+  }
+
+  /**
+   * Gets whether only font subsets are saved (w:saveSubsetFonts)
+   */
+  getSaveSubsetFonts(): boolean {
+    return this._saveSubsetFonts ?? false;
+  }
+
+  /**
+   * Sets whether to save only font subsets (w:saveSubsetFonts)
+   */
+  setSaveSubsetFonts(enabled: boolean): void {
+    this._saveSubsetFonts = enabled;
+    this._settingsModified = true;
+    this._modifiedBooleanSettings.add('saveSubsetFonts');
+  }
+
+  /**
+   * Gets whether move tracking is disabled (w:doNotTrackMoves)
+   */
+  getDoNotTrackMoves(): boolean {
+    return this._doNotTrackMoves ?? false;
+  }
+
+  /**
+   * Sets whether to disable move tracking (w:doNotTrackMoves)
+   */
+  setDoNotTrackMoves(enabled: boolean): void {
+    this._doNotTrackMoves = enabled;
+    this._settingsModified = true;
+    this._modifiedBooleanSettings.add('doNotTrackMoves');
   }
 
   /**
@@ -12174,6 +12422,14 @@ export class Document {
     this._evenAndOddHeaders = undefined;
     this._mirrorMargins = undefined;
     this._autoHyphenation = undefined;
+    this._hideSpellingErrors = undefined;
+    this._hideGrammaticalErrors = undefined;
+    this._defaultTabStop = undefined;
+    this._updateFields = undefined;
+    this._embedTrueTypeFonts = undefined;
+    this._saveSubsetFonts = undefined;
+    this._doNotTrackMoves = undefined;
+    this._modifiedBooleanSettings.clear();
     this._decimalSymbol = undefined;
     this._listSeparator = undefined;
     this._flattenIncludePictureFields = false;

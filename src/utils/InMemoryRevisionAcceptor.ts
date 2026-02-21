@@ -568,6 +568,26 @@ function acceptRevisionsInParagraph(
     }
   }
 
+  // Clear paragraph mark deletion tracking if accepting deletions
+  // This removes the w:del element from w:pPr/w:rPr
+  if (options.acceptDeletions) {
+    const formatting = paragraph.getFormatting();
+    if (formatting.paragraphMarkDeletion) {
+      paragraph.clearParagraphMarkDeletion();
+      result.deletionsAccepted++;
+    }
+  }
+
+  // Clear paragraph mark insertion tracking if accepting insertions
+  // This removes the w:ins element from w:pPr/w:rPr
+  if (options.acceptInsertions) {
+    const formatting = paragraph.getFormatting();
+    if (formatting.paragraphMarkInsertion) {
+      paragraph.clearParagraphMarkInsertion();
+      result.insertionsAccepted++;
+    }
+  }
+
   return result;
 }
 
@@ -576,7 +596,15 @@ function acceptRevisionsInParagraph(
  */
 export function paragraphHasRevisions(paragraph: Paragraph): boolean {
   const content = paragraph.getContent();
-  return content.some((item) => item instanceof Revision);
+  if (content.some((item) => item instanceof Revision)) {
+    return true;
+  }
+  // Also check paragraph mark revision markers in w:pPr/w:rPr
+  const formatting = paragraph.getFormatting();
+  if (formatting.paragraphMarkDeletion || formatting.paragraphMarkInsertion) {
+    return true;
+  }
+  return false;
 }
 
 /**

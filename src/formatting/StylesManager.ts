@@ -9,6 +9,43 @@ import { XMLParser } from "../xml/XMLParser";
 import { Style, StyleType } from "./Style";
 
 /**
+ * Configuration for latent styles (w:latentStyles per ECMA-376 §17.7.4.6)
+ * Controls which built-in styles are shown in the Word UI gallery
+ */
+export interface LatentStylesConfig {
+  /** Default locked state for built-in styles */
+  defaultLockedState?: boolean;
+  /** Default UI priority for built-in styles */
+  defaultUiPriority?: number;
+  /** Default semi-hidden state */
+  defaultSemiHidden?: boolean;
+  /** Default unhide-when-used state */
+  defaultUnhideWhenUsed?: boolean;
+  /** Default quick format flag */
+  defaultQFormat?: boolean;
+  /** Total count of style definitions */
+  count?: number;
+}
+
+/**
+ * Exception to latent style defaults (w:lsdException per ECMA-376 §17.7.4.7)
+ */
+export interface LatentStyleException {
+  /** Style name */
+  name: string;
+  /** Override: locked state */
+  locked?: boolean;
+  /** Override: UI priority */
+  uiPriority?: number;
+  /** Override: semi-hidden */
+  semiHidden?: boolean;
+  /** Override: unhide when used */
+  unhideWhenUsed?: boolean;
+  /** Override: quick format */
+  qFormat?: boolean;
+}
+
+/**
  * Result of XML validation
  */
 export interface ValidationResult {
@@ -36,6 +73,10 @@ export class StylesManager {
 
   // Track which specific styles have been modified (for selective merging)
   private _modifiedStyleIds = new Set<string>();
+
+  // Latent styles configuration
+  private latentStyles?: LatentStylesConfig;
+  private latentStyleExceptions: LatentStyleException[] = [];
 
   /**
    * Registry of built-in style factory functions
@@ -412,6 +453,46 @@ export class StylesManager {
   }
 
   /**
+   * Sets the latent styles configuration
+   * @param config - Latent styles configuration
+   */
+  setLatentStyles(config: LatentStylesConfig): this {
+    this.latentStyles = config;
+    this._modified = true;
+    return this;
+  }
+
+  /**
+   * Gets the latent styles configuration
+   */
+  getLatentStyles(): LatentStylesConfig | undefined {
+    return this.latentStyles;
+  }
+
+  /**
+   * Adds a latent style exception
+   * @param exception - The exception to add
+   */
+  addLatentStyleException(exception: LatentStyleException): this {
+    // Replace existing exception for same name
+    const idx = this.latentStyleExceptions.findIndex(e => e.name === exception.name);
+    if (idx >= 0) {
+      this.latentStyleExceptions[idx] = exception;
+    } else {
+      this.latentStyleExceptions.push(exception);
+    }
+    this._modified = true;
+    return this;
+  }
+
+  /**
+   * Gets all latent style exceptions
+   */
+  getLatentStyleExceptions(): LatentStyleException[] {
+    return [...this.latentStyleExceptions];
+  }
+
+  /**
    * Generates the complete styles.xml file
    * @returns XML string for word/styles.xml
    */
@@ -423,6 +504,11 @@ export class StylesManager {
 
     // Add document defaults
     stylesChildren.push(this.generateDocDefaults());
+
+    // Add latent styles if configured (per ECMA-376 CT_Styles order: docDefaults, latentStyles, style*)
+    if (this.latentStyles) {
+      stylesChildren.push(this.generateLatentStyles());
+    }
 
     // Add all styles
     for (const style of this.getAllStyles()) {
@@ -479,6 +565,45 @@ export class StylesManager {
         XMLBuilder.w("pPr", undefined, pPrDefaultChildren),
       ]),
     ]);
+  }
+
+  /**
+   * Generates the latent styles XML element
+   */
+  private generateLatentStyles() {
+    if (!this.latentStyles) return XMLBuilder.w("latentStyles", {}, []);
+
+    const attrs: Record<string, string> = {};
+    if (this.latentStyles.defaultLockedState !== undefined) {
+      attrs["w:defLockedState"] = this.latentStyles.defaultLockedState ? "1" : "0";
+    }
+    if (this.latentStyles.defaultUiPriority !== undefined) {
+      attrs["w:defUIPriority"] = this.latentStyles.defaultUiPriority.toString();
+    }
+    if (this.latentStyles.defaultSemiHidden !== undefined) {
+      attrs["w:defSemiHidden"] = this.latentStyles.defaultSemiHidden ? "1" : "0";
+    }
+    if (this.latentStyles.defaultUnhideWhenUsed !== undefined) {
+      attrs["w:defUnhideWhenUsed"] = this.latentStyles.defaultUnhideWhenUsed ? "1" : "0";
+    }
+    if (this.latentStyles.defaultQFormat !== undefined) {
+      attrs["w:defQFormat"] = this.latentStyles.defaultQFormat ? "1" : "0";
+    }
+    if (this.latentStyles.count !== undefined) {
+      attrs["w:count"] = this.latentStyles.count.toString();
+    }
+
+    const children = this.latentStyleExceptions.map(exc => {
+      const excAttrs: Record<string, string> = { "w:name": exc.name };
+      if (exc.locked !== undefined) excAttrs["w:locked"] = exc.locked ? "1" : "0";
+      if (exc.uiPriority !== undefined) excAttrs["w:uiPriority"] = exc.uiPriority.toString();
+      if (exc.semiHidden !== undefined) excAttrs["w:semiHidden"] = exc.semiHidden ? "1" : "0";
+      if (exc.unhideWhenUsed !== undefined) excAttrs["w:unhideWhenUsed"] = exc.unhideWhenUsed ? "1" : "0";
+      if (exc.qFormat !== undefined) excAttrs["w:qFormat"] = exc.qFormat ? "1" : "0";
+      return XMLBuilder.wSelf("lsdException", excAttrs);
+    });
+
+    return XMLBuilder.w("latentStyles", attrs, children);
   }
 
   /**

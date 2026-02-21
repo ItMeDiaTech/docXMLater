@@ -279,6 +279,15 @@ export interface ParagraphFormatting {
     /** Date when the paragraph mark was deleted */
     date: Date;
   };
+  /** Paragraph mark insertion tracking (for inserted ¶ symbols) */
+  paragraphMarkInsertion?: {
+    /** Unique revision ID */
+    id: number;
+    /** Author who inserted the paragraph mark */
+    author: string;
+    /** Date when the paragraph mark was inserted */
+    date: Date;
+  };
   /** True when the original XML had numId=0 (explicitly suppressed numbering) */
   numberingSuppressed?: boolean;
 }
@@ -2801,6 +2810,42 @@ export class Paragraph {
   }
 
   /**
+   * Marks the paragraph mark (¶ symbol) as inserted via tracked changes.
+   * This adds a `w:ins` element inside `w:pPr/w:rPr` indicating the insertion
+   * of the ¶ symbol.
+   *
+   * @param id - Unique revision ID
+   * @param author - Author who inserted the paragraph mark
+   * @param date - Date when the insertion occurred (defaults to now)
+   * @returns This paragraph for chaining
+   */
+  markParagraphMarkAsInserted(id: number, author: string, date?: Date): this {
+    this.formatting.paragraphMarkInsertion = {
+      id,
+      author,
+      date: date || new Date(),
+    };
+    return this;
+  }
+
+  /**
+   * Clears the paragraph mark insertion marker
+   * @returns This paragraph for chaining
+   */
+  clearParagraphMarkInsertion(): this {
+    delete this.formatting.paragraphMarkInsertion;
+    return this;
+  }
+
+  /**
+   * Checks if the paragraph mark is marked as inserted
+   * @returns True if the paragraph mark is inserted
+   */
+  isParagraphMarkInserted(): boolean {
+    return !!this.formatting.paragraphMarkInsertion;
+  }
+
+  /**
    * Converts the paragraph to WordprocessingML XML element
    *
    * **ECMA-376 Compliance:** Properties are generated in the order specified by
@@ -3137,7 +3182,8 @@ export class Paragraph {
     // Per CT_PPr, w:rPr comes after all CT_PPrBase elements and before w:sectPr/w:pPrChange
     if (
       this.formatting.paragraphMarkRunProperties ||
-      this.formatting.paragraphMarkDeletion
+      this.formatting.paragraphMarkDeletion ||
+      this.formatting.paragraphMarkInsertion
     ) {
       const rPrChildren: XMLElement[] = [];
 
@@ -3154,6 +3200,20 @@ export class Paragraph {
             }
           }
         }
+      }
+
+      // Per CT_ParaRPr schema, w:ins precedes w:del in the sequence
+      // Add insertion marker if the paragraph mark is inserted (w:ins)
+      // Per ECMA-376 Part 1 §17.13.5.18 - tracks insertion of paragraph mark
+      if (this.formatting.paragraphMarkInsertion) {
+        const ins = this.formatting.paragraphMarkInsertion;
+        rPrChildren.push(
+          XMLBuilder.wSelf("ins", {
+            "w:id": ins.id.toString(),
+            "w:author": ins.author,
+            "w:date": formatDateForXml(ins.date),
+          })
+        );
       }
 
       // Add deletion marker if the paragraph mark is deleted (w:del)
