@@ -62,7 +62,7 @@ export class AbstractNumbering {
       this.multiLevelType = 1; // default multilevel
     } else {
       // Object constructor: new AbstractNumbering({ abstractNumId, ... })
-      const properties = idOrProps as AbstractNumberingProperties;
+      const properties = idOrProps;
       this.abstractNumId = properties.abstractNumId;
       this.name = properties.name;
       this.levels = new Map();
@@ -263,10 +263,7 @@ export class AbstractNumbering {
   toXML(): XMLElement {
     const children: XMLElement[] = [];
 
-    // Add name if present
-    if (this.name) {
-      children.push(XMLBuilder.wSelf("name", { "w:val": this.name }));
-    }
+    // CT_AbstractNum order per ECMA-376: nsid → multiLevelType → tmpl → name → styleLink → numStyleLink → lvl*
 
     // Add multiLevelType
     let multiLevelTypeValue: string;
@@ -284,7 +281,12 @@ export class AbstractNumbering {
       })
     );
 
-    // Add styleLink / numStyleLink if present (before levels per ECMA-376 schema)
+    // Add name if present
+    if (this.name) {
+      children.push(XMLBuilder.wSelf("name", { "w:val": this.name }));
+    }
+
+    // Add styleLink / numStyleLink if present
     if (this.styleLink) {
       children.push(XMLBuilder.wSelf("styleLink", { "w:val": this.styleLink }));
     }
@@ -335,7 +337,7 @@ export class AbstractNumbering {
    */
   static createBulletList(
     abstractNumId: number,
-    levels: number = 9,
+    levels = 9,
     bullets?: string[] // Optional: custom bullets. If not provided, uses Word-native encoding
   ): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
@@ -366,10 +368,8 @@ export class AbstractNumbering {
    */
   static createNumberedList(
     abstractNumId: number,
-    levels: number = 9,
-    formats: Array<
-      "decimal" | "lowerLetter" | "lowerRoman" | "upperLetter" | "upperRoman"
-    > = ["decimal", "lowerLetter", "lowerRoman", "upperLetter", "upperRoman"]
+    levels = 9,
+    formats: ("decimal" | "lowerLetter" | "lowerRoman" | "upperLetter" | "upperRoman")[] = ["decimal", "lowerLetter", "lowerRoman", "upperLetter", "upperRoman"]
   ): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
       abstractNumId,
@@ -489,25 +489,21 @@ export class AbstractNumbering {
    */
   static fromXML(xml: string): AbstractNumbering {
     // Extract abstractNumId (required)
-    const abstractNumIdMatch = xml.match(
-      /<w:abstractNum[^>]*w:abstractNumId="([^"]+)"/
-    );
-    if (!abstractNumIdMatch || !abstractNumIdMatch[1]) {
+    const abstractNumIdMatch = /<w:abstractNum[^>]*w:abstractNumId="([^"]+)"/.exec(xml);
+    if (!abstractNumIdMatch?.[1]) {
       throw new Error("Missing required w:abstractNumId attribute");
     }
     const abstractNumId = parseInt(abstractNumIdMatch[1], 10);
 
     // Extract name (optional)
-    const nameMatch = xml.match(/<w:name[^>]*w:val="([^"]+)"/);
-    const name = nameMatch && nameMatch[1] ? nameMatch[1] : undefined;
+    const nameMatch = /<w:name[^>]*w:val="([^"]+)"/.exec(xml);
+    const name = nameMatch?.[1] ? nameMatch[1] : undefined;
 
     // Extract multiLevelType (optional)
     // Values: "singleLevel" = 0, "multilevel" = 1, "hybridMultilevel" = 2
-    const multiLevelTypeMatch = xml.match(
-      /<w:multiLevelType[^>]*w:val="([^"]+)"/
-    );
+    const multiLevelTypeMatch = /<w:multiLevelType[^>]*w:val="([^"]+)"/.exec(xml);
     let multiLevelType = 1; // default to multilevel
-    if (multiLevelTypeMatch && multiLevelTypeMatch[1]) {
+    if (multiLevelTypeMatch?.[1]) {
       const value = multiLevelTypeMatch[1];
       if (value === "singleLevel") multiLevelType = 0;
       else if (value === "multilevel") multiLevelType = 1;
@@ -515,11 +511,11 @@ export class AbstractNumbering {
     }
 
     // Extract numStyleLink (optional, ECMA-376 §17.9.21)
-    const numStyleLinkMatch = xml.match(/<w:numStyleLink[^>]*w:val="([^"]+)"/);
+    const numStyleLinkMatch = /<w:numStyleLink[^>]*w:val="([^"]+)"/.exec(xml);
     const numStyleLink = numStyleLinkMatch?.[1] || undefined;
 
     // Extract styleLink (optional, ECMA-376 §17.9.27)
-    const styleLinkMatch = xml.match(/<w:styleLink[^>]*w:val="([^"]+)"/);
+    const styleLinkMatch = /<w:styleLink[^>]*w:val="([^"]+)"/.exec(xml);
     const styleLink = styleLinkMatch?.[1] || undefined;
 
     // Create abstract numbering

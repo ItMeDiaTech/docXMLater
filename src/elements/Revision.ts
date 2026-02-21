@@ -100,7 +100,7 @@ export class Revision {
   private newProperties?: Record<string, any>;
   private moveId?: string;
   private moveLocation?: string;
-  private isFieldInstruction: boolean = false;
+  private isFieldInstruction = false;
   private location?: RevisionLocation;
   private fieldContext?: FieldContext;
 
@@ -528,16 +528,32 @@ export class Revision {
       }
     }
 
+    // Check if content contains only a single hyperlink (needs nesting inversion per ECMA-376)
+    // w:hyperlink is NOT a valid child of w:ins/w:del; instead w:ins/w:del must be inside w:hyperlink
+    const firstItem = this.content[0];
+    const singleHyperlink = this.content.length === 1 && firstItem && isHyperlinkContent(firstItem)
+      ? firstItem : null;
+
+    if (singleHyperlink && !this.isPropertyChangeType()) {
+      return this.createHyperlinkWrappedRevisionXml(singleHyperlink, elementName, attributes);
+    }
+
     // Add content to the revision (handles both Run and Hyperlink)
     for (const item of this.content) {
       if (isHyperlinkContent(item)) {
-        // Handle Hyperlink content
-        if (this.type === 'delete' || this.type === 'moveFrom') {
-          // For deletions, transform hyperlink's nested runs to use w:delText
-          children.push(this.createDeletedHyperlinkXml(item));
-        } else {
-          // For insertions, use normal hyperlink XML
-          children.push(item.toXML());
+        // For multiple-item revisions containing hyperlinks, extract the runs
+        // and add them directly (hyperlink wrapper omitted to maintain validity)
+        const hyperlinkXml = item.toXML();
+        if (hyperlinkXml.children) {
+          for (const child of hyperlinkXml.children) {
+            if (typeof child === 'object' && child.name === 'w:r') {
+              if (this.type === 'delete' || this.type === 'moveFrom') {
+                children.push(this.convertRunXmlToDeleted(child));
+              } else {
+                children.push(child);
+              }
+            }
+          }
         }
       } else if (isRunContent(item)) {
         // Handle Run content (existing behavior)
@@ -806,6 +822,47 @@ export class Revision {
    * @param hyperlink - Hyperlink containing deleted content
    * @returns XMLElement with nested runs transformed to use w:delText
    */
+  /**
+   * Creates a hyperlink-wrapped revision XML element.
+   * Per ECMA-376, w:hyperlink is NOT a valid child of w:ins/w:del.
+   * Instead, w:ins/w:del must be inside w:hyperlink:
+   * <w:hyperlink r:id="rId1"><w:ins ...><w:r>...</w:r></w:ins></w:hyperlink>
+   */
+  private createHyperlinkWrappedRevisionXml(
+    hyperlink: import('./Hyperlink').Hyperlink,
+    revisionElementName: string,
+    revisionAttributes: Record<string, string>
+  ): XMLElement {
+    const hyperlinkXml = hyperlink.toXML();
+
+    // Extract runs from the hyperlink
+    const runs: XMLElement[] = [];
+    if (hyperlinkXml.children) {
+      for (const child of hyperlinkXml.children) {
+        if (typeof child === 'object' && child.name === 'w:r') {
+          if (this.type === 'delete' || this.type === 'moveFrom') {
+            runs.push(this.convertRunXmlToDeleted(child));
+          } else {
+            runs.push(child);
+          }
+        }
+      }
+    }
+
+    // Build: <w:hyperlink ...><w:ins/w:del ...><w:r>...</w:r></w:ins/w:del></w:hyperlink>
+    const revisionElement: XMLElement = {
+      name: revisionElementName,
+      attributes: revisionAttributes,
+      children: runs,
+    };
+
+    return {
+      name: hyperlinkXml.name,
+      attributes: hyperlinkXml.attributes,
+      children: [revisionElement],
+    };
+  }
+
   private createDeletedHyperlinkXml(hyperlink: import('./Hyperlink').Hyperlink): XMLElement {
     // Get the hyperlink's normal XML
     const hyperlinkXml = hyperlink.toXML();

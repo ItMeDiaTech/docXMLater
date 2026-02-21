@@ -16,7 +16,7 @@ export interface TOCProperties {
   /** Heading levels to include (1-9, default: 1-3) */
   levels?: number;
   /** Specific styles to include (overrides levels if provided) */
-  includeStyles?: Array<{ styleName: string; level: number }>;
+  includeStyles?: { styleName: string; level: number }[];
   /** Whether to show page numbers (default: true) */
   showPageNumbers?: boolean;
   /** Whether to right-align page numbers (default: true) */
@@ -55,7 +55,7 @@ export interface TOCProperties {
 export class TableOfContents {
   private title: string;
   private levels: number;
-  private includeStyles?: Array<{ styleName: string; level: number }>;
+  private includeStyles?: { styleName: string; level: number }[];
   private showPageNumbers: boolean;
   private useHyperlinks: boolean;
   private tabLeader: 'dot' | 'hyphen' | 'underscore' | 'none';
@@ -216,7 +216,7 @@ export class TableOfContents {
   /**
    * Gets specific included styles
    */
-  getIncludeStyles(): Array<{ styleName: string; level: number }> | undefined {
+  getIncludeStyles(): { styleName: string; level: number }[] | undefined {
     return this.includeStyles;
   }
 
@@ -279,7 +279,7 @@ export class TableOfContents {
         underscore: 'u',
         none: 'n',
       };
-      instruction += ` \\p "${leaderMap[this.tabLeader as keyof typeof leaderMap]}"`;
+      instruction += ` \\p "${leaderMap[this.tabLeader]}"`;
     }
 
     // Add custom field switches
@@ -523,7 +523,7 @@ export class TableOfContents {
    * @param styles - Array of style names (e.g., ['Heading1', 'Heading3']) or objects with styleName and level
    * @returns This TOC for chaining
    */
-  setIncludeStyles(styles: string[] | Array<{ styleName: string; level: number }>): this {
+  setIncludeStyles(styles: string[] | { styleName: string; level: number }[]): this {
     // Convert string[] to object format for backward compatibility
     if (styles.length > 0 && typeof styles[0] === 'string') {
       this.includeStyles = (styles as string[]).map((styleName, index) => ({
@@ -531,7 +531,7 @@ export class TableOfContents {
         level: index + 1 // Default: assign sequential levels
       }));
     } else {
-      this.includeStyles = styles as Array<{ styleName: string; level: number }>;
+      this.includeStyles = styles as { styleName: string; level: number }[];
     }
     return this;
   }

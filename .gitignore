@@ -20,9 +20,12 @@ yarn.lock
 pnpm-lock.yaml
 
 # Project directories (not for public repo)
-.github/
 config/
 data/
+
+# yalc
+.yalc/
+yalc.lock
 
 # Build output
 dist/
@@ -213,16 +216,13 @@ BEFORE.docx
 Incorrect.docx
 *-test.docx
 *_test.docx
-/.gitignore
 /Test_Code.docx
 /COMPATIBILITY_ANALYSIS_UPDATED.md
 docs/guides/toc-style-synchronization.md
 build.bat
-CHANGELOG.md
 Debug_Log.txt
 FULL_TEST/_rels/.rels
 FULL_TEST/word/_rels/document.xml.rels
-/CHANGELOG.md
 /WordDocumentProcessor.ts
 /workingMethodFromDocHub.ts
 
@@ -268,7 +268,6 @@ test.bat
 test-table-cells.bat
 CLAUDE.md
 mcp_server/chroma
-.gitignore
 FONT_COLOR_IMPROVEMENTS.md
 FONT_COLOR_QUICK_REFERENCE.md
 README_FONT_COLOR.md
@@ -295,3 +294,11 @@ tests/testing/
 
 # Logs folder
 logs/
+
+# Dev notes and analysis (session-specific)
+Changes_Framework_*.md
+Rec.md
+numbering-bloat-fix-plan.md
+shading-gaps.md
+webSettings-analysis.md
+tests.txt

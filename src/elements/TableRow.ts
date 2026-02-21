@@ -332,7 +332,7 @@ export class TableRow {
    * @param isHeader - Whether this is a header row
    * @returns This row for chaining
    */
-  setHeader(isHeader: boolean = true): this {
+  setHeader(isHeader = true): this {
     const prev = this.formatting.isHeader;
     this.formatting.isHeader = isHeader;
     if (this.trackingContext?.isEnabled() && prev !== isHeader) {
@@ -346,7 +346,7 @@ export class TableRow {
    * @param cantSplit - Whether to prevent splitting
    * @returns This row for chaining
    */
-  setCantSplit(cantSplit: boolean = true): this {
+  setCantSplit(cantSplit = true): this {
     const prev = this.formatting.cantSplit;
     this.formatting.cantSplit = cantSplit;
     if (this.trackingContext?.isEnabled() && prev !== cantSplit) {
@@ -384,7 +384,7 @@ export class TableRow {
    * row.setHidden(true); // Hide this row from display
    * ```
    */
-  setHidden(hidden: boolean = true): this {
+  setHidden(hidden = true): this {
     const prev = this.formatting.hidden;
     this.formatting.hidden = hidden;
     if (this.trackingContext?.isEnabled() && prev !== hidden) {
@@ -469,7 +469,7 @@ export class TableRow {
    * @param type - Width type (dxa, pct, auto)
    * @returns This row for chaining
    */
-  setWBefore(width: number, type: string = 'dxa'): this {
+  setWBefore(width: number, type = 'dxa'): this {
     const prevWidth = this.formatting.wBefore;
     const prevType = this.formatting.wBeforeType;
     this.formatting.wBefore = width;
@@ -491,7 +491,7 @@ export class TableRow {
    * @param type - Width type (dxa, pct, auto)
    * @returns This row for chaining
    */
-  setWAfter(width: number, type: string = 'dxa'): this {
+  setWAfter(width: number, type = 'dxa'): this {
     const prevWidth = this.formatting.wAfter;
     const prevType = this.formatting.wAfterType;
     this.formatting.wAfter = width;
@@ -513,7 +513,7 @@ export class TableRow {
    * @param type - Spacing type (dxa, pct)
    * @returns This row for chaining
    */
-  setRowCellSpacing(spacing: number, type: string = 'dxa'): this {
+  setRowCellSpacing(spacing: number, type = 'dxa'): this {
     const prevSpacing = this.formatting.cellSpacing;
     const prevType = this.formatting.cellSpacingType;
     this.formatting.cellSpacing = spacing;
@@ -676,10 +676,17 @@ export class TableRow {
 
     // Add shading exception (w:shd)
     if (exceptions.shading) {
-      const attrs = buildShadingAttributes(exceptions.shading);
-      if (Object.keys(attrs).length > 0) {
-        children.push(XMLBuilder.wSelf('shd', attrs));
-      }
+      const shdAttrs: Record<string, string> = {};
+      if (exceptions.shading.pattern) shdAttrs['w:val'] = exceptions.shading.pattern;
+      if (exceptions.shading.color) shdAttrs['w:color'] = exceptions.shading.color;
+      if (exceptions.shading.fill) shdAttrs['w:fill'] = exceptions.shading.fill;
+      if (exceptions.shading.themeColor) shdAttrs['w:themeColor'] = exceptions.shading.themeColor;
+      if (exceptions.shading.themeFill) shdAttrs['w:themeFill'] = exceptions.shading.themeFill;
+      if (exceptions.shading.themeFillShade) shdAttrs['w:themeFillShade'] = exceptions.shading.themeFillShade;
+      if (exceptions.shading.themeFillTint) shdAttrs['w:themeFillTint'] = exceptions.shading.themeFillTint;
+      if (exceptions.shading.themeShade) shdAttrs['w:themeShade'] = exceptions.shading.themeShade;
+      if (exceptions.shading.themeTint) shdAttrs['w:themeTint'] = exceptions.shading.themeTint;
+      children.push(XMLBuilder.w('shd', shdAttrs));
     }
 
     return children;
@@ -692,7 +699,7 @@ export class TableRow {
   private buildBordersXML(borders: TableBorders): XMLElement[] {
     const children: XMLElement[] = [];
 
-    const borderNames: Array<keyof TableBorders> = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'];
+    const borderNames: (keyof TableBorders)[] = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'];
 
     for (const name of borderNames) {
       const border = borders[name];
@@ -719,50 +726,28 @@ export class TableRow {
   toXML(): XMLElement {
     const trPrChildren: XMLElement[] = [];
 
-    // Add row height
-    if (this.formatting.height !== undefined) {
-      const attrs: Record<string, string | number> = {
-        'w:val': this.formatting.height,
-      };
+    // Ordered per CT_TrPr (ECMA-376 §17.4.79):
+    // cnfStyle → divId → gridBefore → gridAfter → wBefore → wAfter →
+    // cantSplit → trHeight → tblHeader → tblCellSpacing → jc → hidden
 
-      if (this.formatting.heightRule) {
-        attrs['w:hRule'] = this.formatting.heightRule;
-      }
-
-      trPrChildren.push(XMLBuilder.wSelf('trHeight', attrs));
+    // 1. cnfStyle (conditional formatting bitmask)
+    if (this.formatting.cnfStyle) {
+      trPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
     }
 
-    // Add header row flag
-    if (this.formatting.isHeader) {
-      trPrChildren.push(XMLBuilder.wSelf('tblHeader'));
-    }
+    // 2. (divId not supported)
 
-    // Add can't split flag
-    if (this.formatting.cantSplit) {
-      trPrChildren.push(XMLBuilder.wSelf('cantSplit'));
-    }
-
-    // Add row justification
-    if (this.formatting.justification) {
-      trPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': this.formatting.justification }));
-    }
-
-    // Add hidden flag
-    if (this.formatting.hidden) {
-      trPrChildren.push(XMLBuilder.wSelf('hidden'));
-    }
-
-    // Add grid before
+    // 3. gridBefore
     if (this.formatting.gridBefore !== undefined) {
       trPrChildren.push(XMLBuilder.wSelf('gridBefore', { 'w:val': this.formatting.gridBefore }));
     }
 
-    // Add grid after
+    // 4. gridAfter
     if (this.formatting.gridAfter !== undefined) {
       trPrChildren.push(XMLBuilder.wSelf('gridAfter', { 'w:val': this.formatting.gridAfter }));
     }
 
-    // Add width before row (w:wBefore) per ECMA-376 Part 1 §17.4.83
+    // 5. wBefore
     if (this.formatting.wBefore !== undefined) {
       trPrChildren.push(XMLBuilder.wSelf('wBefore', {
         'w:w': this.formatting.wBefore,
@@ -770,7 +755,7 @@ export class TableRow {
       }));
     }
 
-    // Add width after row (w:wAfter) per ECMA-376 Part 1 §17.4.82
+    // 6. wAfter
     if (this.formatting.wAfter !== undefined) {
       trPrChildren.push(XMLBuilder.wSelf('wAfter', {
         'w:w': this.formatting.wAfter,
@@ -778,7 +763,28 @@ export class TableRow {
       }));
     }
 
-    // Add row-level cell spacing (w:tblCellSpacing)
+    // 7. cantSplit
+    if (this.formatting.cantSplit) {
+      trPrChildren.push(XMLBuilder.wSelf('cantSplit'));
+    }
+
+    // 8. trHeight
+    if (this.formatting.height !== undefined) {
+      const attrs: Record<string, string | number> = {
+        'w:val': this.formatting.height,
+      };
+      if (this.formatting.heightRule) {
+        attrs['w:hRule'] = this.formatting.heightRule;
+      }
+      trPrChildren.push(XMLBuilder.wSelf('trHeight', attrs));
+    }
+
+    // 9. tblHeader
+    if (this.formatting.isHeader) {
+      trPrChildren.push(XMLBuilder.wSelf('tblHeader'));
+    }
+
+    // 10. tblCellSpacing
     if (this.formatting.cellSpacing !== undefined) {
       trPrChildren.push(XMLBuilder.wSelf('tblCellSpacing', {
         'w:w': this.formatting.cellSpacing,
@@ -786,9 +792,16 @@ export class TableRow {
       }));
     }
 
-    // Add conditional formatting bitmask (w:cnfStyle) per ECMA-376 Part 1 §17.3.1.8
-    if (this.formatting.cnfStyle) {
-      trPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
+    // 11. jc (map 'start'/'end' to valid ST_JcTable values)
+    if (this.formatting.justification) {
+      const jcMap: Record<string, string> = { start: 'left', end: 'right' };
+      const jcVal = jcMap[this.formatting.justification] || this.formatting.justification;
+      trPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': jcVal }));
+    }
+
+    // 12. hidden
+    if (this.formatting.hidden) {
+      trPrChildren.push(XMLBuilder.wSelf('hidden'));
     }
 
     // Add table row property change (w:trPrChange) per ECMA-376 Part 1 §17.13.5.38
@@ -802,22 +815,10 @@ export class TableRow {
       const prevTrPrChildren: XMLElement[] = [];
       const prev = this.trPrChange.previousProperties;
       if (prev) {
-        if (prev.height !== undefined) {
-          const heightAttrs: Record<string, string | number> = { 'w:val': prev.height };
-          if (prev.heightRule) heightAttrs['w:hRule'] = prev.heightRule;
-          prevTrPrChildren.push(XMLBuilder.wSelf('trHeight', heightAttrs));
-        }
-        if (prev.isHeader) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('tblHeader'));
-        }
-        if (prev.cantSplit) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('cantSplit'));
-        }
-        if (prev.justification) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': prev.justification }));
-        }
-        if (prev.hidden) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('hidden'));
+        // Ordered per CT_TrPr: cnfStyle → gridBefore → gridAfter → wBefore → wAfter →
+        // cantSplit → trHeight → tblHeader → tblCellSpacing → jc → hidden
+        if (prev.cnfStyle) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': prev.cnfStyle }));
         }
         if (prev.gridBefore !== undefined) {
           prevTrPrChildren.push(XMLBuilder.wSelf('gridBefore', { 'w:val': prev.gridBefore }));
@@ -837,14 +838,29 @@ export class TableRow {
             'w:type': prev.wAfterType || 'dxa',
           }));
         }
+        if (prev.cantSplit) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('cantSplit'));
+        }
+        if (prev.height !== undefined) {
+          const heightAttrs: Record<string, string | number> = { 'w:val': prev.height };
+          if (prev.heightRule) heightAttrs['w:hRule'] = prev.heightRule;
+          prevTrPrChildren.push(XMLBuilder.wSelf('trHeight', heightAttrs));
+        }
+        if (prev.isHeader) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('tblHeader'));
+        }
         if (prev.cellSpacing !== undefined) {
           prevTrPrChildren.push(XMLBuilder.wSelf('tblCellSpacing', {
             'w:w': prev.cellSpacing,
             'w:type': prev.cellSpacingType || 'dxa',
           }));
         }
-        if (prev.cnfStyle) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': prev.cnfStyle }));
+        if (prev.justification) {
+          const jcPrevMap: Record<string, string> = { start: 'left', end: 'right' };
+          prevTrPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': jcPrevMap[prev.justification] || prev.justification }));
+        }
+        if (prev.hidden) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('hidden'));
         }
       }
       const prevTrPr = XMLBuilder.w('trPr', undefined, prevTrPrChildren);

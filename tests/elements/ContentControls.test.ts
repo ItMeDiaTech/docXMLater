@@ -179,7 +179,14 @@ describe('ContentControls - Date Picker', () => {
       expect(dateElement).toBeDefined();
 
       if (dateElement && typeof dateElement !== 'string') {
-        expect(dateElement.attributes!['w:dateFormat']).toBe('MM/dd/yyyy');
+        // Per ECMA-376, dateFormat is a child element with w:val, not an attribute
+        const dateFormatEl = dateElement.children!.find(
+          (child: any) => typeof child !== 'string' && child.name === 'w:dateFormat'
+        );
+        expect(dateFormatEl).toBeDefined();
+        if (dateFormatEl && typeof dateFormatEl !== 'string') {
+          expect(dateFormatEl.attributes!['w:val']).toBe('MM/dd/yyyy');
+        }
       }
     }
   });

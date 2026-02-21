@@ -255,7 +255,8 @@ describe('Section Properties - Phase 4.5 Enhancements', () => {
       const loadedSection = doc2.getSection();
 
       expect(loadedSection).toBeDefined();
-      expect(loadedSection!.getProperties().textDirection).toBe('rtl');
+      // 'rtl' is a convenience alias that maps to OOXML 'tbRl'; after round-trip normalizes to 'tbRl'
+      expect(loadedSection!.getProperties().textDirection).toBe('tbRl');
     });
 
     it('should set and serialize text direction = tbRl (top-to-bottom, right-to-left)', async () => {
@@ -322,7 +323,8 @@ describe('Section Properties - Phase 4.5 Enhancements', () => {
       expect(props.columns?.count).toBe(3);
       expect(props.columns?.separator).toBe(true);
       expect(props.columns?.columnWidths).toEqual([3000, 4000, 5000]);
-      expect(props.textDirection).toBe('rtl');
+      // 'rtl' convenience alias normalizes to 'tbRl' on round-trip
+      expect(props.textDirection).toBe('tbRl');
     });
 
     it('should preserve new properties with existing properties', async () => {
@@ -397,7 +399,8 @@ describe('Section Properties - Phase 4.5 Enhancements', () => {
       expect(props.paperSource?.other).toBe(3);
       expect(props.columns?.separator).toBe(true);
       expect(props.columns?.columnWidths).toEqual([2000, 3000]);
-      expect(props.textDirection).toBe('rtl');
+      // 'rtl' convenience alias normalizes to 'tbRl' on round-trip
+      expect(props.textDirection).toBe('tbRl');
     });
   });
 

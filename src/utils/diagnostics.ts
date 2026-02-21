@@ -88,7 +88,7 @@ export function logVerbose(message: string, data?: unknown): void {
 export function logParagraphContent(
   source: 'parsing' | 'serialization',
   paraIndex: number,
-  runs: Array<{ text: string; rtl?: boolean }>,
+  runs: { text: string; rtl?: boolean }[],
   bidi?: boolean
 ): void {
   if (!config.enabled) return;

@@ -614,6 +614,19 @@ export class XMLBuilder {
       if (ignorable.length > 0) {
         allNamespaces["mc:Ignorable"] = ignorable.join(" ");
       }
+    } else {
+      // mc:Ignorable was loaded from the original document — ensure every
+      // prefix referenced in mc:Ignorable has a matching xmlns declaration.
+      // Without this, the validator rejects prefixes that appear in
+      // mc:Ignorable but lack namespace declarations in the root element.
+      const defaults = XMLBuilder.createNamespaces();
+      const prefixes = allNamespaces["mc:Ignorable"].split(/\s+/);
+      for (const prefix of prefixes) {
+        const nsKey = `xmlns:${prefix}`;
+        if (!allNamespaces[nsKey] && defaults[nsKey]) {
+          allNamespaces[nsKey] = defaults[nsKey];
+        }
+      }
     }
 
     const documentChildren: XMLElement[] = [];

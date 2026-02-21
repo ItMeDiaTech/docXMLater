@@ -624,7 +624,7 @@ export class Section {
    * @param count Number of columns
    * @param space Space between columns in twips
    */
-  setColumns(count: number, space: number = 720): this {
+  setColumns(count: number, space = 720): this {
     const prev = this.properties.columns ? { ...this.properties.columns } : undefined;
     this.properties.columns = {
       count,
@@ -668,7 +668,7 @@ export class Section {
    * Sets title page flag (different first page)
    * @param titlePage Whether this section has a different first page
    */
-  setTitlePage(titlePage: boolean = true): this {
+  setTitlePage(titlePage = true): this {
     const prev = this.properties.titlePage;
     this.properties.titlePage = titlePage;
     if (this.trackingContext?.isEnabled() && prev !== titlePage) {
@@ -744,7 +744,7 @@ export class Section {
    * Shows a vertical line between columns
    * @param separator Whether to show column separator line
    */
-  setColumnSeparator(separator: boolean = true): this {
+  setColumnSeparator(separator = true): this {
     const prev = this.properties.columns?.separator;
     if (!this.properties.columns) {
       this.properties.columns = { count: 1 };
@@ -847,7 +847,7 @@ export class Section {
    * Sets whether endnotes are suppressed in this section
    * Per ECMA-376 Part 1 §17.6.14
    */
-  setNoEndnote(noEndnote: boolean = true): this {
+  setNoEndnote(noEndnote = true): this {
     const prev = this.properties.noEndnote;
     this.properties.noEndnote = noEndnote;
     if (this.trackingContext?.isEnabled() && prev !== noEndnote) {
@@ -860,7 +860,7 @@ export class Section {
    * Sets form protection for this section
    * Per ECMA-376 Part 1 §17.6.4
    */
-  setFormProtection(formProt: boolean = true): this {
+  setFormProtection(formProt = true): this {
     const prev = this.properties.formProt;
     this.properties.formProt = formProt;
     if (this.trackingContext?.isEnabled() && prev !== formProt) {
@@ -963,6 +963,51 @@ export class Section {
       }
     }
 
+    // CT_SectPr element order per ECMA-376:
+    // footnotePr → endnotePr → type → pgSz → pgMar → paperSrc → pgBorders →
+    // lnNumType → pgNumType → cols → formProt → vAlign → noEndnote → titlePg →
+    // textDirection → bidi → rtlGutter → docGrid → printerSettings → sectPrChange
+
+    // Footnote properties (w:footnotePr)
+    if (this.properties.footnotePr) {
+      const fnChildren: XMLElement[] = [];
+      if (this.properties.footnotePr.position) {
+        fnChildren.push(XMLBuilder.wSelf('pos', { 'w:val': this.properties.footnotePr.position }));
+      }
+      if (this.properties.footnotePr.numberFormat) {
+        fnChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.footnotePr.numberFormat }));
+      }
+      if (this.properties.footnotePr.startNumber !== undefined) {
+        fnChildren.push(XMLBuilder.wSelf('numStart', { 'w:val': this.properties.footnotePr.startNumber.toString() }));
+      }
+      if (this.properties.footnotePr.restart) {
+        fnChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.footnotePr.restart }));
+      }
+      if (fnChildren.length > 0) {
+        children.push(XMLBuilder.w('footnotePr', undefined, fnChildren));
+      }
+    }
+
+    // Endnote properties (w:endnotePr)
+    if (this.properties.endnotePr) {
+      const enChildren: XMLElement[] = [];
+      if (this.properties.endnotePr.position) {
+        enChildren.push(XMLBuilder.wSelf('pos', { 'w:val': this.properties.endnotePr.position }));
+      }
+      if (this.properties.endnotePr.numberFormat) {
+        enChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.endnotePr.numberFormat }));
+      }
+      if (this.properties.endnotePr.startNumber !== undefined) {
+        enChildren.push(XMLBuilder.wSelf('numStart', { 'w:val': this.properties.endnotePr.startNumber.toString() }));
+      }
+      if (this.properties.endnotePr.restart) {
+        enChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.endnotePr.restart }));
+      }
+      if (enChildren.length > 0) {
+        children.push(XMLBuilder.w('endnotePr', undefined, enChildren));
+      }
+    }
+
     // Section type
     if (this.properties.type) {
       children.push(
@@ -998,6 +1043,20 @@ export class Section {
       children.push(XMLBuilder.wSelf('pgMar', attrs));
     }
 
+    // Paper source
+    if (this.properties.paperSource) {
+      const attrs: Record<string, string> = {};
+      if (this.properties.paperSource.first !== undefined) {
+        attrs['w:first'] = this.properties.paperSource.first.toString();
+      }
+      if (this.properties.paperSource.other !== undefined) {
+        attrs['w:other'] = this.properties.paperSource.other.toString();
+      }
+      if (Object.keys(attrs).length > 0) {
+        children.push(XMLBuilder.wSelf('paperSrc', attrs));
+      }
+    }
+
     // Page borders per ECMA-376 Part 1 §17.6.10
     if (this.properties.pageBorders) {
       const pgBorders = this.properties.pageBorders;
@@ -1030,91 +1089,24 @@ export class Section {
       children.push(XMLBuilder.w('pgBorders', pgBordersAttrs, borderChildren));
     }
 
-    // Columns - output when set (including single column)
-    if (this.properties.columns) {
-      const attrs: Record<string, string> = {
-        'w:num': this.properties.columns.count.toString(),
-      };
-      if (this.properties.columns.space !== undefined) {
-        attrs['w:space'] = this.properties.columns.space.toString();
+    // Line numbering (w:lnNumType)
+    if (this.properties.lineNumbering) {
+      const attrs: Record<string, string> = {};
+      if (this.properties.lineNumbering.countBy !== undefined) {
+        attrs['w:countBy'] = this.properties.lineNumbering.countBy.toString();
       }
-      if (this.properties.columns.equalWidth !== undefined) {
-        attrs['w:equalWidth'] = this.properties.columns.equalWidth ? '1' : '0';
+      if (this.properties.lineNumbering.start !== undefined) {
+        attrs['w:start'] = this.properties.lineNumbering.start.toString();
       }
-      if (this.properties.columns.separator !== undefined) {
-        attrs['w:sep'] = this.properties.columns.separator ? '1' : '0';
+      if (this.properties.lineNumbering.distance !== undefined) {
+        attrs['w:distance'] = this.properties.lineNumbering.distance.toString();
       }
-
-      // Add individual column widths if specified
-      const colChildren: XMLElement[] = [];
-      if (this.properties.columns.columnWidths) {
-        for (const width of this.properties.columns.columnWidths) {
-          colChildren.push(
-            XMLBuilder.wSelf('col', { 'w:w': width.toString() })
-          );
-        }
+      if (this.properties.lineNumbering.restart) {
+        attrs['w:restart'] = this.properties.lineNumbering.restart;
       }
-
-      children.push(
-        colChildren.length > 0
-          ? XMLBuilder.w('cols', attrs, colChildren)
-          : XMLBuilder.wSelf('cols', attrs)
-      );
-    }
-
-    // Title page
-    if (this.properties.titlePage) {
-      children.push(XMLBuilder.wSelf('titlePg', { 'w:val': '1' }));
-    }
-
-    // Footnote properties (w:footnotePr) per ECMA-376 Part 1 §17.11.6
-    if (this.properties.footnotePr) {
-      const fnChildren: XMLElement[] = [];
-      if (this.properties.footnotePr.position) {
-        fnChildren.push(XMLBuilder.wSelf('pos', { 'w:val': this.properties.footnotePr.position }));
+      if (Object.keys(attrs).length > 0) {
+        children.push(XMLBuilder.wSelf('lnNumType', attrs));
       }
-      if (this.properties.footnotePr.numberFormat) {
-        fnChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.footnotePr.numberFormat }));
-      }
-      if (this.properties.footnotePr.startNumber !== undefined) {
-        fnChildren.push(XMLBuilder.wSelf('numStart', { 'w:val': this.properties.footnotePr.startNumber.toString() }));
-      }
-      if (this.properties.footnotePr.restart) {
-        fnChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.footnotePr.restart }));
-      }
-      if (fnChildren.length > 0) {
-        children.push(XMLBuilder.w('footnotePr', undefined, fnChildren));
-      }
-    }
-
-    // Endnote properties (w:endnotePr) per ECMA-376 Part 1 §17.11.7
-    if (this.properties.endnotePr) {
-      const enChildren: XMLElement[] = [];
-      if (this.properties.endnotePr.position) {
-        enChildren.push(XMLBuilder.wSelf('pos', { 'w:val': this.properties.endnotePr.position }));
-      }
-      if (this.properties.endnotePr.numberFormat) {
-        enChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.endnotePr.numberFormat }));
-      }
-      if (this.properties.endnotePr.startNumber !== undefined) {
-        enChildren.push(XMLBuilder.wSelf('numStart', { 'w:val': this.properties.endnotePr.startNumber.toString() }));
-      }
-      if (this.properties.endnotePr.restart) {
-        enChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.endnotePr.restart }));
-      }
-      if (enChildren.length > 0) {
-        children.push(XMLBuilder.w('endnotePr', undefined, enChildren));
-      }
-    }
-
-    // Suppress endnotes (w:noEndnote) per ECMA-376 Part 1 §17.6.14
-    if (this.properties.noEndnote) {
-      children.push(XMLBuilder.wSelf('noEndnote'));
-    }
-
-    // Form protection (w:formProt) per ECMA-376 Part 1 §17.6.4
-    if (this.properties.formProt) {
-      children.push(XMLBuilder.wSelf('formProt'));
     }
 
     // Page numbering
@@ -1137,6 +1129,42 @@ export class Section {
       }
     }
 
+    // Columns
+    if (this.properties.columns) {
+      const attrs: Record<string, string> = {
+        'w:num': this.properties.columns.count.toString(),
+      };
+      if (this.properties.columns.space !== undefined) {
+        attrs['w:space'] = this.properties.columns.space.toString();
+      }
+      if (this.properties.columns.equalWidth !== undefined) {
+        attrs['w:equalWidth'] = this.properties.columns.equalWidth ? '1' : '0';
+      }
+      if (this.properties.columns.separator !== undefined) {
+        attrs['w:sep'] = this.properties.columns.separator ? '1' : '0';
+      }
+
+      const colChildren: XMLElement[] = [];
+      if (this.properties.columns.columnWidths) {
+        for (const width of this.properties.columns.columnWidths) {
+          colChildren.push(
+            XMLBuilder.wSelf('col', { 'w:w': width.toString() })
+          );
+        }
+      }
+
+      children.push(
+        colChildren.length > 0
+          ? XMLBuilder.w('cols', attrs, colChildren)
+          : XMLBuilder.wSelf('cols', attrs)
+      );
+    }
+
+    // Form protection (w:formProt)
+    if (this.properties.formProt) {
+      children.push(XMLBuilder.wSelf('formProt'));
+    }
+
     // Vertical alignment
     if (this.properties.verticalAlignment) {
       children.push(
@@ -1144,24 +1172,25 @@ export class Section {
       );
     }
 
-    // Paper source
-    if (this.properties.paperSource) {
-      const attrs: Record<string, string> = {};
-      if (this.properties.paperSource.first !== undefined) {
-        attrs['w:first'] = this.properties.paperSource.first.toString();
-      }
-      if (this.properties.paperSource.other !== undefined) {
-        attrs['w:other'] = this.properties.paperSource.other.toString();
-      }
-      if (Object.keys(attrs).length > 0) {
-        children.push(XMLBuilder.wSelf('paperSrc', attrs));
-      }
+    // Suppress endnotes (w:noEndnote)
+    if (this.properties.noEndnote) {
+      children.push(XMLBuilder.wSelf('noEndnote'));
     }
 
-    // Text direction
+    // Title page
+    if (this.properties.titlePage) {
+      children.push(XMLBuilder.wSelf('titlePg', { 'w:val': '1' }));
+    }
+
+    // Text direction (map to valid ST_TextDirection values per ECMA-376 §17.18.93)
     if (this.properties.textDirection) {
+      const textDirMap: Record<string, string> = {
+        ltr: 'lrTb', rtl: 'tbRl', tbRl: 'tbRl', btLr: 'btLr',
+        lrTb: 'lrTb', lrTbV: 'lrTbV', tbRlV: 'tbRlV', tbLrV: 'tbLrV',
+      };
+      const val = textDirMap[this.properties.textDirection] || this.properties.textDirection;
       children.push(
-        XMLBuilder.wSelf('textDirection', { 'w:val': this.properties.textDirection })
+        XMLBuilder.wSelf('textDirection', { 'w:val': val })
       );
     }
 
@@ -1173,26 +1202,6 @@ export class Section {
     // RTL gutter (gutter on right side)
     if (this.properties.rtlGutter) {
       children.push(XMLBuilder.wSelf('rtlGutter'));
-    }
-
-    // Line numbering (w:lnNumType)
-    if (this.properties.lineNumbering) {
-      const attrs: Record<string, string> = {};
-      if (this.properties.lineNumbering.countBy !== undefined) {
-        attrs['w:countBy'] = this.properties.lineNumbering.countBy.toString();
-      }
-      if (this.properties.lineNumbering.start !== undefined) {
-        attrs['w:start'] = this.properties.lineNumbering.start.toString();
-      }
-      if (this.properties.lineNumbering.distance !== undefined) {
-        attrs['w:distance'] = this.properties.lineNumbering.distance.toString();
-      }
-      if (this.properties.lineNumbering.restart) {
-        attrs['w:restart'] = this.properties.lineNumbering.restart;
-      }
-      if (Object.keys(attrs).length > 0) {
-        children.push(XMLBuilder.wSelf('lnNumType', attrs));
-      }
     }
 
     // Document grid
@@ -1212,7 +1221,7 @@ export class Section {
       }
     }
 
-    // Printer settings (w:printerSettings) per ECMA-376 Part 1 §17.6.6
+    // Printer settings (w:printerSettings)
     if (this.properties.printerSettingsId) {
       children.push(XMLBuilder.wSelf('printerSettings', {
         'r:id': this.properties.printerSettingsId,
@@ -1230,6 +1239,11 @@ export class Section {
       const prevChildren: XMLElement[] = [];
       const prev = this.sectPrChange.previousProperties;
       if (prev) {
+        // Ordered per CT_SectPrBase:
+        // type → pgSz → pgMar → lnNumType → pgNumType → cols → formProt → vAlign → titlePg → textDirection
+        if (prev.type) {
+          prevChildren.push(XMLBuilder.wSelf('type', { 'w:val': prev.type }));
+        }
         if (prev.pageSize) {
           const pgSzAttrs: Record<string, string> = {
             'w:w': prev.pageSize.width?.toString() || '12240',
@@ -1250,31 +1264,6 @@ export class Section {
           if (prev.margins.footer !== undefined) pgMarAttrs['w:footer'] = prev.margins.footer.toString();
           prevChildren.push(XMLBuilder.wSelf('pgMar', pgMarAttrs));
         }
-        if (prev.type) {
-          prevChildren.push(XMLBuilder.wSelf('type', { 'w:val': prev.type }));
-        }
-        if (prev.columns) {
-          const colAttrs: Record<string, string> = { 'w:num': prev.columns.count?.toString() || '1' };
-          if (prev.columns.space !== undefined) colAttrs['w:space'] = prev.columns.space.toString();
-          prevChildren.push(XMLBuilder.wSelf('cols', colAttrs));
-        }
-        if (prev.titlePage) {
-          prevChildren.push(XMLBuilder.wSelf('titlePg'));
-        }
-        if (prev.pageNumbering) {
-          const pnAttrs: Record<string, string> = {};
-          if (prev.pageNumbering.start !== undefined) pnAttrs['w:start'] = prev.pageNumbering.start.toString();
-          if (prev.pageNumbering.format) pnAttrs['w:fmt'] = prev.pageNumbering.format;
-          if (Object.keys(pnAttrs).length > 0) {
-            prevChildren.push(XMLBuilder.wSelf('pgNumType', pnAttrs));
-          }
-        }
-        if (prev.verticalAlignment) {
-          prevChildren.push(XMLBuilder.wSelf('vAlign', { 'w:val': prev.verticalAlignment }));
-        }
-        if (prev.textDirection) {
-          prevChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': prev.textDirection }));
-        }
         if (prev.lineNumbering) {
           const lnAttrs: Record<string, string> = {};
           if (prev.lineNumbering.countBy !== undefined) lnAttrs['w:countBy'] = prev.lineNumbering.countBy.toString();
@@ -1285,8 +1274,34 @@ export class Section {
             prevChildren.push(XMLBuilder.wSelf('lnNumType', lnAttrs));
           }
         }
+        if (prev.pageNumbering) {
+          const pnAttrs: Record<string, string> = {};
+          if (prev.pageNumbering.start !== undefined) pnAttrs['w:start'] = prev.pageNumbering.start.toString();
+          if (prev.pageNumbering.format) pnAttrs['w:fmt'] = prev.pageNumbering.format;
+          if (Object.keys(pnAttrs).length > 0) {
+            prevChildren.push(XMLBuilder.wSelf('pgNumType', pnAttrs));
+          }
+        }
+        if (prev.columns) {
+          const colAttrs: Record<string, string> = { 'w:num': prev.columns.count?.toString() || '1' };
+          if (prev.columns.space !== undefined) colAttrs['w:space'] = prev.columns.space.toString();
+          prevChildren.push(XMLBuilder.wSelf('cols', colAttrs));
+        }
         if (prev.formProt) {
           prevChildren.push(XMLBuilder.wSelf('formProt'));
+        }
+        if (prev.verticalAlignment) {
+          prevChildren.push(XMLBuilder.wSelf('vAlign', { 'w:val': prev.verticalAlignment }));
+        }
+        if (prev.titlePage) {
+          prevChildren.push(XMLBuilder.wSelf('titlePg'));
+        }
+        if (prev.textDirection) {
+          const tdMap: Record<string, string> = {
+            ltr: 'lrTb', rtl: 'tbRl', tbRl: 'tbRl', btLr: 'btLr',
+            lrTb: 'lrTb', lrTbV: 'lrTbV', tbRlV: 'tbRlV', tbLrV: 'tbLrV',
+          };
+          prevChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': tdMap[prev.textDirection] || prev.textDirection }));
         }
       }
       const prevSectPr = XMLBuilder.w('sectPr', undefined, prevChildren);

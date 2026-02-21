@@ -240,7 +240,7 @@ export interface DocumentLoadOptions extends DocumentOptions {
  * Represents a Word document
  */
 export class Document {
-  constructor(zipHandler?: ZipHandler, options: DocumentOptions = {}, initDefaults: boolean = true) {
+  constructor(zipHandler?: ZipHandler, options: DocumentOptions = {}, initDefaults = true) {
     this.zipHandler = zipHandler || new ZipHandler();
     this.bodyElements = [];
     this.properties = options.properties || {};
@@ -249,7 +249,7 @@ export class Document {
     this.numberingManager = NumberingManager.create();
     this.section = new Section();
     this.imageManager = ImageManager.create();
-    this.relationshipManager = RelationshipManager.createForDocument();
+    this.relationshipManager = initDefaults ? RelationshipManager.createForDocument() : RelationshipManager.create();
     this.headerFooterManager = HeaderFooterManager.create();
     this.bookmarkManager = BookmarkManager.create();
     this.revisionManager = RevisionManager.create();
@@ -316,8 +316,8 @@ export class Document {
   private logger: ILogger;
 
   // Track changes settings
-  private trackChangesEnabled: boolean = false;
-  private trackFormatting: boolean = true;
+  private trackChangesEnabled = false;
+  private trackFormatting = true;
   private revisionViewSettings: RevisionViewSettings = {
     showInsertionsAndDeletions: true,
     showFormatting: true,
@@ -325,19 +325,19 @@ export class Document {
   };
 
   // TOC auto-population setting
-  private autoPopulateTOCs: boolean = false;
+  private autoPopulateTOCs = false;
   
   // TOC field instruction sync setting (default: OFF to preserve original instructions)
-  private autoSyncTOCStyles: boolean = false;
+  private autoSyncTOCStyles = false;
 
   // Flag to skip document.xml regeneration after stripping tracked changes
   // When true, save() and toBuffer() will preserve the manually cleaned XML
-  private skipDocumentXmlRegeneration: boolean = false;
+  private skipDocumentXmlRegeneration = false;
 
   // Flag to accept all revisions before save
   // When true, acceptAllRevisions() is called after flushPendingChanges() but before XML generation
   // This ensures ALL revisions (including those created during save) are accepted
-  private acceptRevisionsBeforeSave: boolean = false;
+  private acceptRevisionsBeforeSave = false;
 
   // Store original [Content_Types].xml entries to preserve during save
   // This ensures round-trip fidelity for documents with features the framework doesn't track
@@ -353,23 +353,25 @@ export class Document {
   private _originalFootnotesXml?: string;
   private _originalEndnotesXml?: string;
   private _originalCommentsXml?: string;
-  private _commentsModified: boolean = false;
-  private _originalCommentCompanionFiles: Map<string, string> = new Map();
+  private _commentsModified = false;
+  private _originalCommentCompanionFiles = new Map<string, string>();
+  /** Parts explicitly removed via removePart() — skip regeneration during save */
+  private _removedParts = new Set<string>();
 
   // Track whether app properties have been programmatically modified since load
-  private _appPropsModified: boolean = false;
+  private _appPropsModified = false;
 
   // Track whether footnotes/endnotes have been programmatically modified since load
-  private _footnotesModified: boolean = false;
-  private _endnotesModified: boolean = false;
+  private _footnotesModified = false;
+  private _endnotesModified = false;
 
   // Track whether settings have been programmatically modified since load
   // When true, mergeSettingsWithOriginal() will apply in-memory state to the preserved XML
-  private _settingsModified: boolean = false;
+  private _settingsModified = false;
 
   // webSettings.xml round-trip preservation
   private _originalWebSettingsXml?: string;
-  private _webSettingsModified: boolean = false;
+  private _webSettingsModified = false;
   private _webSettings: {
     optimizeForBrowser: boolean;
     allowPNG: boolean;
@@ -396,7 +398,7 @@ export class Document {
   private _compatInfo?: CompatibilityInfo;
 
   private rsidRoot?: string;
-  private rsids: Set<string> = new Set();
+  private rsids = new Set<string>();
   private documentProtection?: DocumentProtection;
 
   /** Document background (w:background) per ECMA-376 Part 1 §17.2.1 */
@@ -414,13 +416,13 @@ export class Document {
   private _listSeparator?: string;
 
   /** When true, _postProcessDocumentXml() strips INCLUDEPICTURE field markup from document.xml */
-  private _flattenIncludePictureFields: boolean = false;
+  private _flattenIncludePictureFields = false;
   /** When true, _postProcessDocumentXml() removes RSIDs not referenced in document.xml */
-  private _stripOrphanRSIDs: boolean = false;
+  private _stripOrphanRSIDs = false;
   /** When set, _postProcessDocumentXml() removes direct w:spacing from paragraphs with these styles */
   private _clearDirectSpacingStyles: string[] | null = null;
   /** Tracks numPicBullet IDs removed during numbering merge, for rels cleanup */
-  private _removedNumPicBulletIds: Set<number> = new Set();
+  private _removedNumPicBulletIds = new Set<number>();
 
   /**
    * Snapshot of save-related state for rollback on failure
@@ -733,11 +735,11 @@ export class Document {
     // Parse w:trackRevisions - presence means tracking is enabled
     // Both <w:trackRevisions/> and <w:trackRevisions w:val="true"/> mean enabled
     // <w:trackRevisions w:val="false"/> or <w:trackRevisions w:val="0"/> means disabled
-    const trackRevisionsMatch = settingsXml.match(/<w:trackRevisions\b([^>]*)\/?>/);
+    const trackRevisionsMatch = /<w:trackRevisions\b([^>]*)\/?>/.exec(settingsXml);
     if (trackRevisionsMatch) {
       const attrs = trackRevisionsMatch[1] ?? '';
-      const valMatch = attrs.match(/w:val\s*=\s*"([^"]*)"/);
-      if (valMatch && valMatch[1] !== undefined) {
+      const valMatch = /w:val\s*=\s*"([^"]*)"/.exec(attrs);
+      if (valMatch?.[1] !== undefined) {
         const val = valMatch[1].toLowerCase();
         this.trackChangesEnabled = val !== 'false' && val !== '0' && val !== 'off';
       } else {
@@ -758,12 +760,12 @@ export class Document {
     }
 
     // Parse w:revisionView
-    const revisionViewMatch = settingsXml.match(/<w:revisionView\b([^>]*)\/?>/);
+    const revisionViewMatch = /<w:revisionView\b([^>]*)\/?>/.exec(settingsXml);
     if (revisionViewMatch) {
       const attrs = revisionViewMatch[1] || '';
-      const insDelMatch = attrs.match(/w:insDel\s*=\s*"([^"]*)"/);
-      const formattingMatch = attrs.match(/w:formatting\s*=\s*"([^"]*)"/);
-      const inkMatch = attrs.match(/w:inkAnnotations\s*=\s*"([^"]*)"/);
+      const insDelMatch = /w:insDel\s*=\s*"([^"]*)"/.exec(attrs);
+      const formattingMatch = /w:formatting\s*=\s*"([^"]*)"/.exec(attrs);
+      const inkMatch = /w:inkAnnotations\s*=\s*"([^"]*)"/.exec(attrs);
       if (insDelMatch?.[1] !== undefined) {
         this.revisionViewSettings.showInsertionsAndDeletions = insDelMatch[1] !== '0';
       }
@@ -776,24 +778,24 @@ export class Document {
     }
 
     // Parse w:documentProtection
-    const protMatch = settingsXml.match(/<w:documentProtection\b([^>]*)\/?>/);
+    const protMatch = /<w:documentProtection\b([^>]*)\/?>/.exec(settingsXml);
     if (protMatch) {
       const attrs = protMatch[1] || '';
-      const editMatch = attrs.match(/w:edit\s*=\s*"([^"]*)"/);
-      const enforcementMatch = attrs.match(/w:enforcement\s*=\s*"([^"]*)"/);
+      const editMatch = /w:edit\s*=\s*"([^"]*)"/.exec(attrs);
+      const enforcementMatch = /w:enforcement\s*=\s*"([^"]*)"/.exec(attrs);
       if (editMatch?.[1]) {
         const edit = editMatch[1] as 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
         const enforcement = enforcementMatch?.[1] ? enforcementMatch[1] !== '0' : true;
         this.documentProtection = { edit, enforcement };
 
         // Parse optional crypto attributes
-        const cryptProviderMatch = attrs.match(/w:cryptProviderType\s*=\s*"([^"]*)"/);
-        const cryptAlgClassMatch = attrs.match(/w:cryptAlgorithmClass\s*=\s*"([^"]*)"/);
-        const cryptAlgTypeMatch = attrs.match(/w:cryptAlgorithmType\s*=\s*"([^"]*)"/);
-        const cryptAlgSidMatch = attrs.match(/w:cryptAlgorithmSid\s*=\s*"([^"]*)"/);
-        const cryptSpinMatch = attrs.match(/w:cryptSpinCount\s*=\s*"([^"]*)"/);
-        const hashMatch = attrs.match(/w:hash\s*=\s*"([^"]*)"/);
-        const saltMatch = attrs.match(/w:salt\s*=\s*"([^"]*)"/);
+        const cryptProviderMatch = /w:cryptProviderType\s*=\s*"([^"]*)"/.exec(attrs);
+        const cryptAlgClassMatch = /w:cryptAlgorithmClass\s*=\s*"([^"]*)"/.exec(attrs);
+        const cryptAlgTypeMatch = /w:cryptAlgorithmType\s*=\s*"([^"]*)"/.exec(attrs);
+        const cryptAlgSidMatch = /w:cryptAlgorithmSid\s*=\s*"([^"]*)"/.exec(attrs);
+        const cryptSpinMatch = /w:cryptSpinCount\s*=\s*"([^"]*)"/.exec(attrs);
+        const hashMatch = /w:hash\s*=\s*"([^"]*)"/.exec(attrs);
+        const saltMatch = /w:salt\s*=\s*"([^"]*)"/.exec(attrs);
 
         if (cryptProviderMatch?.[1]) this.documentProtection.cryptProviderType = cryptProviderMatch[1];
         if (cryptAlgClassMatch?.[1]) this.documentProtection.cryptAlgorithmClass = cryptAlgClassMatch[1];
@@ -806,12 +808,12 @@ export class Document {
     }
 
     // Parse w:rsids block
-    const rsidsBlockMatch = settingsXml.match(/<w:rsids>([\s\S]*?)<\/w:rsids>/);
+    const rsidsBlockMatch = /<w:rsids>([\s\S]*?)<\/w:rsids>/.exec(settingsXml);
     if (rsidsBlockMatch?.[1]) {
       const rsidsBlock = rsidsBlockMatch[1];
 
       // Parse rsidRoot
-      const rsidRootMatch = rsidsBlock.match(/<w:rsidRoot\s+w:val\s*=\s*"([^"]*)"\s*\/?>/);
+      const rsidRootMatch = /<w:rsidRoot\s+w:val\s*=\s*"([^"]*)"\s*\/?>/.exec(rsidsBlock);
       if (rsidRootMatch?.[1]) {
         this.rsidRoot = rsidRootMatch[1].toUpperCase();
       }
@@ -845,13 +847,13 @@ export class Document {
     }
 
     // Parse w:decimalSymbol per ECMA-376 Part 1 §17.15.1.23
-    const decimalMatch = settingsXml.match(/<w:decimalSymbol\s+w:val\s*=\s*"([^"]*)"\s*\/?>/);
+    const decimalMatch = /<w:decimalSymbol\s+w:val\s*=\s*"([^"]*)"\s*\/?>/.exec(settingsXml);
     if (decimalMatch?.[1]) {
       this._decimalSymbol = decimalMatch[1];
     }
 
     // Parse w:listSeparator per ECMA-376 Part 1 §17.15.1.55
-    const listSepMatch = settingsXml.match(/<w:listSeparator\s+w:val\s*=\s*"([^"]*)"\s*\/?>/);
+    const listSepMatch = /<w:listSeparator\s+w:val\s*=\s*"([^"]*)"\s*\/?>/.exec(settingsXml);
     if (listSepMatch?.[1]) {
       this._listSeparator = listSepMatch[1];
     }
@@ -876,7 +878,7 @@ export class Document {
     let mode = CompatibilityMode.Word2007; // Default per MS-DOCX spec
 
     // Extract w:compat block
-    const compatBlockMatch = settingsXml.match(/<w:compat>([\s\S]*?)<\/w:compat>/);
+    const compatBlockMatch = /<w:compat>([\s\S]*?)<\/w:compat>/.exec(settingsXml);
     if (compatBlockMatch?.[1]) {
       const compatBlock = compatBlockMatch[1];
 
@@ -885,9 +887,9 @@ export class Document {
       let settingMatch;
       while ((settingMatch = settingRegex.exec(compatBlock)) !== null) {
         const attrs = settingMatch[1] ?? '';
-        const nameMatch = attrs.match(/w:name\s*=\s*"([^"]*)"/);
-        const uriMatch = attrs.match(/w:uri\s*=\s*"([^"]*)"/);
-        const valMatch = attrs.match(/w:val\s*=\s*"([^"]*)"/);
+        const nameMatch = /w:name\s*=\s*"([^"]*)"/.exec(attrs);
+        const uriMatch = /w:uri\s*=\s*"([^"]*)"/.exec(attrs);
+        const valMatch = /w:val\s*=\s*"([^"]*)"/.exec(attrs);
 
         if (nameMatch?.[1] && uriMatch?.[1] && valMatch?.[1]) {
           const setting: CompatSetting = {
@@ -1811,7 +1813,7 @@ export class Document {
    * @returns This document for chaining
    */
   setProperty(key: keyof DocumentProperties, value: DocumentProperties[keyof DocumentProperties]): this {
-    (this.properties[key] as DocumentProperties[typeof key]) = value as never;
+    (this.properties[key]) = value as never;
     return this;
   }
 
@@ -2104,6 +2106,9 @@ export class Document {
     // This prevents Word "unreadable content" errors from unbalanced bookmark pairs
     this.validateBookmarkPairs();
 
+    // Ensure unique IDs for revisions and drawing elements before serialization
+    this.assignUniqueIds();
+
     // Only regenerate document.xml if we haven't manually stripped tracked changes
     // acceptAllRevisionsRawXml() sets skipDocumentXmlRegeneration to preserve the cleaned raw XML
     if (this.skipDocumentXmlRegeneration) {
@@ -2388,7 +2393,7 @@ export class Document {
       const runContent = xml.substring(runStart, runEnd);
 
       // Check for fldChar
-      const fldCharMatch = runContent.match(/<w:fldChar\s+w:fldCharType\s*=\s*"(begin|separate|end)"/);
+      const fldCharMatch = /<w:fldChar\s+w:fldCharType\s*=\s*"(begin|separate|end)"/.exec(runContent);
       if (fldCharMatch) {
         fieldTokens.push({
           type: fldCharMatch[1] as 'begin' | 'separate' | 'end',
@@ -2398,7 +2403,7 @@ export class Document {
       }
 
       // Check for instrText
-      const instrMatch = runContent.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
+      const instrMatch = /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/.exec(runContent);
       if (instrMatch) {
         instrTokens.push({
           text: instrMatch[1]!.trim(),
@@ -2410,13 +2415,13 @@ export class Document {
 
     // Phase 2: Use a depth-tracking state machine to identify INCLUDEPICTURE fields
     // and collect the runs to remove
-    const runsToRemove: Array<{ start: number; end: number }> = [];
-    const fieldStack: Array<{
+    const runsToRemove: { start: number; end: number }[] = [];
+    const fieldStack: {
       tokenIndex: number;
-      instrRuns: Array<{ start: number; end: number }>;
+      instrRuns: { start: number; end: number }[];
       separateRun?: { start: number; end: number };
       isIncludePicture: boolean;
-    }> = [];
+    }[] = [];
 
     let instrTokenIdx = 0;
 
@@ -2489,7 +2494,7 @@ export class Document {
     runsToRemove.sort((a, b) => b.start - a.start);
 
     // Deduplicate overlapping ranges
-    const uniqueRuns: Array<{ start: number; end: number }> = [];
+    const uniqueRuns: { start: number; end: number }[] = [];
     for (const run of runsToRemove) {
       const isDuplicate = uniqueRuns.some(u => u.start === run.start && u.end === run.end);
       if (!isDuplicate) {
@@ -2609,7 +2614,7 @@ export class Document {
 
             // Check if this pPr contains a pStyle matching our list
             // (checked against safeInner to avoid matching styles inside pPrChange)
-            const styleMatch = safeInner.match(/<w:pStyle\s+w:val="([^"]+)"/);
+            const styleMatch = /<w:pStyle\s+w:val="([^"]+)"/.exec(safeInner);
             if (styleMatch && styleSet.has(styleMatch[1]!)) {
               // Remove direct <w:spacing .../> (self-closing) from the safe region
               let cleaned = safeInner.replace(/<w:spacing\b[^/]*\/>\s*/g, '');
@@ -2691,6 +2696,7 @@ export class Document {
    * Updates the core properties with current values
    */
   private updateCoreProps(): void {
+    if (this._removedParts.has(DOCX_PATHS.CORE_PROPS) || this._removedParts.has('docProps/core.xml')) return;
     const xml = this.generator.generateCoreProps(this.properties);
     this.zipHandler.updateFile(DOCX_PATHS.CORE_PROPS, xml);
   }
@@ -2700,6 +2706,7 @@ export class Document {
    * Uses preservation strategy to maintain original metadata when unmodified
    */
   private updateAppProps(): void {
+    if (this._removedParts.has(DOCX_PATHS.APP_PROPS) || this._removedParts.has('docProps/app.xml')) return;
     if (this._originalAppPropsXml && !this._appPropsModified) {
       // Preserve original as-is — no changes to app properties
       return;
@@ -2777,13 +2784,13 @@ export class Document {
     this._webSettings.doNotOrganizeInFolder = /<w:doNotOrganizeInFolder\b/.test(xml);
     this._webSettings.doNotUseLongFileNames = /<w:doNotUseLongFileNames\b/.test(xml);
 
-    const pixelsMatch = xml.match(/<w:pixelsPerInch\b[^>]*w:val\s*=\s*"(\d+)"/);
+    const pixelsMatch = /<w:pixelsPerInch\b[^>]*w:val\s*=\s*"(\d+)"/.exec(xml);
     this._webSettings.pixelsPerInch = pixelsMatch?.[1] ? parseInt(pixelsMatch[1], 10) : undefined;
 
-    const screenMatch = xml.match(/<w:targetScreenSz\b[^>]*w:val\s*=\s*"([^"]*)"/);
+    const screenMatch = /<w:targetScreenSz\b[^>]*w:val\s*=\s*"([^"]*)"/.exec(xml);
     this._webSettings.targetScreenSz = screenMatch?.[1] ?? undefined;
 
-    const encodingMatch = xml.match(/<w:encoding\b[^>]*w:val\s*=\s*"([^"]*)"/);
+    const encodingMatch = /<w:encoding\b[^>]*w:val\s*=\s*"([^"]*)"/.exec(xml);
     this._webSettings.encoding = encodingMatch?.[1] ?? undefined;
   }
 
@@ -3012,7 +3019,7 @@ export class Document {
 
     // Collect all rId references still present in the merged numbering.xml
     const usedRIds = new Set<string>();
-    const rIdPattern = /r:(?:embed|link)="(rId\d+)"/g;
+    const rIdPattern = /r:(?:embed|link|id)="(rId\d+)"/g;
     let match: RegExpExecArray | null;
     while ((match = rIdPattern.exec(mergedXml)) !== null) {
       if (match[1]) usedRIds.add(match[1]);
@@ -3389,7 +3396,7 @@ export class Document {
     rsidsXml += '\n  </w:rsids>';
 
     // Insert after w:compat or w:docVars (#81/#82), before m:mathPr (#84)
-    if (/<\/w:compat>/.test(xml)) {
+    if (xml.includes('</w:compat>')) {
       xml = xml.replace(/<\/w:compat>/, '</w:compat>' + rsidsXml);
     } else if (/<m:mathPr\b/.test(xml)) {
       xml = xml.replace(/<m:mathPr\b/, rsidsXml + '\n  <m:mathPr');
@@ -3723,8 +3730,8 @@ export class Document {
    * console.log(`Found ${heading1Elements.length} Heading1 elements`);
    * ```
    */
-  findElementsByStyle(styleId: string): Array<Paragraph | TableCell> {
-    const results: Array<Paragraph | TableCell> = [];
+  findElementsByStyle(styleId: string): (Paragraph | TableCell)[] {
+    const results: (Paragraph | TableCell)[] = [];
 
     // Check body paragraphs
     for (const element of this.bodyElements) {
@@ -4461,7 +4468,7 @@ export class Document {
    * console.log(`Centered ${count} large images`);
    * ```
    */
-  centerLargeImages(minPixels: number = 96): number {
+  centerLargeImages(minPixels = 96): number {
     let count = 0;
 
     // Convert pixels to EMUs (914400 EMUs per inch, 96 DPI)
@@ -4542,7 +4549,7 @@ export class Document {
    * console.log(`Applied 3pt borders to ${count} images > 1 inch`);
    * ```
    */
-  public borderAndCenterLargeImages(minPixels: number = 96, borderThicknessPt: number = 2): number {
+  public borderAndCenterLargeImages(minPixels = 96, borderThicknessPt = 2): number {
     let count = 0;
 
     // Convert pixels to EMUs (914400 EMUs per inch, 96 DPI)
@@ -4624,7 +4631,7 @@ export class Document {
    * console.log(`Updated ${count} list items`);
    * ```
    */
-  setListLineSpacing(spacingTwips: number = 240): number {
+  setListLineSpacing(spacingTwips = 240): number {
     let count = 0;
 
     for (const paragraph of this.getAllParagraphs()) {
@@ -5036,7 +5043,7 @@ export class Document {
           if (content instanceof Paragraph) {
             collectFromParagraph(content);
           } else if (content instanceof Table) {
-            collectFromTable(content as Table);
+            collectFromTable(content);
           }
         }
       }
@@ -5068,6 +5075,58 @@ export class Document {
     }
 
     return repairs;
+  }
+
+  /**
+   * Assigns unique IDs to revisions and drawing elements before serialization.
+   * Prevents duplicate w:id and docPr id attributes that cause OOXML validation failures.
+   */
+  private assignUniqueIds(): void {
+    // Collect the highest existing revision ID to avoid collisions with parsed revisions
+    const existingRevisions = this.revisionManager.getAllRevisions();
+    let maxRevId = 0;
+    for (const rev of existingRevisions) {
+      if (rev.getId() > maxRevId) maxRevId = rev.getId();
+    }
+    const registeredSet = new Set(existingRevisions);
+
+    let docPrId = 1;
+
+    const processParagraph = (para: Paragraph) => {
+      // Assign unique IDs to unregistered revisions
+      for (const rev of para.getRevisions()) {
+        if (!registeredSet.has(rev)) {
+          maxRevId++;
+          rev.setId(maxRevId);
+          registeredSet.add(rev);
+        }
+      }
+
+      // Assign unique docPr IDs to drawing elements
+      for (const item of para.getContent()) {
+        if (item instanceof Shape) {
+          item.setDocPrId(docPrId++);
+        } else if (item instanceof TextBox) {
+          item.setDocPrId(docPrId++);
+        } else if (item instanceof ImageRun) {
+          item.getImageElement().setDocPrId(docPrId++);
+        }
+      }
+    };
+
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        processParagraph(element);
+      } else if (element instanceof Table) {
+        for (const row of element.getRows()) {
+          for (const cell of row.getCells()) {
+            for (const para of cell.getParagraphs()) {
+              processParagraph(para);
+            }
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -5120,7 +5179,7 @@ export class Document {
           if (content instanceof Paragraph) {
             removeFromParagraph(content);
           } else if (content instanceof Table) {
-            removeFromTable(content as Table);
+            removeFromTable(content);
           }
         }
       }
@@ -5235,8 +5294,7 @@ export class Document {
           const isListEnd =
             !nextElement || // End of document
             !(nextElement instanceof Paragraph) || // Next is not a paragraph
-            !nextElement.getNumbering() || // Next paragraph has no numbering
-            nextElement.getNumbering()!.numId !== numbering.numId; // Different list
+            nextElement.getNumbering()?.numId !== numbering.numId; // Different list
 
           if (isListEnd) {
             // Check if there's already a blank paragraph after the list
@@ -5300,7 +5358,7 @@ export class Document {
     // Scan for word/header*.xml and word/footer*.xml files
     const allFiles = this.zipHandler.getFilePaths();
     const headerFooterFiles = allFiles.filter((path) =>
-      path.match(/^word\/(header|footer)\d+\.xml$/i)
+      /^word\/(header|footer)\d+\.xml$/i.exec(path)
     );
 
     for (const filePath of headerFooterFiles) {
@@ -5312,7 +5370,7 @@ export class Document {
 
     // Clear section header/footer references
     const section = this.section;
-    const sectionProps = (section as any).properties as any;
+    const sectionProps = (section as any).properties;
 
     if (sectionProps.headers) {
       sectionProps.headers = {};
@@ -5468,7 +5526,7 @@ export class Document {
    * doc.createParagraph('Hollow star').setNumbering(listId, 1);
    * ```
    */
-  createBulletList(levels: number = 3, bullets?: string[]): number {
+  createBulletList(levels = 3, bullets?: string[]): number {
     return this.numberingManager.createBulletList(levels, bullets);
   }
 
@@ -5500,8 +5558,8 @@ export class Document {
    * ```
    */
   createNumberedList(
-    levels: number = 3,
-    formats?: Array<"decimal" | "lowerLetter" | "lowerRoman">
+    levels = 3,
+    formats?: ("decimal" | "lowerLetter" | "lowerRoman")[]
   ): number {
     return this.numberingManager.createNumberedList(levels, formats);
   }
@@ -5621,7 +5679,7 @@ export class Document {
 
       // Only process bullet lists (skip numbered lists)
       const level0 = abstractNum.getLevel(0);
-      if (!level0 || level0.getFormat() !== "bullet") continue;
+      if (level0?.getFormat() !== "bullet") continue;
 
       // Update all 9 levels (0-8) with standard formatting
       for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
@@ -7312,7 +7370,7 @@ export class Document {
 
       // Only process bullet lists (skip numbered lists)
       const level0 = abstractNum.getLevel(0);
-      if (!level0 || level0.getFormat() !== "bullet") continue;
+      if (level0?.getFormat() !== "bullet") continue;
 
       // Update all 9 levels (0-8) with formatting only (preserve existing symbols)
       for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
@@ -7877,7 +7935,7 @@ export class Document {
     const normalizedText = instrText.trim().replace(/&quot;/g, '"');
 
     // === Parse \o "X-Y" switch (outline levels) - supports quoted and unquoted formats ===
-    const outlineMatch = normalizedText.match(/\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/);
+    const outlineMatch = /\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/.exec(normalizedText);
     if (outlineMatch) {
       // Extract captured groups from whichever format matched
       const start = parseInt(outlineMatch[1] || outlineMatch[3] || outlineMatch[5]!, 10);
@@ -7910,7 +7968,7 @@ export class Document {
       if (!content) continue;
 
       // --- Case 1: Range format "X-Y" ---
-      const rangeMatch = content.match(/^(\d+)-(\d+)$/);
+      const rangeMatch = /^(\d+)-(\d+)$/.exec(content);
       if (rangeMatch?.[1] && rangeMatch?.[2]) {
         const start = parseInt(rangeMatch[1], 10);
         const end = parseInt(rangeMatch[2], 10);
@@ -7979,10 +8037,10 @@ export class Document {
       const instrMatches = Array.from(modifiedXml.matchAll(instrRegex));
 
       for (const match of instrMatches) {
-        if (!match || !match[1]) continue;
+        if (!match?.[1]) continue;
 
         // Decode XML entities in instruction
-        let fieldInstruction = match[1]
+        const fieldInstruction = match[1]
           .replace(/&amp;/g, "&")
           .replace(/&lt;/g, "<")
           .replace(/&gt;/g, ">")
@@ -8042,13 +8100,13 @@ export class Document {
   private syncTOCInstructionInXml(
     xml: string
   ): { xml: string; changed: boolean } {
-    const instrMatch = xml.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
+    const instrMatch = /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/.exec(xml);
     if (!instrMatch?.[1]) {
       return { xml, changed: false };
     }
 
     // Decode XML entities in instruction
-    let fieldInstruction = instrMatch[1]
+    const fieldInstruction = instrMatch[1]
       .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
@@ -8164,8 +8222,8 @@ export class Document {
     // find the actual style being used for that outline level FIRST.
     // This handles cases where heading styles have been renamed (e.g., "Heading 2" -> "Header 2")
     // and ensures we return the style that paragraphs actually use.
-    const headingLevelMatch = tocStyleName.match(/^Heading\s*(\d+)$/i);
-    if (headingLevelMatch && headingLevelMatch[1]) {
+    const headingLevelMatch = /^Heading\s*(\d+)$/i.exec(tocStyleName);
+    if (headingLevelMatch?.[1]) {
       const level = parseInt(headingLevelMatch[1]);
       const usedStyles = this.findHeadingStylesUsedByParagraphs();
       const actualStyleName = usedStyles.get(level);
@@ -8271,8 +8329,8 @@ export class Document {
   private findHeadingsForTOCFromXML(
     docXml: string,
     levels: number[]
-  ): Array<{ level: number; text: string; bookmark: string }> {
-    const headings: Array<{ level: number; text: string; bookmark: string }> =
+  ): { level: number; text: string; bookmark: string }[] {
+    const headings: { level: number; text: string; bookmark: string }[] =
       [];
     const levelSet = new Set(levels);
 
@@ -8292,7 +8350,7 @@ export class Document {
       // Helper function to extract heading info from a parsed paragraph object
       const extractHeading = (para: any): void => {
         const pPr = para["w:pPr"];
-        if (!pPr || !pPr["w:pStyle"]) {
+        if (!pPr?.["w:pStyle"]) {
           return;
         }
 
@@ -8303,7 +8361,7 @@ export class Document {
 
         // Check if style matches "HeadingN" format (exact match, case-insensitive)
         const headingMatch = styleVal.match(/^Heading(\d+)$/i);
-        if (!headingMatch || !headingMatch[1]) {
+        if (!headingMatch?.[1]) {
           return;
         }
 
@@ -8432,8 +8490,8 @@ export class Document {
    */
   private findHeadingsForTOC(
     levels: number[]
-  ): Array<{ level: number; text: string; bookmark: string }> {
-    const headings: Array<{ level: number; text: string; bookmark: string }> =
+  ): { level: number; text: string; bookmark: string }[] {
+    const headings: { level: number; text: string; bookmark: string }[] =
       [];
     const levelSet = new Set(levels);
 
@@ -8445,8 +8503,8 @@ export class Document {
 
         // Check if paragraph has a heading style (handle both "Heading1" and "Heading 1")
         if (formatting.style) {
-          const styleMatch = formatting.style.match(/Heading\s*(\d+)/i);
-          if (styleMatch && styleMatch[1]) {
+          const styleMatch = /Heading\s*(\d+)/i.exec(formatting.style);
+          if (styleMatch?.[1]) {
             const headingLevel = parseInt(styleMatch[1], 10);
 
             // Check if this level should be included in TOC
@@ -8486,7 +8544,7 @@ export class Document {
    * @returns Complete TOC XML string
    */
   private generateTOCXML(
-    headings: Array<{ level: number; text: string; bookmark: string }>,
+    headings: { level: number; text: string; bookmark: string }[],
     originalInstrText: string
   ): string {
     const sdtId = Math.floor(Math.random() * 2000000000) - 1000000000;
@@ -8685,12 +8743,10 @@ export class Document {
       for (const match of sdtMatches) {
         try {
           const tocXml = match[0];
-          const instrMatch = tocXml.match(
-            /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/
-          );
+          const instrMatch = /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/.exec(tocXml);
           if (!instrMatch?.[1]) continue;
 
-          let fieldInstruction = instrMatch[1]
+          const fieldInstruction = instrMatch[1]
             .replace(/&amp;/g, "&")
             .replace(/&lt;/g, "<")
             .replace(/&gt;/g, ">")
@@ -8729,7 +8785,7 @@ export class Document {
           const instrText = match[1];
           if (!instrText) continue;
 
-          let fieldInstruction = instrText
+          const fieldInstruction = instrText
             .replace(/&amp;/g, "&")
             .replace(/&lt;/g, "<")
             .replace(/&gt;/g, ">")
@@ -8795,7 +8851,7 @@ export class Document {
    * @private
    */
   private generateSimpleTOCXML(
-    headings: Array<{ text: string; level: number; bookmark: string }>,
+    headings: { text: string; level: number; bookmark: string }[],
     fieldInstruction: string
   ): string {
     // Build the TOC entries
@@ -9178,9 +9234,7 @@ export class Document {
 
     // Remove each header type
     if (sectionProps.headers) {
-      const types = Object.keys(sectionProps.headers) as Array<
-        "default" | "first" | "even"
-      >;
+      const types = Object.keys(sectionProps.headers) as ("default" | "first" | "even")[];
       for (const type of types) {
         this.removeHeader(type);
       }
@@ -9202,9 +9256,7 @@ export class Document {
 
     // Remove each footer type
     if (sectionProps.footers) {
-      const types = Object.keys(sectionProps.footers) as Array<
-        "default" | "first" | "even"
-      >;
+      const types = Object.keys(sectionProps.footers) as ("default" | "first" | "even")[];
       for (const type of types) {
         this.removeFooter(type);
       }
@@ -9306,6 +9358,11 @@ export class Document {
       const xml = entry.header.toXML();
       const path = `word/${entry.filename}`;
       this.zipHandler.addFile(path, xml);
+
+      // Per OOXML, relationships are part-scoped: hyperlinks in header XML
+      // need word/_rels/headerN.xml.rels, not word/_rels/document.xml.rels
+      const paragraphs = this.extractParagraphsFromElements(entry.header.getElements());
+      this.generatePartLevelHyperlinkRels(paragraphs, `word/_rels/${entry.filename}.rels`);
     }
   }
 
@@ -9319,6 +9376,11 @@ export class Document {
       const xml = entry.footer.toXML();
       const path = `word/${entry.filename}`;
       this.zipHandler.addFile(path, xml);
+
+      // Per OOXML, relationships are part-scoped: hyperlinks in footer XML
+      // need word/_rels/footerN.xml.rels, not word/_rels/document.xml.rels
+      const paragraphs = this.extractParagraphsFromElements(entry.footer.getElements());
+      this.generatePartLevelHyperlinkRels(paragraphs, `word/_rels/${entry.filename}.rels`);
     }
   }
 
@@ -9404,6 +9466,13 @@ export class Document {
       if (existingRels.length === 0) {
         this.relationshipManager.addFootnotes();
       }
+
+      // Per OOXML, relationships are part-scoped: hyperlinks in footnotes.xml
+      // need word/_rels/footnotes.xml.rels, not word/_rels/document.xml.rels
+      this.generatePartLevelHyperlinkRels(
+        this.footnoteManager.getAllFootnotes().flatMap(fn => fn.getParagraphs()),
+        'word/_rels/footnotes.xml.rels'
+      );
     } else if (this._originalFootnotesXml) {
       // Passthrough — preserve original XML exactly
       this.zipHandler.addFile(DOCX_PATHS.FOOTNOTES, this._originalFootnotesXml);
@@ -9424,6 +9493,13 @@ export class Document {
       if (existingRels.length === 0) {
         this.relationshipManager.addEndnotes();
       }
+
+      // Per OOXML, relationships are part-scoped: hyperlinks in endnotes.xml
+      // need word/_rels/endnotes.xml.rels, not word/_rels/document.xml.rels
+      this.generatePartLevelHyperlinkRels(
+        this.endnoteManager.getAllEndnotes().flatMap(en => en.getParagraphs()),
+        'word/_rels/endnotes.xml.rels'
+      );
     } else if (this._originalEndnotesXml) {
       // Passthrough — preserve original XML exactly
       this.zipHandler.addFile(DOCX_PATHS.ENDNOTES, this._originalEndnotesXml);
@@ -9431,6 +9507,80 @@ export class Document {
       const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.ENDNOTES);
       if (existingRels.length === 0) {
         this.relationshipManager.addEndnotes();
+      }
+    }
+  }
+
+  /**
+   * Extracts all Paragraph instances from a mixed array of Paragraphs and Tables.
+   * Tables are recursed: rows → cells → getParagraphs().
+   */
+  private extractParagraphsFromElements(elements: (Paragraph | Table)[]): Paragraph[] {
+    const result: Paragraph[] = [];
+    for (const el of elements) {
+      if (el instanceof Paragraph) {
+        result.push(el);
+      } else if (el instanceof Table) {
+        for (const row of el.getRows()) {
+          for (const cell of row.getCells()) {
+            result.push(...cell.getParagraphs());
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Generates a part-level .rels file for hyperlinks in paragraphs of a specific part.
+   * Per OOXML, relationships are part-scoped: hyperlinks in footnotes.xml need
+   * word/_rels/footnotes.xml.rels, not word/_rels/document.xml.rels.
+   * After generating the .rels file, removes those relationships from the main
+   * RelationshipManager so they don't appear in document.xml.rels.
+   */
+  private generatePartLevelHyperlinkRels(paragraphs: Paragraph[], relsPath: string): void {
+    const hyperlinkRels: Array<{ id: string; url: string }> = [];
+
+    for (const para of paragraphs) {
+      for (const item of para.getContent()) {
+        if (item instanceof Hyperlink && item.isExternal()) {
+          const relId = item.getRelationshipId();
+          const url = item.getUrl();
+          if (relId && url) {
+            hyperlinkRels.push({ id: relId, url });
+          }
+        }
+        // Also check hyperlinks inside Revision objects (tracked changes)
+        if (item instanceof Revision) {
+          for (const revContent of item.getContent()) {
+            if (revContent instanceof Hyperlink && revContent.isExternal()) {
+              const relId = revContent.getRelationshipId();
+              const url = revContent.getUrl();
+              if (relId && url) {
+                hyperlinkRels.push({ id: relId, url });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (hyperlinkRels.length > 0) {
+      let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+      xml += '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n';
+      for (const rel of hyperlinkRels) {
+        const escapedId = XMLBuilder.escapeXmlAttribute(rel.id);
+        const escapedUrl = XMLBuilder.escapeXmlAttribute(rel.url);
+        xml += `  <Relationship Id="${escapedId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${escapedUrl}" TargetMode="External"/>\n`;
+      }
+      xml += '</Relationships>';
+
+      this.zipHandler.addFile(relsPath, xml);
+
+      // Remove these relationships from the main RelationshipManager
+      // so they don't appear in document.xml.rels
+      for (const rel of hyperlinkRels) {
+        this.relationshipManager.removeRelationship(rel.id);
       }
     }
   }
@@ -11429,7 +11579,7 @@ export class Document {
    * Only populated when loading existing documents in lenient mode
    * @returns Array of parse errors/warnings
    */
-  getParseWarnings(): Array<{ element: string; error: Error }> {
+  getParseWarnings(): { element: string; error: Error }[] {
     return this.parser.getParseErrors();
   }
 
@@ -11484,11 +11634,11 @@ export class Document {
 
     // Two-phase update to handle circular URL swaps correctly
     // Phase 1: Collect all updates without modifying hyperlinks
-    const updates: Array<{
+    const updates: {
       hyperlink: Hyperlink;
       newUrl: string;
       relationshipId?: string;
-    }> = [];
+    }[] = [];
 
     // Iterate through all paragraphs in document body
     for (const para of this.getAllParagraphs()) {
@@ -11721,7 +11871,7 @@ export class Document {
    * await doc.save('output.docx');
    * ```
    */
-  consolidateAllRevisions(timeWindowMs: number = 1000): { paragraphsProcessed: number; revisionsConsolidated: number } {
+  consolidateAllRevisions(timeWindowMs = 1000): { paragraphsProcessed: number; revisionsConsolidated: number } {
     let paragraphsProcessed = 0;
     let totalConsolidated = 0;
 
@@ -11862,7 +12012,7 @@ export class Document {
           } else if (item instanceof Hyperlink) {
             para.addHyperlink(item);
           } else if (item instanceof Field) {
-            para.addField(item as Field);
+            para.addField(item);
           }
         }
         
@@ -12169,7 +12319,35 @@ export class Document {
    * ```
    */
   async removePart(partName: string): Promise<boolean> {
-    return this.zipHandler.removeFile(partName);
+    const removed = this.zipHandler.removeFile(partName);
+    if (removed) {
+      // Remove the part's ContentType override to prevent "part does not exist" errors
+      if (this._originalContentTypes?.overrides) {
+        const partKey = partName.startsWith('/') ? partName : `/${partName}`;
+        for (const entry of this._originalContentTypes.overrides) {
+          if (entry.startsWith(`${partKey}|`)) {
+            this._originalContentTypes.overrides.delete(entry);
+            break;
+          }
+        }
+      }
+      // Remove relationships targeting this part from _rels/.rels
+      const relsXml = this.zipHandler.getFileAsString("_rels/.rels");
+      if (relsXml) {
+        const target = partName.replace(/^\//, '');
+        const relPattern = new RegExp(
+          `\\s*<Relationship[^>]*Target="${target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*/?>`,
+          'g'
+        );
+        const cleaned = relsXml.replace(relPattern, '');
+        if (cleaned !== relsXml) {
+          this.zipHandler.updateFile("_rels/.rels", cleaned);
+        }
+      }
+      // Track removed parts to skip regeneration during save
+      this._removedParts.add(partName);
+    }
+    return removed;
   }
 
   /**
@@ -12347,7 +12525,7 @@ export class Document {
 
       for (const partName of parts) {
         // Skip binary files (images, fonts, etc.)
-        if (partName.match(/\.(png|jpg|jpeg|gif|woff|woff2|ttf|otf|bin)$/i)) {
+        if (/\.(png|jpg|jpeg|gif|woff|woff2|ttf|otf|bin)$/i.exec(partName)) {
           continue;
         }
 
@@ -12592,7 +12770,7 @@ export class Document {
   async getRelationships(
     partName: string
   ): Promise<
-    Array<{ id?: string; type?: string; target?: string; targetMode?: string }>
+    { id?: string; type?: string; target?: string; targetMode?: string }[]
   > {
     try {
       // Construct the .rels path from the part name
@@ -12732,22 +12910,22 @@ export class Document {
   findText(
     text: string,
     options?: { caseSensitive?: boolean; wholeWord?: boolean }
-  ): Array<{
+  ): {
     paragraph: Paragraph;
     paragraphIndex: number;
     run: Run;
     runIndex: number;
     text: string;
     startIndex: number;
-  }> {
-    const results: Array<{
+  }[] {
+    const results: {
       paragraph: Paragraph;
       paragraphIndex: number;
       run: Run;
       runIndex: number;
       text: string;
       startIndex: number;
-    }> = [];
+    }[] = [];
 
     const caseSensitive = options?.caseSensitive ?? false;
     const wholeWord = options?.wholeWord ?? false;
@@ -12907,8 +13085,8 @@ export class Document {
    */
   findParagraphsByText(
     pattern: string | RegExp
-  ): Array<{ paragraph: Paragraph; matches: string[] }> {
-    const results: Array<{ paragraph: Paragraph; matches: string[] }> = [];
+  ): { paragraph: Paragraph; matches: string[] }[] {
+    const results: { paragraph: Paragraph; matches: string[] }[] = [];
     const regex =
       typeof pattern === "string" ? new RegExp(pattern, "gi") : pattern;
 
@@ -12944,7 +13122,7 @@ export class Document {
     for (const paragraph of this.getAllParagraphs()) {
       for (const run of paragraph.getRuns()) {
         const formatting = run.getFormatting();
-        if (formatting.font && formatting.font.toLowerCase() === lowerFontName) {
+        if (formatting.font?.toLowerCase() === lowerFontName) {
           results.push(run);
         }
       }
@@ -13506,7 +13684,7 @@ export class Document {
    * console.log(`Characters: ${charsWithSpaces} (with spaces), ${charsNoSpaces} (without)`);
    * ```
    */
-  getCharacterCount(includeSpaces: boolean = true): number {
+  getCharacterCount(includeSpaces = true): number {
     let totalChars = 0;
 
     // Track counted paragraphs to prevent duplicates (getAllParagraphs includes table paragraphs)
@@ -13687,7 +13865,7 @@ export class Document {
 
     // Check first row has cells (rows.length > 0 already checked above)
     const firstRow = rows[0];
-    if (firstRow && firstRow.getCells().length === 0) {
+    if (firstRow?.getCells().length === 0) {
       throw new Error("insertTableAt: table rows must have at least one cell");
     }
 
@@ -14056,8 +14234,8 @@ export class Document {
    * }
    * ```
    */
-  getHyperlinks(): Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> {
-    const hyperlinks: Array<{ hyperlink: Hyperlink; paragraph: Paragraph }> =
+  getHyperlinks(): { hyperlink: Hyperlink; paragraph: Paragraph }[] {
+    const hyperlinks: { hyperlink: Hyperlink; paragraph: Paragraph }[] =
       [];
 
     // Helper function to extract hyperlinks from paragraph content,
@@ -14288,8 +14466,8 @@ export class Document {
    * Gets all bookmarks in the document
    * @returns Array of bookmarks with their containing paragraph
    */
-  getBookmarks(): Array<{ bookmark: Bookmark; paragraph: Paragraph }> {
-    const bookmarks: Array<{ bookmark: Bookmark; paragraph: Paragraph }> = [];
+  getBookmarks(): { bookmark: Bookmark; paragraph: Paragraph }[] {
+    const bookmarks: { bookmark: Bookmark; paragraph: Paragraph }[] = [];
 
     for (const paragraph of this.getAllParagraphs()) {
       // Get bookmarks that start in this paragraph
@@ -14347,8 +14525,8 @@ export class Document {
    * console.log(`Found ${mergeFields.length} merge fields`);
    * ```
    */
-  getFields(): Array<{ field: FieldLike; paragraph: Paragraph; table?: Table }> {
-    const results: Array<{ field: FieldLike; paragraph: Paragraph; table?: Table }> = [];
+  getFields(): { field: FieldLike; paragraph: Paragraph; table?: Table }[] {
+    const results: { field: FieldLike; paragraph: Paragraph; table?: Table }[] = [];
 
     // Get fields from all body paragraphs
     for (const paragraph of this.getAllParagraphs()) {
@@ -14393,11 +14571,11 @@ export class Document {
    * }
    * ```
    */
-  getImages(): Array<{
+  getImages(): {
     image: Image;
     relationshipId: string;
     filename: string;
-  }> {
+  }[] {
     return this.imageManager.getAllImages();
   }
 
@@ -14423,7 +14601,7 @@ export class Document {
     await this.imageManager.loadAllImageData();
 
     // 2. Group images by filename (avoid processing same file twice)
-    const imagesByFilename = new Map<string, Array<{ image: Image; relationshipId: string; filename: string }>>();
+    const imagesByFilename = new Map<string, { image: Image; relationshipId: string; filename: string }[]>();
     for (const entry of this.imageManager.getAllImages()) {
       const group = imagesByFilename.get(entry.filename) || [];
       group.push(entry);
@@ -14500,7 +14678,7 @@ export class Document {
     for (const path of filePaths) {
       if (!path.endsWith('.rels') || path === 'word/_rels/document.xml.rels') continue;
       const content = this.zipHandler.getFileAsString(path);
-      if (content && content.includes(oldTarget)) {
+      if (content?.includes(oldTarget)) {
         const updated = content.replace(new RegExp(escapedOldTarget, 'g'), newTarget);
         this.zipHandler.updateFile(path, updated);
       }
@@ -15090,8 +15268,8 @@ export class Document {
    * console.log(`Processed ${tocSummary.length} TOCs with hyperlinked entries`);
    * ```
    */
-  public rebuildTOCs(): Array<[string, number[]]> {
-    const results: Array<[string, number[]]> = [];
+  public rebuildTOCs(): [string, number[]][] {
+    const results: [string, number[]][] = [];
     
     // Step 1: Remove SDT wrappers around tables if found (helper already exists)
     this.clearCustom();
@@ -15100,7 +15278,7 @@ export class Document {
     this.addTopBookmark();
     
     // Step 3: Get document.xml to scan for TOC elements
-    let docXml = this.zipHandler.getFileAsString('word/document.xml');
+    const docXml = this.zipHandler.getFileAsString('word/document.xml');
     if (!docXml) {
       return results;
     }
@@ -15119,7 +15297,7 @@ export class Document {
         const tocXml = match[0];
         
         // Extract field instruction
-        const instrMatch = tocXml.match(/<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/);
+        const instrMatch = /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/.exec(tocXml);
         if (!instrMatch?.[1]) {
           continue;
         }
@@ -15128,7 +15306,7 @@ export class Document {
         const instrText = instrMatch[1];
         
         // Decode XML entities
-        let fieldInstruction = instrText
+        const fieldInstruction = instrText
           .replace(/&/g, '&')
           .replace(/</g, '<')
           .replace(/>/g, '>')
@@ -15361,7 +15539,7 @@ export class Document {
         "</Types>"
     );
 
-    // _rels/.rels - minimal
+    // _rels/.rels - only reference parts that actually exist
     zipHandler.addFile(
       "_rels/.rels",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +

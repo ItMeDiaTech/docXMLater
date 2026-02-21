@@ -56,11 +56,11 @@ export interface ListDetectionResult {
  */
 export interface ListAnalysis {
   /** All analyzed paragraphs with their detection results */
-  paragraphs: Array<{
+  paragraphs: {
     paragraph: unknown; // Paragraph instance - using unknown to avoid circular dep
     text: string;
     detection: ListDetectionResult;
-  }>;
+  }[];
 
   /** True if any typed (non-Word) lists found */
   hasTypedLists: boolean;
@@ -144,9 +144,9 @@ export interface ListNormalizationReport {
   appliedCategory: ListCategory;
 
   /** Detailed per-paragraph results */
-  details: Array<{
+  details: {
     originalText: string;
     action: "normalized" | "skipped" | "error";
     reason?: string;
-  }>;
+  }[];
 }

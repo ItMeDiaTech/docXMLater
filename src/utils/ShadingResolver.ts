@@ -63,7 +63,7 @@ export function resolveCellShading(
           const activeConditionals = getActiveConditionalsInPriorityOrder(cnfStyle);
           for (const condType of activeConditionals) {
             const match = conditionals.find(
-              (c) => c.type === (condType as ConditionalFormattingType)
+              (c) => c.type === (condType)
             );
             if (match?.cellFormatting?.shading) {
               const condShading = match.cellFormatting.shading;

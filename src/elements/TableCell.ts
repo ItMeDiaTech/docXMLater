@@ -340,10 +340,8 @@ export class TableCell {
    * console.log(`Cell has ${fields.length} fields`);
    * ```
    */
-  getFields(): Array<import("./Field").Field | import("./Field").ComplexField> {
-    const fields: Array<
-      import("./Field").Field | import("./Field").ComplexField
-    > = [];
+  getFields(): (import("./Field").Field | import("./Field").ComplexField)[] {
+    const fields: (import("./Field").Field | import("./Field").ComplexField)[] = [];
     for (const para of this.paragraphs) {
       fields.push(...para.getFields());
     }
@@ -376,7 +374,7 @@ export class TableCell {
     predicate: (
       field: import("./Field").Field | import("./Field").ComplexField
     ) => boolean
-  ): Array<import("./Field").Field | import("./Field").ComplexField> {
+  ): (import("./Field").Field | import("./Field").ComplexField)[] {
     return this.getFields().filter(predicate);
   }
 
@@ -599,7 +597,7 @@ export class TableCell {
    * @param fit - Whether to expand/compress text to fit cell width
    * @returns This cell for chaining
    */
-  setFitText(fit: boolean = true): this {
+  setFitText(fit = true): this {
     const prev = this.formatting.fitText;
     this.formatting.fitText = fit;
     if (this.trackingContext?.isEnabled() && prev !== fit) {
@@ -614,7 +612,7 @@ export class TableCell {
    * @param noWrap - Whether to prevent wrapping (default: true)
    * @returns This cell for chaining
    */
-  setNoWrap(noWrap: boolean = true): this {
+  setNoWrap(noWrap = true): this {
     const prev = this.formatting.noWrap;
     this.formatting.noWrap = noWrap;
     if (this.trackingContext?.isEnabled() && prev !== noWrap) {
@@ -629,7 +627,7 @@ export class TableCell {
    * @param hide - Whether to ignore cell end mark in height calculations (default: true)
    * @returns This cell for chaining
    */
-  setHideMark(hide: boolean = true): this {
+  setHideMark(hide = true): this {
     const prev = this.formatting.hideMark;
     this.formatting.hideMark = hide;
     if (this.trackingContext?.isEnabled() && prev !== hide) {
@@ -1259,7 +1257,19 @@ export class TableCell {
   toXML(): XMLElement {
     const tcPrChildren: XMLElement[] = [];
 
-    // Add cell width (tcW) per ECMA-376 Part 1 §17.4.81
+    // tcPr children ordered per ECMA-376 CT_TcPr:
+    // cnfStyle → tcW → gridSpan → hMerge → vMerge → tcBorders → shd → noWrap → tcMar →
+    // textDirection → tcFitText → vAlign → hideMark →
+    // cellIns/cellDel/cellMerge → tcPrChange
+
+    // cnfStyle - conditional formatting style (MUST be first child per CT_TcPr)
+    if (this.formatting.cnfStyle) {
+      tcPrChildren.push(
+        XMLBuilder.wSelf("cnfStyle", { "w:val": this.formatting.cnfStyle })
+      );
+    }
+
+    // tcW - cell width
     if (this.formatting.width !== undefined) {
       const widthAttrs: Record<string, string | number> = {
         "w:w": this.formatting.width,
@@ -1268,26 +1278,43 @@ export class TableCell {
       tcPrChildren.push(XMLBuilder.wSelf("tcW", widthAttrs));
     }
 
-    // Add conditional formatting style (cnfStyle) per ECMA-376 Part 1 §17.4.7
-    if (this.formatting.cnfStyle) {
+    // gridSpan - column span
+    if (this.formatting.columnSpan && this.formatting.columnSpan > 1) {
       tcPrChildren.push(
-        XMLBuilder.wSelf("cnfStyle", { "w:val": this.formatting.cnfStyle })
+        XMLBuilder.wSelf("gridSpan", { "w:val": this.formatting.columnSpan })
       );
     }
 
-    // Add cell borders
+    // hMerge - legacy horizontal merge
+    if (this.formatting.hMerge) {
+      tcPrChildren.push(XMLBuilder.wSelf("hMerge", { "w:val": this.formatting.hMerge }));
+    }
+
+    // vMerge - vertical merge
+    // Per OOXML, <w:vMerge/> without val means "continue" (default).
+    // Only "restart" needs an explicit w:val attribute.
+    if (this.formatting.vMerge) {
+      if (this.formatting.vMerge === "restart") {
+        tcPrChildren.push(XMLBuilder.wSelf("vMerge", { "w:val": "restart" }));
+      } else {
+        tcPrChildren.push(XMLBuilder.wSelf("vMerge"));
+      }
+    }
+
+    // tcBorders - cell borders
     if (this.formatting.borders) {
       const borderElements: XMLElement[] = [];
       const borders = this.formatting.borders;
 
+      // Ordered per ECMA-376 CT_TcBorders: top, left, bottom, right
       if (borders.top) {
         borderElements.push(XMLBuilder.createBorder("top", borders.top));
       }
-      if (borders.bottom) {
-        borderElements.push(XMLBuilder.createBorder("bottom", borders.bottom));
-      }
       if (borders.left) {
         borderElements.push(XMLBuilder.createBorder("left", borders.left));
+      }
+      if (borders.bottom) {
+        borderElements.push(XMLBuilder.createBorder("bottom", borders.bottom));
       }
       if (borders.right) {
         borderElements.push(XMLBuilder.createBorder("right", borders.right));
@@ -1298,7 +1325,7 @@ export class TableCell {
       }
     }
 
-    // Add shading
+    // shd - shading
     if (this.formatting.shading) {
       const shadingAttrs = buildShadingAttributes(this.formatting.shading);
       if (Object.keys(shadingAttrs).length > 0) {
@@ -1306,7 +1333,12 @@ export class TableCell {
       }
     }
 
-    // Add cell margins (tcMar) per ECMA-376 Part 1 §17.4.43
+    // noWrap
+    if (this.formatting.noWrap) {
+      tcPrChildren.push(XMLBuilder.wSelf("noWrap"));
+    }
+
+    // tcMar - cell margins (ordered per CT_TcMar: top, left, bottom, right)
     if (this.formatting.margins) {
       const margins = this.formatting.margins;
       const marginChildren: XMLElement[] = [];
@@ -1319,18 +1351,18 @@ export class TableCell {
           })
         );
       }
-      if (margins.bottom !== undefined) {
-        marginChildren.push(
-          XMLBuilder.wSelf("bottom", {
-            "w:w": margins.bottom.toString(),
-            "w:type": "dxa",
-          })
-        );
-      }
       if (margins.left !== undefined) {
         marginChildren.push(
           XMLBuilder.wSelf("left", {
             "w:w": margins.left.toString(),
+            "w:type": "dxa",
+          })
+        );
+      }
+      if (margins.bottom !== undefined) {
+        marginChildren.push(
+          XMLBuilder.wSelf("bottom", {
+            "w:w": margins.bottom.toString(),
             "w:type": "dxa",
           })
         );
@@ -1349,23 +1381,7 @@ export class TableCell {
       }
     }
 
-    // Add vertical alignment
-    if (this.formatting.verticalAlignment) {
-      tcPrChildren.push(
-        XMLBuilder.wSelf("vAlign", {
-          "w:val": this.formatting.verticalAlignment,
-        })
-      );
-    }
-
-    // Add column span (gridSpan)
-    if (this.formatting.columnSpan && this.formatting.columnSpan > 1) {
-      tcPrChildren.push(
-        XMLBuilder.wSelf("gridSpan", { "w:val": this.formatting.columnSpan })
-      );
-    }
-
-    // Add text direction (textDirection) per ECMA-376 Part 1 §17.4.72
+    // textDirection
     if (this.formatting.textDirection) {
       tcPrChildren.push(
         XMLBuilder.wSelf("textDirection", {
@@ -1374,38 +1390,23 @@ export class TableCell {
       );
     }
 
-    // Add no wrap (noWrap) per ECMA-376 Part 1 §17.4.34
-    if (this.formatting.noWrap) {
-      tcPrChildren.push(XMLBuilder.wSelf("noWrap"));
-    }
-
-    // Add hide mark (hideMark) per ECMA-376 Part 1 §17.4.24
-    if (this.formatting.hideMark) {
-      tcPrChildren.push(XMLBuilder.wSelf("hideMark"));
-    }
-
-    // Add fit text (tcFitText) per ECMA-376 Part 1 §17.4.68
+    // tcFitText
     if (this.formatting.fitText) {
       tcPrChildren.push(XMLBuilder.wSelf("tcFitText"));
     }
 
-    // Add vertical merge (vMerge) per ECMA-376 Part 1 §17.4.85
-    if (this.formatting.vMerge) {
-      if (this.formatting.vMerge === "restart") {
-        tcPrChildren.push(XMLBuilder.wSelf("vMerge", { "w:val": "restart" }));
-      } else {
-        // 'continue' uses empty element (no val attribute)
-        tcPrChildren.push(XMLBuilder.wSelf("vMerge"));
-      }
+    // vAlign - vertical alignment
+    if (this.formatting.verticalAlignment) {
+      tcPrChildren.push(
+        XMLBuilder.wSelf("vAlign", {
+          "w:val": this.formatting.verticalAlignment,
+        })
+      );
     }
 
-    // Add legacy horizontal merge (hMerge) per ECMA-376 Part 1 §17.4.22
-    if (this.formatting.hMerge) {
-      if (this.formatting.hMerge === "restart") {
-        tcPrChildren.push(XMLBuilder.wSelf("hMerge", { "w:val": "restart" }));
-      } else {
-        tcPrChildren.push(XMLBuilder.wSelf("hMerge"));
-      }
+    // hideMark
+    if (this.formatting.hideMark) {
+      tcPrChildren.push(XMLBuilder.wSelf("hideMark"));
     }
 
     // Add cell revision markers (w:cellIns, w:cellDel, w:cellMerge) per ECMA-376 Part 1 §17.13.5.4-5.6
@@ -1423,12 +1424,14 @@ export class TableCell {
         tcPrChildren.push(XMLBuilder.wSelf("cellDel", attrs));
       } else if (revType === "tableCellMerge") {
         // Add vMerge and vMergeOrig attributes if present
+        // ST_AnnotationVMerge: "cont" | "rest" (not "continue" / "restart")
+        const mergeMap: Record<string, string> = { continue: "cont", restart: "rest" };
         const prevProps = this.cellRevision.getPreviousProperties();
         if (prevProps?.vMerge) {
-          attrs["w:vMerge"] = prevProps.vMerge;
+          attrs["w:vMerge"] = mergeMap[prevProps.vMerge] || prevProps.vMerge;
         }
         if (prevProps?.vMergeOrig) {
-          attrs["w:vMergeOrig"] = prevProps.vMergeOrig;
+          attrs["w:vMergeOrig"] = mergeMap[prevProps.vMergeOrig] || prevProps.vMergeOrig;
         }
         tcPrChildren.push(XMLBuilder.wSelf("cellMerge", attrs));
       }
@@ -1445,14 +1448,23 @@ export class TableCell {
       const prevTcPrChildren: XMLElement[] = [];
       const prev = this.tcPrChange.previousProperties;
       if (prev) {
+        // Ordered per CT_TcPr: tcW → tcBorders → shd → noWrap → tcMar →
+        // textDirection → tcFitText → vAlign → hideMark → cnfStyle
         if (prev.width !== undefined) {
           prevTcPrChildren.push(XMLBuilder.wSelf("tcW", {
             "w:w": prev.width,
             "w:type": prev.widthType || "dxa",
           }));
         }
-        if (prev.cnfStyle) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("cnfStyle", { "w:val": prev.cnfStyle }));
+        if (prev.borders) {
+          const borderElements: XMLElement[] = [];
+          if (prev.borders.top) borderElements.push(XMLBuilder.createBorder("top", prev.borders.top));
+          if (prev.borders.left) borderElements.push(XMLBuilder.createBorder("left", prev.borders.left));
+          if (prev.borders.bottom) borderElements.push(XMLBuilder.createBorder("bottom", prev.borders.bottom));
+          if (prev.borders.right) borderElements.push(XMLBuilder.createBorder("right", prev.borders.right));
+          if (borderElements.length > 0) {
+            prevTcPrChildren.push(XMLBuilder.w("tcBorders", undefined, borderElements));
+          }
         }
         if (prev.shading) {
           const shadingAttrs = buildShadingAttributes(prev.shading);
@@ -1460,16 +1472,19 @@ export class TableCell {
             prevTcPrChildren.push(XMLBuilder.wSelf("shd", shadingAttrs));
           }
         }
+        if (prev.noWrap) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("noWrap"));
+        }
         if (prev.margins) {
           const marginChildren: XMLElement[] = [];
           if (prev.margins.top !== undefined) {
             marginChildren.push(XMLBuilder.wSelf("top", { "w:w": prev.margins.top.toString(), "w:type": "dxa" }));
           }
-          if (prev.margins.bottom !== undefined) {
-            marginChildren.push(XMLBuilder.wSelf("bottom", { "w:w": prev.margins.bottom.toString(), "w:type": "dxa" }));
-          }
           if (prev.margins.left !== undefined) {
             marginChildren.push(XMLBuilder.wSelf("left", { "w:w": prev.margins.left.toString(), "w:type": "dxa" }));
+          }
+          if (prev.margins.bottom !== undefined) {
+            marginChildren.push(XMLBuilder.wSelf("bottom", { "w:w": prev.margins.bottom.toString(), "w:type": "dxa" }));
           }
           if (prev.margins.right !== undefined) {
             marginChildren.push(XMLBuilder.wSelf("right", { "w:w": prev.margins.right.toString(), "w:type": "dxa" }));
@@ -1478,30 +1493,20 @@ export class TableCell {
             prevTcPrChildren.push(XMLBuilder.w("tcMar", undefined, marginChildren));
           }
         }
-        if (prev.verticalAlignment) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("vAlign", { "w:val": prev.verticalAlignment }));
-        }
-        if (prev.borders) {
-          const borderElements: XMLElement[] = [];
-          if (prev.borders.top) borderElements.push(XMLBuilder.createBorder("top", prev.borders.top));
-          if (prev.borders.bottom) borderElements.push(XMLBuilder.createBorder("bottom", prev.borders.bottom));
-          if (prev.borders.left) borderElements.push(XMLBuilder.createBorder("left", prev.borders.left));
-          if (prev.borders.right) borderElements.push(XMLBuilder.createBorder("right", prev.borders.right));
-          if (borderElements.length > 0) {
-            prevTcPrChildren.push(XMLBuilder.w("tcBorders", undefined, borderElements));
-          }
-        }
         if (prev.textDirection) {
           prevTcPrChildren.push(XMLBuilder.wSelf("textDirection", { "w:val": prev.textDirection }));
         }
-        if (prev.noWrap) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("noWrap"));
+        if (prev.fitText) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("tcFitText"));
+        }
+        if (prev.verticalAlignment) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("vAlign", { "w:val": prev.verticalAlignment }));
         }
         if (prev.hideMark) {
           prevTcPrChildren.push(XMLBuilder.wSelf("hideMark"));
         }
-        if (prev.fitText) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("tcFitText"));
+        if (prev.cnfStyle) {
+          prevTcPrChildren.push(XMLBuilder.wSelf("cnfStyle", { "w:val": prev.cnfStyle }));
         }
       }
       const prevTcPr = prevTcPrChildren.length > 0

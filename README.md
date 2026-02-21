@@ -606,7 +606,7 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 10.0.2**
+**Current Version: 10.0.3**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
@@ -614,7 +614,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 The framework includes comprehensive test coverage:
 
-- **2,825 test cases** across 129 test suites
+- **2,811 test cases** across 129 test suites
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks

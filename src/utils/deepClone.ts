@@ -76,22 +76,3 @@ export function deepClone<T>(obj: T): T {
   return objCopy as T;
 }
 
-/**
- * Shallow clone an object (one level deep)
- * More efficient when deep cloning is not needed
- *
- * @param obj - Object to clone
- * @returns Shallow cloned copy
- *
- * @example
- * ```typescript
- * const original = { bold: true, color: "FF0000" };
- * const cloned = shallowClone(original);
- * ```
- */
-export function shallowClone<T extends object>(obj: T): T {
-  if (Array.isArray(obj)) {
-    return [...obj] as T;
-  }
-  return { ...obj };
-}

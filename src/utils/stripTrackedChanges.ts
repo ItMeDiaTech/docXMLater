@@ -5,7 +5,7 @@ import { ZipHandler } from '../zip/ZipHandler';
  * This includes insertions, deletions, move operations, and property changes
  * Also cleans up related metadata in people.xml, settings.xml, and core.xml
  */
-export class TrackedChangesStripper {
+class TrackedChangesStripper {
   private zipHandler: ZipHandler;
 
   constructor(zipHandler: ZipHandler) {

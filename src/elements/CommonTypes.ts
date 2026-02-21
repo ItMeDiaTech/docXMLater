@@ -533,7 +533,8 @@ export function buildShadingAttributes(
   shading: ShadingConfig
 ): Record<string, string> {
   const attrs: Record<string, string> = {};
-  if (shading.pattern) attrs["w:val"] = shading.pattern;
+  // w:val is REQUIRED per ECMA-376 — default to "clear" if no pattern specified
+  attrs["w:val"] = shading.pattern || "clear";
   if (shading.fill) attrs["w:fill"] = shading.fill;
   if (shading.color) attrs["w:color"] = shading.color;
   if (shading.themeFill) attrs["w:themeFill"] = shading.themeFill;

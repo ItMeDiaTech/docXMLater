@@ -46,7 +46,7 @@ export class DocumentValidator {
   private maxRssMB: number;
   private useAbsoluteLimit: boolean;
 
-  constructor(maxMemoryUsagePercent: number = 80, options: MemoryOptions = {}) {
+  constructor(maxMemoryUsagePercent = 80, options: MemoryOptions = {}) {
     // Validate maxMemoryUsagePercent
     const memoryPercent = options.maxMemoryUsagePercent ?? maxMemoryUsagePercent;
     if (

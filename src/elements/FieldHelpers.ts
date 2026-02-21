@@ -68,9 +68,9 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
 
   // Extract the URL (first quoted string after HYPERLINK, before any switches)
   // URL is optional - anchor-only hyperlinks like 'HYPERLINK \l "_top"' are valid
-  let url: string = '';
-  const urlMatch = normalized.match(/HYPERLINK\s+"([^"]*)"/i);
-  if (urlMatch && urlMatch[1] !== undefined) {
+  let url = '';
+  const urlMatch = /HYPERLINK\s+"([^"]*)"/i.exec(normalized);
+  if (urlMatch?.[1] !== undefined) {
     url = urlMatch[1];
     // Decode URL-encoded characters
     try {
@@ -82,8 +82,8 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
 
   // Extract \l switch (anchor/fragment)
   let anchor: string | undefined;
-  const anchorMatch = normalized.match(/\\l\s+"([^"]*)"/i);
-  if (anchorMatch && anchorMatch[1] !== undefined) {
+  const anchorMatch = /\\l\s+"([^"]*)"/i.exec(normalized);
+  if (anchorMatch?.[1] !== undefined) {
     anchor = anchorMatch[1];
     // Decode anchor as well
     try {
@@ -100,8 +100,8 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
 
   // Extract \o switch (tooltip)
   let tooltip: string | undefined;
-  const tooltipMatch = normalized.match(/\\o\s+"([^"]*)"/i);
-  if (tooltipMatch && tooltipMatch[1] !== undefined) {
+  const tooltipMatch = /\\o\s+"([^"]*)"/i.exec(normalized);
+  if (tooltipMatch?.[1] !== undefined) {
     tooltip = tooltipMatch[1];
   }
 
@@ -200,8 +200,8 @@ export function isHyperlinkInstruction(instruction: string): boolean {
 export function createNestedIFMergeField(
   condition: string,
   mergeFieldName: string,
-  trueText: string = '',
-  falseText: string = ''
+  trueText = '',
+  falseText = ''
 ): ComplexField {
   // Create the nested MERGEFIELD
   const mergeField = new ComplexField({
@@ -293,7 +293,7 @@ export function createRefField(bookmarkName: string, format?: string): ComplexFi
 export function createIFField(
   condition: string,
   trueContent: string,
-  falseContent: string = ''
+  falseContent = ''
 ): ComplexField {
   const instruction = ` IF ${condition} "${trueContent}" "${falseContent}" `;
 

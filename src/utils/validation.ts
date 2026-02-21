@@ -144,7 +144,7 @@ export function isTextContent(content: Buffer | string): boolean {
  * @param fieldName - Name of the field (for error messages)
  * @throws {Error} If the value is invalid
  */
-export function validateTwips(value: number, fieldName: string = 'value'): void {
+export function validateTwips(value: number, fieldName = 'value'): void {
   if (!Number.isFinite(value)) {
     throw new Error(`${fieldName} must be a finite number, got ${value}`);
   }
@@ -203,7 +203,7 @@ export function normalizeColor(color: string): string {
  * @param fieldName - Name of the field (for error messages)
  * @throws {Error} If the color is invalid
  */
-export function validateColor(color: string, fieldName: string = 'color'): void {
+export function validateColor(color: string, fieldName = 'color'): void {
   if (typeof color !== 'string') {
     throw new Error(`${fieldName} must be a string, got ${typeof color}`);
   }
@@ -229,7 +229,7 @@ export const validateHexColor = validateColor;
  * @param fieldName - Name of the field (for error messages)
  * @throws {Error} If the ID is invalid
  */
-export function validateNumberingId(numId: number, fieldName: string = 'numbering ID'): void {
+export function validateNumberingId(numId: number, fieldName = 'numbering ID'): void {
   if (!Number.isInteger(numId)) {
     throw new Error(`${fieldName} must be an integer, got ${numId}`);
   }
@@ -254,8 +254,8 @@ export function validateNumberingId(numId: number, fieldName: string = 'numberin
  */
 export function validateLevel(
   level: number,
-  fieldName: string = 'level',
-  maxLevel: number = 8
+  fieldName = 'level',
+  maxLevel = 8
 ): void {
   if (!Number.isInteger(level)) {
     throw new Error(`${fieldName} must be an integer, got ${level}`);
@@ -276,7 +276,7 @@ export function validateLevel(
 export function validateAlignment(
   alignment: string,
   allowed: readonly string[],
-  fieldName: string = 'alignment'
+  fieldName = 'alignment'
 ): void {
   if (typeof alignment !== 'string') {
     throw new Error(`${fieldName} must be a string, got ${typeof alignment}`);
@@ -296,7 +296,7 @@ export function validateAlignment(
  * @param fieldName - Name of the field (for error messages)
  * @throws {Error} If the size is invalid
  */
-export function validateFontSize(size: number, fieldName: string = 'font size'): void {
+export function validateFontSize(size: number, fieldName = 'font size'): void {
   if (!Number.isFinite(size)) {
     throw new Error(`${fieldName} must be a finite number, got ${size}`);
   }
@@ -322,7 +322,7 @@ export function validateFontSize(size: number, fieldName: string = 'font size'):
  * @param fieldName - Name of the field (for error messages)
  * @throws {Error} If the string is empty or not a string
  */
-export function validateNonEmptyString(value: string, fieldName: string = 'value'): void {
+export function validateNonEmptyString(value: string, fieldName = 'value'): void {
   if (typeof value !== 'string') {
     throw new Error(`${fieldName} must be a string, got ${typeof value}`);
   }
@@ -338,7 +338,7 @@ export function validateNonEmptyString(value: string, fieldName: string = 'value
  * @param fieldName - Name of the field (for error messages)
  * @throws {Error} If the percentage is invalid
  */
-export function validatePercentage(value: number, fieldName: string = 'percentage'): void {
+export function validatePercentage(value: number, fieldName = 'percentage'): void {
   if (!Number.isFinite(value)) {
     throw new Error(`${fieldName} must be a finite number, got ${value}`);
   }
@@ -356,7 +356,7 @@ export function validatePercentage(value: number, fieldName: string = 'percentag
  * @param fieldName - Name of the field (for error messages)
  * @throws {Error} If the value is invalid
  */
-export function validateEmus(value: number, fieldName: string = 'EMUs'): void {
+export function validateEmus(value: number, fieldName = 'EMUs'): void {
   if (!Number.isFinite(value)) {
     throw new Error(`${fieldName} must be a finite number, got ${value}`);
   }
@@ -467,7 +467,7 @@ export function detectXmlInText(text: string, context?: string): TextValidationR
  * @param aggressive - If true, removes all angle brackets; if false, only removes clear XML tags
  * @returns Cleaned text with XML patterns removed
  */
-export function cleanXmlFromText(text: string, aggressive: boolean = false): string {
+export function cleanXmlFromText(text: string, aggressive = false): string {
   let cleaned = text;
 
   // First, unescape any HTML/XML entities

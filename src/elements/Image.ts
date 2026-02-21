@@ -57,7 +57,7 @@ export interface ImageBorder {
   fill?: {
     type: 'srgbClr' | 'schemeClr';
     value: string;
-    modifiers?: Array<{ name: string; val: string }>;
+    modifiers?: { name: string; val: string }[];
   };
   /** Raw XML for non-solid fills (gradFill, pattFill, etc.) */
   rawFillXml?: string;
@@ -309,8 +309,8 @@ export class Image {
   private relationshipId?: string;
   private imageData?: Buffer;
   private extension: string;
-  private docPrId: number = 1;
-  private dpi: number = 96;  // Default DPI
+  private docPrId = 1;
+  private dpi = 96;  // Default DPI
 
   // Advanced image properties
   private effectExtent?: EffectExtent;
@@ -319,21 +319,21 @@ export class Image {
   private anchor?: ImageAnchor;
   private crop?: ImageCrop;
   private effects?: ImageEffects;
-  private rotation: number = 0;
-  private flipH: boolean = false;
-  private flipV: boolean = false;
+  private rotation = 0;
+  private flipH = false;
+  private flipV = false;
   private border?: ImageBorder;
 
   // Group A: Simple attribute preservation (ECMA-376 compliance)
   private presetGeometry: PresetGeometry = 'rect';
   private compressionState: BlipCompressionState = 'none';
-  private bwMode: string = 'auto';
-  private inlineDistT: number = 0;
-  private inlineDistB: number = 0;
-  private inlineDistL: number = 0;
-  private inlineDistR: number = 0;
-  private noChangeAspect: boolean = true;
-  private hidden: boolean = false;
+  private bwMode = 'auto';
+  private inlineDistT = 0;
+  private inlineDistB = 0;
+  private inlineDistL = 0;
+  private inlineDistR = 0;
+  private noChangeAspect = true;
+  private hidden = false;
   private blipFillDpi?: number;
   private blipFillRotWithShape?: boolean;
   private picLocks: Partial<Record<PicLockAttribute, boolean>> = {
@@ -341,11 +341,11 @@ export class Image {
     noChangeArrowheads: true,
   };
   private picNonVisualProps: PicNonVisualProperties = { id: '0', name: '', descr: '' };
-  private isLinked: boolean = false;
+  private isLinked = false;
   private svgRelationshipId?: string;
 
   // Group B: Raw XML passthrough for complex subtrees
-  private _rawPassthrough: Map<string, string> = new Map();
+  private _rawPassthrough = new Map<string, string>();
 
   /**
    * Creates a new image from file path (async factory)
@@ -626,8 +626,8 @@ export class Image {
   private detectExtension(): string {
     // Try path-based detection first
     if (typeof this.source === 'string') {
-      const match = this.source.match(/\.([a-z]+)$/i);
-      if (match && match[1]) {
+      const match = /\.([a-z]+)$/i.exec(this.source);
+      if (match?.[1]) {
         return match[1].toLowerCase();
       }
     }
@@ -784,13 +784,13 @@ export class Image {
     try {
       const svgText = this.imageData.toString('utf-8').substring(0, 2000);
       // Try width/height attributes on <svg> element
-      const widthMatch = svgText.match(/<svg[^>]*\bwidth\s*=\s*["']?(\d+(?:\.\d+)?)/i);
-      const heightMatch = svgText.match(/<svg[^>]*\bheight\s*=\s*["']?(\d+(?:\.\d+)?)/i);
+      const widthMatch = /<svg[^>]*\bwidth\s*=\s*["']?(\d+(?:\.\d+)?)/i.exec(svgText);
+      const heightMatch = /<svg[^>]*\bheight\s*=\s*["']?(\d+(?:\.\d+)?)/i.exec(svgText);
       if (widthMatch?.[1] && heightMatch?.[1]) {
         return { width: Math.round(parseFloat(widthMatch[1])), height: Math.round(parseFloat(heightMatch[1])) };
       }
       // Try viewBox attribute
-      const viewBoxMatch = svgText.match(/<svg[^>]*\bviewBox\s*=\s*["']?\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)/i);
+      const viewBoxMatch = /<svg[^>]*\bviewBox\s*=\s*["']?\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)/i.exec(svgText);
       if (viewBoxMatch?.[1] && viewBoxMatch?.[2]) {
         return { width: Math.round(parseFloat(viewBoxMatch[1])), height: Math.round(parseFloat(viewBoxMatch[2])) };
       }
@@ -883,7 +883,7 @@ export class Image {
     return this.imageData ?? null;
   }
 
-  setWidth(width: number, maintainAspectRatio: boolean = true): this {
+  setWidth(width: number, maintainAspectRatio = true): this {
     if (maintainAspectRatio && this.height > 0) {
       const ratio = this.height / this.width;
       this.height = Math.round(width * ratio);
@@ -892,7 +892,7 @@ export class Image {
     return this;
   }
 
-  setHeight(height: number, maintainAspectRatio: boolean = true): this {
+  setHeight(height: number, maintainAspectRatio = true): this {
     if (maintainAspectRatio && this.width > 0) {
       const ratio = this.width / this.height;
       this.width = Math.round(height * ratio);
@@ -1259,7 +1259,7 @@ export class Image {
     return !!this.anchor || !!this.position;
   }
 
-  floatTopLeft(marginTop: number = 0, marginLeft: number = 0): this {
+  floatTopLeft(marginTop = 0, marginLeft = 0): this {
     this.setPosition(
       { anchor: 'page', offset: marginLeft },
       { anchor: 'page', offset: marginTop }
@@ -1275,7 +1275,7 @@ export class Image {
     return this;
   }
 
-  floatTopRight(marginTop: number = 0, marginRight: number = 0): this {
+  floatTopRight(marginTop = 0, marginRight = 0): this {
     this.setPosition(
       { anchor: 'page', alignment: 'right', offset: -marginRight },
       { anchor: 'page', offset: marginTop }
@@ -1307,7 +1307,7 @@ export class Image {
     return this;
   }
 
-  setBehindText(behind: boolean = true): this {
+  setBehindText(behind = true): this {
     if (this.anchor) {
       this.anchor.behindDoc = behind;
     } else {
@@ -1649,7 +1649,7 @@ export class Image {
         effectExtentElement
       ];
 
-      // Wrap element with optional polygon passthrough
+      // Wrap element (required by CT_Anchor per ECMA-376 — defaults to wrapNone)
       if (this.wrap) {
         const wrapAttrs: Record<string, any> = {};
         if (this.wrap.distanceTop !== undefined) wrapAttrs.distT = this.wrap.distanceTop;
@@ -1672,6 +1672,20 @@ export class Image {
         const wrapChildren: XMLElement[] = [];
         if (this._rawPassthrough.has('wrap-polygon')) {
           wrapChildren.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('wrap-polygon')! } as XMLElement);
+        } else if (wrapElementName === 'wrapTight' || wrapElementName === 'wrapThrough') {
+          // CT_WrapTight/CT_WrapThrough require a wp:wrapPolygon child.
+          // Generate a default rectangular polygon covering the full image extents.
+          wrapChildren.push({
+            name: 'wp:wrapPolygon',
+            attributes: { edited: '0' },
+            children: [
+              { name: 'wp:start', attributes: { x: '0', y: '0' }, selfClosing: true },
+              { name: 'wp:lineTo', attributes: { x: '21600', y: '0' }, selfClosing: true },
+              { name: 'wp:lineTo', attributes: { x: '21600', y: '21600' }, selfClosing: true },
+              { name: 'wp:lineTo', attributes: { x: '0', y: '21600' }, selfClosing: true },
+              { name: 'wp:lineTo', attributes: { x: '0', y: '0' }, selfClosing: true },
+            ],
+          });
         }
 
         anchorChildren.push(
@@ -1679,6 +1693,9 @@ export class Image {
             ? XMLBuilder.wp(wrapElementName, wrapAttrs, wrapChildren)
             : XMLBuilder.wp(wrapElementName, wrapAttrs)
         );
+      } else {
+        // Default: wrapNone (required choice element per CT_Anchor)
+        anchorChildren.push(XMLBuilder.wp('wrapNone', {}));
       }
 
       anchorChildren.push(buildDocPr(this.docPrId));

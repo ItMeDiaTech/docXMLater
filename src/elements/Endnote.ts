@@ -206,7 +206,7 @@ export class Endnote {
    * @param text Notice text (e.g., "Continued on next page...")
    * @returns New continuation notice endnote
    */
-  static createContinuationNotice(id: number, text: string = 'Continued...'): Endnote {
+  static createContinuationNotice(id: number, text = 'Continued...'): Endnote {
     const endnote = new Endnote({
       id,
       type: EndnoteType.ContinuationNotice

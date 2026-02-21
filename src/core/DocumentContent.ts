@@ -428,7 +428,7 @@ export class DocumentContent {
    * @param includeSpaces - Whether to include spaces (default: true)
    * @returns Character count
    */
-  getCharacterCount(includeSpaces: boolean = true): number {
+  getCharacterCount(includeSpaces = true): number {
     let charCount = 0;
     for (const paragraph of this.getAllParagraphs()) {
       const text = paragraph.getText();

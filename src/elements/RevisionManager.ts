@@ -59,7 +59,7 @@ export interface RevisionSummary {
  */
 export class RevisionManager {
   private revisions: Revision[] = [];
-  private nextId: number = 0;
+  private nextId = 0;
   private idProvider: IdProviderCallback | null = null;
   private idExistsNotifier: IdExistsCallback | null = null;
 
@@ -67,7 +67,7 @@ export class RevisionManager {
   private revisionsByTypeCache = new Map<RevisionType, Revision[]>();
   private revisionsByAuthorCache = new Map<string, Revision[]>();
   private revisionsByCategoryCache = new Map<RevisionCategory, Revision[]>();
-  private cacheValid: boolean = true;
+  private cacheValid = true;
 
   /**
    * Invalidates all caches. Called when revisions are added/removed.
@@ -972,7 +972,7 @@ export class RevisionManager {
    * console.log(`Reassigned ${count} revision IDs`);
    * ```
    */
-  reassignRevisionIds(startId: number = 0): number {
+  reassignRevisionIds(startId = 0): number {
     let currentId = startId;
 
     for (const rev of this.revisions) {

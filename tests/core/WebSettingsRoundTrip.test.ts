@@ -54,6 +54,10 @@ describe('webSettings.xml Round-Trip', () => {
     </w:div>
     <w:div w:id="3">
       <w:bodyDiv w:val="1"/>
+      <w:marLeft w:val="0"/>
+      <w:marRight w:val="0"/>
+      <w:marTop w:val="0"/>
+      <w:marBottom w:val="0"/>
     </w:div>
   </w:divs>
   <w:optimizeForBrowser/>

@@ -45,7 +45,8 @@ describe('Hyperlink Relationship Preservation', () => {
 
     const zip = new ZipHandler();
     await zip.loadFromBuffer(buffer);
-    const relsXml = zip.getFileAsString('word/_rels/document.xml.rels');
+    // Per OOXML, footnote hyperlink relationships go in footnotes.xml.rels (part-scoped)
+    const relsXml = zip.getFileAsString('word/_rels/footnotes.xml.rels');
     expect(relsXml).toBeDefined();
     expect(relsXml).toContain('rId100');
     expect(relsXml).toContain('https://example.com/footnote-link');
@@ -71,7 +72,8 @@ describe('Hyperlink Relationship Preservation', () => {
 
     const zip = new ZipHandler();
     await zip.loadFromBuffer(buffer);
-    const relsXml = zip.getFileAsString('word/_rels/document.xml.rels');
+    // Per OOXML, endnote hyperlink relationships go in endnotes.xml.rels (part-scoped)
+    const relsXml = zip.getFileAsString('word/_rels/endnotes.xml.rels');
     expect(relsXml).toBeDefined();
     expect(relsXml).toContain('rId200');
     expect(relsXml).toContain('https://example.com/endnote-link');
@@ -153,14 +155,18 @@ describe('Hyperlink Relationship Preservation', () => {
 
     const zip = new ZipHandler();
     await zip.loadFromBuffer(buffer);
-    const relsXml = zip.getFileAsString('word/_rels/document.xml.rels');
-    expect(relsXml).toBeDefined();
-    expect(relsXml).toContain('rId400');
-    expect(relsXml).toContain('https://example.com/body-link');
-    expect(relsXml).toContain('rId401');
-    expect(relsXml).toContain('https://example.com/footnote-link');
-    expect(relsXml).not.toContain('rId999');
-    expect(relsXml).not.toContain('https://example.com/orphaned');
+    // Body hyperlink in document.xml.rels
+    const docRelsXml = zip.getFileAsString('word/_rels/document.xml.rels');
+    expect(docRelsXml).toBeDefined();
+    expect(docRelsXml).toContain('rId400');
+    expect(docRelsXml).toContain('https://example.com/body-link');
+    expect(docRelsXml).not.toContain('rId999');
+    expect(docRelsXml).not.toContain('https://example.com/orphaned');
+    // Footnote hyperlink in footnotes.xml.rels (part-scoped per OOXML)
+    const fnRelsXml = zip.getFileAsString('word/_rels/footnotes.xml.rels');
+    expect(fnRelsXml).toBeDefined();
+    expect(fnRelsXml).toContain('rId401');
+    expect(fnRelsXml).toContain('https://example.com/footnote-link');
   });
 
   it('should preserve nested table hyperlink relationships through CleanupHelper', async () => {

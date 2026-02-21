@@ -274,9 +274,9 @@ export class Comment {
       'w:initials': this.initials,
     };
 
-    // Add parent ID for replies
+    // Add parent ID for replies (w15 namespace per Office 2012 extensions)
     if (this.parentId !== undefined) {
-      attributes['w:parentId'] = this.parentId.toString();
+      attributes['w15:parentId'] = this.parentId.toString();
     }
 
     // Add done attribute for resolved comments (per ECMA-376)

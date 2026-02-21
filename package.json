@@ -1,6 +1,6 @@
 {
   "name": "docxmlater",
-  "version": "10.0.2",
+  "version": "10.0.3",
   "description": "A comprehensive DOCX editing framework for creating, reading, and manipulating Microsoft Word documents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,7 +14,18 @@
     "prepublishOnly": "npm run clean && npm run build",
     "docs:metrics": "echo 'Source Files:' && find src -name '*.ts' | wc -l && echo 'Test Files:' && find tests -name '*.test.ts' | wc -l && echo 'Lines of Code:' && find src -name '*.ts' -exec wc -l {} + | tail -1",
     "docs:check": "echo 'Checking documentation...' && ls -1 README.md CHANGELOG.md 2>/dev/null || echo 'Missing documentation files'",
-    "test-list-arch": "ts-node examples/test-list-formatting-architecture.ts"
+    "test-list-arch": "ts-node examples/test-list-formatting-architecture.ts",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "dev:watch": "tsc --watch",
+    "dev:push": "nodemon --watch dist --ext js,d.ts --exec \"yalc push --changed\"",
+    "dev:full": "concurrently \"npm run dev:watch\" \"npm run dev:push\"",
+    "knip": "knip",
+    "knip:fix": "knip --fix",
+    "depcruise": "depcruise src --config",
+    "size": "size-limit"
   },
   "keywords": [
     "docx",
@@ -41,6 +52,7 @@
   "homepage": "https://github.com/ItMeDiaTech/docXMLater#readme",
   "files": [
     "dist",
+    "src",
     "README.md",
     "LICENSE"
   ],
@@ -48,15 +60,33 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
+    "@size-limit/file": "^12.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "@typescript-eslint/parser": "^8.56.0",
+    "@xarsh/ooxml-validator": "^0.1.10",
+    "concurrently": "^9.2.1",
+    "dependency-cruiser": "^17.3.8",
+    "eslint": "^10.0.1",
     "jest": "^30.2.0",
+    "knip": "^5.84.1",
+    "nodemon": "^3.1.14",
+    "prettier": "^3.8.1",
     "rimraf": "^6.1.0",
+    "size-limit": "^12.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.56.0"
   },
   "dependencies": {
     "jszip": "^3.10.1"
-  }
+  },
+  "size-limit": [
+    {
+      "path": "dist/index.js",
+      "limit": "150 KB"
+    }
+  ]
 }

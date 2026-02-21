@@ -147,8 +147,8 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
 
       expect(xmlString).toContain('cellMerge');
       expect(xmlString).toContain('"w:id":12');
-      expect(xmlString).toContain('"w:vMerge":"restart"');
-      expect(xmlString).toContain('"w:vMergeOrig":"continue"');
+      expect(xmlString).toContain('"w:vMerge":"rest"');
+      expect(xmlString).toContain('"w:vMergeOrig":"cont"');
     });
 
     it('should not generate cell revision element when none set', () => {

@@ -401,7 +401,7 @@ export function acceptRevisionsInMemory(
   // Clear sectPrChange on document section
   if (opts.acceptPropertyChanges) {
     const section = doc.getSection();
-    if (section && section.getSectPrChange()) {
+    if (section?.getSectPrChange()) {
       section.clearSectPrChange();
       result.propertyChangesAccepted++;
     }
@@ -482,11 +482,11 @@ function acceptRevisionsInParagraph(
         for (const child of childContent) {
           // Check ImageRun FIRST since ImageRun extends Run
           if (isImageRunContent(child)) {
-            newContent.push(child as ImageRun);
+            newContent.push(child);
           } else if (isRunContent(child)) {
-            newContent.push(child as Run);
+            newContent.push(child);
           } else if (isHyperlinkContent(child)) {
-            newContent.push(child as Hyperlink);
+            newContent.push(child);
           }
         }
         result.insertionsAccepted++;
@@ -514,11 +514,11 @@ function acceptRevisionsInParagraph(
         for (const child of childContent) {
           // Check ImageRun FIRST since ImageRun extends Run
           if (isImageRunContent(child)) {
-            newContent.push(child as ImageRun);
+            newContent.push(child);
           } else if (isRunContent(child)) {
-            newContent.push(child as Run);
+            newContent.push(child);
           } else if (isHyperlinkContent(child)) {
-            newContent.push(child as Hyperlink);
+            newContent.push(child);
           }
         }
         result.movesAccepted++;
@@ -535,11 +535,11 @@ function acceptRevisionsInParagraph(
         for (const child of childContent) {
           // Check ImageRun FIRST since ImageRun extends Run
           if (isImageRunContent(child)) {
-            newContent.push(child as ImageRun);
+            newContent.push(child);
           } else if (isRunContent(child)) {
-            newContent.push(child as Run);
+            newContent.push(child);
           } else if (isHyperlinkContent(child)) {
-            newContent.push(child as Hyperlink);
+            newContent.push(child);
           }
         }
         result.propertyChangesAccepted++;

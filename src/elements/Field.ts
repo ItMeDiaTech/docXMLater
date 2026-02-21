@@ -164,19 +164,18 @@ export class Field {
   }
 
   /**
-   * Generates XML for the field
-   * Uses fldSimple for simplicity
+   * Generates XML for the field.
+   * Per ECMA-376, w:fldSimple is a paragraph-level element that CONTAINS w:r children.
+   * Structure: <w:fldSimple w:instr="..."><w:r><w:rPr/><w:t>...</w:t></w:r></w:fldSimple>
+   * The fldSimple element should be added directly to paragraph children (not wrapped in w:r).
    */
   toXML(): XMLElement {
-    const children: XMLElement[] = [];
-
-    // Add run properties if formatting is specified
+    // Build the inner run with optional formatting
+    const runChildren: XMLElement[] = [];
     if (this.formatting) {
-      children.push(this.createRunProperties());
+      runChildren.push(this.createRunProperties());
     }
-
-    // Add field text (placeholder)
-    children.push({
+    runChildren.push({
       name: 'w:t',
       children: [this.getPlaceholderText()],
     });
@@ -186,7 +185,10 @@ export class Field {
       attributes: {
         'w:instr': this.instruction,
       },
-      children,
+      children: [{
+        name: 'w:r',
+        children: runChildren,
+      }],
     };
   }
 
@@ -248,28 +250,8 @@ export class Field {
       return { name: 'w:rPr', children };
     }
 
-    if (this.formatting.bold) {
-      children.push({ name: 'w:b', selfClosing: true });
-    }
-
-    if (this.formatting.italic) {
-      children.push({ name: 'w:i', selfClosing: true });
-    }
-
-    if (this.formatting.underline) {
-      const val = typeof this.formatting.underline === 'string'
-        ? this.formatting.underline
-        : 'single';
-      children.push({
-        name: 'w:u',
-        attributes: { 'w:val': val },
-        selfClosing: true,
-      });
-    }
-
-    if (this.formatting.strike) {
-      children.push({ name: 'w:strike', selfClosing: true });
-    }
+    // Per ECMA-376 CT_RPr ordering:
+    // rFonts → b → i → strike → color → sz/szCs → highlight → u
 
     if (this.formatting.font) {
       children.push({
@@ -279,6 +261,27 @@ export class Field {
           'w:hAnsi': this.formatting.font,
           'w:cs': this.formatting.font,
         },
+        selfClosing: true,
+      });
+    }
+
+    if (this.formatting.bold) {
+      children.push({ name: 'w:b', selfClosing: true });
+    }
+
+    if (this.formatting.italic) {
+      children.push({ name: 'w:i', selfClosing: true });
+    }
+
+    if (this.formatting.strike) {
+      children.push({ name: 'w:strike', selfClosing: true });
+    }
+
+    if (this.formatting.color) {
+      const color = this.formatting.color.replace('#', '');
+      children.push({
+        name: 'w:color',
+        attributes: { 'w:val': color },
         selfClosing: true,
       });
     }
@@ -297,19 +300,21 @@ export class Field {
       });
     }
 
-    if (this.formatting.color) {
-      const color = this.formatting.color.replace('#', '');
-      children.push({
-        name: 'w:color',
-        attributes: { 'w:val': color },
-        selfClosing: true,
-      });
-    }
-
     if (this.formatting.highlight) {
       children.push({
         name: 'w:highlight',
         attributes: { 'w:val': this.formatting.highlight },
+        selfClosing: true,
+      });
+    }
+
+    if (this.formatting.underline) {
+      const val = typeof this.formatting.underline === 'string'
+        ? this.formatting.underline
+        : 'single';
+      children.push({
+        name: 'w:u',
+        attributes: { 'w:val': val },
         selfClosing: true,
       });
     }
@@ -370,7 +375,7 @@ export class Field {
    * @param includePath Whether to include full path
    * @param formatting Optional run formatting
    */
-  static createFilename(includePath: boolean = false, formatting?: RunFormatting): Field {
+  static createFilename(includePath = false, formatting?: RunFormatting): Field {
     return new Field({
       type: includePath ? 'FILENAMEWITHPATH' : 'FILENAME',
       formatting,
@@ -491,7 +496,7 @@ export class Field {
    */
   static createTCEntry(
     text: string,
-    level: number = 1,
+    level = 1,
     formatting?: RunFormatting
   ): Field {
     if (level < 1 || level > 9) {
@@ -626,7 +631,7 @@ export class ComplexField {
    * Whether the field has a result section (w:fldSep was present during parsing)
    * Per ECMA-376, fields without results skip the separator element.
    */
-  private _hasResultSection: boolean = false;
+  private _hasResultSection = false;
   private _formFieldData?: FormFieldData;
 
   /**

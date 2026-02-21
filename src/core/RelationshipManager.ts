@@ -32,8 +32,8 @@ export class RelationshipManager {
     this.relationships.set(relationship.getId(), relationship);
 
     // Update next ID if necessary
-    const idMatch = relationship.getId().match(/^rId(\d+)$/);
-    if (idMatch && idMatch[1]) {
+    const idMatch = /^rId(\d+)$/.exec(relationship.getId());
+    if (idMatch?.[1]) {
       const idNum = parseInt(idMatch[1], 10);
       if (idNum >= this.nextId) {
         this.nextId = idNum + 1;
@@ -407,7 +407,7 @@ export class RelationshipManager {
         // Validate targetMode before type assertion
         const validatedTargetMode =
           targetMode === 'Internal' || targetMode === 'External' || targetMode === undefined
-            ? (targetMode as 'Internal' | 'External' | undefined)
+            ? (targetMode)
             : undefined;
 
         // Create and add relationship

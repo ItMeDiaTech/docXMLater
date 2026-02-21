@@ -90,7 +90,7 @@ export class Hyperlink {
   private relationshipId?: string;
   private formatting: RunFormatting;
   /** Whether this is an empty/invisible hyperlink with no display text */
-  private _isEmpty: boolean = false;
+  private _isEmpty = false;
   /** Target frame attribute (e.g., "_blank" for new window) */
   private tgtFrame?: string;
   /** History tracking attribute */
@@ -672,7 +672,7 @@ export class Hyperlink {
    * @param bold Bold state (default: true)
    * @returns This hyperlink for chaining
    */
-  setBold(bold: boolean = true): this {
+  setBold(bold = true): this {
     const previousValue = this.formatting.bold;
     this.formatting.bold = bold;
     this.run = new Run(this.text, this.formatting);
@@ -687,7 +687,7 @@ export class Hyperlink {
    * @param italic Italic state (default: true)
    * @returns This hyperlink for chaining
    */
-  setItalic(italic: boolean = true): this {
+  setItalic(italic = true): this {
     const previousValue = this.formatting.italic;
     this.formatting.italic = italic;
     this.run = new Run(this.text, this.formatting);
@@ -817,14 +817,14 @@ export class Hyperlink {
     // Fix common issues
     if (fixCommonIssues && fixedUrl) {
       // Fix 1: Add missing protocol
-      if (!fixedUrl.match(/^[a-z]+:\/\//i)) {
+      if (!(/^[a-z]+:\/\//i.exec(fixedUrl))) {
         fixedUrl = "https://" + fixedUrl;
         fixed.push("Added missing protocol (https://)");
       }
 
       // Fix 2: Fix double slashes (except after protocol)
-      const protocolMatch = fixedUrl.match(/^([a-z]+:\/\/)/i);
-      if (protocolMatch && protocolMatch[1]) {
+      const protocolMatch = /^([a-z]+:\/\/)/i.exec(fixedUrl);
+      if (protocolMatch?.[1]) {
         const protocol = protocolMatch[1];
         const rest = fixedUrl.substring(protocol.length);
         const fixedRest = rest.replace(/\/\//g, "/");
@@ -841,7 +841,7 @@ export class Hyperlink {
       }
 
       // Fix 4: Remove trailing slashes for non-root URLs
-      if (fixedUrl.match(/^https?:\/\/[^/]+\/.+\/$/)) {
+      if (/^https?:\/\/[^/]+\/.+\/$/.exec(fixedUrl)) {
         fixedUrl = fixedUrl.replace(/\/$/, "");
         fixed.push("Removed trailing slash");
       }
@@ -859,7 +859,7 @@ export class Hyperlink {
     }
 
     // Check accessibility (HTTP HEAD request)
-    if (checkAccessibility && fixedUrl && fixedUrl.match(/^https?:\/\//i)) {
+    if (checkAccessibility && fixedUrl?.match(/^https?:\/\//i)) {
       // Check if fetch is available (Node.js 18+ or browser)
       if (typeof fetch === "undefined") {
         issues.push(

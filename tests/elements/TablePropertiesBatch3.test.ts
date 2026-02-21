@@ -498,9 +498,11 @@ describe('Phase 4.3 Batch 3 - Table Row Properties Part 1', () => {
       const loadedDoc = await Document.load(outputPath);
       const loadedTable = loadedDoc.getTables()[0]!;
 
-      justifications.forEach((jc, i) => {
+      // 'start'/'end' are convenience aliases that normalize to 'left'/'right' per ST_JcTable
+      const expected = ['left', 'center', 'right', 'left', 'right'];
+      justifications.forEach((_jc, i) => {
         const formatting = loadedTable.getRow(i)!.getFormatting();
-        expect(formatting.justification).toBe(jc);
+        expect(formatting.justification).toBe(expected[i]);
       });
     });
   });

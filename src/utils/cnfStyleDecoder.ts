@@ -121,7 +121,7 @@ export function decodeCnfStyle(cnfStyle: string): CnfStyleFlags {
   const normalized = cnfStyle.padEnd(12, "0");
 
   return {
-    firstRow: normalized[BIT_POSITIONS.firstRow] === "1",
+    firstRow: normalized.startsWith("1"),
     lastRow: normalized[BIT_POSITIONS.lastRow] === "1",
     firstCol: normalized[BIT_POSITIONS.firstCol] === "1",
     lastCol: normalized[BIT_POSITIONS.lastCol] === "1",

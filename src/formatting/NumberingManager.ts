@@ -38,21 +38,21 @@ export class NumberingManager {
   private nextNumId: number;
 
   // Track if numbering has been modified (for XML preservation)
-  private _modified: boolean = false;
+  private _modified = false;
 
   // Track which specific definitions have been modified (for selective merging)
-  private _modifiedAbstractNumIds: Set<number> = new Set();
-  private _modifiedNumIds: Set<number> = new Set();
+  private _modifiedAbstractNumIds = new Set<number>();
+  private _modifiedNumIds = new Set<number>();
 
   // Track which definitions have been removed (for removal from original XML during merge)
-  private _removedAbstractNumIds: Set<number> = new Set();
-  private _removedNumIds: Set<number> = new Set();
+  private _removedAbstractNumIds = new Set<number>();
+  private _removedNumIds = new Set<number>();
 
   /**
    * Creates a new numbering manager
    * @param initializeDefaults Whether to initialize with default numbering definitions
    */
-  constructor(initializeDefaults: boolean = false) {
+  constructor(initializeDefaults = false) {
     this.abstractNumberings = new Map();
     this.instances = new Map();
     this.nextAbstractNumId = 0;
@@ -302,7 +302,7 @@ export class NumberingManager {
    * @param levels Number of levels (default: 9)
    * @param bullets Array of bullet characters
    */
-  createBulletList(levels: number = 9, bullets?: string[]): number {
+  createBulletList(levels = 9, bullets?: string[]): number {
     // Create abstract numbering
     const abstractNumId = this.nextAbstractNumId++;
     // Only pass bullets if it's defined, so defaults are used otherwise
@@ -325,8 +325,8 @@ export class NumberingManager {
    * @param formats Array of formats for each level
    */
   createNumberedList(
-    levels: number = 9,
-    formats?: Array<'decimal' | 'lowerLetter' | 'lowerRoman'>
+    levels = 9,
+    formats?: ('decimal' | 'lowerLetter' | 'lowerRoman')[]
   ): number {
     // Create abstract numbering
     const abstractNumId = this.nextAbstractNumId++;
@@ -469,7 +469,7 @@ export class NumberingManager {
     numId: number,
     level: number,
     leftIndent: number,
-    hangingIndent: number = 360
+    hangingIndent = 360
   ): boolean {
     // Validate level
     if (level < 0 || level > 8) {

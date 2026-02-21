@@ -202,10 +202,10 @@ export class NumberingLevel {
    */
   static calculateSafeIndentation(
     level: number,
-    pageWidthTwips: number = 12240,
-    leftMarginTwips: number = 1440,
-    rightMarginTwips: number = 1440,
-    minContentWidth: number = 2880
+    pageWidthTwips = 12240,
+    leftMarginTwips = 1440,
+    rightMarginTwips = 1440,
+    minContentWidth = 2880
   ): { leftIndent: number; hangingIndent: number } {
     if (level < 0 || level > 8) {
       throw new Error(`Invalid level ${level}. Level must be between 0 and 8.`);
@@ -781,7 +781,7 @@ export class NumberingLevel {
    */
   static createDecimalLevel(
     level: number,
-    template: string = `%${level + 1}.`
+    template = `%${level + 1}.`
   ): NumberingLevel {
     return new NumberingLevel({
       level,
@@ -804,7 +804,7 @@ export class NumberingLevel {
    */
   static createLowerRomanLevel(
     level: number,
-    template: string = `%${level + 1}.`
+    template = `%${level + 1}.`
   ): NumberingLevel {
     return new NumberingLevel({
       level,
@@ -827,7 +827,7 @@ export class NumberingLevel {
    */
   static createUpperRomanLevel(
     level: number,
-    template: string = `%${level + 1}.`
+    template = `%${level + 1}.`
   ): NumberingLevel {
     return new NumberingLevel({
       level,
@@ -850,7 +850,7 @@ export class NumberingLevel {
    */
   static createLowerLetterLevel(
     level: number,
-    template: string = `%${level + 1}.`
+    template = `%${level + 1}.`
   ): NumberingLevel {
     return new NumberingLevel({
       level,
@@ -873,7 +873,7 @@ export class NumberingLevel {
    */
   static createUpperLetterLevel(
     level: number,
-    template: string = `%${level + 1}.`
+    template = `%${level + 1}.`
   ): NumberingLevel {
     return new NumberingLevel({
       level,
@@ -904,58 +904,58 @@ export class NumberingLevel {
    */
   static fromXML(xml: string): NumberingLevel {
     // Extract level index (required)
-    const ilvlMatch = xml.match(/<w:lvl[^>]*w:ilvl="([^"]+)"/);
-    if (!ilvlMatch || !ilvlMatch[1]) {
+    const ilvlMatch = /<w:lvl[^>]*w:ilvl="([^"]+)"/.exec(xml);
+    if (!ilvlMatch?.[1]) {
       throw new Error("Missing required w:ilvl attribute");
     }
     const level = parseInt(ilvlMatch[1], 10);
 
     // Extract number format (required)
-    const numFmtMatch = xml.match(/<w:numFmt[^>]*w:val="([^"]+)"/);
-    if (!numFmtMatch || !numFmtMatch[1]) {
+    const numFmtMatch = /<w:numFmt[^>]*w:val="([^"]+)"/.exec(xml);
+    if (!numFmtMatch?.[1]) {
       throw new Error("Missing required w:numFmt element");
     }
     const format = NumberingLevel.normalizeFormat(numFmtMatch[1]);
 
     // Extract level text (optional - can be empty for placeholder levels)
-    const lvlTextMatch = xml.match(/<w:lvlText[^>]*w:val="([^"]*)"/);
-    const text = lvlTextMatch && lvlTextMatch[1] !== undefined ? lvlTextMatch[1] : "";
+    const lvlTextMatch = /<w:lvlText[^>]*w:val="([^"]*)"/.exec(xml);
+    const text = lvlTextMatch?.[1] !== undefined ? lvlTextMatch[1] : "";
 
     // Extract alignment (optional, default: left)
-    const lvlJcMatch = xml.match(/<w:lvlJc[^>]*w:val="([^"]+)"/);
+    const lvlJcMatch = /<w:lvlJc[^>]*w:val="([^"]+)"/.exec(xml);
     const alignment = (
-      lvlJcMatch && lvlJcMatch[1] ? lvlJcMatch[1] : "left"
+      lvlJcMatch?.[1] ? lvlJcMatch[1] : "left"
     ) as NumberAlignment;
 
     // Extract start value (optional, default: 1)
-    const startMatch = xml.match(/<w:start[^>]*w:val="([^"]+)"/);
-    const start = startMatch && startMatch[1] ? parseInt(startMatch[1], 10) : 1;
+    const startMatch = /<w:start[^>]*w:val="([^"]+)"/.exec(xml);
+    const start = startMatch?.[1] ? parseInt(startMatch[1], 10) : 1;
 
     // Extract suffix (optional, default: tab)
-    const suffixMatch = xml.match(/<w:suff[^>]*w:val="([^"]+)"/);
+    const suffixMatch = /<w:suff[^>]*w:val="([^"]+)"/.exec(xml);
     const suffix =
-      suffixMatch && suffixMatch[1]
+      suffixMatch?.[1]
         ? (suffixMatch[1] as "tab" | "space" | "nothing")
         : "tab";
 
     // Extract level restart (w:lvlRestart per ECMA-376 Part 1 §17.9.11)
     let lvlRestart: number | undefined;
-    const lvlRestartMatch = xml.match(/<w:lvlRestart[^>]*w:val="([^"]+)"/);
-    if (lvlRestartMatch && lvlRestartMatch[1]) {
+    const lvlRestartMatch = /<w:lvlRestart[^>]*w:val="([^"]+)"/.exec(xml);
+    if (lvlRestartMatch?.[1]) {
       lvlRestart = parseInt(lvlRestartMatch[1], 10);
     }
 
     // Extract indentation from <w:pPr><w:ind>
     let leftIndent = 720 + level * 360; // default
     let hangingIndent = 360; // default
-    const indMatch = xml.match(/<w:ind[^>]*\/>/);
+    const indMatch = /<w:ind[^>]*\/>/.exec(xml);
     if (indMatch) {
       const indElement = indMatch[0];
-      const leftMatch = indElement.match(/w:left="([^"]+)"/);
-      const hangingMatch = indElement.match(/w:hanging="([^"]+)"/);
+      const leftMatch = /w:left="([^"]+)"/.exec(indElement);
+      const hangingMatch = /w:hanging="([^"]+)"/.exec(indElement);
 
-      if (leftMatch && leftMatch[1]) leftIndent = parseInt(leftMatch[1], 10);
-      if (hangingMatch && hangingMatch[1])
+      if (leftMatch?.[1]) leftIndent = parseInt(leftMatch[1], 10);
+      if (hangingMatch?.[1])
         hangingIndent = parseInt(hangingMatch[1], 10);
     }
 
@@ -963,15 +963,15 @@ export class NumberingLevel {
     let font = "Calibri";
     let fontSize = 22;
 
-    const rFontsMatch = xml.match(/<w:rFonts[^>]*\/>/);
+    const rFontsMatch = /<w:rFonts[^>]*\/>/.exec(xml);
     if (rFontsMatch) {
       const rFontsElement = rFontsMatch[0];
-      const asciiMatch = rFontsElement.match(/w:ascii="([^"]+)"/);
-      if (asciiMatch && asciiMatch[1]) font = asciiMatch[1];
+      const asciiMatch = /w:ascii="([^"]+)"/.exec(rFontsElement);
+      if (asciiMatch?.[1]) font = asciiMatch[1];
     }
 
-    const szMatch = xml.match(/<w:sz[^>]*w:val="([^"]+)"/);
-    if (szMatch && szMatch[1]) fontSize = parseInt(szMatch[1], 10);
+    const szMatch = /<w:sz[^>]*w:val="([^"]+)"/.exec(xml);
+    if (szMatch?.[1]) fontSize = parseInt(szMatch[1], 10);
 
     // List prefixes should never have bold, italic, or underline - ignore source XML formatting
     const bold = false;
@@ -980,8 +980,8 @@ export class NumberingLevel {
 
     // Extract color from <w:rPr>
     let color: string | undefined;
-    const colorMatch = xml.match(/<w:color[^>]*w:val="([^"]+)"/);
-    if (colorMatch && colorMatch[1]) {
+    const colorMatch = /<w:color[^>]*w:val="([^"]+)"/.exec(xml);
+    if (colorMatch?.[1]) {
       color = colorMatch[1];
     }
 

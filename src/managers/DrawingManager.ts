@@ -41,14 +41,14 @@ export interface PreservedDrawing {
  * instead of O(n) linear scans through the main Map.
  */
 export class DrawingManager {
-  private drawings: Map<string, DrawingElement | PreservedDrawing> = new Map();
-  private nextId: number = 1;
+  private drawings = new Map<string, DrawingElement | PreservedDrawing>();
+  private nextId = 1;
 
   // Type-indexed Sets for O(1) type-specific lookups
-  private imageIds: Set<string> = new Set();
-  private shapeIds: Set<string> = new Set();
-  private textboxIds: Set<string> = new Set();
-  private preservedIds: Set<string> = new Set();
+  private imageIds = new Set<string>();
+  private shapeIds = new Set<string>();
+  private textboxIds = new Set<string>();
+  private preservedIds = new Set<string>();
 
   /**
    * Creates a new DrawingManager

@@ -13,8 +13,8 @@ import { XMLParser } from '../xml/XMLParser';
  * Manages footnotes in a document
  */
 export class FootnoteManager {
-  private footnotes: Map<number, Footnote> = new Map();
-  private nextId: number = 1;
+  private footnotes = new Map<number, Footnote>();
+  private nextId = 1;
 
   /**
    * Creates a new FootnoteManager

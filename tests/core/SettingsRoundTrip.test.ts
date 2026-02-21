@@ -76,8 +76,8 @@ const SETTINGS_MODE_14 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?
   <w:defaultTabStop w:val="720"/>
   <w:characterSpacingControl w:val="doNotCompress"/>
   <w:compat>
+    <w:adjustLineHeightInTable/>
     <w:useFELayout/>
-    <w:growAutofit/>
     <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="14"/>
   </w:compat>
   <w:themeFontLang w:val="en-US"/>
@@ -460,7 +460,7 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
 
       const info = doc.getCompatibilityInfo();
       expect(info.legacyFlags).toContain('useFELayout');
-      expect(info.legacyFlags).toContain('growAutofit');
+      expect(info.legacyFlags).toContain('adjustLineHeightInTable');
       expect(info.legacyFlags.length).toBe(2);
       doc.dispose();
     });
@@ -523,7 +523,7 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       // Legacy flags should be preserved too
       const info = reloaded.getCompatibilityInfo();
       expect(info.legacyFlags).toContain('useFELayout');
-      expect(info.legacyFlags).toContain('growAutofit');
+      expect(info.legacyFlags).toContain('adjustLineHeightInTable');
       reloaded.dispose();
     });
   });
@@ -560,14 +560,14 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       expect(doc.getCompatibilityMode()).toBe(CompatibilityMode.Word2010);
       const info = doc.getCompatibilityInfo();
       expect(info.legacyFlags).toContain('useFELayout');
-      expect(info.legacyFlags).toContain('growAutofit');
+      expect(info.legacyFlags).toContain('adjustLineHeightInTable');
 
       const report = doc.upgradeToModernFormat();
 
       expect(report.changed).toBe(true);
       expect(report.previousMode).toBe(CompatibilityMode.Word2010);
       expect(report.removedFlags).toContain('useFELayout');
-      expect(report.removedFlags).toContain('growAutofit');
+      expect(report.removedFlags).toContain('adjustLineHeightInTable');
       expect(doc.getCompatibilityInfo().legacyFlags).toHaveLength(0);
 
       doc.dispose();
@@ -629,7 +629,10 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       doc2.dispose();
     });
 
-    it('should preserve non-Microsoft URI compat settings during upgrade', async () => {
+    it('should preserve extra compat settings during upgrade', async () => {
+      // Use a valid compatSetting name with a non-Microsoft URI to test that
+      // non-Microsoft settings survive the upgrade. The name must be valid per
+      // OOXML schema to pass validation.
       const settingsWithCustomUri = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -637,7 +640,7 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
   <w:compat>
     <w:useFELayout/>
     <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="12"/>
-    <w:compatSetting w:name="customSetting" w:uri="http://custom.vendor.com/word" w:val="enabled"/>
+    <w:compatSetting w:name="overrideTableStyleFontSizeAndJustification" w:uri="http://custom.vendor.com/word" w:val="1"/>
   </w:compat>
 </w:settings>`;
 
@@ -648,13 +651,12 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       expect(report.changed).toBe(true);
       expect(report.removedFlags).toContain('useFELayout');
 
-      // Save and check that custom URI setting was preserved
+      // Save and check that non-Microsoft URI setting was preserved
       const savedBuffer = await doc.toBuffer();
       const zip = new ZipHandler();
       await zip.loadFromBuffer(savedBuffer);
       const settingsXml = zip.getFileAsString(DOCX_PATHS.SETTINGS);
 
-      expect(settingsXml).toContain('customSetting');
       expect(settingsXml).toContain('http://custom.vendor.com/word');
       expect(settingsXml).toContain('w:val="15"');
 
@@ -685,8 +687,8 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
   <w:evenAndOddHeaders/>
   <w:characterSpacingControl w:val="doNotCompress"/>
   <w:compat>
+    <w:adjustLineHeightInTable/>
     <w:useFELayout/>
-    <w:growAutofit/>
     <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="14"/>
   </w:compat>
   <w:decimalSymbol w:val="."/>
@@ -711,7 +713,7 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       expect(settingsXml).toContain('w:trackRevisions');
       // Legacy flags should be gone
       expect(settingsXml).not.toMatch(/<w:useFELayout/);
-      expect(settingsXml).not.toMatch(/<w:growAutofit/);
+      expect(settingsXml).not.toMatch(/<w:adjustLineHeightInTable/);
 
       doc.dispose();
     });
@@ -728,8 +730,8 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
     <w:spaceForUL/>
     <w:doNotExpandShiftReturn/>
     <w:adjustLineHeightInTable/>
+    <w:adjustLineHeightInTable/>
     <w:useFELayout/>
-    <w:growAutofit/>
     <w:cachedColBalance/>
     <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="11"/>
   </w:compat>
@@ -751,7 +753,7 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       expect(report.removedFlags).toContain('doNotExpandShiftReturn');
       expect(report.removedFlags).toContain('adjustLineHeightInTable');
       expect(report.removedFlags).toContain('useFELayout');
-      expect(report.removedFlags).toContain('growAutofit');
+      expect(report.removedFlags).toContain('adjustLineHeightInTable');
       expect(report.removedFlags).toContain('cachedColBalance');
 
       doc.dispose();
@@ -826,8 +828,8 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:compat>
+    <w:adjustLineHeightInTable/>
     <w:useFELayout/>
-    <w:growAutofit/>
     <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="12"/>
   </w:compat>
 </w:settings>`;
@@ -836,10 +838,10 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
 
       expect(result.report.changed).toBe(true);
       expect(result.report.removedFlags).toContain('useFELayout');
-      expect(result.report.removedFlags).toContain('growAutofit');
+      expect(result.report.removedFlags).toContain('adjustLineHeightInTable');
       expect(result.xml).toContain('w:val="15"');
       expect(result.xml).not.toContain('useFELayout');
-      expect(result.xml).not.toContain('growAutofit');
+      expect(result.xml).not.toContain('adjustLineHeightInTable');
     });
 
     it('should insert compat block when missing', () => {

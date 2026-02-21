@@ -894,14 +894,14 @@ export class Table {
       even?: Partial<CellFormatting>;
       odd?: Partial<CellFormatting>;
     };
-    contentRules?: Array<{
+    contentRules?: {
       condition: (
         cellText: string,
         rowIndex: number,
         colIndex: number
       ) => boolean;
       formatting: Partial<CellFormatting>;
-    }>;
+    }[];
   }): this {
     const rows = this.getRows();
 
@@ -1435,26 +1435,31 @@ export class Table {
   toXML(): XMLElement {
     const tblPrChildren: XMLElement[] = [];
 
-    // Add table style (must come first per ECMA-376)
+    // CT_TblPr element order per ECMA-376:
+    // tblStyle, tblpPr, tblOverlap, bidiVisual, tblStyleRowBandSize, tblStyleColBandSize,
+    // tblW, jc, tblCellSpacing, tblInd, tblBorders, shd, tblLayout, tblCellMar, tblLook,
+    // tblCaption, tblDescription, tblPrChange
+
+    // 1. tblStyle
     if (this.formatting.style) {
       tblPrChildren.push(
         XMLBuilder.wSelf("tblStyle", { "w:val": this.formatting.style })
       );
     }
 
-    // Add table positioning properties (tblpPr) - for floating tables
+    // 2. tblpPr - table positioning properties (floating tables)
     if (this.formatting.position) {
       const pos = this.formatting.position;
       const posAttrs: Record<string, string | number> = {};
 
       if (pos.x !== undefined) posAttrs["w:tblpX"] = pos.x;
       if (pos.y !== undefined) posAttrs["w:tblpY"] = pos.y;
-      if (pos.horizontalAnchor) posAttrs["w:tblpXSpec"] = pos.horizontalAnchor;
-      if (pos.verticalAnchor) posAttrs["w:tblpYSpec"] = pos.verticalAnchor;
+      if (pos.horizontalAnchor) posAttrs["w:horzAnchor"] = pos.horizontalAnchor;
+      if (pos.verticalAnchor) posAttrs["w:vertAnchor"] = pos.verticalAnchor;
       if (pos.horizontalAlignment)
-        posAttrs["w:tblpXAlign"] = pos.horizontalAlignment;
+        posAttrs["w:tblpXSpec"] = pos.horizontalAlignment;
       if (pos.verticalAlignment)
-        posAttrs["w:tblpYAlign"] = pos.verticalAlignment;
+        posAttrs["w:tblpYSpec"] = pos.verticalAlignment;
       if (pos.leftFromText !== undefined)
         posAttrs["w:leftFromText"] = pos.leftFromText;
       if (pos.rightFromText !== undefined)
@@ -1469,7 +1474,7 @@ export class Table {
       }
     }
 
-    // Add table overlap
+    // 3. tblOverlap
     if (this.formatting.overlap !== undefined) {
       tblPrChildren.push(
         XMLBuilder.wSelf("tblOverlap", {
@@ -1478,12 +1483,17 @@ export class Table {
       );
     }
 
-    // Add bidirectional visual layout
+    // 4. bidiVisual
     if (this.formatting.bidiVisual) {
       tblPrChildren.push(XMLBuilder.wSelf("bidiVisual"));
     }
 
-    // Add table width
+    // 5-6. tblStyleRowBandSize / tblStyleColBandSize
+    // Only valid within table style definitions (CT_TblPrBase in w:style),
+    // not in direct tblPr. Style.ts handles serialization in style context.
+    // Values are preserved in formatting for round-trip and style use.
+
+    // 7. tblW
     if (this.formatting.width !== undefined) {
       const widthType = this.formatting.widthType || "dxa";
       tblPrChildren.push(
@@ -1494,21 +1504,35 @@ export class Table {
       );
     }
 
-    // Add table alignment (jc = justification/alignment)
+    // 8. jc (alignment)
     if (this.formatting.alignment) {
       tblPrChildren.push(
         XMLBuilder.wSelf("jc", { "w:val": this.formatting.alignment })
       );
     }
 
-    // Add table layout
-    if (this.formatting.layout) {
+    // 9. tblCellSpacing
+    if (this.formatting.cellSpacing !== undefined) {
+      const cellSpacingType = this.formatting.cellSpacingType || "dxa";
       tblPrChildren.push(
-        XMLBuilder.wSelf("tblLayout", { "w:type": this.formatting.layout })
+        XMLBuilder.wSelf("tblCellSpacing", {
+          "w:w": this.formatting.cellSpacing,
+          "w:type": cellSpacingType,
+        })
       );
     }
 
-    // Add table borders
+    // 10. tblInd
+    if (this.formatting.indent !== undefined) {
+      tblPrChildren.push(
+        XMLBuilder.wSelf("tblInd", {
+          "w:w": this.formatting.indent,
+          "w:type": "dxa",
+        })
+      );
+    }
+
+    // 11. tblBorders
     if (this.formatting.borders) {
       const borderElements: XMLElement[] = [];
       const borders = this.formatting.borders;
@@ -1516,11 +1540,11 @@ export class Table {
       if (borders.top) {
         borderElements.push(XMLBuilder.createBorder("top", borders.top));
       }
-      if (borders.bottom) {
-        borderElements.push(XMLBuilder.createBorder("bottom", borders.bottom));
-      }
       if (borders.left) {
         borderElements.push(XMLBuilder.createBorder("left", borders.left));
+      }
+      if (borders.bottom) {
+        borderElements.push(XMLBuilder.createBorder("bottom", borders.bottom));
       }
       if (borders.right) {
         borderElements.push(XMLBuilder.createBorder("right", borders.right));
@@ -1543,18 +1567,22 @@ export class Table {
       }
     }
 
-    // Add cell spacing
-    if (this.formatting.cellSpacing !== undefined) {
-      const cellSpacingType = this.formatting.cellSpacingType || "dxa";
+    // 12. shd (table shading/background)
+    if (this.formatting.shading) {
+      const shdAttrs = buildShadingAttributes(this.formatting.shading);
+      if (Object.keys(shdAttrs).length > 0) {
+        tblPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
+      }
+    }
+
+    // 13. tblLayout
+    if (this.formatting.layout) {
       tblPrChildren.push(
-        XMLBuilder.wSelf("tblCellSpacing", {
-          "w:w": this.formatting.cellSpacing,
-          "w:type": cellSpacingType,
-        })
+        XMLBuilder.wSelf("tblLayout", { "w:type": this.formatting.layout })
       );
     }
 
-    // Add cell margins (tblCellMar) - per ECMA-376 Part 1 §17.4.42
+    // 14. tblCellMar
     if (this.formatting.cellMargins) {
       const marginElements: XMLElement[] = [];
       if (this.formatting.cellMargins.top !== undefined) {
@@ -1596,43 +1624,11 @@ export class Table {
       }
     }
 
-    // Add table indent
-    if (this.formatting.indent !== undefined) {
-      tblPrChildren.push(
-        XMLBuilder.wSelf("tblInd", {
-          "w:w": this.formatting.indent,
-          "w:type": "dxa",
-        })
-      );
-    }
-
-    // Add table look (appearance flags)
+    // 15. tblLook
     if (this.formatting.tblLook) {
       tblPrChildren.push(
         XMLBuilder.wSelf("tblLook", { "w:val": this.formatting.tblLook })
       );
-    }
-
-    // Add table style row band size per ECMA-376 Part 1 §17.4.52
-    if (this.formatting.tblStyleRowBandSize !== undefined) {
-      tblPrChildren.push(
-        XMLBuilder.wSelf("tblStyleRowBandSize", { "w:val": this.formatting.tblStyleRowBandSize })
-      );
-    }
-
-    // Add table style column band size per ECMA-376 Part 1 §17.4.51
-    if (this.formatting.tblStyleColBandSize !== undefined) {
-      tblPrChildren.push(
-        XMLBuilder.wSelf("tblStyleColBandSize", { "w:val": this.formatting.tblStyleColBandSize })
-      );
-    }
-
-    // Add table shading (background) per ECMA-376 Part 1 §17.4.56
-    if (this.formatting.shading) {
-      const shdAttrs = buildShadingAttributes(this.formatting.shading);
-      if (Object.keys(shdAttrs).length > 0) {
-        tblPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
-      }
     }
 
     // Add table caption (accessibility)
@@ -1679,7 +1675,7 @@ export class Table {
         }
         if (prev.borders) {
           const borderChildren: XMLElement[] = [];
-          const bNames = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'] as const;
+          const bNames = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'] as const;
           for (const name of bNames) {
             const b = prev.borders[name];
             if (b) {
@@ -1767,7 +1763,7 @@ export class Table {
     const tblGridChildren: XMLElement[] = [];
 
     for (let i = 0; i < gridColumnCount; i++) {
-      if (gridWidths && gridWidths[i] !== undefined) {
+      if (gridWidths?.[i] !== undefined) {
         // Use specified grid width
         tblGridChildren.push(
           XMLBuilder.wSelf("gridCol", { "w:w": gridWidths[i] })

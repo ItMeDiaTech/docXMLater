@@ -15,13 +15,13 @@
  */
 
 export class DocumentIdManager {
-  private nextId: number = 0;
+  private nextId = 0;
 
   /**
    * Creates a new DocumentIdManager
    * @param initialNextId - Optional starting ID (default 0)
    */
-  constructor(initialNextId: number = 0) {
+  constructor(initialNextId = 0) {
     this.nextId = initialNextId;
   }
 
@@ -152,7 +152,7 @@ export class DocumentIdManager {
    * @param initialNextId - Optional starting ID (default 0)
    * @returns New DocumentIdManager instance
    */
-  static create(initialNextId: number = 0): DocumentIdManager {
+  static create(initialNextId = 0): DocumentIdManager {
     return new DocumentIdManager(initialNextId);
   }
 }

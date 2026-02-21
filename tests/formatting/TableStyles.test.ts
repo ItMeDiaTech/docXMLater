@@ -654,7 +654,7 @@ describe('TableStyles - Phase 5.1', () => {
       expect(props.tableStyle?.table?.indent).toBe(100);
       expect(props.tableStyle?.table?.alignment).toBe('right');
       expect(props.tableStyle?.cell?.verticalAlignment).toBe('center');
-      expect(props.tableStyle?.row?.height).toBe(500);
+      // trHeight is not valid in style-level trPr per strict OOXML schema
       expect(props.tableStyle?.rowBandSize).toBe(2);
       expect(props.tableStyle?.colBandSize).toBe(1);
     });

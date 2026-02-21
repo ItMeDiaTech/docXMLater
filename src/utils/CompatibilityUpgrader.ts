@@ -57,14 +57,14 @@ export class CompatibilityUpgrader {
    */
   static upgradeCompatBlock(
     settingsXml: string,
-    previousMode: number = 12
+    previousMode = 12
   ): { xml: string; report: UpgradeReport } {
     const removedFlags: string[] = [];
     const addedSettings: string[] = [];
 
     // Check if already mode 15 with no legacy flags
-    const compatBlockMatch = settingsXml.match(/<w:compat>([\s\S]*?)<\/w:compat>/);
-    const selfClosingCompat = settingsXml.match(/<w:compat\s*\/>/);
+    const compatBlockMatch = /<w:compat>([\s\S]*?)<\/w:compat>/.exec(settingsXml);
+    const selfClosingCompat = /<w:compat\s*\/>/.exec(settingsXml);
 
     if (!compatBlockMatch && !selfClosingCompat) {
       // No w:compat block — insert a full modern block before </w:settings>
@@ -132,9 +132,9 @@ export class CompatibilityUpgrader {
     let settingMatch;
     while ((settingMatch = settingRegex.exec(compatBlock)) !== null) {
       const attrs = settingMatch[1] ?? '';
-      const nameMatch = attrs.match(/w:name\s*=\s*"([^"]*)"/);
-      const uriMatch = attrs.match(/w:uri\s*=\s*"([^"]*)"/);
-      const valMatch = attrs.match(/w:val\s*=\s*"([^"]*)"/);
+      const nameMatch = /w:name\s*=\s*"([^"]*)"/.exec(attrs);
+      const uriMatch = /w:uri\s*=\s*"([^"]*)"/.exec(attrs);
+      const valMatch = /w:val\s*=\s*"([^"]*)"/.exec(attrs);
 
       if (nameMatch?.[1] && uriMatch?.[1] && valMatch?.[1]) {
         // Preserve settings with non-Microsoft URIs
@@ -154,8 +154,8 @@ export class CompatibilityUpgrader {
     let existingMatch;
     while ((existingMatch = existingSettingRegex.exec(compatBlock)) !== null) {
       const attrs = existingMatch[1] ?? '';
-      const nameMatch = attrs.match(/w:name\s*=\s*"([^"]*)"/);
-      const uriMatch = attrs.match(/w:uri\s*=\s*"([^"]*)"/);
+      const nameMatch = /w:name\s*=\s*"([^"]*)"/.exec(attrs);
+      const uriMatch = /w:uri\s*=\s*"([^"]*)"/.exec(attrs);
       if (nameMatch?.[1] && uriMatch?.[1] && uriMatch[1] === MS_WORD_COMPAT_URI) {
         existingMsSettings.add(nameMatch[1]);
       }

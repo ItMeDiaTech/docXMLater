@@ -104,12 +104,12 @@ export class Shape {
   private outline?: ShapeOutline;
   private position?: ImagePosition;
   private anchor?: ImageAnchor;
-  private rotation: number = 0;
+  private rotation = 0;
   private text?: string;
   private textFormatting?: RunFormatting;
   private name: string;
   private description: string;
-  private docPrId: number = 1;
+  private docPrId = 1;
 
   /**
    * Creates a new shape
@@ -485,6 +485,13 @@ export class Shape {
       relativeHeight: 251658240,
     };
 
+    // simplePos (required first child per CT_Anchor)
+    children.push({
+      name: 'wp:simplePos',
+      attributes: { x: '0', y: '0' },
+      selfClosing: true,
+    });
+
     // Position H (horizontal)
     if (this.position) {
       const posH = this.position.horizontal;
@@ -651,6 +658,24 @@ export class Shape {
     if (this.text) {
       children.push(this.createTextBox());
     }
+
+    // Body properties (required per CT_WordprocessingShape)
+    children.push({
+      name: 'wps:bodyPr',
+      attributes: {
+        rot: '0',
+        vert: 'horz',
+        wrap: 'square',
+        lIns: '91440',
+        tIns: '45720',
+        rIns: '91440',
+        bIns: '45720',
+        anchor: 't',
+        anchorCtr: '0',
+        upright: '1',
+      },
+      selfClosing: true,
+    });
 
     return {
       name: 'wps:wsp',

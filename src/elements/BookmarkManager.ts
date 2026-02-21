@@ -25,8 +25,8 @@ export type IdExistsCallback = (existingId: number) => void;
  * Manages document bookmarks
  */
 export class BookmarkManager {
-  private bookmarks: Map<string, Bookmark> = new Map();
-  private nextId: number = 0;
+  private bookmarks = new Map<string, Bookmark>();
+  private nextId = 0;
   private idProvider: IdProviderCallback | null = null;
   private idExistsNotifier: IdExistsCallback | null = null;
 

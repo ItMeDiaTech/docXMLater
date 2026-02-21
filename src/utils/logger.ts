@@ -219,14 +219,14 @@ export class CollectingLogger implements ILogger {
   /**
    * Get all collected log entries
    */
-  getLogs(): ReadonlyArray<LogEntry> {
+  getLogs(): readonly LogEntry[] {
     return [...this.logs];
   }
 
   /**
    * Get logs filtered by level
    */
-  getLogsByLevel(level: LogLevel): ReadonlyArray<LogEntry> {
+  getLogsByLevel(level: LogLevel): readonly LogEntry[] {
     return this.logs.filter(log => log.level === level);
   }
 
@@ -295,7 +295,7 @@ export function createScopedLogger(logger: ILogger, source: string): ILogger {
  * @param level - Log level string (case-insensitive)
  * @returns LogLevel or undefined if invalid
  */
-export function parseLogLevel(level: string | undefined): LogLevel | undefined {
+function parseLogLevel(level: string | undefined): LogLevel | undefined {
   if (!level) return undefined;
   const normalized = level.toLowerCase();
   switch (normalized) {
@@ -316,7 +316,7 @@ export function parseLogLevel(level: string | undefined): LogLevel | undefined {
  *
  * @returns Logger configured from environment, or SilentLogger if not configured
  */
-export function createLoggerFromEnv(): ILogger {
+function createLoggerFromEnv(): ILogger {
   // Check DEBUG environment variable first (highest precedence for debug mode)
   const debugEnv = process.env.DEBUG || '';
   if (debugEnv.includes('docxmlater')) {

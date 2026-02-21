@@ -90,7 +90,7 @@ export const LEGACY_COMPAT_ELEMENTS: string[] = [
  * Set of legacy compat element names without the w: prefix,
  * for efficient lookup during parsing and filtering.
  */
-export const LEGACY_COMPAT_ELEMENT_NAMES: Set<string> = new Set(
+export const LEGACY_COMPAT_ELEMENT_NAMES = new Set<string>(
   LEGACY_COMPAT_ELEMENTS.map(e => e.replace('w:', ''))
 );
 

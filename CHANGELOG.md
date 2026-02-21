@@ -5,6 +5,23 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.3] - 2026-02-21
+
+### Fixed
+
+- **OOXML Compliance: tblStyleRowBandSize/tblStyleColBandSize in direct tblPr**: `Table.setStyleRowBandSize()` and `setStyleColBandSize()` no longer serialize these elements into direct table `w:tblPr`. Per ECMA-376, they are only valid within table style definitions (`w:style[@w:type='table']/w:tblPr`). Values are still stored for round-trip preservation and style context serialization (Style.ts).
+
+- **OOXML Compliance: Part-scoped hyperlink relationships in headers/footers**: Hyperlinks added to header/footer paragraphs now produce part-level `.rels` files (`word/_rels/headerN.xml.rels`, `word/_rels/footerN.xml.rels`) instead of incorrectly placing relationships in `word/_rels/document.xml.rels`. Follows the same pattern already used for footnotes and endnotes per ECMA-376 section 3.11.
+
+- **OOXML Compliance: Property change revisions in paragraph serialization**: Revision types that represent property changes (`runPropertiesChange`, `paragraphPropertiesChange`, `tablePropertiesChange`, `tableExceptionPropertiesChange`, `tableRowPropertiesChange`, `tableCellPropertiesChange`, `sectionPropertiesChange`, `numberingChange`) are now silently skipped during paragraph content serialization. These elements are only valid inside their respective property containers (e.g., `w:rPrChange` inside `w:rPr`), not as direct children of `w:p`.
+
+### Statistics
+
+- 129 test suites, 2,811 tests passing
+- 120 source files
+
+---
+
 ## [10.0.2] - 2026-02-20
 
 ### Fixed

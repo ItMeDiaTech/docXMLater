@@ -450,6 +450,14 @@ async function createDocxWithNumbering(
   zipHandler.addFile(DOCX_PATHS.NUMBERING, numberingXml);
   if (numberingRels) {
     zipHandler.addFile(DOCX_PATHS.NUMBERING_RELS, numberingRels);
+    // Add minimal 1x1 PNG files so the validator doesn't report missing parts
+    const minimalPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAB' +
+      'Nl7BcQAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    zipHandler.addFile('word/media/image1.png', minimalPng);
+    zipHandler.addFile('word/media/image2.png', minimalPng);
   }
   return await zipHandler.toBuffer();
 }
@@ -461,7 +469,8 @@ describe('numPicBullet cleanup', () => {
              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
              xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
              xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-             xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+             xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+             xmlns:v="urn:schemas-microsoft-com:vml">
   <w:numPicBullet w:numPicBulletId="0">
     <w:pict><v:shape><v:imagedata r:id="rId1"/></v:shape></w:pict>
   </w:numPicBullet>
@@ -562,9 +571,10 @@ describe('numPicBullet cleanup', () => {
 describe('numbering.xml.rels cleanup', () => {
   const NUMBERING_WITH_PIC_BULLETS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+             xmlns:v="urn:schemas-microsoft-com:vml">
   <w:numPicBullet w:numPicBulletId="0">
-    <w:pict><v:shape><v:imagedata r:embed="rId1"/></v:shape></w:pict>
+    <w:pict><v:shape><v:imagedata r:id="rId1"/></v:shape></w:pict>
   </w:numPicBullet>
   <w:abstractNum w:abstractNumId="0">
     <w:multiLevelType w:val="hybridMultilevel"/>

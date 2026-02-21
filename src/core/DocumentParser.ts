@@ -81,7 +81,7 @@ export class DocumentParser {
    */
   private currentPartName: string | undefined = undefined;
 
-  constructor(strictParsing: boolean = false) {
+  constructor(strictParsing = false) {
     this.strictParsing = strictParsing;
   }
 
@@ -1584,7 +1584,7 @@ export class DocumentParser {
         const runElement = runObj["w:r"] as any;
 
         // Check if this run contains a drawing (image)
-        if (runElement && runElement["w:drawing"]) {
+        if (runElement?.["w:drawing"]) {
           if (zipHandler && imageManager) {
             const imageRun = await this.parseDrawingFromObject(
               runElement["w:drawing"],
@@ -1704,8 +1704,10 @@ export class DocumentParser {
       const author = XMLParser.extractAttribute(commentXml, "w:author") || "Unknown";
       const dateAttr = XMLParser.extractAttribute(commentXml, "w:date");
       const initials = XMLParser.extractAttribute(commentXml, "w:initials");
-      const parentIdAttr = XMLParser.extractAttribute(commentXml, "w:parentId");
-      const doneAttr = XMLParser.extractAttribute(commentXml, "w:done");
+      const parentIdAttr = XMLParser.extractAttribute(commentXml, "w15:parentId")
+        || XMLParser.extractAttribute(commentXml, "w:parentId");
+      const doneAttr = XMLParser.extractAttribute(commentXml, "w15:done")
+        || XMLParser.extractAttribute(commentXml, "w:done");
 
       if (!idAttr) {
         return null; // ID is required
@@ -1998,8 +2000,8 @@ export class DocumentParser {
       this.parseParagraphPropertiesFromObject(paraObj["w:pPr"], paragraph);
 
       // Check if we have ordered children metadata from the enhanced parser
-      const orderedChildren = paraObj["_orderedChildren"] as
-        | Array<{ type: string; index: number }>
+      const orderedChildren = paraObj._orderedChildren as
+        | { type: string; index: number }[]
         | undefined;
 
       if (orderedChildren && orderedChildren.length > 0) {
@@ -3129,7 +3131,7 @@ export class DocumentParser {
     interface FieldTracker {
       startParagraphIndex: number;
       startRunIndex: number;
-      fieldRuns: Array<{ paragraphIndex: number; runIndex: number; run: Run }>;
+      fieldRuns: { paragraphIndex: number; runIndex: number; run: Run }[];
       hasBegin: boolean;
       hasSeparate: boolean;
       hasEnd: boolean;
@@ -3266,7 +3268,7 @@ export class DocumentParser {
   private processMultiParagraphField(
     fieldTracker: {
       startParagraphIndex: number;
-      fieldRuns: Array<{ paragraphIndex: number; runIndex: number; run: Run }>;
+      fieldRuns: { paragraphIndex: number; runIndex: number; run: Run }[];
     },
     allParagraphs: Paragraph[]
   ): void {
@@ -3410,7 +3412,7 @@ export class DocumentParser {
   private processMultiParagraphFieldAsComplexField(
     fieldTracker: {
       startParagraphIndex: number;
-      fieldRuns: Array<{ paragraphIndex: number; runIndex: number; run: Run }>;
+      fieldRuns: { paragraphIndex: number; runIndex: number; run: Run }[];
     },
     allParagraphs: Paragraph[],
     runs: Run[]
@@ -3779,9 +3781,9 @@ export class DocumentParser {
 
       // Use _orderedChildren to preserve element order (critical for TOC entries)
       // TOC entries have structure: text → tab → text (heading, tab, page number)
-      if (runObj["_orderedChildren"]) {
+      if (runObj._orderedChildren) {
         // Process elements in their original order
-        for (const child of runObj["_orderedChildren"]) {
+        for (const child of runObj._orderedChildren) {
           const elementType = child.type;
           const elementIndex = child.index;
 
@@ -4415,7 +4417,7 @@ export class DocumentParser {
 
       // Create hyperlink with display text
       // NOTE: Do NOT use anchor (bookmark ID) as display text - it should only be used for navigation
-      let displayText = text || url || "[Link]";
+      const displayText = text || url || "[Link]";
 
       // Warn if hyperlink has no display text (possible TOC corruption or malformed hyperlink)
       if (!text && finalAnchor) {
@@ -4469,7 +4471,7 @@ export class DocumentParser {
    */
   private mergeConsecutiveHyperlinks(
     paragraph: Paragraph,
-    resetFormatting: boolean = false
+    resetFormatting = false
   ): void {
     const content = paragraph.getContent();
     if (!content || content.length < 2) return;
@@ -4698,7 +4700,7 @@ export class DocumentParser {
     // Parse emphasis marks (w:em) per ECMA-376 Part 1 §17.3.2.13
     if (rPrObj["w:em"]) {
       const val = rPrObj["w:em"]["@_w:val"];
-      if (val) run.setEmphasis(val as any);
+      if (val) run.setEmphasis(val);
     }
 
     // Parse outline text effect (w:outline) per ECMA-376 Part 1 §17.3.2.23
@@ -4817,7 +4819,7 @@ export class DocumentParser {
     // Parse text effect (w:effect) per ECMA-376 Part 1 §17.3.2.12
     if (rPrObj["w:effect"]) {
       const val = rPrObj["w:effect"]["@_w:val"];
-      if (val) run.setEffect(val as any);
+      if (val) run.setEffect(val);
     }
 
     if (rPrObj["w:vertAlign"]) {
@@ -5837,9 +5839,9 @@ export class DocumentParser {
    * Returns array of { name, val } for modifiers like lumMod, lumOff, satMod, etc.
    * @private
    */
-  private parseColorModifiers(colorObj: any): Array<{ name: string; val: string }> | undefined {
+  private parseColorModifiers(colorObj: any): { name: string; val: string }[] | undefined {
     if (!colorObj || typeof colorObj !== 'object') return undefined;
-    const modifiers: Array<{ name: string; val: string }> = [];
+    const modifiers: { name: string; val: string }[] = [];
     const modNames = ['a:lumMod', 'a:lumOff', 'a:satMod', 'a:shade', 'a:tint', 'a:alpha'];
     for (const mod of modNames) {
       const modObj = colorObj[mod];
@@ -5882,7 +5884,7 @@ export class DocumentParser {
       }
 
       // Parse table grid (w:tblGrid) - column widths
-      if (tableObj["w:tblGrid"] && tableObj["w:tblGrid"]["w:gridCol"]) {
+      if (tableObj["w:tblGrid"]?.["w:gridCol"]) {
         const gridCols = tableObj["w:tblGrid"]["w:gridCol"];
         const gridColArray = Array.isArray(gridCols) ? gridCols : [gridCols];
         const widths = gridColArray.map((col: any) => {
@@ -6026,14 +6028,14 @@ export class DocumentParser {
 
       if (tblpPr["@_w:tblpX"]) position.x = parseInt(tblpPr["@_w:tblpX"], 10);
       if (tblpPr["@_w:tblpY"]) position.y = parseInt(tblpPr["@_w:tblpY"], 10);
+      if (tblpPr["@_w:horzAnchor"])
+        position.horizontalAnchor = tblpPr["@_w:horzAnchor"];
+      if (tblpPr["@_w:vertAnchor"])
+        position.verticalAnchor = tblpPr["@_w:vertAnchor"];
       if (tblpPr["@_w:tblpXSpec"])
-        position.horizontalAnchor = tblpPr["@_w:tblpXSpec"];
+        position.horizontalAlignment = tblpPr["@_w:tblpXSpec"];
       if (tblpPr["@_w:tblpYSpec"])
-        position.verticalAnchor = tblpPr["@_w:tblpYSpec"];
-      if (tblpPr["@_w:tblpXAlign"])
-        position.horizontalAlignment = tblpPr["@_w:tblpXAlign"];
-      if (tblpPr["@_w:tblpYAlign"])
-        position.verticalAlignment = tblpPr["@_w:tblpYAlign"];
+        position.verticalAlignment = tblpPr["@_w:tblpYSpec"];
       if (tblpPr["@_w:leftFromText"])
         position.leftFromText = parseInt(tblpPr["@_w:leftFromText"], 10);
       if (tblpPr["@_w:rightFromText"])
@@ -6065,7 +6067,7 @@ export class DocumentParser {
       const widthType = tblPrObj["w:tblW"]["@_w:type"] || "dxa";
       if (width > 0) {
         table.setWidth(width);
-        table.setWidthType(widthType as any);
+        table.setWidthType(widthType);
       }
     }
 
@@ -6090,7 +6092,7 @@ export class DocumentParser {
       const spacingType = tblPrObj["w:tblCellSpacing"]["@_w:type"] || "dxa";
       if (spacing > 0) {
         table.setCellSpacing(spacing);
-        table.setCellSpacingType(spacingType as any);
+        table.setCellSpacingType(spacingType);
       }
     }
 
@@ -6098,7 +6100,7 @@ export class DocumentParser {
     if (tblPrObj["w:tblLayout"]) {
       const layoutType = tblPrObj["w:tblLayout"]["@_w:type"];
       if (layoutType) {
-        table.setLayout(layoutType as any);
+        table.setLayout(layoutType);
       }
     }
 
@@ -6266,7 +6268,7 @@ export class DocumentParser {
       const heightVal = parseInt(trPrObj["w:trHeight"]["@_w:val"] || "0", 10);
       const heightRule = trPrObj["w:trHeight"]["@_w:hRule"] || "atLeast";
       if (heightVal > 0) {
-        row.setHeight(heightVal, heightRule as any);
+        row.setHeight(heightVal, heightRule);
       }
     }
 
@@ -6284,7 +6286,7 @@ export class DocumentParser {
     if (trPrObj["w:jc"]) {
       const val = trPrObj["w:jc"]["@_w:val"];
       if (val) {
-        row.setJustification(val as any);
+        row.setJustification(val);
       }
     }
 
@@ -6471,7 +6473,7 @@ export class DocumentParser {
           const widthVal = parseInt(tcPr["w:tcW"]["@_w:w"] || "0", 10);
           const widthType = tcPr["w:tcW"]["@_w:type"] || "dxa";
           if (widthVal > 0 || widthType === "auto") {
-            cell.setWidthType(widthVal, widthType as any);
+            cell.setWidthType(widthVal, widthType);
           }
         }
 
@@ -6556,7 +6558,7 @@ export class DocumentParser {
         if (tcPr["w:textDirection"]) {
           const direction = tcPr["w:textDirection"]["@_w:val"];
           if (direction) {
-            cell.setTextDirection(direction as any);
+            cell.setTextDirection(direction);
           }
         }
 
@@ -6641,6 +6643,8 @@ export class DocumentParser {
           const date = dateAttr ? new Date(dateAttr) : new Date();
           const vMergeAttr = cellMerge["@_w:vMerge"];
           const vMergeOrigAttr = cellMerge["@_w:vMergeOrig"];
+          // ST_AnnotationVMerge uses "rest"/"cont" but API uses "restart"/"continue"
+          const mergeRevMap: Record<string, string> = { rest: "restart", cont: "continue" };
 
           const revision = new Revision({
             id,
@@ -6649,8 +6653,8 @@ export class DocumentParser {
             type: "tableCellMerge",
             content: [],
             previousProperties: {
-              vMerge: vMergeAttr,
-              vMergeOrig: vMergeOrigAttr,
+              vMerge: (vMergeAttr && mergeRevMap[vMergeAttr]) || vMergeAttr,
+              vMergeOrig: (vMergeOrigAttr && mergeRevMap[vMergeOrigAttr]) || vMergeOrigAttr,
             },
           });
           cell.setCellRevision(revision);
@@ -6923,25 +6927,25 @@ export class DocumentParser {
       if (sdtPr) {
         // Parse ID
         const idElement = sdtPr["w:id"];
-        if (idElement && idElement["@_w:val"]) {
+        if (idElement?.["@_w:val"]) {
           properties.id = parseInt(idElement["@_w:val"], 10);
         }
 
         // Parse tag
         const tagElement = sdtPr["w:tag"];
-        if (tagElement && tagElement["@_w:val"]) {
+        if (tagElement?.["@_w:val"]) {
           properties.tag = tagElement["@_w:val"];
         }
 
         // Parse lock
         const lockElement = sdtPr["w:lock"];
-        if (lockElement && lockElement["@_w:val"]) {
+        if (lockElement?.["@_w:val"]) {
           properties.lock = lockElement["@_w:val"];
         }
 
         // Parse alias
         const aliasElement = sdtPr["w:alias"];
-        if (aliasElement && aliasElement["@_w:val"]) {
+        if (aliasElement?.["@_w:val"]) {
           properties.alias = aliasElement["@_w:val"];
         }
 
@@ -7006,8 +7010,8 @@ export class DocumentParser {
       const sdtContent = sdtObj["w:sdtContent"];
       if (sdtContent) {
         // Check for ordered children (preserves element order)
-        const orderedChildren = sdtContent["_orderedChildren"] as
-          | Array<{ type: string; index: number }>
+        const orderedChildren = sdtContent._orderedChildren as
+          | { type: string; index: number }[]
           | undefined;
 
         if (orderedChildren && orderedChildren.length > 0) {
@@ -7365,7 +7369,7 @@ export class DocumentParser {
     }
 
     // Parse all styles from \t switches
-    const styles: Array<{ styleName: string; level: number }> = [];
+    const styles: { styleName: string; level: number }[] = [];
     for (const match of matches) {
       const stylesStr = match[1];
       if (!stylesStr) continue;
@@ -7396,7 +7400,7 @@ export class DocumentParser {
     // Extract heading numbers and find the range
     const headingLevels = styles
       .map((style) => {
-        const match = style.styleName.match(standardHeadingPattern);
+        const match = standardHeadingPattern.exec(style.styleName);
         return match ? parseInt(match[1]!, 10) : 0;
       })
       .filter((level) => level > 0)
@@ -7500,7 +7504,7 @@ export class DocumentParser {
       );
 
       // NORMALIZATION: Convert incomplete \t switches to \o format for standard headings
-      let normalizedInstruction = this.normalizeTOCFieldInstruction(decodedInstruction);
+      const normalizedInstruction = this.normalizeTOCFieldInstruction(decodedInstruction);
 
       // Parse field switches from normalized instruction
       const tocOptions: any = {
@@ -7524,7 +7528,7 @@ export class DocumentParser {
       }
 
       // Check for \o "x-y" (outline levels) - supports quoted and unquoted formats
-      const outlineMatch = normalizedInstruction.match(/\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/);
+      const outlineMatch = /\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/.exec(normalizedInstruction);
       if (outlineMatch) {
         // Extract captured groups from whichever format matched
         const minLevel = outlineMatch[1] || outlineMatch[3] || outlineMatch[5];
@@ -7536,10 +7540,10 @@ export class DocumentParser {
       }
 
       // Check for \t "styles..." (include styles)
-      const stylesMatch = normalizedInstruction.match(/\\t\s+"([^"]+)"/);
-      if (stylesMatch && stylesMatch[1]) {
+      const stylesMatch = /\\t\s+"([^"]+)"/.exec(normalizedInstruction);
+      if (stylesMatch?.[1]) {
         const stylesStr = stylesMatch[1];
-        const styles: Array<{ styleName: string; level: number }> = [];
+        const styles: { styleName: string; level: number }[] = [];
 
         // Parse "StyleName,Level,StyleName2,Level2,..."
         const parts = stylesStr.split(",").filter((p) => p.trim());
@@ -7639,20 +7643,20 @@ export class DocumentParser {
             !k.startsWith("@_") && k !== "#text" && k !== "_orderedChildren"
         );
 
-      if (!hasChildren && (!element || !element["#text"])) {
+      if (!hasChildren && (!element?.["#text"])) {
         xml += "/>";
       } else {
         xml += ">";
 
         // Add text content
-        if (element && element["#text"]) {
+        if (element?.["#text"]) {
           xml += element["#text"];
         }
 
         // Add child elements using _orderedChildren if available
         if (element && typeof element === "object") {
-          const orderedChildren = element["_orderedChildren"] as
-            | Array<{ type: string; index: number }>
+          const orderedChildren = element._orderedChildren as
+            | { type: string; index: number }[]
             | undefined;
 
           if (orderedChildren && orderedChildren.length > 0) {
@@ -7814,8 +7818,8 @@ export class DocumentParser {
 
     for (const propXml of propertyElements) {
       // Extract name attribute
-      const nameMatch = propXml.match(/name="([^"]+)"/);
-      if (!nameMatch || !nameMatch[1]) continue;
+      const nameMatch = /name="([^"]+)"/.exec(propXml);
+      if (!nameMatch?.[1]) continue;
       const name = XMLBuilder.unescapeXml(nameMatch[1]);
 
       // Determine value type and extract value
@@ -8187,7 +8191,7 @@ export class DocumentParser {
           const fmt = XMLParser.extractAttribute(
             pgNumType,
             "w:fmt"
-          ) as PageNumberFormat;
+          )!;
 
           sectionProps.pageNumbering = {
             start: start ? parseInt(start, 10) : undefined,
@@ -8284,7 +8288,12 @@ export class DocumentParser {
         if (textDir) {
           const val = XMLParser.extractAttribute(textDir, "w:val");
           if (val) {
-            sectionProps.textDirection = val as "ltr" | "rtl" | "tbRl" | "btLr";
+            // Reverse-map OOXML value "lrTb" to API shorthand "ltr".
+            // "tbRl" and "btLr" are used directly in both OOXML and API.
+            const reverseTextDirMap: Record<string, string> = {
+              lrTb: "ltr",
+            };
+            sectionProps.textDirection = (reverseTextDirMap[val] || val) as "ltr" | "rtl" | "tbRl" | "btLr";
           }
         }
       }
@@ -8515,12 +8524,12 @@ export class DocumentParser {
       const numPrXml = XMLParser.extractBetweenTags(pPrXml, "<w:numPr>", "</w:numPr>");
       if (numPrXml) {
         styleNumPr = {};
-        const numIdMatch = numPrXml.match(/<w:numId[^>]*w:val="(\d+)"/);
-        if (numIdMatch && numIdMatch[1]) {
+        const numIdMatch = /<w:numId[^>]*w:val="(\d+)"/.exec(numPrXml);
+        if (numIdMatch?.[1]) {
           styleNumPr.numId = parseInt(numIdMatch[1], 10);
         }
-        const ilvlMatch = numPrXml.match(/<w:ilvl[^>]*w:val="(\d+)"/);
-        if (ilvlMatch && ilvlMatch[1]) {
+        const ilvlMatch = /<w:ilvl[^>]*w:val="(\d+)"/.exec(numPrXml);
+        if (ilvlMatch?.[1]) {
           styleNumPr.ilvl = parseInt(ilvlMatch[1], 10);
         }
       }
@@ -8815,13 +8824,7 @@ export class DocumentParser {
         uVal === "dash" ||
         uVal === "none"
       ) {
-        formatting.underline = uVal as
-          | "single"
-          | "double"
-          | "thick"
-          | "dotted"
-          | "dash"
-          | "none";
+        formatting.underline = uVal;
       } else {
         formatting.underline = true;
       }
@@ -9510,12 +9513,12 @@ export class DocumentParser {
   static getRelationships(
     zipHandler: ZipHandler,
     partName: string
-  ): Array<{
+  ): {
     id?: string;
     type?: string;
     target?: string;
     targetMode?: string;
-  }> {
+  }[] {
     try {
       // Construct the .rels path from the part name
       // For 'word/document.xml' -> 'word/_rels/document.xml.rels'
@@ -9552,10 +9555,10 @@ export class DocumentParser {
         const rel: ParsedRelationship = {};
 
         // Extract attributes
-        const idMatch = attrs.match(/Id="([^"]+)"/);
-        const typeMatch = attrs.match(/Type="([^"]+)"/);
-        const targetMatch = attrs.match(/Target="([^"]+)"/);
-        const modeMatch = attrs.match(/TargetMode="([^"]+)"/);
+        const idMatch = /Id="([^"]+)"/.exec(attrs);
+        const typeMatch = /Type="([^"]+)"/.exec(attrs);
+        const targetMatch = /Target="([^"]+)"/.exec(attrs);
+        const modeMatch = /TargetMode="([^"]+)"/.exec(attrs);
 
         if (idMatch) rel.id = idMatch[1];
         if (typeMatch) rel.type = typeMatch[1];
@@ -9600,9 +9603,9 @@ export class DocumentParser {
    */
   private parseNamespaces(docXml: string): Record<string, string> {
     const namespaces: Record<string, string> = {};
-    const docTagMatch = docXml.match(/<w:document([^>]+)>/);
+    const docTagMatch = /<w:document([^>]+)>/.exec(docXml);
 
-    if (docTagMatch && docTagMatch[1]) {
+    if (docTagMatch?.[1]) {
       const attributes = docTagMatch[1];
       const nsPattern = /xmlns:([^=]+)="([^"]+)"/g;
       let match;
@@ -9616,8 +9619,8 @@ export class DocumentParser {
       // Capture mc:Ignorable attribute (critical for w14/w15/etc. compatibility).
       // Without this, Word treats extended namespace attributes (w14:paraId etc.)
       // in raw XML passthrough zones as invalid content and reports corruption.
-      const ignorableMatch = attributes.match(/mc:Ignorable="([^"]+)"/);
-      if (ignorableMatch && ignorableMatch[1]) {
+      const ignorableMatch = /mc:Ignorable="([^"]+)"/.exec(attributes);
+      if (ignorableMatch?.[1]) {
         namespaces["mc:Ignorable"] = ignorableMatch[1];
       }
     }
@@ -9630,23 +9633,23 @@ export class DocumentParser {
    * The w:background element appears as a child of w:document, before w:body
    */
   private parseDocumentBackground(docXml: string): { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } | undefined {
-    const bgMatch = docXml.match(/<w:background([^>]*?)\/>/);
-    if (!bgMatch || !bgMatch[1]) return undefined;
+    const bgMatch = /<w:background([^>]*?)\/>/.exec(docXml);
+    if (!bgMatch?.[1]) return undefined;
 
     const attrStr = bgMatch[1];
     const result: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } = {};
 
-    const colorMatch = attrStr.match(/w:color="([^"]+)"/);
-    if (colorMatch && colorMatch[1]) result.color = colorMatch[1];
+    const colorMatch = /w:color="([^"]+)"/.exec(attrStr);
+    if (colorMatch?.[1]) result.color = colorMatch[1];
 
-    const themeColorMatch = attrStr.match(/w:themeColor="([^"]+)"/);
-    if (themeColorMatch && themeColorMatch[1]) result.themeColor = themeColorMatch[1];
+    const themeColorMatch = /w:themeColor="([^"]+)"/.exec(attrStr);
+    if (themeColorMatch?.[1]) result.themeColor = themeColorMatch[1];
 
-    const themeTintMatch = attrStr.match(/w:themeTint="([^"]+)"/);
-    if (themeTintMatch && themeTintMatch[1]) result.themeTint = themeTintMatch[1];
+    const themeTintMatch = /w:themeTint="([^"]+)"/.exec(attrStr);
+    if (themeTintMatch?.[1]) result.themeTint = themeTintMatch[1];
 
-    const themeShadeMatch = attrStr.match(/w:themeShade="([^"]+)"/);
-    if (themeShadeMatch && themeShadeMatch[1]) result.themeShade = themeShadeMatch[1];
+    const themeShadeMatch = /w:themeShade="([^"]+)"/.exec(attrStr);
+    if (themeShadeMatch?.[1]) result.themeShade = themeShadeMatch[1];
 
     return Object.keys(result).length > 0 ? result : undefined;
   }
@@ -9666,27 +9669,27 @@ export class DocumentParser {
     relationshipManager: RelationshipManager,
     imageManager: ImageManager
   ): Promise<{
-    headers: Array<{
+    headers: {
       header: import("../elements/Header").Header;
       relationshipId: string;
       filename: string;
-    }>;
-    footers: Array<{
+    }[];
+    footers: {
       footer: import("../elements/Footer").Footer;
       relationshipId: string;
       filename: string;
-    }>;
+    }[];
   }> {
-    const headers: Array<{
+    const headers: {
       header: import("../elements/Header").Header;
       relationshipId: string;
       filename: string;
-    }> = [];
-    const footers: Array<{
+    }[] = [];
+    const footers: {
       footer: import("../elements/Footer").Footer;
       relationshipId: string;
       filename: string;
-    }> = [];
+    }[] = [];
 
     if (!section) {
       return { headers, footers };

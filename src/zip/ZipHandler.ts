@@ -233,7 +233,7 @@ export class ZipHandler {
       return file.content.toString('utf8');
     }
 
-    return file.content as string;
+    return file.content;
   }
 
   /**
@@ -259,7 +259,7 @@ export class ZipHandler {
     }
 
     // Encode string content as UTF-8 Buffer (for content from ZipReader)
-    return Buffer.from(file.content as string, 'utf8');
+    return Buffer.from(file.content, 'utf8');
   }
 
   /**

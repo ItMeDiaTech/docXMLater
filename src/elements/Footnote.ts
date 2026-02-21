@@ -206,7 +206,7 @@ export class Footnote {
    * @param text Notice text (e.g., "Continued on next page...")
    * @returns New continuation notice footnote
    */
-  static createContinuationNotice(id: number, text: string = 'Continued...'): Footnote {
+  static createContinuationNotice(id: number, text = 'Continued...'): Footnote {
     const footnote = new Footnote({
       id,
       type: FootnoteType.ContinuationNotice

@@ -17,10 +17,10 @@ import { RevisionWalker } from './RevisionWalker';
  *
  * @see https://learn.microsoft.com/en-us/office/open-xml/how-to-accept-all-revisions
  */
-export class RevisionAcceptor {
+class RevisionAcceptor {
   private zipHandler: ZipHandler;
   /** Feature flag for DOM-based processing (default: true) */
-  private useDomBasedProcessing: boolean = true;
+  private useDomBasedProcessing = true;
 
   constructor(zipHandler: ZipHandler) {
     this.zipHandler = zipHandler;
@@ -43,10 +43,10 @@ export class RevisionAcceptor {
     // Process headers
     const files = this.zipHandler.getFilePaths();
     for (const file of files) {
-      if (file.match(/^word\/header\d+\.xml$/)) {
+      if (/^word\/header\d+\.xml$/.exec(file)) {
         await this.processDocumentPart(file);
       }
-      if (file.match(/^word\/footer\d+\.xml$/)) {
+      if (/^word\/footer\d+\.xml$/.exec(file)) {
         await this.processDocumentPart(file);
       }
     }
@@ -530,7 +530,7 @@ export class RevisionAcceptor {
         'w:pPr', 'w:rPr', 'w:sectPr', 'w:del', 'w:ins', 'w:moveFrom', 'w:moveTo',
       ];
 
-      if (!hasChildren && (!element || !element['#text'])) {
+      if (!hasChildren && (!element?.['#text'])) {
         if (CANNOT_SELF_CLOSE.includes(tagName)) {
           xml += `></${tagName}>`;
         } else {
@@ -540,14 +540,14 @@ export class RevisionAcceptor {
         xml += '>';
 
         // Add text content
-        if (element && element['#text']) {
+        if (element?.['#text']) {
           xml += this.escapeXml(String(element['#text']));
         }
 
         // Add child elements using _orderedChildren if available
         if (element && typeof element === 'object') {
-          const orderedChildren = element['_orderedChildren'] as
-            | Array<{ type: string; index: number }>
+          const orderedChildren = element._orderedChildren as
+            | { type: string; index: number }[]
             | undefined;
 
           if (orderedChildren && orderedChildren.length > 0) {

@@ -274,7 +274,7 @@ export class ImageManager {
    * @param onProgress Optional callback for progress tracking (loaded, total)
    */
   async loadAllImageData(
-    concurrency: number = 5,
+    concurrency = 5,
     onProgress?: (loaded: number, total: number) => void
   ): Promise<void> {
     const images = Array.from(this.images.values());
@@ -398,8 +398,8 @@ export class ImageManager {
 
     for (const entry of this.images.values()) {
       // Extract number from filename (e.g., "image5.png" → 5)
-      const match = entry.filename.match(/image(\d+)\./); 
-      if (match && match[1]) {
+      const match = /image(\d+)\./.exec(entry.filename); 
+      if (match?.[1]) {
         const num = parseInt(match[1], 10);
         if (num > maxNumber) {
           maxNumber = num;

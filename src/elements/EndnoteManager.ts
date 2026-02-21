@@ -13,8 +13,8 @@ import { XMLParser } from '../xml/XMLParser';
  * Manages endnotes in a document
  */
 export class EndnoteManager {
-  private endnotes: Map<number, Endnote> = new Map();
-  private nextId: number = 1;
+  private endnotes = new Map<number, Endnote>();
+  private nextId = 1;
 
   /**
    * Creates a new EndnoteManager

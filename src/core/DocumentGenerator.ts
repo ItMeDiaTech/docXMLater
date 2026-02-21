@@ -290,7 +290,7 @@ ${properties}
     commentManager: CommentManager,
     zipHandler: IZipHandlerReader,
     fontManager?: FontManager,
-    hasCustomProperties: boolean = false,
+    hasCustomProperties = false,
     originalContentTypes?: { defaults: Set<string>; overrides: Set<string> },
     footnoteManager?: FootnoteManager,
     endnoteManager?: EndnoteManager
@@ -308,11 +308,27 @@ ${properties}
     generatedDefaults.add('rels|application/vnd.openxmlformats-package.relationships+xml');
     generatedDefaults.add('xml|application/xml');
 
-    // Image extensions
+    // Image extensions from ImageManager
     for (const entry of images) {
       const ext = entry.image.getExtension();
       const mimeType = ImageManager.getMimeType(ext);
       generatedDefaults.add(`${ext}|${mimeType}`);
+    }
+
+    // Also detect image files in the archive not tracked by ImageManager
+    // (e.g., numPicBullet images referenced by numbering.xml.rels)
+    const mediaExtensions = new Map<string, string>([
+      ['png', 'image/png'], ['jpeg', 'image/jpeg'], ['jpg', 'image/jpeg'],
+      ['gif', 'image/gif'], ['bmp', 'image/bmp'], ['tiff', 'image/tiff'],
+      ['emf', 'image/x-emf'], ['wmf', 'image/x-wmf'],
+    ]);
+    for (const file of (zipHandler.getFilePaths?.() || [])) {
+      if (file.startsWith('word/media/')) {
+        const ext = file.split('.').pop()?.toLowerCase();
+        if (ext && mediaExtensions.has(ext)) {
+          generatedDefaults.add(`${ext}|${mediaExtensions.get(ext)}`);
+        }
+      }
     }
 
     // Font extensions (if FontManager provided)
@@ -320,8 +336,8 @@ ${properties}
       const fontEntries = fontManager.generateContentTypeEntries();
       for (const entry of fontEntries) {
         // Parse each entry and add to set (entries are XML strings)
-        const extMatch = entry.match(/Extension="([^"]+)"/);
-        const typeMatch = entry.match(/ContentType="([^"]+)"/);
+        const extMatch = /Extension="([^"]+)"/.exec(entry);
+        const typeMatch = /ContentType="([^"]+)"/.exec(entry);
         if (extMatch && typeMatch) {
           generatedDefaults.add(`${extMatch[1]}|${typeMatch[1]}`);
         }
@@ -337,14 +353,26 @@ ${properties}
       generatedDefaults.add('ttf|application/x-font-ttf');
     }
 
-    // Override types - required files
+    // Override types - only add if file exists in archive
     generatedOverrides.add('/word/document.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml');
-    generatedOverrides.add('/word/styles.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml');
-    generatedOverrides.add('/word/numbering.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml');
-    generatedOverrides.add('/word/fontTable.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml');
-    generatedOverrides.add('/word/settings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml');
-    generatedOverrides.add('/word/webSettings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml');
-    generatedOverrides.add('/word/theme/theme1.xml|application/vnd.openxmlformats-officedocument.theme+xml');
+    if (filesInArchive.has('word/styles.xml')) {
+      generatedOverrides.add('/word/styles.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml');
+    }
+    if (filesInArchive.has('word/numbering.xml')) {
+      generatedOverrides.add('/word/numbering.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml');
+    }
+    if (filesInArchive.has('word/fontTable.xml')) {
+      generatedOverrides.add('/word/fontTable.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml');
+    }
+    if (filesInArchive.has('word/settings.xml')) {
+      generatedOverrides.add('/word/settings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml');
+    }
+    if (filesInArchive.has('word/webSettings.xml')) {
+      generatedOverrides.add('/word/webSettings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml');
+    }
+    if (filesInArchive.has('word/theme/theme1.xml')) {
+      generatedOverrides.add('/word/theme/theme1.xml|application/vnd.openxmlformats-officedocument.theme+xml');
+    }
 
     // Headers - only add if file actually exists in archive
     // This prevents corruption when HeaderFooterManager has stale entries for removed headers
@@ -386,8 +414,21 @@ ${properties}
       generatedOverrides.add('/word/people.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml');
     }
 
-    // Core properties (always needed)
-    generatedOverrides.add('/docProps/core.xml|application/vnd.openxmlformats-package.core-properties+xml');
+    // Comment companion files (passthrough)
+    if (filesInArchive.has('word/commentsExtended.xml')) {
+      generatedOverrides.add('/word/commentsExtended.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml');
+    }
+    if (filesInArchive.has('word/commentsIds.xml')) {
+      generatedOverrides.add('/word/commentsIds.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml');
+    }
+    if (filesInArchive.has('word/commentsExtensible.xml')) {
+      generatedOverrides.add('/word/commentsExtensible.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml');
+    }
+
+    // Core properties (only add if file exists)
+    if (zipHandler.hasFile?.("docProps/core.xml") || filesInArchive.has('docProps/core.xml')) {
+      generatedOverrides.add('/docProps/core.xml|application/vnd.openxmlformats-package.core-properties+xml');
+    }
 
     // App.xml if it exists
     if (zipHandler.hasFile?.("docProps/app.xml")) {
@@ -496,7 +537,7 @@ ${properties}
         if (item instanceof Revision) {
           for (const revContent of item.getContent()) {
             if (isHyperlinkContent(revContent)) {
-              const hyperlink = revContent as Hyperlink;
+              const hyperlink = revContent;
               if (hyperlink.isExternal()) {
                 const relId = hyperlink.getRelationshipId();
                 if (relId) {
@@ -739,7 +780,7 @@ ${properties}
       if (item instanceof Revision) {
         for (const revContent of item.getContent()) {
           if (isHyperlinkContent(revContent)) {
-            const hyperlink = revContent as Hyperlink;
+            const hyperlink = revContent;
             if (hyperlink.isExternal() && !hyperlink.getRelationshipId()) {
               this.registerHyperlinkRelationship(hyperlink, relationshipManager);
             }
@@ -880,30 +921,31 @@ ${properties}
     let xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <w:zoom w:percent="100"/>
-  <w:updateFields w:val="true"/>`;
+  <w:zoom w:percent="100"/>`;
 
-    // Track changes settings
+    // Track changes settings — ordered per CT_Settings:
+    // revisionView (#30) → trackRevisions (#31) → doNotTrackFormatting (#33)
+    if (trackChangesSettings?.revisionView) {
+      const view = trackChangesSettings.revisionView;
+      // Only emit revisionView if it differs from defaults (all true)
+      if (!view.showInsertionsAndDeletions || !view.showFormatting || view.showInkAnnotations === false) {
+        xml += `\n  <w:revisionView w:insDel="${view.showInsertionsAndDeletions ? '1' : '0'}" w:formatting="${view.showFormatting ? '1' : '0'}"`;
+        if (view.showInkAnnotations !== undefined) {
+          xml += ` w:inkAnnotations="${view.showInkAnnotations ? '1' : '0'}"`;
+        }
+        xml += '/>';
+      }
+    }
+
     if (trackChangesSettings?.trackChangesEnabled) {
       xml += '\n  <w:trackRevisions/>';
     }
 
     if (trackChangesSettings?.trackFormatting !== undefined) {
-      if (trackChangesSettings.trackFormatting) {
-        xml += '\n  <w:trackFormatting/>';
-      } else {
+      if (!trackChangesSettings.trackFormatting) {
         xml += '\n  <w:doNotTrackFormatting/>';
       }
-    }
-
-    // Revision view settings
-    if (trackChangesSettings?.revisionView) {
-      const view = trackChangesSettings.revisionView;
-      xml += `\n  <w:revisionView w:insDel="${view.showInsertionsAndDeletions ? '1' : '0'}" w:formatting="${view.showFormatting ? '1' : '0'}"`;
-      if (view.showInkAnnotations !== undefined) {
-        xml += ` w:inkAnnotations="${view.showInkAnnotations ? '1' : '0'}"`;
-      }
-      xml += '/>';
+      // trackFormatting=true: emit nothing (default when w:trackRevisions is present)
     }
 
     // Document protection
@@ -936,7 +978,8 @@ ${properties}
 
     xml += `
   <w:defaultTabStop w:val="720"/>
-  <w:characterSpacingControl w:val="doNotCompress"/>`;
+  <w:characterSpacingControl w:val="doNotCompress"/>
+  <w:updateFields w:val="true"/>`;
 
     // RSIDs (Revision Save IDs)
     if (trackChangesSettings?.rsids && trackChangesSettings.rsids.length > 0) {

@@ -239,14 +239,17 @@ describe('RevisionHyperlink Tests', () => {
       const xml = revision.toXML();
 
       expect(xml).not.toBeNull();
-      expect(xml!.name).toBe('w:ins');
-      expect(xml!.attributes?.['w:author']).toBe('TestAuthor');
+      // Per ECMA-376, w:hyperlink wraps w:ins (not the other way around)
+      expect(xml!.name).toBe('w:hyperlink');
       expect(xml!.children).toBeDefined();
-      // Should contain the hyperlink
-      const hyperlinkChild = xml!.children?.find(
-        (c) => typeof c === 'object' && c.name === 'w:hyperlink'
+      // The w:ins should be inside the hyperlink
+      const insChild = xml!.children?.find(
+        (c) => typeof c === 'object' && c.name === 'w:ins'
       );
-      expect(hyperlinkChild).toBeDefined();
+      expect(insChild).toBeDefined();
+      if (insChild && typeof insChild !== 'string') {
+        expect(insChild.attributes?.['w:author']).toBe('TestAuthor');
+      }
     });
 
     it('should generate XML for deletion revision with hyperlink (w:delText)', () => {
@@ -260,16 +263,16 @@ describe('RevisionHyperlink Tests', () => {
       const xml = revision.toXML();
 
       expect(xml).not.toBeNull();
-      expect(xml!.name).toBe('w:del');
-      // The hyperlink should be transformed to use w:delText
-      const hyperlinkChild = xml!.children?.find(
-        (c) => typeof c === 'object' && c.name === 'w:hyperlink'
+      // Per ECMA-376, w:hyperlink wraps w:del (not the other way around)
+      expect(xml!.name).toBe('w:hyperlink');
+      const delChild = xml!.children?.find(
+        (c) => typeof c === 'object' && c.name === 'w:del'
       ) as any;
-      expect(hyperlinkChild).toBeDefined();
+      expect(delChild).toBeDefined();
 
       // Check that runs inside use w:delText instead of w:t
-      if (hyperlinkChild?.children) {
-        const runChild = hyperlinkChild.children.find(
+      if (delChild?.children) {
+        const runChild = delChild.children.find(
           (c: any) => typeof c === 'object' && c.name === 'w:r'
         );
         if (runChild?.children) {

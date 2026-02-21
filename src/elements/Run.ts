@@ -864,7 +864,7 @@ export class Run {
     }
 
     // Check table conditional formatting
-    return this.getConditionalFormattingProperty("bold") as boolean | undefined;
+    return this.getConditionalFormattingProperty("bold");
   }
 
   /**
@@ -878,7 +878,7 @@ export class Run {
     if (this.formatting.italic !== undefined) {
       return this.formatting.italic;
     }
-    return this.getConditionalFormattingProperty("italic") as boolean | undefined;
+    return this.getConditionalFormattingProperty("italic");
   }
 
   /**
@@ -892,7 +892,7 @@ export class Run {
     if (this.formatting.color !== undefined) {
       return this.formatting.color;
     }
-    return this.getConditionalFormattingProperty("color") as string | undefined;
+    return this.getConditionalFormattingProperty("color");
   }
 
   /**
@@ -906,7 +906,7 @@ export class Run {
     if (this.formatting.font !== undefined) {
       return this.formatting.font;
     }
-    return this.getConditionalFormattingProperty("font") as string | undefined;
+    return this.getConditionalFormattingProperty("font");
   }
 
   /**
@@ -920,7 +920,7 @@ export class Run {
     if (this.formatting.size !== undefined) {
       return this.formatting.size;
     }
-    return this.getConditionalFormattingProperty("size") as number | undefined;
+    return this.getConditionalFormattingProperty("size");
   }
 
   /**
@@ -1191,7 +1191,7 @@ export class Run {
    * run.setBold(false);   // Remove bold
    * ```
    */
-  setBold(bold: boolean = true): this {
+  setBold(bold = true): this {
     const previousValue = this.formatting.bold;
     this.formatting.bold = bold;
     if (this.trackingContext?.isEnabled() && previousValue !== bold) {
@@ -1215,7 +1215,7 @@ export class Run {
    * run.setItalic(false);  // Remove italic
    * ```
    */
-  setItalic(italic: boolean = true): this {
+  setItalic(italic = true): this {
     const previousValue = this.formatting.italic;
     this.formatting.italic = italic;
     if (this.trackingContext?.isEnabled() && previousValue !== italic) {
@@ -1229,7 +1229,7 @@ export class Run {
    * Per ECMA-376 Part 1 §17.3.2.3
    * @param bold - Whether text is bold for complex scripts
    */
-  setComplexScriptBold(bold: boolean = true): this {
+  setComplexScriptBold(bold = true): this {
     const previousValue = this.formatting.complexScriptBold;
     this.formatting.complexScriptBold = bold;
     if (this.trackingContext?.isEnabled() && previousValue !== bold) {
@@ -1243,7 +1243,7 @@ export class Run {
    * Per ECMA-376 Part 1 §17.3.2.17
    * @param italic - Whether text is italic for complex scripts
    */
-  setComplexScriptItalic(italic: boolean = true): this {
+  setComplexScriptItalic(italic = true): this {
     const previousValue = this.formatting.complexScriptItalic;
     this.formatting.complexScriptItalic = italic;
     if (this.trackingContext?.isEnabled() && previousValue !== italic) {
@@ -1390,7 +1390,7 @@ export class Run {
    * run.setStrike(false);  // Remove strikethrough
    * ```
    */
-  setStrike(strike: boolean = true): this {
+  setStrike(strike = true): this {
     const previousValue = this.formatting.strike;
     this.formatting.strike = strike;
     if (this.trackingContext?.isEnabled() && previousValue !== strike) {
@@ -1414,7 +1414,7 @@ export class Run {
    * run.setSubscript();  // Format as subscript
    * ```
    */
-  setSubscript(subscript: boolean = true): this {
+  setSubscript(subscript = true): this {
     const previousValue = this.formatting.subscript;
     this.formatting.subscript = subscript;
     if (subscript) {
@@ -1441,7 +1441,7 @@ export class Run {
    * run.setSuperscript();  // Format as superscript
    * ```
    */
-  setSuperscript(superscript: boolean = true): this {
+  setSuperscript(superscript = true): this {
     const previousValue = this.formatting.superscript;
     this.formatting.superscript = superscript;
     if (superscript) {
@@ -1671,7 +1671,7 @@ export class Run {
    * run.setSmallCaps();  // SMALL CAPS TEXT
    * ```
    */
-  setSmallCaps(smallCaps: boolean = true): this {
+  setSmallCaps(smallCaps = true): this {
     const previousValue = this.formatting.smallCaps;
     this.formatting.smallCaps = smallCaps;
     if (this.trackingContext?.isEnabled() && previousValue !== smallCaps) {
@@ -1694,7 +1694,7 @@ export class Run {
    * run.setAllCaps();  // ALL CAPS TEXT
    * ```
    */
-  setAllCaps(allCaps: boolean = true): this {
+  setAllCaps(allCaps = true): this {
     const previousValue = this.formatting.allCaps;
     this.formatting.allCaps = allCaps;
     if (this.trackingContext?.isEnabled() && previousValue !== allCaps) {
@@ -1708,7 +1708,7 @@ export class Run {
    * @param outline - Whether to apply outline effect (default: true)
    * @returns This run for method chaining
    */
-  setOutline(outline: boolean = true): this {
+  setOutline(outline = true): this {
     const previousValue = this.formatting.outline;
     this.formatting.outline = outline;
     if (this.trackingContext?.isEnabled() && previousValue !== outline) {
@@ -1722,7 +1722,7 @@ export class Run {
    * @param shadow - Whether to apply shadow effect (default: true)
    * @returns This run for method chaining
    */
-  setShadow(shadow: boolean = true): this {
+  setShadow(shadow = true): this {
     const previousValue = this.formatting.shadow;
     this.formatting.shadow = shadow;
     if (this.trackingContext?.isEnabled() && previousValue !== shadow) {
@@ -1736,7 +1736,7 @@ export class Run {
    * @param emboss - Whether to apply emboss effect (default: true)
    * @returns This run for method chaining
    */
-  setEmboss(emboss: boolean = true): this {
+  setEmboss(emboss = true): this {
     const previousValue = this.formatting.emboss;
     this.formatting.emboss = emboss;
     if (this.trackingContext?.isEnabled() && previousValue !== emboss) {
@@ -1750,7 +1750,7 @@ export class Run {
    * @param imprint - Whether to apply imprint effect (default: true)
    * @returns This run for method chaining
    */
-  setImprint(imprint: boolean = true): this {
+  setImprint(imprint = true): this {
     const previousValue = this.formatting.imprint;
     this.formatting.imprint = imprint;
     if (this.trackingContext?.isEnabled() && previousValue !== imprint) {
@@ -1764,7 +1764,7 @@ export class Run {
    * @param rtl - Whether text is RTL (default: true)
    * @returns This run for method chaining
    */
-  setRTL(rtl: boolean = true): this {
+  setRTL(rtl = true): this {
     const previousValue = this.formatting.rtl;
     this.formatting.rtl = rtl;
     if (this.trackingContext?.isEnabled() && previousValue !== rtl) {
@@ -1778,7 +1778,7 @@ export class Run {
    * @param vanish - Whether text is hidden (default: true)
    * @returns This run for method chaining
    */
-  setVanish(vanish: boolean = true): this {
+  setVanish(vanish = true): this {
     const previousValue = this.formatting.vanish;
     this.formatting.vanish = vanish;
     if (this.trackingContext?.isEnabled() && previousValue !== vanish) {
@@ -1792,7 +1792,7 @@ export class Run {
    * @param noProof - Whether to skip proofing (default: true)
    * @returns This run for method chaining
    */
-  setNoProof(noProof: boolean = true): this {
+  setNoProof(noProof = true): this {
     const previousValue = this.formatting.noProof;
     this.formatting.noProof = noProof;
     if (this.trackingContext?.isEnabled() && previousValue !== noProof) {
@@ -1806,7 +1806,7 @@ export class Run {
    * @param snapToGrid - Whether to snap to grid (default: true)
    * @returns This run for method chaining
    */
-  setSnapToGrid(snapToGrid: boolean = true): this {
+  setSnapToGrid(snapToGrid = true): this {
     const previousValue = this.formatting.snapToGrid;
     this.formatting.snapToGrid = snapToGrid;
     if (this.trackingContext?.isEnabled() && previousValue !== snapToGrid) {
@@ -1820,7 +1820,7 @@ export class Run {
    * @param specVanish - Whether to apply special vanish (default: true)
    * @returns This run for method chaining
    */
-  setSpecVanish(specVanish: boolean = true): this {
+  setSpecVanish(specVanish = true): this {
     const previousValue = this.formatting.specVanish;
     this.formatting.specVanish = specVanish;
     if (this.trackingContext?.isEnabled() && previousValue !== specVanish) {
@@ -1834,7 +1834,7 @@ export class Run {
    * @param complexScript - Whether complex script formatting applies (default: true)
    * @returns This run for method chaining
    */
-  setComplexScript(complexScript: boolean = true): this {
+  setComplexScript(complexScript = true): this {
     const previousValue = this.formatting.complexScript;
     this.formatting.complexScript = complexScript;
     if (this.trackingContext?.isEnabled() && previousValue !== complexScript) {
@@ -1848,7 +1848,7 @@ export class Run {
    * @param webHidden - Whether text is hidden in web view (default: true)
    * @returns This run for method chaining
    */
-  setWebHidden(webHidden: boolean = true): this {
+  setWebHidden(webHidden = true): this {
     const previousValue = this.formatting.webHidden;
     this.formatting.webHidden = webHidden;
     if (this.trackingContext?.isEnabled() && previousValue !== webHidden) {
@@ -2672,12 +2672,11 @@ export class Run {
 
     // 19. w:color — Text color
     // Supports both hex colors and theme color references
+    // w:val is REQUIRED per ECMA-376 — defaults to "000000" when only themeColor is set
     if (formatting.color || formatting.themeColor) {
       const colorAttrs: Record<string, string> = {};
 
-      if (formatting.color) {
-        colorAttrs["w:val"] = formatting.color;
-      }
+      colorAttrs["w:val"] = formatting.color || "000000";
       if (formatting.themeColor) {
         colorAttrs["w:themeColor"] = formatting.themeColor;
       }

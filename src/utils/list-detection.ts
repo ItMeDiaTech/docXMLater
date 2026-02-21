@@ -161,7 +161,7 @@ export function detectListType(paragraph: Paragraph): ListDetectionResult {
   const numbering = paragraph.getNumbering();
 
   // Priority 1: Real Word list with <w:numPr>
-  if (numbering && numbering.numId !== undefined && numbering.numId !== 0) {
+  if (numbering?.numId !== undefined && numbering.numId !== 0) {
     return {
       category: "numbered", // Default, caller can refine with NumberingManager lookup
       isWordList: true,
@@ -209,7 +209,7 @@ export function detectListType(paragraph: Paragraph): ListDetectionResult {
  * E.g., "1. 2. 3." is valid, "1. 5. 2." is suspicious.
  */
 export function validateListSequence(
-  paragraphs: Array<{ detection: ListDetectionResult; text: string }>
+  paragraphs: { detection: ListDetectionResult; text: string }[]
 ): { valid: boolean; warnings: string[] } {
   const warnings: string[] = [];
   let lastDecimal = 0;
@@ -218,8 +218,8 @@ export function validateListSequence(
   for (const { detection } of paragraphs) {
     if (!detection.typedPrefix || detection.category !== "numbered") continue;
 
-    const match = detection.typedPrefix.match(/^(\d+|[a-zA-Z]+)/);
-    if (!match || !match[1]) continue;
+    const match = /^(\d+|[a-zA-Z]+)/.exec(detection.typedPrefix);
+    if (!match?.[1]) continue;
 
     const marker = match[1];
 

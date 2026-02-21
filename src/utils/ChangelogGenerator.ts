@@ -621,7 +621,7 @@ export class ChangelogGenerator {
    * @param maxLength - Maximum length for text excerpts
    * @returns Human-readable description
    */
-  static describeRevision(revision: Revision, maxLength: number = 50): string {
+  static describeRevision(revision: Revision, maxLength = 50): string {
     const type = revision.getType();
     const author = revision.getAuthor();
     const runs = revision.getRuns();

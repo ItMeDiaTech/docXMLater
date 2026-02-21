@@ -84,7 +84,7 @@ export class TextBox {
   private margins?: TextBoxMargins;
   private name: string;
   private description: string;
-  private docPrId: number = 1;
+  private docPrId = 1;
 
   /**
    * Creates a new text box
@@ -674,7 +674,7 @@ export class TextBox {
     }
 
     // Borders
-    if (this.borders && this.borders.size !== undefined) {
+    if (this.borders?.size !== undefined) {
       const lnAttrs: Record<string, string> = {
         w: (this.borders.size * UNITS.EMUS_PER_POINT).toString(), // Convert points to EMUs
       };

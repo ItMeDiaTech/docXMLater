@@ -33,10 +33,10 @@ export function mergeFormatting<T extends Record<string, any>>(
       result[key as keyof T] = mergeFormatting(
         result[key as keyof T] || ({} as any),
         value
-      ) as any;
+      );
     } else {
       // Direct assignment for primitives
-      result[key as keyof T] = value as any;
+      result[key as keyof T] = value;
     }
   }
 
@@ -202,7 +202,7 @@ export function applyDefaults<T extends Record<string, any>>(
     if (value !== undefined) {
       if (typeof value === 'object' && !Array.isArray(value) && value !== null && typeof defaults[key] === 'object') {
         // Deep merge nested objects
-        result[key as keyof T] = applyDefaults(value, defaults[key]) as any;
+        result[key as keyof T] = applyDefaults(value, defaults[key]);
       } else {
         result[key as keyof T] = value;
       }

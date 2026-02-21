@@ -38,8 +38,8 @@ interface CommentEntry {
  * Manages document comments
  */
 export class CommentManager {
-  private comments: Map<number, CommentEntry> = new Map();
-  private nextId: number = 0;
+  private comments = new Map<number, CommentEntry>();
+  private nextId = 0;
   private idProvider: IdProviderCallback | null = null;
   private idExistsNotifier: IdExistsCallback | null = null;
 
@@ -423,9 +423,15 @@ export class CommentManager {
     }
 
     // Build XML manually for comments
+    const hasReplies = comments.some(c => c.isReply());
     let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     xml += '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
-    xml += ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">\n';
+    xml += ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    if (hasReplies) {
+      xml += ' xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"';
+      xml += ' xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="w15"';
+    }
+    xml += '>\n';
 
     // Add each comment
     for (const comment of comments) {
@@ -448,7 +454,7 @@ export class CommentManager {
     xml += ` w:initials="${XMLBuilder.escapeXmlAttribute(comment.getInitials())}"`;
 
     if (comment.isReply() && comment.getParentId() !== undefined) {
-      xml += ` w:parentId="${comment.getParentId()}"`;
+      xml += ` w15:parentId="${comment.getParentId()}"`;
     }
 
     // Add done attribute for resolved comments (per ECMA-376)

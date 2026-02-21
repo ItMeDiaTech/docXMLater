@@ -258,7 +258,7 @@ export class SelectiveRevisionAcceptor {
           if (isRunContent(child)) {
             newContent.push(child as Run);
           } else if (isHyperlinkContent(child)) {
-            newContent.push(child as Hyperlink);
+            newContent.push(child);
           }
         }
         break;
@@ -281,7 +281,7 @@ export class SelectiveRevisionAcceptor {
           if (isRunContent(child)) {
             newContent.push(child as Run);
           } else if (isHyperlinkContent(child)) {
-            newContent.push(child as Hyperlink);
+            newContent.push(child);
           }
         }
         break;
@@ -317,7 +317,7 @@ export class SelectiveRevisionAcceptor {
           if (isRunContent(child)) {
             newContent.push(child as Run);
           } else if (isHyperlinkContent(child)) {
-            newContent.push(child as Hyperlink);
+            newContent.push(child);
           }
         }
         break;
@@ -337,7 +337,7 @@ export class SelectiveRevisionAcceptor {
           if (isRunContent(child)) {
             newContent.push(child as Run);
           } else if (isHyperlinkContent(child)) {
-            newContent.push(child as Hyperlink);
+            newContent.push(child);
           }
         }
         break;

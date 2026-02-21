@@ -191,14 +191,20 @@ describe('Field Types - Formatting', () => {
     const field = Field.createPageNumber({ bold: true });
     const xml = field.toXML();
 
-    const rPr = xml.children!.find(
-      (child) => typeof child !== 'string' && child.name === 'w:rPr'
+    // fldSimple contains w:r which contains w:rPr
+    const run = xml.children!.find(
+      (child) => typeof child !== 'string' && child.name === 'w:r'
+    );
+    expect(run).toBeDefined();
+
+    const rPr = (run as any)?.children?.find(
+      (child: any) => typeof child !== 'string' && child.name === 'w:rPr'
     );
     expect(rPr).toBeDefined();
 
     if (rPr && typeof rPr !== 'string') {
       const bold = rPr.children!.find(
-        (child) => typeof child !== 'string' && child.name === 'w:b'
+        (child: any) => typeof child !== 'string' && child.name === 'w:b'
       );
       expect(bold).toBeDefined();
     }
@@ -213,8 +219,14 @@ describe('Field Types - Formatting', () => {
     });
 
     const xml = field.toXML();
-    const rPr = xml.children!.find(
-      (child) => typeof child !== 'string' && child.name === 'w:rPr'
+    // fldSimple contains w:r which contains w:rPr
+    const run = xml.children!.find(
+      (child) => typeof child !== 'string' && child.name === 'w:r'
+    );
+    expect(run).toBeDefined();
+
+    const rPr = (run as any)?.children?.find(
+      (child: any) => typeof child !== 'string' && child.name === 'w:rPr'
     );
 
     expect(rPr).toBeDefined();
@@ -253,8 +265,14 @@ describe('Field Types - XML Generation', () => {
     const field = Field.createPageNumber();
     const xml = field.toXML();
 
-    const textElement = xml.children!.find(
-      (child) => typeof child !== 'string' && child.name === 'w:t'
+    // fldSimple contains w:r which contains w:t
+    const run = xml.children!.find(
+      (child) => typeof child !== 'string' && child.name === 'w:r'
+    );
+    expect(run).toBeDefined();
+
+    const textElement = (run as any)?.children?.find(
+      (child: any) => typeof child !== 'string' && child.name === 'w:t'
     );
     expect(textElement).toBeDefined();
 

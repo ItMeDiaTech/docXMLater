@@ -28,14 +28,14 @@ export interface ValidationResult {
  * Manages document styles
  */
 export class StylesManager {
-  private styles: Map<string, Style> = new Map();
+  private styles = new Map<string, Style>();
   private includeBuiltInStyles: boolean;
 
   // Track if styles have been modified (for XML preservation)
-  private _modified: boolean = false;
+  private _modified = false;
 
   // Track which specific styles have been modified (for selective merging)
-  private _modifiedStyleIds: Set<string> = new Set();
+  private _modifiedStyleIds = new Set<string>();
 
   /**
    * Registry of built-in style factory functions
@@ -76,7 +76,7 @@ export class StylesManager {
    * Creates a new StylesManager
    * @param includeBuiltInStyles - Whether to include built-in styles (default: true)
    */
-  constructor(includeBuiltInStyles: boolean = true) {
+  constructor(includeBuiltInStyles = true) {
     this.includeBuiltInStyles = includeBuiltInStyles;
 
     // Always load Normal style if built-in styles are enabled
@@ -773,11 +773,11 @@ export class StylesManager {
    */
   validateStyleReferences(): {
     valid: boolean;
-    brokenReferences: Array<{ styleId: string; basedOn: string }>;
-    circularReferences: Array<string[]>;
+    brokenReferences: { styleId: string; basedOn: string }[];
+    circularReferences: string[][];
   } {
-    const broken: Array<{ styleId: string; basedOn: string }> = [];
-    const circular: Array<string[]> = [];
+    const broken: { styleId: string; basedOn: string }[] = [];
+    const circular: string[][] = [];
     const checkedForCycles = new Set<string>();
 
     for (const style of this.getAllStyles()) {

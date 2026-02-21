@@ -28,7 +28,7 @@ export interface NumberingInstanceProperties {
 export class NumberingInstance {
   private numId: number;
   private abstractNumId: number;
-  private levelOverrides: Map<number, number> = new Map();
+  private levelOverrides = new Map<number, number>();
 
   /**
    * Creates a new numbering instance
@@ -191,15 +191,15 @@ export class NumberingInstance {
    */
   static fromXML(xml: string): NumberingInstance {
     // Extract numId (required)
-    const numIdMatch = xml.match(/<w:num[^>]*w:numId="([^"]+)"/);
-    if (!numIdMatch || !numIdMatch[1]) {
+    const numIdMatch = /<w:num[^>]*w:numId="([^"]+)"/.exec(xml);
+    if (!numIdMatch?.[1]) {
       throw new Error('Missing required w:numId attribute');
     }
     const numId = parseInt(numIdMatch[1], 10);
 
     // Extract abstractNumId (required)
-    const abstractNumIdMatch = xml.match(/<w:abstractNumId[^>]*w:val="([^"]+)"/);
-    if (!abstractNumIdMatch || !abstractNumIdMatch[1]) {
+    const abstractNumIdMatch = /<w:abstractNumId[^>]*w:val="([^"]+)"/.exec(xml);
+    if (!abstractNumIdMatch?.[1]) {
       throw new Error('Missing required w:abstractNumId element');
     }
     const abstractNumId = parseInt(abstractNumIdMatch[1], 10);

@@ -61,6 +61,7 @@ const DOC_HEADER = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
             xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
             xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
             xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+            xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
             mc:Ignorable="w14 wp14">
   <w:body>`;
 

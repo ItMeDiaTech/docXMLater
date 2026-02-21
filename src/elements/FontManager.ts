@@ -29,7 +29,7 @@ export interface FontEntry {
  * Ensures fonts are properly registered in [Content_Types].xml
  */
 export class FontManager {
-  private fonts: Map<string, FontEntry> = new Map();
+  private fonts = new Map<string, FontEntry>();
   private static fontCounter = 1;
 
   /**

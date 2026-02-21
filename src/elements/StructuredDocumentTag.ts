@@ -545,21 +545,34 @@ export class StructuredDocumentTag {
 
         case "datePicker":
           if (this.properties.datePicker) {
+            // Per ECMA-376, w:date has w:fullDate as attribute; dateFormat, lid,
+            // storeMappedDataAs, and calendar are child elements with w:val
             const dateAttrs: Record<string, string> = {};
-            if (this.properties.datePicker.dateFormat) {
-              dateAttrs["w:dateFormat"] = this.properties.datePicker.dateFormat;
-            }
-            if (this.properties.datePicker.lid) {
-              dateAttrs["w:lid"] = this.properties.datePicker.lid;
-            }
             if (this.properties.datePicker.fullDate) {
               dateAttrs["w:fullDate"] =
                 this.properties.datePicker.fullDate.toISOString();
             }
-            if (this.properties.datePicker.calendar) {
-              dateAttrs["w:calendar"] = this.properties.datePicker.calendar;
+            const dateChildren: XMLElement[] = [];
+            if (this.properties.datePicker.dateFormat) {
+              dateChildren.push(XMLBuilder.wSelf("dateFormat", {
+                "w:val": this.properties.datePicker.dateFormat,
+              }));
             }
-            sdtPrChildren.push(XMLBuilder.wSelf("date", dateAttrs));
+            if (this.properties.datePicker.lid) {
+              dateChildren.push(XMLBuilder.wSelf("lid", {
+                "w:val": this.properties.datePicker.lid,
+              }));
+            }
+            if (this.properties.datePicker.calendar) {
+              dateChildren.push(XMLBuilder.wSelf("calendar", {
+                "w:val": this.properties.datePicker.calendar,
+              }));
+            }
+            if (dateChildren.length > 0) {
+              sdtPrChildren.push(XMLBuilder.w("date", dateAttrs, dateChildren));
+            } else {
+              sdtPrChildren.push(XMLBuilder.wSelf("date", dateAttrs));
+            }
           }
           break;
 
@@ -665,7 +678,7 @@ export class StructuredDocumentTag {
    */
   static wrapTable(
     table: Table,
-    tag: string = "goog_rdk_0",
+    tag = "goog_rdk_0",
     lock?: SDTLockType
   ): StructuredDocumentTag {
     return new StructuredDocumentTag(
@@ -735,7 +748,7 @@ export class StructuredDocumentTag {
    */
   static createPlainText(
     content: SDTContent[] = [],
-    multiLine: boolean = false,
+    multiLine = false,
     properties: Partial<SDTProperties> = {}
   ): StructuredDocumentTag {
     return new StructuredDocumentTag(
@@ -803,7 +816,7 @@ export class StructuredDocumentTag {
    * @returns New SDT instance
    */
   static createDatePicker(
-    dateFormat: string = "M/d/yyyy",
+    dateFormat = "M/d/yyyy",
     content: SDTContent[] = [],
     properties: Partial<SDTProperties> = {}
   ): StructuredDocumentTag {
@@ -826,7 +839,7 @@ export class StructuredDocumentTag {
    * @returns New SDT instance
    */
   static createCheckbox(
-    checked: boolean = false,
+    checked = false,
     content: SDTContent[] = [],
     properties: Partial<SDTProperties> = {}
   ): StructuredDocumentTag {

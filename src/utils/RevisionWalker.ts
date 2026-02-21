@@ -253,11 +253,11 @@ export class RevisionWalker {
 
     // Build a complete ordered list of child elements by walking _orderedChildren
     // This captures the intended order before we modify anything
-    const orderedElements: Array<{ type: string; element: any }> = [];
+    const orderedElements: { type: string; element: any }[] = [];
 
     if (parent._orderedChildren) {
       // Track how many of each type we've seen to get correct array index
-      const typeCounters: Map<string, number> = new Map();
+      const typeCounters = new Map<string, number>();
       let unwrappedIndex = 0;
 
       for (const entry of parent._orderedChildren) {
@@ -271,7 +271,7 @@ export class RevisionWalker {
           if (revElement && typeof revElement === 'object') {
             if (revElement._orderedChildren) {
               // Use the revision element's _orderedChildren for correct order
-              const childCounters: Map<string, number> = new Map();
+              const childCounters = new Map<string, number>();
               for (const childEntry of revElement._orderedChildren) {
                 const childType = childEntry.type;
                 const childIdx = childCounters.get(childType) || 0;
@@ -333,7 +333,7 @@ export class RevisionWalker {
     // If we have ordered elements, rebuild the arrays in correct order
     if (orderedElements.length > 0) {
       // Group elements by type
-      const rebuiltArrays: Map<string, any[]> = new Map();
+      const rebuiltArrays = new Map<string, any[]>();
 
       for (const { type, element } of orderedElements) {
         if (!rebuiltArrays.has(type)) {
@@ -353,7 +353,7 @@ export class RevisionWalker {
 
       // Rebuild _orderedChildren
       const newOrderedChildren: OrderedChildInfo[] = [];
-      const typeCounters: Map<string, number> = new Map();
+      const typeCounters = new Map<string, number>();
 
       for (const { type } of orderedElements) {
         const idx = typeCounters.get(type) || 0;
@@ -427,7 +427,7 @@ export class RevisionWalker {
   private static reindexOrderedChildren(
     orderedChildren: OrderedChildInfo[]
   ): void {
-    const typeCounters: Map<string, number> = new Map();
+    const typeCounters = new Map<string, number>();
 
     for (const entry of orderedChildren) {
       const currentIndex = typeCounters.get(entry.type) || 0;

@@ -188,7 +188,7 @@ export class ZipReader {
       return file.content.toString('utf8');
     }
 
-    return file.content as string;
+    return file.content;
   }
 
   /**
@@ -214,7 +214,7 @@ export class ZipReader {
     }
 
     // Encode string content as UTF-8 Buffer
-    return Buffer.from(file.content as string, 'utf8');
+    return Buffer.from(file.content, 'utf8');
   }
 
   /**

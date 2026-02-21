@@ -287,11 +287,13 @@ describe("Shading Theme Round-Trip", () => {
       expect(attrs["w:themeFillTint"]).toBe("40");
     });
 
-    it("should omit undefined fields", () => {
+    it("should always include w:val and omit other undefined fields", () => {
       const attrs = buildShadingAttributes({
         fill: "FF0000",
       });
-      expect(Object.keys(attrs)).toEqual(["w:fill"]);
+      // w:val is always required per ECMA-376, defaults to "clear"
+      expect(Object.keys(attrs)).toEqual(["w:val", "w:fill"]);
+      expect(attrs["w:val"]).toBe("clear");
     });
   });
 });

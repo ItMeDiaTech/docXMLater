@@ -498,9 +498,8 @@ export class XMLParser {
     }
 
     // Extract element name
-    const nameMatch = xml
-      .substring(openTagStart + 1)
-      .match(/^([a-zA-Z0-9:_-]+)/);
+    const nameMatch = /^([a-zA-Z0-9:_-]+)/.exec(xml
+      .substring(openTagStart + 1));
     if (!nameMatch) {
       return { value: {}, endPos: openTagStart + 1 };
     }
@@ -629,7 +628,7 @@ export class XMLParser {
           elementValue = text;
         } else {
           // Text with attributes
-          (elementValue as ParsedXMLObject)[options.textNodeName] = text;
+          (elementValue)[options.textNodeName] = text;
         }
       }
     }
@@ -841,7 +840,7 @@ export class XMLParser {
 
     // Track element order for correct run content parsing (tabs, breaks, text)
     // This is critical for preserving the order of mixed content like: text -> tab -> text
-    const orderedChildren: Array<{ type: string; index: number }> = [];
+    const orderedChildren: { type: string; index: number }[] = [];
 
     // Count occurrences of each child name
     for (const child of children) {
@@ -870,7 +869,7 @@ export class XMLParser {
 
     // Add _orderedChildren to track element order (used by DocumentParser for runs)
     if (orderedChildren.length > 0) {
-      result["_orderedChildren"] = orderedChildren;
+      result._orderedChildren = orderedChildren;
     }
 
     return result;

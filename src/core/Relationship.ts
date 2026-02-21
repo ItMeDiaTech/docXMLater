@@ -97,7 +97,7 @@ export class Relationship {
    * Validates the relationship properties
    */
   private validate(): void {
-    if (!this.id || !this.id.startsWith('rId')) {
+    if (!this.id?.startsWith('rId')) {
       throw new Error(`Relationship ID must start with 'rId', got '${this.id}'`);
     }
 
@@ -196,7 +196,7 @@ export class Relationship {
    * Creates a styles relationship
    * @param id Relationship ID
    */
-  static createStyles(id: string = 'rId1'): Relationship {
+  static createStyles(id = 'rId1'): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.STYLES,
@@ -208,7 +208,7 @@ export class Relationship {
    * Creates a numbering relationship
    * @param id Relationship ID
    */
-  static createNumbering(id: string = 'rId2'): Relationship {
+  static createNumbering(id = 'rId2'): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.NUMBERING,
@@ -220,7 +220,7 @@ export class Relationship {
    * Creates a fontTable relationship
    * @param id Relationship ID (defaults to 'rId3')
    */
-  static createFontTable(id: string = 'rId3'): Relationship {
+  static createFontTable(id = 'rId3'): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.FONT_TABLE,
@@ -232,7 +232,7 @@ export class Relationship {
    * Creates a settings relationship
    * @param id Relationship ID (defaults to 'rId4')
    */
-  static createSettings(id: string = 'rId4'): Relationship {
+  static createSettings(id = 'rId4'): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.SETTINGS,
@@ -244,7 +244,7 @@ export class Relationship {
    * Creates a webSettings relationship
    * @param id Relationship ID (defaults to 'rId5')
    */
-  static createWebSettings(id: string = 'rId5'): Relationship {
+  static createWebSettings(id = 'rId5'): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.WEB_SETTINGS,
@@ -256,7 +256,7 @@ export class Relationship {
    * Creates a theme relationship
    * @param id Relationship ID (defaults to 'rId6')
    */
-  static createTheme(id: string = 'rId6'): Relationship {
+  static createTheme(id = 'rId6'): Relationship {
     return new Relationship({
       id,
       type: RelationshipType.THEME,
