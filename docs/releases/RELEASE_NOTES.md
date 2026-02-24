@@ -1,4 +1,4 @@
-# docXMLater v10.1.6 Release Notes
+# docXMLater v10.1.7 Release Notes
 
 ## Release Date: February 24, 2026
 
@@ -70,7 +70,7 @@ doc.createParagraph('New item 1').setNumbering(restartId, 0);
 ## Installation
 
 ```bash
-npm install docxmlater@10.1.6
+npm install docxmlater@10.1.7
 ```
 
 ## Package Information
@@ -78,7 +78,7 @@ npm install docxmlater@10.1.6
 | Field          | Value                                     |
 | -------------- | ----------------------------------------- |
 | **Name**       | docxmlater                                |
-| **Version**    | 10.1.6                                    |
+| **Version**    | 10.1.7                                    |
 | **License**    | MIT                                       |
 | **Repository** | https://github.com/ItMeDiaTech/docXMLater |
 | **npm**        | https://www.npmjs.com/package/docxmlater  |
