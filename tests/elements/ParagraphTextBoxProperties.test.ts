@@ -18,7 +18,7 @@ describe('Paragraph - Text Box & Advanced Properties (Batch 3)', () => {
       para.setFrameProperties({
         w: 2880, // 2 inches
         h: 1440, // 1 inch
-        hRule: 'exact'
+        hRule: 'exact',
       });
 
       doc.addParagraph(para);
@@ -40,12 +40,12 @@ describe('Paragraph - Text Box & Advanced Properties (Batch 3)', () => {
       const para = new Paragraph();
       para.addText('Positioned frame');
       para.setFrameProperties({
-        x: 720,  // 0.5 inch from anchor
+        x: 720, // 0.5 inch from anchor
         y: 1440, // 1 inch from anchor
         hAnchor: 'page',
         vAnchor: 'text',
         xAlign: 'left',
-        yAlign: 'top'
+        yAlign: 'top',
       });
 
       doc.addParagraph(para);
@@ -73,7 +73,7 @@ describe('Paragraph - Text Box & Advanced Properties (Batch 3)', () => {
         dropCap: 'drop',
         lines: 3,
         w: 720,
-        h: 720
+        h: 720,
       });
 
       doc.addParagraph(para);
@@ -106,7 +106,7 @@ describe('Paragraph - Text Box & Advanced Properties (Batch 3)', () => {
         hSpace: 180,
         vSpace: 180,
         wrap: 'around',
-        anchorLock: true
+        anchorLock: true,
       });
 
       doc.addParagraph(para);
@@ -399,7 +399,7 @@ describe('Paragraph - Text Box & Advanced Properties (Batch 3)', () => {
       para.setFrameProperties({
         w: 2880,
         h: 1440,
-        wrap: 'around'
+        wrap: 'around',
       });
       para.setSuppressAutoHyphens(true);
       para.setSuppressOverlap(true);

@@ -47,9 +47,11 @@ export class FootnoteManager {
    */
   private isSpecialFootnote(footnote: Footnote): boolean {
     const type = footnote.getType();
-    return type === FootnoteType.Separator ||
-           type === FootnoteType.ContinuationSeparator ||
-           type === FootnoteType.ContinuationNotice;
+    return (
+      type === FootnoteType.Separator ||
+      type === FootnoteType.ContinuationSeparator ||
+      type === FootnoteType.ContinuationNotice
+    );
   }
 
   /**
@@ -108,7 +110,7 @@ export class FootnoteManager {
    */
   getAllFootnotes(): Footnote[] {
     return Array.from(this.footnotes.values())
-      .filter(f => !this.isSpecialFootnote(f))
+      .filter((f) => !this.isSpecialFootnote(f))
       .sort((a, b) => a.getId() - b.getId());
   }
 
@@ -116,8 +118,7 @@ export class FootnoteManager {
    * Gets all footnotes including special ones
    */
   getAllFootnotesWithSpecial(): Footnote[] {
-    return Array.from(this.footnotes.values())
-      .sort((a, b) => a.getId() - b.getId());
+    return Array.from(this.footnotes.values()).sort((a, b) => a.getId() - b.getId());
   }
 
   /**
@@ -208,18 +209,14 @@ export class FootnoteManager {
       name: 'w:footnotes',
       attributes: {
         'xmlns:w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-        'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+        'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
       },
-      children: footnotes.map(f => f.toXML())
+      children: footnotes.map((f) => f.toXML()),
     };
 
     // Build XML using XMLBuilder
     const builder = new XMLBuilder();
-    builder.element(
-      footnotesElement.name,
-      footnotesElement.attributes,
-      footnotesElement.children
-    );
+    builder.element(footnotesElement.name, footnotesElement.attributes, footnotesElement.children);
     return builder.build(true);
   }
 

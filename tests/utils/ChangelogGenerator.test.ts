@@ -2,18 +2,18 @@
  * Tests for ChangelogGenerator
  */
 
-import { ChangelogGenerator, ChangeEntry, ChangeCategory, ConsolidatedChange } from '../../src/utils/ChangelogGenerator';
+import {
+  ChangelogGenerator,
+  ChangeEntry,
+  ChangeCategory,
+  ConsolidatedChange,
+} from '../../src/utils/ChangelogGenerator';
 import { Revision, RevisionType } from '../../src/elements/Revision';
 import { Run } from '../../src/elements/Run';
 
 describe('ChangelogGenerator', () => {
   // Helper to create test revisions
-  function createRevision(
-    type: RevisionType,
-    author: string,
-    text: string,
-    date?: Date
-  ): Revision {
+  function createRevision(type: RevisionType, author: string, text: string, date?: Date): Revision {
     const run = new Run(text);
     return new Revision({
       author,
@@ -143,7 +143,7 @@ describe('ChangelogGenerator', () => {
       });
 
       expect(entries).toHaveLength(2);
-      expect(entries.every(e => e.author === 'Alice')).toBe(true);
+      expect(entries.every((e) => e.author === 'Alice')).toBe(true);
     });
 
     it('should filter by category', () => {
@@ -173,7 +173,7 @@ describe('ChangelogGenerator', () => {
       });
 
       expect(entries).toHaveLength(2);
-      expect(entries.every(e => e.category !== 'formatting')).toBe(true);
+      expect(entries.every((e) => e.category !== 'formatting')).toBe(true);
     });
 
     it('should filter by date range', () => {

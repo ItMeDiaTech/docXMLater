@@ -7,7 +7,6 @@
  * - Round-trip preservation
  */
 
-
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import { Document } from '../../src/core/Document';

@@ -360,15 +360,11 @@ describe('InMemoryRevisionAcceptor', () => {
     function createTestImageBuffer(): Buffer {
       // 1x1 transparent PNG
       return Buffer.from([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+        0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
       ]);
     }
 
@@ -509,7 +505,7 @@ describe('InMemoryRevisionAcceptor', () => {
         // Verify ImageRun was removed
         const content = para.getContent();
         expect(content.length).toBe(2); // Only the two text runs remain
-        expect(content.every(item => !isImageRunContent(item as any))).toBe(true);
+        expect(content.every((item) => !isImageRunContent(item as any))).toBe(true);
       });
     });
 
@@ -561,7 +557,8 @@ describe('InMemoryRevisionAcceptor', () => {
 
   describe('stripRevisionsFromXml', () => {
     it('should unwrap insertion tags keeping content', () => {
-      const xml = '<w:tbl><w:tr><w:tc><w:p><w:ins w:author="Test"><w:r><w:t>Inserted</w:t></w:r></w:ins></w:p></w:tc></w:tr></w:tbl>';
+      const xml =
+        '<w:tbl><w:tr><w:tc><w:p><w:ins w:author="Test"><w:r><w:t>Inserted</w:t></w:r></w:ins></w:p></w:tc></w:tr></w:tbl>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).not.toContain('<w:ins');
@@ -570,7 +567,8 @@ describe('InMemoryRevisionAcceptor', () => {
     });
 
     it('should remove deletion tags including content', () => {
-      const xml = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Keep</w:t></w:r><w:del w:author="Test"><w:r><w:t>Delete</w:t></w:r></w:del></w:p></w:tc></w:tr></w:tbl>';
+      const xml =
+        '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Keep</w:t></w:r><w:del w:author="Test"><w:r><w:t>Delete</w:t></w:r></w:del></w:p></w:tc></w:tr></w:tbl>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).not.toContain('<w:del');
@@ -579,7 +577,8 @@ describe('InMemoryRevisionAcceptor', () => {
     });
 
     it('should remove moveFrom tags including content', () => {
-      const xml = '<w:p><w:moveFrom w:author="Test" w:id="0"><w:r><w:t>Moved</w:t></w:r></w:moveFrom></w:p>';
+      const xml =
+        '<w:p><w:moveFrom w:author="Test" w:id="0"><w:r><w:t>Moved</w:t></w:r></w:moveFrom></w:p>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).not.toContain('<w:moveFrom');
@@ -587,7 +586,8 @@ describe('InMemoryRevisionAcceptor', () => {
     });
 
     it('should unwrap moveTo tags keeping content', () => {
-      const xml = '<w:p><w:moveTo w:author="Test" w:id="0"><w:r><w:t>Moved</w:t></w:r></w:moveTo></w:p>';
+      const xml =
+        '<w:p><w:moveTo w:author="Test" w:id="0"><w:r><w:t>Moved</w:t></w:r></w:moveTo></w:p>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).not.toContain('<w:moveTo');
@@ -596,7 +596,8 @@ describe('InMemoryRevisionAcceptor', () => {
     });
 
     it('should remove property change elements', () => {
-      const xml = '<w:p><w:pPr><w:pPrChange w:author="Test"><w:pPr><w:jc w:val="left"/></w:pPr></w:pPrChange></w:pPr></w:p>';
+      const xml =
+        '<w:p><w:pPr><w:pPrChange w:author="Test"><w:pPr><w:jc w:val="left"/></w:pPr></w:pPrChange></w:pPr></w:p>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).not.toContain('<w:pPrChange');
@@ -604,7 +605,8 @@ describe('InMemoryRevisionAcceptor', () => {
     });
 
     it('should remove run property change elements', () => {
-      const xml = '<w:r><w:rPr><w:b/><w:rPrChange w:author="Test"><w:rPr></w:rPr></w:rPrChange></w:rPr><w:t>Text</w:t></w:r>';
+      const xml =
+        '<w:r><w:rPr><w:b/><w:rPrChange w:author="Test"><w:rPr></w:rPr></w:rPrChange></w:rPr><w:t>Text</w:t></w:r>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).not.toContain('<w:rPrChange');
@@ -613,7 +615,8 @@ describe('InMemoryRevisionAcceptor', () => {
     });
 
     it('should remove range markers', () => {
-      const xml = '<w:p><w:moveFromRangeStart w:id="0"/><w:r><w:t>Text</w:t></w:r><w:moveFromRangeEnd w:id="0"/></w:p>';
+      const xml =
+        '<w:p><w:moveFromRangeStart w:id="0"/><w:r><w:t>Text</w:t></w:r><w:moveFromRangeEnd w:id="0"/></w:p>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).not.toContain('moveFromRangeStart');
@@ -632,21 +635,24 @@ describe('InMemoryRevisionAcceptor', () => {
     });
 
     it('should handle XML with no revisions', () => {
-      const xml = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>No revisions</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+      const xml =
+        '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>No revisions</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).toBe(xml);
     });
 
     it('should handle table property changes', () => {
-      const xml = '<w:tbl><w:tblPr><w:tblPrChange w:author="Test"><w:tblPr/></w:tblPrChange></w:tblPr></w:tbl>';
+      const xml =
+        '<w:tbl><w:tblPr><w:tblPrChange w:author="Test"><w:tblPr/></w:tblPrChange></w:tblPr></w:tbl>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).not.toContain('<w:tblPrChange');
     });
 
     it('should handle cell property changes', () => {
-      const xml = '<w:tc><w:tcPr><w:tcPrChange w:author="Test"><w:tcPr/></w:tcPrChange></w:tcPr></w:tc>';
+      const xml =
+        '<w:tc><w:tcPr><w:tcPrChange w:author="Test"><w:tcPr/></w:tcPrChange></w:tcPr></w:tc>';
       const result = stripRevisionsFromXml(xml);
 
       expect(result).not.toContain('<w:tcPrChange');
@@ -745,9 +751,7 @@ describe('InMemoryRevisionAcceptor', () => {
         if (cell) {
           const cellParagraphs = cell.getParagraphs();
           if (cellParagraphs[0]) {
-            cellParagraphs[0].addRevision(
-              Revision.createDeletion('Author', new Run('Deleted'))
-            );
+            cellParagraphs[0].addRevision(Revision.createDeletion('Author', new Run('Deleted')));
           }
         }
       }
@@ -778,9 +782,7 @@ describe('InMemoryRevisionAcceptor', () => {
       const cell2 = table2.getRows()[0]?.getCells()[0];
       if (cell2) {
         const para = cell2.createParagraph();
-        para.addRevision(
-          Revision.createDeletion('Author', new Run('Will be deleted'))
-        );
+        para.addRevision(Revision.createDeletion('Author', new Run('Will be deleted')));
       }
 
       // Create another table with content - use createParagraph with text
@@ -1045,12 +1047,8 @@ describe('InMemoryRevisionAcceptor', () => {
       ) as any;
       expect(rPr).toBeDefined();
 
-      const del = rPr?.children?.find(
-        (c: any) => typeof c === 'object' && c.name === 'w:del'
-      );
-      const ins = rPr?.children?.find(
-        (c: any) => typeof c === 'object' && c.name === 'w:ins'
-      );
+      const del = rPr?.children?.find((c: any) => typeof c === 'object' && c.name === 'w:del');
+      const ins = rPr?.children?.find((c: any) => typeof c === 'object' && c.name === 'w:ins');
       expect(del).toBeDefined();
       expect(ins).toBeDefined();
     });

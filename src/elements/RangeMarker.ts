@@ -202,12 +202,7 @@ export class RangeMarker {
    * @param date - Optional date (defaults to now)
    * @returns New RangeMarker instance
    */
-  static createMoveFromStart(
-    id: number,
-    name: string,
-    author: string,
-    date?: Date
-  ): RangeMarker {
+  static createMoveFromStart(id: number, name: string, author: string, date?: Date): RangeMarker {
     return new RangeMarker({
       id,
       type: 'moveFromRangeStart',
@@ -237,12 +232,7 @@ export class RangeMarker {
    * @param date - Optional date (defaults to now)
    * @returns New RangeMarker instance
    */
-  static createMoveToStart(
-    id: number,
-    name: string,
-    author: string,
-    date?: Date
-  ): RangeMarker {
+  static createMoveToStart(id: number, name: string, author: string, date?: Date): RangeMarker {
     return new RangeMarker({
       id,
       type: 'moveToRangeStart',
@@ -271,11 +261,7 @@ export class RangeMarker {
    * @param date - Optional date (defaults to now)
    * @returns New RangeMarker instance
    */
-  static createCustomXmlInsStart(
-    id: number,
-    author: string,
-    date?: Date
-  ): RangeMarker {
+  static createCustomXmlInsStart(id: number, author: string, date?: Date): RangeMarker {
     return new RangeMarker({
       id,
       type: 'customXmlInsRangeStart',
@@ -303,11 +289,7 @@ export class RangeMarker {
    * @param date - Optional date (defaults to now)
    * @returns New RangeMarker instance
    */
-  static createCustomXmlDelStart(
-    id: number,
-    author: string,
-    date?: Date
-  ): RangeMarker {
+  static createCustomXmlDelStart(id: number, author: string, date?: Date): RangeMarker {
     return new RangeMarker({
       id,
       type: 'customXmlDelRangeStart',

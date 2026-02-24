@@ -17,7 +17,11 @@ describe('Revision Consolidation', () => {
 
       // Add two insertions from same author within time window
       const rev1 = Revision.createInsertion('Author', new Run('Hello '), now);
-      const rev2 = Revision.createInsertion('Author', new Run('World'), new Date(now.getTime() + 100));
+      const rev2 = Revision.createInsertion(
+        'Author',
+        new Run('World'),
+        new Date(now.getTime() + 100)
+      );
 
       para.addRevision(rev1);
       para.addRevision(rev2);
@@ -59,7 +63,11 @@ describe('Revision Consolidation', () => {
       const now = new Date();
 
       const rev1 = Revision.createInsertion('Author1', new Run('Hello '), now);
-      const rev2 = Revision.createInsertion('Author2', new Run('World'), new Date(now.getTime() + 100));
+      const rev2 = Revision.createInsertion(
+        'Author2',
+        new Run('World'),
+        new Date(now.getTime() + 100)
+      );
 
       para.addRevision(rev1);
       para.addRevision(rev2);
@@ -75,7 +83,11 @@ describe('Revision Consolidation', () => {
       const now = new Date();
 
       const rev1 = Revision.createInsertion('Author', new Run('Hello '), now);
-      const rev2 = Revision.createDeletion('Author', new Run('World'), new Date(now.getTime() + 100));
+      const rev2 = Revision.createDeletion(
+        'Author',
+        new Run('World'),
+        new Date(now.getTime() + 100)
+      );
 
       para.addRevision(rev1);
       para.addRevision(rev2);
@@ -92,7 +104,11 @@ describe('Revision Consolidation', () => {
 
       // Second revision is 2 seconds later (outside 1 second window)
       const rev1 = Revision.createInsertion('Author', new Run('Hello '), now);
-      const rev2 = Revision.createInsertion('Author', new Run('World'), new Date(now.getTime() + 2000));
+      const rev2 = Revision.createInsertion(
+        'Author',
+        new Run('World'),
+        new Date(now.getTime() + 2000)
+      );
 
       para.addRevision(rev1);
       para.addRevision(rev2);
@@ -130,7 +146,11 @@ describe('Revision Consolidation', () => {
 
       // Add 5 insertions from same author within time window
       for (let i = 0; i < 5; i++) {
-        const rev = Revision.createInsertion('Author', new Run(`Part${i}`), new Date(now.getTime() + i * 100));
+        const rev = Revision.createInsertion(
+          'Author',
+          new Run(`Part${i}`),
+          new Date(now.getTime() + i * 100)
+        );
         para.addRevision(rev);
       }
 
@@ -166,8 +186,18 @@ describe('Revision Consolidation', () => {
       const para = new Paragraph();
       const now = new Date();
 
-      const rev1 = Revision.createRunPropertiesChange('Author', new Run('text'), { bold: true }, now);
-      const rev2 = Revision.createRunPropertiesChange('Author', new Run('text'), { italic: true }, new Date(now.getTime() + 100));
+      const rev1 = Revision.createRunPropertiesChange(
+        'Author',
+        new Run('text'),
+        { bold: true },
+        now
+      );
+      const rev2 = Revision.createRunPropertiesChange(
+        'Author',
+        new Run('text'),
+        { italic: true },
+        new Date(now.getTime() + 100)
+      );
 
       para.addRevision(rev1);
       para.addRevision(rev2);
@@ -185,7 +215,9 @@ describe('Revision Consolidation', () => {
 
       // Two revisions 500ms apart
       para.addRevision(Revision.createInsertion('Author', new Run('A'), now));
-      para.addRevision(Revision.createInsertion('Author', new Run('B'), new Date(now.getTime() + 500)));
+      para.addRevision(
+        Revision.createInsertion('Author', new Run('B'), new Date(now.getTime() + 500))
+      );
 
       // With 250ms window, should NOT consolidate
       let consolidated = para.consolidateRevisions(250);
@@ -195,7 +227,9 @@ describe('Revision Consolidation', () => {
       // Create fresh paragraph for second test
       const para2 = new Paragraph();
       para2.addRevision(Revision.createInsertion('Author', new Run('A'), now));
-      para2.addRevision(Revision.createInsertion('Author', new Run('B'), new Date(now.getTime() + 500)));
+      para2.addRevision(
+        Revision.createInsertion('Author', new Run('B'), new Date(now.getTime() + 500))
+      );
 
       // With 1000ms window, should consolidate
       consolidated = para2.consolidateRevisions(1000);
@@ -212,12 +246,16 @@ describe('Revision Consolidation', () => {
       // Create paragraphs and add revisions to them
       const para1 = Paragraph.create();
       para1.addRevision(Revision.createInsertion('Author', new Run('A'), now));
-      para1.addRevision(Revision.createInsertion('Author', new Run('B'), new Date(now.getTime() + 100)));
+      para1.addRevision(
+        Revision.createInsertion('Author', new Run('B'), new Date(now.getTime() + 100))
+      );
       doc.addParagraph(para1);
 
       const para2 = Paragraph.create();
       para2.addRevision(Revision.createInsertion('Author', new Run('C'), now));
-      para2.addRevision(Revision.createInsertion('Author', new Run('D'), new Date(now.getTime() + 100)));
+      para2.addRevision(
+        Revision.createInsertion('Author', new Run('D'), new Date(now.getTime() + 100))
+      );
       doc.addParagraph(para2);
 
       const result = doc.consolidateAllRevisions(1000);

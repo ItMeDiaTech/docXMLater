@@ -75,7 +75,7 @@ class TrackedChangesStripper {
       /<w:customXmlMoveFromRangeStart[^>]*\/>/g,
       /<w:customXmlMoveFromRangeEnd[^>]*\/>/g,
       /<w:customXmlMoveToRangeStart[^>]*\/>/g,
-      /<w:customXmlMoveToRangeEnd[^>]*\/>/g
+      /<w:customXmlMoveToRangeEnd[^>]*\/>/g,
     ];
 
     let result = xml;
@@ -142,16 +142,16 @@ class TrackedChangesStripper {
   private processDeletions(xml: string): string {
     let result = xml;
     let previousLength = 0;
-    
+
     // Keep replacing until no more changes (handles nested revisions)
     while (result.length !== previousLength) {
       previousLength = result.length;
-      
+
       // Match entire deletion element and remove it
       // Use [\s>] to match either space or closing bracket
       result = result.replace(/<w:del[\s>][^>]*>.*?<\/w:del>/gs, '');
     }
-    
+
     return result;
   }
 
@@ -162,15 +162,15 @@ class TrackedChangesStripper {
   private processMoveFrom(xml: string): string {
     let result = xml;
     let previousLength = 0;
-    
+
     // Keep replacing until no more changes
     while (result.length !== previousLength) {
       previousLength = result.length;
-      
+
       // Use [\s>] to match either space or closing bracket
       result = result.replace(/<w:moveFrom[\s>][^>]*>.*?<\/w:moveFrom>/gs, '');
     }
-    
+
     return result;
   }
 
@@ -180,13 +180,13 @@ class TrackedChangesStripper {
    */
   private processMoveTo(xml: string): string {
     let result = xml;
-    
+
     // First, remove all closing tags
     result = result.replace(/<\/w:moveTo>/g, '');
-    
+
     // Then, remove all opening tags (keeping any content that follows)
     result = result.replace(/<w:moveTo[\s>][^>]*>/g, '');
-    
+
     return result;
   }
 
@@ -195,15 +195,15 @@ class TrackedChangesStripper {
    */
   private removePropertyChanges(xml: string): string {
     const patterns = [
-      /<w:rPrChange[^>]*>.*?<\/w:rPrChange>/gs,      // Run property changes
-      /<w:pPrChange[^>]*>.*?<\/w:pPrChange>/gs,      // Paragraph property changes
-      /<w:tblPrChange[^>]*>.*?<\/w:tblPrChange>/gs,  // Table property changes
+      /<w:rPrChange[^>]*>.*?<\/w:rPrChange>/gs, // Run property changes
+      /<w:pPrChange[^>]*>.*?<\/w:pPrChange>/gs, // Paragraph property changes
+      /<w:tblPrChange[^>]*>.*?<\/w:tblPrChange>/gs, // Table property changes
       /<w:tblPrExChange[^>]*>.*?<\/w:tblPrExChange>/gs, // Table property exception changes
-      /<w:tcPrChange[^>]*>.*?<\/w:tcPrChange>/gs,    // Table cell property changes
-      /<w:trPrChange[^>]*>.*?<\/w:trPrChange>/gs,    // Table row property changes
+      /<w:tcPrChange[^>]*>.*?<\/w:tcPrChange>/gs, // Table cell property changes
+      /<w:trPrChange[^>]*>.*?<\/w:trPrChange>/gs, // Table row property changes
       /<w:sectPrChange[^>]*>.*?<\/w:sectPrChange>/gs, // Section property changes
       /<w:tblGridChange[^>]*>.*?<\/w:tblGridChange>/gs, // Table grid changes
-      /<w:numberingChange[^>]*>.*?<\/w:numberingChange>/gs // Numbering changes
+      /<w:numberingChange[^>]*>.*?<\/w:numberingChange>/gs, // Numbering changes
     ];
 
     let result = xml;
@@ -222,7 +222,7 @@ class TrackedChangesStripper {
       /<w:ins\s+[^>]*\/>/g,
       /<w:del\s+[^>]*\/>/g,
       /<w:moveFrom\s+[^>]*\/>/g,
-      /<w:moveTo\s+[^>]*\/>/g
+      /<w:moveTo\s+[^>]*\/>/g,
     ];
 
     let result = xml;
@@ -338,7 +338,10 @@ class TrackedChangesStripper {
     }
 
     // Reset revision count to 1
-    const content = coreXml.replace(/<cp:revision>\d+<\/cp:revision>/g, '<cp:revision>1</cp:revision>');
+    const content = coreXml.replace(
+      /<cp:revision>\d+<\/cp:revision>/g,
+      '<cp:revision>1</cp:revision>'
+    );
 
     this.zipHandler.updateFile('docProps/core.xml', content);
   }

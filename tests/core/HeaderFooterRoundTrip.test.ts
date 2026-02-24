@@ -76,8 +76,12 @@ describe('Header/Footer Round-Trip', () => {
     const contentTypes = await contentTypesFile!.async('string');
 
     // Verify Override entries for header and footer
-    expect(contentTypes).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml');
-    expect(contentTypes).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml');
+    expect(contentTypes).toContain(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml'
+    );
+    expect(contentTypes).toContain(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml'
+    );
 
     // Verify the header/footer XML files exist
     expect(zip.file('word/header1.xml')).not.toBeNull();
@@ -120,7 +124,9 @@ describe('Header/Footer Round-Trip', () => {
 
     // Content Types should still have footer override
     const contentTypes2 = await zip2.file('[Content_Types].xml')!.async('string');
-    expect(contentTypes2).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml');
+    expect(contentTypes2).toContain(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml'
+    );
   });
 
   it('should handle clearHeaders and clearFooters operations', async () => {
@@ -273,12 +279,12 @@ describe('Header/Footer Round-Trip', () => {
     const para = doc.createParagraph('Section 1 content');
     para.setSectionProperties(
       '<w:sectPr>' +
-      '<w:headerReference w:type="default" r:id="rId99"/>' +
-      '<w:footerReference w:type="default" r:id="rId100"/>' +
-      '<w:titlePg/>' +
-      '<w:pgSz w:w="12240" w:h="15840"/>' +
-      '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>' +
-      '</w:sectPr>'
+        '<w:headerReference w:type="default" r:id="rId99"/>' +
+        '<w:footerReference w:type="default" r:id="rId100"/>' +
+        '<w:titlePg/>' +
+        '<w:pgSz w:w="12240" w:h="15840"/>' +
+        '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>' +
+        '</w:sectPr>'
     );
 
     doc.createParagraph('Section 2 content');
@@ -294,8 +300,8 @@ describe('Header/Footer Round-Trip', () => {
     const JSZip = require('jszip');
     const zip = await JSZip.loadAsync(buffer);
 
-    const headerFiles = Object.keys(zip.files).filter(f => f.match(/^word\/header\d+\.xml$/));
-    const footerFiles = Object.keys(zip.files).filter(f => f.match(/^word\/footer\d+\.xml$/));
+    const headerFiles = Object.keys(zip.files).filter((f) => f.match(/^word\/header\d+\.xml$/));
+    const footerFiles = Object.keys(zip.files).filter((f) => f.match(/^word\/footer\d+\.xml$/));
     expect(headerFiles).toHaveLength(0);
     expect(footerFiles).toHaveLength(0);
 
@@ -337,8 +343,8 @@ describe('Header/Footer Round-Trip', () => {
     const JSZip = require('jszip');
     const zip = await JSZip.loadAsync(buffer2);
 
-    const headerFiles = Object.keys(zip.files).filter(f => f.match(/^word\/header\d+\.xml$/));
-    const footerFiles = Object.keys(zip.files).filter(f => f.match(/^word\/footer\d+\.xml$/));
+    const headerFiles = Object.keys(zip.files).filter((f) => f.match(/^word\/header\d+\.xml$/));
+    const footerFiles = Object.keys(zip.files).filter((f) => f.match(/^word\/footer\d+\.xml$/));
     expect(headerFiles).toHaveLength(0);
     expect(footerFiles).toHaveLength(0);
 

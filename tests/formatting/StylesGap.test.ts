@@ -99,7 +99,12 @@ describe('Latent Styles', () => {
   test('should add and retrieve latent style exceptions', () => {
     const sm = StylesManager.create();
     sm.addLatentStyleException({ name: 'Normal', qFormat: true, uiPriority: 0 });
-    sm.addLatentStyleException({ name: 'heading 1', qFormat: true, semiHidden: false, uiPriority: 9 });
+    sm.addLatentStyleException({
+      name: 'heading 1',
+      qFormat: true,
+      semiHidden: false,
+      uiPriority: 9,
+    });
 
     const exceptions = sm.getLatentStyleExceptions();
     expect(exceptions).toHaveLength(2);
@@ -147,7 +152,13 @@ describe('Latent Styles', () => {
       count: 376,
     });
     sm.addLatentStyleException({ name: 'Normal', qFormat: true, uiPriority: 0 });
-    sm.addLatentStyleException({ name: 'heading 1', qFormat: true, semiHidden: false, unhideWhenUsed: false, uiPriority: 9 });
+    sm.addLatentStyleException({
+      name: 'heading 1',
+      qFormat: true,
+      semiHidden: false,
+      unhideWhenUsed: false,
+      uiPriority: 9,
+    });
 
     doc.createParagraph('Document with latent styles');
 

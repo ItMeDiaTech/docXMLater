@@ -16,21 +16,41 @@ function resolveValidatorBinary(): string {
   else throw new Error(`No OOXML validator binary for platform: ${platform} ${arch}`);
 
   const binName = rid.startsWith('win-') ? 'ooxml-validator.exe' : 'ooxml-validator';
-  return path.join(__dirname, '..', '..', 'node_modules', '@xarsh', 'ooxml-validator', 'bin', rid, binName);
+  return path.join(
+    __dirname,
+    '..',
+    '..',
+    'node_modules',
+    '@xarsh',
+    'ooxml-validator',
+    'bin',
+    rid,
+    binName
+  );
 }
 
-function runValidator(filePath: string): Promise<{ ok: boolean; errors?: Array<{ description: string }> }> {
+function runValidator(
+  filePath: string
+): Promise<{ ok: boolean; errors?: Array<{ description: string }> }> {
   const cmd = resolveValidatorBinary();
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, [filePath], { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
-    child.on('error', (err) => reject(new Error(`Failed to spawn OOXML validator: ${err.message}`)));
+    child.stdout.on('data', (d: Buffer) => {
+      stdout += d.toString();
+    });
+    child.stderr.on('data', (d: Buffer) => {
+      stderr += d.toString();
+    });
+    child.on('error', (err) =>
+      reject(new Error(`Failed to spawn OOXML validator: ${err.message}`))
+    );
     child.on('close', (code) => {
       if (code !== 0) {
-        return reject(new Error(`OOXML Validator exited with code ${code}. stderr: ${stderr || stdout}`));
+        return reject(
+          new Error(`OOXML Validator exited with code ${code}. stderr: ${stderr || stdout}`)
+        );
       }
       try {
         const trimmed = stdout.trim();

@@ -117,7 +117,7 @@ export class Endnote {
    * Gets the text content of the endnote
    */
   getText(): string {
-    return this.paragraphs.map(p => p.getText()).join('\n');
+    return this.paragraphs.map((p) => p.getText()).join('\n');
   }
 
   /**
@@ -137,14 +137,18 @@ export class Endnote {
     // Separator types require specific child elements per ECMA-376
     if (this.type === EndnoteType.Separator) {
       // <w:p><w:r><w:separator/></w:r></w:p>
-      children.push(XMLBuilder.w('p', undefined, [
-        XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('separator')])
-      ]));
+      children.push(
+        XMLBuilder.w('p', undefined, [
+          XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('separator')]),
+        ])
+      );
     } else if (this.type === EndnoteType.ContinuationSeparator) {
       // <w:p><w:r><w:continuationSeparator/></w:r></w:p>
-      children.push(XMLBuilder.w('p', undefined, [
-        XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('continuationSeparator')])
-      ]));
+      children.push(
+        XMLBuilder.w('p', undefined, [
+          XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('continuationSeparator')]),
+        ])
+      );
     } else {
       // Add paragraphs
       for (const para of this.paragraphs) {
@@ -180,7 +184,7 @@ export class Endnote {
   static createSeparator(id: number): Endnote {
     const endnote = new Endnote({
       id,
-      type: EndnoteType.Separator
+      type: EndnoteType.Separator,
     });
     // Separator typically has a horizontal line
     endnote.createParagraph();
@@ -196,7 +200,7 @@ export class Endnote {
   static createContinuationSeparator(id: number): Endnote {
     return new Endnote({
       id,
-      type: EndnoteType.ContinuationSeparator
+      type: EndnoteType.ContinuationSeparator,
     });
   }
 
@@ -209,7 +213,7 @@ export class Endnote {
   static createContinuationNotice(id: number, text = 'Continued...'): Endnote {
     const endnote = new Endnote({
       id,
-      type: EndnoteType.ContinuationNotice
+      type: EndnoteType.ContinuationNotice,
     });
     endnote.createParagraph(text);
     return endnote;

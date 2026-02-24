@@ -315,7 +315,7 @@ export function createIssueFromRule(
  * @returns ValidationRule or undefined
  */
 export function getRuleByCode(code: string): ValidationRule | undefined {
-  return Object.values(REVISION_RULES).find(rule => rule.code === code);
+  return Object.values(REVISION_RULES).find((rule) => rule.code === code);
 }
 
 /**
@@ -325,7 +325,7 @@ export function getRuleByCode(code: string): ValidationRule | undefined {
  * @returns Array of rules
  */
 export function getRulesBySeverity(severity: ValidationSeverity): ValidationRule[] {
-  return Object.values(REVISION_RULES).filter(rule => rule.severity === severity);
+  return Object.values(REVISION_RULES).filter((rule) => rule.severity === severity);
 }
 
 /**
@@ -334,5 +334,5 @@ export function getRulesBySeverity(severity: ValidationSeverity): ValidationRule
  * @returns Array of rules that can be auto-fixed
  */
 export function getAutoFixableRules(): ValidationRule[] {
-  return Object.values(REVISION_RULES).filter(rule => rule.autoFixable);
+  return Object.values(REVISION_RULES).filter((rule) => rule.autoFixable);
 }

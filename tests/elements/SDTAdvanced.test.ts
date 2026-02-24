@@ -13,8 +13,8 @@ function filterXMLElements(children?: (XMLElement | string)[]): XMLElement[] {
 }
 
 function findInSdtPr(xml: XMLElement, name: string): XMLElement | undefined {
-  const sdtPr = filterXMLElements(xml.children).find(c => c.name === 'w:sdtPr');
-  return filterXMLElements(sdtPr?.children).find(c => c.name === name);
+  const sdtPr = filterXMLElements(xml.children).find((c) => c.name === 'w:sdtPr');
+  return filterXMLElements(sdtPr?.children).find((c) => c.name === name);
 }
 
 describe('SDT Placeholder', () => {
@@ -25,16 +25,14 @@ describe('SDT Placeholder', () => {
   });
 
   test('should generate w:placeholder in XML', () => {
-    const sdt = StructuredDocumentTag.createRichText(
-      [new Paragraph().addText('Content')],
-    );
+    const sdt = StructuredDocumentTag.createRichText([new Paragraph().addText('Content')]);
     sdt.setPlaceholder('DefaultPlaceholder_-1854013440');
 
     const xml = sdt.toXML();
     const placeholder = findInSdtPr(xml, 'w:placeholder');
     expect(placeholder).toBeDefined();
 
-    const docPart = filterXMLElements(placeholder?.children).find(c => c.name === 'w:docPart');
+    const docPart = filterXMLElements(placeholder?.children).find((c) => c.name === 'w:docPart');
     expect(docPart).toBeDefined();
     expect(docPart?.attributes?.['w:val']).toBe('DefaultPlaceholder_-1854013440');
   });
@@ -43,7 +41,7 @@ describe('SDT Placeholder', () => {
     const doc = Document.create();
     const sdt = StructuredDocumentTag.createPlainText(
       [new Paragraph().addText('Enter text here')],
-      false,
+      false
     );
     sdt.setPlaceholder('DefaultPlaceholder_-1854013440');
     doc.addBodyElement(sdt);
@@ -51,8 +49,9 @@ describe('SDT Placeholder', () => {
     const buffer = await doc.toBuffer();
     const loaded = await Document.loadFromBuffer(buffer);
 
-    const loadedSdt = loaded.getBodyElements()
-      .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+    const loadedSdt = loaded
+      .getBodyElements()
+      .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
     expect(loadedSdt).toBeDefined();
     expect(loadedSdt.getPlaceholder()?.docPart).toBe('DefaultPlaceholder_-1854013440');
@@ -78,9 +77,7 @@ describe('SDT Data Binding', () => {
   });
 
   test('should generate w:dataBinding in XML', () => {
-    const sdt = StructuredDocumentTag.createPlainText(
-      [new Paragraph().addText('Bound value')],
-    );
+    const sdt = StructuredDocumentTag.createPlainText([new Paragraph().addText('Bound value')]);
     sdt.setDataBinding(
       '/root/name',
       'xmlns:ns="http://example.com"',
@@ -92,13 +89,13 @@ describe('SDT Data Binding', () => {
     expect(dataBinding).toBeDefined();
     expect(dataBinding?.attributes?.['w:xpath']).toBe('/root/name');
     expect(dataBinding?.attributes?.['w:prefixMappings']).toBe('xmlns:ns="http://example.com"');
-    expect(dataBinding?.attributes?.['w:storeItemID']).toBe('{AABBCCDD-1234-5678-9ABC-DDEEFF001122}');
+    expect(dataBinding?.attributes?.['w:storeItemID']).toBe(
+      '{AABBCCDD-1234-5678-9ABC-DDEEFF001122}'
+    );
   });
 
   test('should generate data binding without optional attributes', () => {
-    const sdt = StructuredDocumentTag.createPlainText(
-      [new Paragraph().addText('Simple binding')],
-    );
+    const sdt = StructuredDocumentTag.createPlainText([new Paragraph().addText('Simple binding')]);
     sdt.setDataBinding('/root/simple');
 
     const xml = sdt.toXML();
@@ -111,22 +108,16 @@ describe('SDT Data Binding', () => {
 
   test('should round-trip data binding', async () => {
     const doc = Document.create();
-    const sdt = StructuredDocumentTag.createPlainText(
-      [new Paragraph().addText('Data')],
-      false,
-    );
-    sdt.setDataBinding(
-      '/root/value',
-      undefined,
-      '{11111111-2222-3333-4444-555555555555}'
-    );
+    const sdt = StructuredDocumentTag.createPlainText([new Paragraph().addText('Data')], false);
+    sdt.setDataBinding('/root/value', undefined, '{11111111-2222-3333-4444-555555555555}');
     doc.addBodyElement(sdt);
 
     const buffer = await doc.toBuffer();
     const loaded = await Document.loadFromBuffer(buffer);
 
-    const loadedSdt = loaded.getBodyElements()
-      .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+    const loadedSdt = loaded
+      .getBodyElements()
+      .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
     expect(loadedSdt).toBeDefined();
     const db = loadedSdt.getDataBinding();
@@ -149,9 +140,7 @@ describe('SDT Showing Placeholder', () => {
   });
 
   test('should generate w:showingPlcHdr in XML', () => {
-    const sdt = StructuredDocumentTag.createRichText(
-      [new Paragraph().addText('Placeholder text')],
-    );
+    const sdt = StructuredDocumentTag.createRichText([new Paragraph().addText('Placeholder text')]);
     sdt.setShowingPlaceholder(true);
 
     const xml = sdt.toXML();
@@ -162,9 +151,7 @@ describe('SDT Showing Placeholder', () => {
 
   test('should round-trip showingPlcHdr', async () => {
     const doc = Document.create();
-    const sdt = StructuredDocumentTag.createRichText(
-      [new Paragraph().addText('Placeholder')],
-    );
+    const sdt = StructuredDocumentTag.createRichText([new Paragraph().addText('Placeholder')]);
     sdt.setPlaceholder('DefaultPlaceholder_-1854013440');
     sdt.setShowingPlaceholder(true);
     doc.addBodyElement(sdt);
@@ -172,8 +159,9 @@ describe('SDT Showing Placeholder', () => {
     const buffer = await doc.toBuffer();
     const loaded = await Document.loadFromBuffer(buffer);
 
-    const loadedSdt = loaded.getBodyElements()
-      .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+    const loadedSdt = loaded
+      .getBodyElements()
+      .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
     expect(loadedSdt).toBeDefined();
     expect(loadedSdt.isShowingPlaceholder()).toBe(true);
@@ -187,7 +175,7 @@ describe('SDT Combined Placeholder + Data Binding', () => {
   test('should support placeholder + data binding + showingPlcHdr together', () => {
     const sdt = StructuredDocumentTag.createPlainText(
       [new Paragraph().addText('Click to enter text')],
-      false,
+      false
     );
     sdt.setPlaceholder('DefaultPlaceholder_-1854013440');
     sdt.setDataBinding('/company/name');
@@ -204,7 +192,7 @@ describe('SDT Combined Placeholder + Data Binding', () => {
     const doc = Document.create();
     const sdt = StructuredDocumentTag.createPlainText(
       [new Paragraph().addText('Placeholder text')],
-      false,
+      false
     );
     sdt.setPlaceholder('DefaultPlaceholder_-1854013440');
     sdt.setDataBinding('/company/name', undefined, '{AABB1234-5678-9012-3456-789ABCDEF012}');
@@ -214,8 +202,9 @@ describe('SDT Combined Placeholder + Data Binding', () => {
     const buffer = await doc.toBuffer();
     const loaded = await Document.loadFromBuffer(buffer);
 
-    const loadedSdt = loaded.getBodyElements()
-      .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+    const loadedSdt = loaded
+      .getBodyElements()
+      .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
     expect(loadedSdt.getPlaceholder()?.docPart).toBe('DefaultPlaceholder_-1854013440');
     expect(loadedSdt.getDataBinding()?.xpath).toBe('/company/name');
@@ -229,16 +218,12 @@ describe('SDT Combined Placeholder + Data Binding', () => {
 
 describe('SDT Citation Type', () => {
   test('should create citation control', () => {
-    const sdt = StructuredDocumentTag.createCitation(
-      [new Paragraph().addText('(Author, 2024)')],
-    );
+    const sdt = StructuredDocumentTag.createCitation([new Paragraph().addText('(Author, 2024)')]);
     expect(sdt.getControlType()).toBe('citation');
   });
 
   test('should generate w:citation in XML', () => {
-    const sdt = StructuredDocumentTag.createCitation(
-      [new Paragraph().addText('(Author, 2024)')],
-    );
+    const sdt = StructuredDocumentTag.createCitation([new Paragraph().addText('(Author, 2024)')]);
 
     const xml = sdt.toXML();
     expect(findInSdtPr(xml, 'w:citation')).toBeDefined();
@@ -246,16 +231,15 @@ describe('SDT Citation Type', () => {
 
   test('should round-trip citation control', async () => {
     const doc = Document.create();
-    const sdt = StructuredDocumentTag.createCitation(
-      [new Paragraph().addText('(Smith, 2024)')],
-    );
+    const sdt = StructuredDocumentTag.createCitation([new Paragraph().addText('(Smith, 2024)')]);
     doc.addBodyElement(sdt);
 
     const buffer = await doc.toBuffer();
     const loaded = await Document.loadFromBuffer(buffer);
 
-    const loadedSdt = loaded.getBodyElements()
-      .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+    const loadedSdt = loaded
+      .getBodyElements()
+      .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
     expect(loadedSdt).toBeDefined();
     expect(loadedSdt.getControlType()).toBe('citation');
@@ -267,16 +251,14 @@ describe('SDT Citation Type', () => {
 
 describe('SDT Bibliography Type', () => {
   test('should create bibliography control', () => {
-    const sdt = StructuredDocumentTag.createBibliography(
-      [new Paragraph().addText('Bibliography entries...')],
-    );
+    const sdt = StructuredDocumentTag.createBibliography([
+      new Paragraph().addText('Bibliography entries...'),
+    ]);
     expect(sdt.getControlType()).toBe('bibliography');
   });
 
   test('should generate w:bibliography in XML', () => {
-    const sdt = StructuredDocumentTag.createBibliography(
-      [new Paragraph().addText('References')],
-    );
+    const sdt = StructuredDocumentTag.createBibliography([new Paragraph().addText('References')]);
 
     const xml = sdt.toXML();
     expect(findInSdtPr(xml, 'w:bibliography')).toBeDefined();
@@ -284,16 +266,17 @@ describe('SDT Bibliography Type', () => {
 
   test('should round-trip bibliography control', async () => {
     const doc = Document.create();
-    const sdt = StructuredDocumentTag.createBibliography(
-      [new Paragraph().addText('Smith, J. (2024). Title.')],
-    );
+    const sdt = StructuredDocumentTag.createBibliography([
+      new Paragraph().addText('Smith, J. (2024). Title.'),
+    ]);
     doc.addBodyElement(sdt);
 
     const buffer = await doc.toBuffer();
     const loaded = await Document.loadFromBuffer(buffer);
 
-    const loadedSdt = loaded.getBodyElements()
-      .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+    const loadedSdt = loaded
+      .getBodyElements()
+      .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
     expect(loadedSdt).toBeDefined();
     expect(loadedSdt.getControlType()).toBe('bibliography');
@@ -305,47 +288,42 @@ describe('SDT Bibliography Type', () => {
 
 describe('SDT DocPartList Type', () => {
   test('should create docPartList control', () => {
-    const sdt = StructuredDocumentTag.createDocPartList(
-      'Table of Contents',
-      'Built-In',
-      [new Paragraph().addText('TOC placeholder')],
-    );
+    const sdt = StructuredDocumentTag.createDocPartList('Table of Contents', 'Built-In', [
+      new Paragraph().addText('TOC placeholder'),
+    ]);
     expect(sdt.getControlType()).toBe('docPartList');
     expect(sdt.getBuildingBlockProperties()?.gallery).toBe('Table of Contents');
     expect(sdt.getBuildingBlockProperties()?.isList).toBe(true);
   });
 
   test('should generate w:docPartList in XML', () => {
-    const sdt = StructuredDocumentTag.createDocPartList(
-      'Table of Contents',
-      'Built-In',
-      [new Paragraph().addText('TOC')],
-    );
+    const sdt = StructuredDocumentTag.createDocPartList('Table of Contents', 'Built-In', [
+      new Paragraph().addText('TOC'),
+    ]);
 
     const xml = sdt.toXML();
     const docPartList = findInSdtPr(xml, 'w:docPartList');
     expect(docPartList).toBeDefined();
 
     const gallery = filterXMLElements(docPartList?.children).find(
-      c => c.name === 'w:docPartGallery'
+      (c) => c.name === 'w:docPartGallery'
     );
     expect(gallery?.attributes?.['w:val']).toBe('Table of Contents');
   });
 
   test('should round-trip docPartList control', async () => {
     const doc = Document.create();
-    const sdt = StructuredDocumentTag.createDocPartList(
-      'Table of Contents',
-      'Built-In',
-      [new Paragraph().addText('Contents here')],
-    );
+    const sdt = StructuredDocumentTag.createDocPartList('Table of Contents', 'Built-In', [
+      new Paragraph().addText('Contents here'),
+    ]);
     doc.addBodyElement(sdt);
 
     const buffer = await doc.toBuffer();
     const loaded = await Document.loadFromBuffer(buffer);
 
-    const loadedSdt = loaded.getBodyElements()
-      .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+    const loadedSdt = loaded
+      .getBodyElements()
+      .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
     expect(loadedSdt).toBeDefined();
     expect(loadedSdt.getControlType()).toBe('docPartList');
@@ -358,16 +336,12 @@ describe('SDT DocPartList Type', () => {
 
 describe('SDT Equation Type', () => {
   test('should create equation control', () => {
-    const sdt = StructuredDocumentTag.createEquation(
-      [new Paragraph().addText('E = mc²')],
-    );
+    const sdt = StructuredDocumentTag.createEquation([new Paragraph().addText('E = mc²')]);
     expect(sdt.getControlType()).toBe('equation');
   });
 
   test('should generate w:equation in XML', () => {
-    const sdt = StructuredDocumentTag.createEquation(
-      [new Paragraph().addText('x² + y² = r²')],
-    );
+    const sdt = StructuredDocumentTag.createEquation([new Paragraph().addText('x² + y² = r²')]);
 
     const xml = sdt.toXML();
     expect(findInSdtPr(xml, 'w:equation')).toBeDefined();
@@ -380,7 +354,7 @@ describe('SDT Group with Nested Content', () => {
     const para2 = new Paragraph().addText('Section body');
     const innerSdt = StructuredDocumentTag.createPlainText(
       [new Paragraph().addText('Editable field')],
-      false,
+      false
     );
 
     const group = StructuredDocumentTag.createGroup([para1, innerSdt, para2]);
@@ -393,7 +367,7 @@ describe('SDT Group with Nested Content', () => {
     const doc = Document.create();
     const innerSdt = StructuredDocumentTag.createPlainText(
       [new Paragraph().addText('Inner')],
-      false,
+      false
     );
     const group = StructuredDocumentTag.createGroup([
       new Paragraph().addText('Before'),
@@ -405,16 +379,18 @@ describe('SDT Group with Nested Content', () => {
     const buffer = await doc.toBuffer();
     const loaded = await Document.loadFromBuffer(buffer);
 
-    const loadedGroup = loaded.getBodyElements()
-      .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+    const loadedGroup = loaded
+      .getBodyElements()
+      .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
     expect(loadedGroup).toBeDefined();
     expect(loadedGroup.getControlType()).toBe('group');
     expect(loadedGroup.getContent().length).toBeGreaterThanOrEqual(3);
 
     // Find nested SDT
-    const nestedSdt = loadedGroup.getContent()
-      .find(c => c instanceof StructuredDocumentTag) as StructuredDocumentTag;
+    const nestedSdt = loadedGroup
+      .getContent()
+      .find((c) => c instanceof StructuredDocumentTag) as StructuredDocumentTag;
     expect(nestedSdt).toBeDefined();
     expect(nestedSdt.getControlType()).toBe('plainText');
 

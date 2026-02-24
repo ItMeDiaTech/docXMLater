@@ -80,7 +80,12 @@ export class ImageManager {
    * However, each image occurrence gets its own entry to preserve dimensions
    * (Word allows same image file displayed at different sizes via wp:extent).
    */
-  registerImage(image: Image, relationshipId: string, originalFilename?: string, partName?: string): string {
+  registerImage(
+    image: Image,
+    relationshipId: string,
+    originalFilename?: string,
+    partName?: string
+  ): string {
     // Check if already registered by object reference (exact same object)
     const existing = this.images.get(image);
     if (existing) {
@@ -99,16 +104,16 @@ export class ImageManager {
     // 3. Generate new sequential filename (for newly added images)
     const filename = existingByRelId
       ? existingByRelId.filename
-      : (originalFilename || `image${this.nextImageNumber++}.${image.getExtension()}`);
+      : originalFilename || `image${this.nextImageNumber++}.${image.getExtension()}`;
 
     // Validate image count limit
     if (this.images.size >= this.maxImageCount) {
       throw new Error(
         `Cannot add image: Maximum image count (${this.maxImageCount}) exceeded. ` +
-        `Consider:\n` +
-        `  - Reducing the number of images\n` +
-        `  - Increasing maxImageCount in DocumentOptions\n` +
-        `  - Splitting into multiple documents`
+          `Consider:\n` +
+          `  - Reducing the number of images\n` +
+          `  - Increasing maxImageCount in DocumentOptions\n` +
+          `  - Splitting into multiple documents`
       );
     }
 
@@ -120,12 +125,12 @@ export class ImageManager {
       if (imageData.length > this.maxSingleImageSizeBytes) {
         throw new Error(
           `Image size (${imageSizeMB.toFixed(1)}MB) exceeds maximum single image size ` +
-          `(${(this.maxSingleImageSizeBytes / (1024 * 1024)).toFixed(0)}MB). ` +
-          `Consider:\n` +
-          `  - Compressing the image\n` +
-          `  - Resizing to lower resolution\n` +
-          `  - Converting to a more efficient format (e.g., JPEG)\n` +
-          `  - Increasing maxSingleImageSizeMB in DocumentOptions`
+            `(${(this.maxSingleImageSizeBytes / (1024 * 1024)).toFixed(0)}MB). ` +
+            `Consider:\n` +
+            `  - Compressing the image\n` +
+            `  - Resizing to lower resolution\n` +
+            `  - Converting to a more efficient format (e.g., JPEG)\n` +
+            `  - Increasing maxSingleImageSizeMB in DocumentOptions`
         );
       }
 
@@ -137,12 +142,12 @@ export class ImageManager {
       if (newTotalSize > this.maxTotalImageSizeBytes) {
         throw new Error(
           `Total image size (${newTotalSizeMB.toFixed(1)}MB) would exceed maximum ` +
-          `(${(this.maxTotalImageSizeBytes / (1024 * 1024)).toFixed(0)}MB) after adding this image. ` +
-          `Consider:\n` +
-          `  - Compressing existing images\n` +
-          `  - Removing unnecessary images\n` +
-          `  - Increasing maxTotalImageSizeMB in DocumentOptions\n` +
-          `  - Splitting into multiple documents`
+            `(${(this.maxTotalImageSizeBytes / (1024 * 1024)).toFixed(0)}MB) after adding this image. ` +
+            `Consider:\n` +
+            `  - Compressing existing images\n` +
+            `  - Removing unnecessary images\n` +
+            `  - Increasing maxTotalImageSizeMB in DocumentOptions\n` +
+            `  - Splitting into multiple documents`
         );
       }
     } catch (error: unknown) {
@@ -309,9 +314,7 @@ export class ImageManager {
           } catch (error: unknown) {
             // Log error but continue loading other images
             const message = error instanceof Error ? error.message : String(error);
-            defaultLogger.warn(
-              `Failed to load image data: ${message}`
-            );
+            defaultLogger.warn(`Failed to load image data: ${message}`);
             loaded++; // Still count as processed
 
             if (onProgress) {
@@ -345,7 +348,9 @@ export class ImageManager {
         const data = entry.image.getImageData();
         totalSize += data.length;
       } catch (e) {
-        defaultLogger.debug(`[ImageManager] Image not loaded, skipping size count: ${entry.filename}`);
+        defaultLogger.debug(
+          `[ImageManager] Image not loaded, skipping size count: ${entry.filename}`
+        );
       }
     }
     return totalSize;
@@ -390,7 +395,7 @@ export class ImageManager {
   /**
    * Initializes nextImageNumber from already-loaded images
    * Call after parsing to prevent filename collisions
-   * 
+   *
    * **Issue #12 Fix:** Prevents collisions when adding new images after load
    */
   initializeFromLoadedImages(): void {
@@ -398,7 +403,7 @@ export class ImageManager {
 
     for (const entry of this.images.values()) {
       // Extract number from filename (e.g., "image5.png" → 5)
-      const match = /image(\d+)\./.exec(entry.filename); 
+      const match = /image(\d+)\./.exec(entry.filename);
       if (match?.[1]) {
         const num = parseInt(match[1], 10);
         if (num > maxNumber) {

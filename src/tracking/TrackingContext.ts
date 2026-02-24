@@ -17,7 +17,14 @@ import type { TableCell } from '../elements/TableCell';
 import type { Section } from '../elements/Section';
 
 /** Union of element types that can be tracked */
-export type TrackableElement = Run | Paragraph | Table | TableRow | TableCell | Section | { constructor: { name: string } };
+export type TrackableElement =
+  | Run
+  | Paragraph
+  | Table
+  | TableRow
+  | TableCell
+  | Section
+  | { constructor: { name: string } };
 
 /**
  * Pending change entry before flushing to RevisionManager
@@ -73,12 +80,7 @@ export interface TrackingContext {
    * @param oldValue - Value before the change
    * @param newValue - Value after the change
    */
-  trackRunPropertyChange(
-    run: Run,
-    property: string,
-    oldValue: unknown,
-    newValue: unknown
-  ): void;
+  trackRunPropertyChange(run: Run, property: string, oldValue: unknown, newValue: unknown): void;
 
   /**
    * Track a Paragraph property change (alignment, spacing, etc.)

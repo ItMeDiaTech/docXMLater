@@ -28,14 +28,10 @@ const OUTPUT_DIR = join(__dirname, '..', 'output');
 function createTestImageBuffer(): Buffer {
   // 1x1 transparent PNG
   return Buffer.from([
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
     0x42, 0x60, 0x82,
   ]);
 }
@@ -107,10 +103,7 @@ describe('Image Properties - Text Wrapping', () => {
       relativeHeight: 251658240,
     });
 
-    image.setPosition(
-      { anchor: 'page', offset: 914400 },
-      { anchor: 'page', offset: 914400 }
-    );
+    image.setPosition({ anchor: 'page', offset: 914400 }, { anchor: 'page', offset: 914400 });
 
     // Add image to document (registers it with ImageManager)
     doc.addImage(image);
@@ -140,10 +133,7 @@ describe('Image Properties - Text Wrapping', () => {
       allowOverlap: false,
       relativeHeight: 251658240,
     });
-    image.setPosition(
-      { anchor: 'page', alignment: 'left' },
-      { anchor: 'page', alignment: 'top' }
-    );
+    image.setPosition({ anchor: 'page', alignment: 'left' }, { anchor: 'page', alignment: 'top' });
 
     // Add image to document (registers it with ImageManager)
     doc.addImage(image);
@@ -196,7 +186,7 @@ describe('Image Properties - Positioning', () => {
 
     image.setPosition(
       { anchor: 'page', offset: 1828800 }, // 2 inches from left
-      { anchor: 'page', offset: 1828800 }  // 2 inches from top
+      { anchor: 'page', offset: 1828800 } // 2 inches from top
     );
 
     image.setAnchor({
@@ -331,10 +321,7 @@ describe('Image Properties - Anchor Configuration', () => {
       relativeHeight: 500000000,
     });
 
-    image.setPosition(
-      { anchor: 'page', offset: 914400 },
-      { anchor: 'page', offset: 914400 }
-    );
+    image.setPosition({ anchor: 'page', offset: 914400 }, { anchor: 'page', offset: 914400 });
 
     // Add image to document (registers it with ImageManager)
     doc.addImage(image);
@@ -383,8 +370,8 @@ describe('Image Properties - Cropping', () => {
     image.setCrop(-10, 150, 50, 75);
 
     const crop = image.getCrop();
-    expect(crop!.left).toBe(0);   // Clamped to 0
-    expect(crop!.top).toBe(100);  // Clamped to 100
+    expect(crop!.left).toBe(0); // Clamped to 0
+    expect(crop!.top).toBe(100); // Clamped to 100
     expect(crop!.right).toBe(50);
     expect(crop!.bottom).toBe(75);
   });
@@ -444,10 +431,7 @@ describe('Image Properties - Combined Properties', () => {
     // Set all properties
     image.setEffectExtent(25400, 25400, 25400, 25400);
     image.setWrap('square', 'bothSides', { top: 10000, bottom: 10000, left: 10000, right: 10000 });
-    image.setPosition(
-      { anchor: 'page', offset: 914400 },
-      { anchor: 'page', offset: 914400 }
-    );
+    image.setPosition({ anchor: 'page', offset: 914400 }, { anchor: 'page', offset: 914400 });
     image.setAnchor({
       behindDoc: false,
       locked: false,
@@ -663,10 +647,7 @@ describe('Image Properties - Edge Cases', () => {
       allowOverlap: false,
       relativeHeight: 251658240,
     });
-    image3.setPosition(
-      { anchor: 'page', offset: 914400 },
-      { anchor: 'page', offset: 914400 }
-    );
+    image3.setPosition({ anchor: 'page', offset: 914400 }, { anchor: 'page', offset: 914400 });
     doc.addImage(image3);
 
     // Save and reload
@@ -1039,7 +1020,10 @@ describe('Image Properties - Group B: Raw Passthrough', () => {
   it('should include spPr-effects passthrough in XML output', async () => {
     const doc = Document.create();
     const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
-    image._setRawPassthrough('spPr-effects', '<a:effectLst><a:outerShdw dist="50000" dir="5400000"><a:srgbClr val="000000"/></a:outerShdw></a:effectLst>');
+    image._setRawPassthrough(
+      'spPr-effects',
+      '<a:effectLst><a:outerShdw dist="50000" dir="5400000"><a:srgbClr val="000000"/></a:outerShdw></a:effectLst>'
+    );
     doc.addImage(image);
 
     const buffer = await doc.toBuffer();
@@ -1156,7 +1140,9 @@ describe('Image Properties - Group D: Format Detection', () => {
   });
 
   it('should detect SVG format from buffer', async () => {
-    const svgBuffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100"/></svg>');
+    const svgBuffer = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100"/></svg>'
+    );
     const image = await Image.fromBuffer(svgBuffer);
     expect(image.getExtension()).toBe('svg');
   });
@@ -1168,7 +1154,7 @@ describe('Image Properties - Group D: Format Detection', () => {
     // ' EMF' at offset 40
     emfBuffer[40] = 0x20;
     emfBuffer[41] = 0x45;
-    emfBuffer[42] = 0x4D;
+    emfBuffer[42] = 0x4d;
     emfBuffer[43] = 0x46;
     const image = await Image.fromBuffer(emfBuffer);
     expect(image.getExtension()).toBe('emf');
@@ -1176,10 +1162,10 @@ describe('Image Properties - Group D: Format Detection', () => {
 
   it('should detect WMF placeable format from buffer', async () => {
     const wmfBuffer = Buffer.alloc(22);
-    wmfBuffer[0] = 0xD7;
-    wmfBuffer[1] = 0xCD;
-    wmfBuffer[2] = 0xC6;
-    wmfBuffer[3] = 0x9A;
+    wmfBuffer[0] = 0xd7;
+    wmfBuffer[1] = 0xcd;
+    wmfBuffer[2] = 0xc6;
+    wmfBuffer[3] = 0x9a;
     const image = await Image.fromBuffer(wmfBuffer);
     expect(image.getExtension()).toBe('wmf');
   });
@@ -1196,7 +1182,7 @@ describe('Image Properties - Group D: Format Detection', () => {
     emfBuffer[0] = 0x01;
     emfBuffer[40] = 0x20;
     emfBuffer[41] = 0x45;
-    emfBuffer[42] = 0x4D;
+    emfBuffer[42] = 0x4d;
     emfBuffer[43] = 0x46;
     const image = await Image.fromBuffer(emfBuffer);
     await image.ensureDataLoaded();
@@ -1205,17 +1191,19 @@ describe('Image Properties - Group D: Format Detection', () => {
 
   it('should validate WMF image data', async () => {
     const wmfBuffer = Buffer.alloc(22);
-    wmfBuffer[0] = 0xD7;
-    wmfBuffer[1] = 0xCD;
-    wmfBuffer[2] = 0xC6;
-    wmfBuffer[3] = 0x9A;
+    wmfBuffer[0] = 0xd7;
+    wmfBuffer[1] = 0xcd;
+    wmfBuffer[2] = 0xc6;
+    wmfBuffer[3] = 0x9a;
     const image = await Image.fromBuffer(wmfBuffer);
     await image.ensureDataLoaded();
     expect(image.validateImageData().valid).toBe(true);
   });
 
   it('should detect SVG dimensions from width/height attributes', async () => {
-    const svgBuffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect/></svg>');
+    const svgBuffer = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect/></svg>'
+    );
     const image = await Image.fromBuffer(svgBuffer);
     // SVG dimensions are detected and converted to EMUs
     // If no explicit dimensions passed, it auto-detects

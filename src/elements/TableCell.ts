@@ -2,10 +2,10 @@
  * TableCell - Represents a cell in a table
  */
 
-import { formatDateForXml } from "../utils/dateFormatting";
-import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
-import { Paragraph, TextDirection } from "./Paragraph";
-import { Revision } from "./Revision";
+import { formatDateForXml } from '../utils/dateFormatting';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { Paragraph, TextDirection } from './Paragraph';
+import { Revision } from './Revision';
 import {
   BorderStyle as CommonBorderStyle,
   BorderDefinition,
@@ -15,7 +15,7 @@ import {
   ShadingPattern,
   buildShadingAttributes,
   WidthType,
-} from "./CommonTypes";
+} from './CommonTypes';
 
 // ============================================================================
 // RE-EXPORTED TYPES (for backward compatibility)
@@ -79,13 +79,13 @@ export interface CellMargins {
  * Cell width type
  * Per ECMA-376 Part 1 §17.18.87
  */
-export type CellWidthType = "auto" | "dxa" | "pct";
+export type CellWidthType = 'auto' | 'dxa' | 'pct';
 
 /**
  * Vertical merge type for cells
  * Per ECMA-376 Part 1 §17.4.85
  */
-export type VerticalMerge = "restart" | "continue";
+export type VerticalMerge = 'restart' | 'continue';
 
 /**
  * Cell formatting options
@@ -117,7 +117,7 @@ export interface CellFormatting {
 export interface RawNestedContent {
   position: number; // Content appears after this paragraph index
   xml: string; // Raw XML content
-  type: "table" | "sdt"; // Type of nested content
+  type: 'table' | 'sdt'; // Type of nested content
 }
 
 /**
@@ -328,7 +328,7 @@ export class TableCell {
    * @returns Combined text
    */
   getText(): string {
-    return this.paragraphs.map((p) => p.getText()).join("\n");
+    return this.paragraphs.map((p) => p.getText()).join('\n');
   }
 
   /**
@@ -346,8 +346,8 @@ export class TableCell {
    * console.log(`Cell has ${fields.length} fields`);
    * ```
    */
-  getFields(): (import("./Field").Field | import("./Field").ComplexField)[] {
-    const fields: (import("./Field").Field | import("./Field").ComplexField)[] = [];
+  getFields(): (import('./Field').Field | import('./Field').ComplexField)[] {
+    const fields: (import('./Field').Field | import('./Field').ComplexField)[] = [];
     for (const para of this.paragraphs) {
       fields.push(...para.getFields());
     }
@@ -377,10 +377,8 @@ export class TableCell {
    * ```
    */
   findFields(
-    predicate: (
-      field: import("./Field").Field | import("./Field").ComplexField
-    ) => boolean
-  ): (import("./Field").Field | import("./Field").ComplexField)[] {
+    predicate: (field: import('./Field').Field | import('./Field').ComplexField) => boolean
+  ): (import('./Field').Field | import('./Field').ComplexField)[] {
     return this.getFields().filter(predicate);
   }
 
@@ -528,9 +526,7 @@ export class TableCell {
 
     // Margins must be non-negative
     if (value < 0) {
-      throw new Error(
-        `Invalid ${side} margin: ${value} twips. Cell margins cannot be negative.`
-      );
+      throw new Error(`Invalid ${side} margin: ${value} twips. Cell margins cannot be negative.`);
     }
 
     // Maximum reasonable margin (1 inch = 1440 twips)
@@ -552,10 +548,10 @@ export class TableCell {
    */
   setMargins(margins: CellMargins): this {
     // Validate each margin
-    this.validateMargin(margins.top, "top");
-    this.validateMargin(margins.bottom, "bottom");
-    this.validateMargin(margins.left, "left");
-    this.validateMargin(margins.right, "right");
+    this.validateMargin(margins.top, 'top');
+    this.validateMargin(margins.bottom, 'bottom');
+    this.validateMargin(margins.left, 'left');
+    this.validateMargin(margins.right, 'right');
 
     const prev = this.formatting.margins;
     this.formatting.margins = margins;
@@ -572,7 +568,7 @@ export class TableCell {
    * @throws {Error} If margin value is negative or exceeds maximum
    */
   setAllMargins(margin: number): this {
-    this.validateMargin(margin, "all");
+    this.validateMargin(margin, 'all');
     return this.setMargins({ top: margin, bottom: margin, left: margin, right: margin });
   }
 
@@ -665,7 +661,7 @@ export class TableCell {
    * @param type - Width type: 'auto' (automatic), 'dxa' (twips), or 'pct' (percentage * 50)
    * @returns This cell for chaining
    */
-  setWidthType(width: number, type: CellWidthType = "dxa"): this {
+  setWidthType(width: number, type: CellWidthType = 'dxa'): this {
     const prevWidth = this.formatting.width;
     const prevType = this.formatting.widthType;
     this.formatting.width = width;
@@ -1016,11 +1012,7 @@ export class TableCell {
    * @param type - Type of content ('table' or 'sdt')
    * @returns This cell for chaining
    */
-  addRawNestedContent(
-    position: number,
-    xml: string,
-    type: "table" | "sdt" = "table"
-  ): this {
+  addRawNestedContent(position: number, xml: string, type: 'table' | 'sdt' = 'table'): this {
     this.rawNestedContent.push({ position, xml, type });
     return this;
   }
@@ -1038,7 +1030,7 @@ export class TableCell {
    * @returns True if cell contains nested tables stored as raw XML
    */
   hasNestedTables(): boolean {
-    return this.rawNestedContent.some((c) => c.type === "table");
+    return this.rawNestedContent.some((c) => c.type === 'table');
   }
 
   /**
@@ -1120,9 +1112,7 @@ export class TableCell {
 
       // Check if there's raw nested content positioned after this paragraph
       // If so, we should NOT remove this trailing blank as it maintains structure
-      const hasContentAfter = this.rawNestedContent.some(
-        (item) => item.position >= lastIndex
-      );
+      const hasContentAfter = this.rawNestedContent.some((item) => item.position >= lastIndex);
       if (hasContentAfter) break;
 
       this.removeParagraph(lastIndex);
@@ -1147,13 +1137,13 @@ export class TableCell {
   private isParaBlank(para: Paragraph): boolean {
     // Check for text content
     const text = para.getText().trim();
-    if (text !== "") return false;
+    if (text !== '') return false;
 
     // Check for cnfStyle (conditional formatting) - critical for shading preservation
     // Even a "blank" cnfStyle like "000000000000" is meaningful as it prevents
     // the cell from inheriting table style conditional formatting
     const cnfStyle = para.getTableConditionalStyle();
-    if (cnfStyle && cnfStyle !== "") {
+    if (cnfStyle && cnfStyle !== '') {
       return false;
     }
 
@@ -1164,54 +1154,54 @@ export class TableCell {
       const itemAny = item as unknown as Record<string, unknown>;
 
       // ImageRun check - ImageRun has getImageElement method
-      if (item && typeof itemAny.getImageElement === "function") {
+      if (item && typeof itemAny.getImageElement === 'function') {
         return false;
       }
 
       // Shape check - Shape has getShapeType method
-      if (item && typeof itemAny.getShapeType === "function") {
+      if (item && typeof itemAny.getShapeType === 'function') {
         return false;
       }
 
       // TextBox check - TextBox has getTextContent method
-      if (item && typeof itemAny.getTextContent === "function") {
+      if (item && typeof itemAny.getTextContent === 'function') {
         return false;
       }
 
       // Hyperlink check - Hyperlink has getUrl method
-      if (item && typeof itemAny.getUrl === "function") {
+      if (item && typeof itemAny.getUrl === 'function') {
         return false;
       }
 
       // Field check - Field has getInstruction method
-      if (item && typeof itemAny.getInstruction === "function") {
+      if (item && typeof itemAny.getInstruction === 'function') {
         return false;
       }
 
       // Revision check - check if revision contains meaningful content
-      if (item && typeof itemAny.getText === "function") {
+      if (item && typeof itemAny.getText === 'function') {
         const itemText = (itemAny.getText as () => string)().trim();
-        if (itemText !== "") return false;
+        if (itemText !== '') return false;
 
         // Also check if revision contains non-text elements (hyperlinks, images, shapes, textboxes)
-        if (typeof itemAny.getContent === "function") {
+        if (typeof itemAny.getContent === 'function') {
           const revContent = (itemAny.getContent as () => unknown[])();
           for (const revItem of revContent) {
             const revItemAny = revItem as Record<string, unknown>;
             // Check if revision content is a Hyperlink using duck typing (getUrl method)
-            if (revItem && typeof revItemAny.getUrl === "function") {
+            if (revItem && typeof revItemAny.getUrl === 'function') {
               return false; // Revision contains hyperlink - not blank
             }
             // Check if revision content is an ImageRun (getImageElement method)
-            if (revItem && typeof revItemAny.getImageElement === "function") {
+            if (revItem && typeof revItemAny.getImageElement === 'function') {
               return false; // Revision contains image - not blank
             }
             // Check if revision content is a Shape (getShapeType method)
-            if (revItem && typeof revItemAny.getShapeType === "function") {
+            if (revItem && typeof revItemAny.getShapeType === 'function') {
               return false; // Revision contains shape - not blank
             }
             // Check if revision content is a TextBox (getTextContent method)
-            if (revItem && typeof revItemAny.getTextContent === "function") {
+            if (revItem && typeof revItemAny.getTextContent === 'function') {
               return false; // Revision contains textbox - not blank
             }
           }
@@ -1220,21 +1210,18 @@ export class TableCell {
     }
 
     // Check for bookmarks (they count as content)
-    if (
-      para.getBookmarksStart().length > 0 ||
-      para.getBookmarksEnd().length > 0
-    ) {
+    if (para.getBookmarksStart().length > 0 || para.getBookmarksEnd().length > 0) {
       return false;
     }
 
     // Check for comments (start/end markers)
-    if (typeof para.getCommentsStart === "function") {
+    if (typeof para.getCommentsStart === 'function') {
       const commentsStart = para.getCommentsStart();
       if (commentsStart && commentsStart.length > 0) {
         return false;
       }
     }
-    if (typeof para.getCommentsEnd === "function") {
+    if (typeof para.getCommentsEnd === 'function') {
       const commentsEnd = para.getCommentsEnd();
       if (commentsEnd && commentsEnd.length > 0) {
         return false;
@@ -1289,40 +1276,36 @@ export class TableCell {
 
     // cnfStyle - conditional formatting style (MUST be first child per CT_TcPr)
     if (this.formatting.cnfStyle) {
-      tcPrChildren.push(
-        XMLBuilder.wSelf("cnfStyle", { "w:val": this.formatting.cnfStyle })
-      );
+      tcPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': this.formatting.cnfStyle }));
     }
 
     // tcW - cell width
     if (this.formatting.width !== undefined) {
       const widthAttrs: Record<string, string | number> = {
-        "w:w": this.formatting.width,
-        "w:type": this.formatting.widthType || "dxa",
+        'w:w': this.formatting.width,
+        'w:type': this.formatting.widthType || 'dxa',
       };
-      tcPrChildren.push(XMLBuilder.wSelf("tcW", widthAttrs));
+      tcPrChildren.push(XMLBuilder.wSelf('tcW', widthAttrs));
     }
 
     // gridSpan - column span
     if (this.formatting.columnSpan && this.formatting.columnSpan > 1) {
-      tcPrChildren.push(
-        XMLBuilder.wSelf("gridSpan", { "w:val": this.formatting.columnSpan })
-      );
+      tcPrChildren.push(XMLBuilder.wSelf('gridSpan', { 'w:val': this.formatting.columnSpan }));
     }
 
     // hMerge - legacy horizontal merge
     if (this.formatting.hMerge) {
-      tcPrChildren.push(XMLBuilder.wSelf("hMerge", { "w:val": this.formatting.hMerge }));
+      tcPrChildren.push(XMLBuilder.wSelf('hMerge', { 'w:val': this.formatting.hMerge }));
     }
 
     // vMerge - vertical merge
     // Per OOXML, <w:vMerge/> without val means "continue" (default).
     // Only "restart" needs an explicit w:val attribute.
     if (this.formatting.vMerge) {
-      if (this.formatting.vMerge === "restart") {
-        tcPrChildren.push(XMLBuilder.wSelf("vMerge", { "w:val": "restart" }));
+      if (this.formatting.vMerge === 'restart') {
+        tcPrChildren.push(XMLBuilder.wSelf('vMerge', { 'w:val': 'restart' }));
       } else {
-        tcPrChildren.push(XMLBuilder.wSelf("vMerge"));
+        tcPrChildren.push(XMLBuilder.wSelf('vMerge'));
       }
     }
 
@@ -1333,26 +1316,26 @@ export class TableCell {
 
       // Ordered per ECMA-376 CT_TcBorders: top, left, bottom, right, insideH, insideV, tl2br, tr2bl
       if (borders.top) {
-        borderElements.push(XMLBuilder.createBorder("top", borders.top));
+        borderElements.push(XMLBuilder.createBorder('top', borders.top));
       }
       if (borders.left) {
-        borderElements.push(XMLBuilder.createBorder("left", borders.left));
+        borderElements.push(XMLBuilder.createBorder('left', borders.left));
       }
       if (borders.bottom) {
-        borderElements.push(XMLBuilder.createBorder("bottom", borders.bottom));
+        borderElements.push(XMLBuilder.createBorder('bottom', borders.bottom));
       }
       if (borders.right) {
-        borderElements.push(XMLBuilder.createBorder("right", borders.right));
+        borderElements.push(XMLBuilder.createBorder('right', borders.right));
       }
       if (borders.tl2br) {
-        borderElements.push(XMLBuilder.createBorder("tl2br", borders.tl2br));
+        borderElements.push(XMLBuilder.createBorder('tl2br', borders.tl2br));
       }
       if (borders.tr2bl) {
-        borderElements.push(XMLBuilder.createBorder("tr2bl", borders.tr2bl));
+        borderElements.push(XMLBuilder.createBorder('tr2bl', borders.tr2bl));
       }
 
       if (borderElements.length > 0) {
-        tcPrChildren.push(XMLBuilder.w("tcBorders", undefined, borderElements));
+        tcPrChildren.push(XMLBuilder.w('tcBorders', undefined, borderElements));
       }
     }
 
@@ -1360,13 +1343,13 @@ export class TableCell {
     if (this.formatting.shading) {
       const shadingAttrs = buildShadingAttributes(this.formatting.shading);
       if (Object.keys(shadingAttrs).length > 0) {
-        tcPrChildren.push(XMLBuilder.wSelf("shd", shadingAttrs));
+        tcPrChildren.push(XMLBuilder.wSelf('shd', shadingAttrs));
       }
     }
 
     // noWrap
     if (this.formatting.noWrap) {
-      tcPrChildren.push(XMLBuilder.wSelf("noWrap"));
+      tcPrChildren.push(XMLBuilder.wSelf('noWrap'));
     }
 
     // tcMar - cell margins (ordered per CT_TcMar: top, left, bottom, right)
@@ -1376,68 +1359,68 @@ export class TableCell {
 
       if (margins.top !== undefined) {
         marginChildren.push(
-          XMLBuilder.wSelf("top", {
-            "w:w": margins.top.toString(),
-            "w:type": "dxa",
+          XMLBuilder.wSelf('top', {
+            'w:w': margins.top.toString(),
+            'w:type': 'dxa',
           })
         );
       }
       if (margins.left !== undefined) {
         marginChildren.push(
-          XMLBuilder.wSelf("left", {
-            "w:w": margins.left.toString(),
-            "w:type": "dxa",
+          XMLBuilder.wSelf('left', {
+            'w:w': margins.left.toString(),
+            'w:type': 'dxa',
           })
         );
       }
       if (margins.bottom !== undefined) {
         marginChildren.push(
-          XMLBuilder.wSelf("bottom", {
-            "w:w": margins.bottom.toString(),
-            "w:type": "dxa",
+          XMLBuilder.wSelf('bottom', {
+            'w:w': margins.bottom.toString(),
+            'w:type': 'dxa',
           })
         );
       }
       if (margins.right !== undefined) {
         marginChildren.push(
-          XMLBuilder.wSelf("right", {
-            "w:w": margins.right.toString(),
-            "w:type": "dxa",
+          XMLBuilder.wSelf('right', {
+            'w:w': margins.right.toString(),
+            'w:type': 'dxa',
           })
         );
       }
 
       if (marginChildren.length > 0) {
-        tcPrChildren.push(XMLBuilder.w("tcMar", undefined, marginChildren));
+        tcPrChildren.push(XMLBuilder.w('tcMar', undefined, marginChildren));
       }
     }
 
     // textDirection
     if (this.formatting.textDirection) {
       tcPrChildren.push(
-        XMLBuilder.wSelf("textDirection", {
-          "w:val": this.formatting.textDirection,
+        XMLBuilder.wSelf('textDirection', {
+          'w:val': this.formatting.textDirection,
         })
       );
     }
 
     // tcFitText
     if (this.formatting.fitText) {
-      tcPrChildren.push(XMLBuilder.wSelf("tcFitText"));
+      tcPrChildren.push(XMLBuilder.wSelf('tcFitText'));
     }
 
     // vAlign - vertical alignment
     if (this.formatting.verticalAlignment) {
       tcPrChildren.push(
-        XMLBuilder.wSelf("vAlign", {
-          "w:val": this.formatting.verticalAlignment,
+        XMLBuilder.wSelf('vAlign', {
+          'w:val': this.formatting.verticalAlignment,
         })
       );
     }
 
     // hideMark
     if (this.formatting.hideMark) {
-      tcPrChildren.push(XMLBuilder.wSelf("hideMark"));
+      tcPrChildren.push(XMLBuilder.wSelf('hideMark'));
     }
 
     // Note: w:headers (cell headers for accessibility) is defined in ECMA-376 Part 1 §17.4.26
@@ -1448,27 +1431,27 @@ export class TableCell {
     if (this.cellRevision) {
       const revType = this.cellRevision.getType();
       const attrs: Record<string, string | number> = {
-        "w:id": this.cellRevision.getId(),
-        "w:author": this.cellRevision.getAuthor(),
-        "w:date": formatDateForXml(this.cellRevision.getDate()),
+        'w:id': this.cellRevision.getId(),
+        'w:author': this.cellRevision.getAuthor(),
+        'w:date': formatDateForXml(this.cellRevision.getDate()),
       };
 
-      if (revType === "tableCellInsert") {
-        tcPrChildren.push(XMLBuilder.wSelf("cellIns", attrs));
-      } else if (revType === "tableCellDelete") {
-        tcPrChildren.push(XMLBuilder.wSelf("cellDel", attrs));
-      } else if (revType === "tableCellMerge") {
+      if (revType === 'tableCellInsert') {
+        tcPrChildren.push(XMLBuilder.wSelf('cellIns', attrs));
+      } else if (revType === 'tableCellDelete') {
+        tcPrChildren.push(XMLBuilder.wSelf('cellDel', attrs));
+      } else if (revType === 'tableCellMerge') {
         // Add vMerge and vMergeOrig attributes if present
         // ST_AnnotationVMerge: "cont" | "rest" (not "continue" / "restart")
-        const mergeMap: Record<string, string> = { continue: "cont", restart: "rest" };
+        const mergeMap: Record<string, string> = { continue: 'cont', restart: 'rest' };
         const prevProps = this.cellRevision.getPreviousProperties();
         if (prevProps?.vMerge) {
-          attrs["w:vMerge"] = mergeMap[prevProps.vMerge] || prevProps.vMerge;
+          attrs['w:vMerge'] = mergeMap[prevProps.vMerge] || prevProps.vMerge;
         }
         if (prevProps?.vMergeOrig) {
-          attrs["w:vMergeOrig"] = mergeMap[prevProps.vMergeOrig] || prevProps.vMergeOrig;
+          attrs['w:vMergeOrig'] = mergeMap[prevProps.vMergeOrig] || prevProps.vMergeOrig;
         }
-        tcPrChildren.push(XMLBuilder.wSelf("cellMerge", attrs));
+        tcPrChildren.push(XMLBuilder.wSelf('cellMerge', attrs));
       }
     }
 
@@ -1476,9 +1459,9 @@ export class TableCell {
     // Must be last child of w:tcPr
     if (this.tcPrChange) {
       const changeAttrs: Record<string, string | number> = {
-        "w:id": this.tcPrChange.id,
-        "w:author": this.tcPrChange.author,
-        "w:date": this.tcPrChange.date,
+        'w:id': this.tcPrChange.id,
+        'w:author': this.tcPrChange.author,
+        'w:date': this.tcPrChange.date,
       };
       const prevTcPrChildren: XMLElement[] = [];
       const prev = this.tcPrChange.previousProperties;
@@ -1486,68 +1469,83 @@ export class TableCell {
         // Ordered per CT_TcPr: tcW → tcBorders → shd → noWrap → tcMar →
         // textDirection → tcFitText → vAlign → hideMark → cnfStyle
         if (prev.width !== undefined) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("tcW", {
-            "w:w": prev.width,
-            "w:type": prev.widthType || "dxa",
-          }));
+          prevTcPrChildren.push(
+            XMLBuilder.wSelf('tcW', {
+              'w:w': prev.width,
+              'w:type': prev.widthType || 'dxa',
+            })
+          );
         }
         if (prev.borders) {
           const borderElements: XMLElement[] = [];
-          if (prev.borders.top) borderElements.push(XMLBuilder.createBorder("top", prev.borders.top));
-          if (prev.borders.left) borderElements.push(XMLBuilder.createBorder("left", prev.borders.left));
-          if (prev.borders.bottom) borderElements.push(XMLBuilder.createBorder("bottom", prev.borders.bottom));
-          if (prev.borders.right) borderElements.push(XMLBuilder.createBorder("right", prev.borders.right));
+          if (prev.borders.top)
+            borderElements.push(XMLBuilder.createBorder('top', prev.borders.top));
+          if (prev.borders.left)
+            borderElements.push(XMLBuilder.createBorder('left', prev.borders.left));
+          if (prev.borders.bottom)
+            borderElements.push(XMLBuilder.createBorder('bottom', prev.borders.bottom));
+          if (prev.borders.right)
+            borderElements.push(XMLBuilder.createBorder('right', prev.borders.right));
           if (borderElements.length > 0) {
-            prevTcPrChildren.push(XMLBuilder.w("tcBorders", undefined, borderElements));
+            prevTcPrChildren.push(XMLBuilder.w('tcBorders', undefined, borderElements));
           }
         }
         if (prev.shading) {
           const shadingAttrs = buildShadingAttributes(prev.shading);
           if (Object.keys(shadingAttrs).length > 0) {
-            prevTcPrChildren.push(XMLBuilder.wSelf("shd", shadingAttrs));
+            prevTcPrChildren.push(XMLBuilder.wSelf('shd', shadingAttrs));
           }
         }
         if (prev.noWrap) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("noWrap"));
+          prevTcPrChildren.push(XMLBuilder.wSelf('noWrap'));
         }
         if (prev.margins) {
           const marginChildren: XMLElement[] = [];
           if (prev.margins.top !== undefined) {
-            marginChildren.push(XMLBuilder.wSelf("top", { "w:w": prev.margins.top.toString(), "w:type": "dxa" }));
+            marginChildren.push(
+              XMLBuilder.wSelf('top', { 'w:w': prev.margins.top.toString(), 'w:type': 'dxa' })
+            );
           }
           if (prev.margins.left !== undefined) {
-            marginChildren.push(XMLBuilder.wSelf("left", { "w:w": prev.margins.left.toString(), "w:type": "dxa" }));
+            marginChildren.push(
+              XMLBuilder.wSelf('left', { 'w:w': prev.margins.left.toString(), 'w:type': 'dxa' })
+            );
           }
           if (prev.margins.bottom !== undefined) {
-            marginChildren.push(XMLBuilder.wSelf("bottom", { "w:w": prev.margins.bottom.toString(), "w:type": "dxa" }));
+            marginChildren.push(
+              XMLBuilder.wSelf('bottom', { 'w:w': prev.margins.bottom.toString(), 'w:type': 'dxa' })
+            );
           }
           if (prev.margins.right !== undefined) {
-            marginChildren.push(XMLBuilder.wSelf("right", { "w:w": prev.margins.right.toString(), "w:type": "dxa" }));
+            marginChildren.push(
+              XMLBuilder.wSelf('right', { 'w:w': prev.margins.right.toString(), 'w:type': 'dxa' })
+            );
           }
           if (marginChildren.length > 0) {
-            prevTcPrChildren.push(XMLBuilder.w("tcMar", undefined, marginChildren));
+            prevTcPrChildren.push(XMLBuilder.w('tcMar', undefined, marginChildren));
           }
         }
         if (prev.textDirection) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("textDirection", { "w:val": prev.textDirection }));
+          prevTcPrChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': prev.textDirection }));
         }
         if (prev.fitText) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("tcFitText"));
+          prevTcPrChildren.push(XMLBuilder.wSelf('tcFitText'));
         }
         if (prev.verticalAlignment) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("vAlign", { "w:val": prev.verticalAlignment }));
+          prevTcPrChildren.push(XMLBuilder.wSelf('vAlign', { 'w:val': prev.verticalAlignment }));
         }
         if (prev.hideMark) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("hideMark"));
+          prevTcPrChildren.push(XMLBuilder.wSelf('hideMark'));
         }
         if (prev.cnfStyle) {
-          prevTcPrChildren.push(XMLBuilder.wSelf("cnfStyle", { "w:val": prev.cnfStyle }));
+          prevTcPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': prev.cnfStyle }));
         }
       }
-      const prevTcPr = prevTcPrChildren.length > 0
-        ? XMLBuilder.w("tcPr", undefined, prevTcPrChildren)
-        : XMLBuilder.w("tcPr", undefined, []);
-      tcPrChildren.push(XMLBuilder.w("tcPrChange", changeAttrs, [prevTcPr]));
+      const prevTcPr =
+        prevTcPrChildren.length > 0
+          ? XMLBuilder.w('tcPr', undefined, prevTcPrChildren)
+          : XMLBuilder.w('tcPr', undefined, []);
+      tcPrChildren.push(XMLBuilder.w('tcPrChange', changeAttrs, [prevTcPr]));
     }
 
     // Build cell element
@@ -1555,16 +1553,14 @@ export class TableCell {
 
     // Add cell properties if there are any
     if (tcPrChildren.length > 0) {
-      cellChildren.push(XMLBuilder.w("tcPr", undefined, tcPrChildren));
+      cellChildren.push(XMLBuilder.w('tcPr', undefined, tcPrChildren));
     }
 
     // Add paragraphs and raw nested content in correct order
     // Raw nested content (tables, SDTs) are interspersed with paragraphs
     if (this.paragraphs.length > 0 || this.rawNestedContent.length > 0) {
       // Sort raw content by position
-      const sortedRaw = [...this.rawNestedContent].sort(
-        (a, b) => a.position - b.position
-      );
+      const sortedRaw = [...this.rawNestedContent].sort((a, b) => a.position - b.position);
       let rawIndex = 0;
 
       for (let i = 0; i < this.paragraphs.length; i++) {
@@ -1573,7 +1569,7 @@ export class TableCell {
         while (rawIndex < sortedRaw.length && rawItem && rawItem.position <= i) {
           // Use __rawXml element for passthrough (supported by XMLBuilder)
           cellChildren.push({
-            name: "__rawXml",
+            name: '__rawXml',
             rawXml: rawItem.xml,
           });
           rawIndex++;
@@ -1590,7 +1586,7 @@ export class TableCell {
         const rawItem = sortedRaw[rawIndex];
         if (rawItem) {
           cellChildren.push({
-            name: "__rawXml",
+            name: '__rawXml',
             rawXml: rawItem.xml,
           });
         }
@@ -1607,7 +1603,7 @@ export class TableCell {
       cellChildren.push(new Paragraph().toXML());
     }
 
-    return XMLBuilder.w("tc", undefined, cellChildren);
+    return XMLBuilder.w('tc', undefined, cellChildren);
   }
 
   /**

@@ -147,11 +147,7 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
  * // Returns: 'HYPERLINK "https://example.com/" \\l "section1" \\o "Click here" \\h'
  * ```
  */
-export function buildHyperlinkInstruction(
-  url: string,
-  anchor?: string,
-  tooltip?: string
-): string {
+export function buildHyperlinkInstruction(url: string, anchor?: string, tooltip?: string): string {
   let instruction = `HYPERLINK "${url}"`;
 
   if (anchor) {

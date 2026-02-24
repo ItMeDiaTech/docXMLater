@@ -37,10 +37,10 @@ The default paragraph style used for body text.
 - Line Spacing: Auto (276 twips)
 
 ```typescript
-import { Document } from "docxml";
+import { Document } from 'docxml';
 
 const doc = Document.create();
-doc.createParagraph("This is normal body text.").setStyle("Normal");
+doc.createParagraph('This is normal body text.').setStyle('Normal');
 ```
 
 ### Heading Styles (Heading1 through Heading9)
@@ -64,9 +64,9 @@ Nine heading levels for document structure.
 - Spacing After: 120 twips
 
 ```typescript
-doc.createParagraph("Chapter 1: Introduction").setStyle("Heading1");
-doc.createParagraph("Section 1.1").setStyle("Heading2");
-doc.createParagraph("Subsection 1.1.1").setStyle("Heading3");
+doc.createParagraph('Chapter 1: Introduction').setStyle('Heading1');
+doc.createParagraph('Section 1.1').setStyle('Heading2');
+doc.createParagraph('Subsection 1.1.1').setStyle('Heading3');
 ```
 
 ### Title Style
@@ -80,7 +80,7 @@ Large, prominent style for document titles.
 - Spacing After: 120 twips
 
 ```typescript
-doc.createParagraph("Annual Report 2025").setStyle("Title");
+doc.createParagraph('Annual Report 2025').setStyle('Title');
 ```
 
 ### Subtitle Style
@@ -95,7 +95,7 @@ Secondary title style with italic formatting.
 - Spacing After: 120 twips
 
 ```typescript
-doc.createParagraph("Q4 Financial Results").setStyle("Subtitle");
+doc.createParagraph('Q4 Financial Results').setStyle('Subtitle');
 ```
 
 ### ListParagraph Style
@@ -108,7 +108,7 @@ Style for list items (used with numbering).
 - Left Indent: 720 twips (0.5 inch)
 
 ```typescript
-doc.createParagraph("First item").setStyle("ListParagraph");
+doc.createParagraph('First item').setStyle('ListParagraph');
 ```
 
 ## Using Styles
@@ -121,11 +121,11 @@ Use the `setStyle()` method on any paragraph:
 const doc = Document.create();
 
 // Apply style by ID
-doc.createParagraph("Title Text").setStyle("Title");
-doc.createParagraph("Body text").setStyle("Normal");
-doc.createParagraph("Heading").setStyle("Heading1");
+doc.createParagraph('Title Text').setStyle('Title');
+doc.createParagraph('Body text').setStyle('Normal');
+doc.createParagraph('Heading').setStyle('Heading1');
 
-await doc.save("styled-document.docx");
+await doc.save('styled-document.docx');
 ```
 
 ### Checking if a Style Exists
@@ -133,8 +133,8 @@ await doc.save("styled-document.docx");
 Before applying a style, you can check if it exists:
 
 ```typescript
-if (doc.hasStyle("Heading1")) {
-  doc.createParagraph("My Heading").setStyle("Heading1");
+if (doc.hasStyle('Heading1')) {
+  doc.createParagraph('My Heading').setStyle('Heading1');
 }
 ```
 
@@ -143,42 +143,42 @@ if (doc.hasStyle("Heading1")) {
 Retrieve style details:
 
 ```typescript
-const heading1 = doc.getStyle("Heading1");
+const heading1 = doc.getStyle('Heading1');
 if (heading1) {
-  console.log("Style Name:", heading1.getName());
-  console.log("Style Type:", heading1.getType());
+  console.log('Style Name:', heading1.getName());
+  console.log('Style Type:', heading1.getType());
   const props = heading1.getProperties();
-  console.log("Based On:", props.basedOn);
+  console.log('Based On:', props.basedOn);
 }
 ```
 
 ### Complete Document Example
 
 ```typescript
-import { Document } from "docxml";
+import { Document } from 'docxml';
 
 const doc = Document.create({
   properties: {
-    title: "Styled Document Example",
-    creator: "DocXML",
+    title: 'Styled Document Example',
+    creator: 'DocXML',
   },
 });
 
 // Title page
-doc.createParagraph("My Professional Document").setStyle("Title");
-doc.createParagraph("A demonstration of styles").setStyle("Subtitle");
+doc.createParagraph('My Professional Document').setStyle('Title');
+doc.createParagraph('A demonstration of styles').setStyle('Subtitle');
 doc.createParagraph(); // Empty line
 
 // Chapter
-doc.createParagraph("Chapter 1: Introduction").setStyle("Heading1");
-doc.createParagraph("This is the introduction text.").setStyle("Normal");
+doc.createParagraph('Chapter 1: Introduction').setStyle('Heading1');
+doc.createParagraph('This is the introduction text.').setStyle('Normal');
 doc.createParagraph(); // Empty line
 
 // Section
-doc.createParagraph("Section 1.1: Background").setStyle("Heading2");
-doc.createParagraph("Background information here.").setStyle("Normal");
+doc.createParagraph('Section 1.1: Background').setStyle('Heading2');
+doc.createParagraph('Background information here.').setStyle('Normal');
 
-await doc.save("professional-document.docx");
+await doc.save('professional-document.docx');
 ```
 
 ## Creating Custom Styles
@@ -188,19 +188,19 @@ await doc.save("professional-document.docx");
 Create a custom paragraph style with specific formatting:
 
 ```typescript
-import { Document, Style } from "docxml";
+import { Document, Style } from 'docxml';
 
 const doc = Document.create();
 
 // Create custom style
 const customStyle = Style.create({
-  styleId: "MyCustomStyle",
-  name: "My Custom Style",
-  type: "paragraph",
-  basedOn: "Normal",
+  styleId: 'MyCustomStyle',
+  name: 'My Custom Style',
+  type: 'paragraph',
+  basedOn: 'Normal',
   customStyle: true,
   paragraphFormatting: {
-    alignment: "center",
+    alignment: 'center',
     spacing: {
       before: 240,
       after: 240,
@@ -208,7 +208,7 @@ const customStyle = Style.create({
   },
   runFormatting: {
     bold: true,
-    color: "0066CC",
+    color: '0066CC',
     size: 14,
   },
 });
@@ -217,9 +217,9 @@ const customStyle = Style.create({
 doc.addStyle(customStyle);
 
 // Use the custom style
-doc.createParagraph("Custom Styled Text").setStyle("MyCustomStyle");
+doc.createParagraph('Custom Styled Text').setStyle('MyCustomStyle');
 
-await doc.save("custom-styles.docx");
+await doc.save('custom-styles.docx');
 ```
 
 ### Custom Character Style
@@ -228,14 +228,14 @@ Character styles apply to text runs rather than entire paragraphs:
 
 ```typescript
 const charStyle = Style.create({
-  styleId: "Emphasis",
-  name: "Emphasis",
-  type: "character",
+  styleId: 'Emphasis',
+  name: 'Emphasis',
+  type: 'character',
   customStyle: true,
   runFormatting: {
     bold: true,
     italic: true,
-    color: "FF0000",
+    color: 'FF0000',
   },
 });
 
@@ -254,24 +254,24 @@ const stylesManager = doc.getStylesManager();
 
 // Create paragraph style
 const alertStyle = stylesManager.createParagraphStyle(
-  "Alert",
-  "Alert Style",
-  "Normal" // basedOn
+  'Alert',
+  'Alert Style',
+  'Normal' // basedOn
 );
 
 alertStyle.setRunFormatting({
   bold: true,
-  color: "FF0000",
+  color: 'FF0000',
   size: 12,
 });
 
 alertStyle.setParagraphFormatting({
-  alignment: "center",
+  alignment: 'center',
   spacing: { before: 120, after: 120 },
 });
 
 // Use it
-doc.createParagraph("⚠ Important Alert").setStyle("Alert");
+doc.createParagraph('⚠ Important Alert').setStyle('Alert');
 ```
 
 ## Style Inheritance
@@ -289,24 +289,24 @@ When a style is based on another style:
 ```typescript
 // Base style
 const baseStyle = Style.create({
-  styleId: "BaseText",
-  name: "Base Text",
-  type: "paragraph",
+  styleId: 'BaseText',
+  name: 'Base Text',
+  type: 'paragraph',
   runFormatting: {
-    font: "Arial",
+    font: 'Arial',
     size: 11,
   },
 });
 
 // Child style inherits font and size
 const highlightStyle = Style.create({
-  styleId: "HighlightText",
-  name: "Highlight Text",
-  type: "paragraph",
-  basedOn: "BaseText",
+  styleId: 'HighlightText',
+  name: 'Highlight Text',
+  type: 'paragraph',
+  basedOn: 'BaseText',
   runFormatting: {
     bold: true, // Added property
-    color: "FF0000", // Added property
+    color: 'FF0000', // Added property
     // font: 'Arial'   // Inherited
     // size: 11        // Inherited
   },
@@ -349,7 +349,7 @@ allStyles.forEach((style) => {
 });
 
 // Get styles by type
-const paragraphStyles = stylesManager.getStylesByType("paragraph");
+const paragraphStyles = stylesManager.getStylesByType('paragraph');
 console.log(`Paragraph styles: ${paragraphStyles.length}`);
 ```
 
@@ -358,7 +358,7 @@ console.log(`Paragraph styles: ${paragraphStyles.length}`);
 Remove custom styles (built-in styles should not be removed):
 
 ```typescript
-stylesManager.removeStyle("MyCustomStyle");
+stylesManager.removeStyle('MyCustomStyle');
 ```
 
 ### Clearing All Styles
@@ -380,11 +380,11 @@ Built-in styles ensure consistency and compatibility:
 
 ```typescript
 // ✅ Good
-doc.createParagraph("Chapter Title").setStyle("Heading1");
+doc.createParagraph('Chapter Title').setStyle('Heading1');
 
 // ❌ Avoid
-const para = doc.createParagraph("Chapter Title");
-para.addText("Chapter Title", { bold: true, size: 16, color: "2E74B5" });
+const para = doc.createParagraph('Chapter Title');
+para.addText('Chapter Title', { bold: true, size: 16, color: '2E74B5' });
 ```
 
 ### 2. Base Custom Styles on Normal
@@ -394,18 +394,18 @@ Always base custom styles on an existing style:
 ```typescript
 // ✅ Good
 Style.create({
-  styleId: "MyStyle",
-  name: "My Style",
-  type: "paragraph",
-  basedOn: "Normal", // ✅ Inherits default formatting
+  styleId: 'MyStyle',
+  name: 'My Style',
+  type: 'paragraph',
+  basedOn: 'Normal', // ✅ Inherits default formatting
   // ...
 });
 
 // ⚠️ Risky
 Style.create({
-  styleId: "MyStyle",
-  name: "My Style",
-  type: "paragraph",
+  styleId: 'MyStyle',
+  name: 'My Style',
+  type: 'paragraph',
   // No basedOn - starts from scratch
 });
 ```
@@ -414,29 +414,29 @@ Style.create({
 
 ```typescript
 // ✅ Good
-styleId: "CodeBlock";
-name: "Code Block";
+styleId: 'CodeBlock';
+name: 'Code Block';
 
 // ❌ Avoid
-styleId: "style1";
-name: "Style 1";
+styleId: 'style1';
+name: 'Style 1';
 ```
 
 ### 4. Group Related Content with Styles
 
 ```typescript
 // Document structure
-doc.createParagraph("Report").setStyle("Title");
-doc.createParagraph("Q4 2025").setStyle("Subtitle");
+doc.createParagraph('Report').setStyle('Title');
+doc.createParagraph('Q4 2025').setStyle('Subtitle');
 doc.createParagraph();
 
 // Main content
-doc.createParagraph("Executive Summary").setStyle("Heading1");
-doc.createParagraph("Summary text...").setStyle("Normal");
+doc.createParagraph('Executive Summary').setStyle('Heading1');
+doc.createParagraph('Summary text...').setStyle('Normal');
 
-doc.createParagraph("Financial Results").setStyle("Heading1");
-doc.createParagraph("Section 1.1").setStyle("Heading2");
-doc.createParagraph("Details...").setStyle("Normal");
+doc.createParagraph('Financial Results').setStyle('Heading1');
+doc.createParagraph('Section 1.1').setStyle('Heading2');
+doc.createParagraph('Details...').setStyle('Normal');
 ```
 
 ### 5. Test Styles in Microsoft Word
@@ -446,7 +446,7 @@ Always verify your styled documents in Word to ensure compatibility:
 ```typescript
 const doc = Document.create();
 // ... add content with styles ...
-await doc.save("test-styles.docx");
+await doc.save('test-styles.docx');
 // Open in Microsoft Word to verify
 ```
 
@@ -455,87 +455,87 @@ await doc.save("test-styles.docx");
 ### Example 1: Professional Report
 
 ```typescript
-import { Document } from "docxml";
+import { Document } from 'docxml';
 
 const doc = Document.create({
   properties: {
-    title: "Annual Report 2025",
-    creator: "DocXML",
-    subject: "Financial Report",
+    title: 'Annual Report 2025',
+    creator: 'DocXML',
+    subject: 'Financial Report',
   },
 });
 
 // Cover page
-doc.createParagraph("Annual Report").setStyle("Title");
-doc.createParagraph("Fiscal Year 2025").setStyle("Subtitle");
+doc.createParagraph('Annual Report').setStyle('Title');
+doc.createParagraph('Fiscal Year 2025').setStyle('Subtitle');
 doc.createParagraph();
 doc.createParagraph();
 
 // Executive Summary
-doc.createParagraph("Executive Summary").setStyle("Heading1");
-doc.createParagraph("This report summarizes...").setStyle("Normal");
+doc.createParagraph('Executive Summary').setStyle('Heading1');
+doc.createParagraph('This report summarizes...').setStyle('Normal');
 doc.createParagraph();
 
 // Chapter 1
-doc.createParagraph("Chapter 1: Financial Performance").setStyle("Heading1");
-doc.createParagraph("Section 1.1: Revenue").setStyle("Heading2");
-doc.createParagraph("Revenue increased by 15%...").setStyle("Normal");
+doc.createParagraph('Chapter 1: Financial Performance').setStyle('Heading1');
+doc.createParagraph('Section 1.1: Revenue').setStyle('Heading2');
+doc.createParagraph('Revenue increased by 15%...').setStyle('Normal');
 doc.createParagraph();
 
-doc.createParagraph("Section 1.2: Expenses").setStyle("Heading2");
-doc.createParagraph("Operating expenses...").setStyle("Normal");
+doc.createParagraph('Section 1.2: Expenses').setStyle('Heading2');
+doc.createParagraph('Operating expenses...').setStyle('Normal');
 
-await doc.save("annual-report.docx");
+await doc.save('annual-report.docx');
 ```
 
 ### Example 2: Custom Styles for Branding
 
 ```typescript
-import { Document, Style } from "docxml";
+import { Document, Style } from 'docxml';
 
 const doc = Document.create();
 
 // Create branded styles
 const brandTitle = Style.create({
-  styleId: "BrandTitle",
-  name: "Brand Title",
-  type: "paragraph",
-  basedOn: "Title",
+  styleId: 'BrandTitle',
+  name: 'Brand Title',
+  type: 'paragraph',
+  basedOn: 'Title',
   runFormatting: {
-    font: "Montserrat",
-    color: "1a237e", // Brand color
+    font: 'Montserrat',
+    color: '1a237e', // Brand color
     size: 32,
     bold: true,
   },
   paragraphFormatting: {
-    alignment: "center",
+    alignment: 'center',
     spacing: { after: 480 },
   },
 });
 
 const brandHeading = Style.create({
-  styleId: "BrandHeading",
-  name: "Brand Heading",
-  type: "paragraph",
-  basedOn: "Heading1",
+  styleId: 'BrandHeading',
+  name: 'Brand Heading',
+  type: 'paragraph',
+  basedOn: 'Heading1',
   runFormatting: {
-    font: "Montserrat",
-    color: "3949ab",
+    font: 'Montserrat',
+    color: '3949ab',
     size: 18,
   },
 });
 
 const brandBody = Style.create({
-  styleId: "BrandBody",
-  name: "Brand Body",
-  type: "paragraph",
-  basedOn: "Normal",
+  styleId: 'BrandBody',
+  name: 'Brand Body',
+  type: 'paragraph',
+  basedOn: 'Normal',
   runFormatting: {
-    font: "Open Sans",
+    font: 'Open Sans',
     size: 11,
   },
   paragraphFormatting: {
-    alignment: "justify",
+    alignment: 'justify',
     spacing: { after: 200 },
   },
 });
@@ -546,11 +546,11 @@ doc.addStyle(brandHeading);
 doc.addStyle(brandBody);
 
 // Use branded styles
-doc.createParagraph("Company Name").setStyle("BrandTitle");
-doc.createParagraph("Our Story").setStyle("BrandHeading");
-doc.createParagraph("We are a company...").setStyle("BrandBody");
+doc.createParagraph('Company Name').setStyle('BrandTitle');
+doc.createParagraph('Our Story').setStyle('BrandHeading');
+doc.createParagraph('We are a company...').setStyle('BrandBody');
 
-await doc.save("branded-document.docx");
+await doc.save('branded-document.docx');
 ```
 
 ### Example 3: Multi-Level Document Structure
@@ -559,25 +559,25 @@ await doc.save("branded-document.docx");
 const doc = Document.create();
 
 // Title
-doc.createParagraph("Technical Documentation").setStyle("Title");
-doc.createParagraph("Version 1.0").setStyle("Subtitle");
+doc.createParagraph('Technical Documentation').setStyle('Title');
+doc.createParagraph('Version 1.0').setStyle('Subtitle');
 doc.createParagraph();
 
 // Part 1
-doc.createParagraph("Part I: Getting Started").setStyle("Heading1");
-doc.createParagraph("Chapter 1: Installation").setStyle("Heading2");
-doc.createParagraph("Section 1.1: Prerequisites").setStyle("Heading3");
-doc.createParagraph("You need Node.js installed...").setStyle("Normal");
+doc.createParagraph('Part I: Getting Started').setStyle('Heading1');
+doc.createParagraph('Chapter 1: Installation').setStyle('Heading2');
+doc.createParagraph('Section 1.1: Prerequisites').setStyle('Heading3');
+doc.createParagraph('You need Node.js installed...').setStyle('Normal');
 
 // Part 2
-doc.createParagraph("Part II: Advanced Topics").setStyle("Heading1");
-doc.createParagraph("Chapter 3: Architecture").setStyle("Heading2");
-doc.createParagraph("Section 3.1: Overview").setStyle("Heading3");
-doc.createParagraph("The architecture consists of...").setStyle("Normal");
-doc.createParagraph("Subsection 3.1.1: Core Components").setStyle("Heading4");
-doc.createParagraph("Core components include...").setStyle("Normal");
+doc.createParagraph('Part II: Advanced Topics').setStyle('Heading1');
+doc.createParagraph('Chapter 3: Architecture').setStyle('Heading2');
+doc.createParagraph('Section 3.1: Overview').setStyle('Heading3');
+doc.createParagraph('The architecture consists of...').setStyle('Normal');
+doc.createParagraph('Subsection 3.1.1: Core Components').setStyle('Heading4');
+doc.createParagraph('Core components include...').setStyle('Normal');
 
-await doc.save("technical-docs.docx");
+await doc.save('technical-docs.docx');
 ```
 
 ## See Also

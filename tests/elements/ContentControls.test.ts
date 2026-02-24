@@ -3,7 +3,6 @@
  * Phase 5.2: All 9 content control types
  */
 
-
 import { StructuredDocumentTag, ListItem } from '../../src/elements/StructuredDocumentTag';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Document } from '../../src/core/Document';
@@ -290,11 +289,7 @@ describe('ContentControls - Picture', () => {
 describe('ContentControls - Building Block', () => {
   test('should create building block control', () => {
     const para = new Paragraph().addText('Building block content');
-    const sdt = StructuredDocumentTag.createBuildingBlock(
-      'Quick Parts',
-      'General',
-      [para]
-    );
+    const sdt = StructuredDocumentTag.createBuildingBlock('Quick Parts', 'General', [para]);
 
     expect(sdt.getControlType()).toBe('buildingBlock');
     expect(sdt.getBuildingBlockProperties()).toEqual({
@@ -305,11 +300,7 @@ describe('ContentControls - Building Block', () => {
 
   test('should generate correct XML for building block control', () => {
     const para = new Paragraph().addText('Building block content');
-    const sdt = StructuredDocumentTag.createBuildingBlock(
-      'Quick Parts',
-      'General',
-      [para]
-    );
+    const sdt = StructuredDocumentTag.createBuildingBlock('Quick Parts', 'General', [para]);
 
     const xml = sdt.toXML();
     const sdtPr = xml.children!.find(

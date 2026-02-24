@@ -152,7 +152,9 @@ describe('RevisionManager', () => {
       manager.register(Revision.fromText('delete', 'Bob', 'deletion1'));
       manager.register(Revision.fromText('insert', 'Alice', 'insertion2'));
       manager.register(Revision.fromText('delete', 'Carol', 'deletion2'));
-      manager.register(Revision.createRunPropertiesChange('Bob', new Run('formatted'), { b: true }));
+      manager.register(
+        Revision.createRunPropertiesChange('Bob', new Run('formatted'), { b: true })
+      );
     });
 
     it('should get all revisions', () => {
@@ -196,13 +198,13 @@ describe('RevisionManager', () => {
     it('should get all insertions', () => {
       const insertions = manager.getAllInsertions();
       expect(insertions).toHaveLength(2);
-      insertions.forEach(r => expect(r.getType()).toBe('insert'));
+      insertions.forEach((r) => expect(r.getType()).toBe('insert'));
     });
 
     it('should get all deletions', () => {
       const deletions = manager.getAllDeletions();
       expect(deletions).toHaveLength(2);
-      deletions.forEach(r => expect(r.getType()).toBe('delete'));
+      deletions.forEach((r) => expect(r.getType()).toBe('delete'));
     });
 
     it('should get all property changes', () => {
@@ -341,7 +343,9 @@ describe('RevisionManager', () => {
 
       // Formatting changes
       manager.register(Revision.createRunPropertiesChange('A', new Run('formatted'), { b: true }));
-      manager.register(Revision.createParagraphPropertiesChange('A', new Run('para'), { jc: 'center' }));
+      manager.register(
+        Revision.createParagraphPropertiesChange('A', new Run('para'), { jc: 'center' })
+      );
 
       // Structural changes
       manager.register(Revision.createMoveFrom('A', new Run('moved'), 'move-1'));
@@ -373,31 +377,41 @@ describe('RevisionManager', () => {
 
     it('should include internal tracking types in content category', () => {
       // Register internal tracking types (for changelog generation)
-      manager.register(new Revision({
-        author: 'A',
-        type: 'imageChange',
-        content: new Run('image'),
-      }));
-      manager.register(new Revision({
-        author: 'A',
-        type: 'fieldChange',
-        content: new Run('field'),
-      }));
-      manager.register(new Revision({
-        author: 'A',
-        type: 'commentChange',
-        content: new Run('comment'),
-      }));
-      manager.register(new Revision({
-        author: 'A',
-        type: 'contentControlChange',
-        content: new Run('sdt'),
-      }));
-      manager.register(new Revision({
-        author: 'A',
-        type: 'hyperlinkChange',
-        content: new Run('link'),
-      }));
+      manager.register(
+        new Revision({
+          author: 'A',
+          type: 'imageChange',
+          content: new Run('image'),
+        })
+      );
+      manager.register(
+        new Revision({
+          author: 'A',
+          type: 'fieldChange',
+          content: new Run('field'),
+        })
+      );
+      manager.register(
+        new Revision({
+          author: 'A',
+          type: 'commentChange',
+          content: new Run('comment'),
+        })
+      );
+      manager.register(
+        new Revision({
+          author: 'A',
+          type: 'contentControlChange',
+          content: new Run('sdt'),
+        })
+      );
+      manager.register(
+        new Revision({
+          author: 'A',
+          type: 'hyperlinkChange',
+          content: new Run('link'),
+        })
+      );
 
       const content = manager.getByCategory('content');
       // Original 2 (insert, delete) + 5 new internal types
@@ -405,11 +419,13 @@ describe('RevisionManager', () => {
     });
 
     it('should include bookmarkChange in structural category', () => {
-      manager.register(new Revision({
-        author: 'A',
-        type: 'bookmarkChange',
-        content: new Run('bookmark'),
-      }));
+      manager.register(
+        new Revision({
+          author: 'A',
+          type: 'bookmarkChange',
+          content: new Run('bookmark'),
+        })
+      );
 
       const structural = manager.getByCategory('structural');
       // Original 2 (moveFrom, moveTo) + 1 bookmarkChange
@@ -579,8 +595,8 @@ describe('RevisionManager', () => {
       // Simulate loading revisions with existing IDs
       // First register normally (gets ID 0), then manually override to simulate loaded state
       const rev = Revision.fromText('insert', 'A', 'text');
-      manager.register(rev);  // Gets ID 0
-      rev.setId(50);  // Simulate that this was loaded with ID 50
+      manager.register(rev); // Gets ID 0
+      rev.setId(50); // Simulate that this was loaded with ID 50
 
       // After loading, nextId is 1 but highest ID is 50
       manager.syncNextId();

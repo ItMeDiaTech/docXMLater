@@ -10,7 +10,7 @@ This guide explains how to work with images in DocXML, including basic usage, ad
 const image = await Image.fromFile('path/to/image.png', {
   width: inchesToEmus(3),
   height: inchesToEmus(2),
-  description: 'Sample image'
+  description: 'Sample image',
 });
 doc.addImage(image);
 ```
@@ -21,7 +21,7 @@ doc.addImage(image);
 const buffer = fs.readFileSync('path/to/image.png');
 const image = await Image.fromBuffer(buffer, {
   width: inchesToEmus(3),
-  height: inchesToEmus(2)
+  height: inchesToEmus(2),
 });
 doc.addImage(image);
 ```
@@ -51,7 +51,7 @@ image.setBehindText(true);
 image.setEffects({
   brightness: 20,
   contrast: 10,
-  grayscale: true
+  grayscale: true,
 });
 image.setCrop(10, 10, 10, 10); // Percentage-based cropping
 ```

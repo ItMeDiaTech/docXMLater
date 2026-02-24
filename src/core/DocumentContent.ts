@@ -5,15 +5,15 @@
  * Extracted from Document.ts for better separation of concerns.
  */
 
-import { Paragraph } from "../elements/Paragraph";
-import { Table } from "../elements/Table";
-import { Section } from "../elements/Section";
-import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
-import { TableOfContentsElement } from "../elements/TableOfContentsElement";
-import { AlternateContent } from "../elements/AlternateContent";
-import { MathParagraph } from "../elements/MathElement";
-import { CustomXmlBlock } from "../elements/CustomXml";
-import { PreservedElement } from "../elements/PreservedElement";
+import { Paragraph } from '../elements/Paragraph';
+import { Table } from '../elements/Table';
+import { Section } from '../elements/Section';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
+import { TableOfContentsElement } from '../elements/TableOfContentsElement';
+import { AlternateContent } from '../elements/AlternateContent';
+import { MathParagraph } from '../elements/MathElement';
+import { CustomXmlBlock } from '../elements/CustomXml';
+import { PreservedElement } from '../elements/PreservedElement';
 
 /**
  * Body element type - can be a Paragraph, Table, TOC, SDT, or raw XML preservation element
@@ -177,9 +177,7 @@ export class DocumentContent {
    * @returns Array of Paragraph instances in document body
    */
   getParagraphs(): Paragraph[] {
-    return this.bodyElements.filter(
-      (el): el is Paragraph => el instanceof Paragraph
-    );
+    return this.bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
   }
 
   /**
@@ -343,9 +341,7 @@ export class DocumentContent {
    * @returns This instance for chaining
    */
   clearParagraphs(): this {
-    this.bodyElements = this.bodyElements.filter(
-      (el) => !(el instanceof Paragraph)
-    );
+    this.bodyElements = this.bodyElements.filter((el) => !(el instanceof Paragraph));
     return this;
   }
 
@@ -355,9 +351,7 @@ export class DocumentContent {
    * @returns This instance for chaining
    */
   clearTables(): this {
-    this.bodyElements = this.bodyElements.filter(
-      (el) => !(el instanceof Table)
-    );
+    this.bodyElements = this.bodyElements.filter((el) => !(el instanceof Table));
     return this;
   }
 
@@ -433,7 +427,7 @@ export class DocumentContent {
     for (const paragraph of this.getAllParagraphs()) {
       const text = paragraph.getText();
       if (text) {
-        charCount += includeSpaces ? text.length : text.replace(/\s/g, "").length;
+        charCount += includeSpaces ? text.length : text.replace(/\s/g, '').length;
       }
     }
     return charCount;

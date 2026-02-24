@@ -32,7 +32,10 @@ async function createDocxWithDocumentXml(documentXml: string): Promise<Buffer> {
 /**
  * Helper: Creates a DOCX buffer with custom document.xml AND settings.xml.
  */
-async function createDocxWithDocAndSettings(documentXml: string, settingsXml: string): Promise<Buffer> {
+async function createDocxWithDocAndSettings(
+  documentXml: string,
+  settingsXml: string
+): Promise<Buffer> {
   const doc = Document.create();
   doc.addParagraph(new Paragraph().addText('placeholder'));
   const buffer = await doc.toBuffer();
@@ -133,7 +136,7 @@ const PLAIN_PARAGRAPH = `
 
 /** Settings with many RSIDs, most orphaned */
 function settingsWithRsids(rsidRoot: string, rsidValues: string[]): string {
-  const rsidElements = rsidValues.map(v => `    <w:rsid w:val="${v}"/>`).join('\n');
+  const rsidElements = rsidValues.map((v) => `    <w:rsid w:val="${v}"/>`).join('\n');
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -152,9 +155,9 @@ ${rsidElements}
 
 /** Document XML that references specific RSIDs */
 function documentWithRsids(rsidValues: string[]): string {
-  const paras = rsidValues.map(v =>
-    `    <w:p w:rsidR="${v}" w:rsidRDefault="${v}"><w:r><w:t>Content</w:t></w:r></w:p>`
-  ).join('\n');
+  const paras = rsidValues
+    .map((v) => `    <w:p w:rsidR="${v}" w:rsidRDefault="${v}"><w:r><w:t>Content</w:t></w:r></w:p>`)
+    .join('\n');
   return wrapDocXml(paras);
 }
 
@@ -163,12 +166,10 @@ function documentWithRsids(rsidValues: string[]): string {
 // =============================================================================
 
 describe('Document Sanitization', () => {
-
   // =========================================================================
   // flattenFieldCodes()
   // =========================================================================
   describe('flattenFieldCodes()', () => {
-
     it('strips single INCLUDEPICTURE field, preserves w:drawing content', async () => {
       const docXml = wrapDocXml(SINGLE_INCLUDEPICTURE);
       const buffer = await createDocxWithDocumentXml(docXml);
@@ -328,7 +329,6 @@ describe('Document Sanitization', () => {
   // stripOrphanRSIDs()
   // =========================================================================
   describe('stripOrphanRSIDs()', () => {
-
     it('removes RSIDs not referenced in document.xml', async () => {
       const referencedRsids = ['00AA1111', '00BB2222'];
       const orphanRsids = ['00CC3333', '00DD4444', '00EE5555', '00FF6666'];
@@ -464,7 +464,6 @@ describe('Document Sanitization', () => {
   // clearDirectSpacingForStyles()
   // =========================================================================
   describe('clearDirectSpacingForStyles()', () => {
-
     it('removes direct w:spacing from paragraphs with matching style', async () => {
       const bodyContent = `
     <w:p>
@@ -575,7 +574,9 @@ describe('Document Sanitization', () => {
       const resultXml = zip.getFileAsString(DOCX_PATHS.DOCUMENT)!;
 
       // Direct spacing removed
-      expect(resultXml).not.toMatch(/<w:pPr>\s*<w:pStyle w:val="Normal"\/>[\s\S]*?<w:spacing w:before="120"/);
+      expect(resultXml).not.toMatch(
+        /<w:pPr>\s*<w:pStyle w:val="Normal"\/>[\s\S]*?<w:spacing w:before="120"/
+      );
       // Historical spacing inside pPrChange preserved
       expect(resultXml).toContain('w:before="240"');
       expect(resultXml).toContain('w:after="240"');
@@ -941,7 +942,6 @@ describe('Document Sanitization', () => {
   // Combined sanitization
   // =========================================================================
   describe('Combined sanitization', () => {
-
     it('both methods chained: doc.flattenFieldCodes().stripOrphanRSIDs()', async () => {
       const referencedRsids = ['00AA1111'];
       const orphanRsids = ['00BB2222', '00CC3333'];

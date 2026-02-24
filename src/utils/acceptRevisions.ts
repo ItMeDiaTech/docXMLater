@@ -39,7 +39,7 @@ class RevisionAcceptor {
   public async acceptAllRevisions(): Promise<void> {
     // Process document.xml
     await this.processDocumentPart('word/document.xml');
-    
+
     // Process headers
     const files = this.zipHandler.getFilePaths();
     for (const file of files) {
@@ -94,8 +94,7 @@ class RevisionAcceptor {
 
     // Step 4: Convert back to XML
     const outputXml =
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      this.objectToXml(processed);
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + this.objectToXml(processed);
 
     // Step 5: Update file
     this.zipHandler.updateFile(partPath, outputXml);
@@ -176,7 +175,7 @@ class RevisionAcceptor {
     const patterns = [
       // Run property changes
       /<w:rPrChange[^>]*>[\s\S]*?<\/w:rPrChange>/g,
-      // Paragraph property changes  
+      // Paragraph property changes
       /<w:pPrChange[^>]*>[\s\S]*?<\/w:pPrChange>/g,
       // Table property changes
       /<w:tblPrChange[^>]*>[\s\S]*?<\/w:tblPrChange>/g,
@@ -202,61 +201,61 @@ class RevisionAcceptor {
 
   /**
    * Accept deletions - remove the entire <w:del> element including its content
-   * 
+   *
    * Per Microsoft SDK: "DeletedRun elements should be removed along with their content"
    */
   private acceptDeletions(xml: string): string {
     let result = xml;
     let previousLength = 0;
-    
+
     // Iterate until no more deletions (handles nested cases)
     while (result.length !== previousLength) {
       previousLength = result.length;
-      
+
       // Match complete <w:del ...>...</w:del> elements and remove entirely
       result = result.replace(/<w:del\b[^>]*>[\s\S]*?<\/w:del>/g, '');
     }
-    
+
     // Also remove self-closing deletion tags
     result = result.replace(/<w:del\b[^>]*\/>/g, '');
-    
+
     return result;
   }
 
   /**
    * Accept moveFrom - remove the entire element (source of moved content)
-   * 
+   *
    * The content exists at the moveTo destination, so we discard the source
    */
   private acceptMoveFrom(xml: string): string {
     let result = xml;
     let previousLength = 0;
-    
+
     while (result.length !== previousLength) {
       previousLength = result.length;
       result = result.replace(/<w:moveFrom\b[^>]*>[\s\S]*?<\/w:moveFrom>/g, '');
     }
-    
+
     // Also remove self-closing tags
     result = result.replace(/<w:moveFrom\b[^>]*\/>/g, '');
-    
+
     return result;
   }
 
   /**
    * Accept moveTo - keep the content, remove the wrapper tags
-   * 
+   *
    * The moveTo location is where the content should remain
    */
   private acceptMoveTo(xml: string): string {
     let result = xml;
-    
+
     // Remove closing tags first (prevents issues with regex matching)
     result = result.replace(/<\/w:moveTo>/g, '');
-    
+
     // Remove opening tags (keeps content that was inside)
     result = result.replace(/<w:moveTo\b[^>]*>/g, '');
-    
+
     return result;
   }
 
@@ -413,10 +412,10 @@ class RevisionAcceptor {
     // Remove all person elements in any namespace variant
     content = content.replace(/<w:person\b[^>]*>[\s\S]*?<\/w:person>/g, '');
     content = content.replace(/<w15:person\b[^>]*>[\s\S]*?<\/w15:person>/g, '');
-    
+
     // Handle any namespace-prefixed variants (w1:, w2:, etc.)
     content = content.replace(/<w\d+:person\b[^>]*>[\s\S]*?<\/w\d+:person>/g, '');
-    
+
     // Also remove self-closing person elements
     content = content.replace(/<w:person\b[^>]*\/>/g, '');
     content = content.replace(/<w15:person\b[^>]*\/>/g, '');
@@ -450,7 +449,10 @@ class RevisionAcceptor {
 
     // Remove doNotTrackFormatting
     content = content.replace(/<w:doNotTrackFormatting\b[^>]*\/>/g, '');
-    content = content.replace(/<w:doNotTrackFormatting\b[^>]*>[\s\S]*?<\/w:doNotTrackFormatting>/g, '');
+    content = content.replace(
+      /<w:doNotTrackFormatting\b[^>]*>[\s\S]*?<\/w:doNotTrackFormatting>/g,
+      ''
+    );
 
     this.zipHandler.updateFile('word/settings.xml', content);
   }
@@ -518,19 +520,34 @@ class RevisionAcceptor {
         element &&
         typeof element === 'object' &&
         Object.keys(element).some(
-          (k) =>
-            !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren'
+          (k) => !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren'
         );
 
       // Per ECMA-376, certain elements MUST NOT be self-closing (e.g., <w:p/> is invalid).
       // This mirrors the CANNOT_SELF_CLOSE list in XMLBuilder.ts.
       const CANNOT_SELF_CLOSE = [
-        'w:t', 'w:r', 'w:p', 'w:tbl', 'w:tr', 'w:tc', 'w:body',
-        'w:document', 'w:hyperlink', 'w:sdt', 'w:sdtContent', 'w:sdtPr',
-        'w:pPr', 'w:rPr', 'w:sectPr', 'w:del', 'w:ins', 'w:moveFrom', 'w:moveTo',
+        'w:t',
+        'w:r',
+        'w:p',
+        'w:tbl',
+        'w:tr',
+        'w:tc',
+        'w:body',
+        'w:document',
+        'w:hyperlink',
+        'w:sdt',
+        'w:sdtContent',
+        'w:sdtPr',
+        'w:pPr',
+        'w:rPr',
+        'w:sectPr',
+        'w:del',
+        'w:ins',
+        'w:moveFrom',
+        'w:moveTo',
       ];
 
-      if (!hasChildren && (!element?.['#text'])) {
+      if (!hasChildren && !element?.['#text']) {
         if (CANNOT_SELF_CLOSE.includes(tagName)) {
           xml += `></${tagName}>`;
         } else {
@@ -576,11 +593,7 @@ class RevisionAcceptor {
           } else {
             // Fallback: iterate through keys if no _orderedChildren
             for (const key of Object.keys(element)) {
-              if (
-                !key.startsWith('@_') &&
-                key !== '#text' &&
-                key !== '_orderedChildren'
-              ) {
+              if (!key.startsWith('@_') && key !== '#text' && key !== '_orderedChildren') {
                 const children = element[key];
                 if (Array.isArray(children)) {
                   for (const child of children) {
@@ -669,11 +682,7 @@ class RevisionAcceptor {
       // Check for r:embed attribute
       if (key === '@_r:embed') {
         callback(obj[key], obj, key);
-      } else if (
-        !key.startsWith('@_') &&
-        key !== '#text' &&
-        key !== '_orderedChildren'
-      ) {
+      } else if (!key.startsWith('@_') && key !== '#text' && key !== '_orderedChildren') {
         const value = obj[key];
         if (Array.isArray(value)) {
           for (const item of value) {

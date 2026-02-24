@@ -621,7 +621,7 @@ describe('Document', () => {
       const para = new Paragraph()
         .addText('Test content')
         .setPageBreakBefore(true)
-        .setKeepNext(true)     // Clears pageBreakBefore
+        .setKeepNext(true) // Clears pageBreakBefore
         .setKeepLines(true);
       doc.addParagraph(para);
 
@@ -643,10 +643,7 @@ describe('Document', () => {
     test('should preserve keepNext/keepLines when pageBreakBefore is not set', async () => {
       // Create a document without conflicts
       const doc = Document.create();
-      const para = new Paragraph()
-        .addText('Test content')
-        .setKeepNext(true)
-        .setKeepLines(true);
+      const para = new Paragraph().addText('Test content').setKeepNext(true).setKeepLines(true);
       doc.addParagraph(para);
 
       // Save and reload
@@ -671,19 +668,15 @@ describe('Document', () => {
       const para1 = new Paragraph()
         .addText('Paragraph 1')
         .setPageBreakBefore(true)
-        .setKeepNext(true);  // Clears pageBreakBefore
+        .setKeepNext(true); // Clears pageBreakBefore
       doc.addParagraph(para1);
 
       // Para 2: No conflict, just keepNext
-      const para2 = new Paragraph()
-        .addText('Paragraph 2')
-        .setKeepNext(true);
+      const para2 = new Paragraph().addText('Paragraph 2').setKeepNext(true);
       doc.addParagraph(para2);
 
       // Para 3: No conflict, just pageBreakBefore
-      const para3 = new Paragraph()
-        .addText('Paragraph 3')
-        .setPageBreakBefore(true);
+      const para3 = new Paragraph().addText('Paragraph 3').setPageBreakBefore(true);
       doc.addParagraph(para3);
 
       // Save and reload
@@ -714,8 +707,8 @@ describe('Document', () => {
         .addText('Test content')
         .setKeepNext(true)
         .setKeepLines(true)
-        .setPageBreakBefore(true)  // Can be set after
-        .setKeepNext(true);         // Call again to clear pageBreakBefore
+        .setPageBreakBefore(true) // Can be set after
+        .setKeepNext(true); // Call again to clear pageBreakBefore
       doc.addParagraph(para);
 
       // Save and reload
@@ -738,7 +731,7 @@ describe('Document', () => {
       test('should parse TOC field with double-quoted \o switch', () => {
         const doc = Document.create();
         const instruction = 'TOC \\o "1-3"';
-        
+
         // We need to access the private method for testing
         // For now, we'll verify through the internal structure
         // This test documents the expected behavior
@@ -748,7 +741,7 @@ describe('Document', () => {
       test('should parse TOC field with single-quoted \o switch', () => {
         const doc = Document.create();
         const instruction = "TOC \\o '1-3'";
-        
+
         // Verify regex matches single-quoted format
         expect(instruction).toMatch(/\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/);
       });
@@ -756,7 +749,7 @@ describe('Document', () => {
       test('should parse TOC field with unquoted \o switch', () => {
         const doc = Document.create();
         const instruction = 'TOC \\o 1-3';
-        
+
         // Verify regex matches unquoted format (this is the key fix)
         expect(instruction).toMatch(/\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/);
       });
@@ -765,7 +758,7 @@ describe('Document', () => {
         const instruction = 'TOC \\o "1-3"';
         const regex = /\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/;
         const match = instruction.match(regex);
-        
+
         expect(match).not.toBeNull();
         if (match) {
           const start = parseInt(match[1] || match[3] || match[5]!, 10);
@@ -779,7 +772,7 @@ describe('Document', () => {
         const instruction = "TOC \\o '2-4'";
         const regex = /\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/;
         const match = instruction.match(regex);
-        
+
         expect(match).not.toBeNull();
         if (match) {
           const start = parseInt(match[1] || match[3] || match[5]!, 10);
@@ -793,7 +786,7 @@ describe('Document', () => {
         const instruction = 'TOC \\o 1-3';
         const regex = /\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/;
         const match = instruction.match(regex);
-        
+
         expect(match).not.toBeNull();
         if (match) {
           const start = parseInt(match[1] || match[3] || match[5]!, 10);
@@ -807,7 +800,7 @@ describe('Document', () => {
         const instruction = 'TOC \\o   1-3';
         const regex = /\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/;
         const match = instruction.match(regex);
-        
+
         expect(match).not.toBeNull();
         if (match) {
           const start = parseInt(match[1] || match[3] || match[5]!, 10);
@@ -821,7 +814,7 @@ describe('Document', () => {
         const instruction = 'HYPERLINK \\l "anchor"';
         const regex = /\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/;
         const match = instruction.match(regex);
-        
+
         expect(match).toBeNull();
       });
 
@@ -829,7 +822,7 @@ describe('Document', () => {
         const instruction = 'TOC \\o "1-3" \\t "Heading 1,1,Heading 2,2"';
         const regex = /\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/;
         const match = instruction.match(regex);
-        
+
         expect(match).not.toBeNull();
         if (match) {
           const start = parseInt(match[1] || match[3] || match[5]!, 10);
@@ -843,7 +836,7 @@ describe('Document', () => {
         const instruction = 'TOC \\o 1-3 \\t "Heading 1,1,Heading 2,2"';
         const regex = /\\o\s+(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/;
         const match = instruction.match(regex);
-        
+
         expect(match).not.toBeNull();
         if (match) {
           const start = parseInt(match[1] || match[3] || match[5]!, 10);
@@ -858,7 +851,6 @@ describe('Document', () => {
   describe('Bookmark Helpers', () => {
     describe('addTopBookmark()', () => {
       test('should create _top bookmark when it does not exist', () => {
-
         const doc = Document.create();
 
         // Verify no _top bookmark exists yet
@@ -943,7 +935,7 @@ describe('Document', () => {
 
         // Should only have one _top bookmark
         const bookmarks = doc.getBookmarkManager().getAllBookmarks();
-        const topBookmarks = bookmarks.filter(b => b.getName() === '_top');
+        const topBookmarks = bookmarks.filter((b) => b.getName() === '_top');
         expect(topBookmarks.length).toBe(1);
 
         // Should only have one paragraph (the fallback empty paragraph with bookmark)
@@ -966,7 +958,7 @@ describe('Document', () => {
 
         // Should only have one _top bookmark
         const bookmarks = doc.getBookmarkManager().getAllBookmarks();
-        const topBookmarks = bookmarks.filter(b => b.getName() === '_top');
+        const topBookmarks = bookmarks.filter((b) => b.getName() === '_top');
         expect(topBookmarks.length).toBe(1);
 
         // Should still have only 2 paragraphs (no extra paragraphs created)
@@ -1065,7 +1057,7 @@ describe('Document', () => {
 
         // Apply formatting with preserve option enabled
         doc.applyStyles({
-          preserveBlankLinesAfterHeading2Tables: true
+          preserveBlankLinesAfterHeading2Tables: true,
         });
 
         // Get all paragraphs
@@ -1096,7 +1088,7 @@ describe('Document', () => {
 
         // Apply formatting with preserve option disabled
         doc.applyStyles({
-          preserveBlankLinesAfterHeading2Tables: false
+          preserveBlankLinesAfterHeading2Tables: false,
         });
 
         // Get body elements
@@ -1133,7 +1125,6 @@ describe('Document', () => {
         expect((blankPara as Paragraph).isPreserved()).toBe(true);
       });
     });
-
   });
 
   describe('applyStyles ListParagraph indentation validation', () => {
@@ -1217,7 +1208,7 @@ describe('Document', () => {
         type: 'insert',
         author: 'Test Author',
         content: insertedRun,
-        date: new Date()
+        date: new Date(),
       });
 
       para1.addRevision(revision);
@@ -1236,7 +1227,7 @@ describe('Document', () => {
       expect(allRevisions.length).toBeGreaterThanOrEqual(1);
 
       // Verify the revision has location info
-      const foundRevision = allRevisions.find(r => r.getAuthor() === 'Test Author');
+      const foundRevision = allRevisions.find((r) => r.getAuthor() === 'Test Author');
       expect(foundRevision).toBeDefined();
 
       reloadedDoc.dispose();
@@ -1256,7 +1247,7 @@ describe('Document', () => {
         type: 'delete',
         author: 'Reviewer',
         content: deletedRun,
-        date: new Date()
+        date: new Date(),
       });
 
       para1.addRevision(deletion);
@@ -1273,7 +1264,7 @@ describe('Document', () => {
       expect(entries.length).toBeGreaterThanOrEqual(1);
 
       // Find the deletion entry
-      const deletionEntry = entries.find(e => e.revisionType === 'delete');
+      const deletionEntry = entries.find((e) => e.revisionType === 'delete');
       expect(deletionEntry).toBeDefined();
       expect(deletionEntry?.author).toBe('Reviewer');
 
@@ -1644,7 +1635,7 @@ describe('Document', () => {
       // Load with both options - acceptRevisions should win
       const loadedDoc = await Document.loadFromBuffer(buffer, {
         acceptRevisions: true,
-        revisionHandling: 'preserve' // This should be ignored when acceptRevisions is true
+        revisionHandling: 'preserve', // This should be ignored when acceptRevisions is true
       });
 
       // Revisions should be accepted (acceptRevisions takes precedence)

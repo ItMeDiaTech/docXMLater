@@ -159,7 +159,7 @@ export class Footer {
     }
 
     // Otherwise generate from elements
-    const elementXmls = this.elements.map(el => el.toXML());
+    const elementXmls = this.elements.map((el) => el.toXML());
 
     let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     xml += '<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ';
@@ -205,7 +205,7 @@ export class Footer {
       xml += '>';
 
       if (element.children && element.children.length > 0) {
-        const hasOnlyText = element.children.every(c => typeof c === 'string');
+        const hasOnlyText = element.children.every((c) => typeof c === 'string');
 
         if (hasOnlyText) {
           // Inline text content

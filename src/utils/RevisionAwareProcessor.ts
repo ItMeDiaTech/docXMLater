@@ -20,8 +20,8 @@ import { ChangeCategory, ChangeLocation } from './ChangelogGenerator';
  * Revision handling modes for document processing.
  */
 export type RevisionHandlingMode =
-  | 'accept_all'        // Accept all revisions before processing
-  | 'preserve'          // Preserve revisions, skip conflicting operations
+  | 'accept_all' // Accept all revisions before processing
+  | 'preserve' // Preserve revisions, skip conflicting operations
   | 'preserve_and_wrap'; // Preserve revisions, wrap conflicts in new revisions
 
 /**
@@ -167,7 +167,10 @@ export class RevisionAwareProcessor {
             preservedRevisions.push(rev.getId().toString());
           }
           doc.preserveRawXml();
-          addLog('complete', `Preserved ${preservedRevisions.length} revisions (raw XML preservation enabled)`);
+          addLog(
+            'complete',
+            `Preserved ${preservedRevisions.length} revisions (raw XML preservation enabled)`
+          );
           break;
 
         case 'preserve_and_wrap':
@@ -177,7 +180,10 @@ export class RevisionAwareProcessor {
             preservedRevisions.push(rev.getId().toString());
           }
           doc.preserveRawXml();
-          addLog('info', `Will preserve and wrap conflicts for ${preservedRevisions.length} revisions`);
+          addLog(
+            'info',
+            `Will preserve and wrap conflicts for ${preservedRevisions.length} revisions`
+          );
           addLog('info', `New revisions will be authored by: ${options.author || 'Unknown'}`);
           break;
 
@@ -270,10 +276,7 @@ export class RevisionAwareProcessor {
    * @param criteria - Selection criteria
    * @returns Array of accepted revision IDs
    */
-  static acceptSelective(
-    doc: Document,
-    criteria: SelectionCriteria
-  ): string[] {
+  static acceptSelective(doc: Document, criteria: SelectionCriteria): string[] {
     const revisionManager = doc.getRevisionManager();
     if (!revisionManager) {
       return [];
@@ -295,11 +298,8 @@ export class RevisionAwareProcessor {
   /**
    * Filter revisions based on criteria.
    */
-  private static filterRevisions(
-    revisions: Revision[],
-    criteria: SelectionCriteria
-  ): Revision[] {
-    return revisions.filter(rev => {
+  private static filterRevisions(revisions: Revision[], criteria: SelectionCriteria): Revision[] {
+    return revisions.filter((rev) => {
       // Filter by IDs
       if (criteria.ids && !criteria.ids.includes(rev.getId())) {
         return false;
@@ -356,11 +356,7 @@ export class RevisionAwareProcessor {
     ) {
       return 'formatting';
     }
-    if (
-      type === 'moveFrom' ||
-      type === 'moveTo' ||
-      type === 'sectionPropertiesChange'
-    ) {
+    if (type === 'moveFrom' || type === 'moveTo' || type === 'sectionPropertiesChange') {
       return 'structural';
     }
     if (
@@ -386,11 +382,7 @@ export class RevisionAwareProcessor {
    * @param runIndex - Optional run index
    * @returns Conflicting revision or null
    */
-  static checkConflict(
-    doc: Document,
-    paragraphIndex: number,
-    runIndex?: number
-  ): Revision | null {
+  static checkConflict(doc: Document, paragraphIndex: number, runIndex?: number): Revision | null {
     const revisionManager = doc.getRevisionManager();
     if (!revisionManager) {
       return null;

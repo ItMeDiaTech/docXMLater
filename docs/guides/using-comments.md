@@ -31,38 +31,38 @@ Each comment has:
 ### Creating a Simple Comment
 
 ```typescript
-import { Document } from "docxml";
+import { Document } from 'docxml';
 
 const doc = Document.create();
 
 // Create a paragraph
-const para = doc.createParagraph("This text needs review.");
+const para = doc.createParagraph('This text needs review.');
 
 // Create and add a comment
 const comment = doc.createComment(
-  "John Smith",
-  "Please verify this information.",
-  "JS" // Optional initials
+  'John Smith',
+  'Please verify this information.',
+  'JS' // Optional initials
 );
 
 // Attach comment to paragraph
 para.addComment(comment);
 
-await doc.save("document.docx");
+await doc.save('document.docx');
 ```
 
 ### Using the Convenience Method
 
 ```typescript
 const doc = Document.create();
-const para = doc.createParagraph("Content here.");
+const para = doc.createParagraph('Content here.');
 
 // Create and attach in one step
 doc.addCommentToParagraph(
   para,
-  "Jane Doe", // Author
-  "Looks good!", // Content
-  "JD" // Initials (optional)
+  'Jane Doe', // Author
+  'Looks good!', // Content
+  'JD' // Initials (optional)
 );
 ```
 
@@ -77,12 +77,12 @@ The `CommentManager` handles all comment operations:
 const manager = doc.getCommentManager();
 
 // Create and register a comment
-const comment = manager.createComment("Author Name", "Comment text");
+const comment = manager.createComment('Author Name', 'Comment text');
 
 // Get statistics
 const stats = manager.getStats();
 console.log(`Total comments: ${stats.total}`);
-console.log(`Authors: ${stats.authors.join(", ")}`);
+console.log(`Authors: ${stats.authors.join(', ')}`);
 ```
 
 ### Document-Level API
@@ -91,7 +91,7 @@ Convenient wrapper methods on the `Document` class:
 
 ```typescript
 // Create comments
-const comment = doc.createComment("Author", "Text");
+const comment = doc.createComment('Author', 'Text');
 
 // Get all comments (top-level only)
 const comments = doc.getAllComments();
@@ -104,7 +104,7 @@ const stats = doc.getCommentStats();
 
 // Check if document has comments
 if (doc.hasComments()) {
-  console.log("Document has comments");
+  console.log('Document has comments');
 }
 ```
 
@@ -114,23 +114,16 @@ if (doc.hasComments()) {
 
 ```typescript
 const doc = Document.create();
-const para = doc.createParagraph("Project proposal text.");
+const para = doc.createParagraph('Project proposal text.');
 
 // Create main comment
-const mainComment = doc.createComment(
-  "Sarah Thompson",
-  "What is the estimated budget?"
-);
+const mainComment = doc.createComment('Sarah Thompson', 'What is the estimated budget?');
 para.addComment(mainComment);
 
 // Create replies
-doc.createReply(mainComment.getId(), "Mike Rodriguez", "Estimated at $50,000.");
+doc.createReply(mainComment.getId(), 'Mike Rodriguez', 'Estimated at $50,000.');
 
-doc.createReply(
-  mainComment.getId(),
-  "Sarah Thompson",
-  "That seems reasonable, thanks!"
-);
+doc.createReply(mainComment.getId(), 'Sarah Thompson', 'That seems reasonable, thanks!');
 ```
 
 ### Working with Comment Threads
@@ -155,15 +148,15 @@ if (thread) {
 Comments can contain formatted text with bold, italic, colors, etc.:
 
 ```typescript
-import { Comment, Run } from "docxml";
+import { Comment, Run } from 'docxml';
 
 const formattedRuns = [
-  new Run("This requires ").setBold(false),
-  new Run("urgent attention").setBold(true).setColor("FF0000"),
-  new Run(" before the deadline.").setBold(false),
+  new Run('This requires ').setBold(false),
+  new Run('urgent attention').setBold(true).setColor('FF0000'),
+  new Run(' before the deadline.').setBold(false),
 ];
 
-const comment = Comment.createFormatted("Project Manager", formattedRuns, "PM");
+const comment = Comment.createFormatted('Project Manager', formattedRuns, 'PM');
 
 // Register and attach
 doc.getCommentManager().register(comment);
@@ -174,15 +167,15 @@ para.addComment(comment);
 
 ```typescript
 const runs = [
-  new Run("Question: ").setBold(true),
-  new Run("Should we use ").setBold(false),
-  new Run("approach A").setItalic(true),
-  new Run(" or ").setBold(false),
-  new Run("approach B").setItalic(true),
-  new Run("?").setBold(false),
+  new Run('Question: ').setBold(true),
+  new Run('Should we use ').setBold(false),
+  new Run('approach A').setItalic(true),
+  new Run(' or ').setBold(false),
+  new Run('approach B').setItalic(true),
+  new Run('?').setBold(false),
 ];
 
-const comment = Comment.createFormatted("Tech Lead", runs);
+const comment = Comment.createFormatted('Tech Lead', runs);
 ```
 
 ## Comment Ranges
@@ -193,24 +186,24 @@ By default, `para.addComment()` comments the entire paragraph. For specific text
 
 ```typescript
 const para = new Paragraph();
-para.addText("Some text ");
+para.addText('Some text ');
 
 // Add comment start marker
 para.addCommentStart(comment);
-para.addText("commented portion ");
+para.addText('commented portion ');
 // Add comment end marker
 para.addCommentEnd(comment);
 
-para.addText("more text");
+para.addText('more text');
 ```
 
 ### Multiple Comments on Same Paragraph
 
 ```typescript
-const para = doc.createParagraph("This paragraph has multiple comments.");
+const para = doc.createParagraph('This paragraph has multiple comments.');
 
-const comment1 = doc.createComment("Author 1", "First comment");
-const comment2 = doc.createComment("Author 2", "Second comment");
+const comment1 = doc.createComment('Author 1', 'First comment');
+const comment2 = doc.createComment('Author 2', 'Second comment');
 
 para.addComment(comment1);
 para.addComment(comment2);
@@ -222,7 +215,7 @@ para.addComment(comment2);
 
 ```typescript
 // Search all comment content
-const results = doc.findCommentsByText("budget");
+const results = doc.findCommentsByText('budget');
 
 results.forEach((comment) => {
   console.log(`Found in comment by ${comment.getAuthor()}`);
@@ -246,11 +239,11 @@ recent.forEach((comment) => {
 const manager = doc.getCommentManager();
 
 // Get all comments by specific author
-const authorComments = manager.getCommentsByAuthor("John Smith");
+const authorComments = manager.getCommentsByAuthor('John Smith');
 
 // Get all unique authors
 const authors = manager.getAuthors();
-console.log(`Comments from: ${authors.join(", ")}`);
+console.log(`Comments from: ${authors.join(', ')}`);
 ```
 
 ### Filter by Date
@@ -258,8 +251,8 @@ console.log(`Comments from: ${authors.join(", ")}`);
 ```typescript
 const manager = doc.getCommentManager();
 
-const startDate = new Date("2024-01-01");
-const endDate = new Date("2024-12-31");
+const startDate = new Date('2024-01-01');
+const endDate = new Date('2024-12-31');
 
 const comments = manager.getCommentsByDateRange(startDate, endDate);
 console.log(`Comments in 2024: ${comments.length}`);
@@ -472,11 +465,11 @@ In `[Content_Types].xml`:
 
 ```typescript
 try {
-  const comment = doc.createComment("Author", "Text");
+  const comment = doc.createComment('Author', 'Text');
   para.addComment(comment);
-  await doc.save("document.docx");
+  await doc.save('document.docx');
 } catch (error) {
-  console.error("Failed to add comment:", error);
+  console.error('Failed to add comment:', error);
 }
 ```
 
@@ -486,9 +479,9 @@ try {
 // Verify parent exists before creating reply
 const parentId = mainComment.getId();
 if (doc.getComment(parentId)) {
-  const reply = doc.createReply(parentId, "Author", "Reply text");
+  const reply = doc.createReply(parentId, 'Author', 'Reply text');
 } else {
-  console.error("Parent comment not found");
+  console.error('Parent comment not found');
 }
 ```
 
@@ -497,118 +490,102 @@ if (doc.getComment(parentId)) {
 ### Example 1: Document Review Workflow
 
 ```typescript
-import { Document } from "docxml";
+import { Document } from 'docxml';
 
 const doc = Document.create({
   properties: {
-    title: "Quarterly Report - Draft",
-    creator: "Marketing Team",
+    title: 'Quarterly Report - Draft',
+    creator: 'Marketing Team',
   },
 });
 
 // Add content
 const execSummary = doc.createParagraph(
-  "Q4 results show significant growth across all departments."
+  'Q4 results show significant growth across all departments.'
 );
 
 // Reviewer 1 comments
 const comment1 = doc.createComment(
-  "Alice Johnson",
-  "Great work! Can we add specific percentage numbers?",
-  "AJ"
+  'Alice Johnson',
+  'Great work! Can we add specific percentage numbers?',
+  'AJ'
 );
 execSummary.addComment(comment1);
 
 // Reviewer 2 replies
 doc.createReply(
   comment1.getId(),
-  "Bob Williams",
-  "I agree. I will add the figures by tomorrow.",
-  "BW"
+  'Bob Williams',
+  'I agree. I will add the figures by tomorrow.',
+  'BW'
 );
 
-await doc.save("review-draft.docx");
+await doc.save('review-draft.docx');
 ```
 
 ### Example 2: Multi-Author Discussion
 
 ```typescript
 const doc = Document.create();
-const para = doc.createParagraph("Proposed timeline: 6 months");
+const para = doc.createParagraph('Proposed timeline: 6 months');
 
 // Start discussion
-const mainComment = doc.createComment(
-  "Project Manager",
-  "Can we shorten to 4 months?",
-  "PM"
-);
+const mainComment = doc.createComment('Project Manager', 'Can we shorten to 4 months?', 'PM');
 para.addComment(mainComment);
 
 // Multiple replies
-doc.createReply(
-  mainComment.getId(),
-  "Tech Lead",
-  "That would require additional resources."
-);
+doc.createReply(mainComment.getId(), 'Tech Lead', 'That would require additional resources.');
 
-doc.createReply(
-  mainComment.getId(),
-  "Project Manager",
-  "Let me check resource availability."
-);
+doc.createReply(mainComment.getId(), 'Project Manager', 'Let me check resource availability.');
 
-doc.createReply(
-  mainComment.getId(),
-  "Finance",
-  "We can allocate 2 more developers if needed."
-);
+doc.createReply(mainComment.getId(), 'Finance', 'We can allocate 2 more developers if needed.');
 
-await doc.save("project-discussion.docx");
+await doc.save('project-discussion.docx');
 ```
 
 ### Example 3: Formatted Technical Comments
 
 ```typescript
-import { Document, Comment, Run } from "docxml";
+import { Document, Comment, Run } from 'docxml';
 
 const doc = Document.create();
-const codePara = doc.createParagraph("function processData(input) { ... }");
+const codePara = doc.createParagraph('function processData(input) { ... }');
 
 // Create formatted comment
 const commentRuns = [
-  new Run("Critical: ").setBold(true).setColor("FF0000"),
-  new Run("This function needs ").setBold(false),
-  new Run("error handling").setItalic(true),
-  new Run(" for null inputs.").setBold(false),
+  new Run('Critical: ').setBold(true).setColor('FF0000'),
+  new Run('This function needs ').setBold(false),
+  new Run('error handling').setItalic(true),
+  new Run(' for null inputs.').setBold(false),
 ];
 
-const comment = Comment.createFormatted("Code Reviewer", commentRuns, "CR");
+const comment = Comment.createFormatted('Code Reviewer', commentRuns, 'CR');
 
 doc.getCommentManager().register(comment);
 codePara.addComment(comment);
 
-await doc.save("code-review.docx");
+await doc.save('code-review.docx');
 ```
 
 ### Example 4: Comment Analysis
 
 ```typescript
 // Load existing document
-const doc = await Document.load("reviewed-document.docx");
+const doc = await Document.load('reviewed-document.docx');
 
 // Analyze comments
 const stats = doc.getCommentStats();
 console.log(`Total comments: ${stats.total}`);
 console.log(`Top-level: ${stats.topLevel}, Replies: ${stats.replies}`);
-console.log(`Authors: ${stats.authors.join(", ")}`);
+console.log(`Authors: ${stats.authors.join(', ')}`);
 
 // Find unresolved issues
-const urgent = doc.findCommentsByText("urgent");
+const urgent = doc.findCommentsByText('urgent');
 console.log(`Urgent items: ${urgent.length}`);
 
 // Get recent activity
 const recent = doc.getRecentComments(10);
-console.log("Recent comments:");
+console.log('Recent comments:');
 recent.forEach((comment) => {
   console.log(`  ${comment.getAuthor()}: ${comment.getText()}`);
 });
@@ -619,42 +596,33 @@ recent.forEach((comment) => {
 ### Comments with Bookmarks
 
 ```typescript
-const bookmark = doc.createBookmark("ImportantSection");
-const para = doc.createParagraph("Critical information here");
+const bookmark = doc.createBookmark('ImportantSection');
+const para = doc.createParagraph('Critical information here');
 para.addBookmark(bookmark);
 
-const comment = doc.createComment(
-  "Reviewer",
-  "This section references bookmark: ImportantSection"
-);
+const comment = doc.createComment('Reviewer', 'This section references bookmark: ImportantSection');
 para.addComment(comment);
 ```
 
 ### Comments with Track Changes
 
 ```typescript
-const para = doc.createParagraph("Original text");
+const para = doc.createParagraph('Original text');
 
 // Add tracked deletion
-doc.trackDeletion(para, "Editor", "removed text");
+doc.trackDeletion(para, 'Editor', 'removed text');
 
 // Add comment about the change
-const comment = doc.createComment(
-  "Editor",
-  "Removed redundant text as per style guide"
-);
+const comment = doc.createComment('Editor', 'Removed redundant text as per style guide');
 para.addComment(comment);
 ```
 
 ### Comments with Styles
 
 ```typescript
-const para = doc.createParagraph("Heading Text").setStyle("Heading1");
+const para = doc.createParagraph('Heading Text').setStyle('Heading1');
 
-const comment = doc.createComment(
-  "Designer",
-  "Consider using Heading2 for better hierarchy"
-);
+const comment = doc.createComment('Designer', 'Consider using Heading2 for better hierarchy');
 para.addComment(comment);
 ```
 
@@ -686,15 +654,15 @@ para.addComment(comment);
 // docx library
 new Paragraph({
   children: [
-    new TextRun("text"),
+    new TextRun('text'),
     new CommentRangeStart(0),
     // ...
   ],
 });
 
 // DocXML
-const para = doc.createParagraph("text");
-const comment = doc.createComment("Author", "Comment text");
+const para = doc.createParagraph('text');
+const comment = doc.createComment('Author', 'Comment text');
 para.addComment(comment);
 ```
 
@@ -709,8 +677,8 @@ paragraph.add_comment(comment)
 
 ```typescript
 // DocXML
-const para = doc.createParagraph("text");
-const comment = doc.createComment("author", "text");
+const para = doc.createParagraph('text');
+const comment = doc.createComment('author', 'text');
 para.addComment(comment);
 ```
 

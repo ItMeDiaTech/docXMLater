@@ -26,7 +26,7 @@ describe('Run Advanced Properties - Round Trip Tests', () => {
 
   describe('RTL (Right-to-Left)', () => {
     it('should set RTL text direction', () => {
-      const run = new Run('مرحبا');  // Arabic text
+      const run = new Run('مرحبا'); // Arabic text
       run.setRTL();
 
       expect(run.getFormatting().rtl).toBe(true);
@@ -206,7 +206,7 @@ describe('Run Advanced Properties - Round Trip Tests', () => {
       const run = new Run('中文');
       run.setEastAsianLayout({
         combine: true,
-        combineBrackets: 'round'
+        combineBrackets: 'round',
       });
 
       const formatting = run.getFormatting();
@@ -223,8 +223,8 @@ describe('Run Advanced Properties - Round Trip Tests', () => {
           vert: true,
           vertCompress: true,
           combine: true,
-          combineBrackets: 'square'
-        }
+          combineBrackets: 'square',
+        },
       });
       doc.addParagraph(para);
 

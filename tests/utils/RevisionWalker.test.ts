@@ -40,10 +40,7 @@ describe('RevisionWalker', () => {
           'w:p': {
             'w:ins': {
               '@_w:id': '0',
-              'w:r': [
-                { 'w:t': { '#text': 'First' } },
-                { 'w:t': { '#text': 'Second' } },
-              ],
+              'w:r': [{ 'w:t': { '#text': 'First' } }, { 'w:t': { '#text': 'Second' } }],
               _orderedChildren: [
                 { type: 'w:r', index: 0 },
                 { type: 'w:r', index: 1 },
@@ -154,10 +151,7 @@ describe('RevisionWalker', () => {
       it('should preserve sibling runs when removing w:del', () => {
         const input = {
           'w:p': {
-            'w:r': [
-              { 'w:t': { '#text': 'Before' } },
-              { 'w:t': { '#text': 'After' } },
-            ],
+            'w:r': [{ 'w:t': { '#text': 'Before' } }, { 'w:t': { '#text': 'After' } }],
             'w:del': {
               '@_w:id': '0',
               'w:r': { 'w:delText': { '#text': 'Deleted' } },
@@ -406,9 +400,7 @@ describe('RevisionWalker', () => {
         // _orderedChildren should be updated
         expect(result['w:p']._orderedChildren).toBeDefined();
         // Should not contain w:ins
-        const hasIns = result['w:p']._orderedChildren.some(
-          (c: any) => c.type === 'w:ins'
-        );
+        const hasIns = result['w:p']._orderedChildren.some((c: any) => c.type === 'w:ins');
         expect(hasIns).toBe(false);
       });
 
@@ -430,9 +422,7 @@ describe('RevisionWalker', () => {
         const result = RevisionWalker.processTree(input) as any;
 
         expect(result['w:p']._orderedChildren).toBeDefined();
-        const hasDel = result['w:p']._orderedChildren.some(
-          (c: any) => c.type === 'w:del'
-        );
+        const hasDel = result['w:p']._orderedChildren.some((c: any) => c.type === 'w:del');
         expect(hasDel).toBe(false);
       });
     });
@@ -649,9 +639,7 @@ describe('RevisionWalker', () => {
     });
 
     it('should identify range markers as revision elements', () => {
-      expect(RevisionWalker.isRevisionElement('w:moveFromRangeStart')).toBe(
-        true
-      );
+      expect(RevisionWalker.isRevisionElement('w:moveFromRangeStart')).toBe(true);
       expect(RevisionWalker.isRevisionElement('w:moveToRangeEnd')).toBe(true);
     });
 

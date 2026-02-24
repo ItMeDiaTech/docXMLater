@@ -11,26 +11,25 @@
  * 7. widthType / cellSpacingType - Width type definitions
  */
 
+import { Table } from '../../src/elements/Table';
+import { Document } from '../../src/core/Document';
+import * as path from 'path';
 
-import { Table } from "../../src/elements/Table";
-import { Document } from "../../src/core/Document";
-import * as path from "path";
-
-describe("Table Properties Batch 1 - Table-Level Properties", () => {
-  describe("Table Positioning (tblpPr)", () => {
-    test("should set and serialize absolute positioning", async () => {
+describe('Table Properties Batch 1 - Table-Level Properties', () => {
+  describe('Table Positioning (tblpPr)', () => {
+    test('should set and serialize absolute positioning', async () => {
       const table = new Table(2, 3);
       table.setPosition({
         x: 1440, // 1 inch
         y: 2880, // 2 inches
         horizontalAnchor: 'page',
-        verticalAnchor: 'page'
+        verticalAnchor: 'page',
       });
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-pos-absolute.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-pos-absolute.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -45,19 +44,19 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(pos!.verticalAnchor).toBe('page');
     });
 
-    test("should set and serialize relative positioning with alignment", async () => {
+    test('should set and serialize relative positioning with alignment', async () => {
       const table = new Table(2, 2);
       table.setPosition({
         horizontalAlignment: 'center',
         verticalAlignment: 'top',
         horizontalAnchor: 'margin',
-        verticalAnchor: 'page'
+        verticalAnchor: 'page',
       });
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-pos-relative.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-pos-relative.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -72,7 +71,7 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(pos!.verticalAnchor).toBe('page');
     });
 
-    test("should set and serialize positioning with text distances", async () => {
+    test('should set and serialize positioning with text distances', async () => {
       const table = new Table(3, 3);
       table.setPosition({
         x: 720,
@@ -82,13 +81,13 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
         leftFromText: 144,
         rightFromText: 144,
         topFromText: 144,
-        bottomFromText: 144
+        bottomFromText: 144,
       });
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-pos-distances.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-pos-distances.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -103,15 +102,15 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
     });
   });
 
-  describe("Table Overlap (tblOverlap)", () => {
-    test("should set and serialize overlap=true", async () => {
+  describe('Table Overlap (tblOverlap)', () => {
+    test('should set and serialize overlap=true', async () => {
       const table = new Table(2, 2);
       table.setOverlap(true);
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-overlap-true.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-overlap-true.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -120,14 +119,14 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(table2!.getFormatting().overlap).toBe(true);
     });
 
-    test("should set and serialize overlap=false", async () => {
+    test('should set and serialize overlap=false', async () => {
       const table = new Table(2, 2);
       table.setOverlap(false);
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-overlap-false.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-overlap-false.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -137,15 +136,15 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
     });
   });
 
-  describe("Bidirectional Visual Layout (bidiVisual)", () => {
-    test("should set and serialize bidiVisual=true", async () => {
+  describe('Bidirectional Visual Layout (bidiVisual)', () => {
+    test('should set and serialize bidiVisual=true', async () => {
       const table = new Table(2, 3);
       table.setBidiVisual(true);
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-bidi.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-bidi.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -154,14 +153,14 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(table2!.getFormatting().bidiVisual).toBe(true);
     });
 
-    test("should handle undefined bidiVisual (default LTR)", () => {
+    test('should handle undefined bidiVisual (default LTR)', () => {
       const table = new Table(2, 2);
       expect(table.getFormatting().bidiVisual).toBeUndefined();
     });
   });
 
-  describe("Table Grid (Column Widths)", () => {
-    test("should set and serialize table grid with custom widths", async () => {
+  describe('Table Grid (Column Widths)', () => {
+    test('should set and serialize table grid with custom widths', async () => {
       const table = new Table(2, 3);
       // 3 columns: 2 inches, 3 inches, 1.5 inches
       table.setTableGrid([2880, 4320, 2160]);
@@ -169,7 +168,7 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-grid.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-grid.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -184,14 +183,14 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(grid![2]).toBe(2160);
     });
 
-    test("should handle varying column widths", async () => {
+    test('should handle varying column widths', async () => {
       const table = new Table(3, 4);
       table.setTableGrid([1440, 2880, 1440, 2160]);
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-grid-varying.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-grid-varying.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -207,63 +206,63 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
     });
   });
 
-  describe("Accessibility Properties", () => {
-    test("should set and serialize table caption", async () => {
+  describe('Accessibility Properties', () => {
+    test('should set and serialize table caption', async () => {
       const table = new Table(3, 3);
-      table.setCaption("Q4 Sales Data");
+      table.setCaption('Q4 Sales Data');
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-caption.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-caption.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
       const table2 = doc2.getTables()[0];
       expect(table2).toBeDefined();
-      expect(table2!.getFormatting().caption).toBe("Q4 Sales Data");
+      expect(table2!.getFormatting().caption).toBe('Q4 Sales Data');
     });
 
-    test("should set and serialize table description", async () => {
+    test('should set and serialize table description', async () => {
       const table = new Table(2, 4);
-      table.setDescription("This table shows quarterly sales figures broken down by region");
+      table.setDescription('This table shows quarterly sales figures broken down by region');
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-description.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-description.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
       const table2 = doc2.getTables()[0];
       expect(table2).toBeDefined();
       expect(table2!.getFormatting().description).toBe(
-        "This table shows quarterly sales figures broken down by region"
+        'This table shows quarterly sales figures broken down by region'
       );
     });
 
-    test("should set and serialize both caption and description", async () => {
+    test('should set and serialize both caption and description', async () => {
       const table = new Table(2, 2);
-      table.setCaption("Product Comparison");
-      table.setDescription("Comparison of product features across different models");
+      table.setCaption('Product Comparison');
+      table.setDescription('Comparison of product features across different models');
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-caption-description.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-caption-description.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
       const table2 = doc2.getTables()[0];
-      expect(table2!.getFormatting().caption).toBe("Product Comparison");
+      expect(table2!.getFormatting().caption).toBe('Product Comparison');
       expect(table2!.getFormatting().description).toBe(
-        "Comparison of product features across different models"
+        'Comparison of product features across different models'
       );
     });
   });
 
-  describe("Width and Spacing Types", () => {
-    test("should set and serialize table width with type", async () => {
+  describe('Width and Spacing Types', () => {
+    test('should set and serialize table width with type', async () => {
       const table = new Table(2, 3);
       table.setWidth(5000);
       table.setWidthType('pct'); // percentage
@@ -271,7 +270,7 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-width-type.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-width-type.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -281,7 +280,7 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(table2!.getFormatting().widthType).toBe('pct');
     });
 
-    test("should set and serialize cell spacing with type", async () => {
+    test('should set and serialize cell spacing with type', async () => {
       const table = new Table(2, 2);
       table.setCellSpacing(100);
       table.setCellSpacingType('dxa');
@@ -289,7 +288,7 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-cell-spacing-type.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-cell-spacing-type.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -305,7 +304,7 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-width-default-type.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-width-default-type.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -315,8 +314,8 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
     });
   });
 
-  describe("Combined Properties", () => {
-    test("should handle multiple properties together", async () => {
+  describe('Combined Properties', () => {
+    test('should handle multiple properties together', async () => {
       const table = new Table(3, 4);
 
       // Set all batch 1 properties
@@ -324,20 +323,20 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
         horizontalAlignment: 'center',
         verticalAlignment: 'top',
         horizontalAnchor: 'margin',
-        verticalAnchor: 'page'
+        verticalAnchor: 'page',
       });
       table.setOverlap(false);
       table.setBidiVisual(false);
       table.setTableGrid([2000, 3000, 2000, 2500]);
-      table.setCaption("Comprehensive Test Table");
-      table.setDescription("Testing all Batch 1 properties together");
+      table.setCaption('Comprehensive Test Table');
+      table.setDescription('Testing all Batch 1 properties together');
       table.setWidthType('dxa');
       table.setCellSpacingType('dxa');
 
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-table-batch1-combined.docx");
+      const outputPath = path.join(__dirname, '../output/test-table-batch1-combined.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -348,29 +347,29 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(table2!.getFormatting().position).toBeDefined();
       expect(table2!.getFormatting().overlap).toBe(false);
       expect(table2!.getFormatting().tableGrid).toHaveLength(4);
-      expect(table2!.getFormatting().caption).toBe("Comprehensive Test Table");
-      expect(table2!.getFormatting().description).toBe("Testing all Batch 1 properties together");
+      expect(table2!.getFormatting().caption).toBe('Comprehensive Test Table');
+      expect(table2!.getFormatting().description).toBe('Testing all Batch 1 properties together');
     });
 
-    test("should preserve properties through multiple save/load cycles", async () => {
+    test('should preserve properties through multiple save/load cycles', async () => {
       const table = new Table(2, 3);
       table.setPosition({ x: 1440, y: 1440, horizontalAnchor: 'page', verticalAnchor: 'page' });
       table.setOverlap(true);
       table.setTableGrid([2880, 2880, 2880]);
-      table.setCaption("Multi-cycle Test");
+      table.setCaption('Multi-cycle Test');
 
       const doc1 = Document.create();
       doc1.addTable(table);
 
       // First save
-      const path1 = path.join(__dirname, "../output/test-table-cycle1.docx");
+      const path1 = path.join(__dirname, '../output/test-table-cycle1.docx');
       await doc1.save(path1);
 
       // First load
       const doc2 = await Document.load(path1);
 
       // Second save
-      const path2 = path.join(__dirname, "../output/test-table-cycle2.docx");
+      const path2 = path.join(__dirname, '../output/test-table-cycle2.docx');
       await doc2.save(path2);
 
       // Second load
@@ -381,18 +380,18 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(finalTable!.getFormatting().position!.x).toBe(1440);
       expect(finalTable!.getFormatting().overlap).toBe(true);
       expect(finalTable!.getFormatting().tableGrid).toHaveLength(3);
-      expect(finalTable!.getFormatting().caption).toBe("Multi-cycle Test");
+      expect(finalTable!.getFormatting().caption).toBe('Multi-cycle Test');
     });
   });
 
-  describe("XML Structure Validation", () => {
-    test("should generate correct XML for positioning", () => {
+  describe('XML Structure Validation', () => {
+    test('should generate correct XML for positioning', () => {
       const table = new Table(2, 2);
       table.setPosition({
         x: 1000,
         y: 2000,
         horizontalAnchor: 'page',
-        verticalAnchor: 'margin'
+        verticalAnchor: 'margin',
       });
 
       const xml = table.toXML();
@@ -405,7 +404,7 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(xmlStr).toContain('2000');
     });
 
-    test("should generate correct XML for overlap", () => {
+    test('should generate correct XML for overlap', () => {
       const table = new Table(2, 2);
       table.setOverlap(false);
 
@@ -416,7 +415,7 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(xmlStr).toContain('"never"');
     });
 
-    test("should generate correct XML for bidiVisual", () => {
+    test('should generate correct XML for bidiVisual', () => {
       const table = new Table(2, 2);
       table.setBidiVisual(true);
 
@@ -426,10 +425,10 @@ describe("Table Properties Batch 1 - Table-Level Properties", () => {
       expect(xmlStr).toContain('"w:bidiVisual"');
     });
 
-    test("should generate correct XML for caption and description", () => {
+    test('should generate correct XML for caption and description', () => {
       const table = new Table(2, 2);
-      table.setCaption("Test Caption");
-      table.setDescription("Test Description");
+      table.setCaption('Test Caption');
+      table.setDescription('Test Description');
 
       const xml = table.toXML();
       const xmlStr = JSON.stringify(xml);

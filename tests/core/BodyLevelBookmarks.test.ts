@@ -9,7 +9,6 @@
  * and attach them to the NEXT parsed element (mirroring bookmarkEnd → PREVIOUS).
  */
 
-
 import { Document } from '../../src/core/Document';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 
@@ -50,7 +49,6 @@ async function createMinimalDocx(documentXml: string): Promise<Buffer> {
 }
 
 describe('Body-Level Bookmark Round-Trip', () => {
-
   it('should preserve body-level bookmarkStart elements', async () => {
     // Body-level bookmarkStart between two paragraphs
     const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -132,7 +130,7 @@ describe('Body-Level Bookmark Round-Trip', () => {
     const starts = secondPara.getBookmarksStart();
     expect(starts.length).toBe(3);
 
-    const names = starts.map(b => b.getName()).sort();
+    const names = starts.map((b) => b.getName()).sort();
     expect(names).toEqual(['_Heading_3', '_Next_Day', '_PAR_Process']);
 
     // The bookmarkEnds should be attached to the second paragraph (body-level → previous)

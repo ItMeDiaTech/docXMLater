@@ -14,16 +14,15 @@
  * 2. Field content exists AND tracking is enabled (mergeConsecutiveHyperlinks)
  */
 
+import { join } from 'path';
+import { promises as fs } from 'fs';
+import { Document } from '../../src/core/Document';
+import { Paragraph } from '../../src/elements/Paragraph';
+import { Hyperlink } from '../../src/elements/Hyperlink';
+import { Run } from '../../src/elements/Run';
+import { ZipHandler } from '../../src/zip/ZipHandler';
 
-import { join } from "path";
-import { promises as fs } from "fs";
-import { Document } from "../../src/core/Document";
-import { Paragraph } from "../../src/elements/Paragraph";
-import { Hyperlink } from "../../src/elements/Hyperlink";
-import { Run } from "../../src/elements/Run";
-import { ZipHandler } from "../../src/zip/ZipHandler";
-
-const OUTPUT_DIR = join(__dirname, "../output");
+const OUTPUT_DIR = join(__dirname, '../output');
 
 // Ensure output directory exists
 beforeAll(async () => {
@@ -42,7 +41,7 @@ async function createDocxFromXml(documentXml: string): Promise<Buffer> {
 
   // [Content_Types].xml
   zipHandler.addFile(
-    "[Content_Types].xml",
+    '[Content_Types].xml',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -53,7 +52,7 @@ async function createDocxFromXml(documentXml: string): Promise<Buffer> {
 
   // _rels/.rels
   zipHandler.addFile(
-    "_rels/.rels",
+    '_rels/.rels',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
@@ -62,14 +61,14 @@ async function createDocxFromXml(documentXml: string): Promise<Buffer> {
 
   // word/_rels/document.xml.rels
   zipHandler.addFile(
-    "word/_rels/document.xml.rels",
+    'word/_rels/document.xml.rels',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 </Relationships>`
   );
 
   // word/document.xml
-  zipHandler.addFile("word/document.xml", documentXml);
+  zipHandler.addFile('word/document.xml', documentXml);
 
   return await zipHandler.toBuffer();
 }
@@ -85,26 +84,26 @@ function getContentStructure(paragraph: Paragraph): string[] {
     if (!item) continue;
     const typeName = item.constructor.name;
 
-    if (typeName === "Run") {
+    if (typeName === 'Run') {
       const run = item as any;
       const runContent = run.getContent();
-      const fieldChar = runContent.find((c: any) => c.type === "fieldChar");
+      const fieldChar = runContent.find((c: any) => c.type === 'fieldChar');
       if (fieldChar) {
         structure.push(`[${fieldChar.fieldCharType}]`);
-      } else if (runContent.some((c: any) => c.type === "instructionText")) {
-        structure.push("[instr]");
-      } else if (runContent.some((c: any) => c.type === "text")) {
-        structure.push("[text]");
+      } else if (runContent.some((c: any) => c.type === 'instructionText')) {
+        structure.push('[instr]');
+      } else if (runContent.some((c: any) => c.type === 'text')) {
+        structure.push('[text]');
       } else {
-        structure.push("[run]");
+        structure.push('[run]');
       }
-    } else if (typeName === "Revision") {
+    } else if (typeName === 'Revision') {
       const rev = item as any;
       structure.push(`{${rev.getType()} id=${rev.getId()}}`);
-    } else if (typeName === "ComplexField") {
-      structure.push("<ComplexField>");
-    } else if (typeName === "Hyperlink") {
-      structure.push("<Hyperlink>");
+    } else if (typeName === 'ComplexField') {
+      structure.push('<ComplexField>');
+    } else if (typeName === 'Hyperlink') {
+      structure.push('<Hyperlink>');
     } else {
       structure.push(`<${typeName}>`);
     }
@@ -113,27 +112,27 @@ function getContentStructure(paragraph: Paragraph): string[] {
   return structure;
 }
 
-describe("Hyperlink Defragmentation with Revisions", () => {
-  describe("Document.defragmentHyperlinks guard", () => {
-    it("should return 0 and skip defragmentation when track changes is enabled", async () => {
+describe('Hyperlink Defragmentation with Revisions', () => {
+  describe('Document.defragmentHyperlinks guard', () => {
+    it('should return 0 and skip defragmentation when track changes is enabled', async () => {
       // Create a document with hyperlinks
       const doc = Document.create();
       const para = doc.createParagraph();
       para.addHyperlink(
         new Hyperlink({
-          url: "https://example.com",
-          text: "Part 1",
+          url: 'https://example.com',
+          text: 'Part 1',
         })
       );
       para.addHyperlink(
         new Hyperlink({
-          url: "https://example.com",
-          text: " Part 2",
+          url: 'https://example.com',
+          text: ' Part 2',
         })
       );
 
       // Enable track changes
-      doc.enableTrackChanges({ author: "Test Author" });
+      doc.enableTrackChanges({ author: 'Test Author' });
 
       // Call defragmentHyperlinks - should skip and return 0
       const mergedCount = doc.defragmentHyperlinks();
@@ -143,20 +142,20 @@ describe("Hyperlink Defragmentation with Revisions", () => {
       doc.dispose();
     });
 
-    it("should defragment normally when track changes is not enabled", async () => {
+    it('should defragment normally when track changes is not enabled', async () => {
       // Create a document with consecutive hyperlinks (same URL)
       const doc = Document.create();
       const para = doc.createParagraph();
       para.addHyperlink(
         new Hyperlink({
-          url: "https://example.com",
-          text: "Part 1",
+          url: 'https://example.com',
+          text: 'Part 1',
         })
       );
       para.addHyperlink(
         new Hyperlink({
-          url: "https://example.com",
-          text: " Part 2",
+          url: 'https://example.com',
+          text: ' Part 2',
         })
       );
 
@@ -171,8 +170,8 @@ describe("Hyperlink Defragmentation with Revisions", () => {
     });
   });
 
-  describe("Field structure preservation", () => {
-    it("should preserve complex field structure when track changes is enabled", async () => {
+  describe('Field structure preservation', () => {
+    it('should preserve complex field structure when track changes is enabled', async () => {
       // Create document with HYPERLINK complex field structure
       // This simulates what Template_UI sees when processing theSource documents
       const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -195,7 +194,7 @@ describe("Hyperlink Defragmentation with Revisions", () => {
 
       const buffer = await createDocxFromXml(docXml);
       const doc = await Document.loadFromBuffer(buffer, {
-        revisionHandling: "preserve",
+        revisionHandling: 'preserve',
       });
 
       // Get initial structure
@@ -204,7 +203,7 @@ describe("Hyperlink Defragmentation with Revisions", () => {
       const initialStructure = getContentStructure(paragraphs[0]!);
 
       // Enable track changes
-      doc.enableTrackChanges({ author: "Doc Hub" });
+      doc.enableTrackChanges({ author: 'Doc Hub' });
 
       // Call defragmentHyperlinks - should skip due to guard
       const mergedCount = doc.defragmentHyperlinks();
@@ -218,7 +217,7 @@ describe("Hyperlink Defragmentation with Revisions", () => {
       doc.dispose();
     });
 
-    it("should not place revisions after field END marker", async () => {
+    it('should not place revisions after field END marker', async () => {
       // This is the specific bug pattern from theSource hyperlinks
       // Original: [begin] {ins} [separate] {ins} [end]
       // Bug:      [begin] {ins} [separate] [end] {ins}  <-- ins AFTER end!
@@ -239,11 +238,11 @@ describe("Hyperlink Defragmentation with Revisions", () => {
 
       const buffer = await createDocxFromXml(docXml);
       const doc = await Document.loadFromBuffer(buffer, {
-        revisionHandling: "preserve",
+        revisionHandling: 'preserve',
       });
 
       // Enable track changes BEFORE defragment
-      doc.enableTrackChanges({ author: "Doc Hub" });
+      doc.enableTrackChanges({ author: 'Doc Hub' });
 
       // Defragment should skip
       const mergedCount = doc.defragmentHyperlinks();
@@ -252,20 +251,18 @@ describe("Hyperlink Defragmentation with Revisions", () => {
       // Save and reload to verify structure
       const savedBuffer = await doc.toBuffer();
       const reloadedDoc = await Document.loadFromBuffer(savedBuffer, {
-        revisionHandling: "preserve",
+        revisionHandling: 'preserve',
       });
 
       const paragraphs = reloadedDoc.getParagraphs();
       const structure = getContentStructure(paragraphs[0]!);
 
       // Verify no revision appears after [end]
-      const endIdx = structure.findIndex((s) => s === "[end]");
+      const endIdx = structure.findIndex((s) => s === '[end]');
       if (endIdx !== -1 && endIdx < structure.length - 1) {
         // Check if anything after [end] is a revision
         const afterEnd = structure.slice(endIdx + 1);
-        const hasRevisionAfterEnd = afterEnd.some(
-          (s) => s.startsWith("{") && s.endsWith("}")
-        );
+        const hasRevisionAfterEnd = afterEnd.some((s) => s.startsWith('{') && s.endsWith('}'));
         expect(hasRevisionAfterEnd).toBe(false);
       }
 
@@ -274,25 +271,21 @@ describe("Hyperlink Defragmentation with Revisions", () => {
     });
   });
 
-  describe("Order of operations", () => {
-    it("should allow defragment before enableTrackChanges", async () => {
+  describe('Order of operations', () => {
+    it('should allow defragment before enableTrackChanges', async () => {
       // This is the recommended order: defragment THEN enable tracking
       const doc = Document.create();
       const para = doc.createParagraph();
 
       // Add fragmented hyperlinks
-      para.addHyperlink(
-        new Hyperlink({ url: "https://example.com", text: "First " })
-      );
-      para.addHyperlink(
-        new Hyperlink({ url: "https://example.com", text: "Second" })
-      );
+      para.addHyperlink(new Hyperlink({ url: 'https://example.com', text: 'First ' }));
+      para.addHyperlink(new Hyperlink({ url: 'https://example.com', text: 'Second' }));
 
       // Defragment first (tracking not enabled)
       const mergedCount = doc.defragmentHyperlinks();
 
       // Then enable track changes
-      doc.enableTrackChanges({ author: "Test" });
+      doc.enableTrackChanges({ author: 'Test' });
 
       // Defragmentation should have worked
       // The exact merge count depends on implementation details
@@ -301,13 +294,13 @@ describe("Hyperlink Defragmentation with Revisions", () => {
       doc.dispose();
     });
 
-    it("should log warning when skipping due to track changes", async () => {
+    it('should log warning when skipping due to track changes', async () => {
       // This test verifies the guard behavior
       const doc = Document.create();
-      doc.createParagraph("Test content");
+      doc.createParagraph('Test content');
 
       // Enable track changes first
-      doc.enableTrackChanges({ author: "Test" });
+      doc.enableTrackChanges({ author: 'Test' });
 
       // Defragment should return 0 (skipped)
       const mergedCount = doc.defragmentHyperlinks();
@@ -318,8 +311,8 @@ describe("Hyperlink Defragmentation with Revisions", () => {
     });
   });
 
-  describe("Complex field with revisions round-trip", () => {
-    it("should preserve theSource hyperlink structure through round-trip", async () => {
+  describe('Complex field with revisions round-trip', () => {
+    it('should preserve theSource hyperlink structure through round-trip', async () => {
       // Simulates the exact pattern from Original_16.docx theSource links
       const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -347,7 +340,7 @@ describe("Hyperlink Defragmentation with Revisions", () => {
 
       const buffer = await createDocxFromXml(docXml);
       const doc = await Document.loadFromBuffer(buffer, {
-        revisionHandling: "preserve",
+        revisionHandling: 'preserve',
       });
 
       const paragraphs = doc.getParagraphs();
@@ -357,7 +350,7 @@ describe("Hyperlink Defragmentation with Revisions", () => {
       const initialStructure = getContentStructure(paragraphs[0]!);
 
       // Enable track changes
-      doc.enableTrackChanges({ author: "Doc Hub" });
+      doc.enableTrackChanges({ author: 'Doc Hub' });
 
       // Defragment - should be skipped
       doc.defragmentHyperlinks();
@@ -368,7 +361,7 @@ describe("Hyperlink Defragmentation with Revisions", () => {
       // Save and reload
       const savedBuffer = await doc.toBuffer();
       const reloadedDoc = await Document.loadFromBuffer(savedBuffer, {
-        revisionHandling: "preserve",
+        revisionHandling: 'preserve',
       });
 
       const reloadedParagraphs = reloadedDoc.getParagraphs();
@@ -376,11 +369,11 @@ describe("Hyperlink Defragmentation with Revisions", () => {
 
       // The structure may have changed through serialization/parsing
       // but no revision should appear AFTER the [end] marker
-      const endIdx = finalStructure.findIndex((s) => s === "[end]");
+      const endIdx = finalStructure.findIndex((s) => s === '[end]');
       if (endIdx !== -1) {
         const afterEnd = finalStructure.slice(endIdx + 1);
         const revisionsAfterEnd = afterEnd.filter(
-          (s) => s.startsWith("{insert") || s.startsWith("{delete")
+          (s) => s.startsWith('{insert') || s.startsWith('{delete')
         );
         expect(revisionsAfterEnd.length).toBe(0);
       }

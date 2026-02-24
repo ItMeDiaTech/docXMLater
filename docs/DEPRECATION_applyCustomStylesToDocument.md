@@ -20,7 +20,7 @@
 
 ```typescript
 // Line 3130
-para.setStyle("CustomHeader1"); // ← Style doesn't exist!
+para.setStyle('CustomHeader1'); // ← Style doesn't exist!
 ```
 
 The method sets paragraph style references to `CustomHeader1`, `CustomHeader2`, etc., but **NEVER creates these style definitions** in the StylesManager or [`styles.xml`](../src/core/Document.ts:1392).
@@ -91,16 +91,16 @@ doc.applyCustomFormattingToExistingStyles();
 // Or customize
 doc.applyCustomFormattingToExistingStyles({
   heading1: {
-    run: { font: "Verdana", size: 18, bold: true },
+    run: { font: 'Verdana', size: 18, bold: true },
     paragraph: { spacing: { after: 240 } },
   },
   heading2: {
-    run: { font: "Verdana", size: 14, bold: true },
-    tableOptions: { shading: "BFBFBF", marginLeft: 115 },
+    run: { font: 'Verdana', size: 14, bold: true },
+    tableOptions: { shading: 'BFBFBF', marginLeft: 115 },
   },
   normal: {
     run: {
-      font: "Verdana",
+      font: 'Verdana',
       size: 12,
       preserveBold: true, // Keep user's bold
       preserveItalic: true, // Keep user's italic
@@ -120,9 +120,9 @@ doc.applyCustomFormattingToExistingStyles({
 doc.applyCustomFormattingToExistingStyles({
   normal: {
     run: {
-      font: "Arial",
+      font: 'Arial',
       size: 11,
-      color: "000000",
+      color: '000000',
       // Preserve user's intentional emphasis
       preserveBold: true,
       preserveItalic: true,

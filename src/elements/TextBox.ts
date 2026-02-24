@@ -16,7 +16,7 @@ import {
   ImageAnchor,
   PositionAnchor,
   HorizontalAlignment,
-  VerticalAlignment
+  VerticalAlignment,
 } from './Image';
 import { BorderDefinition } from './Paragraph';
 
@@ -742,10 +742,8 @@ export class TextBox {
             name: 'w:txbxContent',
             children: [
               XMLBuilder.w('p', undefined, [
-                XMLBuilder.w('r', undefined, [
-                  XMLBuilder.w('t', undefined, [''])
-                ])
-              ])
+                XMLBuilder.w('r', undefined, [XMLBuilder.w('t', undefined, [''])]),
+              ]),
             ],
           },
         ],
@@ -753,7 +751,7 @@ export class TextBox {
     }
 
     // Convert paragraphs to XML
-    const paragraphXml = this.paragraphs.map(p => p.toXML());
+    const paragraphXml = this.paragraphs.map((p) => p.toXML());
 
     return {
       name: 'wps:txbx',

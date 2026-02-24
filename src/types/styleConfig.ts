@@ -40,7 +40,7 @@ export interface StyleRunFormatting {
  */
 export interface StyleParagraphFormatting {
   /** Text alignment */
-  alignment?: "left" | "center" | "right" | "justify";
+  alignment?: 'left' | 'center' | 'right' | 'justify';
 
   /** Spacing configuration */
   spacing?: {
@@ -54,7 +54,7 @@ export interface StyleParagraphFormatting {
     line?: number;
 
     /** How to interpret the line spacing value */
-    lineRule?: "auto" | "exact" | "atLeast";
+    lineRule?: 'auto' | 'exact' | 'atLeast';
   };
 
   /** Indentation configuration */

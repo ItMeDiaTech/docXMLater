@@ -91,7 +91,7 @@ export const LEGACY_COMPAT_ELEMENTS: string[] = [
  * for efficient lookup during parsing and filtering.
  */
 export const LEGACY_COMPAT_ELEMENT_NAMES = new Set<string>(
-  LEGACY_COMPAT_ELEMENTS.map(e => e.replace('w:', ''))
+  LEGACY_COMPAT_ELEMENTS.map((e) => e.replace('w:', ''))
 );
 
 import type { CompatSetting } from '../types/compatibility-types';

@@ -184,8 +184,7 @@ export class BookmarkManager {
 
       // Truncate base name to leave room for suffix within 40-char limit
       const maxBase = maxLength - suffix.length;
-      const truncatedBase =
-        baseName.length > maxBase ? baseName.substring(0, maxBase) : baseName;
+      const truncatedBase = baseName.length > maxBase ? baseName.substring(0, maxBase) : baseName;
 
       const uniqueName = `${truncatedBase}${suffix}`;
 
@@ -195,9 +194,7 @@ export class BookmarkManager {
       counter++;
     }
 
-    throw new Error(
-      `Could not generate unique bookmark name from base "${baseName}"`
-    );
+    throw new Error(`Could not generate unique bookmark name from base "${baseName}"`);
   }
 
   /**

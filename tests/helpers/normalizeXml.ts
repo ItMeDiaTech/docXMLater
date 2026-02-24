@@ -26,8 +26,8 @@ export function normalizeXml(xml: string): string {
   // Trim lines
   normalized = normalized
     .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
     .join('\n');
 
   return normalized;

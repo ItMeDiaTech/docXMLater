@@ -155,7 +155,7 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
         author: 'John Doe',
         date: '2025-10-23T12:00:00Z',
         id: '1',
-        previousProperties: { alignment: 'justify' }  // Required for valid OOXML
+        previousProperties: { alignment: 'justify' }, // Required for valid OOXML
       });
 
       doc.addParagraph(para);
@@ -182,8 +182,8 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
         id: '2',
         previousProperties: {
           alignment: 'left',
-          spacing: { before: 120 }
-        }
+          spacing: { before: 120 },
+        },
       });
 
       doc.addParagraph(para);
@@ -232,7 +232,7 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
         author: 'Test User',
         date: '2025-10-23T16:00:00Z',
         id: '3',
-        previousProperties: { alignment: 'left' }  // Required for valid OOXML
+        previousProperties: { alignment: 'left' }, // Required for valid OOXML
       });
 
       doc.addParagraph(para);
@@ -260,7 +260,7 @@ describe('Paragraph - Style & Conditional Properties (Batch 4)', () => {
         author: 'Cycle Tester',
         date: '2025-10-23T18:00:00Z',
         id: '99',
-        previousProperties: { alignment: 'center' }  // Required for valid OOXML
+        previousProperties: { alignment: 'center' }, // Required for valid OOXML
       });
 
       doc.addParagraph(para);

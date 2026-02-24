@@ -94,9 +94,10 @@ describe('Word Compatibility - Track Changes', () => {
       );
 
       // Get all children that are XMLElements
-      const rPrChildren = rPr?.children?.filter(
-        (c): c is XMLElement => typeof c === 'object' && c.name !== undefined
-      ) || [];
+      const rPrChildren =
+        rPr?.children?.filter(
+          (c): c is XMLElement => typeof c === 'object' && c.name !== undefined
+        ) || [];
 
       // w:rPrChange should be the last element
       expect(rPrChildren.length).toBeGreaterThan(0);

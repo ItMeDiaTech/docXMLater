@@ -7,11 +7,11 @@
  * - File order matters for Microsoft Word compatibility
  */
 
-import JSZip from "jszip";
-import { promises as fs } from "fs";
-import { ZipFile, FileMap, SaveOptions, AddFileOptions } from "./types";
-import { FileOperationError } from "./errors";
-import { validateDocxStructure, normalizePath } from "../utils/validation";
+import JSZip from 'jszip';
+import { promises as fs } from 'fs';
+import { ZipFile, FileMap, SaveOptions, AddFileOptions } from './types';
+import { FileOperationError } from './errors';
+import { validateDocxStructure, normalizePath } from '../utils/validation';
 
 /**
  * Handles writing operations on ZIP archives with DOCX-specific compliance
@@ -46,7 +46,7 @@ export class ZipWriter {
    */
   private validatePathSecurity(path: string): void {
     // Check for path traversal attacks
-    if (path.includes("..")) {
+    if (path.includes('..')) {
       throw new Error(
         `Security error: Path "${path}" contains path traversal sequence "..". ` +
           `This could be an attempt to write files outside the archive.`
@@ -54,7 +54,7 @@ export class ZipWriter {
     }
 
     // Check for absolute paths (even after normalization)
-    if (path.startsWith("/") || /^[a-zA-Z]:/.test(path)) {
+    if (path.startsWith('/') || /^[a-zA-Z]:/.test(path)) {
       throw new Error(
         `Security error: Path "${path}" is an absolute path. ` +
           `Only relative paths are allowed in ZIP archives.`
@@ -62,7 +62,7 @@ export class ZipWriter {
     }
 
     // Check for null bytes (can be used to truncate paths)
-    if (path.includes("\0")) {
+    if (path.includes('\0')) {
       throw new Error(
         `Security error: Path "${path}" contains null byte. ` +
           `This could be an attempt to exploit path handling.`
@@ -78,16 +78,8 @@ export class ZipWriter {
     }
   }
 
-  addFile(
-    filePath: string,
-    content: string | Buffer,
-    options: AddFileOptions = {}
-  ): void {
-    const {
-      binary = Buffer.isBuffer(content),
-      compression = 6,
-      date = new Date(),
-    } = options;
+  addFile(filePath: string, content: string | Buffer, options: AddFileOptions = {}): void {
+    const { binary = Buffer.isBuffer(content), compression = 6, date = new Date() } = options;
 
     const normalizedPath = normalizePath(filePath);
 
@@ -97,18 +89,14 @@ export class ZipWriter {
     // Convert string content to UTF-8 Buffer if not already binary
     // This ensures consistent UTF-8 encoding regardless of system locale
     let processedContent = content;
-    if (typeof content === "string") {
+    if (typeof content === 'string') {
       // Explicitly encode string as UTF-8 Buffer
-      processedContent = Buffer.from(content, "utf8");
+      processedContent = Buffer.from(content, 'utf8');
     }
 
     // DOCX REQUIREMENT: [Content_Types].xml MUST be uncompressed (STORE)
-    const isContentTypes = normalizedPath === "[Content_Types].xml";
-    const useCompression = isContentTypes
-      ? "STORE"
-      : compression > 0
-      ? "DEFLATE"
-      : "STORE";
+    const isContentTypes = normalizedPath === '[Content_Types].xml';
+    const useCompression = isContentTypes ? 'STORE' : compression > 0 ? 'DEFLATE' : 'STORE';
     const compressionLevel = isContentTypes ? 0 : compression;
 
     // For text content (XML), this ensures UTF-8 encoding is preserved
@@ -233,32 +221,32 @@ export class ZipWriter {
 
     return paths.sort((a, b) => {
       // Priority 1: [Content_Types].xml MUST be first (CRITICAL for MS Word)
-      if (a === "[Content_Types].xml") return -1;
-      if (b === "[Content_Types].xml") return 1;
+      if (a === '[Content_Types].xml') return -1;
+      if (b === '[Content_Types].xml') return 1;
 
       // Priority 2: Root relationships
-      if (a === "_rels/.rels") return -1;
-      if (b === "_rels/.rels") return 1;
+      if (a === '_rels/.rels') return -1;
+      if (b === '_rels/.rels') return 1;
 
       // Priority 3: Document properties
-      const aIsDocProps = a.startsWith("docProps/");
-      const bIsDocProps = b.startsWith("docProps/");
+      const aIsDocProps = a.startsWith('docProps/');
+      const bIsDocProps = b.startsWith('docProps/');
       if (aIsDocProps && !bIsDocProps) return -1;
       if (!aIsDocProps && bIsDocProps) return 1;
 
       // Priority 4: word/_rels/document.xml.rels
-      if (a === "word/_rels/document.xml.rels") return -1;
-      if (b === "word/_rels/document.xml.rels") return 1;
+      if (a === 'word/_rels/document.xml.rels') return -1;
+      if (b === 'word/_rels/document.xml.rels') return 1;
 
       // Priority 5: word/document.xml
-      if (a === "word/document.xml") return -1;
-      if (b === "word/document.xml") return 1;
+      if (a === 'word/document.xml') return -1;
+      if (b === 'word/document.xml') return 1;
 
       // Priority 6: Other word/ folder files (before relationships)
-      const aIsWordRels = a.startsWith("word/_rels/");
-      const bIsWordRels = b.startsWith("word/_rels/");
-      const aIsWord = a.startsWith("word/") && !aIsWordRels;
-      const bIsWord = b.startsWith("word/") && !bIsWordRels;
+      const aIsWordRels = a.startsWith('word/_rels/');
+      const bIsWordRels = b.startsWith('word/_rels/');
+      const aIsWord = a.startsWith('word/') && !aIsWordRels;
+      const bIsWord = b.startsWith('word/') && !bIsWordRels;
 
       if (aIsWord && !bIsWord && !bIsWordRels) return -1;
       if (!aIsWord && bIsWord && !aIsWordRels) return 1;
@@ -309,12 +297,8 @@ export class ZipWriter {
         const processedContent = file.content as Buffer;
 
         // DOCX REQUIREMENT: [Content_Types].xml MUST be uncompressed
-        const isContentTypes = path === "[Content_Types].xml";
-        const useCompression = isContentTypes
-          ? "STORE"
-          : compression > 0
-          ? "DEFLATE"
-          : "STORE";
+        const isContentTypes = path === '[Content_Types].xml';
+        const useCompression = isContentTypes ? 'STORE' : compression > 0 ? 'DEFLATE' : 'STORE';
         const compressionLevel = isContentTypes ? 0 : compression;
 
         orderedZip.file(path, processedContent, {
@@ -329,8 +313,8 @@ export class ZipWriter {
 
       // Generate ZIP with the ordered files
       const buffer = await orderedZip.generateAsync({
-        type: "nodebuffer",
-        compression: compression > 0 ? "DEFLATE" : "STORE",
+        type: 'nodebuffer',
+        compression: compression > 0 ? 'DEFLATE' : 'STORE',
         compressionOptions: {
           level: compression,
         },
@@ -340,7 +324,7 @@ export class ZipWriter {
       return buffer;
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
-      throw new FileOperationError("generate", err.message);
+      throw new FileOperationError('generate', err.message);
     }
   }
 
@@ -358,7 +342,7 @@ export class ZipWriter {
         throw error;
       }
       const err = error instanceof Error ? error : new Error(String(error));
-      throw new FileOperationError("save", err.message);
+      throw new FileOperationError('save', err.message);
     }
   }
 

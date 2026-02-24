@@ -117,7 +117,7 @@ export class Footnote {
    * Gets the text content of the footnote
    */
   getText(): string {
-    return this.paragraphs.map(p => p.getText()).join('\n');
+    return this.paragraphs.map((p) => p.getText()).join('\n');
   }
 
   /**
@@ -137,14 +137,18 @@ export class Footnote {
     // Separator types require specific child elements per ECMA-376
     if (this.type === FootnoteType.Separator) {
       // <w:p><w:r><w:separator/></w:r></w:p>
-      children.push(XMLBuilder.w('p', undefined, [
-        XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('separator')])
-      ]));
+      children.push(
+        XMLBuilder.w('p', undefined, [
+          XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('separator')]),
+        ])
+      );
     } else if (this.type === FootnoteType.ContinuationSeparator) {
       // <w:p><w:r><w:continuationSeparator/></w:r></w:p>
-      children.push(XMLBuilder.w('p', undefined, [
-        XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('continuationSeparator')])
-      ]));
+      children.push(
+        XMLBuilder.w('p', undefined, [
+          XMLBuilder.w('r', undefined, [XMLBuilder.wSelf('continuationSeparator')]),
+        ])
+      );
     } else {
       // Add paragraphs
       for (const para of this.paragraphs) {
@@ -180,7 +184,7 @@ export class Footnote {
   static createSeparator(id: number): Footnote {
     const footnote = new Footnote({
       id,
-      type: FootnoteType.Separator
+      type: FootnoteType.Separator,
     });
     // Separator typically has a horizontal line
     footnote.createParagraph();
@@ -196,7 +200,7 @@ export class Footnote {
   static createContinuationSeparator(id: number): Footnote {
     return new Footnote({
       id,
-      type: FootnoteType.ContinuationSeparator
+      type: FootnoteType.ContinuationSeparator,
     });
   }
 
@@ -209,7 +213,7 @@ export class Footnote {
   static createContinuationNotice(id: number, text = 'Continued...'): Footnote {
     const footnote = new Footnote({
       id,
-      type: FootnoteType.ContinuationNotice
+      type: FootnoteType.ContinuationNotice,
     });
     footnote.createParagraph(text);
     return footnote;

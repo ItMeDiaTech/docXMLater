@@ -11,7 +11,7 @@ import { optimizePng, convertBmpToPng, optimizeImage } from '../../src/images/Im
 // Test Helpers — Synthetic Image Builders
 // =============================================================================
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /** CRC-32 for building valid PNG chunks in tests */
 function crc32(buf: Buffer): number {
@@ -19,15 +19,15 @@ function crc32(buf: Buffer): number {
   for (let n = 0; n < 256; n++) {
     let c = n;
     for (let k = 0; k < 8; k++) {
-      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
     }
     table[n] = c;
   }
-  let crc = 0xFFFFFFFF;
+  let crc = 0xffffffff;
   for (let i = 0; i < buf.length; i++) {
-    crc = table[(crc ^ buf[i]!) & 0xFF]! ^ (crc >>> 8);
+    crc = table[(crc ^ buf[i]!) & 0xff]! ^ (crc >>> 8);
   }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
 function buildChunk(type: string, data: Buffer): Buffer {
@@ -44,16 +44,16 @@ function buildChunk(type: string, data: Buffer): Buffer {
 /** Build a minimal 1x1 RGBA PNG (red pixel) */
 function buildMinimalPng(): Buffer {
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(1, 0);  // width
-  ihdr.writeUInt32BE(1, 4);  // height
-  ihdr[8] = 8;  // bit depth
-  ihdr[9] = 6;  // RGBA
+  ihdr.writeUInt32BE(1, 0); // width
+  ihdr.writeUInt32BE(1, 4); // height
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // RGBA
   ihdr[10] = 0; // compression
   ihdr[11] = 0; // filter
   ihdr[12] = 0; // interlace
 
   // Raw pixel data: filter byte (0) + R(FF) G(00) B(00) A(FF)
-  const rawData = Buffer.from([0, 0xFF, 0x00, 0x00, 0xFF]);
+  const rawData = Buffer.from([0, 0xff, 0x00, 0x00, 0xff]);
   const compressed = zlib.deflateSync(rawData, { level: 6 });
 
   return Buffer.concat([
@@ -69,8 +69,8 @@ function buildSuboptimalPng(width: number, height: number): Buffer {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8;  // bit depth
-  ihdr[9] = 2;  // RGB
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // RGB
   ihdr[10] = 0;
   ihdr[11] = 0;
   ihdr[12] = 0;
@@ -81,7 +81,7 @@ function buildSuboptimalPng(width: number, height: number): Buffer {
   for (let y = 0; y < height; y++) {
     rawData[y * rowSize] = 0; // filter: None
     for (let x = 0; x < width; x++) {
-      rawData[y * rowSize + 1 + x * 3] = 0xFF; // R
+      rawData[y * rowSize + 1 + x * 3] = 0xff; // R
       rawData[y * rowSize + 1 + x * 3 + 1] = 0x00; // G
       rawData[y * rowSize + 1 + x * 3 + 2] = 0x00; // B
     }
@@ -147,7 +147,8 @@ function buildBmp24(width: number, height: number): Buffer {
   const buf = Buffer.alloc(fileSize);
 
   // File header (14 bytes)
-  buf[0] = 0x42; buf[1] = 0x4D; // BM
+  buf[0] = 0x42;
+  buf[1] = 0x4d; // BM
   buf.writeUInt32LE(fileSize, 2);
   buf.writeUInt32LE(0, 6); // reserved
   buf.writeUInt32LE(54, 10); // pixel data offset
@@ -169,7 +170,7 @@ function buildBmp24(width: number, height: number): Buffer {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const offset = 54 + y * rowSize + x * 3;
-      buf[offset] = 0xFF;     // B
+      buf[offset] = 0xff; // B
       buf[offset + 1] = 0x00; // G
       buf[offset + 2] = 0x00; // R
     }
@@ -190,7 +191,8 @@ function buildBmp32(width: number, height: number): Buffer {
   const buf = Buffer.alloc(fileSize);
 
   // File header (14 bytes)
-  buf[0] = 0x42; buf[1] = 0x4D;
+  buf[0] = 0x42;
+  buf[1] = 0x4d;
   buf.writeUInt32LE(fileSize, 2);
   buf.writeUInt32LE(0, 6);
   buf.writeUInt32LE(headerSize, 10); // pixel data offset after masks
@@ -209,16 +211,16 @@ function buildBmp32(width: number, height: number): Buffer {
   buf.writeUInt32LE(0, 50);
 
   // Color masks (12 bytes) for BI_BITFIELDS
-  buf.writeUInt32LE(0x00FF0000, 54); // R mask
-  buf.writeUInt32LE(0x0000FF00, 58); // G mask
-  buf.writeUInt32LE(0x000000FF, 62); // B mask
+  buf.writeUInt32LE(0x00ff0000, 54); // R mask
+  buf.writeUInt32LE(0x0000ff00, 58); // G mask
+  buf.writeUInt32LE(0x000000ff, 62); // B mask
 
   // Pixel data (BGRA, bottom-up): fill with semi-transparent green
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const offset = headerSize + y * rowSize + x * 4;
-      buf[offset] = 0x00;     // B
-      buf[offset + 1] = 0xFF; // G
+      buf[offset] = 0x00; // B
+      buf[offset + 1] = 0xff; // G
       buf[offset + 2] = 0x00; // R
       buf[offset + 3] = 0x80; // A (128 = semi-transparent)
     }
@@ -232,7 +234,8 @@ function buildRleCompressedBmp(): Buffer {
   const buf = Buffer.alloc(66);
 
   // File header
-  buf[0] = 0x42; buf[1] = 0x4D;
+  buf[0] = 0x42;
+  buf[1] = 0x4d;
   buf.writeUInt32LE(66, 2);
   buf.writeUInt32LE(0, 6);
   buf.writeUInt32LE(54, 10);
@@ -347,9 +350,9 @@ describe('optimizePng', () => {
     ihdr[9] = 3; // indexed color
 
     // 2-entry palette: red and blue
-    const plte = Buffer.from([0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF]);
+    const plte = Buffer.from([0xff, 0x00, 0x00, 0x00, 0x00, 0xff]);
     // tRNS for palette transparency
-    const trns = Buffer.from([0xFF, 0x80]);
+    const trns = Buffer.from([0xff, 0x80]);
 
     // Raw data: 4 rows, 4 pixels each, filter 0
     const rawData = Buffer.alloc(4 * (1 + 4));
@@ -379,7 +382,7 @@ describe('optimizePng', () => {
   });
 
   it('should return null for non-PNG data', () => {
-    const jpeg = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]);
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
     expect(optimizePng(jpeg)).toBeNull();
   });
 
@@ -399,8 +402,11 @@ describe('optimizePng', () => {
 
     // Split into 3 IDAT chunks
     const chunk1 = compressed.subarray(0, Math.floor(compressed.length / 3));
-    const chunk2 = compressed.subarray(Math.floor(compressed.length / 3), Math.floor(2 * compressed.length / 3));
-    const chunk3 = compressed.subarray(Math.floor(2 * compressed.length / 3));
+    const chunk2 = compressed.subarray(
+      Math.floor(compressed.length / 3),
+      Math.floor((2 * compressed.length) / 3)
+    );
+    const chunk3 = compressed.subarray(Math.floor((2 * compressed.length) / 3));
 
     const png = Buffer.concat([
       PNG_SIGNATURE,
@@ -465,7 +471,7 @@ describe('convertBmpToPng', () => {
 
     // First pixel of first row (after filter byte): R=0, G=FF, B=0, A=80
     expect(pixels[1]).toBe(0x00); // R
-    expect(pixels[2]).toBe(0xFF); // G
+    expect(pixels[2]).toBe(0xff); // G
     expect(pixels[3]).toBe(0x00); // B
     expect(pixels[4]).toBe(0x80); // A (semi-transparent)
   });
@@ -479,12 +485,20 @@ describe('convertBmpToPng', () => {
     const rowSize = Math.ceil((2 * 3) / 4) * 4; // 8 bytes (padded)
 
     // Bottom row (y=0 in BMP, last row visually): red (BGR = 00,00,FF)
-    bmp[54 + 0] = 0x00; bmp[54 + 1] = 0x00; bmp[54 + 2] = 0xFF; // pixel (0,0)
-    bmp[54 + 3] = 0x00; bmp[54 + 4] = 0x00; bmp[54 + 5] = 0xFF; // pixel (1,0)
+    bmp[54 + 0] = 0x00;
+    bmp[54 + 1] = 0x00;
+    bmp[54 + 2] = 0xff; // pixel (0,0)
+    bmp[54 + 3] = 0x00;
+    bmp[54 + 4] = 0x00;
+    bmp[54 + 5] = 0xff; // pixel (1,0)
 
     // Top row (y=1 in BMP, first row visually): blue (BGR = FF,00,00)
-    bmp[54 + rowSize + 0] = 0xFF; bmp[54 + rowSize + 1] = 0x00; bmp[54 + rowSize + 2] = 0x00;
-    bmp[54 + rowSize + 3] = 0xFF; bmp[54 + rowSize + 4] = 0x00; bmp[54 + rowSize + 5] = 0x00;
+    bmp[54 + rowSize + 0] = 0xff;
+    bmp[54 + rowSize + 1] = 0x00;
+    bmp[54 + rowSize + 2] = 0x00;
+    bmp[54 + rowSize + 3] = 0xff;
+    bmp[54 + rowSize + 4] = 0x00;
+    bmp[54 + rowSize + 5] = 0x00;
 
     const png = convertBmpToPng(bmp);
     expect(png).not.toBeNull();
@@ -495,16 +509,16 @@ describe('convertBmpToPng', () => {
     // PNG is top-down: first row should be blue (from BMP's top row y=1)
     // Row 0: filter(0) + RGB pixels
     const row0Start = 1; // skip filter byte
-    expect(pixels[row0Start]).toBe(0x00);     // R (from BMP B=FF → but wait, it's BGR!)
+    expect(pixels[row0Start]).toBe(0x00); // R (from BMP B=FF → but wait, it's BGR!)
     // Actually: BMP top row (y=1) is BGR = FF,00,00 → RGB = 00,00,FF (blue)
-    expect(pixels[row0Start]).toBe(0x00);     // R
+    expect(pixels[row0Start]).toBe(0x00); // R
     expect(pixels[row0Start + 1]).toBe(0x00); // G
-    expect(pixels[row0Start + 2]).toBe(0xFF); // B → blue
+    expect(pixels[row0Start + 2]).toBe(0xff); // B → blue
 
     // Row 1: filter(0) + RGB pixels
-    const row1Start = (1 + 2 * 3) + 1; // second row filter byte
+    const row1Start = 1 + 2 * 3 + 1; // second row filter byte
     // BMP bottom row (y=0) is BGR = 00,00,FF → RGB = FF,00,00 (red)
-    expect(pixels[row1Start]).toBe(0xFF);     // R
+    expect(pixels[row1Start]).toBe(0xff); // R
     expect(pixels[row1Start + 1]).toBe(0x00); // G
     expect(pixels[row1Start + 2]).toBe(0x00); // B → red
   });
@@ -516,7 +530,8 @@ describe('convertBmpToPng', () => {
 
   it('should return null for 8-bit indexed BMP', () => {
     const buf = Buffer.alloc(58);
-    buf[0] = 0x42; buf[1] = 0x4D;
+    buf[0] = 0x42;
+    buf[1] = 0x4d;
     buf.writeUInt32LE(58, 2);
     buf.writeUInt32LE(54, 10);
     buf.writeUInt32LE(40, 14);
@@ -529,7 +544,7 @@ describe('convertBmpToPng', () => {
   });
 
   it('should return null for non-BMP data', () => {
-    expect(convertBmpToPng(Buffer.from([0x89, 0x50, 0x4E, 0x47]))).toBeNull();
+    expect(convertBmpToPng(Buffer.from([0x89, 0x50, 0x4e, 0x47]))).toBeNull();
   });
 
   it('should return null for empty buffer', () => {
@@ -572,7 +587,7 @@ describe('optimizeImage', () => {
   });
 
   it('should return null for JPEG', () => {
-    const jpeg = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]);
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
     expect(optimizeImage(jpeg, 'jpeg')).toBeNull();
     expect(optimizeImage(jpeg, 'jpg')).toBeNull();
   });

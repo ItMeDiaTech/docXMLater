@@ -11,7 +11,7 @@
  */
 export interface DiffSegment {
   /** Whether this segment is unchanged, deleted, or inserted */
-  type: "equal" | "delete" | "insert";
+  type: 'equal' | 'delete' | 'insert';
   /** The text content of this segment */
   text: string;
 }
@@ -35,17 +35,17 @@ export interface DiffSegment {
 export function diffText(oldText: string, newText: string): DiffSegment[] {
   // Identical strings — no changes
   if (oldText === newText) {
-    return oldText.length > 0 ? [{ type: "equal", text: oldText }] : [];
+    return oldText.length > 0 ? [{ type: 'equal', text: oldText }] : [];
   }
 
   // Empty old — entire new text is an insertion
   if (oldText.length === 0) {
-    return newText.length > 0 ? [{ type: "insert", text: newText }] : [];
+    return newText.length > 0 ? [{ type: 'insert', text: newText }] : [];
   }
 
   // Empty new — entire old text is a deletion
   if (newText.length === 0) {
-    return [{ type: "delete", text: oldText }];
+    return [{ type: 'delete', text: oldText }];
   }
 
   // Find common prefix length
@@ -69,7 +69,7 @@ export function diffText(oldText: string, newText: string): DiffSegment[] {
 
   // Common prefix
   if (prefixLen > 0) {
-    segments.push({ type: "equal", text: oldText.slice(0, prefixLen) });
+    segments.push({ type: 'equal', text: oldText.slice(0, prefixLen) });
   }
 
   // Middle portion — what changed
@@ -77,15 +77,15 @@ export function diffText(oldText: string, newText: string): DiffSegment[] {
   const newMiddle = newText.slice(prefixLen, newText.length - suffixLen);
 
   if (oldMiddle.length > 0) {
-    segments.push({ type: "delete", text: oldMiddle });
+    segments.push({ type: 'delete', text: oldMiddle });
   }
   if (newMiddle.length > 0) {
-    segments.push({ type: "insert", text: newMiddle });
+    segments.push({ type: 'insert', text: newMiddle });
   }
 
   // Common suffix
   if (suffixLen > 0) {
-    segments.push({ type: "equal", text: oldText.slice(oldText.length - suffixLen) });
+    segments.push({ type: 'equal', text: oldText.slice(oldText.length - suffixLen) });
   }
 
   return segments;
@@ -96,5 +96,5 @@ export function diffText(oldText: string, newText: string): DiffSegment[] {
  * If false, the entire text was replaced (no benefit from granular tracking).
  */
 export function diffHasUnchangedParts(segments: DiffSegment[]): boolean {
-  return segments.some(s => s.type === "equal");
+  return segments.some((s) => s.type === 'equal');
 }

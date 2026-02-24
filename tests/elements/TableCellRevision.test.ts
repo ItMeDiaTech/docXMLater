@@ -59,26 +59,30 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
       const cell = new TableCell();
       expect(cell.hasCellRevision()).toBe(false);
 
-      cell.setCellRevision(new Revision({
-        id: 3,
-        author: 'Charlie',
-        date: new Date(),
-        type: 'tableCellMerge',
-        content: [],
-      }));
+      cell.setCellRevision(
+        new Revision({
+          id: 3,
+          author: 'Charlie',
+          date: new Date(),
+          type: 'tableCellMerge',
+          content: [],
+        })
+      );
 
       expect(cell.hasCellRevision()).toBe(true);
     });
 
     it('should clear cell revision', () => {
       const cell = new TableCell();
-      cell.setCellRevision(new Revision({
-        id: 4,
-        author: 'Diana',
-        date: new Date(),
-        type: 'tableCellInsert',
-        content: [],
-      }));
+      cell.setCellRevision(
+        new Revision({
+          id: 4,
+          author: 'Diana',
+          date: new Date(),
+          type: 'tableCellInsert',
+          content: [],
+        })
+      );
 
       expect(cell.hasCellRevision()).toBe(true);
 
@@ -93,13 +97,15 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
     it('should generate w:cellIns element for tableCellInsert', () => {
       const cell = new TableCell();
       cell.createParagraph('Test content');
-      cell.setCellRevision(new Revision({
-        id: 10,
-        author: 'TestAuthor',
-        date: new Date('2025-01-20T12:00:00Z'),
-        type: 'tableCellInsert',
-        content: [],
-      }));
+      cell.setCellRevision(
+        new Revision({
+          id: 10,
+          author: 'TestAuthor',
+          date: new Date('2025-01-20T12:00:00Z'),
+          type: 'tableCellInsert',
+          content: [],
+        })
+      );
 
       const xml = cell.toXML();
       const xmlString = JSON.stringify(xml);
@@ -112,13 +118,15 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
     it('should generate w:cellDel element for tableCellDelete', () => {
       const cell = new TableCell();
       cell.createParagraph('Deleted content');
-      cell.setCellRevision(new Revision({
-        id: 11,
-        author: 'TestAuthor',
-        date: new Date('2025-01-20T12:00:00Z'),
-        type: 'tableCellDelete',
-        content: [],
-      }));
+      cell.setCellRevision(
+        new Revision({
+          id: 11,
+          author: 'TestAuthor',
+          date: new Date('2025-01-20T12:00:00Z'),
+          type: 'tableCellDelete',
+          content: [],
+        })
+      );
 
       const xml = cell.toXML();
       const xmlString = JSON.stringify(xml);
@@ -130,17 +138,19 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
     it('should generate w:cellMerge element with vMerge attributes', () => {
       const cell = new TableCell();
       cell.createParagraph('Merged content');
-      cell.setCellRevision(new Revision({
-        id: 12,
-        author: 'MergeAuthor',
-        date: new Date('2025-01-20T12:00:00Z'),
-        type: 'tableCellMerge',
-        content: [],
-        previousProperties: {
-          vMerge: 'restart',
-          vMergeOrig: 'continue',
-        },
-      }));
+      cell.setCellRevision(
+        new Revision({
+          id: 12,
+          author: 'MergeAuthor',
+          date: new Date('2025-01-20T12:00:00Z'),
+          type: 'tableCellMerge',
+          content: [],
+          previousProperties: {
+            vMerge: 'restart',
+            vMergeOrig: 'continue',
+          },
+        })
+      );
 
       const xml = cell.toXML();
       const xmlString = JSON.stringify(xml);
@@ -171,13 +181,15 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
       const cell = table.getCell(0, 0);
 
       cell?.createParagraph('Inserted cell content');
-      cell?.setCellRevision(new Revision({
-        id: 100,
-        author: 'RoundTripAuthor',
-        date: new Date('2025-01-15T09:30:00Z'),
-        type: 'tableCellInsert',
-        content: [],
-      }));
+      cell?.setCellRevision(
+        new Revision({
+          id: 100,
+          author: 'RoundTripAuthor',
+          date: new Date('2025-01-15T09:30:00Z'),
+          type: 'tableCellInsert',
+          content: [],
+        })
+      );
 
       doc.addTable(table);
 
@@ -199,13 +211,15 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
       const cell = table.getCell(1, 1);
 
       cell?.createParagraph('Deleted cell content');
-      cell?.setCellRevision(new Revision({
-        id: 101,
-        author: 'DeleteAuthor',
-        date: new Date('2025-01-15T10:00:00Z'),
-        type: 'tableCellDelete',
-        content: [],
-      }));
+      cell?.setCellRevision(
+        new Revision({
+          id: 101,
+          author: 'DeleteAuthor',
+          date: new Date('2025-01-15T10:00:00Z'),
+          type: 'tableCellDelete',
+          content: [],
+        })
+      );
 
       doc.addTable(table);
 
@@ -226,17 +240,19 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
       const cell = table.getCell(0, 0);
 
       cell?.createParagraph('Merged cell content');
-      cell?.setCellRevision(new Revision({
-        id: 102,
-        author: 'MergeTestAuthor',
-        date: new Date('2025-01-15T11:00:00Z'),
-        type: 'tableCellMerge',
-        content: [],
-        previousProperties: {
-          vMerge: 'restart',
-          vMergeOrig: 'continue',
-        },
-      }));
+      cell?.setCellRevision(
+        new Revision({
+          id: 102,
+          author: 'MergeTestAuthor',
+          date: new Date('2025-01-15T11:00:00Z'),
+          type: 'tableCellMerge',
+          content: [],
+          previousProperties: {
+            vMerge: 'restart',
+            vMergeOrig: 'continue',
+          },
+        })
+      );
 
       doc.addTable(table);
 
@@ -263,24 +279,28 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
       // Cell with insert revision
       const cell00 = table.getCell(0, 0);
       cell00?.createParagraph('Cell 00');
-      cell00?.setCellRevision(new Revision({
-        id: 200,
-        author: 'FileTestAuthor',
-        date: new Date('2025-01-20T08:00:00Z'),
-        type: 'tableCellInsert',
-        content: [],
-      }));
+      cell00?.setCellRevision(
+        new Revision({
+          id: 200,
+          author: 'FileTestAuthor',
+          date: new Date('2025-01-20T08:00:00Z'),
+          type: 'tableCellInsert',
+          content: [],
+        })
+      );
 
       // Cell with delete revision
       const cell11 = table.getCell(1, 1);
       cell11?.createParagraph('Cell 11');
-      cell11?.setCellRevision(new Revision({
-        id: 201,
-        author: 'FileTestAuthor',
-        date: new Date('2025-01-20T09:00:00Z'),
-        type: 'tableCellDelete',
-        content: [],
-      }));
+      cell11?.setCellRevision(
+        new Revision({
+          id: 201,
+          author: 'FileTestAuthor',
+          date: new Date('2025-01-20T09:00:00Z'),
+          type: 'tableCellDelete',
+          content: [],
+        })
+      );
 
       doc.addTable(table);
 
@@ -308,13 +328,15 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
 
       cell?.setMargins({ top: 100, bottom: 100, left: 100, right: 100 });
       cell?.createParagraph('Cell with margins and revision');
-      cell?.setCellRevision(new Revision({
-        id: 300,
-        author: 'FormattingAuthor',
-        date: new Date(),
-        type: 'tableCellInsert',
-        content: [],
-      }));
+      cell?.setCellRevision(
+        new Revision({
+          id: 300,
+          author: 'FormattingAuthor',
+          date: new Date(),
+          type: 'tableCellInsert',
+          content: [],
+        })
+      );
 
       doc.addTable(table);
 
@@ -337,13 +359,15 @@ describe('Table Cell Revisions (w:cellIns, w:cellDel, w:cellMerge)', () => {
 
       cell?.setVerticalMerge('restart');
       cell?.createParagraph('Merged start cell');
-      cell?.setCellRevision(new Revision({
-        id: 301,
-        author: 'VMergeAuthor',
-        date: new Date(),
-        type: 'tableCellInsert',
-        content: [],
-      }));
+      cell?.setCellRevision(
+        new Revision({
+          id: 301,
+          author: 'VMergeAuthor',
+          date: new Date(),
+          type: 'tableCellInsert',
+          content: [],
+        })
+      );
 
       doc.addTable(table);
 

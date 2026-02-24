@@ -74,7 +74,10 @@ export interface ILogger {
 export class ConsoleLogger implements ILogger {
   private showTimestamp: boolean;
 
-  constructor(private minLevel: LogLevel = LogLevel.WARN, options?: { showTimestamp?: boolean }) {
+  constructor(
+    private minLevel: LogLevel = LogLevel.WARN,
+    options?: { showTimestamp?: boolean }
+  ) {
     this.showTimestamp = options?.showTimestamp ?? true;
   }
 
@@ -227,7 +230,7 @@ export class CollectingLogger implements ILogger {
    * Get logs filtered by level
    */
   getLogsByLevel(level: LogLevel): readonly LogEntry[] {
-    return this.logs.filter(log => log.level === level);
+    return this.logs.filter((log) => log.level === level);
   }
 
   /**
@@ -242,7 +245,7 @@ export class CollectingLogger implements ILogger {
    */
   getCount(level?: LogLevel): number {
     if (level) {
-      return this.logs.filter(log => log.level === level).length;
+      return this.logs.filter((log) => log.level === level).length;
     }
     return this.logs.length;
   }
@@ -299,11 +302,16 @@ function parseLogLevel(level: string | undefined): LogLevel | undefined {
   if (!level) return undefined;
   const normalized = level.toLowerCase();
   switch (normalized) {
-    case 'debug': return LogLevel.DEBUG;
-    case 'info': return LogLevel.INFO;
-    case 'warn': return LogLevel.WARN;
-    case 'error': return LogLevel.ERROR;
-    default: return undefined;
+    case 'debug':
+      return LogLevel.DEBUG;
+    case 'info':
+      return LogLevel.INFO;
+    case 'warn':
+      return LogLevel.WARN;
+    case 'error':
+      return LogLevel.ERROR;
+    default:
+      return undefined;
   }
 }
 

@@ -153,10 +153,7 @@ describe('Run Complex Script Size (w:szCs)', () => {
   describe('Complex Script Size with RTL Text', () => {
     it('should support sizeCs with RTL text direction', () => {
       const run = new Run('Hebrew text');
-      run.setSize(12)
-         .setSizeCs(14)
-         .setRTL(true)
-         .setComplexScriptBold(true);
+      run.setSize(12).setSizeCs(14).setRTL(true).setComplexScriptBold(true);
 
       const formatting = run.getFormatting();
       expect(formatting.size).toBe(12);

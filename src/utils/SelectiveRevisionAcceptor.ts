@@ -54,10 +54,7 @@ export class SelectiveRevisionAcceptor {
    * @param criteria - Selection criteria
    * @returns Result with accepted, rejected, and remaining revision IDs
    */
-  static accept(
-    doc: Document,
-    criteria: SelectionCriteria
-  ): SelectiveAcceptResult {
+  static accept(doc: Document, criteria: SelectionCriteria): SelectiveAcceptResult {
     const accepted: string[] = [];
     const remaining: string[] = [];
 
@@ -131,10 +128,7 @@ export class SelectiveRevisionAcceptor {
    * @param criteria - Selection criteria
    * @returns Result with accepted, rejected, and remaining revision IDs
    */
-  static reject(
-    doc: Document,
-    criteria: SelectionCriteria
-  ): SelectiveAcceptResult {
+  static reject(doc: Document, criteria: SelectionCriteria): SelectiveAcceptResult {
     const rejected: string[] = [];
     const remaining: string[] = [];
 
@@ -313,10 +307,7 @@ export class SelectiveRevisionAcceptor {
   /**
    * Accept a single revision item (unwrap insertions, remove deletions).
    */
-  private static acceptRevisionItem(
-    revision: Revision,
-    newContent: ParagraphContent[]
-  ): void {
+  private static acceptRevisionItem(revision: Revision, newContent: ParagraphContent[]): void {
     const revisionType = revision.getType();
     const childContent = revision.getContent();
 
@@ -367,10 +358,7 @@ export class SelectiveRevisionAcceptor {
    * - Rejecting an insertion removes the content
    * - Rejecting a deletion keeps the content (unwraps it)
    */
-  private static rejectRevisionItem(
-    revision: Revision,
-    newContent: ParagraphContent[]
-  ): void {
+  private static rejectRevisionItem(revision: Revision, newContent: ParagraphContent[]): void {
     const revisionType = revision.getType();
     const childContent = revision.getContent();
 
@@ -432,9 +420,7 @@ export class SelectiveRevisionAcceptor {
     action: 'accept' | 'reject'
   ): SelectiveAcceptResult {
     // Preview is the same as the actual operation but without side effects
-    return action === 'accept'
-      ? this.accept(doc, criteria)
-      : this.reject(doc, criteria);
+    return action === 'accept' ? this.accept(doc, criteria) : this.reject(doc, criteria);
   }
 
   /**
@@ -571,10 +557,7 @@ export class SelectiveRevisionAcceptor {
   /**
    * Check if a revision matches the given criteria.
    */
-  private static matchesCriteria(
-    revision: Revision,
-    criteria: SelectionCriteria
-  ): boolean {
+  private static matchesCriteria(revision: Revision, criteria: SelectionCriteria): boolean {
     // If no criteria specified, match nothing
     if (
       !criteria.ids &&
@@ -642,11 +625,7 @@ export class SelectiveRevisionAcceptor {
     ) {
       return 'formatting';
     }
-    if (
-      type === 'moveFrom' ||
-      type === 'moveTo' ||
-      type === 'sectionPropertiesChange'
-    ) {
+    if (type === 'moveFrom' || type === 'moveTo' || type === 'sectionPropertiesChange') {
       return 'structural';
     }
     if (

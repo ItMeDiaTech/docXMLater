@@ -97,9 +97,13 @@ describe('SelectiveRevisionAcceptor', () => {
       const doc = new MockDocument();
       doc.addRevision('insert', 'Alice', 'Text');
 
-      const result = SelectiveRevisionAcceptor.preview(doc as any, {
-        authors: ['Alice'],
-      }, 'accept');
+      const result = SelectiveRevisionAcceptor.preview(
+        doc as any,
+        {
+          authors: ['Alice'],
+        },
+        'accept'
+      );
 
       expect(result.accepted).toHaveLength(1);
       expect(result.rejected).toHaveLength(0);
@@ -109,9 +113,13 @@ describe('SelectiveRevisionAcceptor', () => {
       const doc = new MockDocument();
       doc.addRevision('insert', 'Alice', 'Text');
 
-      const result = SelectiveRevisionAcceptor.preview(doc as any, {
-        authors: ['Alice'],
-      }, 'reject');
+      const result = SelectiveRevisionAcceptor.preview(
+        doc as any,
+        {
+          authors: ['Alice'],
+        },
+        'reject'
+      );
 
       expect(result.accepted).toHaveLength(0);
       expect(result.rejected).toHaveLength(1);
@@ -179,10 +187,7 @@ describe('SelectiveRevisionAcceptor', () => {
       doc.addRevision('insert', 'Bob', 'Text 2', new Date('2024-06-15'));
       doc.addRevision('insert', 'Carol', 'Text 3', new Date('2024-12-31'));
 
-      const result = SelectiveRevisionAcceptor.acceptBeforeDate(
-        doc as any,
-        new Date('2024-06-01')
-      );
+      const result = SelectiveRevisionAcceptor.acceptBeforeDate(doc as any, new Date('2024-06-01'));
 
       expect(result.accepted).toHaveLength(1);
       expect(result.remaining).toHaveLength(2);
@@ -196,10 +201,7 @@ describe('SelectiveRevisionAcceptor', () => {
       doc.addRevision('insert', 'Bob', 'Text 2', new Date('2024-06-15'));
       doc.addRevision('insert', 'Carol', 'Text 3', new Date('2024-12-31'));
 
-      const result = SelectiveRevisionAcceptor.acceptAfterDate(
-        doc as any,
-        new Date('2024-06-01')
-      );
+      const result = SelectiveRevisionAcceptor.acceptAfterDate(doc as any, new Date('2024-06-01'));
 
       expect(result.accepted).toHaveLength(2);
       expect(result.remaining).toHaveLength(1);
@@ -301,7 +303,10 @@ describe('SelectiveRevisionAcceptor', () => {
 
       const result = SelectiveRevisionAcceptor.accept(doc as any, {
         custom: (rev) => {
-          const text = rev.getRuns().map(r => r.getText()).join('');
+          const text = rev
+            .getRuns()
+            .map((r) => r.getText())
+            .join('');
           return text.length > 10;
         },
       });

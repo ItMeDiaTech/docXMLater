@@ -98,10 +98,7 @@ export class RevisionWalker {
    * const clean = RevisionWalker.processTree(parsed);
    * ```
    */
-  static processTree(
-    obj: ParsedXMLObject,
-    options?: RevisionWalkerOptions
-  ): ParsedXMLObject {
+  static processTree(obj: ParsedXMLObject, options?: RevisionWalkerOptions): ParsedXMLObject {
     const opts: Required<RevisionWalkerOptions> = {
       acceptInsertions: options?.acceptInsertions ?? true,
       acceptDeletions: options?.acceptDeletions ?? true,
@@ -141,10 +138,7 @@ export class RevisionWalker {
    * Recursively walk and transform the object tree
    * Processes children first (depth-first) to handle nested revisions
    */
-  private static walkAndTransform(
-    obj: any,
-    options: Required<RevisionWalkerOptions>
-  ): void {
+  private static walkAndTransform(obj: any, options: Required<RevisionWalkerOptions>): void {
     if (obj === null || typeof obj !== 'object') {
       return;
     }
@@ -174,10 +168,7 @@ export class RevisionWalker {
   /**
    * Process revision elements at the current level
    */
-  private static processRevisions(
-    parent: any,
-    options: Required<RevisionWalkerOptions>
-  ): void {
+  private static processRevisions(parent: any, options: Required<RevisionWalkerOptions>): void {
     if (!parent || typeof parent !== 'object') {
       return;
     }
@@ -199,10 +190,7 @@ export class RevisionWalker {
   /**
    * Check if an element should be unwrapped (content kept)
    */
-  private static shouldUnwrap(
-    key: string,
-    options: Required<RevisionWalkerOptions>
-  ): boolean {
+  private static shouldUnwrap(key: string, options: Required<RevisionWalkerOptions>): boolean {
     if (REVISION_ELEMENTS.UNWRAP.includes(key)) {
       if (key === 'w:ins' && !options.acceptInsertions) return false;
       if (key === 'w:moveTo' && !options.acceptMoves) return false;
@@ -214,10 +202,7 @@ export class RevisionWalker {
   /**
    * Check if an element should be removed (content discarded)
    */
-  private static shouldRemove(
-    key: string,
-    options: Required<RevisionWalkerOptions>
-  ): boolean {
+  private static shouldRemove(key: string, options: Required<RevisionWalkerOptions>): boolean {
     if (REVISION_ELEMENTS.REMOVE.includes(key)) {
       if (key === 'w:del' && !options.acceptDeletions) return false;
       if (key === 'w:moveFrom' && !options.acceptMoves) return false;
@@ -279,9 +264,7 @@ export class RevisionWalker {
 
                 const childElements = revElement[childType];
                 if (childElements) {
-                  const childArray = Array.isArray(childElements)
-                    ? childElements
-                    : [childElements];
+                  const childArray = Array.isArray(childElements) ? childElements : [childElements];
                   if (childIdx < childArray.length) {
                     orderedElements.push({
                       type: childType,
@@ -293,16 +276,11 @@ export class RevisionWalker {
             } else {
               // No _orderedChildren, extract children in object key order
               const childKeys = Object.keys(revElement).filter(
-                (k) =>
-                  !k.startsWith('@_') &&
-                  k !== '#text' &&
-                  k !== '_orderedChildren'
+                (k) => !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren'
               );
               for (const childKey of childKeys) {
                 const childValue = revElement[childKey];
-                const childArray = Array.isArray(childValue)
-                  ? childValue
-                  : [childValue];
+                const childArray = Array.isArray(childValue) ? childValue : [childValue];
                 for (const child of childArray) {
                   orderedElements.push({ type: childKey, element: child });
                 }
@@ -316,9 +294,7 @@ export class RevisionWalker {
 
           const parentElements = parent[type];
           if (parentElements) {
-            const parentArray = Array.isArray(parentElements)
-              ? parentElements
-              : [parentElements];
+            const parentArray = Array.isArray(parentElements) ? parentElements : [parentElements];
             if (idx < parentArray.length) {
               orderedElements.push({ type, element: parentArray[idx] });
             }
@@ -400,11 +376,7 @@ export class RevisionWalker {
   /**
    * Merge a child value into the parent, handling arrays properly
    */
-  private static mergeIntoParent(
-    parent: any,
-    childKey: string,
-    childValue: any
-  ): void {
+  private static mergeIntoParent(parent: any, childKey: string, childValue: any): void {
     if (parent[childKey] === undefined) {
       // No existing value, just assign
       parent[childKey] = childValue;
@@ -424,9 +396,7 @@ export class RevisionWalker {
   /**
    * Re-index _orderedChildren to ensure indices are sequential per type
    */
-  private static reindexOrderedChildren(
-    orderedChildren: OrderedChildInfo[]
-  ): void {
+  private static reindexOrderedChildren(orderedChildren: OrderedChildInfo[]): void {
     const typeCounters = new Map<string, number>();
 
     for (const entry of orderedChildren) {

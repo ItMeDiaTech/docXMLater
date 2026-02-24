@@ -68,14 +68,19 @@ export class Comment {
    * Examples: "John Doe" -> "JD", "Jane Smith" -> "JS"
    */
   private generateInitials(author: string): string {
-    const words = author.trim().split(/\s+/).filter(w => w.length > 0);
+    const words = author
+      .trim()
+      .split(/\s+/)
+      .filter((w) => w.length > 0);
     if (words.length === 0) return 'U';
     if (words.length === 1) return (words[0] || 'U').substring(0, 2).toUpperCase();
-    return words
-      .map(word => word[0] || '')
-      .join('')
-      .toUpperCase()
-      .substring(0, 3) || 'U';
+    return (
+      words
+        .map((word) => word[0] || '')
+        .join('')
+        .toUpperCase()
+        .substring(0, 3) || 'U'
+    );
   }
 
   /**
@@ -197,7 +202,7 @@ export class Comment {
    * Gets the comment text (combines all runs)
    */
   getText(): string {
-    return this.runs.map(run => run.getText()).join('');
+    return this.runs.map((run) => run.getText()).join('');
   }
 
   /**
@@ -287,7 +292,7 @@ export class Comment {
     // Create paragraph containing the comment content
     const commentParagraph: XMLElement = {
       name: 'w:p',
-      children: this.runs.map(run => run.toXML()),
+      children: this.runs.map((run) => run.toXML()),
     };
 
     return {
@@ -304,11 +309,7 @@ export class Comment {
    * @param initials - Optional author initials
    * @returns New Comment instance
    */
-  static create(
-    author: string,
-    content: string | Run | Run[],
-    initials?: string
-  ): Comment {
+  static create(author: string, content: string | Run | Run[], initials?: string): Comment {
     return new Comment({
       author,
       content,
@@ -345,11 +346,7 @@ export class Comment {
    * @param initials - Optional author initials
    * @returns New Comment instance
    */
-  static createFormatted(
-    author: string,
-    runs: Run[],
-    initials?: string
-  ): Comment {
+  static createFormatted(author: string, runs: Run[], initials?: string): Comment {
     return new Comment({
       author,
       content: runs,

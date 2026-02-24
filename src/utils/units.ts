@@ -361,27 +361,27 @@ export function pixelsToPoints(pixels: number, dpi: number = STANDARD_DPI): numb
 export const PAGE_SIZES = {
   /** Letter (8.5" x 11") */
   LETTER: {
-    width: 12240,  // 8.5 inches
+    width: 12240, // 8.5 inches
     height: 15840, // 11 inches
   },
   /** A4 (21cm x 29.7cm) */
   A4: {
-    width: 11906,  // 21cm
+    width: 11906, // 21cm
     height: 16838, // 29.7cm
   },
   /** Legal (8.5" x 14") */
   LEGAL: {
-    width: 12240,  // 8.5 inches
+    width: 12240, // 8.5 inches
     height: 20160, // 14 inches
   },
   /** Tabloid (11" x 17") */
   TABLOID: {
-    width: 15840,  // 11 inches
+    width: 15840, // 11 inches
     height: 24480, // 17 inches
   },
   /** A3 (29.7cm x 42cm) */
   A3: {
-    width: 16838,  // 29.7cm
+    width: 16838, // 29.7cm
     height: 23811, // 42cm
   },
 } as const;

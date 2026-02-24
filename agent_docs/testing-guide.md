@@ -17,16 +17,19 @@ tests/
 ## Writing Tests
 
 ### Unit Tests
+
 - Test individual methods in isolation
 - Mock dependencies when testing internal logic
 - Use descriptive test names: `should [expected behavior] when [condition]`
 
 ### Integration Tests
+
 - Test document create → modify → save → reload cycles
 - Verify round-trip fidelity for load → save operations
 - Use `validateOoxml()` to check OOXML compliance of generated documents
 
 ### Golden File Tests
+
 - Located in `tests/golden/`
 - Compare generated DOCX output against known-good baseline files
 - Regenerate baselines: `UPDATE_GOLDEN=true npm test -- --testPathPattern=golden`
@@ -56,6 +59,7 @@ it('should produce valid OOXML', async () => {
 ## Common Patterns
 
 ### Always dispose documents
+
 ```typescript
 const doc = Document.create();
 try {
@@ -66,6 +70,7 @@ try {
 ```
 
 ### Testing XML output
+
 ```typescript
 const xml = element.toXML();
 expect(xml).toContain('<w:b/>');
@@ -73,6 +78,7 @@ expect(xml).not.toContain('<w:rsid');
 ```
 
 ### Testing round-trip
+
 ```typescript
 const doc = Document.create();
 // ... add content ...

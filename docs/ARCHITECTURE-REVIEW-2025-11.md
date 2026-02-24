@@ -88,44 +88,44 @@ graph TB
 
 ### Critical Issues
 
-| Issue | Severity | Location | Recommendation |
-|-------|----------|----------|----------------|
-| `moveCell()` doesn't persist changes | CRITICAL | `src/elements/Table.ts:1403` | Add setter methods to TableRow or return references |
-| `swapCells()` doesn't persist changes | CRITICAL | `src/elements/Table.ts:1438-1439` | Same as above - getCells() returns copies |
-| Missing `tests/setup.ts` file | HIGH | `jest.config.js:5` | Created during review |
-| Glob pattern potential ReDoS | HIGH | `src/zip/ZipReader.ts:256-259` | Sanitize pattern or use safe glob library |
+| Issue                                 | Severity | Location                          | Recommendation                                      |
+| ------------------------------------- | -------- | --------------------------------- | --------------------------------------------------- |
+| `moveCell()` doesn't persist changes  | CRITICAL | `src/elements/Table.ts:1403`      | Add setter methods to TableRow or return references |
+| `swapCells()` doesn't persist changes | CRITICAL | `src/elements/Table.ts:1438-1439` | Same as above - getCells() returns copies           |
+| Missing `tests/setup.ts` file         | HIGH     | `jest.config.js:5`                | Created during review                               |
+| Glob pattern potential ReDoS          | HIGH     | `src/zip/ZipReader.ts:256-259`    | Sanitize pattern or use safe glob library           |
 
 ### High Priority Issues
 
-| Issue | Severity | Location | Recommendation |
-|-------|----------|----------|----------------|
-| 85 `as any` type casts | HIGH | 18 files | Eliminate type erasure, use proper interfaces |
-| Direct private field mutation | HIGH | `Table.ts:1178,1208` | Create proper setters on TableRow |
-| No tests for `units.ts` (30+ functions) | HIGH | Missing | Add comprehensive unit tests |
-| No tests for `formatting.ts` (6 functions) | HIGH | Missing | Add unit tests |
-| Circular reference in logger JSON.stringify | HIGH | `src/utils/logger.ts:154` | Add try-catch handler |
+| Issue                                       | Severity | Location                  | Recommendation                                |
+| ------------------------------------------- | -------- | ------------------------- | --------------------------------------------- |
+| 85 `as any` type casts                      | HIGH     | 18 files                  | Eliminate type erasure, use proper interfaces |
+| Direct private field mutation               | HIGH     | `Table.ts:1178,1208`      | Create proper setters on TableRow             |
+| No tests for `units.ts` (30+ functions)     | HIGH     | Missing                   | Add comprehensive unit tests                  |
+| No tests for `formatting.ts` (6 functions)  | HIGH     | Missing                   | Add unit tests                                |
+| Circular reference in logger JSON.stringify | HIGH     | `src/utils/logger.ts:154` | Add try-catch handler                         |
 
 ### Medium Priority Issues
 
-| Issue | Severity | Location | Recommendation |
-|-------|----------|----------|----------------|
-| `Record<string, any>` for property tracking | MEDIUM | `Revision.ts`, `PropertyChangeTypes.ts` | Use discriminated unions |
-| `Math.max()` returns -Infinity on empty array | MEDIUM | `Table.ts:1233` | Add empty array check |
-| cloneFormatting uses JSON instead of deepClone | MEDIUM | `src/utils/formatting.ts:61` | Use consistent cloning |
-| diagnostics.ts bypasses logger system | MEDIUM | `src/utils/diagnostics.ts` | Use configured logger |
-| No DPI validation in unit conversions | MEDIUM | `src/utils/units.ts` | Validate DPI > 0 |
+| Issue                                          | Severity | Location                                | Recommendation           |
+| ---------------------------------------------- | -------- | --------------------------------------- | ------------------------ |
+| `Record<string, any>` for property tracking    | MEDIUM   | `Revision.ts`, `PropertyChangeTypes.ts` | Use discriminated unions |
+| `Math.max()` returns -Infinity on empty array  | MEDIUM   | `Table.ts:1233`                         | Add empty array check    |
+| cloneFormatting uses JSON instead of deepClone | MEDIUM   | `src/utils/formatting.ts:61`            | Use consistent cloning   |
+| diagnostics.ts bypasses logger system          | MEDIUM   | `src/utils/diagnostics.ts`              | Use configured logger    |
+| No DPI validation in unit conversions          | MEDIUM   | `src/utils/units.ts`                    | Validate DPI > 0         |
 
 ### Test Failures (8 failing)
 
-| Test | Issue | Root Cause |
-|------|-------|------------|
-| TextPreservation: XML entities | `&lt;` not decoded | XML entity decoding in parser |
-| TextPreservation: formatted runs | Spaces trimmed | Whitespace handling |
-| SpecialCharacters: round-trip | Text concatenation | Tab/break handling |
-| ImageProperties: positioning | Undefined offsets | Position parsing incomplete |
-| TextElementProtection: special chars | Entities not decoded | Same as above |
-| TextElementProtection: formatted text | Space trimming | Whitespace normalization |
-| TextElementProtection: multiple round-trips | Double-escaping | Entity handling |
+| Test                                        | Issue                | Root Cause                    |
+| ------------------------------------------- | -------------------- | ----------------------------- |
+| TextPreservation: XML entities              | `&lt;` not decoded   | XML entity decoding in parser |
+| TextPreservation: formatted runs            | Spaces trimmed       | Whitespace handling           |
+| SpecialCharacters: round-trip               | Text concatenation   | Tab/break handling            |
+| ImageProperties: positioning                | Undefined offsets    | Position parsing incomplete   |
+| TextElementProtection: special chars        | Entities not decoded | Same as above                 |
+| TextElementProtection: formatted text       | Space trimming       | Whitespace normalization      |
+| TextElementProtection: multiple round-trips | Double-escaping      | Entity handling               |
 
 ---
 
@@ -214,6 +214,7 @@ if (pattern.length > 100 || (pattern.match(/\*/g)?.length ?? 0) > 5) {
 **Impact:** MEDIUM | **Effort:** MEDIUM
 
 Create test files for:
+
 - `tests/utils/units.test.ts` - 30+ conversion functions
 - `tests/utils/formatting.test.ts` - 6 formatting utilities
 - `tests/utils/logger.test.ts` - Logging system
@@ -224,6 +225,7 @@ Create test files for:
 **Impact:** MEDIUM | **Effort:** HIGH
 
 Replace `as any` with proper type definitions, especially in:
+
 - `Table.ts` (6 occurrences) - Direct field mutation
 - `RevisionContent.ts` (3 occurrences) - Type guards
 - `formatting.ts` (6 occurrences) - Merge operations
@@ -260,15 +262,15 @@ Replace `as any` with proper type definitions, especially in:
 
 ## Module Quality Summary
 
-| Module | Lines | Tests | Quality | Notes |
-|--------|-------|-------|---------|-------|
-| `core/` | ~21K | 200+ | A- | Well-designed facade pattern |
-| `elements/` | ~22K | 300+ | B+ | Critical bugs in Table.ts |
-| `xml/` | ~2K | 100+ | A | Excellent ReDoS prevention |
-| `zip/` | ~2K | 60+ | A- | Strong security, minor memory issue |
-| `formatting/` | ~3K | 200+ | A | Clean style/numbering system |
-| `utils/` | ~2K | 40 | C | Missing test coverage |
-| `validation/` | ~1K | 50+ | A | Comprehensive validation |
+| Module        | Lines | Tests | Quality | Notes                               |
+| ------------- | ----- | ----- | ------- | ----------------------------------- |
+| `core/`       | ~21K  | 200+  | A-      | Well-designed facade pattern        |
+| `elements/`   | ~22K  | 300+  | B+      | Critical bugs in Table.ts           |
+| `xml/`        | ~2K   | 100+  | A       | Excellent ReDoS prevention          |
+| `zip/`        | ~2K   | 60+   | A-      | Strong security, minor memory issue |
+| `formatting/` | ~3K   | 200+  | A       | Clean style/numbering system        |
+| `utils/`      | ~2K   | 40    | C       | Missing test coverage               |
+| `validation/` | ~1K   | 50+   | A       | Comprehensive validation            |
 
 ---
 
@@ -277,11 +279,13 @@ Replace `as any` with proper type definitions, especially in:
 docXMLater is a **mature, production-ready framework** with solid architecture and comprehensive functionality. The codebase demonstrates professional software engineering with proper separation of concerns, comprehensive documentation, and strong security practices.
 
 **Immediate Actions Required:**
+
 1. Fix the 2 critical bugs in Table.ts
 2. Fix XML entity decoding (causing 8 test failures)
 3. Add glob pattern sanitization
 
 **Recommended Improvements:**
+
 1. Improve test coverage for utility modules
 2. Eliminate type-unsafe casts
 3. Address the remaining 8 failing tests
@@ -290,4 +294,4 @@ Overall assessment: **B+ (Very Good)** - Production-ready with minor issues to a
 
 ---
 
-*Report generated as part of codebase architecture review.*
+_Report generated as part of codebase architecture review._

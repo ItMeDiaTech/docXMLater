@@ -28,9 +28,18 @@ export type BlipCompressionState = 'none' | 'print' | 'email' | 'hqprint' | 'scr
 /**
  * Picture lock attribute names (ECMA-376 §20.1.2.2.31)
  */
-export type PicLockAttribute = 'noChangeAspect' | 'noChangeArrowheads' | 'noSelect' | 'noMove'
-  | 'noResize' | 'noEditPoints' | 'noAdjustHandles' | 'noRot' | 'noChangeShapeType'
-  | 'noCrop' | 'noGrp';
+export type PicLockAttribute =
+  | 'noChangeAspect'
+  | 'noChangeArrowheads'
+  | 'noSelect'
+  | 'noMove'
+  | 'noResize'
+  | 'noEditPoints'
+  | 'noAdjustHandles'
+  | 'noRot'
+  | 'noChangeShapeType'
+  | 'noCrop'
+  | 'noGrp';
 
 /**
  * Non-visual picture properties (ECMA-376 §19.3.1.12)
@@ -310,7 +319,7 @@ export class Image {
   private imageData?: Buffer;
   private extension: string;
   private docPrId = 1;
-  private dpi = 96;  // Default DPI
+  private dpi = 96; // Default DPI
 
   // Advanced image properties
   private effectExtent?: EffectExtent;
@@ -390,7 +399,7 @@ export class Image {
       // Note: mimeType is ignored - extension is auto-detected from buffer
       properties = {
         width: width,
-        height: height
+        height: height,
       };
     } else {
       // Modern API: fromBuffer(buffer, { width: 914400, height: 914400 })
@@ -456,7 +465,8 @@ export class Image {
 
     // Group A: Simple attribute preservation
     if (properties.presetGeometry !== undefined) this.presetGeometry = properties.presetGeometry;
-    if (properties.compressionState !== undefined) this.compressionState = properties.compressionState;
+    if (properties.compressionState !== undefined)
+      this.compressionState = properties.compressionState;
     if (properties.bwMode !== undefined) this.bwMode = properties.bwMode;
     if (properties.inlineDistT !== undefined) this.inlineDistT = properties.inlineDistT;
     if (properties.inlineDistB !== undefined) this.inlineDistB = properties.inlineDistB;
@@ -465,11 +475,14 @@ export class Image {
     if (properties.noChangeAspect !== undefined) this.noChangeAspect = properties.noChangeAspect;
     if (properties.hidden !== undefined) this.hidden = properties.hidden;
     if (properties.blipFillDpi !== undefined) this.blipFillDpi = properties.blipFillDpi;
-    if (properties.blipFillRotWithShape !== undefined) this.blipFillRotWithShape = properties.blipFillRotWithShape;
+    if (properties.blipFillRotWithShape !== undefined)
+      this.blipFillRotWithShape = properties.blipFillRotWithShape;
     if (properties.picLocks !== undefined) this.picLocks = properties.picLocks;
-    if (properties.picNonVisualProps !== undefined) this.picNonVisualProps = properties.picNonVisualProps;
+    if (properties.picNonVisualProps !== undefined)
+      this.picNonVisualProps = properties.picNonVisualProps;
     if (properties.isLinked !== undefined) this.isLinked = properties.isLinked;
-    if (properties.svgRelationshipId !== undefined) this.svgRelationshipId = properties.svgRelationshipId;
+    if (properties.svgRelationshipId !== undefined)
+      this.svgRelationshipId = properties.svgRelationshipId;
 
     // Set default DPI
     this.dpi = 96;
@@ -572,20 +585,24 @@ export class Image {
     }
 
     const signatures: Record<string, number[]> = {
-      png: [0x89, 0x50, 0x4E, 0x47],
-      jpg: [0xFF, 0xD8],
-      jpeg: [0xFF, 0xD8],
+      png: [0x89, 0x50, 0x4e, 0x47],
+      jpg: [0xff, 0xd8],
+      jpeg: [0xff, 0xd8],
       gif: [0x47, 0x49, 0x46],
-      bmp: [0x42, 0x4D],
-      tiff: [0x49, 0x49, 0x2A, 0x00],
-      tif: [0x49, 0x49, 0x2A, 0x00]
+      bmp: [0x42, 0x4d],
+      tiff: [0x49, 0x49, 0x2a, 0x00],
+      tif: [0x49, 0x49, 0x2a, 0x00],
     };
 
     // EMF: check for ENHMETAHEADER signature at offset 40
     if (this.extension === 'emf') {
-      if (this.imageData.length >= 44 &&
-          this.imageData[40] === 0x20 && this.imageData[41] === 0x45 &&
-          this.imageData[42] === 0x4D && this.imageData[43] === 0x46) {
+      if (
+        this.imageData.length >= 44 &&
+        this.imageData[40] === 0x20 &&
+        this.imageData[41] === 0x45 &&
+        this.imageData[42] === 0x4d &&
+        this.imageData[43] === 0x46
+      ) {
         return { valid: true };
       }
       return { valid: false, error: 'Invalid EMF signature' };
@@ -595,13 +612,21 @@ export class Image {
     if (this.extension === 'wmf') {
       if (this.imageData.length >= 4) {
         // Placeable WMF
-        if (this.imageData[0] === 0xD7 && this.imageData[1] === 0xCD &&
-            this.imageData[2] === 0xC6 && this.imageData[3] === 0x9A) {
+        if (
+          this.imageData[0] === 0xd7 &&
+          this.imageData[1] === 0xcd &&
+          this.imageData[2] === 0xc6 &&
+          this.imageData[3] === 0x9a
+        ) {
           return { valid: true };
         }
         // Standard WMF
-        if (this.imageData[0] === 0x01 && this.imageData[1] === 0x00 &&
-            this.imageData[2] === 0x09 && this.imageData[3] === 0x00) {
+        if (
+          this.imageData[0] === 0x01 &&
+          this.imageData[1] === 0x00 &&
+          this.imageData[2] === 0x09 &&
+          this.imageData[3] === 0x00
+        ) {
           return { valid: true };
         }
       }
@@ -636,26 +661,40 @@ export class Image {
     if (Buffer.isBuffer(this.source) && this.source.length >= 4) {
       const buf = this.source;
       // PNG
-      if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'png';
+      if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
       // JPEG
-      if (buf[0] === 0xFF && buf[1] === 0xD8) return 'jpeg';
+      if (buf[0] === 0xff && buf[1] === 0xd8) return 'jpeg';
       // GIF
       if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'gif';
       // BMP
-      if (buf[0] === 0x42 && buf[1] === 0x4D) return 'bmp';
+      if (buf[0] === 0x42 && buf[1] === 0x4d) return 'bmp';
       // TIFF LE
-      if (buf[0] === 0x49 && buf[1] === 0x49 && buf[2] === 0x2A && buf[3] === 0x00) return 'tiff';
+      if (buf[0] === 0x49 && buf[1] === 0x49 && buf[2] === 0x2a && buf[3] === 0x00) return 'tiff';
       // TIFF BE
-      if (buf[0] === 0x4D && buf[1] === 0x4D && buf[2] === 0x00 && buf[3] === 0x2A) return 'tiff';
+      if (buf[0] === 0x4d && buf[1] === 0x4d && buf[2] === 0x00 && buf[3] === 0x2a) return 'tiff';
       // EMF: byte 0 = 0x01,0x00,0x00,0x00 AND ' EMF' at offset 40
-      if (buf.length >= 44 && buf[0] === 0x01 && buf[1] === 0x00 && buf[2] === 0x00 && buf[3] === 0x00 &&
-          buf[40] === 0x20 && buf[41] === 0x45 && buf[42] === 0x4D && buf[43] === 0x46) return 'emf';
+      if (
+        buf.length >= 44 &&
+        buf[0] === 0x01 &&
+        buf[1] === 0x00 &&
+        buf[2] === 0x00 &&
+        buf[3] === 0x00 &&
+        buf[40] === 0x20 &&
+        buf[41] === 0x45 &&
+        buf[42] === 0x4d &&
+        buf[43] === 0x46
+      )
+        return 'emf';
       // WMF placeable
-      if (buf[0] === 0xD7 && buf[1] === 0xCD && buf[2] === 0xC6 && buf[3] === 0x9A) return 'wmf';
+      if (buf[0] === 0xd7 && buf[1] === 0xcd && buf[2] === 0xc6 && buf[3] === 0x9a) return 'wmf';
       // WMF standard
       if (buf[0] === 0x01 && buf[1] === 0x00 && buf[2] === 0x09 && buf[3] === 0x00) return 'wmf';
       // SVG: starts with '<' or UTF-8 BOM + '<'
-      if (buf[0] === 0x3C || (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF && buf.length > 3 && buf[3] === 0x3C)) return 'svg';
+      if (
+        buf[0] === 0x3c ||
+        (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf && buf.length > 3 && buf[3] === 0x3c)
+      )
+        return 'svg';
     }
 
     return 'png';
@@ -667,7 +706,12 @@ export class Image {
   private detectDimensions(): { width: number; height: number } | null {
     if (!this.imageData || this.imageData.length < 24) return null;
 
-    if (this.imageData[0] === 0x89 && this.imageData[1] === 0x50 && this.imageData[2] === 0x4e && this.imageData[3] === 0x47) {
+    if (
+      this.imageData[0] === 0x89 &&
+      this.imageData[1] === 0x50 &&
+      this.imageData[2] === 0x4e &&
+      this.imageData[3] === 0x47
+    ) {
       return this.detectPngDimensions();
     }
     if (this.imageData[0] === 0xff && this.imageData[1] === 0xd8) {
@@ -679,24 +723,36 @@ export class Image {
     if (this.imageData[0] === 0x42 && this.imageData[1] === 0x4d) {
       return this.detectBmpDimensions();
     }
-    if ((this.imageData[0] === 0x49 && this.imageData[1] === 0x49 && this.imageData[2] === 0x2a) ||
-        (this.imageData[0] === 0x4d && this.imageData[1] === 0x4d && this.imageData[2] === 0x00)) {
+    if (
+      (this.imageData[0] === 0x49 && this.imageData[1] === 0x49 && this.imageData[2] === 0x2a) ||
+      (this.imageData[0] === 0x4d && this.imageData[1] === 0x4d && this.imageData[2] === 0x00)
+    ) {
       return this.detectTiffDimensions();
     }
     // EMF: ENHMETAHEADER has ' EMF' at offset 40
-    if (this.imageData.length >= 44 &&
-        this.imageData[40] === 0x20 && this.imageData[41] === 0x45 &&
-        this.imageData[42] === 0x4D && this.imageData[43] === 0x46) {
+    if (
+      this.imageData.length >= 44 &&
+      this.imageData[40] === 0x20 &&
+      this.imageData[41] === 0x45 &&
+      this.imageData[42] === 0x4d &&
+      this.imageData[43] === 0x46
+    ) {
       return this.detectEmfDimensions();
     }
     // WMF placeable
-    if (this.imageData[0] === 0xD7 && this.imageData[1] === 0xCD &&
-        this.imageData[2] === 0xC6 && this.imageData[3] === 0x9A) {
+    if (
+      this.imageData[0] === 0xd7 &&
+      this.imageData[1] === 0xcd &&
+      this.imageData[2] === 0xc6 &&
+      this.imageData[3] === 0x9a
+    ) {
       return this.detectWmfDimensions();
     }
     // SVG (text-based)
-    if (this.imageData[0] === 0x3C ||
-        (this.imageData[0] === 0xEF && this.imageData[1] === 0xBB && this.imageData[2] === 0xBF)) {
+    if (
+      this.imageData[0] === 0x3c ||
+      (this.imageData[0] === 0xef && this.imageData[1] === 0xbb && this.imageData[2] === 0xbf)
+    ) {
       return this.detectSvgDimensions();
     }
     return null;
@@ -731,16 +787,24 @@ export class Image {
     // Implementation as before
     if (!this.imageData || this.imageData.length < 14) return null;
     const isLittleEndian = this.imageData[0] === 0x49;
-    const ifdOffset = isLittleEndian ? this.imageData.readUInt32LE(4) : this.imageData.readUInt32BE(4);
+    const ifdOffset = isLittleEndian
+      ? this.imageData.readUInt32LE(4)
+      : this.imageData.readUInt32BE(4);
     if (ifdOffset + 14 > this.imageData.length) return null;
-    const numEntries = isLittleEndian ? this.imageData.readUInt16LE(ifdOffset) : this.imageData.readUInt16BE(ifdOffset);
+    const numEntries = isLittleEndian
+      ? this.imageData.readUInt16LE(ifdOffset)
+      : this.imageData.readUInt16BE(ifdOffset);
     let width = 0;
     let height = 0;
     for (let i = 0; i < numEntries; i++) {
       const entryOffset = ifdOffset + 2 + i * 12;
       if (entryOffset + 12 > this.imageData.length) break;
-      const tag = isLittleEndian ? this.imageData.readUInt16LE(entryOffset) : this.imageData.readUInt16BE(entryOffset);
-      const value = isLittleEndian ? this.imageData.readUInt32LE(entryOffset + 8) : this.imageData.readUInt32BE(entryOffset + 8);
+      const tag = isLittleEndian
+        ? this.imageData.readUInt16LE(entryOffset)
+        : this.imageData.readUInt16BE(entryOffset);
+      const value = isLittleEndian
+        ? this.imageData.readUInt32LE(entryOffset + 8)
+        : this.imageData.readUInt32BE(entryOffset + 8);
       if (tag === 256) width = value;
       if (tag === 257) height = value;
       if (width > 0 && height > 0) break;
@@ -755,13 +819,14 @@ export class Image {
     let offset = 2;
     while (offset < this.imageData.length - 1) {
       if (this.imageData[offset] !== 0xff) break;
-  const marker = this.imageData[offset + 1];
-  if (marker === undefined) break;
-  if (marker === 0x00 || marker === 0xff) {
-    offset++;
-    continue;
-  }
-  const isSOF = (marker >= 0xc0 && marker <= 0xcf) && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+      const marker = this.imageData[offset + 1];
+      if (marker === undefined) break;
+      if (marker === 0x00 || marker === 0xff) {
+        offset++;
+        continue;
+      }
+      const isSOF =
+        marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
       if (isSOF) {
         if (offset + 9 > this.imageData.length) break;
         const height = this.imageData.readUInt16BE(offset + 5);
@@ -787,12 +852,19 @@ export class Image {
       const widthMatch = /<svg[^>]*\bwidth\s*=\s*["']?(\d+(?:\.\d+)?)/i.exec(svgText);
       const heightMatch = /<svg[^>]*\bheight\s*=\s*["']?(\d+(?:\.\d+)?)/i.exec(svgText);
       if (widthMatch?.[1] && heightMatch?.[1]) {
-        return { width: Math.round(parseFloat(widthMatch[1])), height: Math.round(parseFloat(heightMatch[1])) };
+        return {
+          width: Math.round(parseFloat(widthMatch[1])),
+          height: Math.round(parseFloat(heightMatch[1])),
+        };
       }
       // Try viewBox attribute
-      const viewBoxMatch = /<svg[^>]*\bviewBox\s*=\s*["']?\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)/i.exec(svgText);
+      const viewBoxMatch =
+        /<svg[^>]*\bviewBox\s*=\s*["']?\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)/i.exec(svgText);
       if (viewBoxMatch?.[1] && viewBoxMatch?.[2]) {
-        return { width: Math.round(parseFloat(viewBoxMatch[1])), height: Math.round(parseFloat(viewBoxMatch[2])) };
+        return {
+          width: Math.round(parseFloat(viewBoxMatch[1])),
+          height: Math.round(parseFloat(viewBoxMatch[2])),
+        };
       }
     } catch {
       // SVG parsing failed
@@ -979,19 +1051,42 @@ export class Image {
 
   // --- Group A: Simple attribute getters/setters ---
 
-  getPresetGeometry(): PresetGeometry { return this.presetGeometry; }
-  setPresetGeometry(geom: PresetGeometry): this { this.presetGeometry = geom; return this; }
+  getPresetGeometry(): PresetGeometry {
+    return this.presetGeometry;
+  }
+  setPresetGeometry(geom: PresetGeometry): this {
+    this.presetGeometry = geom;
+    return this;
+  }
 
-  getCompressionState(): BlipCompressionState { return this.compressionState; }
-  setCompressionState(state: BlipCompressionState): this { this.compressionState = state; return this; }
+  getCompressionState(): BlipCompressionState {
+    return this.compressionState;
+  }
+  setCompressionState(state: BlipCompressionState): this {
+    this.compressionState = state;
+    return this;
+  }
 
-  getBwMode(): string { return this.bwMode; }
-  setBwMode(mode: string): this { this.bwMode = mode; return this; }
+  getBwMode(): string {
+    return this.bwMode;
+  }
+  setBwMode(mode: string): this {
+    this.bwMode = mode;
+    return this;
+  }
 
-  getInlineDistT(): number { return this.inlineDistT; }
-  getInlineDistB(): number { return this.inlineDistB; }
-  getInlineDistL(): number { return this.inlineDistL; }
-  getInlineDistR(): number { return this.inlineDistR; }
+  getInlineDistT(): number {
+    return this.inlineDistT;
+  }
+  getInlineDistB(): number {
+    return this.inlineDistB;
+  }
+  getInlineDistL(): number {
+    return this.inlineDistL;
+  }
+  getInlineDistR(): number {
+    return this.inlineDistR;
+  }
   setInlineDist(distT: number, distB: number, distL: number, distR: number): this {
     this.inlineDistT = distT;
     this.inlineDistB = distB;
@@ -1000,29 +1095,69 @@ export class Image {
     return this;
   }
 
-  getNoChangeAspect(): boolean { return this.noChangeAspect; }
-  setNoChangeAspect(val: boolean): this { this.noChangeAspect = val; return this; }
+  getNoChangeAspect(): boolean {
+    return this.noChangeAspect;
+  }
+  setNoChangeAspect(val: boolean): this {
+    this.noChangeAspect = val;
+    return this;
+  }
 
-  getHidden(): boolean { return this.hidden; }
-  setHidden(val: boolean): this { this.hidden = val; return this; }
+  getHidden(): boolean {
+    return this.hidden;
+  }
+  setHidden(val: boolean): this {
+    this.hidden = val;
+    return this;
+  }
 
-  getBlipFillDpi(): number | undefined { return this.blipFillDpi; }
-  setBlipFillDpi(dpi: number | undefined): this { this.blipFillDpi = dpi; return this; }
+  getBlipFillDpi(): number | undefined {
+    return this.blipFillDpi;
+  }
+  setBlipFillDpi(dpi: number | undefined): this {
+    this.blipFillDpi = dpi;
+    return this;
+  }
 
-  getBlipFillRotWithShape(): boolean | undefined { return this.blipFillRotWithShape; }
-  setBlipFillRotWithShape(val: boolean | undefined): this { this.blipFillRotWithShape = val; return this; }
+  getBlipFillRotWithShape(): boolean | undefined {
+    return this.blipFillRotWithShape;
+  }
+  setBlipFillRotWithShape(val: boolean | undefined): this {
+    this.blipFillRotWithShape = val;
+    return this;
+  }
 
-  getPicLocks(): Partial<Record<PicLockAttribute, boolean>> { return { ...this.picLocks }; }
-  setPicLocks(locks: Partial<Record<PicLockAttribute, boolean>>): this { this.picLocks = locks; return this; }
+  getPicLocks(): Partial<Record<PicLockAttribute, boolean>> {
+    return { ...this.picLocks };
+  }
+  setPicLocks(locks: Partial<Record<PicLockAttribute, boolean>>): this {
+    this.picLocks = locks;
+    return this;
+  }
 
-  getPicNonVisualProps(): PicNonVisualProperties { return { ...this.picNonVisualProps }; }
-  setPicNonVisualProps(props: PicNonVisualProperties): this { this.picNonVisualProps = props; return this; }
+  getPicNonVisualProps(): PicNonVisualProperties {
+    return { ...this.picNonVisualProps };
+  }
+  setPicNonVisualProps(props: PicNonVisualProperties): this {
+    this.picNonVisualProps = props;
+    return this;
+  }
 
-  getIsLinked(): boolean { return this.isLinked; }
-  setIsLinked(val: boolean): this { this.isLinked = val; return this; }
+  getIsLinked(): boolean {
+    return this.isLinked;
+  }
+  setIsLinked(val: boolean): this {
+    this.isLinked = val;
+    return this;
+  }
 
-  getSvgRelationshipId(): string | undefined { return this.svgRelationshipId; }
-  setSvgRelationshipId(id: string | undefined): this { this.svgRelationshipId = id; return this; }
+  getSvgRelationshipId(): string | undefined {
+    return this.svgRelationshipId;
+  }
+  setSvgRelationshipId(id: string | undefined): this {
+    this.svgRelationshipId = id;
+    return this;
+  }
 
   // --- Group B: Raw passthrough storage ---
 
@@ -1043,7 +1178,9 @@ export class Image {
 
   // --- Group C: Enhanced border ---
 
-  getBorder(): ImageBorder | undefined { return this.border; }
+  getBorder(): ImageBorder | undefined {
+    return this.border;
+  }
 
   setEffectExtent(left: number, top: number, right: number, bottom: number): this {
     this.effectExtent = { left, top, right, bottom };
@@ -1054,7 +1191,11 @@ export class Image {
     return this.effectExtent;
   }
 
-  setWrap(type: WrapType, side?: WrapSide, distances?: { top?: number; bottom?: number; left?: number; right?: number }): this {
+  setWrap(
+    type: WrapType,
+    side?: WrapSide,
+    distances?: { top?: number; bottom?: number; left?: number; right?: number }
+  ): this {
     this.wrap = {
       type,
       side,
@@ -1203,8 +1344,17 @@ export class Image {
   }
 
   setEffects(options: ImageEffects): this {
-    const clamp = (val?: number) => val !== undefined ? Math.max(-100, Math.min(100, val)) : undefined;
-    this.effects = { brightness: clamp(options.brightness), contrast: clamp(options.contrast), grayscale: options.grayscale, transparency: options.transparency !== undefined ? Math.max(0, Math.min(100, options.transparency)) : undefined };
+    const clamp = (val?: number) =>
+      val !== undefined ? Math.max(-100, Math.min(100, val)) : undefined;
+    this.effects = {
+      brightness: clamp(options.brightness),
+      contrast: clamp(options.contrast),
+      grayscale: options.grayscale,
+      transparency:
+        options.transparency !== undefined
+          ? Math.max(0, Math.min(100, options.transparency))
+          : undefined,
+    };
     return this;
   }
 
@@ -1231,16 +1381,20 @@ export class Image {
       } else if (this.extension === 'jpg' || this.extension === 'jpeg') {
         let offset = 2;
         while (offset < this.imageData.length) {
-          if (this.imageData[offset] !== 0xFF) break;
+          if (this.imageData[offset] !== 0xff) break;
           const marker = this.imageData[offset + 1];
-          if (marker === 0xE0) {
+          if (marker === 0xe0) {
             const length = this.imageData.readUInt16BE(offset + 2);
-            if (length >= 16 && this.imageData.slice(offset + 4, offset + 9).toString('ascii') === 'JFIF\0') {
+            if (
+              length >= 16 &&
+              this.imageData.slice(offset + 4, offset + 9).toString('ascii') === 'JFIF\0'
+            ) {
               const units = this.imageData[offset + 11];
               const xDensity = this.imageData.readUInt16BE(offset + 12);
               const yDensity = this.imageData.readUInt16BE(offset + 14);
               if (units === 1) return Math.min(xDensity, yDensity);
-              if (units === 2) return Math.min(Math.round(xDensity * 2.54), Math.round(yDensity * 2.54));
+              if (units === 2)
+                return Math.min(Math.round(xDensity * 2.54), Math.round(yDensity * 2.54));
             }
             offset += 2 + length;
             continue;
@@ -1260,16 +1414,13 @@ export class Image {
   }
 
   floatTopLeft(marginTop = 0, marginLeft = 0): this {
-    this.setPosition(
-      { anchor: 'page', offset: marginLeft },
-      { anchor: 'page', offset: marginTop }
-    );
+    this.setPosition({ anchor: 'page', offset: marginLeft }, { anchor: 'page', offset: marginTop });
     this.setAnchor({
       behindDoc: false,
       locked: false,
       layoutInCell: true,
       allowOverlap: true,
-      relativeHeight: 251658240
+      relativeHeight: 251658240,
     });
     this.setWrap('square', 'bothSides');
     return this;
@@ -1285,7 +1436,7 @@ export class Image {
       locked: false,
       layoutInCell: true,
       allowOverlap: true,
-      relativeHeight: 251658240
+      relativeHeight: 251658240,
     });
     this.setWrap('square', 'bothSides');
     return this;
@@ -1301,7 +1452,7 @@ export class Image {
       locked: false,
       layoutInCell: true,
       allowOverlap: true,
-      relativeHeight: 251658240
+      relativeHeight: 251658240,
     });
     this.setWrap('square', 'bothSides');
     return this;
@@ -1316,7 +1467,7 @@ export class Image {
         locked: false,
         layoutInCell: true,
         allowOverlap: true,
-        relativeHeight: 251658240
+        relativeHeight: 251658240,
       });
     }
     return this;
@@ -1377,7 +1528,10 @@ export class Image {
     const isFloating = this.isFloating();
 
     // Common elements - must include wp: namespace prefix
-    const extent = XMLBuilder.wp('extent', { cx: this.width.toString(), cy: this.height.toString() });
+    const extent = XMLBuilder.wp('extent', {
+      cx: this.width.toString(),
+      cy: this.height.toString(),
+    });
 
     // --- Build blip element with effects ---
     const blipChildren: XMLElement[] = [];
@@ -1409,12 +1563,18 @@ export class Image {
 
     // Group B: Inject raw blip effects passthrough (a:clrChange, a:duotone, etc.)
     if (this._rawPassthrough.has('blip-effects')) {
-      blipChildren.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('blip-effects')! } as XMLElement);
+      blipChildren.push({
+        name: '__rawXml',
+        rawXml: this._rawPassthrough.get('blip-effects')!,
+      } as XMLElement);
     }
 
     // Group B: Inject raw blip extLst passthrough (must come last per schema)
     if (this._rawPassthrough.has('blip-extLst')) {
-      blipChildren.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('blip-extLst')! } as XMLElement);
+      blipChildren.push({
+        name: '__rawXml',
+        rawXml: this._rawPassthrough.get('blip-extLst')!,
+      } as XMLElement);
     } else if (this.svgRelationshipId) {
       // SVG dual-relationship: add asvg:svgBlip reference in extLst
       blipChildren.push({
@@ -1433,9 +1593,10 @@ export class Image {
       blipAttrs['r:embed'] = this.relationshipId;
     }
 
-    const blip = blipChildren.length > 0
-      ? XMLBuilder.a('blip', blipAttrs, blipChildren)
-      : XMLBuilder.a('blip', blipAttrs);
+    const blip =
+      blipChildren.length > 0
+        ? XMLBuilder.a('blip', blipAttrs, blipChildren)
+        : XMLBuilder.a('blip', blipAttrs);
 
     // --- Build transform (a:xfrm) ---
     const xfrmAttrs: Record<string, string> | undefined = (() => {
@@ -1447,7 +1608,7 @@ export class Image {
     })();
     const xfrm = XMLBuilder.a('xfrm', xfrmAttrs, [
       XMLBuilder.a('off', { x: '0', y: '0' }),
-      XMLBuilder.a('ext', { cx: this.width.toString(), cy: this.height.toString() })
+      XMLBuilder.a('ext', { cx: this.width.toString(), cy: this.height.toString() }),
     ]);
 
     // --- Build shape properties (pic:spPr) ---
@@ -1455,11 +1616,14 @@ export class Image {
 
     // Geometry: use passthrough for custGeom or prstGeom with avLst, otherwise default
     if (this._rawPassthrough.has('geometry')) {
-      spPrChildren.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('geometry')! } as XMLElement);
+      spPrChildren.push({
+        name: '__rawXml',
+        rawXml: this._rawPassthrough.get('geometry')!,
+      } as XMLElement);
     } else {
-      spPrChildren.push(XMLBuilder.a('prstGeom', { prst: this.presetGeometry }, [
-        XMLBuilder.a('avLst')
-      ]));
+      spPrChildren.push(
+        XMLBuilder.a('prstGeom', { prst: this.presetGeometry }, [XMLBuilder.a('avLst')])
+      );
     }
 
     // Border (a:ln) - full model (Group C)
@@ -1486,15 +1650,16 @@ export class Image {
             colorChildren.push(XMLBuilder.aSelf(mod.name, { val: mod.val }));
           }
         }
-        const colorEl = colorChildren.length > 0
-          ? XMLBuilder.a(this.border.fill.type, { val: this.border.fill.value }, colorChildren)
-          : XMLBuilder.a(this.border.fill.type, { val: this.border.fill.value });
+        const colorEl =
+          colorChildren.length > 0
+            ? XMLBuilder.a(this.border.fill.type, { val: this.border.fill.value }, colorChildren)
+            : XMLBuilder.a(this.border.fill.type, { val: this.border.fill.value });
         lnChildren.push(XMLBuilder.a('solidFill', undefined, [colorEl]));
       } else {
         // Default: scheme color tx1 (backward compat)
-        lnChildren.push(XMLBuilder.a('solidFill', undefined, [
-          XMLBuilder.a('schemeClr', { val: 'tx1' })
-        ]));
+        lnChildren.push(
+          XMLBuilder.a('solidFill', undefined, [XMLBuilder.a('schemeClr', { val: 'tx1' })])
+        );
       }
 
       // Dash pattern
@@ -1526,25 +1691,36 @@ export class Image {
 
     // Group B: Inject raw spPr effects passthrough (effectLst, scene3d, sp3d, etc.)
     if (this._rawPassthrough.has('spPr-effects')) {
-      spPrChildren.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('spPr-effects')! } as XMLElement);
+      spPrChildren.push({
+        name: '__rawXml',
+        rawXml: this._rawPassthrough.get('spPr-effects')!,
+      } as XMLElement);
     }
 
     // --- Build pic:cNvPr with passthrough ---
     const cNvPrChildren: XMLElement[] = [];
     if (this._rawPassthrough.has('cNvPr-extra')) {
-      cNvPrChildren.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('cNvPr-extra')! } as XMLElement);
+      cNvPrChildren.push({
+        name: '__rawXml',
+        rawXml: this._rawPassthrough.get('cNvPr-extra')!,
+      } as XMLElement);
     }
-    const cNvPr = cNvPrChildren.length > 0
-      ? XMLBuilder.pic('cNvPr', {
-          id: this.picNonVisualProps.id,
-          name: this.picNonVisualProps.name,
-          descr: this.picNonVisualProps.descr,
-        }, cNvPrChildren)
-      : XMLBuilder.pic('cNvPr', {
-          id: this.picNonVisualProps.id,
-          name: this.picNonVisualProps.name,
-          descr: this.picNonVisualProps.descr,
-        });
+    const cNvPr =
+      cNvPrChildren.length > 0
+        ? XMLBuilder.pic(
+            'cNvPr',
+            {
+              id: this.picNonVisualProps.id,
+              name: this.picNonVisualProps.name,
+              descr: this.picNonVisualProps.descr,
+            },
+            cNvPrChildren
+          )
+        : XMLBuilder.pic('cNvPr', {
+            id: this.picNonVisualProps.id,
+            name: this.picNonVisualProps.name,
+            descr: this.picNonVisualProps.descr,
+          });
 
     // --- Build picLocks from map ---
     const picLocksAttrs: Record<string, string> = {};
@@ -1555,39 +1731,52 @@ export class Image {
     // --- Build blipFill ---
     const blipFillAttrs: Record<string, string> = {};
     if (this.blipFillDpi !== undefined) blipFillAttrs.dpi = this.blipFillDpi.toString();
-    if (this.blipFillRotWithShape !== undefined) blipFillAttrs.rotWithShape = this.blipFillRotWithShape ? '1' : '0';
+    if (this.blipFillRotWithShape !== undefined)
+      blipFillAttrs.rotWithShape = this.blipFillRotWithShape ? '1' : '0';
 
     const blipFillChildren: XMLElement[] = [blip];
     // Crop values are stored as percentages (0-100), serialized as per-mille (0-100000)
     if (this.crop) {
-      blipFillChildren.push(XMLBuilder.a('srcRect', {
-        l: Math.round(this.crop.left * 1000).toString(),
-        t: Math.round(this.crop.top * 1000).toString(),
-        r: Math.round(this.crop.right * 1000).toString(),
-        b: Math.round(this.crop.bottom * 1000).toString(),
-      }));
+      blipFillChildren.push(
+        XMLBuilder.a('srcRect', {
+          l: Math.round(this.crop.left * 1000).toString(),
+          t: Math.round(this.crop.top * 1000).toString(),
+          r: Math.round(this.crop.right * 1000).toString(),
+          b: Math.round(this.crop.bottom * 1000).toString(),
+        })
+      );
     }
     // Group B: Use tile passthrough instead of stretch when present
     if (this._rawPassthrough.has('blipFill-extra')) {
-      blipFillChildren.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('blipFill-extra')! } as XMLElement);
+      blipFillChildren.push({
+        name: '__rawXml',
+        rawXml: this._rawPassthrough.get('blipFill-extra')!,
+      } as XMLElement);
     } else {
       blipFillChildren.push(XMLBuilder.a('stretch', undefined, [XMLBuilder.a('fillRect')]));
     }
 
     const blipFillAttrsObj = Object.keys(blipFillAttrs).length > 0 ? blipFillAttrs : undefined;
 
-    const graphicData = XMLBuilder.a('graphicData', { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' }, [
-      XMLBuilder.pic('pic', undefined, [
-        XMLBuilder.pic('nvPicPr', undefined, [
-          cNvPr,
-          XMLBuilder.pic('cNvPicPr', undefined, [
-            XMLBuilder.a('picLocks', Object.keys(picLocksAttrs).length > 0 ? picLocksAttrs : undefined)
-          ])
+    const graphicData = XMLBuilder.a(
+      'graphicData',
+      { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' },
+      [
+        XMLBuilder.pic('pic', undefined, [
+          XMLBuilder.pic('nvPicPr', undefined, [
+            cNvPr,
+            XMLBuilder.pic('cNvPicPr', undefined, [
+              XMLBuilder.a(
+                'picLocks',
+                Object.keys(picLocksAttrs).length > 0 ? picLocksAttrs : undefined
+              ),
+            ]),
+          ]),
+          XMLBuilder.pic('blipFill', blipFillAttrsObj, blipFillChildren),
+          XMLBuilder.pic('spPr', { bwMode: this.bwMode }, spPrChildren),
         ]),
-        XMLBuilder.pic('blipFill', blipFillAttrsObj, blipFillChildren),
-        XMLBuilder.pic('spPr', { bwMode: this.bwMode }, spPrChildren)
-      ])
-    ]);
+      ]
+    );
 
     const graphic = XMLBuilder.a('graphic', undefined, [graphicData]);
 
@@ -1598,7 +1787,10 @@ export class Image {
       if (this.hidden) attrs.hidden = '1';
       const children: XMLElement[] = [];
       if (this._rawPassthrough.has('docPr-extra')) {
-        children.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('docPr-extra')! } as XMLElement);
+        children.push({
+          name: '__rawXml',
+          rawXml: this._rawPassthrough.get('docPr-extra')!,
+        } as XMLElement);
       }
       return children.length > 0
         ? XMLBuilder.wp('docPr', attrs, children)
@@ -1611,7 +1803,7 @@ export class Image {
         XMLBuilder.a('graphicFrameLocks', {
           'xmlns:a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
           noChangeAspect: this.noChangeAspect ? '1' : '0',
-        })
+        }),
       ]);
     };
 
@@ -1619,19 +1811,37 @@ export class Image {
       // Floating image (anchor)
       const positionHChildren: XMLElement[] = [];
       if (this.position?.horizontal.alignment) {
-        positionHChildren.push(XMLBuilder.wp('align', undefined, [this.position.horizontal.alignment]));
+        positionHChildren.push(
+          XMLBuilder.wp('align', undefined, [this.position.horizontal.alignment])
+        );
       } else {
-        positionHChildren.push(XMLBuilder.wp('posOffset', undefined, [(this.position?.horizontal.offset || 0).toString()]));
+        positionHChildren.push(
+          XMLBuilder.wp('posOffset', undefined, [
+            (this.position?.horizontal.offset || 0).toString(),
+          ])
+        );
       }
-      const positionH = XMLBuilder.wp('positionH', { relativeFrom: this.position?.horizontal.anchor || 'page' }, positionHChildren);
+      const positionH = XMLBuilder.wp(
+        'positionH',
+        { relativeFrom: this.position?.horizontal.anchor || 'page' },
+        positionHChildren
+      );
 
       const positionVChildren: XMLElement[] = [];
       if (this.position?.vertical.alignment) {
-        positionVChildren.push(XMLBuilder.wp('align', undefined, [this.position.vertical.alignment]));
+        positionVChildren.push(
+          XMLBuilder.wp('align', undefined, [this.position.vertical.alignment])
+        );
       } else {
-        positionVChildren.push(XMLBuilder.wp('posOffset', undefined, [(this.position?.vertical.offset || 0).toString()]));
+        positionVChildren.push(
+          XMLBuilder.wp('posOffset', undefined, [(this.position?.vertical.offset || 0).toString()])
+        );
       }
-      const positionV = XMLBuilder.wp('positionV', { relativeFrom: this.position?.vertical.anchor || 'page' }, positionVChildren);
+      const positionV = XMLBuilder.wp(
+        'positionV',
+        { relativeFrom: this.position?.vertical.anchor || 'page' },
+        positionVChildren
+      );
 
       // Effect extent for floating images (required by Word)
       const floatEffectExt = this.effectExtent || { left: 0, top: 0, right: 0, bottom: 0 };
@@ -1639,15 +1849,10 @@ export class Image {
         t: floatEffectExt.top.toString(),
         r: floatEffectExt.right.toString(),
         b: floatEffectExt.bottom.toString(),
-        l: floatEffectExt.left.toString()
+        l: floatEffectExt.left.toString(),
       });
 
-      const anchorChildren: XMLElement[] = [
-        positionH,
-        positionV,
-        extent,
-        effectExtentElement
-      ];
+      const anchorChildren: XMLElement[] = [positionH, positionV, extent, effectExtentElement];
 
       // Wrap element (required by CT_Anchor per ECMA-376 — defaults to wrapNone)
       if (this.wrap) {
@@ -1660,18 +1865,32 @@ export class Image {
 
         let wrapElementName: string;
         switch (this.wrap.type) {
-          case 'square': wrapElementName = 'wrapSquare'; break;
-          case 'tight': wrapElementName = 'wrapTight'; break;
-          case 'through': wrapElementName = 'wrapThrough'; break;
-          case 'topAndBottom': wrapElementName = 'wrapTopAndBottom'; break;
-          case 'none': wrapElementName = 'wrapNone'; break;
-          default: wrapElementName = 'wrapSquare';
+          case 'square':
+            wrapElementName = 'wrapSquare';
+            break;
+          case 'tight':
+            wrapElementName = 'wrapTight';
+            break;
+          case 'through':
+            wrapElementName = 'wrapThrough';
+            break;
+          case 'topAndBottom':
+            wrapElementName = 'wrapTopAndBottom';
+            break;
+          case 'none':
+            wrapElementName = 'wrapNone';
+            break;
+          default:
+            wrapElementName = 'wrapSquare';
         }
 
         // Group B: Include wrap polygon passthrough as children
         const wrapChildren: XMLElement[] = [];
         if (this._rawPassthrough.has('wrap-polygon')) {
-          wrapChildren.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('wrap-polygon')! } as XMLElement);
+          wrapChildren.push({
+            name: '__rawXml',
+            rawXml: this._rawPassthrough.get('wrap-polygon')!,
+          } as XMLElement);
         } else if (wrapElementName === 'wrapTight' || wrapElementName === 'wrapThrough') {
           // CT_WrapTight/CT_WrapThrough require a wp:wrapPolygon child.
           // Generate a default rectangular polygon covering the full image extents.
@@ -1704,7 +1923,10 @@ export class Image {
 
       // Group B: Inject anchor extras (wp14:sizeRelH, wp14:sizeRelV)
       if (this._rawPassthrough.has('anchor-extra')) {
-        anchorChildren.push({ name: '__rawXml', rawXml: this._rawPassthrough.get('anchor-extra')! } as XMLElement);
+        anchorChildren.push({
+          name: '__rawXml',
+          rawXml: this._rawPassthrough.get('anchor-extra')!,
+        } as XMLElement);
       }
 
       // Build anchor attributes including simplePos and distance from text
@@ -1726,30 +1948,34 @@ export class Image {
       anchorChildren.unshift(XMLBuilder.wp('simplePos', { x: '0', y: '0' }));
 
       return XMLBuilder.w('drawing', undefined, [
-        XMLBuilder.wp('anchor', anchorAttrs, anchorChildren)
+        XMLBuilder.wp('anchor', anchorAttrs, anchorChildren),
       ]);
     } else {
       // Inline image
       const effectExt = this.effectExtent || { left: 0, top: 0, right: 0, bottom: 0 };
 
       return XMLBuilder.w('drawing', undefined, [
-        XMLBuilder.wp('inline', {
-          distT: this.inlineDistT.toString(),
-          distB: this.inlineDistB.toString(),
-          distL: this.inlineDistL.toString(),
-          distR: this.inlineDistR.toString(),
-        }, [
-          extent,
-          XMLBuilder.wp('effectExtent', {
-            t: effectExt.top.toString(),
-            r: effectExt.right.toString(),
-            b: effectExt.bottom.toString(),
-            l: effectExt.left.toString()
-          }),
-          buildDocPr(this.docPrId.toString()),
-          buildCNvGraphicFramePr(),
-          graphic
-        ])
+        XMLBuilder.wp(
+          'inline',
+          {
+            distT: this.inlineDistT.toString(),
+            distB: this.inlineDistB.toString(),
+            distL: this.inlineDistL.toString(),
+            distR: this.inlineDistR.toString(),
+          },
+          [
+            extent,
+            XMLBuilder.wp('effectExtent', {
+              t: effectExt.top.toString(),
+              r: effectExt.right.toString(),
+              b: effectExt.bottom.toString(),
+              l: effectExt.left.toString(),
+            }),
+            buildDocPr(this.docPrId.toString()),
+            buildCNvGraphicFramePr(),
+            graphic,
+          ]
+        ),
       ]);
     }
   }

@@ -69,10 +69,7 @@ export class CompatibilityUpgrader {
     if (!compatBlockMatch && !selfClosingCompat) {
       // No w:compat block — insert a full modern block before </w:settings>
       const modernBlock = CompatibilityUpgrader.buildModernCompatBlock(MODERN_COMPAT_SETTINGS);
-      const xml = settingsXml.replace(
-        /<\/w:settings>/,
-        modernBlock + '\n</w:settings>'
-      );
+      const xml = settingsXml.replace(/<\/w:settings>/, modernBlock + '\n</w:settings>');
 
       for (const s of MODERN_COMPAT_SETTINGS) {
         addedSettings.push(s.name);
@@ -201,9 +198,10 @@ export class CompatibilityUpgrader {
    * @param namespaces - Current namespace record from document
    * @returns Updated namespace record with modern namespaces added
    */
-  static ensureModernNamespaces(
-    namespaces: Record<string, string>
-  ): { namespaces: Record<string, string>; expanded: boolean } {
+  static ensureModernNamespaces(namespaces: Record<string, string>): {
+    namespaces: Record<string, string>;
+    expanded: boolean;
+  } {
     const result = { ...namespaces };
     let expanded = false;
 
@@ -230,7 +228,7 @@ export class CompatibilityUpgrader {
    */
   private static buildModernCompatBlock(settings: CompatSetting[]): string {
     const entries = settings.map(
-      s => `    <w:compatSetting w:name="${s.name}" w:uri="${s.uri}" w:val="${s.val}"/>`
+      (s) => `    <w:compatSetting w:name="${s.name}" w:uri="${s.uri}" w:val="${s.val}"/>`
     );
     return `<w:compat>\n${entries.join('\n')}\n  </w:compat>`;
   }

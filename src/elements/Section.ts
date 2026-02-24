@@ -26,24 +26,63 @@ export type SectionType = 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' | '
  * Comprehensive set of page number formats
  */
 export type PageNumberFormat =
-  | 'decimal' | 'lowerRoman' | 'upperRoman' | 'lowerLetter' | 'upperLetter'
-  | 'ordinal' | 'cardinalText' | 'ordinalText'
-  | 'hex' | 'chicago' | 'decimalZero'
-  | 'decimalEnclosedCircle' | 'decimalEnclosedFullstop' | 'decimalEnclosedParen'
-  | 'ideographDigital' | 'ideographTraditional' | 'ideographLegalTraditional'
-  | 'ideographEnclosedCircle' | 'ideographZodiac' | 'ideographZodiacTraditional'
-  | 'chineseCounting' | 'chineseCountingThousand' | 'chineseLegalSimplified'
-  | 'japaneseCounting' | 'japaneseDigitalTenThousand' | 'japaneseLegal'
-  | 'koreanCounting' | 'koreanDigital' | 'koreanDigital2' | 'koreanLegal'
-  | 'taiwaneseCounting' | 'taiwaneseCountingThousand' | 'taiwaneseDigital'
-  | 'aiueo' | 'aiueoFullWidth' | 'iroha' | 'irohaFullWidth'
-  | 'arabicAbjad' | 'arabicAlpha' | 'hebrew1' | 'hebrew2'
-  | 'hindiConsonants' | 'hindiCounting' | 'hindiNumbers' | 'hindiVowels'
-  | 'thaiCounting' | 'thaiLetters' | 'thaiNumbers'
+  | 'decimal'
+  | 'lowerRoman'
+  | 'upperRoman'
+  | 'lowerLetter'
+  | 'upperLetter'
+  | 'ordinal'
+  | 'cardinalText'
+  | 'ordinalText'
+  | 'hex'
+  | 'chicago'
+  | 'decimalZero'
+  | 'decimalEnclosedCircle'
+  | 'decimalEnclosedFullstop'
+  | 'decimalEnclosedParen'
+  | 'ideographDigital'
+  | 'ideographTraditional'
+  | 'ideographLegalTraditional'
+  | 'ideographEnclosedCircle'
+  | 'ideographZodiac'
+  | 'ideographZodiacTraditional'
+  | 'chineseCounting'
+  | 'chineseCountingThousand'
+  | 'chineseLegalSimplified'
+  | 'japaneseCounting'
+  | 'japaneseDigitalTenThousand'
+  | 'japaneseLegal'
+  | 'koreanCounting'
+  | 'koreanDigital'
+  | 'koreanDigital2'
+  | 'koreanLegal'
+  | 'taiwaneseCounting'
+  | 'taiwaneseCountingThousand'
+  | 'taiwaneseDigital'
+  | 'aiueo'
+  | 'aiueoFullWidth'
+  | 'iroha'
+  | 'irohaFullWidth'
+  | 'arabicAbjad'
+  | 'arabicAlpha'
+  | 'hebrew1'
+  | 'hebrew2'
+  | 'hindiConsonants'
+  | 'hindiCounting'
+  | 'hindiNumbers'
+  | 'hindiVowels'
+  | 'thaiCounting'
+  | 'thaiLetters'
+  | 'thaiNumbers'
   | 'vietnameseCounting'
-  | 'russianLower' | 'russianUpper'
-  | 'numberInDash' | 'dollarText' | 'bullet'
-  | 'bahtText' | 'ganada' | 'chosung'
+  | 'russianLower'
+  | 'russianUpper'
+  | 'numberInDash'
+  | 'dollarText'
+  | 'bullet'
+  | 'bahtText'
+  | 'ganada'
+  | 'chosung'
   | 'none'
   | string; // Allow any format string for forward compatibility
 
@@ -253,15 +292,15 @@ export interface SectionProperties {
   pageNumbering?: PageNumbering;
   /** Header reference IDs */
   headers?: {
-    default?: string;  // rId for default header
-    first?: string;    // rId for first page header
-    even?: string;     // rId for even page header
+    default?: string; // rId for default header
+    first?: string; // rId for first page header
+    even?: string; // rId for even page header
   };
   /** Footer reference IDs */
   footers?: {
-    default?: string;  // rId for default footer
-    first?: string;    // rId for first page footer
-    even?: string;     // rId for even page footer
+    default?: string; // rId for default footer
+    first?: string; // rId for first page footer
+    even?: string; // rId for even page footer
   };
   /** Title page (different first page) */
   titlePage?: boolean;
@@ -331,11 +370,11 @@ export class Section {
         orientation: 'portrait',
       },
       margins: properties.margins || {
-        top: 1440,    // 1 inch
+        top: 1440, // 1 inch
         bottom: 1440,
         left: 1440,
         right: 1440,
-        header: 720,  // 0.5 inch
+        header: 720, // 0.5 inch
         footer: 720,
       },
       // Default to single column layout
@@ -516,7 +555,9 @@ export class Section {
    * @returns Array of column widths in twips, or undefined if not set
    */
   getColumnWidths(): number[] | undefined {
-    return this.properties.columns?.columnWidths ? [...this.properties.columns.columnWidths] : undefined;
+    return this.properties.columns?.columnWidths
+      ? [...this.properties.columns.columnWidths]
+      : undefined;
   }
 
   /**
@@ -585,7 +626,10 @@ export class Section {
     this.properties.pageSize.orientation = orientation;
 
     // Swap width/height for landscape
-    if (orientation === 'landscape' && this.properties.pageSize.width < this.properties.pageSize.height) {
+    if (
+      orientation === 'landscape' &&
+      this.properties.pageSize.width < this.properties.pageSize.height
+    ) {
       const temp = this.properties.pageSize.width;
       this.properties.pageSize.width = this.properties.pageSize.height;
       this.properties.pageSize.height = temp;
@@ -659,7 +703,12 @@ export class Section {
     const prev = this.properties.pageNumbering ? { ...this.properties.pageNumbering } : undefined;
     this.properties.pageNumbering = { start, format };
     if (this.trackingContext?.isEnabled()) {
-      this.trackingContext.trackSectionChange(this, 'pageNumbering', prev, this.properties.pageNumbering);
+      this.trackingContext.trackSectionChange(
+        this,
+        'pageNumbering',
+        prev,
+        this.properties.pageNumbering
+      );
     }
     return this;
   }
@@ -734,7 +783,12 @@ export class Section {
     const prev = this.properties.paperSource ? { ...this.properties.paperSource } : undefined;
     this.properties.paperSource = { first, other };
     if (this.trackingContext?.isEnabled()) {
-      this.trackingContext.trackSectionChange(this, 'paperSource', prev, this.properties.paperSource);
+      this.trackingContext.trackSectionChange(
+        this,
+        'paperSource',
+        prev,
+        this.properties.paperSource
+      );
     }
     return this;
   }
@@ -769,7 +823,9 @@ export class Section {
     this.properties.columns.equalWidth = false;
     this.properties.columns.count = widths.length;
     if (this.trackingContext?.isEnabled()) {
-      this.trackingContext.trackSectionChange(this, 'columns', prev, { ...this.properties.columns });
+      this.trackingContext.trackSectionChange(this, 'columns', prev, {
+        ...this.properties.columns,
+      });
     }
     return this;
   }
@@ -796,7 +852,12 @@ export class Section {
     const prev = this.properties.lineNumbering ? { ...this.properties.lineNumbering } : undefined;
     this.properties.lineNumbering = { ...options };
     if (this.trackingContext?.isEnabled()) {
-      this.trackingContext.trackSectionChange(this, 'lineNumbering', prev, this.properties.lineNumbering);
+      this.trackingContext.trackSectionChange(
+        this,
+        'lineNumbering',
+        prev,
+        this.properties.lineNumbering
+      );
     }
     return this;
   }
@@ -894,9 +955,12 @@ export class Section {
     this.properties.chapStyle = chapStyle;
     if (chapSep) this.properties.chapSep = chapSep;
     if (this.trackingContext?.isEnabled()) {
-      this.trackingContext.trackSectionChange(this, 'chapterNumbering',
+      this.trackingContext.trackSectionChange(
+        this,
+        'chapterNumbering',
         { chapStyle: prevStyle, chapSep: prevSep },
-        { chapStyle, chapSep: chapSep || prevSep });
+        { chapStyle, chapSep: chapSep || prevSep }
+      );
     }
     return this;
   }
@@ -975,13 +1039,21 @@ export class Section {
         fnChildren.push(XMLBuilder.wSelf('pos', { 'w:val': this.properties.footnotePr.position }));
       }
       if (this.properties.footnotePr.numberFormat) {
-        fnChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.footnotePr.numberFormat }));
+        fnChildren.push(
+          XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.footnotePr.numberFormat })
+        );
       }
       if (this.properties.footnotePr.startNumber !== undefined) {
-        fnChildren.push(XMLBuilder.wSelf('numStart', { 'w:val': this.properties.footnotePr.startNumber.toString() }));
+        fnChildren.push(
+          XMLBuilder.wSelf('numStart', {
+            'w:val': this.properties.footnotePr.startNumber.toString(),
+          })
+        );
       }
       if (this.properties.footnotePr.restart) {
-        fnChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.footnotePr.restart }));
+        fnChildren.push(
+          XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.footnotePr.restart })
+        );
       }
       if (fnChildren.length > 0) {
         children.push(XMLBuilder.w('footnotePr', undefined, fnChildren));
@@ -995,13 +1067,21 @@ export class Section {
         enChildren.push(XMLBuilder.wSelf('pos', { 'w:val': this.properties.endnotePr.position }));
       }
       if (this.properties.endnotePr.numberFormat) {
-        enChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.endnotePr.numberFormat }));
+        enChildren.push(
+          XMLBuilder.wSelf('numFmt', { 'w:val': this.properties.endnotePr.numberFormat })
+        );
       }
       if (this.properties.endnotePr.startNumber !== undefined) {
-        enChildren.push(XMLBuilder.wSelf('numStart', { 'w:val': this.properties.endnotePr.startNumber.toString() }));
+        enChildren.push(
+          XMLBuilder.wSelf('numStart', {
+            'w:val': this.properties.endnotePr.startNumber.toString(),
+          })
+        );
       }
       if (this.properties.endnotePr.restart) {
-        enChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.endnotePr.restart }));
+        enChildren.push(
+          XMLBuilder.wSelf('numRestart', { 'w:val': this.properties.endnotePr.restart })
+        );
       }
       if (enChildren.length > 0) {
         children.push(XMLBuilder.w('endnotePr', undefined, enChildren));
@@ -1010,9 +1090,7 @@ export class Section {
 
     // Section type
     if (this.properties.type) {
-      children.push(
-        XMLBuilder.wSelf('type', { 'w:val': this.properties.type })
-      );
+      children.push(XMLBuilder.wSelf('type', { 'w:val': this.properties.type }));
     }
 
     // Page size
@@ -1147,9 +1225,7 @@ export class Section {
       const colChildren: XMLElement[] = [];
       if (this.properties.columns.columnWidths) {
         for (const width of this.properties.columns.columnWidths) {
-          colChildren.push(
-            XMLBuilder.wSelf('col', { 'w:w': width.toString() })
-          );
+          colChildren.push(XMLBuilder.wSelf('col', { 'w:w': width.toString() }));
         }
       }
 
@@ -1167,9 +1243,7 @@ export class Section {
 
     // Vertical alignment
     if (this.properties.verticalAlignment) {
-      children.push(
-        XMLBuilder.wSelf('vAlign', { 'w:val': this.properties.verticalAlignment })
-      );
+      children.push(XMLBuilder.wSelf('vAlign', { 'w:val': this.properties.verticalAlignment }));
     }
 
     // Suppress endnotes (w:noEndnote)
@@ -1185,13 +1259,17 @@ export class Section {
     // Text direction (map to valid ST_TextDirection values per ECMA-376 §17.18.93)
     if (this.properties.textDirection) {
       const textDirMap: Record<string, string> = {
-        ltr: 'lrTb', rtl: 'tbRl', tbRl: 'tbRl', btLr: 'btLr',
-        lrTb: 'lrTb', lrTbV: 'lrTbV', tbRlV: 'tbRlV', tbLrV: 'tbLrV',
+        ltr: 'lrTb',
+        rtl: 'tbRl',
+        tbRl: 'tbRl',
+        btLr: 'btLr',
+        lrTb: 'lrTb',
+        lrTbV: 'lrTbV',
+        tbRlV: 'tbRlV',
+        tbLrV: 'tbLrV',
       };
       const val = textDirMap[this.properties.textDirection] || this.properties.textDirection;
-      children.push(
-        XMLBuilder.wSelf('textDirection', { 'w:val': val })
-      );
+      children.push(XMLBuilder.wSelf('textDirection', { 'w:val': val }));
     }
 
     // Bidirectional section (RTL)
@@ -1223,9 +1301,11 @@ export class Section {
 
     // Printer settings (w:printerSettings)
     if (this.properties.printerSettingsId) {
-      children.push(XMLBuilder.wSelf('printerSettings', {
-        'r:id': this.properties.printerSettingsId,
-      }));
+      children.push(
+        XMLBuilder.wSelf('printerSettings', {
+          'r:id': this.properties.printerSettingsId,
+        })
+      );
     }
 
     // Add section property change (w:sectPrChange) per ECMA-376 Part 1 §17.13.5.32
@@ -1257,33 +1337,43 @@ export class Section {
         if (prev.margins) {
           const pgMarAttrs: Record<string, string> = {};
           if (prev.margins.top !== undefined) pgMarAttrs['w:top'] = prev.margins.top.toString();
-          if (prev.margins.bottom !== undefined) pgMarAttrs['w:bottom'] = prev.margins.bottom.toString();
+          if (prev.margins.bottom !== undefined)
+            pgMarAttrs['w:bottom'] = prev.margins.bottom.toString();
           if (prev.margins.left !== undefined) pgMarAttrs['w:left'] = prev.margins.left.toString();
-          if (prev.margins.right !== undefined) pgMarAttrs['w:right'] = prev.margins.right.toString();
-          if (prev.margins.header !== undefined) pgMarAttrs['w:header'] = prev.margins.header.toString();
-          if (prev.margins.footer !== undefined) pgMarAttrs['w:footer'] = prev.margins.footer.toString();
+          if (prev.margins.right !== undefined)
+            pgMarAttrs['w:right'] = prev.margins.right.toString();
+          if (prev.margins.header !== undefined)
+            pgMarAttrs['w:header'] = prev.margins.header.toString();
+          if (prev.margins.footer !== undefined)
+            pgMarAttrs['w:footer'] = prev.margins.footer.toString();
           prevChildren.push(XMLBuilder.wSelf('pgMar', pgMarAttrs));
         }
         if (prev.lineNumbering) {
           const lnAttrs: Record<string, string> = {};
-          if (prev.lineNumbering.countBy !== undefined) lnAttrs['w:countBy'] = prev.lineNumbering.countBy.toString();
-          if (prev.lineNumbering.start !== undefined) lnAttrs['w:start'] = prev.lineNumbering.start.toString();
+          if (prev.lineNumbering.countBy !== undefined)
+            lnAttrs['w:countBy'] = prev.lineNumbering.countBy.toString();
+          if (prev.lineNumbering.start !== undefined)
+            lnAttrs['w:start'] = prev.lineNumbering.start.toString();
           if (prev.lineNumbering.restart) lnAttrs['w:restart'] = prev.lineNumbering.restart;
-          if (prev.lineNumbering.distance !== undefined) lnAttrs['w:distance'] = prev.lineNumbering.distance.toString();
+          if (prev.lineNumbering.distance !== undefined)
+            lnAttrs['w:distance'] = prev.lineNumbering.distance.toString();
           if (Object.keys(lnAttrs).length > 0) {
             prevChildren.push(XMLBuilder.wSelf('lnNumType', lnAttrs));
           }
         }
         if (prev.pageNumbering) {
           const pnAttrs: Record<string, string> = {};
-          if (prev.pageNumbering.start !== undefined) pnAttrs['w:start'] = prev.pageNumbering.start.toString();
+          if (prev.pageNumbering.start !== undefined)
+            pnAttrs['w:start'] = prev.pageNumbering.start.toString();
           if (prev.pageNumbering.format) pnAttrs['w:fmt'] = prev.pageNumbering.format;
           if (Object.keys(pnAttrs).length > 0) {
             prevChildren.push(XMLBuilder.wSelf('pgNumType', pnAttrs));
           }
         }
         if (prev.columns) {
-          const colAttrs: Record<string, string> = { 'w:num': prev.columns.count?.toString() || '1' };
+          const colAttrs: Record<string, string> = {
+            'w:num': prev.columns.count?.toString() || '1',
+          };
           if (prev.columns.space !== undefined) colAttrs['w:space'] = prev.columns.space.toString();
           prevChildren.push(XMLBuilder.wSelf('cols', colAttrs));
         }
@@ -1298,10 +1388,20 @@ export class Section {
         }
         if (prev.textDirection) {
           const tdMap: Record<string, string> = {
-            ltr: 'lrTb', rtl: 'tbRl', tbRl: 'tbRl', btLr: 'btLr',
-            lrTb: 'lrTb', lrTbV: 'lrTbV', tbRlV: 'tbRlV', tbLrV: 'tbLrV',
+            ltr: 'lrTb',
+            rtl: 'tbRl',
+            tbRl: 'tbRl',
+            btLr: 'btLr',
+            lrTb: 'lrTb',
+            lrTbV: 'lrTbV',
+            tbRlV: 'tbRlV',
+            tbLrV: 'tbLrV',
           };
-          prevChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': tdMap[prev.textDirection] || prev.textDirection }));
+          prevChildren.push(
+            XMLBuilder.wSelf('textDirection', {
+              'w:val': tdMap[prev.textDirection] || prev.textDirection,
+            })
+          );
         }
       }
       const prevSectPr = XMLBuilder.w('sectPr', undefined, prevChildren);
@@ -1412,7 +1512,7 @@ export class Section {
     const size = pageSize === 'a4' ? PAGE_SIZES.A4 : PAGE_SIZES.LETTER;
     return new Section({
       pageSize: {
-        width: size.height,  // Swap for landscape
+        width: size.height, // Swap for landscape
         height: size.width,
         orientation: 'landscape',
       },

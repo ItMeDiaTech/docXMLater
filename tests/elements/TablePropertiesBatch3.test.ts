@@ -343,7 +343,8 @@ describe('Phase 4.3 Batch 3 - Table Row Properties Part 1', () => {
       const table = new Table(3, 3);
 
       // Row 0: Header with center justification
-      table.getRow(0)!
+      table
+        .getRow(0)!
         .setHeader(true)
         .setJustification('center')
         .setCantSplit(true)
@@ -351,9 +352,7 @@ describe('Phase 4.3 Batch 3 - Table Row Properties Part 1', () => {
       table.getRow(0)!.getCell(0)!.createParagraph('Header');
 
       // Row 1: Hidden row with gridBefore
-      table.getRow(1)!
-        .setHidden(true)
-        .setGridBefore(1);
+      table.getRow(1)!.setHidden(true).setGridBefore(1);
       table.getRow(1)!.getCell(0)!.createParagraph('Hidden');
 
       // Row 2: Normal row with gridAfter
@@ -393,7 +392,8 @@ describe('Phase 4.3 Batch 3 - Table Row Properties Part 1', () => {
       const table = new Table(2, 2);
 
       // Set all properties
-      table.getRow(0)!
+      table
+        .getRow(0)!
         .setJustification('center')
         .setHidden(false)
         .setGridBefore(1)
@@ -481,7 +481,13 @@ describe('Phase 4.3 Batch 3 - Table Row Properties Part 1', () => {
       const doc = Document.create();
       const table = new Table(5, 2);
 
-      const justifications: Array<'left' | 'center' | 'right' | 'start' | 'end'> = ['left', 'center', 'right', 'start', 'end'];
+      const justifications: Array<'left' | 'center' | 'right' | 'start' | 'end'> = [
+        'left',
+        'center',
+        'right',
+        'start',
+        'end',
+      ];
 
       justifications.forEach((jc, i) => {
         table.getRow(i)!.setJustification(jc);

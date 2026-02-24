@@ -9,7 +9,6 @@
  * and relationship registration in updatePeopleXml().
  */
 
-
 import { Document } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';
@@ -17,7 +16,6 @@ import { Revision } from '../../src/elements/Revision';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 
 describe('people.xml Registration', () => {
-
   it('should register people.xml in Content_Types when track changes create authors', async () => {
     const doc = Document.create();
     doc.enableTrackChanges({ author: 'Test Author' });
@@ -41,7 +39,9 @@ describe('people.xml Registration', () => {
     // Verify Content_Types includes people.xml override
     const contentTypes = zipHandler.getFileAsString('[Content_Types].xml') || '';
     expect(contentTypes).toContain('people.xml');
-    expect(contentTypes).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml');
+    expect(contentTypes).toContain(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml'
+    );
   });
 
   it('should register people.xml relationship in document.xml.rels', async () => {

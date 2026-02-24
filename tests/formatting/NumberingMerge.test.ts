@@ -425,10 +425,7 @@ describe('Numbering XML Merge Tests', () => {
       const closingPos = numberingXml.indexOf('</w:numbering>');
 
       // Nothing between numIdMacAtCleanup and </w:numbering> except whitespace
-      const between = numberingXml.slice(
-        numberingXml.indexOf('>', macPos) + 1,
-        closingPos
-      ).trim();
+      const between = numberingXml.slice(numberingXml.indexOf('>', macPos) + 1, closingPos).trim();
       expect(between).toBe('');
     });
 

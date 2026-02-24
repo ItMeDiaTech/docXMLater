@@ -5,13 +5,13 @@
  * paragraph list properties.
  */
 
-import type { Paragraph } from "../elements/Paragraph";
+import type { Paragraph } from '../elements/Paragraph';
 import type {
   ListCategory,
   ListDetectionResult,
   NumberFormat,
   BulletFormat,
-} from "../types/list-types";
+} from '../types/list-types';
 
 // =============================================================================
 // CONSTANTS
@@ -36,13 +36,13 @@ export const TYPED_LIST_PATTERNS: Record<string, RegExp> = {
 
 /** Map pattern names to categories */
 export const PATTERN_TO_CATEGORY: Record<string, ListCategory> = {
-  decimal: "numbered",
-  lowerLetter: "numbered",
-  upperLetter: "numbered",
-  lowerRoman: "numbered",
-  bullet: "bullet",
-  dash: "bullet",
-  arrow: "bullet",
+  decimal: 'numbered',
+  lowerLetter: 'numbered',
+  upperLetter: 'numbered',
+  lowerRoman: 'numbered',
+  bullet: 'bullet',
+  dash: 'bullet',
+  arrow: 'bullet',
 };
 
 /**
@@ -53,14 +53,14 @@ export const PATTERN_TO_CATEGORY: Record<string, ListCategory> = {
  *   Level 2: i., ii., iii. (lowerRoman)
  */
 export const FORMAT_TO_LEVEL: Record<string, number> = {
-  decimal: 0,      // 1., 2., 3.
-  lowerLetter: 1,  // a., b., c.
-  upperLetter: 1,  // A., B., C.
-  lowerRoman: 2,   // i., ii., iii.
-  upperRoman: 2,   // I., II., III.
-  bullet: 0,       // Top-level bullet (filled circle)
-  dash: 0,         // Top-level dash marker
-  arrow: 0,        // Top-level arrow marker
+  decimal: 0, // 1., 2., 3.
+  lowerLetter: 1, // a., b., c.
+  upperLetter: 1, // A., B., C.
+  lowerRoman: 2, // i., ii., iii.
+  upperRoman: 2, // I., II., III.
+  bullet: 0, // Top-level bullet (filled circle)
+  dash: 0, // Top-level dash marker
+  arrow: 0, // Top-level arrow marker
 };
 
 /**
@@ -124,7 +124,7 @@ export function detectTypedPrefix(text: string): {
     if (match) {
       // Special check for single-letter patterns (lowerLetter, upperLetter)
       // to avoid false positives on abbreviations like "P.O. Box", "U.S.", "A.M."
-      if (format === "lowerLetter" || format === "upperLetter") {
+      if (format === 'lowerLetter' || format === 'upperLetter') {
         const remaining = text.substring(match[0].length);
         // If remaining text starts with another letter followed by period,
         // this is likely an abbreviation, not a list marker
@@ -136,12 +136,12 @@ export function detectTypedPrefix(text: string): {
       return {
         prefix: match[0],
         format: format as NumberFormat | BulletFormat,
-        category: PATTERN_TO_CATEGORY[format] ?? "none",
+        category: PATTERN_TO_CATEGORY[format] ?? 'none',
       };
     }
   }
 
-  return { prefix: null, format: null, category: "none" };
+  return { prefix: null, format: null, category: 'none' };
 }
 
 /**
@@ -163,7 +163,7 @@ export function detectListType(paragraph: Paragraph): ListDetectionResult {
   // Priority 1: Real Word list with <w:numPr>
   if (numbering?.numId !== undefined && numbering.numId !== 0) {
     return {
-      category: "numbered", // Default, caller can refine with NumberingManager lookup
+      category: 'numbered', // Default, caller can refine with NumberingManager lookup
       isWordList: true,
       typedPrefix: null,
       inferredLevel: numbering.level ?? 0,
@@ -193,7 +193,7 @@ export function detectListType(paragraph: Paragraph): ListDetectionResult {
 
   // Priority 3: Not a list
   return {
-    category: "none",
+    category: 'none',
     isWordList: false,
     typedPrefix: null,
     inferredLevel: 0,
@@ -213,10 +213,10 @@ export function validateListSequence(
 ): { valid: boolean; warnings: string[] } {
   const warnings: string[] = [];
   let lastDecimal = 0;
-  let lastLetter = "";
+  let lastLetter = '';
 
   for (const { detection } of paragraphs) {
-    if (!detection.typedPrefix || detection.category !== "numbered") continue;
+    if (!detection.typedPrefix || detection.category !== 'numbered') continue;
 
     const match = /^(\d+|[a-zA-Z]+)/.exec(detection.typedPrefix);
     if (!match?.[1]) continue;
@@ -235,11 +235,7 @@ export function validateListSequence(
     // Check letter sequence
     if (/^[a-z]$/i.test(marker)) {
       const letter = marker.toLowerCase();
-      if (
-        lastLetter &&
-        letter.charCodeAt(0) !== lastLetter.charCodeAt(0) + 1 &&
-        letter !== "a"
-      ) {
+      if (lastLetter && letter.charCodeAt(0) !== lastLetter.charCodeAt(0) + 1 && letter !== 'a') {
         warnings.push(`Unexpected letter sequence: ${lastLetter} → ${letter}`);
       }
       lastLetter = letter;
@@ -253,22 +249,16 @@ export function validateListSequence(
  * Determine the list category for a given numId by checking the abstractNum.
  * This requires access to the NumberingManager.
  */
-export function getListCategoryFromFormat(
-  format: string | undefined
-): ListCategory {
-  if (!format) return "none";
+export function getListCategoryFromFormat(format: string | undefined): ListCategory {
+  if (!format) return 'none';
 
-  if (["bullet", "dash", "arrow"].includes(format)) {
-    return "bullet";
+  if (['bullet', 'dash', 'arrow'].includes(format)) {
+    return 'bullet';
   }
 
-  if (
-    ["decimal", "lowerLetter", "upperLetter", "lowerRoman", "upperRoman"].includes(
-      format
-    )
-  ) {
-    return "numbered";
+  if (['decimal', 'lowerLetter', 'upperLetter', 'lowerRoman', 'upperRoman'].includes(format)) {
+    return 'numbered';
   }
 
-  return "none";
+  return 'none';
 }

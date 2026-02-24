@@ -5,7 +5,6 @@
  * that appear inside the result section of complex fields like HYPERLINK
  */
 
-
 import { join } from 'path';
 import { Document } from '../../src/core/Document';
 import { ComplexField } from '../../src/elements/Field';

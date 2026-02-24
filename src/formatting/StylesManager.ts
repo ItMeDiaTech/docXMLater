@@ -3,10 +3,10 @@
  * Handles style registration, retrieval, and styles.xml generation
  */
 
-import { Paragraph } from "../elements/Paragraph";
-import { XMLBuilder } from "../xml/XMLBuilder";
-import { XMLParser } from "../xml/XMLParser";
-import { Style, StyleType } from "./Style";
+import { Paragraph } from '../elements/Paragraph';
+import { XMLBuilder } from '../xml/XMLBuilder';
+import { XMLParser } from '../xml/XMLParser';
+import { Style, StyleType } from './Style';
 
 /**
  * Configuration for latent styles (w:latentStyles per ECMA-376 §17.7.4.6)
@@ -82,35 +82,32 @@ export class StylesManager {
    * Registry of built-in style factory functions
    * Maps style ID to factory function for lazy loading
    */
-  private static readonly BUILT_IN_STYLE_FACTORIES = new Map<
-    string,
-    () => Style
-  >([
-    ["Normal", () => Style.createNormalStyle()],
-    ["Heading1", () => Style.createHeadingStyle(1)],
-    ["Heading2", () => Style.createHeadingStyle(2)],
-    ["Heading3", () => Style.createHeadingStyle(3)],
-    ["Heading4", () => Style.createHeadingStyle(4)],
-    ["Heading5", () => Style.createHeadingStyle(5)],
-    ["Heading6", () => Style.createHeadingStyle(6)],
-    ["Heading7", () => Style.createHeadingStyle(7)],
-    ["Heading8", () => Style.createHeadingStyle(8)],
-    ["Heading9", () => Style.createHeadingStyle(9)],
-    ["Heading1Char", () => Style.createHeadingCharStyle(1)],
-    ["Heading2Char", () => Style.createHeadingCharStyle(2)],
-    ["Heading3Char", () => Style.createHeadingCharStyle(3)],
-    ["Heading4Char", () => Style.createHeadingCharStyle(4)],
-    ["Heading5Char", () => Style.createHeadingCharStyle(5)],
-    ["Heading6Char", () => Style.createHeadingCharStyle(6)],
-    ["Heading7Char", () => Style.createHeadingCharStyle(7)],
-    ["Heading8Char", () => Style.createHeadingCharStyle(8)],
-    ["Heading9Char", () => Style.createHeadingCharStyle(9)],
-    ["Title", () => Style.createTitleStyle()],
-    ["Subtitle", () => Style.createSubtitleStyle()],
-    ["ListParagraph", () => Style.createListParagraphStyle()],
-    ["TOCHeading", () => Style.createTOCHeadingStyle()],
-    ["TableNormal", () => Style.createTableNormalStyle()],
-    ["TableGrid", () => Style.createTableGridStyle()],
+  private static readonly BUILT_IN_STYLE_FACTORIES = new Map<string, () => Style>([
+    ['Normal', () => Style.createNormalStyle()],
+    ['Heading1', () => Style.createHeadingStyle(1)],
+    ['Heading2', () => Style.createHeadingStyle(2)],
+    ['Heading3', () => Style.createHeadingStyle(3)],
+    ['Heading4', () => Style.createHeadingStyle(4)],
+    ['Heading5', () => Style.createHeadingStyle(5)],
+    ['Heading6', () => Style.createHeadingStyle(6)],
+    ['Heading7', () => Style.createHeadingStyle(7)],
+    ['Heading8', () => Style.createHeadingStyle(8)],
+    ['Heading9', () => Style.createHeadingStyle(9)],
+    ['Heading1Char', () => Style.createHeadingCharStyle(1)],
+    ['Heading2Char', () => Style.createHeadingCharStyle(2)],
+    ['Heading3Char', () => Style.createHeadingCharStyle(3)],
+    ['Heading4Char', () => Style.createHeadingCharStyle(4)],
+    ['Heading5Char', () => Style.createHeadingCharStyle(5)],
+    ['Heading6Char', () => Style.createHeadingCharStyle(6)],
+    ['Heading7Char', () => Style.createHeadingCharStyle(7)],
+    ['Heading8Char', () => Style.createHeadingCharStyle(8)],
+    ['Heading9Char', () => Style.createHeadingCharStyle(9)],
+    ['Title', () => Style.createTitleStyle()],
+    ['Subtitle', () => Style.createSubtitleStyle()],
+    ['ListParagraph', () => Style.createListParagraphStyle()],
+    ['TOCHeading', () => Style.createTOCHeadingStyle()],
+    ['TableNormal', () => Style.createTableNormalStyle()],
+    ['TableGrid', () => Style.createTableGridStyle()],
   ]);
 
   /**
@@ -123,7 +120,7 @@ export class StylesManager {
     // Always load Normal style if built-in styles are enabled
     // Normal is required and referenced by most other styles
     if (includeBuiltInStyles) {
-      this.ensureStyleLoaded("Normal");
+      this.ensureStyleLoaded('Normal');
     }
   }
 
@@ -207,10 +204,7 @@ export class StylesManager {
     }
 
     // Check if it's a built-in style that can be loaded
-    return (
-      this.includeBuiltInStyles &&
-      StylesManager.BUILT_IN_STYLE_FACTORIES.has(styleId)
-    );
+    return this.includeBuiltInStyles && StylesManager.BUILT_IN_STYLE_FACTORIES.has(styleId);
   }
 
   /**
@@ -274,9 +268,7 @@ export class StylesManager {
   getQuickStyles(): Style[] {
     return this.getAllStyles().filter((style) => {
       const props = style.getProperties();
-      const isQuick =
-        props.qFormat === true ||
-        (!props.customStyle && props.qFormat !== false);
+      const isQuick = props.qFormat === true || (!props.customStyle && props.qFormat !== false);
       const isVisible = !props.semiHidden;
       return isQuick && isVisible;
     });
@@ -335,7 +327,7 @@ export class StylesManager {
    * @returns Array of table styles
    */
   getTableStyles(): Style[] {
-    return this.getAllStyles().filter((style) => style.getType() === "table");
+    return this.getAllStyles().filter((style) => style.getType() === 'table');
   }
 
   /**
@@ -349,7 +341,7 @@ export class StylesManager {
     const style = Style.create({
       styleId,
       name,
-      type: "table",
+      type: 'table',
       basedOn,
       customStyle: true,
     });
@@ -401,9 +393,7 @@ export class StylesManager {
     customStyles: number;
   } {
     const loadedStyles = this.styles.size;
-    const customStyles = this.getAllStyles().filter(
-      (s) => s.getProperties().customStyle
-    ).length;
+    const customStyles = this.getAllStyles().filter((s) => s.getProperties().customStyle).length;
 
     return {
       loadedStyles,
@@ -425,7 +415,7 @@ export class StylesManager {
     const style = Style.create({
       styleId,
       name,
-      type: "paragraph",
+      type: 'paragraph',
       basedOn,
       customStyle: true,
     });
@@ -444,7 +434,7 @@ export class StylesManager {
     const style = Style.create({
       styleId,
       name,
-      type: "character",
+      type: 'character',
       basedOn,
       customStyle: true,
     });
@@ -475,7 +465,7 @@ export class StylesManager {
    */
   addLatentStyleException(exception: LatentStyleException): this {
     // Replace existing exception for same name
-    const idx = this.latentStyleExceptions.findIndex(e => e.name === exception.name);
+    const idx = this.latentStyleExceptions.findIndex((e) => e.name === exception.name);
     if (idx >= 0) {
       this.latentStyleExceptions[idx] = exception;
     } else {
@@ -516,12 +506,10 @@ export class StylesManager {
     }
 
     builder.element(
-      "w:styles",
+      'w:styles',
       {
-        "xmlns:w":
-          "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-        "xmlns:r":
-          "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+        'xmlns:w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+        'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
       },
       stylesChildren
     );
@@ -534,36 +522,32 @@ export class StylesManager {
    */
   private generateDocDefaults() {
     const rPrDefaultChildren = [
-      XMLBuilder.wSelf("rFonts", {
-        "w:ascii": "Calibri",
-        "w:hAnsi": "Calibri",
-        "w:eastAsia": "Calibri",
-        "w:cs": "Calibri",
+      XMLBuilder.wSelf('rFonts', {
+        'w:ascii': 'Calibri',
+        'w:hAnsi': 'Calibri',
+        'w:eastAsia': 'Calibri',
+        'w:cs': 'Calibri',
       }),
-      XMLBuilder.wSelf("sz", { "w:val": "22" }), // 11pt
-      XMLBuilder.wSelf("szCs", { "w:val": "22" }),
-      XMLBuilder.wSelf("lang", {
-        "w:val": "en-US",
-        "w:eastAsia": "en-US",
-        "w:bidi": "ar-SA",
+      XMLBuilder.wSelf('sz', { 'w:val': '22' }), // 11pt
+      XMLBuilder.wSelf('szCs', { 'w:val': '22' }),
+      XMLBuilder.wSelf('lang', {
+        'w:val': 'en-US',
+        'w:eastAsia': 'en-US',
+        'w:bidi': 'ar-SA',
       }),
     ];
 
     const pPrDefaultChildren = [
-      XMLBuilder.wSelf("spacing", {
-        "w:after": "200",
-        "w:line": "276",
-        "w:lineRule": "auto",
+      XMLBuilder.wSelf('spacing', {
+        'w:after': '200',
+        'w:line': '276',
+        'w:lineRule': 'auto',
       }),
     ];
 
-    return XMLBuilder.w("docDefaults", undefined, [
-      XMLBuilder.w("rPrDefault", undefined, [
-        XMLBuilder.w("rPr", undefined, rPrDefaultChildren),
-      ]),
-      XMLBuilder.w("pPrDefault", undefined, [
-        XMLBuilder.w("pPr", undefined, pPrDefaultChildren),
-      ]),
+    return XMLBuilder.w('docDefaults', undefined, [
+      XMLBuilder.w('rPrDefault', undefined, [XMLBuilder.w('rPr', undefined, rPrDefaultChildren)]),
+      XMLBuilder.w('pPrDefault', undefined, [XMLBuilder.w('pPr', undefined, pPrDefaultChildren)]),
     ]);
   }
 
@@ -571,39 +555,40 @@ export class StylesManager {
    * Generates the latent styles XML element
    */
   private generateLatentStyles() {
-    if (!this.latentStyles) return XMLBuilder.w("latentStyles", {}, []);
+    if (!this.latentStyles) return XMLBuilder.w('latentStyles', {}, []);
 
     const attrs: Record<string, string> = {};
     if (this.latentStyles.defaultLockedState !== undefined) {
-      attrs["w:defLockedState"] = this.latentStyles.defaultLockedState ? "1" : "0";
+      attrs['w:defLockedState'] = this.latentStyles.defaultLockedState ? '1' : '0';
     }
     if (this.latentStyles.defaultUiPriority !== undefined) {
-      attrs["w:defUIPriority"] = this.latentStyles.defaultUiPriority.toString();
+      attrs['w:defUIPriority'] = this.latentStyles.defaultUiPriority.toString();
     }
     if (this.latentStyles.defaultSemiHidden !== undefined) {
-      attrs["w:defSemiHidden"] = this.latentStyles.defaultSemiHidden ? "1" : "0";
+      attrs['w:defSemiHidden'] = this.latentStyles.defaultSemiHidden ? '1' : '0';
     }
     if (this.latentStyles.defaultUnhideWhenUsed !== undefined) {
-      attrs["w:defUnhideWhenUsed"] = this.latentStyles.defaultUnhideWhenUsed ? "1" : "0";
+      attrs['w:defUnhideWhenUsed'] = this.latentStyles.defaultUnhideWhenUsed ? '1' : '0';
     }
     if (this.latentStyles.defaultQFormat !== undefined) {
-      attrs["w:defQFormat"] = this.latentStyles.defaultQFormat ? "1" : "0";
+      attrs['w:defQFormat'] = this.latentStyles.defaultQFormat ? '1' : '0';
     }
     if (this.latentStyles.count !== undefined) {
-      attrs["w:count"] = this.latentStyles.count.toString();
+      attrs['w:count'] = this.latentStyles.count.toString();
     }
 
-    const children = this.latentStyleExceptions.map(exc => {
-      const excAttrs: Record<string, string> = { "w:name": exc.name };
-      if (exc.locked !== undefined) excAttrs["w:locked"] = exc.locked ? "1" : "0";
-      if (exc.uiPriority !== undefined) excAttrs["w:uiPriority"] = exc.uiPriority.toString();
-      if (exc.semiHidden !== undefined) excAttrs["w:semiHidden"] = exc.semiHidden ? "1" : "0";
-      if (exc.unhideWhenUsed !== undefined) excAttrs["w:unhideWhenUsed"] = exc.unhideWhenUsed ? "1" : "0";
-      if (exc.qFormat !== undefined) excAttrs["w:qFormat"] = exc.qFormat ? "1" : "0";
-      return XMLBuilder.wSelf("lsdException", excAttrs);
+    const children = this.latentStyleExceptions.map((exc) => {
+      const excAttrs: Record<string, string> = { 'w:name': exc.name };
+      if (exc.locked !== undefined) excAttrs['w:locked'] = exc.locked ? '1' : '0';
+      if (exc.uiPriority !== undefined) excAttrs['w:uiPriority'] = exc.uiPriority.toString();
+      if (exc.semiHidden !== undefined) excAttrs['w:semiHidden'] = exc.semiHidden ? '1' : '0';
+      if (exc.unhideWhenUsed !== undefined)
+        excAttrs['w:unhideWhenUsed'] = exc.unhideWhenUsed ? '1' : '0';
+      if (exc.qFormat !== undefined) excAttrs['w:qFormat'] = exc.qFormat ? '1' : '0';
+      return XMLBuilder.wSelf('lsdException', excAttrs);
     });
 
-    return XMLBuilder.w("latentStyles", attrs, children);
+    return XMLBuilder.w('latentStyles', attrs, children);
   }
 
   /**
@@ -648,17 +633,15 @@ export class StylesManager {
     // Check for empty or null
     if (!xml || xml.trim().length === 0) {
       result.isValid = false;
-      result.errors.push("Styles XML is empty or null");
+      result.errors.push('Styles XML is empty or null');
       return result;
     }
 
     // Check for common corruption patterns FIRST (before parsing)
     // This catches double-encoding issues that would break the parser
-    if (xml.includes("&lt;w:") || xml.includes("&gt;")) {
+    if (xml.includes('&lt;w:') || xml.includes('&gt;')) {
       result.isValid = false;
-      result.errors.push(
-        "XML contains escaped tags - possible double-encoding corruption"
-      );
+      result.errors.push('XML contains escaped tags - possible double-encoding corruption');
       return result;
     }
 
@@ -666,45 +649,39 @@ export class StylesManager {
     // Checking balanced tags with regex is unreliable and can give false positives
 
     // Use XMLParser to extract root element
-    const stylesContent = XMLParser.extractBetweenTags(
-      xml,
-      "<w:styles",
-      "</w:styles>"
-    );
+    const stylesContent = XMLParser.extractBetweenTags(xml, '<w:styles', '</w:styles>');
     if (!stylesContent) {
       result.isValid = false;
-      result.errors.push("Missing required <w:styles> root element");
+      result.errors.push('Missing required <w:styles> root element');
       return result;
     }
 
     // Check for namespace declaration
-    if (!xml.includes("xmlns:w=")) {
-      result.warnings.push("Missing WordprocessingML namespace declaration");
+    if (!xml.includes('xmlns:w=')) {
+      result.warnings.push('Missing WordprocessingML namespace declaration');
     }
 
     // Use XMLParser to extract all style elements
-    const styleElements = XMLParser.extractElements(stylesContent, "w:style");
+    const styleElements = XMLParser.extractElements(stylesContent, 'w:style');
     result.styleCount = styleElements.length;
 
     // Check if any styles found
     if (styleElements.length === 0) {
-      result.warnings.push("No styles found in document");
+      result.warnings.push('No styles found in document');
       return result;
     }
 
     // Check for styles without attributes (invalid)
     const styleWithoutAttrs = styleElements.filter((el) => {
       // Check if element has any attributes
-      const openTagEnd = el.indexOf(">");
+      const openTagEnd = el.indexOf('>');
       const openTag = el.substring(0, openTagEnd);
-      return !openTag.includes("w:type") || !openTag.includes("w:styleId");
+      return !openTag.includes('w:type') || !openTag.includes('w:styleId');
     });
 
     if (styleWithoutAttrs.length > 0) {
       result.isValid = false;
-      result.errors.push(
-        "Style found without any attributes - w:type and w:styleId are required"
-      );
+      result.errors.push('Style found without any attributes - w:type and w:styleId are required');
     }
 
     // Process each style element
@@ -712,7 +689,7 @@ export class StylesManager {
 
     for (const styleElement of styleElements) {
       // Extract styleId using XMLParser
-      const styleId = XMLParser.extractAttribute(styleElement, "w:styleId");
+      const styleId = XMLParser.extractAttribute(styleElement, 'w:styleId');
       if (styleId) {
         // Check for duplicates
         if (foundStyleIds.has(styleId)) {
@@ -724,53 +701,44 @@ export class StylesManager {
         }
       } else {
         result.isValid = false;
-        result.errors.push("Style found without required w:styleId attribute");
+        result.errors.push('Style found without required w:styleId attribute');
       }
 
       // Extract and validate type using XMLParser
-      const type = XMLParser.extractAttribute(styleElement, "w:type");
+      const type = XMLParser.extractAttribute(styleElement, 'w:type');
       if (type) {
-        if (!["paragraph", "character", "table", "numbering"].includes(type)) {
+        if (!['paragraph', 'character', 'table', 'numbering'].includes(type)) {
           result.warnings.push(`Invalid style type: "${type}"`);
         }
       } else {
         result.isValid = false;
-        result.errors.push("Style found without required w:type attribute");
+        result.errors.push('Style found without required w:type attribute');
       }
 
       // Check for circular references - extract basedOn value
-      const basedOnElement = XMLParser.extractElements(
-        styleElement,
-        "w:basedOn"
-      )[0];
+      const basedOnElement = XMLParser.extractElements(styleElement, 'w:basedOn')[0];
       if (basedOnElement && styleId) {
-        const basedOn = XMLParser.extractAttribute(basedOnElement, "w:val");
+        const basedOn = XMLParser.extractAttribute(basedOnElement, 'w:val');
         if (basedOn && styleId === basedOn) {
           result.isValid = false;
-          result.errors.push(
-            `Circular reference detected: style "${styleId}" based on itself`
-          );
+          result.errors.push(`Circular reference detected: style "${styleId}" based on itself`);
         }
       }
     }
 
     // Check for required Normal style
-    if (!foundStyleIds.has("Normal")) {
-      result.warnings.push(
-        'Missing "Normal" style - document may not render correctly'
-      );
+    if (!foundStyleIds.has('Normal')) {
+      result.warnings.push('Missing "Normal" style - document may not render correctly');
     }
 
     // Check for BOM or invalid characters
     if (xml.charCodeAt(0) === 0xfeff) {
-      result.warnings.push(
-        "XML contains BOM (Byte Order Mark) - may cause parsing issues"
-      );
+      result.warnings.push('XML contains BOM (Byte Order Mark) - may cause parsing issues');
     }
 
     // Summary
     if (result.styleCount === 0) {
-      result.warnings.push("No styles found in document");
+      result.warnings.push('No styles found in document');
     }
 
     return result;
@@ -788,9 +756,7 @@ export class StylesManager {
    */
   searchByName(searchTerm: string): Style[] {
     const term = searchTerm.toLowerCase();
-    return this.getAllStyles().filter((style) =>
-      style.getName().toLowerCase().includes(term)
-    );
+    return this.getAllStyles().filter((style) => style.getName().toLowerCase().includes(term));
   }
 
   /**
@@ -959,7 +925,7 @@ export class StylesManager {
       if (visited.has(currentId)) {
         const cycle = [...chain.map((s) => s.getStyleId()), currentId];
         throw new Error(
-          `Circular style reference detected: ${cycle.join(" -> ")}. ` +
+          `Circular style reference detected: ${cycle.join(' -> ')}. ` +
             `Style '${currentId}' references itself through inheritance chain.`
         );
       }
@@ -1021,9 +987,7 @@ export class StylesManager {
    * ```
    */
   getDerivedStyles(baseStyleId: string): Style[] {
-    return this.getAllStyles().filter(
-      (style) => style.getProperties().basedOn === baseStyleId
-    );
+    return this.getAllStyles().filter((style) => style.getProperties().basedOn === baseStyleId);
   }
 
   /**
@@ -1068,9 +1032,7 @@ export class StylesManager {
       return style;
     } catch (error: unknown) {
       throw new Error(
-        `Failed to import style: ${
-          error instanceof Error ? error.message : "Invalid JSON"
-        }`
+        `Failed to import style: ${error instanceof Error ? error.message : 'Invalid JSON'}`
       );
     }
   }
@@ -1108,7 +1070,7 @@ export class StylesManager {
     try {
       const propsArray = JSON.parse(json);
       if (!Array.isArray(propsArray)) {
-        throw new Error("JSON must contain an array of style properties");
+        throw new Error('JSON must contain an array of style properties');
       }
 
       const styles: Style[] = [];
@@ -1121,9 +1083,7 @@ export class StylesManager {
       return styles;
     } catch (error: unknown) {
       throw new Error(
-        `Failed to import styles: ${
-          error instanceof Error ? error.message : "Invalid JSON"
-        }`
+        `Failed to import styles: ${error instanceof Error ? error.message : 'Invalid JSON'}`
       );
     }
   }

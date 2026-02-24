@@ -33,7 +33,7 @@ describe('Document Part Access Methods', () => {
 
     it('should handle binary parts correctly', async () => {
       // Add a binary part
-      const binaryContent = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]); // JPEG magic bytes
+      const binaryContent = Buffer.from([0xff, 0xd8, 0xff, 0xe0]); // JPEG magic bytes
       await doc.setPart('word/media/test.jpg', binaryContent);
 
       const part = await doc.getPart('word/media/test.jpg');
@@ -75,7 +75,7 @@ describe('Document Part Access Methods', () => {
     });
 
     it('should handle binary content', async () => {
-      const imageBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x47]); // PNG magic bytes
+      const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // PNG magic bytes
 
       await doc.setPart('word/media/image.png', imageBuffer);
 
@@ -176,7 +176,9 @@ describe('Document Part Access Methods', () => {
       const contentTypes = await doc.getContentTypes();
 
       expect(contentTypes.size).toBeGreaterThan(0);
-      expect(contentTypes.get('.rels')).toBe('application/vnd.openxmlformats-package.relationships+xml');
+      expect(contentTypes.get('.rels')).toBe(
+        'application/vnd.openxmlformats-package.relationships+xml'
+      );
       expect(contentTypes.get('.xml')).toBe('application/xml');
     });
 
@@ -236,7 +238,7 @@ describe('Document Part Access Methods', () => {
       expect(packageRels).toBeDefined();
       expect(packageRels!.length).toBeGreaterThan(0);
 
-      const docRel = packageRels!.find(rel => rel.target === 'word/document.xml');
+      const docRel = packageRels!.find((rel) => rel.target === 'word/document.xml');
       expect(docRel).toBeDefined();
       expect(docRel.id).toBeDefined();
       expect(docRel.type).toContain('officeDocument');
@@ -251,7 +253,7 @@ describe('Document Part Access Methods', () => {
       const relationships = await doc.getAllRelationships();
       const docRels = relationships.get('word/_rels/document.xml.rels');
 
-      const externalRel = docRels?.find(rel => rel.targetMode === 'External');
+      const externalRel = docRels?.find((rel) => rel.targetMode === 'External');
       expect(externalRel).toBeDefined();
       expect(externalRel?.target).toBe('https://example.com');
     });
@@ -315,7 +317,7 @@ describe('Document Part Access Methods', () => {
       // Update URLs
       const urlMap = new Map([
         ['https://old-site.com', 'https://new-site.com'],
-        ['https://example.org', 'https://example.com']
+        ['https://example.org', 'https://example.com'],
       ]);
 
       const updated = doc.updateHyperlinkUrls(urlMap);
@@ -329,7 +331,7 @@ describe('Document Part Access Methods', () => {
       const docRels = relationships.get('word/_rels/document.xml.rels');
 
       // Check that new URLs are in relationships
-      const targets = docRels?.map(rel => rel.target) || [];
+      const targets = docRels?.map((rel) => rel.target) || [];
       expect(targets).toContain('https://new-site.com');
       expect(targets).toContain('https://example.com');
       expect(targets).not.toContain('https://old-site.com');
@@ -348,7 +350,7 @@ describe('Document Part Access Methods', () => {
       // Get original relationship count
       const origRelsBefore = await doc.getAllRelationships();
       const origDocRels = origRelsBefore.get('word/_rels/document.xml.rels');
-      const origRel = origDocRels?.find(rel => rel.target === 'https://test.com');
+      const origRel = origDocRels?.find((rel) => rel.target === 'https://test.com');
       const origRelCount = origDocRels?.length || 0;
 
       expect(origRel).toBeDefined();
@@ -364,7 +366,7 @@ describe('Document Part Access Methods', () => {
 
       const relsAfter = await updatedDoc.getAllRelationships();
       const docRelsAfter = relsAfter.get('word/_rels/document.xml.rels');
-      const updatedRel = docRelsAfter?.find(rel => rel.target === 'https://updated.com');
+      const updatedRel = docRelsAfter?.find((rel) => rel.target === 'https://updated.com');
 
       // Verify the relationship exists and is valid
       expect(updatedRel).toBeDefined();
@@ -372,7 +374,7 @@ describe('Document Part Access Methods', () => {
       expect(updatedRel?.id).toMatch(/^rId\d+$/); // Should be a valid rId
 
       // Verify the old URL is gone
-      const oldRel = docRelsAfter?.find(rel => rel.target === 'https://test.com');
+      const oldRel = docRelsAfter?.find((rel) => rel.target === 'https://test.com');
       expect(oldRel).toBeUndefined();
 
       // Verify relationship count hasn't changed
@@ -402,7 +404,7 @@ describe('Document Part Access Methods', () => {
     });
 
     it('should handle large binary content', async () => {
-      const largeBuffer = Buffer.alloc(1024 * 1024, 0xFF); // 1MB
+      const largeBuffer = Buffer.alloc(1024 * 1024, 0xff); // 1MB
 
       await doc.setPart('large/binary.bin', largeBuffer);
 
@@ -412,10 +414,11 @@ describe('Document Part Access Methods', () => {
     });
 
     it('should preserve XML content without modification', async () => {
-      const xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n' +
-                        '<root xmlns:custom="http://example.com">\n' +
-                        '  <item attr="value &amp; special">Content with &lt;tags&gt;</item>\n' +
-                        '</root>';
+      const xmlContent =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<root xmlns:custom="http://example.com">\n' +
+        '  <item attr="value &amp; special">Content with &lt;tags&gt;</item>\n' +
+        '</root>';
 
       await doc.setPart('preserve/test.xml', xmlContent);
 

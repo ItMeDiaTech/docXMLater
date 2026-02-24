@@ -18,32 +18,32 @@ import { formatDateForXml } from '../utils/dateFormatting';
  */
 export type RevisionType =
   // Content changes
-  | 'insert'              // w:ins - Inserted content
-  | 'delete'              // w:del - Deleted content
+  | 'insert' // w:ins - Inserted content
+  | 'delete' // w:del - Deleted content
   // Property changes
   | 'runPropertiesChange' // w:rPrChange - Run formatting change (bold, italic, font, etc.)
   | 'paragraphPropertiesChange' // w:pPrChange - Paragraph formatting change
-  | 'tablePropertiesChange'     // w:tblPrChange - Table formatting change
+  | 'tablePropertiesChange' // w:tblPrChange - Table formatting change
   | 'tableExceptionPropertiesChange' // w:tblPrExChange - Table exception properties change
-  | 'tableRowPropertiesChange'  // w:trPrChange - Table row properties change
+  | 'tableRowPropertiesChange' // w:trPrChange - Table row properties change
   | 'tableCellPropertiesChange' // w:tcPrChange - Table cell properties change
-  | 'sectionPropertiesChange'   // w:sectPrChange - Section properties change
+  | 'sectionPropertiesChange' // w:sectPrChange - Section properties change
   // Move operations
-  | 'moveFrom'            // w:moveFrom - Content moved from this location
-  | 'moveTo'              // w:moveTo - Content moved to this location
+  | 'moveFrom' // w:moveFrom - Content moved from this location
+  | 'moveTo' // w:moveTo - Content moved to this location
   // Table operations
-  | 'tableCellInsert'     // w:cellIns - Table cell inserted
-  | 'tableCellDelete'     // w:cellDel - Table cell deleted
-  | 'tableCellMerge'      // w:cellMerge - Table cells merged
+  | 'tableCellInsert' // w:cellIns - Table cell inserted
+  | 'tableCellDelete' // w:cellDel - Table cell deleted
+  | 'tableCellMerge' // w:cellMerge - Table cells merged
   // Numbering
-  | 'numberingChange'     // w:numberingChange - List numbering changed
+  | 'numberingChange' // w:numberingChange - List numbering changed
   // Hyperlink changes
-  | 'hyperlinkChange'     // Hyperlink URL, text, or formatting change
+  | 'hyperlinkChange' // Hyperlink URL, text, or formatting change
   // Rich content changes (new tracking types)
-  | 'imageChange'         // Image insertion, deletion, or property change
-  | 'fieldChange'         // Field insertion, deletion, or value change
-  | 'commentChange'       // Comment insertion, deletion, or content change
-  | 'bookmarkChange'      // Bookmark creation, deletion, or range change
+  | 'imageChange' // Image insertion, deletion, or property change
+  | 'fieldChange' // Field insertion, deletion, or value change
+  | 'commentChange' // Comment insertion, deletion, or content change
+  | 'bookmarkChange' // Bookmark creation, deletion, or range change
   | 'contentControlChange'; // Content control insertion, deletion, or property change
 
 /**
@@ -195,7 +195,9 @@ export class Revision {
    * @returns Array of Hyperlink objects
    */
   getHyperlinks(): import('./Hyperlink').Hyperlink[] {
-    return this.content.filter((item): item is import('./Hyperlink').Hyperlink => isHyperlinkContent(item));
+    return this.content.filter((item): item is import('./Hyperlink').Hyperlink =>
+      isHyperlinkContent(item)
+    );
   }
 
   /**
@@ -229,8 +231,9 @@ export class Revision {
    */
   getText(): string {
     return this.content
-      .filter((item): item is Run | import('./Hyperlink').Hyperlink =>
-        isRunContent(item) || isHyperlinkContent(item)
+      .filter(
+        (item): item is Run | import('./Hyperlink').Hyperlink =>
+          isRunContent(item) || isHyperlinkContent(item)
       )
       .map((item) => item.getText())
       .join('');
@@ -424,8 +427,8 @@ export class Revision {
       case 'contentControlChange':
         throw new Error(
           `Revision type '${this.type}' is an internal tracking type and cannot be serialized to OOXML XML. ` +
-          `OOXML does not have a native element for this type. ` +
-          `Use insert/delete revision pairs for tracking changes to ${this.type.replace('Change', '')}s.`
+            `OOXML does not have a native element for this type. ` +
+            `Use insert/delete revision pairs for tracking changes to ${this.type.replace('Change', '')}s.`
         );
       default:
         // TypeScript exhaustiveness check - this should never be reached
@@ -531,8 +534,8 @@ export class Revision {
     // Check if content contains only a single hyperlink (needs nesting inversion per ECMA-376)
     // w:hyperlink is NOT a valid child of w:ins/w:del; instead w:ins/w:del must be inside w:hyperlink
     const firstItem = this.content[0];
-    const singleHyperlink = this.content.length === 1 && firstItem && isHyperlinkContent(firstItem)
-      ? firstItem : null;
+    const singleHyperlink =
+      this.content.length === 1 && firstItem && isHyperlinkContent(firstItem) ? firstItem : null;
 
     if (singleHyperlink && !this.isPropertyChangeType()) {
       return this.createHyperlinkWrappedRevisionXml(singleHyperlink, elementName, attributes);
@@ -771,7 +774,7 @@ export class Revision {
     // - w:t -> w:delText (or w:delInstrText if isFieldInstruction)
     // - w:instrText -> w:delInstrText (always, regardless of isFieldInstruction flag)
     if (runXml.children) {
-      const modifiedChildren = runXml.children.map(child => {
+      const modifiedChildren = runXml.children.map((child) => {
         if (typeof child === 'object') {
           if (child.name === 'w:t') {
             // Replace w:t with appropriate deleted text element
@@ -869,7 +872,7 @@ export class Revision {
 
     // Transform nested runs: w:t -> w:delText (or w:delInstrText for field instructions)
     if (hyperlinkXml.children) {
-      hyperlinkXml.children = hyperlinkXml.children.map(child => {
+      hyperlinkXml.children = hyperlinkXml.children.map((child) => {
         if (typeof child === 'object' && child.name === 'w:r') {
           // Transform the run's text elements
           return this.convertRunXmlToDeleted(child);
@@ -890,7 +893,7 @@ export class Revision {
 
     if (!runXml.children) return runXml;
 
-    const modifiedChildren = runXml.children.map(child => {
+    const modifiedChildren = runXml.children.map((child) => {
       if (typeof child === 'object' && child.name === 'w:t') {
         return {
           ...child,
@@ -978,12 +981,7 @@ export class Revision {
    * @param date - Optional date (defaults to now)
    * @returns New Revision instance
    */
-  static fromText(
-    type: RevisionType,
-    author: string,
-    text: string,
-    date?: Date
-  ): Revision {
+  static fromText(type: RevisionType, author: string, text: string, date?: Date): Revision {
     const run = new Run(text);
     return new Revision({
       author,
@@ -1117,12 +1115,7 @@ export class Revision {
    * @param date - Optional date (defaults to now)
    * @returns New Revision instance
    */
-  static createMoveTo(
-    author: string,
-    content: Run | Run[],
-    moveId: string,
-    date?: Date
-  ): Revision {
+  static createMoveTo(author: string, content: Run | Run[], moveId: string, date?: Date): Revision {
     return new Revision({
       author,
       type: 'moveTo',
@@ -1139,11 +1132,7 @@ export class Revision {
    * @param date - Optional date (defaults to now)
    * @returns New Revision instance
    */
-  static createTableCellInsert(
-    author: string,
-    content: Run | Run[],
-    date?: Date
-  ): Revision {
+  static createTableCellInsert(author: string, content: Run | Run[], date?: Date): Revision {
     return new Revision({
       author,
       type: 'tableCellInsert',
@@ -1159,11 +1148,7 @@ export class Revision {
    * @param date - Optional date (defaults to now)
    * @returns New Revision instance
    */
-  static createTableCellDelete(
-    author: string,
-    content: Run | Run[],
-    date?: Date
-  ): Revision {
+  static createTableCellDelete(author: string, content: Run | Run[], date?: Date): Revision {
     return new Revision({
       author,
       type: 'tableCellDelete',
@@ -1179,11 +1164,7 @@ export class Revision {
    * @param date - Optional date (defaults to now)
    * @returns New Revision instance
    */
-  static createTableCellMerge(
-    author: string,
-    content: Run | Run[],
-    date?: Date
-  ): Revision {
+  static createTableCellMerge(author: string, content: Run | Run[], date?: Date): Revision {
     return new Revision({
       author,
       type: 'tableCellMerge',

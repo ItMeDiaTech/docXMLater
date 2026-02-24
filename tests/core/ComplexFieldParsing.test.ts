@@ -17,7 +17,7 @@ async function createDocxFromXml(documentXml: string): Promise<Buffer> {
 
   // [Content_Types].xml
   zipHandler.addFile(
-    "[Content_Types].xml",
+    '[Content_Types].xml',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -28,7 +28,7 @@ async function createDocxFromXml(documentXml: string): Promise<Buffer> {
 
   // _rels/.rels
   zipHandler.addFile(
-    "_rels/.rels",
+    '_rels/.rels',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
@@ -37,14 +37,14 @@ async function createDocxFromXml(documentXml: string): Promise<Buffer> {
 
   // word/_rels/document.xml.rels
   zipHandler.addFile(
-    "word/_rels/document.xml.rels",
+    'word/_rels/document.xml.rels',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 </Relationships>`
   );
 
   // word/document.xml
-  zipHandler.addFile("word/document.xml", documentXml);
+  zipHandler.addFile('word/document.xml', documentXml);
 
   return await zipHandler.toBuffer();
 }
@@ -58,7 +58,7 @@ describe('Complex Field Parsing', () => {
       // Create IF field
       const field = new Field({
         type: 'IF' as FieldType,
-        instruction: 'IF { MERGEFIELD Status } = "Active" "Current" "Former"'
+        instruction: 'IF { MERGEFIELD Status } = "Active" "Current" "Former"',
       });
       para.addField(field);
 
@@ -80,7 +80,7 @@ describe('Complex Field Parsing', () => {
       // Create MERGEFIELD
       const field = new Field({
         type: 'MERGEFIELD' as FieldType,
-        instruction: 'MERGEFIELD CustomerName \\* MERGEFORMAT'
+        instruction: 'MERGEFIELD CustomerName \\* MERGEFORMAT',
       });
       para.addField(field);
 
@@ -102,7 +102,7 @@ describe('Complex Field Parsing', () => {
       // Create INCLUDE field
       const field = new Field({
         type: 'INCLUDE' as FieldType,
-        instruction: 'INCLUDETEXT "C:\\\\Documents\\\\Header.docx"'
+        instruction: 'INCLUDETEXT "C:\\\\Documents\\\\Header.docx"',
       });
       para.addField(field);
 
@@ -120,7 +120,7 @@ describe('Complex Field Parsing', () => {
       // Create custom/unknown field type
       const field = new Field({
         type: 'CUSTOM' as FieldType,
-        instruction: 'SPECIALFIELD param1 param2'
+        instruction: 'SPECIALFIELD param1 param2',
       });
       para.addField(field);
 
@@ -139,7 +139,7 @@ describe('Complex Field Parsing', () => {
       // Complex field with multiple switches
       const field = new Field({
         type: 'DATE',
-        instruction: 'DATE \\@ "MMMM d, yyyy" \\* MERGEFORMAT \\s'
+        instruction: 'DATE \\@ "MMMM d, yyyy" \\* MERGEFORMAT \\s',
       });
       para.addField(field);
 
@@ -160,24 +160,30 @@ describe('Complex Field Parsing', () => {
 
       // Numeric formatting
       const para1 = doc.createParagraph();
-      para1.addField(new Field({
-        type: 'SEQ',
-        instruction: 'SEQ Figure \\# "0.0"'
-      }));
+      para1.addField(
+        new Field({
+          type: 'SEQ',
+          instruction: 'SEQ Figure \\# "0.0"',
+        })
+      );
 
       // Date formatting
       const para2 = doc.createParagraph();
-      para2.addField(new Field({
-        type: 'CREATEDATE',
-        instruction: 'CREATEDATE \\@ "dddd, MMMM dd, yyyy"'
-      }));
+      para2.addField(
+        new Field({
+          type: 'CREATEDATE',
+          instruction: 'CREATEDATE \\@ "dddd, MMMM dd, yyyy"',
+        })
+      );
 
       // Case formatting
       const para3 = doc.createParagraph();
-      para3.addField(new Field({
-        type: 'FILENAME',
-        instruction: 'FILENAME \\* Upper'
-      }));
+      para3.addField(
+        new Field({
+          type: 'FILENAME',
+          instruction: 'FILENAME \\* Upper',
+        })
+      );
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
@@ -192,7 +198,8 @@ describe('Complex Field Parsing', () => {
       // Nested IF with MERGEFIELD
       const field = new Field({
         type: 'IF' as FieldType,
-        instruction: 'IF { MERGEFIELD Score } > 90 "Excellent" { IF { MERGEFIELD Score } > 70 "Good" "Needs Improvement" }'
+        instruction:
+          'IF { MERGEFIELD Score } > 90 "Excellent" { IF { MERGEFIELD Score } > 70 "Good" "Needs Improvement" }',
       });
       para.addField(field);
 
@@ -209,22 +216,28 @@ describe('Complex Field Parsing', () => {
 
       // Multiple SEQ fields for numbering
       const para1 = doc.createParagraph('Figure ');
-      para1.addField(new Field({
-        type: 'SEQ',
-        instruction: 'SEQ Figure \\* ARABIC'
-      }));
+      para1.addField(
+        new Field({
+          type: 'SEQ',
+          instruction: 'SEQ Figure \\* ARABIC',
+        })
+      );
 
       const para2 = doc.createParagraph('Figure ');
-      para2.addField(new Field({
-        type: 'SEQ',
-        instruction: 'SEQ Figure \\* ARABIC'
-      }));
+      para2.addField(
+        new Field({
+          type: 'SEQ',
+          instruction: 'SEQ Figure \\* ARABIC',
+        })
+      );
 
       const para3 = doc.createParagraph('Table ');
-      para3.addField(new Field({
-        type: 'SEQ',
-        instruction: 'SEQ Table \\* ROMAN'
-      }));
+      para3.addField(
+        new Field({
+          type: 'SEQ',
+          instruction: 'SEQ Table \\* ROMAN',
+        })
+      );
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
@@ -237,10 +250,12 @@ describe('Complex Field Parsing', () => {
       const doc = Document.create();
 
       const para = doc.createParagraph();
-      para.addField(new Field({
-        type: 'TC',
-        instruction: 'TC "Chapter 1: Introduction" \\f C \\l "1"'
-      }));
+      para.addField(
+        new Field({
+          type: 'TC',
+          instruction: 'TC "Chapter 1: Introduction" \\f C \\l "1"',
+        })
+      );
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
@@ -252,10 +267,12 @@ describe('Complex Field Parsing', () => {
       const doc = Document.create();
 
       const para = doc.createParagraph('Important term');
-      para.addField(new Field({
-        type: 'XE',
-        instruction: 'XE "Important term" \\i'
-      }));
+      para.addField(
+        new Field({
+          type: 'XE',
+          instruction: 'XE "Important term" \\i',
+        })
+      );
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
@@ -275,8 +292,8 @@ describe('Complex Field Parsing', () => {
         formatting: {
           bold: true,
           size: 14,
-          color: 'FF0000'
-        }
+          color: 'FF0000',
+        },
       });
       para.addField(field);
 
@@ -293,7 +310,7 @@ describe('Complex Field Parsing', () => {
 
       // Add page number field
       const field = new Field({
-        type: 'PAGE'
+        type: 'PAGE',
       });
       para.addField(field);
 
@@ -301,7 +318,7 @@ describe('Complex Field Parsing', () => {
 
       // Add total pages field
       const totalField = new Field({
-        type: 'NUMPAGES'
+        type: 'NUMPAGES',
       });
       para.addField(totalField);
 
@@ -323,7 +340,7 @@ describe('Complex Field Parsing', () => {
       // Complex fields have: begin -> instruction -> separate -> result -> end
       const field = new Field({
         type: 'DATE',
-        instruction: 'DATE \\@ "MM/dd/yyyy"'
+        instruction: 'DATE \\@ "MM/dd/yyyy"',
       });
       para.addField(field);
 
@@ -346,7 +363,7 @@ describe('Complex Field Parsing', () => {
       // Some fields don't have visible results (TC, XE)
       const field = new Field({
         type: 'XE',
-        instruction: 'XE "Index Entry"'
+        instruction: 'XE "Index Entry"',
       });
       para.addField(field);
 
@@ -390,7 +407,7 @@ describe('Complex Field Parsing', () => {
       const tocInstruction = ' TOC \\n \\p " " \\h \\z \\u \\t "Heading 2,1" ';
       const field = new Field({
         type: 'CUSTOM' as FieldType,
-        instruction: tocInstruction
+        instruction: tocInstruction,
       });
       para.addField(field);
 
@@ -422,7 +439,7 @@ describe('Complex Field Parsing', () => {
       const tocInstruction = ' TOC \\o "1-3" \\h \\z \\u ';
       const field = new Field({
         type: 'CUSTOM' as FieldType,
-        instruction: tocInstruction
+        instruction: tocInstruction,
       });
       para.addField(field);
 
@@ -437,7 +454,8 @@ describe('Complex Field Parsing', () => {
       // Either way, the instruction with leading space should be preserved
       // Simple field format: w:instr=" TOC ..."
       // Complex field format: <w:instrText xml:space="preserve"> TOC ...</w:instrText>
-      const hasSimpleField = docXml!.includes('w:instr=" TOC') || docXml!.includes('w:instr=\\" TOC');
+      const hasSimpleField =
+        docXml!.includes('w:instr=" TOC') || docXml!.includes('w:instr=\\" TOC');
       const hasComplexField = docXml!.includes('> TOC') && docXml!.includes('instrText');
 
       // Either format should preserve the leading space
@@ -492,8 +510,8 @@ describe('Complex Field Parsing', () => {
      * - No revisions appear AFTER the end marker
      */
     function validateFieldStructure(structure: string[]): { valid: boolean; issue?: string } {
-      const beginIdx = structure.findIndex(s => s === '[begin]');
-      const endIdx = structure.findIndex(s => s === '[end]');
+      const beginIdx = structure.findIndex((s) => s === '[begin]');
+      const endIdx = structure.findIndex((s) => s === '[end]');
 
       if (beginIdx === -1 || endIdx === -1) {
         return { valid: true }; // No field to validate
@@ -505,7 +523,7 @@ describe('Complex Field Parsing', () => {
         if (elem && elem.startsWith('{')) {
           return {
             valid: false,
-            issue: `Revision found after field end at position ${i}: ${elem}`
+            issue: `Revision found after field end at position ${i}: ${elem}`,
           };
         }
       }
@@ -603,7 +621,9 @@ describe('Complex Field Parsing', () => {
   </w:body>
 </w:document>`;
 
-      const doc = await Document.loadFromBuffer(await createDocxFromXml(xml), { revisionHandling: 'preserve' });
+      const doc = await Document.loadFromBuffer(await createDocxFromXml(xml), {
+        revisionHandling: 'preserve',
+      });
       const paragraphs = doc.getAllParagraphs();
       expect(paragraphs.length).toBe(1);
 
@@ -646,7 +666,9 @@ describe('Complex Field Parsing', () => {
   </w:body>
 </w:document>`;
 
-      const doc = await Document.loadFromBuffer(await createDocxFromXml(xml), { revisionHandling: 'preserve' });
+      const doc = await Document.loadFromBuffer(await createDocxFromXml(xml), {
+        revisionHandling: 'preserve',
+      });
       const paragraphs = doc.getAllParagraphs();
       expect(paragraphs.length).toBe(1);
 

@@ -82,10 +82,7 @@ describe('Run Character Style Reference - Round Trip Tests', () => {
     });
 
     it('should support method chaining', () => {
-      const run = new Run('Chained')
-        .setCharacterStyle('Emphasis')
-        .setBold()
-        .setItalic();
+      const run = new Run('Chained').setCharacterStyle('Emphasis').setBold().setItalic();
 
       const formatting = run.getFormatting();
       expect(formatting.characterStyle).toBe('Emphasis');

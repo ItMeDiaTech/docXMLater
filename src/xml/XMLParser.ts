@@ -4,8 +4,8 @@
  * Completes the DocXML framework (XMLBuilder + XMLParser)
  */
 
-import { getGlobalLogger, createScopedLogger, ILogger } from "../utils/logger";
-import { XMLBuilder } from "./XMLBuilder";
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
+import { XMLBuilder } from './XMLBuilder';
 
 // Create scoped logger for XMLParser operations
 function getLogger(): ILogger {
@@ -86,19 +86,19 @@ export class XMLParser {
    * @returns The body content, or empty string if not found
    */
   static extractBody(docXml: string): string {
-    const startTag = "<w:body";
-    const endTag = "</w:body>";
+    const startTag = '<w:body';
+    const endTag = '</w:body>';
 
     const startIdx = docXml.indexOf(startTag);
-    if (startIdx === -1) return "";
+    if (startIdx === -1) return '';
 
     // Find the closing > of opening tag
-    const openEnd = docXml.indexOf(">", startIdx);
-    if (openEnd === -1) return "";
+    const openEnd = docXml.indexOf('>', startIdx);
+    if (openEnd === -1) return '';
 
     // Find matching closing tag
     const endIdx = docXml.indexOf(endTag, openEnd);
-    if (endIdx === -1) return "";
+    if (endIdx === -1) return '';
 
     return docXml.substring(openEnd + 1, endIdx);
   }
@@ -114,7 +114,7 @@ export class XMLParser {
     const elements: string[] = [];
     const openTag = `<${tagName}`;
     const closeTag = `</${tagName}>`;
-    const selfClosingEnd = "/>";
+    const selfClosingEnd = '/>';
 
     let pos = 0;
     while (pos < xml.length) {
@@ -126,13 +126,13 @@ export class XMLParser {
       const charAfterTag = xml[startIdx + openTag.length];
       if (
         charAfterTag &&
-        charAfterTag !== ">" &&
-        charAfterTag !== "/" &&
-        charAfterTag !== " " &&
-        charAfterTag !== "\t" &&
-        charAfterTag !== "\n" &&
-        charAfterTag !== "\r" &&
-        charAfterTag !== "="
+        charAfterTag !== '>' &&
+        charAfterTag !== '/' &&
+        charAfterTag !== ' ' &&
+        charAfterTag !== '\t' &&
+        charAfterTag !== '\n' &&
+        charAfterTag !== '\r' &&
+        charAfterTag !== '='
       ) {
         // This is a prefix match (e.g., <w:pPr> when looking for <w:p>), skip it (Issue #5)
         pos = startIdx + openTag.length;
@@ -140,7 +140,7 @@ export class XMLParser {
       }
 
       // Find the end of opening tag
-      const openEnd = xml.indexOf(">", startIdx);
+      const openEnd = xml.indexOf('>', startIdx);
       if (openEnd === -1) break;
 
       // Check if self-closing
@@ -167,12 +167,12 @@ export class XMLParser {
           const charAfter = xml[candidateOpen + openTag.length];
           if (
             charAfter &&
-            charAfter !== ">" &&
-            charAfter !== "/" &&
-            charAfter !== " " &&
-            charAfter !== "\t" &&
-            charAfter !== "\n" &&
-            charAfter !== "\r"
+            charAfter !== '>' &&
+            charAfter !== '/' &&
+            charAfter !== ' ' &&
+            charAfter !== '\t' &&
+            charAfter !== '\n' &&
+            charAfter !== '\r'
           ) {
             // Prefix match, keep searching
             openSearchPos = candidateOpen + openTag.length;
@@ -215,10 +215,7 @@ export class XMLParser {
    * @param attributeName - Attribute name (e.g., 'w:val')
    * @returns Attribute value or undefined
    */
-  static extractAttribute(
-    xml: string,
-    attributeName: string
-  ): string | undefined {
+  static extractAttribute(xml: string, attributeName: string): string | undefined {
     // Use simple indexOf for bounded string search (safe)
     const attrPattern = `${attributeName}="`;
     const startIdx = xml.indexOf(attrPattern);
@@ -262,10 +259,7 @@ export class XMLParser {
    */
   static hasBooleanProperty(xml: string, tagName: string): boolean {
     // Check for tag with w:val="1" or w:val="true"
-    if (
-      xml.includes(`<${tagName} w:val="1"`) ||
-      xml.includes(`<${tagName} w:val="true"`)
-    ) {
+    if (xml.includes(`<${tagName} w:val="1"`) || xml.includes(`<${tagName} w:val="true"`)) {
       return true;
     }
 
@@ -286,8 +280,8 @@ export class XMLParser {
    */
   static extractText(xml: string): string {
     const texts: string[] = [];
-    const openTag = "<w:t";
-    const closeTag = "</w:t>";
+    const openTag = '<w:t';
+    const closeTag = '</w:t>';
 
     let pos = 0;
     while (pos < xml.length) {
@@ -295,7 +289,7 @@ export class XMLParser {
       if (startIdx === -1) break;
 
       // Find the end of opening tag
-      const openEnd = xml.indexOf(">", startIdx);
+      const openEnd = xml.indexOf('>', startIdx);
       if (openEnd === -1) break;
 
       // Find closing tag
@@ -309,7 +303,7 @@ export class XMLParser {
       pos = closeIdx + closeTag.length;
     }
 
-    return texts.join("");
+    return texts.join('');
   }
 
   /**
@@ -321,11 +315,7 @@ export class XMLParser {
   static validateSize(xml: string, maxSize: number = 10 * 1024 * 1024): void {
     if (xml.length > maxSize) {
       throw new Error(
-        `XML content too large for parsing (${(
-          xml.length /
-          1024 /
-          1024
-        ).toFixed(1)}MB). ` +
+        `XML content too large for parsing (${(xml.length / 1024 / 1024).toFixed(1)}MB). ` +
           `Maximum allowed: ${(maxSize / 1024 / 1024).toFixed(0)}MB`
       );
     }
@@ -339,16 +329,12 @@ export class XMLParser {
    * @param endTag - Closing tag (e.g., '</w:pPr>')
    * @returns Content between tags, or undefined if not found
    */
-  static extractBetweenTags(
-    xml: string,
-    startTag: string,
-    endTag: string
-  ): string | undefined {
+  static extractBetweenTags(xml: string, startTag: string, endTag: string): string | undefined {
     const startIdx = xml.indexOf(startTag);
     if (startIdx === -1) return undefined;
 
     // Find the end of the opening tag
-    const openEnd = xml.indexOf(">", startIdx);
+    const openEnd = xml.indexOf('>', startIdx);
     if (openEnd === -1) return undefined;
 
     // Find the closing tag
@@ -371,10 +357,7 @@ export class XMLParser {
    * const colorTag = XMLParser.extractSelfClosingTag(xml, 'w:color');
    * // Returns: ' w:val="FF0000"'
    */
-  static extractSelfClosingTag(
-    xml: string,
-    tagName: string
-  ): string | undefined {
+  static extractSelfClosingTag(xml: string, tagName: string): string | undefined {
     const startPattern = `<${tagName}`;
     let searchPos = 0;
 
@@ -428,18 +411,15 @@ export class XMLParser {
    * const obj = XMLParser.parseToObject(xml);
    * // Returns: { Items: { Item: [{ '@_id': '1' }, { '@_id': '2' }] } }
    */
-  static parseToObject(
-    xml: string,
-    options?: ParseToObjectOptions
-  ): ParsedXMLObject {
+  static parseToObject(xml: string, options?: ParseToObjectOptions): ParsedXMLObject {
     const logger = getLogger();
     logger.debug('Parsing XML to object', { xmlSize: xml.length });
 
     // Default options
     const opts: Required<ParseToObjectOptions> = {
       ignoreAttributes: options?.ignoreAttributes ?? false,
-      attributeNamePrefix: options?.attributeNamePrefix ?? "@_",
-      textNodeName: options?.textNodeName ?? "#text",
+      attributeNamePrefix: options?.attributeNamePrefix ?? '@_',
+      textNodeName: options?.textNodeName ?? '#text',
       ignoreNamespace: options?.ignoreNamespace ?? false,
       parseAttributeValue: options?.parseAttributeValue ?? true,
       trimValues: options?.trimValues ?? true,
@@ -451,7 +431,7 @@ export class XMLParser {
     XMLParser.validateSize(xml);
 
     // Remove XML declaration and trim
-    xml = xml.replace(/<\?xml[^>]*\?>\s*/g, "").trim();
+    xml = xml.replace(/<\?xml[^>]*\?>\s*/g, '').trim();
 
     if (!xml) {
       return {};
@@ -477,20 +457,20 @@ export class XMLParser {
     if (depth > options.maxNestingDepth) {
       throw new Error(
         `XML nesting depth exceeds maximum of ${options.maxNestingDepth}. ` +
-        `This may indicate malformed XML or an attack attempt. ` +
-        `Use the maxNestingDepth option to increase the limit if needed.`
+          `This may indicate malformed XML or an attack attempt. ` +
+          `Use the maxNestingDepth option to increase the limit if needed.`
       );
     }
 
     // Find opening tag
-    const openTagStart = xml.indexOf("<", startPos);
+    const openTagStart = xml.indexOf('<', startPos);
     if (openTagStart === -1) {
       return { value: {}, endPos: xml.length };
     }
 
     // Skip comments
-    if (xml.substring(openTagStart, openTagStart + 4) === "<!--") {
-      const commentEnd = xml.indexOf("-->", openTagStart + 4);
+    if (xml.substring(openTagStart, openTagStart + 4) === '<!--') {
+      const commentEnd = xml.indexOf('-->', openTagStart + 4);
       if (commentEnd !== -1) {
         return XMLParser.parseElementToObject(xml, commentEnd + 3, options, depth);
       }
@@ -498,34 +478,29 @@ export class XMLParser {
     }
 
     // Extract element name
-    const nameMatch = /^([a-zA-Z0-9:_-]+)/.exec(xml
-      .substring(openTagStart + 1));
+    const nameMatch = /^([a-zA-Z0-9:_-]+)/.exec(xml.substring(openTagStart + 1));
     if (!nameMatch) {
       return { value: {}, endPos: openTagStart + 1 };
     }
 
-    const originalElementName: string = nameMatch[1] || "";
+    const originalElementName: string = nameMatch[1] || '';
     let elementName: string = originalElementName;
-    const tagHeaderEnd = xml.indexOf(">", openTagStart);
+    const tagHeaderEnd = xml.indexOf('>', openTagStart);
     if (tagHeaderEnd === -1) {
       return { value: {}, endPos: xml.length };
     }
 
     // Remove namespace if requested (but keep original for offset calculations)
-    if (options.ignoreNamespace && elementName.includes(":")) {
-      elementName = elementName.split(":")[1] || elementName;
+    if (options.ignoreNamespace && elementName.includes(':')) {
+      elementName = elementName.split(':')[1] || elementName;
     }
 
     // Extract attributes using ORIGINAL element name length for correct offset
-    const tagHeader = xml.substring(
-      openTagStart + 1 + originalElementName.length,
-      tagHeaderEnd
-    );
+    const tagHeader = xml.substring(openTagStart + 1 + originalElementName.length, tagHeaderEnd);
     const attributes = XMLParser.extractAttributesFromTag(tagHeader, options);
 
     // Check if self-closing
-    const isSelfClosing =
-      tagHeader.trim().endsWith("/") || xml[tagHeaderEnd - 1] === "/";
+    const isSelfClosing = tagHeader.trim().endsWith('/') || xml[tagHeaderEnd - 1] === '/';
 
     if (isSelfClosing) {
       // Self-closing tag - return object with attributes only
@@ -539,11 +514,7 @@ export class XMLParser {
     // Find closing tag (use original name with namespace for correct matching)
     const closingTag = `</${originalElementName}>`;
     const contentStart = tagHeaderEnd + 1;
-    const closingTagPos = XMLParser.findClosingTag(
-      xml,
-      originalElementName,
-      contentStart
-    );
+    const closingTagPos = XMLParser.findClosingTag(xml, originalElementName, contentStart);
 
     if (closingTagPos === -1) {
       // No closing tag found - treat as self-closing
@@ -558,11 +529,11 @@ export class XMLParser {
 
     // Parse content (children or text)
     const children: ParsedElement[] = [];
-    let textContent = "";
+    let textContent = '';
     let pos = 0;
 
     while (pos < content.length) {
-      const nextTag = content.indexOf("<", pos);
+      const nextTag = content.indexOf('<', pos);
 
       if (nextTag === -1) {
         // No more tags - rest is text
@@ -588,12 +559,7 @@ export class XMLParser {
       }
 
       // Parse child element (increment depth for children)
-      const childResult = XMLParser.parseElementToObject(
-        content,
-        nextTag,
-        options,
-        depth + 1
-      );
+      const childResult = XMLParser.parseElementToObject(content, nextTag, options, depth + 1);
       const childObj = childResult.value as ParsedXMLObject;
 
       // Extract child name and value
@@ -622,13 +588,13 @@ export class XMLParser {
     // When trimValues is true, only include text with non-whitespace content
     if (textContent.length > 0 && (!options.trimValues || textContent.trim())) {
       const text = options.trimValues ? textContent.trim() : textContent;
-      if (typeof elementValue === "object" && !Array.isArray(elementValue)) {
+      if (typeof elementValue === 'object' && !Array.isArray(elementValue)) {
         if (Object.keys(elementValue).length === 0) {
           // Only text, no attributes - return as direct value if simple
           elementValue = text;
         } else {
           // Text with attributes
-          (elementValue)[options.textNodeName] = text;
+          elementValue[options.textNodeName] = text;
         }
       }
     }
@@ -636,7 +602,7 @@ export class XMLParser {
     // Add children
     if (children.length > 0) {
       const coalescedChildren = XMLParser.coalesceChildren(children, options);
-      if (typeof elementValue === "object" && !Array.isArray(elementValue)) {
+      if (typeof elementValue === 'object' && !Array.isArray(elementValue)) {
         elementValue = { ...elementValue, ...coalescedChildren };
       } else {
         elementValue = coalescedChildren;
@@ -645,7 +611,7 @@ export class XMLParser {
 
     // If element has no content, attributes, or children - return empty object
     if (
-      typeof elementValue === "object" &&
+      typeof elementValue === 'object' &&
       !Array.isArray(elementValue) &&
       Object.keys(elementValue).length === 0
     ) {
@@ -685,7 +651,7 @@ export class XMLParser {
         }
       }
 
-      if (pos >= tagHeader.length || tagHeader[pos] === "/") {
+      if (pos >= tagHeader.length || tagHeader[pos] === '/') {
         break;
       }
 
@@ -717,11 +683,8 @@ export class XMLParser {
       }
 
       // Extract attribute value
-      let attrValue = "";
-      if (
-        pos < tagHeader.length &&
-        (tagHeader[pos] === '"' || tagHeader[pos] === "'")
-      ) {
+      let attrValue = '';
+      if (pos < tagHeader.length && (tagHeader[pos] === '"' || tagHeader[pos] === "'")) {
         const quote = tagHeader[pos];
         pos++; // Skip opening quote
         const valueStart = pos;
@@ -735,8 +698,8 @@ export class XMLParser {
       }
 
       // Remove namespace from attribute name if requested
-      if (options.ignoreNamespace && attrName.includes(":")) {
-        attrName = attrName.split(":")[1] || attrName;
+      if (options.ignoreNamespace && attrName.includes(':')) {
+        attrName = attrName.split(':')[1] || attrName;
       }
 
       // Add prefix to attribute name
@@ -755,11 +718,7 @@ export class XMLParser {
    * Finds the closing tag for an element, handling nesting
    * @private
    */
-  private static findClosingTag(
-    xml: string,
-    elementName: string,
-    startPos: number
-  ): number {
+  private static findClosingTag(xml: string, elementName: string, startPos: number): number {
     const openTag = `<${elementName}`;
     const closeTag = `</${elementName}>`;
     let depth = 1;
@@ -784,17 +743,17 @@ export class XMLParser {
 
         const charAfter = xml[candidateOpen + openTag.length];
         if (
-          charAfter === ">" ||
-          charAfter === " " ||
-          charAfter === "/" ||
-          charAfter === "\t" ||
-          charAfter === "\n" ||
-          charAfter === "\r"
+          charAfter === '>' ||
+          charAfter === ' ' ||
+          charAfter === '/' ||
+          charAfter === '\t' ||
+          charAfter === '\n' ||
+          charAfter === '\r'
         ) {
           // This looks like a real opening tag - but check if it's self-closing
           // Self-closing tags like <w:rPr/> should NOT increase depth
-          const tagEnd = xml.indexOf(">", candidateOpen);
-          if (tagEnd !== -1 && xml[tagEnd - 1] === "/") {
+          const tagEnd = xml.indexOf('>', candidateOpen);
+          if (tagEnd !== -1 && xml[tagEnd - 1] === '/') {
             // Self-closing tag - skip it (don't affect depth)
             searchPos = tagEnd + 1;
             continue;
@@ -849,8 +808,7 @@ export class XMLParser {
 
     // Build result object while tracking order
     for (const child of children) {
-      const shouldBeArray =
-        options.alwaysArray || (nameCounts[child.name] || 0) > 1;
+      const shouldBeArray = options.alwaysArray || (nameCounts[child.name] || 0) > 1;
 
       // Track element order with its index in the array
       const currentIndex = nameIndices[child.name] || 0;
@@ -880,8 +838,8 @@ export class XMLParser {
    * @private
    */
   private static parseValue(value: string): string | number | boolean {
-    if (value === "true") return true;
-    if (value === "false") return false;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
 
     // Preserve 6-character hex color codes (OpenXML standard for colors)
     // This includes "000000" (black) which should stay as a string

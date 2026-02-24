@@ -7,11 +7,7 @@
  * the generated styles.xml.
  */
 
-import {
-  Document,
-  TableOfContents,
-  TableOfContentsElement,
-} from '../../src';
+import { Document, TableOfContents, TableOfContentsElement } from '../../src';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 
 describe('TOC relative indentation (indentPerLevel) integration', () => {
@@ -61,9 +57,7 @@ describe('TOC relative indentation (indentPerLevel) integration', () => {
     await zip.loadFromBuffer(buffer);
     const stylesXml = zip.getFileAsString('word/styles.xml');
     if (!stylesXml) return undefined;
-    const pattern = new RegExp(
-      `<w:style[^>]*\\sw:styleId="${styleId}"[^>]*>[\\s\\S]*?</w:style>`
-    );
+    const pattern = new RegExp(`<w:style[^>]*\\sw:styleId="${styleId}"[^>]*>[\\s\\S]*?</w:style>`);
     return stylesXml.match(pattern)?.[0];
   }
 
@@ -72,12 +66,8 @@ describe('TOC relative indentation (indentPerLevel) integration', () => {
   it('should set TOC2=0 and TOC3=360 in memory when indentPerLevel is 360', () => {
     const doc = buildDocument(360);
 
-    expect(
-      doc.getStyle('TOC2')?.getParagraphFormatting()?.indentation?.left
-    ).toBe(0);
-    expect(
-      doc.getStyle('TOC3')?.getParagraphFormatting()?.indentation?.left
-    ).toBe(360);
+    expect(doc.getStyle('TOC2')?.getParagraphFormatting()?.indentation?.left).toBe(0);
+    expect(doc.getStyle('TOC3')?.getParagraphFormatting()?.indentation?.left).toBe(360);
 
     doc.dispose();
   });
@@ -85,12 +75,8 @@ describe('TOC relative indentation (indentPerLevel) integration', () => {
   it('should make all levels flush-left in memory when indentPerLevel is 0', () => {
     const doc = buildDocument(0);
 
-    expect(
-      doc.getStyle('TOC2')?.getParagraphFormatting()?.indentation?.left
-    ).toBe(0);
-    expect(
-      doc.getStyle('TOC3')?.getParagraphFormatting()?.indentation?.left
-    ).toBe(0);
+    expect(doc.getStyle('TOC2')?.getParagraphFormatting()?.indentation?.left).toBe(0);
+    expect(doc.getStyle('TOC3')?.getParagraphFormatting()?.indentation?.left).toBe(0);
 
     doc.dispose();
   });
@@ -109,18 +95,10 @@ describe('TOC relative indentation (indentPerLevel) integration', () => {
   it('should preserve spacing alongside relative indent', () => {
     const doc = buildDocument(360);
 
-    expect(
-      doc.getStyle('TOC2')?.getParagraphFormatting()?.spacing?.before
-    ).toBe(0);
-    expect(
-      doc.getStyle('TOC2')?.getParagraphFormatting()?.spacing?.after
-    ).toBe(0);
-    expect(
-      doc.getStyle('TOC3')?.getParagraphFormatting()?.spacing?.before
-    ).toBe(0);
-    expect(
-      doc.getStyle('TOC3')?.getParagraphFormatting()?.spacing?.after
-    ).toBe(0);
+    expect(doc.getStyle('TOC2')?.getParagraphFormatting()?.spacing?.before).toBe(0);
+    expect(doc.getStyle('TOC2')?.getParagraphFormatting()?.spacing?.after).toBe(0);
+    expect(doc.getStyle('TOC3')?.getParagraphFormatting()?.spacing?.before).toBe(0);
+    expect(doc.getStyle('TOC3')?.getParagraphFormatting()?.spacing?.after).toBe(0);
 
     doc.dispose();
   });

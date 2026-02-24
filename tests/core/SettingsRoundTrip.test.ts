@@ -15,7 +15,12 @@ import { Document } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { CompatibilityMode } from '../../src/types/compatibility-types';
 import { CompatibilityUpgrader } from '../../src/utils/CompatibilityUpgrader';
-import { LEGACY_COMPAT_ELEMENTS, LEGACY_COMPAT_ELEMENT_NAMES, MODERN_COMPAT_SETTINGS, MS_WORD_COMPAT_URI } from '../../src/constants/legacyCompatFlags';
+import {
+  LEGACY_COMPAT_ELEMENTS,
+  LEGACY_COMPAT_ELEMENT_NAMES,
+  MODERN_COMPAT_SETTINGS,
+  MS_WORD_COMPAT_URI,
+} from '../../src/constants/legacyCompatFlags';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 import { DOCX_PATHS } from '../../src/zip/types';
 
@@ -136,12 +141,10 @@ const SETTINGS_WITH_EXTRA_ELEMENTS = `<?xml version="1.0" encoding="UTF-8" stand
 </w:settings>`;
 
 describe('Settings.xml Round-Trip and Compatibility Mode', () => {
-
   // ======================================================================
   // Phase 1a: Parsing managed settings from settings.xml on load
   // ======================================================================
   describe('Phase 1a: Parse settings on load', () => {
-
     it('should parse trackRevisions as enabled', async () => {
       const buffer = await createDocxWithSettings(SETTINGS_WITH_TRACKING_AND_PROTECTION);
       const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
@@ -150,7 +153,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       // We verify via the public isTrackChangesEnabled() or by enabling and checking it stays
       // Actually, let's verify by saving and checking the output
       const outputBuffer = await doc.toBuffer();
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       expect(settingsXml).toContain('<w:trackRevisions');
       reloaded.dispose();
@@ -211,7 +216,6 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
   // Phase 1b: Settings merge and save flow
   // ======================================================================
   describe('Phase 1b: Settings merge and save flow', () => {
-
     it('should preserve original settings.xml when no modifications made', async () => {
       const buffer = await createDocxWithSettings(SETTINGS_WITH_EXTRA_ELEMENTS);
       const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
@@ -221,7 +225,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       doc.dispose();
 
       // Reload and verify all original elements are preserved
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       expect(settingsXml).toContain('<w:evenAndOddHeaders');
       expect(settingsXml).toContain('<w:drawingGridHorizontalSpacing');
@@ -244,7 +250,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       doc.dispose();
 
       // Verify compat mode is still 12 and trackRevisions was added
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       expect(settingsXml).toContain('w:val="12"');
       expect(settingsXml).toContain('<w:trackRevisions');
@@ -261,7 +269,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       const outputBuffer = await doc.toBuffer();
       doc.dispose();
 
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       // trackRevisions should still be present (was parsed from settings on load)
       expect(settingsXml).toContain('<w:trackRevisions');
@@ -279,7 +289,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       const outputBuffer = await doc.toBuffer();
       doc.dispose();
 
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       expect(settingsXml).toContain('00A1B2C3');
       expect(settingsXml).toContain('00D4E5F6');
@@ -302,7 +314,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       doc.dispose();
 
       // Saved settings should now have trackRevisions
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       expect(settingsXml).toContain('<w:trackRevisions');
       reloaded.dispose();
@@ -316,7 +330,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       const outputBuffer = await doc.toBuffer();
       doc.dispose();
 
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       expect(settingsXml).not.toContain('<w:trackRevisions');
       reloaded.dispose();
@@ -331,7 +347,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       const outputBuffer = await doc.toBuffer();
       doc.dispose();
 
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       // All framework-unmanaged elements should still be present
       expect(settingsXml).toContain('<w:evenAndOddHeaders');
@@ -376,7 +394,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       const outputBuffer = await doc.toBuffer();
       doc.dispose();
 
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       expect(settingsXml).toContain('w:edit="readOnly"');
       expect(settingsXml).toContain('w:enforcement="1"');
@@ -395,7 +415,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       const outputBuffer = await doc.toBuffer();
       doc.dispose();
 
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       const settingsXml = reloaded.getZipHandler().getFileAsString(DOCX_PATHS.SETTINGS);
       expect(settingsXml).not.toContain('<w:documentProtection');
       reloaded.dispose();
@@ -406,7 +428,6 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
   // Phase 2: Compatibility mode detection API
   // ======================================================================
   describe('Phase 2: Compatibility mode detection API', () => {
-
     it('should detect mode 15 (Word 2013+)', async () => {
       const buffer = await createDocxWithSettings(SETTINGS_MODE_15);
       const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
@@ -500,7 +521,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       const outputBuffer = await doc.toBuffer();
       doc.dispose();
 
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       // Mode should still be 12, not upgraded to 15
       expect(reloaded.getCompatibilityMode()).toBe(12);
       reloaded.dispose();
@@ -517,7 +540,9 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       const outputBuffer = await doc.toBuffer();
       doc.dispose();
 
-      const reloaded = await Document.loadFromBuffer(outputBuffer, { revisionHandling: 'preserve' });
+      const reloaded = await Document.loadFromBuffer(outputBuffer, {
+        revisionHandling: 'preserve',
+      });
       // Mode should still be 14 even after settings merge
       expect(reloaded.getCompatibilityMode()).toBe(14);
       // Legacy flags should be preserved too
@@ -534,7 +559,6 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
   // Phase 3: Modern Format Upgrade
   // ======================================================================
   describe('Phase 3: upgradeToModernFormat()', () => {
-
     it('should upgrade mode 12 document to mode 15', async () => {
       const buffer = await createDocxWithSettings(SETTINGS_MODE_12);
       const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
@@ -806,7 +830,6 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
   // Phase 3: CompatibilityUpgrader unit tests
   // ======================================================================
   describe('Phase 3: CompatibilityUpgrader', () => {
-
     it('should contain 65 legacy compat elements in catalog', () => {
       expect(LEGACY_COMPAT_ELEMENTS).toHaveLength(65);
       expect(LEGACY_COMPAT_ELEMENT_NAMES.size).toBe(65);
@@ -918,7 +941,6 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
 
   // ======================================================================
   describe('dispose() cleanup', () => {
-
     it('should reset all settings-related fields on dispose', async () => {
       const buffer = await createDocxWithSettings(SETTINGS_WITH_TRACKING_AND_PROTECTION);
       const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });

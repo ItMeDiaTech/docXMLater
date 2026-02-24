@@ -4,9 +4,7 @@
 
 import { ZipHandler } from '../../src/zip/ZipHandler';
 import { DOCX_PATHS } from '../../src/zip/types';
-import {
-  MissingRequiredFileError,
-} from '../../src/zip/errors';
+import { MissingRequiredFileError } from '../../src/zip/errors';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
@@ -199,9 +197,7 @@ describe('ZipHandler', () => {
       handler.addFile('test.txt', 'Test');
 
       // Should not throw when validation is disabled
-      await expect(
-        handler.save(testFile, { validate: false })
-      ).resolves.not.toThrow();
+      await expect(handler.save(testFile, { validate: false })).resolves.not.toThrow();
     });
 
     test('should throw error when loading invalid ZIP', async () => {
@@ -296,13 +292,9 @@ describe('ZipHandler', () => {
       const outputFile = path.join(testDir, 'modified.docx');
 
       // Modify it
-      await ZipHandler.modify(
-        testFile,
-        outputFile,
-        (handler) => {
-          handler.updateFile(DOCX_PATHS.DOCUMENT, '<document>Modified</document>');
-        }
-      );
+      await ZipHandler.modify(testFile, outputFile, (handler) => {
+        handler.updateFile(DOCX_PATHS.DOCUMENT, '<document>Modified</document>');
+      });
 
       // Verify modification
       const verifyHandler = new ZipHandler();
@@ -364,7 +356,9 @@ describe('ZipHandler', () => {
       });
 
       test('should throw when file does not exist', () => {
-        expect(() => handler.existsOrThrow('nonexistent.txt')).toThrow('File not found in archive: nonexistent.txt');
+        expect(() => handler.existsOrThrow('nonexistent.txt')).toThrow(
+          'File not found in archive: nonexistent.txt'
+        );
       });
     });
 
@@ -461,7 +455,7 @@ describe('ZipHandler', () => {
 
         const textFiles = handler.getTextFiles();
         expect(textFiles.length).toBe(2);
-        expect(textFiles.every(f => !f.isBinary)).toBe(true);
+        expect(textFiles.every((f) => !f.isBinary)).toBe(true);
       });
 
       test('should get binary files', () => {
@@ -471,7 +465,7 @@ describe('ZipHandler', () => {
 
         const binaryFiles = handler.getBinaryFiles();
         expect(binaryFiles.length).toBe(2);
-        expect(binaryFiles.every(f => f.isBinary)).toBe(true);
+        expect(binaryFiles.every((f) => f.isBinary)).toBe(true);
       });
 
       test('should get media files', () => {
@@ -482,7 +476,7 @@ describe('ZipHandler', () => {
 
         const mediaFiles = handler.getMediaFiles();
         expect(mediaFiles.length).toBe(2);
-        expect(mediaFiles.every(f => f.path.startsWith('word/media/'))).toBe(true);
+        expect(mediaFiles.every((f) => f.path.startsWith('word/media/'))).toBe(true);
       });
     });
 
@@ -503,7 +497,9 @@ describe('ZipHandler', () => {
 
       test('should throw when exporting non-existent file', async () => {
         const outputPath = path.join(testDir, 'output.txt');
-        await expect(handler.exportFile('nonexistent.txt', outputPath)).rejects.toThrow('File not found in archive: nonexistent.txt');
+        await expect(handler.exportFile('nonexistent.txt', outputPath)).rejects.toThrow(
+          'File not found in archive: nonexistent.txt'
+        );
       });
 
       test('should import file', async () => {
@@ -584,7 +580,8 @@ describe('ZipHandler', () => {
     });
 
     test('should handle mixed scripts (Latin, Greek, Cyrillic, Arabic, CJK)', () => {
-      const mixed = 'Latin: Hello\nGreek: Γεια\nCyrillic: Привет\nArabic: مرحبا\nCJK: 你好日本語한글';
+      const mixed =
+        'Latin: Hello\nGreek: Γεια\nCyrillic: Привет\nArabic: مرحبا\nCJK: 你好日本語한글';
       handler.addFile('mixed-scripts.txt', mixed);
 
       expect(handler.getFileAsString('mixed-scripts.txt')).toBe(mixed);

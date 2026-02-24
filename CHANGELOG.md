@@ -5,6 +5,37 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.1.6] - 2026-02-24
+
+### Added
+
+- **Numbering Restart Helper: `restartNumbering(numId, level?, startValue?)`** - Single-call method to restart list numbering. Creates a new `<w:num>` instance referencing the same abstract numbering with a `<w:lvlOverride>/<w:startOverride>`. Available on both `Document` and `NumberingManager`. Replaces the previous multi-step manual process of creating instances and setting level overrides.
+
+### Statistics
+
+- 143 test suites, 3,084 tests passing
+- 103 source files
+
+---
+
+## [10.1.1] - 2026-02-21
+
+### Fixed
+
+- **Table Width Parsing for Auto-Sized Tables**: Tables with `w:tblW w:w="0" w:type="auto"` now correctly parse as `width=0, widthType='auto'` instead of falling through to the constructor default of `9360/dxa`. This caused `tblPrChange` snapshots to capture incorrect "previous" width values, making tables display with absurd widths in Word's "Original" markup view.
+- **NaN-Safe Table Property Parsing**: Replaced raw `parseInt` calls with `safeParseInt` for table width and indentation parsing, preventing NaN propagation from malformed DOCX input.
+
+### Added
+
+- **Table Indentation Parsing (`w:tblInd`)**: `DocumentParser` now parses `w:tblInd` from main `tblPr` properties per ECMA-376 §17.4.43. Previously only parsed from `tblPrEx` and revision elements, causing indent values to be missing from tracked change snapshots.
+
+### Statistics
+
+- 142 test suites, 3,039 tests passing
+- 120 source files
+
+---
+
 ## [10.1.0] - 2026-02-21
 
 ### Added
@@ -705,7 +736,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Hyperlink Properties**
   - `isEmpty()` - Check if hyperlink is empty/invisible
-  - `getTgtFrame()` - Get target frame attribute (e.g., "_blank")
+  - `getTgtFrame()` - Get target frame attribute (e.g., "\_blank")
   - `getHistory()` - Get history tracking attribute
   - `tgtFrame` and `history` attributes now preserved in XML output
 
@@ -922,6 +953,7 @@ For detailed changes between v5.1.0 and v7.6.8, see:
 ## [5.0.0] - 2025-11-19
 
 ### Added
+
 - **CleanupHelper Class**: Comprehensive document cleanup utilities including unlocking SDTs, removing preserve flags, defragmenting hyperlinks, cleaning unused elements, removing customXML, unlocking fields/frames, and sanitizing tables.
 
 ### Fixed
@@ -947,7 +979,6 @@ For detailed changes between v5.1.0 and v7.6.8, see:
   - **Enhanced Logging**: Added diagnostic logging showing field marker counts and extraction steps
   - **Multi-Paragraph Support**: Field tracking now spans multiple paragraphs (TOC fields can have begin/separate in paragraph 1, end in paragraph 5)
   - **Tested With**: Test_Code.docx successfully extracts `TOC \h \u \z \t "Heading 2,2,"` instruction
-
 
 ### Removed
 
@@ -1275,15 +1306,15 @@ level.setLeftIndent(1440); // Old value
 Bullets now use Calibri font by default instead of Symbol font. If you need Symbol font:
 
 ```typescript
-const level = NumberingLevel.createBulletLevel(0, "•");
-level.setFont("Symbol");
+const level = NumberingLevel.createBulletLevel(0, '•');
+level.setFont('Symbol');
 ```
 
 **Numbered List Formats:**
 Level 3 now shows uppercase letters (A., B., C.) instead of numbers (1., 2., 3.). To maintain old behavior:
 
 ```typescript
-const formats = ["decimal", "lowerLetter", "lowerRoman"]; // 3-level cycle
+const formats = ['decimal', 'lowerLetter', 'lowerRoman']; // 3-level cycle
 const abstractNum = AbstractNumbering.createNumberedList(1, 9, formats);
 ```
 
@@ -1292,9 +1323,9 @@ Text containing tabs, newlines, etc. now automatically converts to proper XML el
 
 ```typescript
 // Tabs and newlines now auto-convert to XML elements
-const run = new Run("Text\tWith\nSpecial");
+const run = new Run('Text\tWith\nSpecial');
 // Generates: <w:t>Text</w:t><w:tab/><w:t>With</w:t><w:br/><w:t>Special</w:t>
 
 // To preserve as literal text (not recommended):
-const run = new Run("Text\\tWith\\nSpecial");
+const run = new Run('Text\\tWith\\nSpecial');
 ```

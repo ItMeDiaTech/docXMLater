@@ -150,11 +150,7 @@ describe('Revision', () => {
 
   describe('Multiple Runs', () => {
     it('should accept array of runs for insertion', () => {
-      const runs = [
-        new Run('first '),
-        new Run('second '),
-        new Run('third'),
-      ];
+      const runs = [new Run('first '), new Run('second '), new Run('third')];
       const revision = Revision.createInsertion('Author', runs);
 
       expect(revision.getRuns()).toHaveLength(3);
@@ -328,7 +324,12 @@ describe('Revision', () => {
     });
 
     it('should format date as ISO 8601', () => {
-      const revision = Revision.fromText('insert', 'Author', 'text', new Date('2025-06-15T12:30:45.000Z'));
+      const revision = Revision.fromText(
+        'insert',
+        'Author',
+        'text',
+        new Date('2025-06-15T12:30:45.000Z')
+      );
       revision.setId(0);
       const xml = revision.toXML();
 

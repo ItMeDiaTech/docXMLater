@@ -104,7 +104,6 @@ export class RevisionAutoFixer {
       if (shouldProcess('REV104')) {
         actions.push(...this.fixNonSequentialIds(revisions, options?.dryRun));
       }
-
     } catch (error: unknown) {
       errors.push(`Fix error: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -121,7 +120,7 @@ export class RevisionAutoFixer {
 
     return {
       allFixed: postValidation.valid,
-      issuesFixed: actions.filter(a => a.success).length,
+      issuesFixed: actions.filter((a) => a.success).length,
       issuesRemaining: postValidation.summary.errorCount + postValidation.summary.warningCount,
       actions,
       errors,
@@ -140,7 +139,7 @@ export class RevisionAutoFixer {
   static fixDuplicateIds(revisions: Revision[], dryRun?: boolean): FixAction[] {
     const actions: FixAction[] = [];
     const usedIds = new Set<number>();
-    let nextId = Math.max(...revisions.map(r => r.getId()), 0) + 1;
+    let nextId = Math.max(...revisions.map((r) => r.getId()), 0) + 1;
 
     for (const rev of revisions) {
       const id = rev.getId();
@@ -414,7 +413,7 @@ export class RevisionAutoFixer {
       }
 
       const runs = rev.getRuns();
-      const hasContent = runs.length > 0 && runs.some(r => r.getText().length > 0);
+      const hasContent = runs.length > 0 && runs.some((r) => r.getText().length > 0);
 
       if (!hasContent) {
         const issue: ValidationIssue = {
@@ -455,7 +454,7 @@ export class RevisionAutoFixer {
     if (revisions.length === 0) return actions;
 
     // Check if IDs are already sequential
-    const ids = revisions.map(r => r.getId()).sort((a, b) => a - b);
+    const ids = revisions.map((r) => r.getId()).sort((a, b) => a - b);
     let isSequential = true;
 
     for (let i = 1; i < ids.length; i++) {
@@ -475,7 +474,7 @@ export class RevisionAutoFixer {
         autoFixable: true,
       };
 
-      const oldIds = revisions.map(r => r.getId());
+      const oldIds = revisions.map((r) => r.getId());
       const newIds: number[] = [];
 
       revisions.forEach((rev, index) => {

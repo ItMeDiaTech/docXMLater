@@ -18,10 +18,10 @@ interface DocumentLike {
  * Types of corruption that can be detected
  */
 export type CorruptionType =
-  | 'escaped-xml'      // &lt;w:t&gt; style escaping
-  | 'xml-tags'         // <w:t> tags in text
-  | 'entities'         // &quot; &apos; etc.
-  | 'mixed';           // Multiple types
+  | 'escaped-xml' // &lt;w:t&gt; style escaping
+  | 'xml-tags' // <w:t> tags in text
+  | 'entities' // &quot; &apos; etc.
+  | 'mixed'; // Multiple types
 
 /**
  * Location of corruption within a document
@@ -206,7 +206,8 @@ export function detectCorruptionInText(text: string): TextCorruptionResult {
   // ONLY flag if we see Word-specific patterns, not just any entities
   // This avoids false positives from legitimate escaped characters
   // Matches all OOXML namespaces: w: (word), a: (drawingML), pic: (picture), r: (relationships), wp: (word drawing)
-  const wordXmlAttributePattern = /(&lt;(?:w|a|r|pic|wp|m|mc|wpc|wps|wpg|c|dgm|o|v):|xml:space=&quot;preserve&quot;)/i;
+  const wordXmlAttributePattern =
+    /(&lt;(?:w|a|r|pic|wp|m|mc|wpc|wps|wpg|c|dgm|o|v):|xml:space=&quot;preserve&quot;)/i;
   if (wordXmlAttributePattern.test(text)) {
     hasEntities = true;
   }

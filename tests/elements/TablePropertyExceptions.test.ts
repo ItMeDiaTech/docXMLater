@@ -34,8 +34,8 @@ describe('Table Property Exceptions (tblPrEx)', () => {
           top: { style: 'single', size: 8, color: 'FF0000' },
           bottom: { style: 'single', size: 8, color: 'FF0000' },
           left: { style: 'single', size: 8, color: 'FF0000' },
-          right: { style: 'single', size: 8, color: 'FF0000' }
-        }
+          right: { style: 'single', size: 8, color: 'FF0000' },
+        },
       });
       table.getRow(0)!.getCell(0)!.createParagraph('Red borders');
 
@@ -68,8 +68,8 @@ describe('Table Property Exceptions (tblPrEx)', () => {
       table.getRow(0)!.setTablePropertyExceptions({
         borders: {
           top: { style: 'single', size: 8, color: '000000' },
-          bottom: { style: 'single', size: 8, color: '000000' }
-        }
+          bottom: { style: 'single', size: 8, color: '000000' },
+        },
       });
       table.getRow(0)!.getCell(0)!.createParagraph('Single borders');
 
@@ -77,8 +77,8 @@ describe('Table Property Exceptions (tblPrEx)', () => {
       table.getRow(1)!.setTablePropertyExceptions({
         borders: {
           top: { style: 'double', size: 12, color: '0000FF' },
-          bottom: { style: 'double', size: 12, color: '0000FF' }
-        }
+          bottom: { style: 'double', size: 12, color: '0000FF' },
+        },
       });
       table.getRow(1)!.getCell(0)!.createParagraph('Double borders');
 
@@ -86,8 +86,8 @@ describe('Table Property Exceptions (tblPrEx)', () => {
       table.getRow(2)!.setTablePropertyExceptions({
         borders: {
           top: { style: 'dashed', size: 6, color: '00FF00' },
-          bottom: { style: 'dashed', size: 6, color: '00FF00' }
-        }
+          bottom: { style: 'dashed', size: 6, color: '00FF00' },
+        },
       });
       table.getRow(2)!.getCell(0)!.createParagraph('Dashed borders');
 
@@ -120,8 +120,8 @@ describe('Table Property Exceptions (tblPrEx)', () => {
       table.getRow(1)!.setTablePropertyExceptions({
         shading: {
           fill: 'FFFF00',
-          pattern: 'clear'
-        }
+          pattern: 'clear',
+        },
       });
       table.getRow(1)!.getCell(0)!.createParagraph('Yellow background');
 
@@ -155,12 +155,12 @@ describe('Table Property Exceptions (tblPrEx)', () => {
         { fill: 'FFE6E6', name: 'Light Red' },
         { fill: 'E6F2FF', name: 'Light Blue' },
         { fill: 'E6FFE6', name: 'Light Green' },
-        { fill: 'FFF9E6', name: 'Light Yellow' }
+        { fill: 'FFF9E6', name: 'Light Yellow' },
       ];
 
       colors.forEach((color, i) => {
         table.getRow(i)!.setTablePropertyExceptions({
-          shading: { fill: color.fill, pattern: 'clear' }
+          shading: { fill: color.fill, pattern: 'clear' },
         });
         table.getRow(i)!.getCell(0)!.createParagraph(color.name);
       });
@@ -190,12 +190,12 @@ describe('Table Property Exceptions (tblPrEx)', () => {
       table.getRow(0)!.setTablePropertyExceptions({
         borders: {
           top: { style: 'double', size: 12, color: 'FF0000' },
-          bottom: { style: 'double', size: 12, color: 'FF0000' }
+          bottom: { style: 'double', size: 12, color: 'FF0000' },
         },
         shading: {
           fill: 'FFFFCC',
-          pattern: 'clear'
-        }
+          pattern: 'clear',
+        },
       });
       table.getRow(0)!.getCell(0)!.createParagraph('Borders + Shading');
 
@@ -226,13 +226,13 @@ describe('Table Property Exceptions (tblPrEx)', () => {
       // Row with all exceptions
       table.getRow(0)!.setTablePropertyExceptions({
         borders: {
-          top: { style: 'single', size: 8, color: '000000' }
+          top: { style: 'single', size: 8, color: '000000' },
         },
         shading: { fill: 'E6E6E6', pattern: 'clear' },
         cellSpacing: 50,
         width: 7200,
         indentation: 144,
-        justification: 'center'
+        justification: 'center',
       });
       table.getRow(0)!.getCell(0)!.createParagraph('All exceptions');
 
@@ -266,7 +266,7 @@ describe('Table Property Exceptions (tblPrEx)', () => {
 
       // Middle row with extra cell spacing
       table.getRow(1)!.setTablePropertyExceptions({
-        cellSpacing: 100 // Extra spacing
+        cellSpacing: 100, // Extra spacing
       });
       table.getRow(1)!.getCell(0)!.createParagraph('Extra spacing');
 
@@ -296,7 +296,7 @@ describe('Table Property Exceptions (tblPrEx)', () => {
       // First row narrower
       table.getRow(0)!.setTablePropertyExceptions({
         width: 5000, // Narrower width
-        indentation: 500 // Indented
+        indentation: 500, // Indented
       });
       table.getRow(0)!.getCell(0)!.createParagraph('Narrow & indented');
 
@@ -325,17 +325,17 @@ describe('Table Property Exceptions (tblPrEx)', () => {
 
       // Different justifications
       table.getRow(0)!.setTablePropertyExceptions({
-        justification: 'left'
+        justification: 'left',
       });
       table.getRow(0)!.getCell(0)!.createParagraph('Left justified');
 
       table.getRow(1)!.setTablePropertyExceptions({
-        justification: 'center'
+        justification: 'center',
       });
       table.getRow(1)!.getCell(0)!.createParagraph('Center justified');
 
       table.getRow(2)!.setTablePropertyExceptions({
-        justification: 'right'
+        justification: 'right',
       });
       table.getRow(2)!.getCell(0)!.createParagraph('Right justified');
 
@@ -361,10 +361,10 @@ describe('Table Property Exceptions (tblPrEx)', () => {
 
       table.getRow(0)!.setTablePropertyExceptions({
         borders: {
-          top: { style: 'double', size: 12, color: 'FF0000' }
+          top: { style: 'double', size: 12, color: 'FF0000' },
         },
         shading: { fill: 'FFFF00', pattern: 'clear' },
-        cellSpacing: 75
+        cellSpacing: 75,
       });
       table.getRow(0)!.getCell(0)!.createParagraph('Test row');
 

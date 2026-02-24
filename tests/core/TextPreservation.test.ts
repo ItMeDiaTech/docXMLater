@@ -34,7 +34,9 @@ describe('Text Preservation', () => {
 
     doc1.createParagraph('Simple paragraph text');
 
-    doc1.createParagraph().addText('Multiple ', { bold: true })
+    doc1
+      .createParagraph()
+      .addText('Multiple ', { bold: true })
       .addText('formatted ', { italic: true })
       .addText('runs', { color: 'FF0000' });
 
@@ -60,7 +62,9 @@ describe('Text Preservation', () => {
     expect(paragraphs[0]?.getText()).toBe('Simple paragraph text');
     expect(paragraphs[1]?.getText()).toBe('Multiple formatted runs');
     expect(paragraphs[2]?.getText()).toBe('Text with special chars: < > & " \' @  #');
-    expect(paragraphs[3]?.getText()).toBe('Run 1 Run 2 Run 3 Run 4 Run 5 Run 6 Run 7 Run 8 Run 9 Run 10 ');
+    expect(paragraphs[3]?.getText()).toBe(
+      'Run 1 Run 2 Run 3 Run 4 Run 5 Run 6 Run 7 Run 8 Run 9 Run 10 '
+    );
 
     // Verify run count
     expect(paragraphs[1]?.getRuns().length).toBe(3);
@@ -167,10 +171,8 @@ describe('Text Preservation', () => {
         // Verify the warning was logged
         expect(consoleWarnSpy).toHaveBeenCalled();
         const warnCalls = consoleWarnSpy.mock.calls;
-        const hasCorruptionWarning = warnCalls.some(call =>
-          call.some(arg =>
-            typeof arg === 'string' && arg.includes('corrupted or empty')
-          )
+        const hasCorruptionWarning = warnCalls.some((call) =>
+          call.some((arg) => typeof arg === 'string' && arg.includes('corrupted or empty'))
         );
 
         expect(hasCorruptionWarning).toBe(true);
@@ -179,9 +181,7 @@ describe('Text Preservation', () => {
         const warnings = doc.getParseWarnings();
         expect(warnings.length).toBeGreaterThan(0);
 
-        const hasValidationWarning = warnings.some(w =>
-          w.element === 'document-validation'
-        );
+        const hasValidationWarning = warnings.some((w) => w.element === 'document-validation');
         expect(hasValidationWarning).toBe(true);
       }
     } finally {
@@ -211,10 +211,8 @@ describe('Text Preservation', () => {
       // Verify the warning was logged
       expect(consoleWarnSpy).toHaveBeenCalled();
       const warnCalls = consoleWarnSpy.mock.calls;
-      const hasEmptyWarning = warnCalls.some(call =>
-        call.some(arg =>
-          typeof arg === 'string' && arg.includes('empty')
-        )
+      const hasEmptyWarning = warnCalls.some((call) =>
+        call.some((arg) => typeof arg === 'string' && arg.includes('empty'))
       );
 
       expect(hasEmptyWarning).toBe(true);
@@ -230,12 +228,12 @@ describe('Text Preservation', () => {
     const originalText = [
       'First paragraph with important data',
       'Second paragraph with more data',
-      'Third paragraph with even more data'
+      'Third paragraph with even more data',
     ];
 
     // Cycle 1: Create and save
     const doc1 = Document.create();
-    originalText.forEach(text => doc1.createParagraph(text));
+    originalText.forEach((text) => doc1.createParagraph(text));
     await doc1.save(testPath);
 
     // Cycle 2: Load and save

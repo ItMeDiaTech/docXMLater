@@ -23,15 +23,15 @@ function getLogger(): ILogger {
  * Semantic category for grouping changes.
  */
 export type ChangeCategory =
-  | 'content'      // Text insertions, deletions
-  | 'formatting'   // Run/paragraph property changes
-  | 'structural'   // Moves, section changes
-  | 'table'        // Table structure changes
-  | 'hyperlink'    // Hyperlink URL, text, or formatting changes
-  | 'image'        // Image insertion, deletion, or property changes
-  | 'field'        // Field insertion, deletion, or value changes
-  | 'comment'      // Comment changes
-  | 'bookmark'     // Bookmark changes
+  | 'content' // Text insertions, deletions
+  | 'formatting' // Run/paragraph property changes
+  | 'structural' // Moves, section changes
+  | 'table' // Table structure changes
+  | 'hyperlink' // Hyperlink URL, text, or formatting changes
+  | 'image' // Image insertion, deletion, or property changes
+  | 'field' // Field insertion, deletion, or value changes
+  | 'comment' // Comment changes
+  | 'bookmark' // Bookmark changes
   | 'contentControl'; // Content control (SDT) changes
 
 /**
@@ -213,8 +213,8 @@ export class ChangelogGenerator {
       filters: {
         categories: opts.filterCategories?.length ?? 0,
         authors: opts.filterAuthors?.length ?? 0,
-        dateRange: !!opts.filterDateRange
-      }
+        dateRange: !!opts.filterDateRange,
+      },
     });
 
     const entries: ChangeEntry[] = [];
@@ -282,10 +282,9 @@ export class ChangelogGenerator {
     const runs = revision.getRuns();
 
     // Extract text content from runs
-    const text = runs.map(r => r.getText()).join('');
-    const truncatedText = text.length > maxContextLength
-      ? text.substring(0, maxContextLength) + '...'
-      : text;
+    const text = runs.map((r) => r.getText()).join('');
+    const truncatedText =
+      text.length > maxContextLength ? text.substring(0, maxContextLength) + '...' : text;
 
     // Build content object based on revision type
     const content: ChangeEntry['content'] = {};
@@ -321,10 +320,7 @@ export class ChangelogGenerator {
     let propertyChange: ChangeEntry['propertyChange'] | undefined;
     if (prevProps || newProps) {
       // Get the first property that changed
-      const allKeys = new Set([
-        ...Object.keys(prevProps || {}),
-        ...Object.keys(newProps || {}),
-      ]);
+      const allKeys = new Set([...Object.keys(prevProps || {}), ...Object.keys(newProps || {})]);
       const firstKey = Array.from(allKeys)[0];
       if (firstKey) {
         propertyChange = {
@@ -456,12 +452,12 @@ export class ChangelogGenerator {
         count: groupEntries.length,
         category: first.category,
         commonAttributes: {
-          author: this.allSame(groupEntries.map(e => e.author)) ? first.author : undefined,
+          author: this.allSame(groupEntries.map((e) => e.author)) ? first.author : undefined,
           revisionType: first.revisionType,
           propertyChanged: first.propertyChange?.property,
           newValue: first.propertyChange?.newValue,
         },
-        changeIds: groupEntries.map(e => e.id),
+        changeIds: groupEntries.map((e) => e.id),
       });
     }
 
@@ -472,7 +468,7 @@ export class ChangelogGenerator {
       getLogger().info('Entries consolidated', {
         input: entries.length,
         groups: consolidated.length,
-        reduction: `${Math.round((1 - consolidated.length / entries.length) * 100)}%`
+        reduction: `${Math.round((1 - consolidated.length / entries.length) * 100)}%`,
       });
     }
 
@@ -533,7 +529,7 @@ export class ChangelogGenerator {
   private static allSame<T>(arr: T[]): boolean {
     if (arr.length === 0) return true;
     const first = arr[0];
-    return arr.every(v => v === first);
+    return arr.every((v) => v === first);
   }
 
   /**
@@ -625,10 +621,9 @@ export class ChangelogGenerator {
     const type = revision.getType();
     const author = revision.getAuthor();
     const runs = revision.getRuns();
-    const text = runs.map(r => r.getText()).join('');
-    const excerpt = text.length > maxLength
-      ? `"${text.substring(0, maxLength)}..."`
-      : text ? `"${text}"` : '';
+    const text = runs.map((r) => r.getText()).join('');
+    const excerpt =
+      text.length > maxLength ? `"${text.substring(0, maxLength)}..."` : text ? `"${text}"` : '';
 
     switch (type) {
       case 'insert':
@@ -848,10 +843,7 @@ export class ChangelogGenerator {
 
     // Get meaningful property names
     const propNames: string[] = [];
-    const allKeys = new Set([
-      ...Object.keys(prevProps || {}),
-      ...Object.keys(newProps || {}),
-    ]);
+    const allKeys = new Set([...Object.keys(prevProps || {}), ...Object.keys(newProps || {})]);
 
     for (const key of allKeys) {
       const oldVal = prevProps?.[key];
@@ -1007,10 +999,7 @@ export class ChangelogGenerator {
    * @param options - Export options
    * @returns Markdown string
    */
-  static toMarkdown(
-    entries: ChangeEntry[],
-    options?: { includeMetadata?: boolean }
-  ): string {
+  static toMarkdown(entries: ChangeEntry[], options?: { includeMetadata?: boolean }): string {
     const opts = { includeMetadata: true, ...options };
     const lines: string[] = [];
 
@@ -1023,7 +1012,9 @@ export class ChangelogGenerator {
       lines.push('');
 
       if (summary.dateRange) {
-        lines.push(`**Date Range:** ${summary.dateRange.earliest.toLocaleDateString()} - ${summary.dateRange.latest.toLocaleDateString()}`);
+        lines.push(
+          `**Date Range:** ${summary.dateRange.earliest.toLocaleDateString()} - ${summary.dateRange.latest.toLocaleDateString()}`
+        );
         lines.push('');
       }
 
@@ -1118,11 +1109,15 @@ export class ChangelogGenerator {
    * @returns JSON string
    */
   static toJSON(entries: ChangeEntry[]): string {
-    return JSON.stringify({
-      generated: new Date().toISOString(),
-      summary: this.getSummary(entries),
-      entries,
-    }, null, 2);
+    return JSON.stringify(
+      {
+        generated: new Date().toISOString(),
+        summary: this.getSummary(entries),
+        entries,
+      },
+      null,
+      2
+    );
   }
 
   // ============================================================
@@ -1173,7 +1168,7 @@ export class ChangelogGenerator {
     logger.info('Changelog entries processed', {
       entries: entries.length,
       format,
-      sorted: !!options?.sortBy
+      sorted: !!options?.sortBy,
     });
 
     // Generate output in specified format
@@ -1366,10 +1361,13 @@ export class ChangelogGenerator {
    * fs.writeFileSync('changelog.csv', csv);
    * ```
    */
-  static toCSV(entries: ChangeEntry[], options?: {
-    delimiter?: string;
-    includeHeaders?: boolean;
-  }): string {
+  static toCSV(
+    entries: ChangeEntry[],
+    options?: {
+      delimiter?: string;
+      includeHeaders?: boolean;
+    }
+  ): string {
     const delimiter = options?.delimiter || ',';
     const includeHeaders = options?.includeHeaders !== false;
 
@@ -1383,7 +1381,7 @@ export class ChangelogGenerator {
       'Before',
       'After',
       'Paragraph',
-      'Run'
+      'Run',
     ];
 
     const lines: string[] = [];
@@ -1462,28 +1460,32 @@ export class ChangelogGenerator {
     hyperlinks: ChangeEntry[];
   } {
     return {
-      paragraphs: entries.filter(e =>
-        e.revisionType === 'paragraphPropertiesChange' ||
-        e.revisionType === 'numberingChange' ||
-        (e.revisionType === 'insert' && !e.location.runIndex) ||
-        (e.revisionType === 'delete' && !e.location.runIndex)
+      paragraphs: entries.filter(
+        (e) =>
+          e.revisionType === 'paragraphPropertiesChange' ||
+          e.revisionType === 'numberingChange' ||
+          (e.revisionType === 'insert' && !e.location.runIndex) ||
+          (e.revisionType === 'delete' && !e.location.runIndex)
       ),
-      tables: entries.filter(e =>
-        ['tablePropertiesChange', 'tableRowPropertiesChange',
-         'tableCellPropertiesChange', 'tableExceptionPropertiesChange',
-         'tableCellInsert', 'tableCellDelete', 'tableCellMerge'].includes(e.revisionType)
+      tables: entries.filter((e) =>
+        [
+          'tablePropertiesChange',
+          'tableRowPropertiesChange',
+          'tableCellPropertiesChange',
+          'tableExceptionPropertiesChange',
+          'tableCellInsert',
+          'tableCellDelete',
+          'tableCellMerge',
+        ].includes(e.revisionType)
       ),
-      sections: entries.filter(e =>
-        e.revisionType === 'sectionPropertiesChange'
+      sections: entries.filter((e) => e.revisionType === 'sectionPropertiesChange'),
+      runs: entries.filter(
+        (e) =>
+          e.revisionType === 'runPropertiesChange' ||
+          (e.revisionType === 'insert' && e.location.runIndex !== undefined) ||
+          (e.revisionType === 'delete' && e.location.runIndex !== undefined)
       ),
-      runs: entries.filter(e =>
-        e.revisionType === 'runPropertiesChange' ||
-        (e.revisionType === 'insert' && e.location.runIndex !== undefined) ||
-        (e.revisionType === 'delete' && e.location.runIndex !== undefined)
-      ),
-      hyperlinks: entries.filter(e =>
-        e.revisionType === 'hyperlinkChange'
-      ),
+      hyperlinks: entries.filter((e) => e.revisionType === 'hyperlinkChange'),
     };
   }
 

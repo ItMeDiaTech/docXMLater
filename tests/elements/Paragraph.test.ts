@@ -134,11 +134,7 @@ describe('Run', () => {
 
   describe('Method chaining', () => {
     test('should support method chaining', () => {
-      const run = new Run('Text')
-        .setBold()
-        .setItalic()
-        .setColor('FF0000')
-        .setSize(14);
+      const run = new Run('Text').setBold().setItalic().setColor('FF0000').setSize(14);
 
       const formatting = run.getFormatting();
       expect(formatting.bold).toBe(true);
@@ -419,7 +415,6 @@ describe('Paragraph', () => {
       // Accept both <w:b/> and <w:b w:val="1"/> (both are valid per ECMA-376)
       expect(xmlStr).toMatch(/<w:b(\s+w:val="1")?\/?>/);
       expect(xmlStr).toMatch(/<w:i(\s+w:val="1")?\/?>/);
-
     });
   });
 
@@ -497,9 +492,7 @@ describe('Paragraph', () => {
       });
 
       test('should allow adding content after creation', () => {
-        const para = Paragraph.createEmpty()
-          .addText('Added later')
-          .setAlignment('center');
+        const para = Paragraph.createEmpty().addText('Added later').setAlignment('center');
 
         expect(para.getText()).toBe('Added later');
         expect(para.getFormatting().alignment).toBe('center');
@@ -524,10 +517,7 @@ describe('Paragraph', () => {
       });
 
       test('should work without paragraph formatting', () => {
-        const para = Paragraph.createFormatted(
-          'Bold Text',
-          { bold: true }
-        );
+        const para = Paragraph.createFormatted('Bold Text', { bold: true });
 
         expect(para.getText()).toBe('Bold Text');
         const run = para.getRuns()[0];
@@ -536,11 +526,7 @@ describe('Paragraph', () => {
       });
 
       test('should work without run formatting', () => {
-        const para = Paragraph.createFormatted(
-          'Plain Text',
-          undefined,
-          { alignment: 'right' }
-        );
+        const para = Paragraph.createFormatted('Plain Text', undefined, { alignment: 'right' });
 
         expect(para.getText()).toBe('Plain Text');
         expect(para.getFormatting().alignment).toBe('right');
@@ -767,8 +753,8 @@ describe('Paragraph', () => {
       test('should work with method chaining', () => {
         const para = new Paragraph()
           .setPageBreakBefore(true)
-          .setKeepNext(true)        // Should clear pageBreakBefore
-          .setKeepLines(true);      // pageBreakBefore already cleared
+          .setKeepNext(true) // Should clear pageBreakBefore
+          .setKeepLines(true); // pageBreakBefore already cleared
 
         const formatting = para.getFormatting();
         expect(formatting.keepNext).toBe(true);
@@ -777,10 +763,7 @@ describe('Paragraph', () => {
       });
 
       test('should work when keepNext/keepLines are set first', () => {
-        const para = new Paragraph()
-          .setKeepNext(true)
-          .setKeepLines(true)
-          .setPageBreakBefore(true); // This can be set after
+        const para = new Paragraph().setKeepNext(true).setKeepLines(true).setPageBreakBefore(true); // This can be set after
 
         // User explicitly set pageBreakBefore after keepNext/keepLines
         const formatting = para.getFormatting();
@@ -799,7 +782,7 @@ describe('Paragraph', () => {
         const para = new Paragraph()
           .addText('Content')
           .setPageBreakBefore(true)
-          .setKeepNext(true)        // Clears pageBreakBefore
+          .setKeepNext(true) // Clears pageBreakBefore
           .setKeepLines(true);
 
         const xmlElement = para.toXML();
@@ -819,7 +802,7 @@ describe('Paragraph', () => {
         const para = new Paragraph({
           pageBreakBefore: true,
           keepNext: false,
-          keepLines: false
+          keepLines: false,
         });
 
         // Set keepNext after construction
@@ -910,7 +893,7 @@ describe('Paragraph', () => {
       if (!pPr || !pPr.children) return [];
       return (pPr.children as (XMLElement | string)[])
         .filter((c): c is XMLElement => typeof c !== 'string')
-        .map(c => c.name);
+        .map((c) => c.name);
     }
 
     it('should place w:rPr after w:numPr in pPr', () => {

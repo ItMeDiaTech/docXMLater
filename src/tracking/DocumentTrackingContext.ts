@@ -134,20 +134,12 @@ export class DocumentTrackingContext implements TrackingContext {
     return this.trackFormatting;
   }
 
-  trackRunPropertyChange(
-    run: Run,
-    property: string,
-    oldValue: unknown,
-    newValue: unknown
-  ): void {
+  trackRunPropertyChange(run: Run, property: string, oldValue: unknown, newValue: unknown): void {
     if (!this.enabled) return;
     if (this.valuesEqual(oldValue, newValue)) return;
 
     // Skip formatting changes if not tracking them
-    if (
-      !this.trackFormatting &&
-      DocumentTrackingContext.FORMATTING_PROPERTIES.has(property)
-    ) {
+    if (!this.trackFormatting && DocumentTrackingContext.FORMATTING_PROPERTIES.has(property)) {
       return;
     }
 
@@ -318,11 +310,17 @@ export class DocumentTrackingContext implements TrackingContext {
         const changes = tableChanges.get(pending.element) || [];
         changes.push(pending);
         tableChanges.set(pending.element, changes);
-      } else if (pending.type === 'tableRowPropertiesChange' && pending.element instanceof TableRow) {
+      } else if (
+        pending.type === 'tableRowPropertiesChange' &&
+        pending.element instanceof TableRow
+      ) {
         const changes = rowChanges.get(pending.element) || [];
         changes.push(pending);
         rowChanges.set(pending.element, changes);
-      } else if (pending.type === 'tableCellPropertiesChange' && pending.element instanceof TableCell) {
+      } else if (
+        pending.type === 'tableCellPropertiesChange' &&
+        pending.element instanceof TableCell
+      ) {
         const changes = cellChanges.get(pending.element) || [];
         changes.push(pending);
         cellChanges.set(pending.element, changes);
@@ -394,7 +392,12 @@ export class DocumentTrackingContext implements TrackingContext {
           const merged = { ...(existing.previousProperties || {}), ...prevProps };
           row.setTrPrChange({ ...existing, previousProperties: merged });
         } else {
-          row.setTrPrChange({ author: this.author, date, id: String(getNextId()), previousProperties: prevProps });
+          row.setTrPrChange({
+            author: this.author,
+            date,
+            id: String(getNextId()),
+            previousProperties: prevProps,
+          });
         }
       });
     }
@@ -407,7 +410,12 @@ export class DocumentTrackingContext implements TrackingContext {
           const merged = { ...(existing.previousProperties || {}), ...prevProps };
           cell.setTcPrChange({ ...existing, previousProperties: merged });
         } else {
-          cell.setTcPrChange({ author: this.author, date, id: String(getNextId()), previousProperties: prevProps });
+          cell.setTcPrChange({
+            author: this.author,
+            date,
+            id: String(getNextId()),
+            previousProperties: prevProps,
+          });
         }
       });
     }
@@ -420,7 +428,12 @@ export class DocumentTrackingContext implements TrackingContext {
           const merged = { ...(existing.previousProperties || {}), ...prevProps };
           section.setSectPrChange({ ...existing, previousProperties: merged });
         } else {
-          section.setSectPrChange({ author: this.author, date, id: String(getNextId()), previousProperties: prevProps });
+          section.setSectPrChange({
+            author: this.author,
+            date,
+            id: String(getNextId()),
+            previousProperties: prevProps,
+          });
         }
       });
     }
@@ -573,8 +586,7 @@ export class DocumentTrackingContext implements TrackingContext {
       author: this.author,
       type: pending.type,
       content: run,
-      previousProperties:
-        Object.keys(previousProps).length > 0 ? previousProps : undefined,
+      previousProperties: Object.keys(previousProps).length > 0 ? previousProps : undefined,
       newProperties: Object.keys(newProps).length > 0 ? newProps : undefined,
       date: new Date(pending.timestamp),
     });
@@ -596,7 +608,8 @@ export class DocumentTrackingContext implements TrackingContext {
     if (element instanceof Paragraph) return new Run('Paragraph');
 
     // Fallback for other elements (e.g., Hyperlink)
-    const hasGetText = 'getText' in element && typeof (element as { getText?: () => string }).getText === 'function';
+    const hasGetText =
+      'getText' in element && typeof (element as { getText?: () => string }).getText === 'function';
     const text = hasGetText
       ? (element as { getText: () => string }).getText()
       : element?.constructor?.name || 'Unknown element';

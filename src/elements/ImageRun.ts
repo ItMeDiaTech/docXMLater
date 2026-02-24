@@ -53,7 +53,7 @@ export class ImageRun extends Run {
     const drawing = this.imageElement.toXML();
     return {
       name: 'w:r',
-      children: [drawing]
+      children: [drawing],
     };
   }
 }

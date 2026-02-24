@@ -20,11 +20,14 @@ describe('Text Element Protection (from Error Analysis Report)', () => {
       const element: XMLElement = {
         name: 'w:t',
         attributes: { 'xml:space': 'preserve' },
-        selfClosing: true
+        selfClosing: true,
       };
 
       expect(() => {
-        builder.element(element.name, element.attributes).selfClosingElement('w:t', { 'xml:space': 'preserve' }).build();
+        builder
+          .element(element.name, element.attributes)
+          .selfClosingElement('w:t', { 'xml:space': 'preserve' })
+          .build();
       }).toThrow();
     });
 
@@ -60,9 +63,9 @@ describe('Text Element Protection (from Error Analysis Report)', () => {
 
         expect(spy).toHaveBeenCalled();
         const callArgs = spy.mock.calls[0];
-        expect(callArgs && callArgs.some(arg =>
-          typeof arg === 'string' && arg.includes('undefined')
-        )).toBe(true);
+        expect(
+          callArgs && callArgs.some((arg) => typeof arg === 'string' && arg.includes('undefined'))
+        ).toBe(true);
       } finally {
         spy.mockRestore();
         setGlobalLogger(new SilentLogger());
@@ -80,9 +83,9 @@ describe('Text Element Protection (from Error Analysis Report)', () => {
 
         expect(spy).toHaveBeenCalled();
         const callArgs = spy.mock.calls[0];
-        expect(callArgs && callArgs.some(arg =>
-          typeof arg === 'string' && arg.includes('null')
-        )).toBe(true);
+        expect(
+          callArgs && callArgs.some((arg) => typeof arg === 'string' && arg.includes('null'))
+        ).toBe(true);
       } finally {
         spy.mockRestore();
         setGlobalLogger(new SilentLogger());
@@ -218,12 +221,12 @@ describe('Text Element Protection (from Error Analysis Report)', () => {
       const originalTexts = [
         'First paragraph',
         'Second paragraph',
-        'Third paragraph with special chars: <>&"\''
+        'Third paragraph with special chars: <>&"\'',
       ];
 
       // Round trip 1
       const doc1 = Document.create();
-      originalTexts.forEach(text => doc1.createParagraph(text));
+      originalTexts.forEach((text) => doc1.createParagraph(text));
       await doc1.save(testPath);
 
       // Round trip 2

@@ -3,7 +3,6 @@
  * Validates that we can detect when users pass XML strings to text methods
  */
 
-
 import {
   detectCorruptionInText,
   suggestFix,
@@ -75,7 +74,8 @@ describe('CorruptionDetection', () => {
 
   describe('suggestFix', () => {
     it('should clean escaped XML tags', () => {
-      const corrupted = 'Important Information&lt;w:t xml:space=&quot;preserve&quot;&gt;1&lt;/w:t&gt;';
+      const corrupted =
+        'Important Information&lt;w:t xml:space=&quot;preserve&quot;&gt;1&lt;/w:t&gt;';
       const fixed = suggestFix(corrupted);
 
       expect(fixed).toBe('Important Information1');
@@ -138,12 +138,7 @@ describe('CorruptionDetection', () => {
     });
 
     it('should not flag clean text', () => {
-      const cleanTexts = [
-        'Hello World',
-        'Normal text',
-        'Text with <html> tags',
-        'Some & text',
-      ];
+      const cleanTexts = ['Hello World', 'Normal text', 'Text with <html> tags', 'Some & text'];
 
       for (const text of cleanTexts) {
         expect(looksCorrupted(text)).toBe(false);
@@ -163,11 +158,17 @@ describe('CorruptionDetection', () => {
 
       // Add corrupted paragraphs (disable auto-clean to test detection)
       const para1 = new Paragraph();
-      para1.addRun(new Run('Important Information&lt;w:t xml:space=&quot;preserve&quot;&gt;1&lt;/w:t&gt;', { cleanXmlFromText: false }));
+      para1.addRun(
+        new Run('Important Information&lt;w:t xml:space=&quot;preserve&quot;&gt;1&lt;/w:t&gt;', {
+          cleanXmlFromText: false,
+        })
+      );
       doc.addParagraph(para1);
 
       const para2 = new Paragraph();
-      para2.addRun(new Run('CVS Specialty Pharmacy&lt;w:t&gt;1&lt;/w:t&gt;', { cleanXmlFromText: false }));
+      para2.addRun(
+        new Run('CVS Specialty Pharmacy&lt;w:t&gt;1&lt;/w:t&gt;', { cleanXmlFromText: false })
+      );
       doc.addParagraph(para2);
 
       const report = detectCorruptionInDocument(doc);
@@ -264,7 +265,9 @@ describe('CorruptionDetection', () => {
       const doc = Document.create();
 
       const para = new Paragraph();
-      para.addRun(new Run('Important Information&lt;w:t&gt;1&lt;/w:t&gt;', { cleanXmlFromText: false }));
+      para.addRun(
+        new Run('Important Information&lt;w:t&gt;1&lt;/w:t&gt;', { cleanXmlFromText: false })
+      );
       doc.addParagraph(para);
 
       const report = detectCorruptionInDocument(doc);
@@ -276,7 +279,8 @@ describe('CorruptionDetection', () => {
   describe('Real-world corruption patterns', () => {
     it('should detect the exact pattern from the bug report', () => {
       // This is the actual corrupted text from the issue
-      const corruptedText = 'Important Information&lt;w:t xml:space=&quot;preserve&quot;&gt;1</w:t>';
+      const corruptedText =
+        'Important Information&lt;w:t xml:space=&quot;preserve&quot;&gt;1</w:t>';
 
       const result = detectCorruptionInText(corruptedText);
       expect(result.isCorrupted).toBe(true);

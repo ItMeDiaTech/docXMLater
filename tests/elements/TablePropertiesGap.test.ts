@@ -124,7 +124,7 @@ describe('Table Properties Gap Tests', () => {
       const look = loadedTable.getTblLook();
       expect(look).toBeDefined();
       const lookVal = typeof look === 'number' ? look : parseInt(String(look), 16);
-      expect(lookVal).toBe(0x04A0);
+      expect(lookVal).toBe(0x04a0);
 
       doc.dispose();
       loaded.dispose();
@@ -168,7 +168,7 @@ describe('Table Properties Gap Tests', () => {
       // The important thing is the hex value is preserved
       expect(tblLook).toBeDefined();
       const numericVal = typeof tblLook === 'number' ? tblLook : parseInt(String(tblLook), 16);
-      expect(numericVal).toBe(0x04A0);
+      expect(numericVal).toBe(0x04a0);
 
       doc.dispose();
       loaded.dispose();

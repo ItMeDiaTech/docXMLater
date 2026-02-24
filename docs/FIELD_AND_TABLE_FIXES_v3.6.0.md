@@ -41,16 +41,16 @@ The [`createComplexFieldFromRuns()`](../src/core/DocumentParser.ts:1256) method 
 ### Example
 
 ```typescript
-const doc = await Document.load("file-with-malformed-fields.docx");
+const doc = await Document.load('file-with-malformed-fields.docx');
 
 // Check for parsing warnings
 const warnings = doc.getParseWarnings();
 if (warnings.length > 0) {
-  console.log("Parse warnings:", warnings);
+  console.log('Parse warnings:', warnings);
   // Fields that couldn't be parsed are preserved as text
 }
 
-await doc.save("output.docx"); // Works fine, no data loss
+await doc.save('output.docx'); // Works fine, no data loss
 ```
 
 ---
@@ -142,12 +142,12 @@ sdt.unlock();
 
 // Check if locked
 if (sdt.isLocked()) {
-  console.log("SDT is locked");
+  console.log('SDT is locked');
 }
 
 // Check if content can be edited
 if (sdt.isContentEditable()) {
-  console.log("Content can be edited");
+  console.log('Content can be edited');
 }
 ```
 
@@ -156,10 +156,10 @@ if (sdt.isContentEditable()) {
 Added public API to [`Document`](../src/core/Document.ts:9666):
 
 ```typescript
-const doc = await Document.load("google-docs.docx");
+const doc = await Document.load('google-docs.docx');
 const count = doc.unlockAllContent(); // Manually unlock if needed
 console.log(`Unlocked ${count} SDTs`);
-await doc.save("unlocked.docx");
+await doc.save('unlocked.docx');
 ```
 
 **Modified Files:**
@@ -190,14 +190,14 @@ Added to [`Paragraph`](../src/elements/Paragraph.ts:823):
 const fields = para.getFields();
 
 // Find fields by instruction pattern
-const pageFields = para.findFieldsByInstruction("PAGE");
+const pageFields = para.findFieldsByInstruction('PAGE');
 const tocFields = para.findFieldsByInstruction(/^TOC/i);
 
 // Remove all fields
 const removed = para.removeAllFields();
 
 // Replace a field
-para.replaceField(oldField, "Plain text");
+para.replaceField(oldField, 'Plain text');
 para.replaceField(oldField, newField);
 ```
 
@@ -210,7 +210,7 @@ Added to [`TableCell`](../src/elements/TableCell.ts:143):
 const fields = cell.getFields();
 
 // Find specific fields
-const dateFields = cell.findFields((f) => f.getInstruction().includes("DATE"));
+const dateFields = cell.findFields((f) => f.getInstruction().includes('DATE'));
 
 // Remove all fields from cell
 const removed = cell.removeAllFields();
@@ -310,29 +310,29 @@ npm run npx ts-node examples/troubleshooting/test-fixes.ts
 ### Before (Locked Tables)
 
 ```typescript
-const doc = await Document.load("google-docs.docx");
-await doc.save("output.docx");
+const doc = await Document.load('google-docs.docx');
+await doc.save('output.docx');
 // ❌ Tables are locked, cannot edit in Word
 ```
 
 ### After (Automatically Unlocked)
 
 ```typescript
-const doc = await Document.load("google-docs.docx");
-await doc.save("output.docx");
+const doc = await Document.load('google-docs.docx');
+await doc.save('output.docx');
 // ✅ Tables are automatically unlocked and editable!
 ```
 
 ### Manual Unlock (if needed)
 
 ```typescript
-const doc = await Document.load("some-file.docx");
+const doc = await Document.load('some-file.docx');
 
 // Check and unlock manually if needed
 const count = doc.unlockAllContent();
 console.log(`Unlocked ${count} content controls`);
 
-await doc.save("unlocked.docx");
+await doc.save('unlocked.docx');
 ```
 
 ### Programmatic Table Wrapping
@@ -347,11 +347,7 @@ const sdt = StructuredDocumentTag.wrapTable(table);
 // Table is editable
 
 // If you WANT to lock it:
-const lockedSdt = StructuredDocumentTag.wrapTable(
-  table,
-  "my-table",
-  "contentLocked"
-);
+const lockedSdt = StructuredDocumentTag.wrapTable(table, 'my-table', 'contentLocked');
 ```
 
 ---

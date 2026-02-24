@@ -104,18 +104,14 @@ export function logParagraphContent(
     logger(`    ${idx + 1}. "${run.text}"${rtlStatus}`);
   });
 
-  const fullText = runs.map(r => r.text).join('');
+  const fullText = runs.map((r) => r.text).join('');
   logger(`  Combined text: "${fullText}"`);
 }
 
 /**
  * Compare text before and after processing
  */
-export function logTextComparison(
-  label: string,
-  before: string,
-  after: string
-): void {
+export function logTextComparison(label: string, before: string, after: string): void {
   if (!config.enabled) return;
 
   if (before !== after) {

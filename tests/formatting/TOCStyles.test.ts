@@ -97,15 +97,9 @@ describe('TOC Entry Style Formatting', () => {
       });
 
       // Level 1: 0 indent, Level 2: 220 twips, Level 3: 440 twips
-      expect(
-        doc.getStyle('TOC1')?.getParagraphFormatting()?.indentation?.left
-      ).toBe(0);
-      expect(
-        doc.getStyle('TOC2')?.getParagraphFormatting()?.indentation?.left
-      ).toBe(220);
-      expect(
-        doc.getStyle('TOC3')?.getParagraphFormatting()?.indentation?.left
-      ).toBe(440);
+      expect(doc.getStyle('TOC1')?.getParagraphFormatting()?.indentation?.left).toBe(0);
+      expect(doc.getStyle('TOC2')?.getParagraphFormatting()?.indentation?.left).toBe(220);
+      expect(doc.getStyle('TOC3')?.getParagraphFormatting()?.indentation?.left).toBe(440);
     });
 
     it('should skip invalid level numbers', () => {
@@ -306,15 +300,11 @@ describe('TOC Entry Style Formatting', () => {
     });
 
     it('should throw for invalid level 0', () => {
-      expect(() => Style.createTOCStyle(0)).toThrow(
-        'TOC level must be between 1 and 9'
-      );
+      expect(() => Style.createTOCStyle(0)).toThrow('TOC level must be between 1 and 9');
     });
 
     it('should throw for invalid level 10', () => {
-      expect(() => Style.createTOCStyle(10)).toThrow(
-        'TOC level must be between 1 and 9'
-      );
+      expect(() => Style.createTOCStyle(10)).toThrow('TOC level must be between 1 and 9');
     });
 
     it('should accept custom formatting', () => {
@@ -335,9 +325,7 @@ describe('TOC Entry Style Formatting', () => {
       for (let level = 1; level <= 9; level++) {
         const tocStyle = Style.createTOCStyle(level);
         const expectedIndent = (level - 1) * 220;
-        expect(tocStyle.getParagraphFormatting()?.indentation?.left).toBe(
-          expectedIndent
-        );
+        expect(tocStyle.getParagraphFormatting()?.indentation?.left).toBe(expectedIndent);
       }
     });
   });

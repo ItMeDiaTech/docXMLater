@@ -19,10 +19,7 @@
  * // Result: { bold: true, fontSize: 28, italic: true }
  * ```
  */
-export function mergeFormatting<T extends Record<string, any>>(
-  base: T,
-  override: Partial<T>
-): T {
+export function mergeFormatting<T extends Record<string, any>>(base: T, override: Partial<T>): T {
   const result = { ...base };
 
   for (const [key, value] of Object.entries(override)) {
@@ -30,10 +27,7 @@ export function mergeFormatting<T extends Record<string, any>>(
 
     if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
       // Deep merge nested objects
-      result[key as keyof T] = mergeFormatting(
-        result[key as keyof T] || ({} as any),
-        value
-      );
+      result[key as keyof T] = mergeFormatting(result[key as keyof T] || ({} as any), value);
     } else {
       // Direct assignment for primitives
       result[key as keyof T] = value;
@@ -167,8 +161,16 @@ export function isEqualFormatting(
     }
 
     // Check nested objects
-    if (typeof val1 === 'object' && val1 !== null && typeof val2 === 'object' && val2 !== null && !Array.isArray(val1) && !Array.isArray(val2)) {
-      if (!isEqualFormatting(val1 as Record<string, unknown>, val2 as Record<string, unknown>)) return false;
+    if (
+      typeof val1 === 'object' &&
+      val1 !== null &&
+      typeof val2 === 'object' &&
+      val2 !== null &&
+      !Array.isArray(val1) &&
+      !Array.isArray(val2)
+    ) {
+      if (!isEqualFormatting(val1 as Record<string, unknown>, val2 as Record<string, unknown>))
+        return false;
     } else if (val1 !== val2) {
       return false;
     }
@@ -200,7 +202,12 @@ export function applyDefaults<T extends Record<string, any>>(
 
   for (const [key, value] of Object.entries(formatting)) {
     if (value !== undefined) {
-      if (typeof value === 'object' && !Array.isArray(value) && value !== null && typeof defaults[key] === 'object') {
+      if (
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        value !== null &&
+        typeof defaults[key] === 'object'
+      ) {
         // Deep merge nested objects
         result[key as keyof T] = applyDefaults(value, defaults[key]);
       } else {

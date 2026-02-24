@@ -104,9 +104,7 @@ export class ZipReader {
     this.files.clear();
 
     // Get all file paths
-    const filePaths = Object.keys(this.zip.files).filter(
-      (path) => !this.zip!.files[path]!.dir
-    );
+    const filePaths = Object.keys(this.zip.files).filter((path) => !this.zip!.files[path]!.dir);
 
     // Extract each file
     for (const filePath of filePaths) {
@@ -255,9 +253,7 @@ export class ZipReader {
     this.ensureLoaded();
 
     // Convert simple glob pattern to regex
-    const regexPattern = pattern
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.');
+    const regexPattern = pattern.replace(/\*/g, '.*').replace(/\?/g, '.');
     const regex = new RegExp(`^${regexPattern}$`);
 
     const matchingFiles: ZipFile[] = [];

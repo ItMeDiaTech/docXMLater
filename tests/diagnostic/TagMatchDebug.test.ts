@@ -1,4 +1,3 @@
-
 import { XMLParser } from '../../src/xml/XMLParser';
 
 describe('Tag Match Debug', () => {

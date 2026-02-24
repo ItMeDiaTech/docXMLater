@@ -150,18 +150,13 @@ export class MoveOperationHelper {
 
     // Create destination elements (clone content for moveTo)
     const contentArray = Array.isArray(content) ? content : [content];
-    const clonedContent = contentArray.map(run => {
+    const clonedContent = contentArray.map((run) => {
       // Clone the run to have independent content at destination
       const cloned = new Run(run.getText(), { ...run.getFormatting() });
       return cloned;
     });
 
-    const moveToRangeStart = RangeMarker.createMoveToStart(
-      moveToRangeId,
-      moveId,
-      author,
-      date
-    );
+    const moveToRangeStart = RangeMarker.createMoveToStart(moveToRangeId, moveId, author, date);
 
     const moveTo = Revision.createMoveTo(author, clonedContent, moveId, date);
     moveTo.setId(moveToId);

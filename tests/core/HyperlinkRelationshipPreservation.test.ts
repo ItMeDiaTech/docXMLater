@@ -15,16 +15,18 @@ import { Table } from '../../src/elements/Table';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 import { CleanupHelper } from '../../src/helpers/CleanupHelper';
 
-const HYPERLINK_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+const HYPERLINK_REL_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
 
 function addHyperlinkRel(doc: Document, id: string, url: string): void {
-  doc.getRelationshipManager().addRelationship(
-    Relationship.create({ id, type: HYPERLINK_REL_TYPE, target: url, targetMode: 'External' })
-  );
+  doc
+    .getRelationshipManager()
+    .addRelationship(
+      Relationship.create({ id, type: HYPERLINK_REL_TYPE, target: url, targetMode: 'External' })
+    );
 }
 
 describe('Hyperlink Relationship Preservation', () => {
-
   it('should preserve hyperlink relationships in footnotes through save', async () => {
     const doc = Document.create();
     doc.createParagraph('Body text');
@@ -88,7 +90,8 @@ describe('Hyperlink Relationship Preservation', () => {
     if (cell) {
       cell.addParagraph(new Paragraph().addText('Cell text'));
 
-      const nestedXml = `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr>` +
+      const nestedXml =
+        `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr>` +
         `<w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid>` +
         `<w:tr><w:tc><w:p><w:hyperlink r:id="rId300"><w:r><w:t>Nested Link</w:t></w:r></w:hyperlink></w:p></w:tc></w:tr>` +
         `</w:tbl>`;
@@ -187,7 +190,8 @@ describe('Hyperlink Relationship Preservation', () => {
       cell.addParagraph(new Paragraph().addText('Outer cell'));
 
       // Nested table with a hyperlink referencing rId501 (simulates parsed nested table)
-      const nestedXml = `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr>` +
+      const nestedXml =
+        `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr>` +
         `<w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid>` +
         `<w:tr><w:tc><w:p><w:hyperlink r:id="rId501" w:anchor="section1">` +
         `<w:r><w:t>Nested Link</w:t></w:r></w:hyperlink></w:p></w:tc></w:tr></w:tbl>`;

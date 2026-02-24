@@ -54,11 +54,7 @@ describe('Run InstructionText Preservation', () => {
     it('should convert mixed content run to text type', () => {
       // Create a run with mixed content (text + tab + text)
       const run = Run.createFromContent(
-        [
-          { type: 'text', value: 'Hello' },
-          { type: 'tab' },
-          { type: 'text', value: 'World' }
-        ],
+        [{ type: 'text', value: 'Hello' }, { type: 'tab' }, { type: 'text', value: 'World' }],
         {}
       );
 

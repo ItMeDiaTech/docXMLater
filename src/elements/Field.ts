@@ -7,7 +7,11 @@
 
 import { XMLElement } from '../xml/XMLBuilder';
 import { RunFormatting, FormFieldData } from './Run';
-import { ParsedHyperlinkInstruction, parseHyperlinkInstruction, isHyperlinkInstruction } from './FieldHelpers';
+import {
+  ParsedHyperlinkInstruction,
+  parseHyperlinkInstruction,
+  isHyperlinkInstruction,
+} from './FieldHelpers';
 import type { Revision } from './Revision';
 import { pointsToHalfPoints } from '../utils/units';
 
@@ -15,31 +19,31 @@ import { pointsToHalfPoints } from '../utils/units';
  * Common field types
  */
 export type FieldType =
-  | 'PAGE'           // Current page number
-  | 'NUMPAGES'       // Total number of pages
-  | 'DATE'           // Current date
-  | 'TIME'           // Current time
-  | 'AUTHOR'         // Document author
-  | 'TITLE'          // Document title
-  | 'FILENAME'       // Document filename
+  | 'PAGE' // Current page number
+  | 'NUMPAGES' // Total number of pages
+  | 'DATE' // Current date
+  | 'TIME' // Current time
+  | 'AUTHOR' // Document author
+  | 'TITLE' // Document title
+  | 'FILENAME' // Document filename
   | 'FILENAMEWITHPATH' // Document filename with path
-  | 'SUBJECT'        // Document subject
-  | 'KEYWORDS'       // Document keywords
-  | 'CREATEDATE'     // Document creation date
-  | 'SAVEDATE'       // Last save date
-  | 'PRINTDATE'      // Last print date
-  | 'SECTIONPAGES'   // Pages in current section
-  | 'SECTION'        // Current section number
-  | 'REF'            // Cross-reference to bookmark
-  | 'HYPERLINK'      // Hyperlink field
-  | 'SEQ'            // Sequence numbering
-  | 'TC'             // Table of contents entry
-  | 'XE'             // Index entry
-  | 'IF'             // Conditional field
-  | 'MERGEFIELD'     // Mail merge field
-  | 'INCLUDE'        // Include text from external file
-  | 'INCLUDETEXT'    // Include text from external file (alias)
-  | 'CUSTOM';        // Custom field type for unknown/specialized fields
+  | 'SUBJECT' // Document subject
+  | 'KEYWORDS' // Document keywords
+  | 'CREATEDATE' // Document creation date
+  | 'SAVEDATE' // Last save date
+  | 'PRINTDATE' // Last print date
+  | 'SECTIONPAGES' // Pages in current section
+  | 'SECTION' // Current section number
+  | 'REF' // Cross-reference to bookmark
+  | 'HYPERLINK' // Hyperlink field
+  | 'SEQ' // Sequence numbering
+  | 'TC' // Table of contents entry
+  | 'XE' // Index entry
+  | 'IF' // Conditional field
+  | 'MERGEFIELD' // Mail merge field
+  | 'INCLUDE' // Include text from external file
+  | 'INCLUDETEXT' // Include text from external file (alias)
+  | 'CUSTOM'; // Custom field type for unknown/specialized fields
 
 /**
  * Field properties
@@ -146,8 +150,9 @@ export class Field {
    * @returns True if the field type is HYPERLINK or instruction starts with HYPERLINK
    */
   isHyperlinkField(): boolean {
-    return this.type === 'HYPERLINK' ||
-           this.instruction.trim().toUpperCase().startsWith('HYPERLINK');
+    return (
+      this.type === 'HYPERLINK' || this.instruction.trim().toUpperCase().startsWith('HYPERLINK')
+    );
   }
 
   /**
@@ -185,10 +190,12 @@ export class Field {
       attributes: {
         'w:instr': this.instruction,
       },
-      children: [{
-        name: 'w:r',
-        children: runChildren,
-      }],
+      children: [
+        {
+          name: 'w:r',
+          children: runChildren,
+        },
+      ],
     };
   }
 
@@ -309,9 +316,8 @@ export class Field {
     }
 
     if (this.formatting.underline) {
-      const val = typeof this.formatting.underline === 'string'
-        ? this.formatting.underline
-        : 'single';
+      const val =
+        typeof this.formatting.underline === 'string' ? this.formatting.underline : 'single';
       children.push({
         name: 'w:u',
         attributes: { 'w:val': val },
@@ -466,11 +472,7 @@ export class Field {
    * @param format Number format (\* ARABIC, \* ROMAN, etc.)
    * @param formatting Optional run formatting
    */
-  static createSeq(
-    identifier: string,
-    format?: string,
-    formatting?: RunFormatting
-  ): Field {
+  static createSeq(identifier: string, format?: string, formatting?: RunFormatting): Field {
     let instruction = `SEQ ${identifier}`;
 
     if (format) {
@@ -494,11 +496,7 @@ export class Field {
    * @param level TOC level (1-9)
    * @param formatting Optional run formatting
    */
-  static createTCEntry(
-    text: string,
-    level = 1,
-    formatting?: RunFormatting
-  ): Field {
+  static createTCEntry(text: string, level = 1, formatting?: RunFormatting): Field {
     if (level < 1 || level > 9) {
       throw new Error('TC level must be between 1 and 9');
     }
@@ -518,11 +516,7 @@ export class Field {
    * @param subEntry Optional sub-entry text
    * @param formatting Optional run formatting
    */
-  static createXEEntry(
-    text: string,
-    subEntry?: string,
-    formatting?: RunFormatting
-  ): Field {
+  static createXEEntry(text: string, subEntry?: string, formatting?: RunFormatting): Field {
     let instruction = `XE "${text}"`;
 
     if (subEntry) {
@@ -1014,10 +1008,7 @@ export class ComplexField {
     }
 
     if (formatting.underline) {
-      const val =
-        typeof formatting.underline === 'string'
-          ? formatting.underline
-          : 'single';
+      const val = typeof formatting.underline === 'string' ? formatting.underline : 'single';
       children.push({
         name: 'w:u',
         attributes: { 'w:val': val },
@@ -1093,29 +1084,69 @@ export class ComplexField {
       }
     }
     if (ffd.calcOnExit !== undefined) {
-      ffDataChildren.push({ name: 'w:calcOnExit', attributes: { 'w:val': ffd.calcOnExit ? '1' : '0' }, selfClosing: true });
+      ffDataChildren.push({
+        name: 'w:calcOnExit',
+        attributes: { 'w:val': ffd.calcOnExit ? '1' : '0' },
+        selfClosing: true,
+      });
     }
     if (ffd.helpText) {
-      ffDataChildren.push({ name: 'w:helpText', attributes: { 'w:type': 'text', 'w:val': ffd.helpText }, selfClosing: true });
+      ffDataChildren.push({
+        name: 'w:helpText',
+        attributes: { 'w:type': 'text', 'w:val': ffd.helpText },
+        selfClosing: true,
+      });
     }
     if (ffd.statusText) {
-      ffDataChildren.push({ name: 'w:statusText', attributes: { 'w:type': 'text', 'w:val': ffd.statusText }, selfClosing: true });
+      ffDataChildren.push({
+        name: 'w:statusText',
+        attributes: { 'w:type': 'text', 'w:val': ffd.statusText },
+        selfClosing: true,
+      });
     }
     if (ffd.entryMacro) {
-      ffDataChildren.push({ name: 'w:entryMacro', attributes: { 'w:val': ffd.entryMacro }, selfClosing: true });
+      ffDataChildren.push({
+        name: 'w:entryMacro',
+        attributes: { 'w:val': ffd.entryMacro },
+        selfClosing: true,
+      });
     }
     if (ffd.exitMacro) {
-      ffDataChildren.push({ name: 'w:exitMacro', attributes: { 'w:val': ffd.exitMacro }, selfClosing: true });
+      ffDataChildren.push({
+        name: 'w:exitMacro',
+        attributes: { 'w:val': ffd.exitMacro },
+        selfClosing: true,
+      });
     }
 
     if (ffd.fieldType) {
       switch (ffd.fieldType.type) {
         case 'textInput': {
           const tiChildren: (string | XMLElement)[] = [];
-          if (ffd.fieldType.inputType) tiChildren.push({ name: 'w:type', attributes: { 'w:val': ffd.fieldType.inputType }, selfClosing: true });
-          if (ffd.fieldType.defaultValue) tiChildren.push({ name: 'w:default', attributes: { 'w:val': ffd.fieldType.defaultValue }, selfClosing: true });
-          if (ffd.fieldType.maxLength !== undefined) tiChildren.push({ name: 'w:maxLength', attributes: { 'w:val': String(ffd.fieldType.maxLength) }, selfClosing: true });
-          if (ffd.fieldType.format) tiChildren.push({ name: 'w:format', attributes: { 'w:val': ffd.fieldType.format }, selfClosing: true });
+          if (ffd.fieldType.inputType)
+            tiChildren.push({
+              name: 'w:type',
+              attributes: { 'w:val': ffd.fieldType.inputType },
+              selfClosing: true,
+            });
+          if (ffd.fieldType.defaultValue)
+            tiChildren.push({
+              name: 'w:default',
+              attributes: { 'w:val': ffd.fieldType.defaultValue },
+              selfClosing: true,
+            });
+          if (ffd.fieldType.maxLength !== undefined)
+            tiChildren.push({
+              name: 'w:maxLength',
+              attributes: { 'w:val': String(ffd.fieldType.maxLength) },
+              selfClosing: true,
+            });
+          if (ffd.fieldType.format)
+            tiChildren.push({
+              name: 'w:format',
+              attributes: { 'w:val': ffd.fieldType.format },
+              selfClosing: true,
+            });
           ffDataChildren.push({ name: 'w:textInput', children: tiChildren });
           break;
         }
@@ -1124,20 +1155,48 @@ export class ComplexField {
           if (ffd.fieldType.size === 'auto') {
             cbChildren.push({ name: 'w:sizeAuto', selfClosing: true });
           } else if (ffd.fieldType.size !== undefined) {
-            cbChildren.push({ name: 'w:size', attributes: { 'w:val': String(ffd.fieldType.size) }, selfClosing: true });
+            cbChildren.push({
+              name: 'w:size',
+              attributes: { 'w:val': String(ffd.fieldType.size) },
+              selfClosing: true,
+            });
           }
-          if (ffd.fieldType.defaultChecked !== undefined) cbChildren.push({ name: 'w:default', attributes: { 'w:val': ffd.fieldType.defaultChecked ? '1' : '0' }, selfClosing: true });
-          if (ffd.fieldType.checked !== undefined) cbChildren.push({ name: 'w:checked', attributes: { 'w:val': ffd.fieldType.checked ? '1' : '0' }, selfClosing: true });
+          if (ffd.fieldType.defaultChecked !== undefined)
+            cbChildren.push({
+              name: 'w:default',
+              attributes: { 'w:val': ffd.fieldType.defaultChecked ? '1' : '0' },
+              selfClosing: true,
+            });
+          if (ffd.fieldType.checked !== undefined)
+            cbChildren.push({
+              name: 'w:checked',
+              attributes: { 'w:val': ffd.fieldType.checked ? '1' : '0' },
+              selfClosing: true,
+            });
           ffDataChildren.push({ name: 'w:checkBox', children: cbChildren });
           break;
         }
         case 'dropDownList': {
           const ddChildren: (string | XMLElement)[] = [];
-          if (ffd.fieldType.result !== undefined) ddChildren.push({ name: 'w:result', attributes: { 'w:val': String(ffd.fieldType.result) }, selfClosing: true });
-          if (ffd.fieldType.defaultResult !== undefined) ddChildren.push({ name: 'w:default', attributes: { 'w:val': String(ffd.fieldType.defaultResult) }, selfClosing: true });
+          if (ffd.fieldType.result !== undefined)
+            ddChildren.push({
+              name: 'w:result',
+              attributes: { 'w:val': String(ffd.fieldType.result) },
+              selfClosing: true,
+            });
+          if (ffd.fieldType.defaultResult !== undefined)
+            ddChildren.push({
+              name: 'w:default',
+              attributes: { 'w:val': String(ffd.fieldType.defaultResult) },
+              selfClosing: true,
+            });
           if (ffd.fieldType.listEntries) {
             for (const entry of ffd.fieldType.listEntries) {
-              ddChildren.push({ name: 'w:listEntry', attributes: { 'w:val': entry }, selfClosing: true });
+              ddChildren.push({
+                name: 'w:listEntry',
+                attributes: { 'w:val': entry },
+                selfClosing: true,
+              });
             }
           }
           ffDataChildren.push({ name: 'w:ddList', children: ddChildren });

@@ -17,9 +17,9 @@ module.exports = {
       from: {
         orphan: true,
         pathNot: [
-          '(^|/)\\.[^/]+',       // dot files
-          '\\.d\\.ts$',           // type declarations
-          'types\\.ts$',          // type-only files
+          '(^|/)\\.[^/]+', // dot files
+          '\\.d\\.ts$', // type declarations
+          'types\\.ts$', // type-only files
         ],
       },
       to: {},

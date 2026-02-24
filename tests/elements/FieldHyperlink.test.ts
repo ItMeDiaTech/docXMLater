@@ -10,7 +10,6 @@
  * - Full URL construction with anchors
  */
 
-
 import {
   parseHyperlinkInstruction,
   buildHyperlinkInstruction,
@@ -116,7 +115,9 @@ describe('HYPERLINK Field Instruction Parsing', () => {
       );
 
       expect(result).not.toBeNull();
-      expect(result!.url).toBe('https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=abc123');
+      expect(result!.url).toBe(
+        'https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=abc123'
+      );
     });
 
     it('should decode anchor value as well', () => {

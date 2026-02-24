@@ -28,25 +28,19 @@ describe('Validation Utilities', () => {
     test('should throw when missing [Content_Types].xml', () => {
       const invalidFiles = ['_rels/.rels', 'word/document.xml'];
 
-      expect(() => validateDocxStructure(invalidFiles)).toThrow(
-        MissingRequiredFileError
-      );
+      expect(() => validateDocxStructure(invalidFiles)).toThrow(MissingRequiredFileError);
     });
 
     test('should throw when missing _rels/.rels', () => {
       const invalidFiles = ['[Content_Types].xml', 'word/document.xml'];
 
-      expect(() => validateDocxStructure(invalidFiles)).toThrow(
-        MissingRequiredFileError
-      );
+      expect(() => validateDocxStructure(invalidFiles)).toThrow(MissingRequiredFileError);
     });
 
     test('should throw when missing word/document.xml', () => {
       const invalidFiles = ['[Content_Types].xml', '_rels/.rels'];
 
-      expect(() => validateDocxStructure(invalidFiles)).toThrow(
-        MissingRequiredFileError
-      );
+      expect(() => validateDocxStructure(invalidFiles)).toThrow(MissingRequiredFileError);
     });
 
     test('should validate all required files', () => {

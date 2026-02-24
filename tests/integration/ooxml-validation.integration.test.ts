@@ -34,20 +34,15 @@ import { NumberingLevel } from '../../src/formatting/NumberingLevel';
 /** 1x1 transparent PNG for image tests */
 function createTestPng(): Buffer {
   return Buffer.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
     0x42, 0x60, 0x82,
   ]);
 }
 
 describe('OOXML Validation Integration', () => {
-
   // =========================================================================
   // 1. Table with full tblPr properties
   // =========================================================================
@@ -458,19 +453,23 @@ describe('OOXML Validation Integration', () => {
       // Second paragraph with interleaved insert/delete revisions
       const para2 = new Paragraph();
       para2.addText('Before ');
-      para2.addRevision(new Revision({
-        type: 'insert',
-        author: 'Author2',
-        date: new Date('2025-01-15T14:00:00Z'),
-        content: [new Run('newly added')],
-      }));
+      para2.addRevision(
+        new Revision({
+          type: 'insert',
+          author: 'Author2',
+          date: new Date('2025-01-15T14:00:00Z'),
+          content: [new Run('newly added')],
+        })
+      );
       para2.addText(' middle ');
-      para2.addRevision(new Revision({
-        type: 'delete',
-        author: 'Author2',
-        date: new Date('2025-01-15T15:00:00Z'),
-        content: [new Run('removed')],
-      }));
+      para2.addRevision(
+        new Revision({
+          type: 'delete',
+          author: 'Author2',
+          date: new Date('2025-01-15T15:00:00Z'),
+          content: [new Run('removed')],
+        })
+      );
       para2.addText(' after');
       doc.addParagraph(para2);
 
@@ -581,12 +580,9 @@ describe('OOXML Validation Integration', () => {
       para.addComment(comment);
 
       // Create reply to the comment
-      const reply = doc.getCommentManager().createReply(
-        comment.getId(),
-        'Bob',
-        'Looks good to me',
-        'B'
-      );
+      const reply = doc
+        .getCommentManager()
+        .createReply(comment.getId(), 'Bob', 'Looks good to me', 'B');
       // Mark as modified for save
       (doc as any)._commentsModified = true;
 
@@ -984,12 +980,14 @@ describe('OOXML Validation Integration', () => {
 
       // Revision
       const revPara = new Paragraph();
-      revPara.addRevision(new Revision({
-        type: 'insert',
-        author: 'TestAuthor',
-        date: new Date('2025-01-15T10:00:00Z'),
-        content: [new Run('Tracked change')],
-      }));
+      revPara.addRevision(
+        new Revision({
+          type: 'insert',
+          author: 'TestAuthor',
+          date: new Date('2025-01-15T10:00:00Z'),
+          content: [new Run('Tracked change')],
+        })
+      );
       doc.addParagraph(revPara);
 
       const buffer = await doc.toBuffer();

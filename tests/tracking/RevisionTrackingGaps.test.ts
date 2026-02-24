@@ -1050,7 +1050,7 @@ describe('Fix 3: removeRow wraps content in w:del', () => {
     expect(rev!.getType()).toBe('tableCellDelete');
 
     const content = para.getContent();
-    const revisions = content.filter(item => item instanceof Revision);
+    const revisions = content.filter((item) => item instanceof Revision);
     expect(revisions.length).toBe(1);
     expect(revisions[0]!.getType()).toBe('delete');
 
@@ -1079,5 +1079,82 @@ describe('Fix 12: Object equality prevents duplicate tracking', () => {
     expect(table.getTblPrChange()).toBeUndefined();
 
     doc.dispose();
+  });
+});
+
+// ============================================================================
+// Fix: Loaded tables with w:tblW w:w="0" w:type="auto" capture correct width
+// ============================================================================
+
+describe('Loaded table with auto width captures correct tblPrChange', () => {
+  it('should capture original 0/auto width in tblPrChange for loaded tables', async () => {
+    // Create a document with a table that has w:tblW w:w="0" w:type="auto"
+    const doc = Document.create();
+    const table = new Table(1, 1);
+    doc.addTable(table);
+
+    // Set width to 0/auto (simulating what the parser does for auto-sized tables)
+    table.setWidth(0);
+    table.setWidthType('auto');
+
+    // Save and reload to go through the parser
+    const buffer = await doc.toBuffer();
+    doc.dispose();
+
+    const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    const loadedTable = loaded.getTables()[0]!;
+
+    // Verify the loaded table has width=0, widthType=auto
+    expect(loadedTable.getWidth()).toBe(0);
+    expect(loadedTable.getWidthType()).toBe('auto');
+
+    // Enable tracking and modify a property
+    loaded.enableTrackChanges({ author: 'TestAuthor' });
+    loadedTable.setLayout('fixed');
+    loaded.flushPendingChanges();
+
+    // Verify tblPrChange captures 0/auto, NOT the constructor default 9360/dxa
+    const change = loadedTable.getTblPrChange();
+    expect(change).toBeDefined();
+    expect(change!.previousProperties.width).toBe(0);
+    expect(change!.previousProperties.widthType).toBe('auto');
+
+    loaded.dispose();
+  });
+});
+
+// ============================================================================
+// Fix: Loaded tables with w:tblInd capture correct indent in tblPrChange
+// ============================================================================
+
+describe('Loaded table with indent captures correct tblPrChange', () => {
+  it('should round-trip w:tblInd through save/load and capture in tblPrChange', async () => {
+    // Create a document with a table that has a specific indent
+    const doc = Document.create();
+    const table = new Table(1, 1);
+    doc.addTable(table);
+    table.setIndent(720); // 0.5 inch
+
+    // Save and reload to go through the parser
+    const buffer = await doc.toBuffer();
+    doc.dispose();
+
+    const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    const loadedTable = loaded.getTables()[0]!;
+
+    // Verify the loaded table preserved the indent
+    expect(loadedTable.getIndent()).toBe(720);
+
+    // Enable tracking and modify a property
+    loaded.enableTrackChanges({ author: 'TestAuthor' });
+    loadedTable.setLayout('fixed');
+    loaded.flushPendingChanges();
+
+    // Verify tblPrChange captures the original indent
+    const change = loadedTable.getTblPrChange();
+    expect(change).toBeDefined();
+    expect(change!.previousProperties.indent).toBe(720);
+
+    loaded.dispose();
   });
 });

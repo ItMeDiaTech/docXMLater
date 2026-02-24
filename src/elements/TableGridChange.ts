@@ -113,9 +113,7 @@ export class TableGridChange {
     // Build previous grid
     const gridChildren: XMLElement[] = [];
     for (const col of this.previousGrid) {
-      gridChildren.push(
-        XMLBuilder.wSelf('gridCol', { 'w:w': col.width.toString() })
-      );
+      gridChildren.push(XMLBuilder.wSelf('gridCol', { 'w:w': col.width.toString() }));
     }
 
     const tblGridElement = XMLBuilder.w('tblGrid', undefined, gridChildren);

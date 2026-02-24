@@ -136,9 +136,7 @@ describe('Style Round-Trip Tests', () => {
       await doc.save(tempFile);
 
       const doc2 = await Document.load(tempFile);
-      const reloadedStyle = doc2
-        .getStyles()
-        .find((s) => s.getStyleId() === 'BlackText');
+      const reloadedStyle = doc2.getStyles().find((s) => s.getStyleId() === 'BlackText');
 
       expect(reloadedStyle).toBeDefined();
       const props = reloadedStyle!.getProperties();
@@ -159,7 +157,7 @@ describe('Style Round-Trip Tests', () => {
         name: 'List Paragraph',
         paragraphFormatting: {
           indentation: { left: 720 },
-          contextualSpacing: true,  // The critical setting
+          contextualSpacing: true, // The critical setting
         },
       });
 
@@ -350,20 +348,25 @@ describe('Style Round-Trip Tests', () => {
     it('should preserve all alignment values through round-trip', async () => {
       const doc = Document.create();
       // OOXML uses "both" for justify (w:val="both"), so test both API values
-      const alignments: Array<{ input: 'left' | 'center' | 'right' | 'justify'; expected: string }> = [
+      const alignments: Array<{
+        input: 'left' | 'center' | 'right' | 'justify';
+        expected: string;
+      }> = [
         { input: 'left', expected: 'left' },
         { input: 'center', expected: 'center' },
         { input: 'right', expected: 'right' },
-        { input: 'justify', expected: 'both' },  // OOXML maps justify -> both
+        { input: 'justify', expected: 'both' }, // OOXML maps justify -> both
       ];
 
       for (const { input } of alignments) {
-        doc.addStyle(new Style({
-          type: 'paragraph',
-          styleId: `Align${input}`,
-          name: `Align ${input}`,
-          paragraphFormatting: { alignment: input },
-        }));
+        doc.addStyle(
+          new Style({
+            type: 'paragraph',
+            styleId: `Align${input}`,
+            name: `Align ${input}`,
+            paragraphFormatting: { alignment: input },
+          })
+        );
       }
 
       const tempFile = path.join(TEMP_DIR, 'alignment-roundtrip.docx');

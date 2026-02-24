@@ -63,7 +63,7 @@ export class RelationshipManager {
    * @param type The relationship type
    */
   getRelationshipsByType(type: string | RelationshipType): Relationship[] {
-    return this.getAllRelationships().filter(rel => rel.getType() === type);
+    return this.getAllRelationships().filter((rel) => rel.getType() === type);
   }
 
   /**
@@ -222,7 +222,7 @@ export class RelationshipManager {
     if (relationship.getType() !== RelationshipType.HYPERLINK) {
       throw new Error(
         `Relationship ${relationshipId} is not a hyperlink relationship. ` +
-        `Type is ${relationship.getType()}, expected ${RelationshipType.HYPERLINK}`
+          `Type is ${relationship.getType()}, expected ${RelationshipType.HYPERLINK}`
       );
     }
 
@@ -239,7 +239,7 @@ export class RelationshipManager {
    */
   findHyperlinkByTarget(targetUrl: string): Relationship | undefined {
     return this.getAllRelationships().find(
-      rel => rel.getType() === RelationshipType.HYPERLINK && rel.getTarget() === targetUrl
+      (rel) => rel.getType() === RelationshipType.HYPERLINK && rel.getTarget() === targetUrl
     );
   }
 
@@ -383,7 +383,9 @@ export class RelationshipManager {
 
     // Prevent ReDoS: validate input size (typical .rels files are < 10KB)
     if (xml.length > 100000) {
-      throw new Error('Relationships XML file too large (>100KB). Possible malicious input or corrupted file.');
+      throw new Error(
+        'Relationships XML file too large (>100KB). Possible malicious input or corrupted file.'
+      );
     }
 
     // Use XMLParser to extract all Relationship elements
@@ -407,7 +409,7 @@ export class RelationshipManager {
         // Validate targetMode before type assertion
         const validatedTargetMode =
           targetMode === 'Internal' || targetMode === 'External' || targetMode === undefined
-            ? (targetMode)
+            ? targetMode
             : undefined;
 
         // Create and add relationship
@@ -424,5 +426,4 @@ export class RelationshipManager {
 
     return manager;
   }
-
 }

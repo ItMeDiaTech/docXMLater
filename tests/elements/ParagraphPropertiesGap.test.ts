@@ -88,7 +88,11 @@ describe('Paragraph Properties Gap Tests', () => {
 
   describe('Text Alignment (w:textAlignment)', () => {
     const alignments: Array<'top' | 'center' | 'baseline' | 'bottom' | 'auto'> = [
-      'top', 'center', 'baseline', 'bottom', 'auto'
+      'top',
+      'center',
+      'baseline',
+      'bottom',
+      'auto',
     ];
 
     test('should round-trip all textAlignment values', async () => {

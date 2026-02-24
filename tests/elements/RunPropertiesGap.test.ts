@@ -86,18 +86,16 @@ describe('Run Properties Gap Tests', () => {
 
   describe('Double Strikethrough (w:dstrike)', () => {
     test('should set dstrike via formatting object', () => {
-      const run = Run.createFromContent(
-        [{ type: 'text', value: 'double strike' }],
-        { dstrike: true }
-      );
+      const run = Run.createFromContent([{ type: 'text', value: 'double strike' }], {
+        dstrike: true,
+      });
       expect(run.getFormatting().dstrike).toBe(true);
     });
 
     test('should generate w:dstrike in XML', () => {
-      const run = Run.createFromContent(
-        [{ type: 'text', value: 'double strike' }],
-        { dstrike: true }
-      );
+      const run = Run.createFromContent([{ type: 'text', value: 'double strike' }], {
+        dstrike: true,
+      });
       const xml = run.toXML();
       const rPr = (xml.children as any[])?.find((c: any) => c?.name === 'w:rPr');
       const dstrike = rPr?.children?.find((c: any) => c?.name === 'w:dstrike');
@@ -107,9 +105,22 @@ describe('Run Properties Gap Tests', () => {
 
   describe('Highlight (w:highlight)', () => {
     const highlightColors = [
-      'yellow', 'green', 'cyan', 'magenta', 'blue', 'red',
-      'darkBlue', 'darkCyan', 'darkGreen', 'darkMagenta', 'darkRed', 'darkYellow',
-      'darkGray', 'lightGray', 'black', 'white'
+      'yellow',
+      'green',
+      'cyan',
+      'magenta',
+      'blue',
+      'red',
+      'darkBlue',
+      'darkCyan',
+      'darkGreen',
+      'darkMagenta',
+      'darkRed',
+      'darkYellow',
+      'darkGray',
+      'lightGray',
+      'black',
+      'white',
     ] as const;
 
     test('should set highlight color', () => {

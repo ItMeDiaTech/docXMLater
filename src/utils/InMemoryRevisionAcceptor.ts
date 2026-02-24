@@ -70,12 +70,7 @@ export interface AcceptRevisionsResult {
 /**
  * Revision types that represent content changes (contain actual text/runs)
  */
-const CONTENT_REVISION_TYPES: RevisionType[] = [
-  'insert',
-  'delete',
-  'moveFrom',
-  'moveTo',
-];
+const CONTENT_REVISION_TYPES: RevisionType[] = ['insert', 'delete', 'moveFrom', 'moveTo'];
 
 /**
  * Revision types that represent property/formatting changes
@@ -219,14 +214,14 @@ export function acceptRevisionsInMemory(
         if (movePairValidation.orphanedMoveFrom.length > 0) {
           logger.warn(
             'Orphaned moveFrom revisions detected - accepting these will DELETE content permanently ' +
-            '(content was moved from here but no moveTo destination exists)',
+              '(content was moved from here but no moveTo destination exists)',
             { orphanedMoveIds: movePairValidation.orphanedMoveFrom }
           );
         }
         if (movePairValidation.orphanedMoveTo.length > 0) {
           logger.warn(
             'Orphaned moveTo revisions detected - content may be duplicated ' +
-            '(content moved to here but no moveFrom source exists)',
+              '(content moved to here but no moveFrom source exists)',
             { orphanedMoveIds: movePairValidation.orphanedMoveTo }
           );
         }

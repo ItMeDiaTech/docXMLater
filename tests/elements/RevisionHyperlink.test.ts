@@ -243,9 +243,7 @@ describe('RevisionHyperlink Tests', () => {
       expect(xml!.name).toBe('w:hyperlink');
       expect(xml!.children).toBeDefined();
       // The w:ins should be inside the hyperlink
-      const insChild = xml!.children?.find(
-        (c) => typeof c === 'object' && c.name === 'w:ins'
-      );
+      const insChild = xml!.children?.find((c) => typeof c === 'object' && c.name === 'w:ins');
       expect(insChild).toBeDefined();
       if (insChild && typeof insChild !== 'string') {
         expect(insChild.attributes?.['w:author']).toBe('TestAuthor');
@@ -539,6 +537,406 @@ describe('RevisionHyperlink Tests', () => {
       para.setContent([run, hyperlink]);
 
       expect(hyperlink._getParentParagraph()).toBe(para);
+    });
+  });
+
+  describe('Formatting tracked changes (rPrChange)', () => {
+    function createTrackingMock() {
+      let nextId = 100;
+      return {
+        isEnabled: () => true,
+        getAuthor: () => 'FormatAuthor',
+        getRevisionManager: () => ({
+          consumeNextId: () => nextId++,
+        }),
+        trackHyperlinkChange: jest.fn(),
+      };
+    }
+
+    it('should create rPrChange when setColor() called with tracking', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      hyperlink._setTrackingContext(mock as any);
+
+      // Default color is '0000FF'
+      hyperlink.setColor('FF0000');
+
+      const rPrChange = hyperlink.getRun().getPropertyChangeRevision();
+      expect(rPrChange).toBeDefined();
+      expect(rPrChange!.author).toBe('FormatAuthor');
+      expect(rPrChange!.previousProperties.color).toBe('0000FF');
+    });
+
+    it('should create rPrChange when setBold() called with tracking', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setBold(true);
+
+      const rPrChange = hyperlink.getRun().getPropertyChangeRevision();
+      expect(rPrChange).toBeDefined();
+      expect(rPrChange!.previousProperties.bold).toBeUndefined();
+    });
+
+    it('should create rPrChange when setFormatting() called with tracking', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setFormatting({ bold: true, italic: true, color: 'FF0000' });
+
+      const rPrChange = hyperlink.getRun().getPropertyChangeRevision();
+      expect(rPrChange).toBeDefined();
+      expect(rPrChange!.previousProperties.color).toBe('0000FF');
+    });
+
+    it('should produce single merged rPrChange for multiple sequential formatting changes', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({
+        url: 'https://example.com',
+        text: 'Link',
+        formatting: { color: '0000FF', bold: false },
+      });
+      hyperlink._setTrackingContext(mock as any);
+
+      // Two sequential changes
+      hyperlink.setColor('FF0000');
+      hyperlink.setBold(true);
+
+      const rPrChange = hyperlink.getRun().getPropertyChangeRevision();
+      expect(rPrChange).toBeDefined();
+      // Both previous values should be from the original baseline
+      expect(rPrChange!.previousProperties.color).toBe('0000FF');
+      expect(rPrChange!.previousProperties.bold).toBe(false);
+    });
+
+    it('should not create rPrChange when tracking is disabled', () => {
+      const mock = {
+        isEnabled: () => false,
+        getAuthor: () => 'Author',
+        getRevisionManager: () => ({ consumeNextId: () => 1 }),
+        trackHyperlinkChange: jest.fn(),
+      };
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setColor('FF0000');
+
+      const rPrChange = hyperlink.getRun().getPropertyChangeRevision();
+      expect(rPrChange).toBeUndefined();
+    });
+
+    it('should produce rPrChange in XML output with w:rPr > w:rPrChange structure', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({
+        url: 'https://example.com',
+        text: 'Link',
+        relationshipId: 'rId1',
+      });
+      hyperlink._setTrackingContext(mock as any);
+
+      // Change color from default '0000FF' to 'FF0000' — previous value is defined,
+      // ensuring generateRunPropertiesXML produces non-null output for rPrChange
+      hyperlink.setColor('FF0000');
+
+      const xml = hyperlink.toXML();
+      // The hyperlink should contain a run
+      const runChild = xml.children?.find((c) => typeof c === 'object' && c.name === 'w:r') as any;
+      expect(runChild).toBeDefined();
+
+      // The run should have w:rPr with w:rPrChange inside
+      const rPr = runChild?.children?.find((c: any) => typeof c === 'object' && c.name === 'w:rPr');
+      expect(rPr).toBeDefined();
+      if (rPr && typeof rPr === 'object') {
+        const rPrChange = (rPr as any).children?.find(
+          (c: any) => typeof c === 'object' && c.name === 'w:rPrChange'
+        );
+        expect(rPrChange).toBeDefined();
+      }
+    });
+
+    it('should create rPrChange for setItalic()', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setItalic(true);
+
+      const rPrChange = hyperlink.getRun().getPropertyChangeRevision();
+      expect(rPrChange).toBeDefined();
+    });
+
+    it('should create rPrChange for setFont()', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setFont('Arial');
+
+      const rPrChange = hyperlink.getRun().getPropertyChangeRevision();
+      expect(rPrChange).toBeDefined();
+      expect(rPrChange!.previousProperties.font).toBe('Verdana');
+    });
+
+    it('should create rPrChange for setSize()', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setSize(24);
+
+      const rPrChange = hyperlink.getRun().getPropertyChangeRevision();
+      expect(rPrChange).toBeDefined();
+      expect(rPrChange!.previousProperties.size).toBe(12);
+    });
+
+    it('should create rPrChange for setUnderline()', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setUnderline('double');
+
+      const rPrChange = hyperlink.getRun().getPropertyChangeRevision();
+      expect(rPrChange).toBeDefined();
+      expect(rPrChange!.previousProperties.underline).toBe('single');
+    });
+  });
+
+  describe('Text tracked changes (delete/insert)', () => {
+    function createTrackingMock() {
+      return {
+        isEnabled: () => true,
+        getAuthor: () => 'TextAuthor',
+        getRevisionManager: () => ({ consumeNextId: () => 200 }),
+        trackHyperlinkChange: jest.fn(),
+      };
+    }
+
+    it('should create delete/insert pair when setText() called with tracking', () => {
+      const mock = createTrackingMock();
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Old Text' });
+      para.addHyperlink(hyperlink);
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setText('New Text');
+
+      const content = para.getContent();
+      expect(content).toHaveLength(2);
+
+      const deletion = content[0] as Revision;
+      expect(deletion.getType()).toBe('delete');
+      expect(deletion.getHyperlinks()[0]!.getText()).toBe('Old Text');
+
+      const insertion = content[1] as Revision;
+      expect(insertion.getType()).toBe('insert');
+      expect(insertion.getHyperlinks()[0]!.getText()).toBe('New Text');
+    });
+
+    it('should not create revision when text is unchanged', () => {
+      const mock = createTrackingMock();
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Same Text' });
+      para.addHyperlink(hyperlink);
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setText('Same Text');
+
+      // Should still be just the hyperlink, no revisions
+      const content = para.getContent();
+      expect(content).toHaveLength(1);
+      expect(content[0]).toBeInstanceOf(Hyperlink);
+    });
+
+    it('should fall through to non-tracking when no parent paragraph', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Old Text' });
+      // NOT added to paragraph
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setText('New Text');
+
+      // Should just update text without revisions
+      expect(hyperlink.getText()).toBe('New Text');
+    });
+
+    it('should clear parent reference after setText() tracking', () => {
+      const mock = createTrackingMock();
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Old' });
+      para.addHyperlink(hyperlink);
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setText('New');
+
+      expect(hyperlink._getParentParagraph()).toBeUndefined();
+    });
+  });
+
+  describe('Tooltip tracked changes (delete/insert)', () => {
+    function createTrackingMock() {
+      return {
+        isEnabled: () => true,
+        getAuthor: () => 'TooltipAuthor',
+        getRevisionManager: () => ({ consumeNextId: () => 300 }),
+        trackHyperlinkChange: jest.fn(),
+      };
+    }
+
+    it('should create delete/insert pair when setTooltip() called with tracking', () => {
+      const mock = createTrackingMock();
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({
+        url: 'https://example.com',
+        text: 'Link',
+        tooltip: 'Old Tip',
+      });
+      para.addHyperlink(hyperlink);
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setTooltip('New Tip');
+
+      const content = para.getContent();
+      expect(content).toHaveLength(2);
+
+      const deletion = content[0] as Revision;
+      expect(deletion.getType()).toBe('delete');
+      expect(deletion.getHyperlinks()[0]!.getTooltip()).toBe('Old Tip');
+
+      const insertion = content[1] as Revision;
+      expect(insertion.getType()).toBe('insert');
+      expect(insertion.getHyperlinks()[0]!.getTooltip()).toBe('New Tip');
+    });
+
+    it('should not create revision when tooltip is unchanged', () => {
+      const mock = createTrackingMock();
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({
+        url: 'https://example.com',
+        text: 'Link',
+        tooltip: 'Same Tip',
+      });
+      para.addHyperlink(hyperlink);
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setTooltip('Same Tip');
+
+      const content = para.getContent();
+      expect(content).toHaveLength(1);
+      expect(content[0]).toBeInstanceOf(Hyperlink);
+    });
+
+    it('should fall through to non-tracking when no parent paragraph', () => {
+      const mock = createTrackingMock();
+      const hyperlink = new Hyperlink({
+        url: 'https://example.com',
+        text: 'Link',
+        tooltip: 'Old Tip',
+      });
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setTooltip('New Tip');
+
+      expect(hyperlink.getTooltip()).toBe('New Tip');
+    });
+
+    it('should clear parent reference after setTooltip() tracking', () => {
+      const mock = createTrackingMock();
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({
+        url: 'https://example.com',
+        text: 'Link',
+        tooltip: 'Old',
+      });
+      para.addHyperlink(hyperlink);
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setTooltip('New');
+
+      expect(hyperlink._getParentParagraph()).toBeUndefined();
+    });
+  });
+
+  describe('Integration: formatting + text changes', () => {
+    it('should preserve rPrChange when followed by setText() with tracking', () => {
+      let nextId = 400;
+      const mock = {
+        isEnabled: () => true,
+        getAuthor: () => 'IntegrationAuthor',
+        getRevisionManager: () => ({ consumeNextId: () => nextId++ }),
+        trackHyperlinkChange: jest.fn(),
+      };
+
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      para.addHyperlink(hyperlink);
+      hyperlink._setTrackingContext(mock as any);
+
+      // First: formatting change (rPrChange on inner Run)
+      hyperlink.setBold(true);
+      expect(hyperlink.getRun().getPropertyChangeRevision()).toBeDefined();
+
+      // Second: text change (delete/insert pair — clone preserves rPrChange)
+      hyperlink.setText('New Text');
+
+      const content = para.getContent();
+      expect(content).toHaveLength(2);
+
+      // Deletion should have the old text with rPrChange (cloned from modified hyperlink)
+      const deletion = content[0] as Revision;
+      const deletedLink = deletion.getHyperlinks()[0]!;
+      expect(deletedLink.getText()).toBe('Link');
+      expect(deletedLink.getRun().getPropertyChangeRevision()).toBeDefined();
+
+      // Insertion should have the new text
+      const insertion = content[1] as Revision;
+      expect(insertion.getHyperlinks()[0]!.getText()).toBe('New Text');
+    });
+
+    it('should save valid buffer after tracked hyperlink formatting changes', async () => {
+      const doc = Document.create();
+      doc.enableTrackChanges({ author: 'SaveAuthor' });
+
+      const para = new Paragraph();
+      const hyperlink = new Hyperlink({
+        url: 'https://example.com',
+        text: 'Styled Link',
+      });
+      para.addHyperlink(hyperlink);
+      doc.addParagraph(para);
+
+      // Formatting change — produces rPrChange
+      hyperlink.setBold(true);
+      hyperlink.setColor('FF0000');
+
+      const buffer = await doc.toBuffer();
+      expect(buffer).toBeDefined();
+      expect(buffer.length).toBeGreaterThan(0);
+
+      doc.dispose();
+    });
+
+    it('should preserve rPrChange through clone()', () => {
+      let nextId = 500;
+      const mock = {
+        isEnabled: () => true,
+        getAuthor: () => 'CloneAuthor',
+        getRevisionManager: () => ({ consumeNextId: () => nextId++ }),
+        trackHyperlinkChange: jest.fn(),
+      };
+
+      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      hyperlink._setTrackingContext(mock as any);
+
+      hyperlink.setBold(true);
+      expect(hyperlink.getRun().getPropertyChangeRevision()).toBeDefined();
+
+      const cloned = hyperlink.clone();
+      const clonedRPrChange = cloned.getRun().getPropertyChangeRevision();
+      expect(clonedRPrChange).toBeDefined();
+      expect(clonedRPrChange!.author).toBe('CloneAuthor');
     });
   });
 });

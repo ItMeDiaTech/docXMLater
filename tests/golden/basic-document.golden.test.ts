@@ -21,10 +21,7 @@ async function ensureGoldenDir(): Promise<void> {
 /**
  * Helper: generate a doc, compare to golden file, or update if UPDATE_GOLDEN=true
  */
-async function goldenTest(
-  name: string,
-  generate: () => Promise<Buffer>
-): Promise<void> {
+async function goldenTest(name: string, generate: () => Promise<Buffer>): Promise<void> {
   await ensureGoldenDir();
   const goldenPath = path.join(GOLDEN_DIR, `${name}.docx`);
   const actual = await generate();
@@ -40,8 +37,7 @@ async function goldenTest(
     expected = await fs.readFile(goldenPath);
   } catch {
     throw new Error(
-      `Golden file not found: ${goldenPath}\n` +
-      `Run with UPDATE_GOLDEN=true to generate it.`
+      `Golden file not found: ${goldenPath}\n` + `Run with UPDATE_GOLDEN=true to generate it.`
     );
   }
 

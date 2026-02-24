@@ -49,11 +49,7 @@ export class DocumentValidator {
   constructor(maxMemoryUsagePercent = 80, options: MemoryOptions = {}) {
     // Validate maxMemoryUsagePercent
     const memoryPercent = options.maxMemoryUsagePercent ?? maxMemoryUsagePercent;
-    if (
-      memoryPercent < 1 ||
-      memoryPercent > 100 ||
-      !Number.isFinite(memoryPercent)
-    ) {
+    if (memoryPercent < 1 || memoryPercent > 100 || !Number.isFinite(memoryPercent)) {
       throw new Error('maxMemoryUsagePercent must be between 1 and 100');
     }
     this.maxMemoryUsagePercent = memoryPercent;
@@ -145,16 +141,11 @@ export class DocumentValidator {
 
     // Validate revision number
     if (properties.revision !== undefined) {
-      if (
-        typeof properties.revision !== 'number' ||
-        !Number.isInteger(properties.revision)
-      ) {
+      if (typeof properties.revision !== 'number' || !Number.isInteger(properties.revision)) {
         throw new Error('DocumentProperties.revision must be an integer');
       }
       if (properties.revision < 0 || properties.revision > LIMITS.MAX_REVISION) {
-        throw new Error(
-          `DocumentProperties.revision must be between 0 and ${LIMITS.MAX_REVISION}`
-        );
+        throw new Error(`DocumentProperties.revision must be between 0 and ${LIMITS.MAX_REVISION}`);
       }
       validated.revision = properties.revision;
     }
@@ -188,9 +179,7 @@ export class DocumentValidator {
    * Warns if the document appears to be empty or corrupted
    */
   validateBeforeSave(bodyElements: BodyElement[]): void {
-    const paragraphs = bodyElements.filter(
-      (el): el is Paragraph => el instanceof Paragraph
-    );
+    const paragraphs = bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
 
     if (paragraphs.length === 0) {
       defaultLogger.warn(
@@ -259,14 +248,14 @@ export class DocumentValidator {
     if (heapExceeded && rssExceeded) {
       throw new Error(
         `Memory usage critical:\n` +
-        `  Heap: ${heapMB.toFixed(0)}MB / ${heapLimitMB.toFixed(0)}MB (${heapPercent.toFixed(1)}%)\n` +
-        `  RSS: ${rssMB.toFixed(0)}MB (limit: ${this.maxRssMB}MB)\n` +
-        `  External: ${externalMB.toFixed(0)}MB\n` +
-        `Cannot process document safely. Consider:\n` +
-        `  - Reducing document size (remove/compress images)\n` +
-        `  - Splitting into multiple documents\n` +
-        `  - Increasing memory limits in DocumentOptions\n` +
-        `  - Increasing Node.js heap size (--max-old-space-size)`
+          `  Heap: ${heapMB.toFixed(0)}MB / ${heapLimitMB.toFixed(0)}MB (${heapPercent.toFixed(1)}%)\n` +
+          `  RSS: ${rssMB.toFixed(0)}MB (limit: ${this.maxRssMB}MB)\n` +
+          `  External: ${externalMB.toFixed(0)}MB\n` +
+          `Cannot process document safely. Consider:\n` +
+          `  - Reducing document size (remove/compress images)\n` +
+          `  - Splitting into multiple documents\n` +
+          `  - Increasing memory limits in DocumentOptions\n` +
+          `  - Increasing Node.js heap size (--max-old-space-size)`
       );
     }
 
@@ -274,8 +263,8 @@ export class DocumentValidator {
     if (heapExceeded && !rssExceeded && this.useAbsoluteLimit) {
       defaultLogger.warn(
         `DocXML Memory Warning: Heap usage high (${heapPercent.toFixed(1)}%) ` +
-        `but RSS (${rssMB.toFixed(0)}MB) is below limit. ` +
-        `This might be temporary heap fragmentation.`
+          `but RSS (${rssMB.toFixed(0)}MB) is below limit. ` +
+          `This might be temporary heap fragmentation.`
       );
     }
   }
@@ -287,18 +276,17 @@ export class DocumentValidator {
    */
   estimateSize(bodyElements: BodyElement[], imageManager: ImageManager): SizeEstimate {
     // Count elements
-    const paragraphs = bodyElements.filter(
-      (el): el is Paragraph => el instanceof Paragraph
-    );
+    const paragraphs = bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
     const tables = bodyElements.filter((el): el is Table => el instanceof Table);
     const paragraphCount = paragraphs.length;
     const tableCount = tables.length;
     const imageCount = imageManager.getImageCount();
 
     // Estimate XML size using documented constants
-    const estimatedXml = paragraphCount * LIMITS.BYTES_PER_PARAGRAPH +
-                         tableCount * LIMITS.BYTES_PER_TABLE +
-                         LIMITS.BASE_STRUCTURE_BYTES;
+    const estimatedXml =
+      paragraphCount * LIMITS.BYTES_PER_PARAGRAPH +
+      tableCount * LIMITS.BYTES_PER_TABLE +
+      LIMITS.BASE_STRUCTURE_BYTES;
 
     // Get actual image sizes
     const imageBytes = imageManager.getTotalSize();
@@ -336,7 +324,10 @@ export class DocumentValidator {
    * Gets size statistics for the document
    * @returns Size statistics
    */
-  getSizeStats(bodyElements: BodyElement[], imageManager: ImageManager): {
+  getSizeStats(
+    bodyElements: BodyElement[],
+    imageManager: ImageManager
+  ): {
     elements: { paragraphs: number; tables: number; images: number };
     size: { xml: string; images: string; total: string };
     warnings: string[];

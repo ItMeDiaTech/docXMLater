@@ -13,14 +13,12 @@
 ### Problems with `applyCustomStylesToDocument()`
 
 1. **Creates Non-Standard Styles** ❌
-
    - Sets style IDs like `CustomHeader1`, `CustomHeader2`
    - **Never defines these styles** in StylesManager
    - Text falls back to "Normal" style (formatting is lost!)
    - Breaks compatibility with other Word documents
 
 2. **No Actual Style Definitions** ❌
-
    - Changes paragraph style _references_ only
    - Doesn't modify [`styles.xml`](../../src/core/Document.ts:1392)
    - Formatting won't apply in Word
@@ -33,19 +31,16 @@
 ### Benefits of `applyCustomFormattingToExistingStyles()`
 
 1. **Modifies Actual Style Definitions** ✅
-
    - Updates styles in [`styles.xml`](../../src/core/Document.ts:1392)
    - Works with standard Word styles (Heading1, Heading2, etc.)
    - Changes apply immediately to ALL paragraphs using that style
 
 2. **Clears Direct Formatting Conflicts** ✅
-
    - Per ECMA-376 §17.7.2: Direct formatting overrides styles
    - Automatically removes conflicting direct formatting
    - Style changes now take effect properly
 
 3. **Fully Customizable** ✅
-
    - Configure 5 styles: Heading1, Heading2, Heading3, Normal, List Paragraph
    - Full control over fonts, sizes, colors, spacing, etc.
    - **Selective preservation** of bold/italic/underline
@@ -74,20 +69,20 @@ console.log(`Updated ${counts.heading1} Heading1 paragraphs`);
 // ✅ USE THIS - Updates actual style definitions
 doc.applyCustomFormattingToExistingStyles({
   heading1: {
-    run: { font: "Verdana", size: 18, bold: true, color: "000000" },
+    run: { font: 'Verdana', size: 18, bold: true, color: '000000' },
     paragraph: {
-      alignment: "left",
-      spacing: { before: 0, after: 240, line: 240, lineRule: "auto" },
+      alignment: 'left',
+      spacing: { before: 0, after: 240, line: 240, lineRule: 'auto' },
     },
   },
   heading2: {
-    run: { font: "Verdana", size: 14, bold: true, color: "000000" },
+    run: { font: 'Verdana', size: 14, bold: true, color: '000000' },
     paragraph: {
-      alignment: "left",
-      spacing: { before: 120, after: 120, line: 240, lineRule: "auto" },
+      alignment: 'left',
+      spacing: { before: 120, after: 120, line: 240, lineRule: 'auto' },
     },
     tableOptions: {
-      shading: "BFBFBF",
+      shading: 'BFBFBF',
       marginTop: 0,
       marginBottom: 0,
       marginLeft: 115,
@@ -97,17 +92,17 @@ doc.applyCustomFormattingToExistingStyles({
   },
   normal: {
     run: {
-      font: "Verdana",
+      font: 'Verdana',
       size: 12,
-      color: "000000",
+      color: '000000',
       // Keep user's emphasis formatting
       preserveBold: true,
       preserveItalic: true,
       preserveUnderline: true,
     },
     paragraph: {
-      alignment: "left",
-      spacing: { before: 60, after: 60, line: 240, lineRule: "auto" },
+      alignment: 'left',
+      spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' },
     },
   },
 });
@@ -133,9 +128,9 @@ doc.applyCustomFormattingToExistingStyles({
 doc.applyCustomFormattingToExistingStyles({
   normal: {
     run: {
-      font: "Arial",
+      font: 'Arial',
       size: 11,
-      color: "000000",
+      color: '000000',
       // Preserve ALL user formatting
       preserveBold: true,
       preserveItalic: true,
@@ -157,7 +152,7 @@ doc.applyCustomFormattingToExistingStyles({
 doc.applyCustomFormattingToExistingStyles({
   heading1: {
     run: {
-      font: "Arial",
+      font: 'Arial',
       size: 24,
       bold: true,
       italic: false,
@@ -190,7 +185,7 @@ doc.applyCustomStylesToDocument();
 doc.applyCustomFormattingToExistingStyles({
   normal: {
     run: {
-      font: "Verdana",
+      font: 'Verdana',
       size: 12,
       preserveBold: true, // Keep user's bold
       preserveItalic: true, // Keep user's italic
@@ -207,7 +202,7 @@ doc.applyCustomFormattingToExistingStyles({
 doc.applyCustomFormattingToExistingStyles({
   heading1: {
     run: {
-      font: "Arial",
+      font: 'Arial',
       size: 18,
       bold: true,
       italic: false,
@@ -230,10 +225,10 @@ doc.applyCustomStylesToDocument(); // ❌ Fixed gray color
 // NEW METHOD - fully customizable table appearance
 doc.applyCustomFormattingToExistingStyles({
   heading2: {
-    run: { font: "Arial", size: 14, bold: true },
+    run: { font: 'Arial', size: 14, bold: true },
     paragraph: { spacing: { before: 120, after: 120 } },
     tableOptions: {
-      shading: "4472C4", // Blue background!
+      shading: '4472C4', // Blue background!
       marginLeft: 200, // Custom margins
       marginRight: 200,
       tableWidthPercent: 4500, // 90% width
@@ -247,32 +242,32 @@ doc.applyCustomFormattingToExistingStyles({
 ```typescript
 doc.applyCustomFormattingToExistingStyles({
   heading1: {
-    run: { font: "Arial", size: 20, bold: true, color: "1F4788" },
+    run: { font: 'Arial', size: 20, bold: true, color: '1F4788' },
     paragraph: { spacing: { after: 240 } },
   },
   heading2: {
-    run: { font: "Arial", size: 16, bold: true, color: "1F4788" },
+    run: { font: 'Arial', size: 16, bold: true, color: '1F4788' },
     paragraph: { spacing: { before: 120, after: 120 } },
-    tableOptions: { shading: "D9E2F3" },
+    tableOptions: { shading: 'D9E2F3' },
   },
   heading3: {
-    run: { font: "Arial", size: 14, bold: true },
+    run: { font: 'Arial', size: 14, bold: true },
     paragraph: { spacing: { before: 60, after: 60 } },
   },
   normal: {
     run: {
-      font: "Calibri",
+      font: 'Calibri',
       size: 11,
       preserveBold: true,
       preserveItalic: true,
     },
     paragraph: {
       spacing: { after: 100 },
-      alignment: "justify",
+      alignment: 'justify',
     },
   },
   listParagraph: {
-    run: { font: "Calibri", size: 11, preserveBold: true },
+    run: { font: 'Calibri', size: 11, preserveBold: true },
     paragraph: { spacing: { before: 0, after: 60 } },
   },
 });
@@ -341,15 +336,12 @@ The new method properly handles this by:
 ## Questions?
 
 - **Q: Will my existing documents break?**
-
   - A: No - this only affects how you apply styles during generation, not already-saved documents
 
 - **Q: What if I want to remove ALL emphasis?**
-
   - A: Set `preserveBold: false`, `preserveItalic: false`, `preserveUnderline: false`
 
 - **Q: Can I still use the old method?**
-
   - A: Yes until v4.0.0, but it won't work correctly (creates undefined styles)
 
 - **Q: What about other styles (Heading4, Heading5, etc.)?**

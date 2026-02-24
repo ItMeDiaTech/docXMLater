@@ -26,7 +26,7 @@ const CRC_TABLE: Uint32Array = (() => {
   for (let n = 0; n < 256; n++) {
     let c = n;
     for (let k = 0; k < 8; k++) {
-      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
     }
     table[n] = c;
   }
@@ -34,18 +34,18 @@ const CRC_TABLE: Uint32Array = (() => {
 })();
 
 function crc32(buf: Buffer): number {
-  let crc = 0xFFFFFFFF;
+  let crc = 0xffffffff;
   for (let i = 0; i < buf.length; i++) {
-    crc = CRC_TABLE[(crc ^ buf[i]!) & 0xFF]! ^ (crc >>> 8);
+    crc = CRC_TABLE[(crc ^ buf[i]!) & 0xff]! ^ (crc >>> 8);
   }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
 // =============================================================================
 // PNG Chunk Builder
 // =============================================================================
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /**
  * Builds a PNG chunk: [4-byte length][4-byte type][data][4-byte CRC]
@@ -154,7 +154,7 @@ export function optimizePng(buffer: Buffer): Buffer | null {
  */
 export function convertBmpToPng(buffer: Buffer): Buffer | null {
   // Minimum BMP size: 14 (file header) + 40 (BITMAPINFOHEADER) = 54 bytes
-  if (buffer.length < 54 || buffer[0] !== 0x42 || buffer[1] !== 0x4D) {
+  if (buffer.length < 54 || buffer[0] !== 0x42 || buffer[1] !== 0x4d) {
     return null;
   }
 
@@ -197,11 +197,11 @@ export function convertBmpToPng(buffer: Buffer): Buffer | null {
   const ihdrData = Buffer.alloc(13);
   ihdrData.writeUInt32BE(width, 0);
   ihdrData.writeUInt32BE(absHeight, 4);
-  ihdrData[8] = 8;         // bit depth
-  ihdrData[9] = colorType;  // color type
-  ihdrData[10] = 0;         // compression method (deflate)
-  ihdrData[11] = 0;         // filter method (adaptive)
-  ihdrData[12] = 0;         // interlace method (none)
+  ihdrData[8] = 8; // bit depth
+  ihdrData[9] = colorType; // color type
+  ihdrData[10] = 0; // compression method (deflate)
+  ihdrData[11] = 0; // filter method (adaptive)
+  ihdrData[12] = 0; // interlace method (none)
 
   // Build raw image data: filter byte (0 = None) + pixel data per row
   const rawDataSize = absHeight * (1 + width * pngBytesPerPixel);
@@ -209,7 +209,7 @@ export function convertBmpToPng(buffer: Buffer): Buffer | null {
 
   for (let y = 0; y < absHeight; y++) {
     // BMP stores rows bottom-up by default; top-down if height is negative
-    const bmpRow = isTopDown ? y : (absHeight - 1 - y);
+    const bmpRow = isTopDown ? y : absHeight - 1 - y;
     const bmpRowOffset = pixelDataOffset + bmpRow * rowSize;
 
     const pngRowOffset = y * (1 + width * pngBytesPerPixel);
@@ -220,9 +220,9 @@ export function convertBmpToPng(buffer: Buffer): Buffer | null {
       const pngPixelOffset = pngRowOffset + 1 + x * pngBytesPerPixel;
 
       // Convert BGR(A) → RGB(A)
-      rawData[pngPixelOffset] = buffer[bmpPixelOffset + 2]!;     // R
+      rawData[pngPixelOffset] = buffer[bmpPixelOffset + 2]!; // R
       rawData[pngPixelOffset + 1] = buffer[bmpPixelOffset + 1]!; // G
-      rawData[pngPixelOffset + 2] = buffer[bmpPixelOffset]!;     // B
+      rawData[pngPixelOffset + 2] = buffer[bmpPixelOffset]!; // B
 
       if (bitsPerPixel === 32) {
         rawData[pngPixelOffset + 3] = buffer[bmpPixelOffset + 3]!; // A

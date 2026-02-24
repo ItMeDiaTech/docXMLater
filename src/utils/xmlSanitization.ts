@@ -18,7 +18,7 @@
  * @module xmlSanitization
  */
 
-import { getGlobalLogger } from "./logger";
+import { getGlobalLogger } from './logger';
 
 /**
  * Regular expression matching invalid XML 1.0 control characters.
@@ -53,10 +53,7 @@ const INVALID_XML_CHAR_REGEX = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
  * // Returns: "Hello\tWorld\n"
  * ```
  */
-export function removeInvalidXmlChars(
-  text: string,
-  logWarning = true
-): string {
+export function removeInvalidXmlChars(text: string, logWarning = true): string {
   // Reset regex lastIndex for global regex
   INVALID_XML_CHAR_REGEX.lastIndex = 0;
 
@@ -66,8 +63,8 @@ export function removeInvalidXmlChars(
 
     const invalidChars = findInvalidXmlChars(text);
     const hexCodes = invalidChars
-      .map((c) => `0x${c.toString(16).toUpperCase().padStart(2, "0")}`)
-      .join(", ");
+      .map((c) => `0x${c.toString(16).toUpperCase().padStart(2, '0')}`)
+      .join(', ');
     getGlobalLogger().warn(
       `[XMLSanitization] Removing invalid XML control characters: ${hexCodes}`
     );
@@ -75,7 +72,7 @@ export function removeInvalidXmlChars(
 
   // Reset regex lastIndex before replace
   INVALID_XML_CHAR_REGEX.lastIndex = 0;
-  return text.replace(INVALID_XML_CHAR_REGEX, "");
+  return text.replace(INVALID_XML_CHAR_REGEX, '');
 }
 
 /**

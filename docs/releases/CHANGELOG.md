@@ -5,6 +5,69 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.1.6] - 2026-02-24
+
+### Added
+
+- **Numbering Restart Helper: `restartNumbering(numId, level?, startValue?)`** - Single-call method to restart list numbering. Creates a new `<w:num>` instance referencing the same abstract numbering with a `<w:lvlOverride>/<w:startOverride>`. Available on both `Document` and `NumberingManager`.
+
+### Statistics
+
+- 143 test suites, 3,084 tests passing
+- 103 source files
+
+---
+
+## [10.1.1] - 2026-02-21
+
+### Fixed
+
+- **Table Width Parsing for Auto-Sized Tables**: Tables with `w:tblW w:w="0" w:type="auto"` now correctly parse as `width=0, widthType='auto'` instead of falling through to the constructor default of `9360/dxa`.
+- **NaN-Safe Table Property Parsing**: Replaced raw `parseInt` calls with `safeParseInt` for table width and indentation parsing.
+
+### Added
+
+- **Table Indentation Parsing (`w:tblInd`)**: `DocumentParser` now parses `w:tblInd` from main `tblPr` properties per ECMA-376 section 17.4.43.
+
+---
+
+## [10.1.0] - 2026-02-21
+
+### Added
+
+- **Settings API Expansion**: New getter/setter pairs for `hideSpellingErrors`, `hideGrammaticalErrors`, `defaultTabStop`, `updateFields`, `embedTrueTypeFonts`, `saveSubsetFonts`, `doNotTrackMoves`.
+- **Hyperlink Attributes**: `setDocLocation()`, `setTgtFrame()`, `setHistory()` with getters and round-trip support.
+- **SDT Enhancements**: Placeholder, data binding, showingPlaceholder support; group and inline SDT types.
+- **Numbering Enhancements**: Level pStyle association, full level override in NumberingInstance, AbstractNumbering template.
+- **Styles Enhancements**: Latent styles support, `setPersonalCompose()` and `setPersonalReply()` on Style.
+- **Dirty-tracking for settings**: `_modifiedBooleanSettings` Set for selective merging.
+
+---
+
+## [10.0.4] - 2026-02-21
+
+### Fixed
+
+- **Tracked Deletions Leaving Blank Lines in Simple Markup View**: Documents with pre-existing tracked deletions now preserve paragraph mark revision markers through round-trip processing.
+
+### Added
+
+- **Paragraph Mark Insertion Tracking**: `markParagraphMarkAsInserted()`, `clearParagraphMarkInsertion()`, `isParagraphMarkInserted()`.
+- **Paragraph Mark Revision Parsing**: `DocumentParser` extracts `w:del` and `w:ins` from `w:pPr/w:rPr`.
+- **Paragraph Mark Revision Acceptance**: `acceptRevisionsInMemory()` and `SelectiveRevisionAcceptor` support paragraph mark markers.
+
+---
+
+## [10.0.3] - 2026-02-21
+
+### Fixed
+
+- **OOXML Compliance**: `tblStyleRowBandSize`/`tblStyleColBandSize` no longer serialize into direct table `w:tblPr`.
+- **OOXML Compliance**: Hyperlinks in headers/footers now use part-level `.rels` files.
+- **OOXML Compliance**: Property change revisions silently skipped during paragraph content serialization.
+
+---
+
 ## [10.0.0] - 2026-02-20
 
 ### Added

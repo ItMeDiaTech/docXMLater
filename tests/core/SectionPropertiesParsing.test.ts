@@ -28,7 +28,8 @@ describe('Section Properties Parsing', () => {
   describe('Inline sectPr serialization', () => {
     it('should serialize inline sectPr as raw XML passthrough when stored as string', () => {
       const paragraph = new Paragraph();
-      const rawSectPr = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>';
+      const rawSectPr =
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>';
       paragraph.setSectionProperties(rawSectPr);
 
       const xml = paragraph.toXML();
@@ -94,7 +95,7 @@ describe('Section Properties Parsing', () => {
 </w:document>`;
 
       // Extract body content
-      const bodyElements = XMLParser.extractElements(docXml, "w:body");
+      const bodyElements = XMLParser.extractElements(docXml, 'w:body');
       expect(bodyElements.length).toBeGreaterThan(0);
       const bodyContent = bodyElements[0]!;
 
@@ -107,7 +108,7 @@ describe('Section Properties Parsing', () => {
       let bodySectPr: string | undefined;
       if (lastBlockEnd !== -1) {
         const tailContent = bodyContent.substring(lastBlockEnd);
-        const sectPrElements = XMLParser.extractElements(tailContent, "w:sectPr");
+        const sectPrElements = XMLParser.extractElements(tailContent, 'w:sectPr');
         if (sectPrElements.length > 0) {
           bodySectPr = sectPrElements[0];
         }
@@ -132,12 +133,12 @@ describe('Section Properties Parsing', () => {
   </w:body>
 </w:document>`;
 
-      const bodyElements = XMLParser.extractElements(docXml, "w:body");
+      const bodyElements = XMLParser.extractElements(docXml, 'w:body');
       const bodyContent = bodyElements[0]!;
 
       const lastPClose = bodyContent.lastIndexOf('</w:p>');
       const tailContent = bodyContent.substring(lastPClose);
-      const sectPrElements = XMLParser.extractElements(tailContent, "w:sectPr");
+      const sectPrElements = XMLParser.extractElements(tailContent, 'w:sectPr');
 
       expect(sectPrElements.length).toBe(1);
       expect(sectPrElements[0]).toContain('w:w="12240"');

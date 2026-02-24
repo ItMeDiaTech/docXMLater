@@ -30,9 +30,9 @@ describe('Table Cell Diagonal Borders', () => {
       cell.createParagraph('Diagonal');
 
       const xml = cell.toXML();
-      const tcPr = filterXMLElements(xml.children).find(c => c.name === 'w:tcPr');
-      const tcBorders = filterXMLElements(tcPr?.children).find(c => c.name === 'w:tcBorders');
-      const tl2br = filterXMLElements(tcBorders?.children).find(c => c.name === 'w:tl2br');
+      const tcPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tcPr');
+      const tcBorders = filterXMLElements(tcPr?.children).find((c) => c.name === 'w:tcBorders');
+      const tl2br = filterXMLElements(tcBorders?.children).find((c) => c.name === 'w:tl2br');
 
       expect(tl2br).toBeDefined();
       expect(tl2br?.attributes?.['w:val']).toBe('single');
@@ -42,9 +42,12 @@ describe('Table Cell Diagonal Borders', () => {
     test('should round-trip tl2br border', async () => {
       const doc = Document.create();
       const table = new Table(2, 2);
-      table.getRow(0)!.getCell(0)!.setBorders({
-        tl2br: { style: 'single', size: 8, color: '0000FF' },
-      });
+      table
+        .getRow(0)!
+        .getCell(0)!
+        .setBorders({
+          tl2br: { style: 'single', size: 8, color: '0000FF' },
+        });
       table.getRow(0)!.getCell(0)!.createParagraph('Diagonal TL-BR');
       doc.addTable(table);
 
@@ -74,9 +77,12 @@ describe('Table Cell Diagonal Borders', () => {
     test('should round-trip tr2bl border', async () => {
       const doc = Document.create();
       const table = new Table(2, 2);
-      table.getRow(0)!.getCell(0)!.setBorders({
-        tr2bl: { style: 'double', size: 6, color: 'FF0000' },
-      });
+      table
+        .getRow(0)!
+        .getCell(0)!
+        .setBorders({
+          tr2bl: { style: 'double', size: 6, color: 'FF0000' },
+        });
       table.getRow(0)!.getCell(0)!.createParagraph('Diagonal TR-BL');
       doc.addTable(table);
 
@@ -96,14 +102,17 @@ describe('Table Cell Diagonal Borders', () => {
     test('should round-trip both diagonal borders', async () => {
       const doc = Document.create();
       const table = new Table(2, 2);
-      table.getRow(0)!.getCell(0)!.setBorders({
-        top: { style: 'single', size: 4, color: '000000' },
-        bottom: { style: 'single', size: 4, color: '000000' },
-        left: { style: 'single', size: 4, color: '000000' },
-        right: { style: 'single', size: 4, color: '000000' },
-        tl2br: { style: 'single', size: 4, color: 'FF0000' },
-        tr2bl: { style: 'single', size: 4, color: '0000FF' },
-      });
+      table
+        .getRow(0)!
+        .getCell(0)!
+        .setBorders({
+          top: { style: 'single', size: 4, color: '000000' },
+          bottom: { style: 'single', size: 4, color: '000000' },
+          left: { style: 'single', size: 4, color: '000000' },
+          right: { style: 'single', size: 4, color: '000000' },
+          tl2br: { style: 'single', size: 4, color: 'FF0000' },
+          tr2bl: { style: 'single', size: 4, color: '0000FF' },
+        });
       table.getRow(0)!.getCell(0)!.createParagraph('X borders');
       doc.addTable(table);
 
@@ -136,8 +145,8 @@ describe('Table Cell Headers Attribute', () => {
     cell.createParagraph('Data');
 
     const xml = cell.toXML();
-    const tcPr = filterXMLElements(xml.children).find(c => c.name === 'w:tcPr');
-    const headers = filterXMLElements(tcPr?.children).find(c => c.name === 'w:headers');
+    const tcPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tcPr');
+    const headers = filterXMLElements(tcPr?.children).find((c) => c.name === 'w:headers');
 
     expect(headers).toBeUndefined();
     // But the in-memory value is still accessible

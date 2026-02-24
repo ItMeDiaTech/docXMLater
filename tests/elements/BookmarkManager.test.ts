@@ -130,8 +130,7 @@ describe('BookmarkManager', () => {
     });
 
     it('should handle multiple headings with same prefix', () => {
-      const heading1 =
-        'Process for Basic Call Handling for Dedicated Representatives Overview';
+      const heading1 = 'Process for Basic Call Handling for Dedicated Representatives Overview';
       const heading2 =
         'Process for Basic Call Handling for Dedicated Representatives Customer Service';
 

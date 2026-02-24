@@ -37,46 +37,46 @@ In Microsoft Word:
 ### Creating Tracked Insertions
 
 ```typescript
-import { Document, Run } from "docxml";
+import { Document, Run } from 'docxml';
 
 const doc = Document.create();
-const para = doc.createParagraph("Original text ");
+const para = doc.createParagraph('Original text ');
 
 // Create an insertion revision
-const insertion = doc.createInsertion("Editor Name", new Run("added text"));
+const insertion = doc.createInsertion('Editor Name', new Run('added text'));
 
 // Add to paragraph
 para.addRevision(insertion);
 
-await doc.save("document.docx");
+await doc.save('document.docx');
 ```
 
 ### Creating Tracked Deletions
 
 ```typescript
 const doc = Document.create();
-const para = doc.createParagraph("Keep this text ");
+const para = doc.createParagraph('Keep this text ');
 
 // Create a deletion revision
-const deletion = doc.createDeletion("Editor Name", new Run("removed text"));
+const deletion = doc.createDeletion('Editor Name', new Run('removed text'));
 
 // Add to paragraph
 para.addRevision(deletion);
 
-await doc.save("document.docx");
+await doc.save('document.docx');
 ```
 
 ### Using Convenience Methods
 
 ```typescript
 const doc = Document.create();
-const para = doc.createParagraph("Original content ");
+const para = doc.createParagraph('Original content ');
 
 // Track an insertion
-doc.trackInsertion(para, "John Doe", "new text");
+doc.trackInsertion(para, 'John Doe', 'new text');
 
 // Track a deletion
-doc.trackDeletion(para, "Jane Smith", "old text");
+doc.trackDeletion(para, 'Jane Smith', 'old text');
 ```
 
 ## Revision Management
@@ -90,7 +90,7 @@ The `RevisionManager` handles all revision operations:
 const manager = doc.getRevisionManager();
 
 // Create revision from text
-const revision = Revision.fromText("insert", "Author Name", "Inserted text");
+const revision = Revision.fromText('insert', 'Author Name', 'Inserted text');
 
 // Register the revision
 manager.register(revision);
@@ -108,19 +108,19 @@ Convenient wrapper methods on the `Document` class:
 
 ```typescript
 // Create revisions
-const insertion = doc.createInsertion("Author", new Run("text"));
-const deletion = doc.createDeletion("Author", new Run("text"));
+const insertion = doc.createInsertion('Author', new Run('text'));
+const deletion = doc.createDeletion('Author', new Run('text'));
 
 // From text (convenience)
-const revision = doc.createRevisionFromText("insert", "Author", "text");
+const revision = doc.createRevisionFromText('insert', 'Author', 'text');
 
 // Track changes on paragraphs
-doc.trackInsertion(para, "Author", "inserted text");
-doc.trackDeletion(para, "Author", "deleted text");
+doc.trackInsertion(para, 'Author', 'inserted text');
+doc.trackDeletion(para, 'Author', 'deleted text');
 
 // Check status
 if (doc.isTrackingChanges()) {
-  console.log("Document has tracked changes");
+  console.log('Document has tracked changes');
 }
 
 // Get statistics
@@ -133,17 +133,17 @@ const stats = doc.getRevisionStats();
 
 ```typescript
 const doc = Document.create();
-const para = doc.createParagraph("Document text ");
+const para = doc.createParagraph('Document text ');
 
 // Author 1 makes changes
-doc.trackInsertion(para, "Alice Johnson", "added by Alice");
-doc.trackDeletion(para, "Alice Johnson", "removed by Alice");
+doc.trackInsertion(para, 'Alice Johnson', 'added by Alice');
+doc.trackDeletion(para, 'Alice Johnson', 'removed by Alice');
 
 // Author 2 makes changes
-doc.trackInsertion(para, "Bob Williams", "added by Bob");
-doc.trackDeletion(para, "Bob Williams", "removed by Bob");
+doc.trackInsertion(para, 'Bob Williams', 'added by Bob');
+doc.trackDeletion(para, 'Bob Williams', 'removed by Bob');
 
-await doc.save("multi-author.docx");
+await doc.save('multi-author.docx');
 ```
 
 ### Analyzing Changes by Author
@@ -153,10 +153,10 @@ const manager = doc.getRevisionManager();
 
 // Get all unique authors
 const authors = manager.getAuthors();
-console.log(`Authors: ${authors.join(", ")}`);
+console.log(`Authors: ${authors.join(', ')}`);
 
 // Get revisions by specific author
-const aliceChanges = manager.getRevisionsByAuthor("Alice Johnson");
+const aliceChanges = manager.getRevisionsByAuthor('Alice Johnson');
 console.log(`Alice made ${aliceChanges.length} changes`);
 ```
 
@@ -167,16 +167,16 @@ console.log(`Alice made ${aliceChanges.length} changes`);
 Revisions can contain formatted text:
 
 ```typescript
-import { Run, Revision } from "docxml";
+import { Run, Revision } from 'docxml';
 
 // Create formatted runs
 const runs = [
-  new Run("important ").setBold(true).setColor("FF0000"),
-  new Run("addition").setItalic(true),
+  new Run('important ').setBold(true).setColor('FF0000'),
+  new Run('addition').setItalic(true),
 ];
 
 // Create insertion with formatted content
-const insertion = Revision.createInsertion("Editor", runs);
+const insertion = Revision.createInsertion('Editor', runs);
 
 doc.getRevisionManager().register(insertion);
 para.addRevision(insertion);
@@ -185,13 +185,9 @@ para.addRevision(insertion);
 ### Multiple Runs in Single Revision
 
 ```typescript
-const runs = [
-  new Run("Part 1 "),
-  new Run("Part 2 ").setBold(true),
-  new Run(" Part 3"),
-];
+const runs = [new Run('Part 1 '), new Run('Part 2 ').setBold(true), new Run(' Part 3')];
 
-const insertion = doc.createInsertion("Author", runs);
+const insertion = doc.createInsertion('Author', runs);
 para.addRevision(insertion);
 ```
 
@@ -199,9 +195,9 @@ para.addRevision(insertion);
 
 ```typescript
 // Specify custom date for revision
-const date = new Date("2024-10-15T10:00:00Z");
+const date = new Date('2024-10-15T10:00:00Z');
 
-const insertion = doc.createInsertion("Author", new Run("text"), date);
+const insertion = doc.createInsertion('Author', new Run('text'), date);
 ```
 
 ## Searching and Filtering
@@ -210,7 +206,7 @@ const insertion = doc.createInsertion("Author", new Run("text"), date);
 
 ```typescript
 // Search all revision content
-const results = doc.findRevisionsByText("budget");
+const results = doc.findRevisionsByText('budget');
 
 results.forEach((revision) => {
   console.log(`Found in ${revision.getType()} by ${revision.getAuthor()}`);
@@ -247,10 +243,10 @@ console.log(`Total deletions: ${deletions.length}`);
 const manager = doc.getRevisionManager();
 
 // Get only insertions
-const insertions = manager.getRevisionsByType("insert");
+const insertions = manager.getRevisionsByType('insert');
 
 // Get only deletions
-const deletions = manager.getRevisionsByType("delete");
+const deletions = manager.getRevisionsByType('delete');
 ```
 
 ### Filter by Date
@@ -258,8 +254,8 @@ const deletions = manager.getRevisionsByType("delete");
 ```typescript
 const manager = doc.getRevisionManager();
 
-const startDate = new Date("2024-10-01");
-const endDate = new Date("2024-10-31");
+const startDate = new Date('2024-10-01');
+const endDate = new Date('2024-10-31');
 
 const revisions = manager.getRevisionsByDateRange(startDate, endDate);
 console.log(`Changes in October: ${revisions.length}`);
@@ -457,11 +453,11 @@ doc.getRevisionStats(): { total, insertions, deletions, authors, nextId }
 
 ```typescript
 try {
-  const revision = doc.createInsertion("Author", new Run("text"));
+  const revision = doc.createInsertion('Author', new Run('text'));
   para.addRevision(revision);
-  await doc.save("document.docx");
+  await doc.save('document.docx');
 } catch (error) {
-  console.error("Failed to track change:", error);
+  console.error('Failed to track change:', error);
 }
 ```
 
@@ -472,7 +468,7 @@ try {
 const stats = doc.getRevisionStats();
 if (stats.total > 0) {
   console.log(`Saving document with ${stats.total} tracked changes`);
-  await doc.save("document.docx");
+  await doc.save('document.docx');
 }
 ```
 
@@ -481,27 +477,27 @@ if (stats.total > 0) {
 ### Example 1: Document Editing Session
 
 ```typescript
-import { Document } from "docxml";
+import { Document } from 'docxml';
 
 const doc = Document.create({
   properties: {
-    title: "Article Draft",
-    creator: "Writer",
+    title: 'Article Draft',
+    creator: 'Writer',
   },
 });
 
 // Original content
-const para1 = doc.createParagraph("The project was completed successfully. ");
-const para2 = doc.createParagraph("Total cost was within budget. ");
+const para1 = doc.createParagraph('The project was completed successfully. ');
+const para2 = doc.createParagraph('Total cost was within budget. ');
 
 // Editor makes changes
-doc.trackDeletion(para1, "Editor", "successfully");
-doc.trackInsertion(para1, "Editor", "on schedule");
+doc.trackDeletion(para1, 'Editor', 'successfully');
+doc.trackInsertion(para1, 'Editor', 'on schedule');
 
-doc.trackDeletion(para2, "Editor", "within");
-doc.trackInsertion(para2, "Editor", "under");
+doc.trackDeletion(para2, 'Editor', 'within');
+doc.trackInsertion(para2, 'Editor', 'under');
 
-await doc.save("edited-draft.docx");
+await doc.save('edited-draft.docx');
 
 // Check statistics
 const stats = doc.getRevisionStats();
@@ -513,18 +509,18 @@ console.log(`Insertions: ${stats.insertions}, Deletions: ${stats.deletions}`);
 
 ```typescript
 const doc = Document.create();
-const para = doc.createParagraph("Original content ");
+const para = doc.createParagraph('Original content ');
 
 // Author 1 edits
-doc.trackInsertion(para, "Alice", "added by Alice ");
+doc.trackInsertion(para, 'Alice', 'added by Alice ');
 
 // Author 2 edits
-doc.trackInsertion(para, "Bob", "added by Bob ");
+doc.trackInsertion(para, 'Bob', 'added by Bob ');
 
 // Author 3 removes something
-doc.trackDeletion(para, "Carol", "removed by Carol ");
+doc.trackDeletion(para, 'Carol', 'removed by Carol ');
 
-await doc.save("collaborative.docx");
+await doc.save('collaborative.docx');
 
 // Analyze contributions
 const manager = doc.getRevisionManager();
@@ -539,49 +535,49 @@ authors.forEach((author) => {
 ### Example 3: Formatted Track Changes
 
 ```typescript
-import { Document, Run, Revision } from "docxml";
+import { Document, Run, Revision } from 'docxml';
 
 const doc = Document.create();
-const para = doc.createParagraph("Document text ");
+const para = doc.createParagraph('Document text ');
 
 // Create formatted insertion
 const formattedRuns = [
-  new Run("IMPORTANT: ").setBold(true).setColor("FF0000"),
-  new Run("This section must be reviewed.").setBold(false),
+  new Run('IMPORTANT: ').setBold(true).setColor('FF0000'),
+  new Run('This section must be reviewed.').setBold(false),
 ];
 
-const insertion = Revision.createInsertion("Editor", formattedRuns, new Date());
+const insertion = Revision.createInsertion('Editor', formattedRuns, new Date());
 
 doc.getRevisionManager().register(insertion);
 para.addRevision(insertion);
 
-await doc.save("formatted-changes.docx");
+await doc.save('formatted-changes.docx');
 ```
 
 ### Example 4: Change Analysis
 
 ```typescript
 // Load existing document
-const doc = await Document.load("reviewed-document.docx");
+const doc = await Document.load('reviewed-document.docx');
 
 // Analyze all changes
 const stats = doc.getRevisionStats();
 console.log(`Total tracked changes: ${stats.total}`);
-console.log(`Authors involved: ${stats.authors.join(", ")}`);
+console.log(`Authors involved: ${stats.authors.join(', ')}`);
 
 // Find specific changes
-const critical = doc.findRevisionsByText("critical");
+const critical = doc.findRevisionsByText('critical');
 console.log(`Critical changes: ${critical.length}`);
 
 // Get recent activity
 const recent = doc.getRecentRevisions(5);
-console.log("Recent changes:");
+console.log('Recent changes:');
 recent.forEach((revision) => {
-  const type = revision.getType() === "insert" ? "Added" : "Removed";
+  const type = revision.getType() === 'insert' ? 'Added' : 'Removed';
   const text = revision
     .getRuns()
     .map((r) => r.getText())
-    .join("");
+    .join('');
   console.log(`  ${type} by ${revision.getAuthor()}: "${text}"`);
 });
 
@@ -589,8 +585,8 @@ recent.forEach((revision) => {
 const authors = doc.getRevisionManager().getAuthors();
 authors.forEach((author) => {
   const changes = doc.getRevisionManager().getRevisionsByAuthor(author);
-  const insertions = changes.filter((r) => r.getType() === "insert").length;
-  const deletions = changes.filter((r) => r.getType() === "delete").length;
+  const insertions = changes.filter((r) => r.getType() === 'insert').length;
+  const deletions = changes.filter((r) => r.getType() === 'delete').length;
   console.log(`${author}: ${insertions} insertions, ${deletions} deletions`);
 });
 ```
@@ -598,12 +594,12 @@ authors.forEach((author) => {
 ### Example 5: Date-Based Analysis
 
 ```typescript
-const doc = await Document.load("document.docx");
+const doc = await Document.load('document.docx');
 const manager = doc.getRevisionManager();
 
 // Get changes from specific date range
-const startDate = new Date("2024-10-01");
-const endDate = new Date("2024-10-31");
+const startDate = new Date('2024-10-01');
+const endDate = new Date('2024-10-31');
 const octoberChanges = manager.getRevisionsByDateRange(startDate, endDate);
 
 console.log(`Changes in October: ${octoberChanges.length}`);
@@ -617,7 +613,7 @@ octoberChanges.forEach((revision) => {
   changesByWeek.set(week, count + 1);
 });
 
-console.log("Changes by week:");
+console.log('Changes by week:');
 changesByWeek.forEach((count, week) => {
   console.log(`  Week ${week + 1}: ${count} changes`);
 });
@@ -628,15 +624,15 @@ changesByWeek.forEach((count, week) => {
 ### Track Changes with Comments
 
 ```typescript
-const para = doc.createParagraph("Original text ");
+const para = doc.createParagraph('Original text ');
 
 // Track a deletion
-const deletion = doc.trackDeletion(para, "Editor", "removed text");
+const deletion = doc.trackDeletion(para, 'Editor', 'removed text');
 
 // Add comment explaining the change
 const comment = doc.createComment(
-  "Editor",
-  "Removed redundant text as per style guide section 3.2"
+  'Editor',
+  'Removed redundant text as per style guide section 3.2'
 );
 para.addComment(comment);
 ```
@@ -644,22 +640,22 @@ para.addComment(comment);
 ### Track Changes with Bookmarks
 
 ```typescript
-const bookmark = doc.createBookmark("Version2Changes");
-const para = doc.createParagraph("Updated content ");
+const bookmark = doc.createBookmark('Version2Changes');
+const para = doc.createParagraph('Updated content ');
 para.addBookmark(bookmark);
 
 // Track changes in bookmarked section
-doc.trackInsertion(para, "Editor", "new version 2 content");
+doc.trackInsertion(para, 'Editor', 'new version 2 content');
 ```
 
 ### Track Changes with Styles
 
 ```typescript
-const para = doc.createParagraph("Section heading ").setStyle("Heading2");
+const para = doc.createParagraph('Section heading ').setStyle('Heading2');
 
 // Track formatting change
-doc.trackDeletion(para, "Editor", "old heading");
-doc.trackInsertion(para, "Editor", "new heading");
+doc.trackDeletion(para, 'Editor', 'old heading');
+doc.trackInsertion(para, 'Editor', 'new heading');
 ```
 
 ## Accepting/Rejecting Changes
@@ -705,15 +701,15 @@ doc.getRevisionManager().clear();
 // docx library
 new Paragraph({
   children: [
-    new InsertedTextRun({ text: "inserted", author: "John", date: new Date() }),
-    new DeletedTextRun({ text: "deleted", author: "John", date: new Date() }),
+    new InsertedTextRun({ text: 'inserted', author: 'John', date: new Date() }),
+    new DeletedTextRun({ text: 'deleted', author: 'John', date: new Date() }),
   ],
 });
 
 // DocXML
 const para = doc.createParagraph();
-doc.trackInsertion(para, "John", "inserted");
-doc.trackDeletion(para, "John", "deleted");
+doc.trackInsertion(para, 'John', 'inserted');
+doc.trackDeletion(para, 'John', 'deleted');
 ```
 
 ### From python-docx
@@ -726,7 +722,7 @@ run._element.append(OxmlElement('w:ins'))
 
 ```typescript
 // DocXML
-doc.trackInsertion(para, "Author", "text");
+doc.trackInsertion(para, 'Author', 'text');
 ```
 
 ## Word Compatibility

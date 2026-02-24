@@ -19,7 +19,9 @@ describe('Comment Parsing', () => {
       const para = doc.createParagraph('This text has a comment');
 
       // Add a comment programmatically
-      const comment = doc.getCommentManager().createComment('John Doe', 'This is a test comment', 'JD');
+      const comment = doc
+        .getCommentManager()
+        .createComment('John Doe', 'This is a test comment', 'JD');
 
       // Save and reload
       const buffer = await doc.toBuffer();
@@ -42,7 +44,7 @@ describe('Comment Parsing', () => {
         author: 'Alice Smith',
         initials: 'AS',
         date: testDate,
-        content: 'Review this section'
+        content: 'Review this section',
       });
 
       doc.getCommentManager().register(comment);
@@ -69,11 +71,9 @@ describe('Comment Parsing', () => {
       const parentComment = doc.getCommentManager().createComment('User1', 'Initial comment');
 
       // Add reply
-      const replyComment = doc.getCommentManager().createReply(
-        parentComment.getId(),
-        'User2',
-        'Reply to initial comment'
-      );
+      const replyComment = doc
+        .getCommentManager()
+        .createReply(parentComment.getId(), 'User2', 'Reply to initial comment');
 
       // Round-trip
       const buffer = await doc.toBuffer();
@@ -83,7 +83,7 @@ describe('Comment Parsing', () => {
       expect(comments).toHaveLength(2);
 
       // Find reply
-      const reply = comments.find(c => c.isReply());
+      const reply = comments.find((c) => c.isReply());
       expect(reply).toBeDefined();
       expect(reply?.getParentId()).toBe(parentComment.getId());
     });
@@ -127,7 +127,7 @@ describe('Comment Parsing', () => {
       expect(comments).toHaveLength(3);
 
       // Verify each comment has unique ID
-      const ids = comments.map(c => c.getId());
+      const ids = comments.map((c) => c.getId());
       const uniqueIds = new Set(ids);
       expect(uniqueIds.size).toBe(3);
     });
@@ -142,8 +142,8 @@ describe('Comment Parsing', () => {
         content: [
           new Run('Bold text', { bold: true }),
           new Run(' and '),
-          new Run('italic text', { italic: true })
-        ]
+          new Run('italic text', { italic: true }),
+        ],
       });
 
       doc.getCommentManager().register(comment);
@@ -166,7 +166,7 @@ describe('Comment Parsing', () => {
       // Add empty comment
       const comment = new Comment({
         author: 'User',
-        content: ''
+        content: '',
       });
 
       doc.getCommentManager().register(comment);
@@ -191,9 +191,10 @@ describe('Comment Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const aliceComments = loadedDoc.getCommentManager()
+      const aliceComments = loadedDoc
+        .getCommentManager()
         .getAllComments()
-        .filter(c => c.getAuthor() === 'Alice');
+        .filter((c) => c.getAuthor() === 'Alice');
 
       expect(aliceComments).toHaveLength(2);
     });
@@ -342,24 +343,30 @@ describe('Comment Parsing', () => {
       await zip.loadFromBuffer(buffer1);
 
       // Add companion files
-      zip.addFile('word/commentsExtended.xml',
+      zip.addFile(
+        'word/commentsExtended.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"/>');
-      zip.addFile('word/commentsIds.xml',
+          '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"/>'
+      );
+      zip.addFile(
+        'word/commentsIds.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid"/>');
-      zip.addFile('word/commentsExtensible.xml',
+          '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid"/>'
+      );
+      zip.addFile(
+        'word/commentsExtensible.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w16cex:commentsExtensible xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex"/>');
+          '<w16cex:commentsExtensible xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex"/>'
+      );
 
       // Inject companion relationships into document.xml.rels
       const relsXml = zip.getFileAsString('word/_rels/document.xml.rels')!;
       const injectedRels = relsXml.replace(
         '</Relationships>',
         '  <Relationship Id="rId72" Type="http://schemas.microsoft.com/office/2011/relationships/commentsExtended" Target="commentsExtended.xml"/>\n' +
-        '  <Relationship Id="rId73" Type="http://schemas.microsoft.com/office/2016/09/relationships/commentsIds" Target="commentsIds.xml"/>\n' +
-        '  <Relationship Id="rId74" Type="http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible" Target="commentsExtensible.xml"/>\n' +
-        '</Relationships>'
+          '  <Relationship Id="rId73" Type="http://schemas.microsoft.com/office/2016/09/relationships/commentsIds" Target="commentsIds.xml"/>\n' +
+          '  <Relationship Id="rId74" Type="http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible" Target="commentsExtensible.xml"/>\n' +
+          '</Relationships>'
       );
       zip.addFile('word/_rels/document.xml.rels', injectedRels);
       const bufferWithCompanions = await zip.toBuffer();
@@ -399,20 +406,26 @@ describe('Comment Parsing', () => {
       // Inject companion files to simulate a real Word document
       const zip = new ZipHandler();
       await zip.loadFromBuffer(buffer1);
-      zip.addFile('word/commentsExtended.xml',
+      zip.addFile(
+        'word/commentsExtended.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">' +
-        '<w15:commentEx w15:paraId="DEADBEEF" w15:done="0"/>' +
-        '</w15:commentsEx>');
-      zip.addFile('word/commentsIds.xml',
+          '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">' +
+          '<w15:commentEx w15:paraId="DEADBEEF" w15:done="0"/>' +
+          '</w15:commentsEx>'
+      );
+      zip.addFile(
+        'word/commentsIds.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">' +
-        '<w16cid:commentId w16cid:paraId="DEADBEEF" w16cid:durableId="12345"/>' +
-        '</w16cid:commentsIds>');
-      zip.addFile('word/commentsExtensible.xml',
+          '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">' +
+          '<w16cid:commentId w16cid:paraId="DEADBEEF" w16cid:durableId="12345"/>' +
+          '</w16cid:commentsIds>'
+      );
+      zip.addFile(
+        'word/commentsExtensible.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w16cex:commentsExtensible xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex">' +
-        '</w16cex:commentsExtensible>');
+          '<w16cex:commentsExtensible xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex">' +
+          '</w16cex:commentsExtensible>'
+      );
       const bufferWithCompanions = await zip.toBuffer();
 
       // Load, MODIFY comments, then save
@@ -442,16 +455,20 @@ describe('Comment Parsing', () => {
       // Inject companion files to simulate a real Word document
       const zip = new ZipHandler();
       await zip.loadFromBuffer(buffer1);
-      zip.addFile('word/commentsExtended.xml',
+      zip.addFile(
+        'word/commentsExtended.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">' +
-        '<w15:commentEx w15:paraId="DEADBEEF" w15:done="0"/>' +
-        '</w15:commentsEx>');
-      zip.addFile('word/commentsIds.xml',
+          '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">' +
+          '<w15:commentEx w15:paraId="DEADBEEF" w15:done="0"/>' +
+          '</w15:commentsEx>'
+      );
+      zip.addFile(
+        'word/commentsIds.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">' +
-        '<w16cid:commentId w16cid:paraId="DEADBEEF" w16cid:durableId="12345"/>' +
-        '</w16cid:commentsIds>');
+          '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">' +
+          '<w16cid:commentId w16cid:paraId="DEADBEEF" w16cid:durableId="12345"/>' +
+          '</w16cid:commentsIds>'
+      );
       const bufferWithCompanions = await zip.toBuffer();
 
       // Load, remove ALL comments, then save
@@ -488,20 +505,24 @@ describe('Comment Parsing', () => {
       const zip = new ZipHandler();
       await zip.loadFromBuffer(buffer1);
 
-      zip.addFile('word/commentsExtended.xml',
+      zip.addFile(
+        'word/commentsExtended.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"/>');
-      zip.addFile('word/commentsIds.xml',
+          '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"/>'
+      );
+      zip.addFile(
+        'word/commentsIds.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid"/>');
+          '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid"/>'
+      );
 
       // Inject Content_Types overrides for companion files
       let contentTypes = zip.getFileAsString('[Content_Types].xml')!;
       contentTypes = contentTypes.replace(
         '</Types>',
         '<Override PartName="/word/commentsExtended.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml"/>' +
-        '<Override PartName="/word/commentsIds.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml"/>' +
-        '</Types>'
+          '<Override PartName="/word/commentsIds.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml"/>' +
+          '</Types>'
       );
       zip.addFile('[Content_Types].xml', contentTypes);
       const bufferWithCompanions = await zip.toBuffer();
@@ -636,13 +657,15 @@ describe('Comment Parsing', () => {
       const paraEnd = docXml.indexOf('</w:p>', firstRunPos);
 
       // Insert commentRangeStart before the run, commentRangeEnd + reference run after the run
-      const commentRefRun = '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="0"/></w:r>';
-      docXml = docXml.substring(0, firstRunPos)
-        + '<w:commentRangeStart w:id="0"/>'
-        + docXml.substring(firstRunPos, paraEnd)
-        + '<w:commentRangeEnd w:id="0"/>'
-        + commentRefRun
-        + docXml.substring(paraEnd);
+      const commentRefRun =
+        '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="0"/></w:r>';
+      docXml =
+        docXml.substring(0, firstRunPos) +
+        '<w:commentRangeStart w:id="0"/>' +
+        docXml.substring(firstRunPos, paraEnd) +
+        '<w:commentRangeEnd w:id="0"/>' +
+        commentRefRun +
+        docXml.substring(paraEnd);
 
       zip.addFile('word/document.xml', docXml);
       const bufferWithAnchors = await zip.toBuffer();
@@ -686,13 +709,15 @@ describe('Comment Parsing', () => {
       if (runs.length >= 2) {
         const secondRun = runs[1]!;
         const pos = docXml.indexOf(secondRun);
-        const commentRefRun = '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="0"/></w:r>';
-        docXml = docXml.substring(0, pos)
-          + '<w:commentRangeStart w:id="0"/>'
-          + secondRun
-          + '<w:commentRangeEnd w:id="0"/>'
-          + commentRefRun
-          + docXml.substring(pos + secondRun.length);
+        const commentRefRun =
+          '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="0"/></w:r>';
+        docXml =
+          docXml.substring(0, pos) +
+          '<w:commentRangeStart w:id="0"/>' +
+          secondRun +
+          '<w:commentRangeEnd w:id="0"/>' +
+          commentRefRun +
+          docXml.substring(pos + secondRun.length);
         zip.addFile('word/document.xml', docXml);
       }
       const bufferWithAnchors = await zip.toBuffer();

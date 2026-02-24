@@ -3,34 +3,34 @@
  * Provides a simple interface for creating DOCX files without managing ZIP and XML manually
  */
 
-import { AlternateContent } from "../elements/AlternateContent";
-import { Bookmark } from "../elements/Bookmark";
-import { BookmarkManager } from "../elements/BookmarkManager";
-import { Comment } from "../elements/Comment";
-import { CustomXmlBlock } from "../elements/CustomXml";
-import { PreservedElement } from "../elements/PreservedElement";
-import { MathParagraph } from "../elements/MathElement";
-import { CommentManager } from "../elements/CommentManager";
-import { Endnote } from "../elements/Endnote";
-import { EndnoteManager } from "../elements/EndnoteManager";
-import { Field } from "../elements/Field";
-import { Footnote } from "../elements/Footnote";
-import { FootnoteManager } from "../elements/FootnoteManager";
-import { Footer } from "../elements/Footer";
-import { Header } from "../elements/Header";
-import { HeaderFooterManager } from "../elements/HeaderFooterManager";
-import { Hyperlink } from "../elements/Hyperlink";
-import { Image } from "../elements/Image";
-import { ImageManager } from "../elements/ImageManager";
-import { ImageRun } from "../elements/ImageRun";
-import { Paragraph, ParagraphContent, FieldLike } from "../elements/Paragraph";
-import { RangeMarker } from "../elements/RangeMarker";
-import { Revision, RevisionType } from "../elements/Revision";
-import { RevisionManager } from "../elements/RevisionManager";
-import { RevisionLocation } from "../elements/PropertyChangeTypes";
-import { Run, RunFormatting } from "../elements/Run";
-import { Shape } from "../elements/Shape";
-import { TextBox } from "../elements/TextBox";
+import { AlternateContent } from '../elements/AlternateContent';
+import { Bookmark } from '../elements/Bookmark';
+import { BookmarkManager } from '../elements/BookmarkManager';
+import { Comment } from '../elements/Comment';
+import { CustomXmlBlock } from '../elements/CustomXml';
+import { PreservedElement } from '../elements/PreservedElement';
+import { MathParagraph } from '../elements/MathElement';
+import { CommentManager } from '../elements/CommentManager';
+import { Endnote } from '../elements/Endnote';
+import { EndnoteManager } from '../elements/EndnoteManager';
+import { Field } from '../elements/Field';
+import { Footnote } from '../elements/Footnote';
+import { FootnoteManager } from '../elements/FootnoteManager';
+import { Footer } from '../elements/Footer';
+import { Header } from '../elements/Header';
+import { HeaderFooterManager } from '../elements/HeaderFooterManager';
+import { Hyperlink } from '../elements/Hyperlink';
+import { Image } from '../elements/Image';
+import { ImageManager } from '../elements/ImageManager';
+import { ImageRun } from '../elements/ImageRun';
+import { Paragraph, ParagraphContent, FieldLike } from '../elements/Paragraph';
+import { RangeMarker } from '../elements/RangeMarker';
+import { Revision, RevisionType } from '../elements/Revision';
+import { RevisionManager } from '../elements/RevisionManager';
+import { RevisionLocation } from '../elements/PropertyChangeTypes';
+import { Run, RunFormatting } from '../elements/Run';
+import { Shape } from '../elements/Shape';
+import { TextBox } from '../elements/TextBox';
 import {
   RevisionValidator,
   RevisionAutoFixer,
@@ -38,21 +38,25 @@ import {
   AutoFixOptions,
   ValidationResult,
   AutoFixResult,
-} from "../validation";
-import { Section } from "../elements/Section";
-import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
-import { Table, TableBorder } from "../elements/Table";
-import { TableCell } from "../elements/TableCell";
-import { TableOfContentsElement } from "../elements/TableOfContentsElement";
-import { resolveCellShading } from "../utils/ShadingResolver";
-import { NumberingManager, NumberingConsolidationOptions, NumberingConsolidationResult } from "../formatting/NumberingManager";
-import { Style, StyleProperties } from "../formatting/Style";
-import { StylesManager } from "../formatting/StylesManager";
-import { FormatOptions, StyleApplyOptions } from "../types/formatting";
-import { CompatibilityMode, CompatibilityInfo, CompatSetting } from "../types/compatibility-types";
-import { DocumentProtection, RevisionViewSettings, WebSettingsInfo } from "../types/settings-types";
-import { CompatibilityUpgrader, UpgradeReport } from "../utils/CompatibilityUpgrader";
-import { MODERN_COMPAT_SETTINGS } from "../constants/legacyCompatFlags";
+} from '../validation';
+import { Section } from '../elements/Section';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
+import { Table, TableBorder } from '../elements/Table';
+import { TableCell } from '../elements/TableCell';
+import { TableOfContentsElement } from '../elements/TableOfContentsElement';
+import { resolveCellShading } from '../utils/ShadingResolver';
+import {
+  NumberingManager,
+  NumberingConsolidationOptions,
+  NumberingConsolidationResult,
+} from '../formatting/NumberingManager';
+import { Style, StyleProperties } from '../formatting/Style';
+import { StylesManager } from '../formatting/StylesManager';
+import { FormatOptions, StyleApplyOptions } from '../types/formatting';
+import { CompatibilityMode, CompatibilityInfo, CompatSetting } from '../types/compatibility-types';
+import { DocumentProtection, RevisionViewSettings, WebSettingsInfo } from '../types/settings-types';
+import { CompatibilityUpgrader, UpgradeReport } from '../utils/CompatibilityUpgrader';
+import { MODERN_COMPAT_SETTINGS } from '../constants/legacyCompatFlags';
 // ListNormalizationOptions and ListNormalizationReport removed - normalizeTableLists moved to consumer
 import {
   ApplyStylesOptions,
@@ -60,10 +64,10 @@ import {
   StyleConfig,
   StyleRunFormatting,
   StyleParagraphFormatting,
-} from "../types/styleConfig";
+} from '../types/styleConfig';
 // ListNormalizer import removed - moved to consumer
-import { defaultLogger, ILogger, getGlobalLogger, createScopedLogger } from "../utils/logger";
-import { UNITS } from "../utils/units";
+import { defaultLogger, ILogger, getGlobalLogger, createScopedLogger } from '../utils/logger';
+import { UNITS } from '../utils/units';
 
 // Create scoped logger for Document operations
 function getLogger(): ILogger {
@@ -71,25 +75,25 @@ function getLogger(): ILogger {
 }
 // Raw XML revision acceptance - used at load time BEFORE parsing
 // cleanupRevisionMetadata - cleanup metadata files after in-memory acceptance
-import { acceptAllRevisions, cleanupRevisionMetadata } from "../utils/acceptRevisions";
+import { acceptAllRevisions, cleanupRevisionMetadata } from '../utils/acceptRevisions';
 // In-memory revision acceptance - used AFTER parsing, allows subsequent modifications
-import { acceptRevisionsInMemory, AcceptRevisionsResult } from "../utils/InMemoryRevisionAcceptor";
-import { stripTrackedChanges } from "../utils/stripTrackedChanges";
-import { diffText, diffHasUnchangedParts } from "../utils/textDiff";
-import { XMLBuilder } from "../xml/XMLBuilder";
-import { XMLParser } from "../xml/XMLParser";
-import { DocumentTrackingContext } from "../tracking/DocumentTrackingContext";
-import type { TrackingContext } from "../tracking/TrackingContext";
-import { ZipHandler } from "../zip/ZipHandler";
-import { DOCX_PATHS } from "../zip/types";
-import { DocumentGenerator } from "./DocumentGenerator";
-import { DocumentIdManager } from "./DocumentIdManager";
-import { DocumentParser } from "./DocumentParser";
-import { DocumentValidator } from "./DocumentValidator";
-import { RelationshipManager } from "./RelationshipManager";
-import { RelationshipType } from "./Relationship";
-import { BodyElement } from "./DocumentContent";
-import { optimizeImage, ImageOptimizationResult } from "../images/ImageOptimizer";
+import { acceptRevisionsInMemory, AcceptRevisionsResult } from '../utils/InMemoryRevisionAcceptor';
+import { stripTrackedChanges } from '../utils/stripTrackedChanges';
+import { diffText, diffHasUnchangedParts } from '../utils/textDiff';
+import { XMLBuilder } from '../xml/XMLBuilder';
+import { XMLParser } from '../xml/XMLParser';
+import { DocumentTrackingContext } from '../tracking/DocumentTrackingContext';
+import type { TrackingContext } from '../tracking/TrackingContext';
+import { ZipHandler } from '../zip/ZipHandler';
+import { DOCX_PATHS } from '../zip/types';
+import { DocumentGenerator } from './DocumentGenerator';
+import { DocumentIdManager } from './DocumentIdManager';
+import { DocumentParser } from './DocumentParser';
+import { DocumentValidator } from './DocumentValidator';
+import { RelationshipManager } from './RelationshipManager';
+import { RelationshipType } from './Relationship';
+import { BodyElement } from './DocumentContent';
+import { optimizeImage, ImageOptimizationResult } from '../images/ImageOptimizer';
 
 /**
  * Document properties (core and extended)
@@ -249,7 +253,9 @@ export class Document {
     this.numberingManager = NumberingManager.create();
     this.section = new Section();
     this.imageManager = ImageManager.create();
-    this.relationshipManager = initDefaults ? RelationshipManager.createForDocument() : RelationshipManager.create();
+    this.relationshipManager = initDefaults
+      ? RelationshipManager.createForDocument()
+      : RelationshipManager.create();
     this.headerFooterManager = HeaderFooterManager.create();
     this.bookmarkManager = BookmarkManager.create();
     this.revisionManager = RevisionManager.create();
@@ -326,7 +332,7 @@ export class Document {
 
   // TOC auto-population setting
   private autoPopulateTOCs = false;
-  
+
   // TOC field instruction sync setting (default: OFF to preserve original instructions)
   private autoSyncTOCStyles = false;
 
@@ -404,7 +410,12 @@ export class Document {
   private documentProtection?: DocumentProtection;
 
   /** Document background (w:background) per ECMA-376 Part 1 §17.2.1 */
-  private _documentBackground?: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string };
+  private _documentBackground?: {
+    color?: string;
+    themeColor?: string;
+    themeTint?: string;
+    themeShade?: string;
+  };
 
   /** Even and odd headers setting (w:evenAndOddHeaders) per ECMA-376 Part 1 §17.15.1.28 */
   private _evenAndOddHeaders?: boolean;
@@ -430,6 +441,8 @@ export class Document {
   private _decimalSymbol?: string;
   /** List separator for locale (w:listSeparator) per ECMA-376 Part 1 §17.15.1.55 */
   private _listSeparator?: string;
+  /** Document view type (w:view) per ECMA-376 Part 1 §17.15.1.92 — element #1 in CT_Settings */
+  private _documentView?: string;
 
   /** When true, _postProcessDocumentXml() strips INCLUDEPICTURE field markup from document.xml */
   private _flattenIncludePictureFields = false;
@@ -577,10 +590,7 @@ export class Document {
    * }
    * ```
    */
-  static async load(
-    filePath: string,
-    options?: DocumentLoadOptions
-  ): Promise<Document> {
+  static async load(filePath: string, options?: DocumentLoadOptions): Promise<Document> {
     const logger = getLogger();
     logger.info('Loading document from file', { path: filePath });
 
@@ -618,10 +628,7 @@ export class Document {
    * const doc = await Document.loadFromBuffer(buffer);
    * ```
    */
-  static async loadFromBuffer(
-    buffer: Buffer,
-    options?: DocumentLoadOptions
-  ): Promise<Document> {
+  static async loadFromBuffer(buffer: Buffer, options?: DocumentLoadOptions): Promise<Document> {
     const logger = getLogger();
     logger.info('Loading document from buffer', { bufferSize: buffer.length });
 
@@ -646,7 +653,7 @@ export class Document {
     // so they can be accepted using in-memory transformation after parsing
     const useInMemoryAccept = options?.acceptRevisions === true;
     const revisionHandling = useInMemoryAccept
-      ? 'preserve'  // Force preserve so revisions are parsed into model
+      ? 'preserve' // Force preserve so revisions are parsed into model
       : (options?.revisionHandling ?? 'accept'); // Default to accept
 
     // Handle tracked changes BEFORE parsing (unless using in-memory accept)
@@ -660,8 +667,13 @@ export class Document {
       // Check if document has tracked changes and warn (unless intentionally accepting later)
       if (!useInMemoryAccept) {
         const documentXml = zipHandler.getFileAsString('word/document.xml');
-        if (documentXml && (documentXml.includes('<w:ins') || documentXml.includes('<w:del') ||
-            documentXml.includes('<w:moveFrom') || documentXml.includes('<w:moveTo'))) {
+        if (
+          documentXml &&
+          (documentXml.includes('<w:ins') ||
+            documentXml.includes('<w:del') ||
+            documentXml.includes('<w:moveFrom') ||
+            documentXml.includes('<w:moveTo'))
+        ) {
           logger.warn('Document contains tracked changes in preserve mode');
         }
       }
@@ -715,7 +727,7 @@ export class Document {
     if (parseWarnings.length > 0) {
       logger.warn('Document loaded with parse warnings', {
         warningCount: parseWarnings.length,
-        elements: parseWarnings.map(w => w.element).join(', '),
+        elements: parseWarnings.map((w) => w.element).join(', '),
       });
     }
 
@@ -813,11 +825,16 @@ export class Document {
         const hashMatch = /w:hash\s*=\s*"([^"]*)"/.exec(attrs);
         const saltMatch = /w:salt\s*=\s*"([^"]*)"/.exec(attrs);
 
-        if (cryptProviderMatch?.[1]) this.documentProtection.cryptProviderType = cryptProviderMatch[1];
-        if (cryptAlgClassMatch?.[1]) this.documentProtection.cryptAlgorithmClass = cryptAlgClassMatch[1];
-        if (cryptAlgTypeMatch?.[1]) this.documentProtection.cryptAlgorithmType = cryptAlgTypeMatch[1];
-        if (cryptAlgSidMatch?.[1]) this.documentProtection.cryptAlgorithmSid = parseInt(cryptAlgSidMatch[1], 10);
-        if (cryptSpinMatch?.[1]) this.documentProtection.cryptSpinCount = parseInt(cryptSpinMatch[1], 10);
+        if (cryptProviderMatch?.[1])
+          this.documentProtection.cryptProviderType = cryptProviderMatch[1];
+        if (cryptAlgClassMatch?.[1])
+          this.documentProtection.cryptAlgorithmClass = cryptAlgClassMatch[1];
+        if (cryptAlgTypeMatch?.[1])
+          this.documentProtection.cryptAlgorithmType = cryptAlgTypeMatch[1];
+        if (cryptAlgSidMatch?.[1])
+          this.documentProtection.cryptAlgorithmSid = parseInt(cryptAlgSidMatch[1], 10);
+        if (cryptSpinMatch?.[1])
+          this.documentProtection.cryptSpinCount = parseInt(cryptSpinMatch[1], 10);
         if (hashMatch?.[1]) this.documentProtection.hash = hashMatch[1];
         if (saltMatch?.[1]) this.documentProtection.salt = saltMatch[1];
       }
@@ -845,6 +862,12 @@ export class Document {
       if (this.rsidRoot) {
         this.rsids.add(this.rsidRoot);
       }
+    }
+
+    // Parse w:view per ECMA-376 Part 1 §17.15.1.92 (element #1 in CT_Settings)
+    const viewMatch = /<w:view\s+w:val\s*=\s*"([^"]*)"[^>]*\/?>/.exec(settingsXml);
+    if (viewMatch?.[1]) {
+      this._documentView = viewMatch[1];
     }
 
     // Parse w:evenAndOddHeaders per ECMA-376 Part 1 §17.15.1.28
@@ -952,8 +975,10 @@ export class Document {
           compatSettings.push(setting);
 
           // Extract compatibility mode value
-          if (setting.name === 'compatibilityMode' &&
-              setting.uri === 'http://schemas.microsoft.com/office/word') {
+          if (
+            setting.name === 'compatibilityMode' &&
+            setting.uri === 'http://schemas.microsoft.com/office/word'
+          ) {
             const modeVal = parseInt(setting.val, 10);
             if (!isNaN(modeVal)) {
               mode = modeVal as CompatibilityMode;
@@ -1056,15 +1081,12 @@ export class Document {
       }
     } catch (headerFooterError) {
       const logger = getLogger();
-      logger.warn(
-        "Failed to parse headers/footers - document will load without them",
-        {
-          error:
-            headerFooterError instanceof Error
-              ? headerFooterError.message
-              : String(headerFooterError),
-        }
-      );
+      logger.warn('Failed to parse headers/footers - document will load without them', {
+        error:
+          headerFooterError instanceof Error
+            ? headerFooterError.message
+            : String(headerFooterError),
+      });
       // Continue loading - headers/footers are not critical for document structure
       // User should be aware that headers/footers may be missing
     }
@@ -1117,7 +1139,10 @@ export class Document {
     // Initialize the centralized DocumentIdManager from document XML
     // This scans ALL w:id attributes and sets nextId to globalMax + 1
     // All managers (Bookmark, Revision, Comment) use this shared counter via callbacks
-    this.documentIdManager.initializeFromDocument(documentXml || undefined, commentsXml || undefined);
+    this.documentIdManager.initializeFromDocument(
+      documentXml || undefined,
+      commentsXml || undefined
+    );
   }
 
   /**
@@ -1135,7 +1160,11 @@ export class Document {
     this._originalCommentsXml = commentsXml;
 
     // Also preserve companion files from the ZIP
-    for (const path of [DOCX_PATHS.COMMENTS_EXTENDED, DOCX_PATHS.COMMENTS_IDS, DOCX_PATHS.COMMENTS_EXTENSIBLE]) {
+    for (const path of [
+      DOCX_PATHS.COMMENTS_EXTENDED,
+      DOCX_PATHS.COMMENTS_IDS,
+      DOCX_PATHS.COMMENTS_EXTENSIBLE,
+    ]) {
       const content = this.zipHandler.getFileAsString(path);
       if (content) {
         this._originalCommentCompanionFiles.set(path, content);
@@ -1259,10 +1288,7 @@ export class Document {
    */
   private initializeRequiredFiles(): void {
     // [Content_Types].xml
-    this.zipHandler.addFile(
-      DOCX_PATHS.CONTENT_TYPES,
-      this.generator.generateContentTypes()
-    );
+    this.zipHandler.addFile(DOCX_PATHS.CONTENT_TYPES, this.generator.generateContentTypes());
 
     // _rels/.rels
     this.zipHandler.addFile(DOCX_PATHS.RELS, this.generator.generateRels());
@@ -1279,34 +1305,19 @@ export class Document {
     );
 
     // word/_rels/document.xml.rels
-    this.zipHandler.addFile(
-      "word/_rels/document.xml.rels",
-      this.relationshipManager.generateXml()
-    );
+    this.zipHandler.addFile('word/_rels/document.xml.rels', this.relationshipManager.generateXml());
 
     // word/styles.xml
-    this.zipHandler.addFile(
-      DOCX_PATHS.STYLES,
-      this.stylesManager.generateStylesXml()
-    );
+    this.zipHandler.addFile(DOCX_PATHS.STYLES, this.stylesManager.generateStylesXml());
 
     // word/numbering.xml
-    this.zipHandler.addFile(
-      DOCX_PATHS.NUMBERING,
-      this.numberingManager.generateNumberingXml()
-    );
+    this.zipHandler.addFile(DOCX_PATHS.NUMBERING, this.numberingManager.generateNumberingXml());
 
     // word/fontTable.xml (REQUIRED for DOCX compliance)
-    this.zipHandler.addFile(
-      "word/fontTable.xml",
-      this.generator.generateFontTable()
-    );
+    this.zipHandler.addFile('word/fontTable.xml', this.generator.generateFontTable());
 
     // word/webSettings.xml
-    this.zipHandler.addFile(
-      DOCX_PATHS.WEB_SETTINGS,
-      this.generator.generateWebSettings()
-    );
+    this.zipHandler.addFile(DOCX_PATHS.WEB_SETTINGS, this.generator.generateWebSettings());
 
     // word/settings.xml (REQUIRED for DOCX compliance)
     this.zipHandler.addFile(
@@ -1327,19 +1338,32 @@ export class Document {
       isLegacyMode: false,
       compatSettings: [
         { name: 'compatibilityMode', uri: 'http://schemas.microsoft.com/office/word', val: '15' },
-        { name: 'overrideTableStyleFontSizeAndJustification', uri: 'http://schemas.microsoft.com/office/word', val: '1' },
-        { name: 'enableOpenTypeFeatures', uri: 'http://schemas.microsoft.com/office/word', val: '1' },
-        { name: 'doNotFlipMirrorIndents', uri: 'http://schemas.microsoft.com/office/word', val: '1' },
-        { name: 'differentiateMultirowTableHeaders', uri: 'http://schemas.microsoft.com/office/word', val: '1' },
+        {
+          name: 'overrideTableStyleFontSizeAndJustification',
+          uri: 'http://schemas.microsoft.com/office/word',
+          val: '1',
+        },
+        {
+          name: 'enableOpenTypeFeatures',
+          uri: 'http://schemas.microsoft.com/office/word',
+          val: '1',
+        },
+        {
+          name: 'doNotFlipMirrorIndents',
+          uri: 'http://schemas.microsoft.com/office/word',
+          val: '1',
+        },
+        {
+          name: 'differentiateMultirowTableHeaders',
+          uri: 'http://schemas.microsoft.com/office/word',
+          val: '1',
+        },
       ],
       legacyFlags: [],
     };
 
     // word/theme/theme1.xml (REQUIRED for DOCX compliance)
-    this.zipHandler.addFile(
-      "word/theme/theme1.xml",
-      this.generator.generateTheme()
-    );
+    this.zipHandler.addFile('word/theme/theme1.xml', this.generator.generateTheme());
 
     // docProps/core.xml
     this.zipHandler.addFile(
@@ -1348,14 +1372,10 @@ export class Document {
     );
 
     // docProps/app.xml
-    this.zipHandler.addFile(
-      DOCX_PATHS.APP_PROPS,
-      this.generator.generateAppProps(this.properties)
-    );
+    this.zipHandler.addFile(DOCX_PATHS.APP_PROPS, this.generator.generateAppProps(this.properties));
 
     // Note: docProps/custom.xml is added during save() if custom properties exist
   }
-
 
   /**
    * Adds an existing paragraph to the document body
@@ -1646,9 +1666,7 @@ export class Document {
    * @returns The paragraph at that index, or undefined if out of bounds
    */
   getParagraphAt(index: number): Paragraph | undefined {
-    const paragraphs = this.bodyElements.filter(
-      (el): el is Paragraph => el instanceof Paragraph
-    );
+    const paragraphs = this.bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
     return paragraphs[index];
   }
 
@@ -1658,9 +1676,7 @@ export class Document {
    * @returns The table at that index, or undefined if out of bounds
    */
   getTableAt(index: number): Table | undefined {
-    const tables = this.bodyElements.filter(
-      (el): el is Table => el instanceof Table
-    );
+    const tables = this.bodyElements.filter((el): el is Table => el instanceof Table);
     return tables[index];
   }
 
@@ -1679,9 +1695,7 @@ export class Document {
    * @returns The index of the paragraph, or -1 if not found
    */
   getParagraphIndex(paragraph: Paragraph): number {
-    const paragraphs = this.bodyElements.filter(
-      (el): el is Paragraph => el instanceof Paragraph
-    );
+    const paragraphs = this.bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
     return paragraphs.indexOf(paragraph);
   }
 
@@ -1691,9 +1705,7 @@ export class Document {
    * @returns The index of the table, or -1 if not found
    */
   getTableIndex(table: Table): number {
-    const tables = this.bodyElements.filter(
-      (el): el is Table => el instanceof Table
-    );
+    const tables = this.bodyElements.filter((el): el is Table => el instanceof Table);
     return tables.indexOf(table);
   }
 
@@ -1703,13 +1715,9 @@ export class Document {
    * @returns The next paragraph, or undefined if none exists
    */
   getNextParagraph(paragraph: Paragraph): Paragraph | undefined {
-    const paragraphs = this.bodyElements.filter(
-      (el): el is Paragraph => el instanceof Paragraph
-    );
+    const paragraphs = this.bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
     const index = paragraphs.indexOf(paragraph);
-    return index >= 0 && index < paragraphs.length - 1
-      ? paragraphs[index + 1]
-      : undefined;
+    return index >= 0 && index < paragraphs.length - 1 ? paragraphs[index + 1] : undefined;
   }
 
   /**
@@ -1718,9 +1726,7 @@ export class Document {
    * @returns The previous paragraph, or undefined if none exists
    */
   getPreviousParagraph(paragraph: Paragraph): Paragraph | undefined {
-    const paragraphs = this.bodyElements.filter(
-      (el): el is Paragraph => el instanceof Paragraph
-    );
+    const paragraphs = this.bodyElements.filter((el): el is Paragraph => el instanceof Paragraph);
     const index = paragraphs.indexOf(paragraph);
     return index > 0 ? paragraphs[index - 1] : undefined;
   }
@@ -1864,8 +1870,11 @@ export class Document {
    * @param value - Property value
    * @returns This document for chaining
    */
-  setProperty(key: keyof DocumentProperties, value: DocumentProperties[keyof DocumentProperties]): this {
-    (this.properties[key]) = value as never;
+  setProperty(
+    key: keyof DocumentProperties,
+    value: DocumentProperties[keyof DocumentProperties]
+  ): this {
+    this.properties[key] = value as never;
     return this;
   }
 
@@ -2003,10 +2012,7 @@ export class Document {
    * @param value - Property value (string, number, boolean, or Date)
    * @returns This document for chaining
    */
-  setCustomProperty(
-    name: string,
-    value: string | number | boolean | Date
-  ): this {
+  setCustomProperty(name: string, value: string | number | boolean | Date): this {
     if (!this.properties.customProperties) {
       this.properties.customProperties = {};
     }
@@ -2019,9 +2025,7 @@ export class Document {
    * @param properties - Object containing custom properties
    * @returns This document for chaining
    */
-  setCustomProperties(
-    properties: Record<string, string | number | boolean | Date>
-  ): this {
+  setCustomProperties(properties: Record<string, string | number | boolean | Date>): this {
     this.properties.customProperties = { ...properties };
     return this;
   }
@@ -2031,9 +2035,7 @@ export class Document {
    * @param name - Property name
    * @returns Property value or undefined
    */
-  getCustomProperty(
-    name: string
-  ): string | number | boolean | Date | undefined {
+  getCustomProperty(name: string): string | number | boolean | Date | undefined {
     return this.properties.customProperties?.[name];
   }
 
@@ -2112,10 +2114,7 @@ export class Document {
     this.validator.checkMemoryThreshold();
 
     // Check document size and warn if too large
-    const sizeInfo = this.validator.estimateSize(
-      this.bodyElements,
-      this.imageManager
-    );
+    const sizeInfo = this.validator.estimateSize(this.bodyElements, this.imageManager);
     if (sizeInfo.warning) {
       this.logger.warn(sizeInfo.warning, {
         totalMB: sizeInfo.totalEstimatedMB,
@@ -2166,7 +2165,7 @@ export class Document {
     if (this.skipDocumentXmlRegeneration) {
       this.logger.warn(
         'skipDocumentXmlRegeneration is set: in-memory content modifications will NOT be saved. ' +
-        'Use acceptAllRevisions() instead of acceptAllRevisionsRawXml() if you need to modify the document after accepting revisions.'
+          'Use acceptAllRevisions() instead of acceptAllRevisionsRawXml() if you need to modify the document after accepting revisions.'
       );
     } else {
       this.updateDocumentXml();
@@ -2221,7 +2220,7 @@ export class Document {
       }
 
       // Atomic rename - only if save succeeded
-      const { promises: fs } = await import("fs");
+      const { promises: fs } = await import('fs');
       await fs.rename(tempPath, filePath);
 
       // Mark save as successful - image data can now be released safely
@@ -2234,7 +2233,7 @@ export class Document {
 
       // Cleanup temporary file on error
       try {
-        const { promises: fs } = await import("fs");
+        const { promises: fs } = await import('fs');
         await fs.unlink(tempPath);
       } catch (cleanupErr) {
         logger.debug('Failed to clean up temp file', { tempPath, error: String(cleanupErr) });
@@ -2292,11 +2291,11 @@ export class Document {
 
       // Auto-populate TOCs if enabled
       if (this.autoPopulateTOCs) {
-        const docXml = this.zipHandler.getFileAsString("word/document.xml");
+        const docXml = this.zipHandler.getFileAsString('word/document.xml');
         if (docXml) {
           const populatedXml = this.populateAllTOCsInXML(docXml);
           if (populatedXml !== docXml) {
-            this.zipHandler.updateFile("word/document.xml", populatedXml);
+            this.zipHandler.updateFile('word/document.xml', populatedXml);
           }
         }
       }
@@ -2366,7 +2365,11 @@ export class Document {
    * @private
    */
   private _postProcessDocumentXml(): void {
-    if (!this._flattenIncludePictureFields && !this._stripOrphanRSIDs && !this._clearDirectSpacingStyles) {
+    if (
+      !this._flattenIncludePictureFields &&
+      !this._stripOrphanRSIDs &&
+      !this._clearDirectSpacingStyles
+    ) {
       return;
     }
 
@@ -2445,7 +2448,9 @@ export class Document {
       const runContent = xml.substring(runStart, runEnd);
 
       // Check for fldChar
-      const fldCharMatch = /<w:fldChar\s+w:fldCharType\s*=\s*"(begin|separate|end)"/.exec(runContent);
+      const fldCharMatch = /<w:fldChar\s+w:fldCharType\s*=\s*"(begin|separate|end)"/.exec(
+        runContent
+      );
       if (fldCharMatch) {
         fieldTokens.push({
           type: fldCharMatch[1] as 'begin' | 'separate' | 'end',
@@ -2490,7 +2495,11 @@ export class Document {
 
         // Collect any instrText runs between this begin and the next fldChar
         const nextFldCharIdx = i + 1 < fieldTokens.length ? fieldTokens[i + 1]!.runStart : Infinity;
-        while (instrTokenIdx < instrTokens.length && instrTokens[instrTokenIdx]!.runStart < nextFldCharIdx && instrTokens[instrTokenIdx]!.runStart > token.runStart) {
+        while (
+          instrTokenIdx < instrTokens.length &&
+          instrTokens[instrTokenIdx]!.runStart < nextFldCharIdx &&
+          instrTokens[instrTokenIdx]!.runStart > token.runStart
+        ) {
           const instr = instrTokens[instrTokenIdx]!;
           stackTop.instrRuns.push({ start: instr.runStart, end: instr.runEnd });
 
@@ -2508,9 +2517,11 @@ export class Document {
           // Also collect instrText runs between begin and separate that we may have missed
           // (when instrText spans multiple runs between begin and separate)
           const beginToken = fieldTokens[current.tokenIndex]!;
-          while (instrTokenIdx < instrTokens.length &&
-                 instrTokens[instrTokenIdx]!.runStart > beginToken.runStart &&
-                 instrTokens[instrTokenIdx]!.runStart < token.runStart) {
+          while (
+            instrTokenIdx < instrTokens.length &&
+            instrTokens[instrTokenIdx]!.runStart > beginToken.runStart &&
+            instrTokens[instrTokenIdx]!.runStart < token.runStart
+          ) {
             const instr = instrTokens[instrTokenIdx]!;
             current.instrRuns.push({ start: instr.runStart, end: instr.runEnd });
             if (/^\s*INCLUDEPICTURE\b/i.test(instr.text)) {
@@ -2548,7 +2559,7 @@ export class Document {
     // Deduplicate overlapping ranges
     const uniqueRuns: { start: number; end: number }[] = [];
     for (const run of runsToRemove) {
-      const isDuplicate = uniqueRuns.some(u => u.start === run.start && u.end === run.end);
+      const isDuplicate = uniqueRuns.some((u) => u.start === run.start && u.end === run.end);
       if (!isDuplicate) {
         uniqueRuns.push(run);
       }
@@ -2649,20 +2660,14 @@ export class Document {
             const protectedBlocks: string[] = [];
             // Protect pPrChange and rPr blocks separately to prevent cross-tag
             // mismatch (e.g., <w:rPr> matching </w:pPrChange> in the alternation).
-            let safeInner = inner.replace(
-              /<w:pPrChange\b[\s\S]*?<\/w:pPrChange>/g,
-              (block) => {
-                protectedBlocks.push(block);
-                return `\x00PROTECTED_${protectedBlocks.length - 1}\x00`;
-              }
-            );
-            safeInner = safeInner.replace(
-              /<w:rPr\b[\s\S]*?<\/w:rPr>/g,
-              (block) => {
-                protectedBlocks.push(block);
-                return `\x00PROTECTED_${protectedBlocks.length - 1}\x00`;
-              }
-            );
+            let safeInner = inner.replace(/<w:pPrChange\b[\s\S]*?<\/w:pPrChange>/g, (block) => {
+              protectedBlocks.push(block);
+              return `\x00PROTECTED_${protectedBlocks.length - 1}\x00`;
+            });
+            safeInner = safeInner.replace(/<w:rPr\b[\s\S]*?<\/w:rPr>/g, (block) => {
+              protectedBlocks.push(block);
+              return `\x00PROTECTED_${protectedBlocks.length - 1}\x00`;
+            });
 
             // Check if this pPr contains a pStyle matching our list
             // (checked against safeInner to avoid matching styles inside pPrChange)
@@ -2748,7 +2753,11 @@ export class Document {
    * Updates the core properties with current values
    */
   private updateCoreProps(): void {
-    if (this._removedParts.has(DOCX_PATHS.CORE_PROPS) || this._removedParts.has('docProps/core.xml')) return;
+    if (
+      this._removedParts.has(DOCX_PATHS.CORE_PROPS) ||
+      this._removedParts.has('docProps/core.xml')
+    )
+      return;
     const xml = this.generator.generateCoreProps(this.properties);
     this.zipHandler.updateFile(DOCX_PATHS.CORE_PROPS, xml);
   }
@@ -2758,7 +2767,8 @@ export class Document {
    * Uses preservation strategy to maintain original metadata when unmodified
    */
   private updateAppProps(): void {
-    if (this._removedParts.has(DOCX_PATHS.APP_PROPS) || this._removedParts.has('docProps/app.xml')) return;
+    if (this._removedParts.has(DOCX_PATHS.APP_PROPS) || this._removedParts.has('docProps/app.xml'))
+      return;
     if (this._originalAppPropsXml && !this._appPropsModified) {
       // Preserve original as-is — no changes to app properties
       return;
@@ -2800,7 +2810,10 @@ export class Document {
     if (this.properties.application !== undefined) {
       const escaped = XMLBuilder.sanitizeXmlContent(this.properties.application);
       if (xml.includes('<Application>')) {
-        xml = xml.replace(/<Application>[^<]*<\/Application>/, `<Application>${escaped}</Application>`);
+        xml = xml.replace(
+          /<Application>[^<]*<\/Application>/,
+          `<Application>${escaped}</Application>`
+        );
       }
     }
 
@@ -3020,10 +3033,7 @@ export class Document {
         resultXml = resultXml.replace(stylePattern, newStyleXml);
       } else {
         // Style doesn't exist in original - append before </w:styles>
-        resultXml = resultXml.replace(
-          '</w:styles>',
-          `${newStyleXml}\n</w:styles>`
-        );
+        resultXml = resultXml.replace('</w:styles>', `${newStyleXml}\n</w:styles>`);
       }
     }
 
@@ -3089,7 +3099,10 @@ export class Document {
     }
 
     for (const entry of entriesToRemove) {
-      cleanedRels = cleanedRels.replace(new RegExp(`\\s*${entry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '');
+      cleanedRels = cleanedRels.replace(
+        new RegExp(`\\s*${entry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+        ''
+      );
     }
 
     if (entriesToRemove.length > 0) {
@@ -3124,8 +3137,12 @@ export class Document {
     const removedNumIds = this.numberingManager.getRemovedNumIds();
 
     // If nothing was modified or removed, return original as-is
-    if (modifiedAbstractNumIds.size === 0 && modifiedNumIds.size === 0 &&
-        removedAbstractNumIds.size === 0 && removedNumIds.size === 0) {
+    if (
+      modifiedAbstractNumIds.size === 0 &&
+      modifiedNumIds.size === 0 &&
+      removedAbstractNumIds.size === 0 &&
+      removedNumIds.size === 0
+    ) {
       return this._originalNumberingXml;
     }
 
@@ -3303,6 +3320,7 @@ export class Document {
       });
       // Apply settings merges to the generated XML for new documents
       if (this._settingsModified) {
+        xml = this.mergeViewIntoSettings(xml);
         xml = this.mergeTrackChangesIntoSettings(xml);
         xml = this.mergeBooleanSettingsIntoSettings(xml);
       }
@@ -3316,10 +3334,34 @@ export class Document {
 
     // Start from original XML and selectively merge changed settings
     let xml = this._originalSettingsXml;
+    xml = this.mergeViewIntoSettings(xml);
     xml = this.mergeTrackChangesIntoSettings(xml);
     xml = this.mergeProtectionIntoSettings(xml);
     xml = this.mergeRsidsIntoSettings(xml);
     xml = this.mergeBooleanSettingsIntoSettings(xml);
+
+    return xml;
+  }
+
+  /**
+   * Merges the document view (w:view) into settings.xml.
+   *
+   * Per CT_Settings schema: w:view is element #1 — must be the first child
+   * of w:settings. Only modifies if setDocumentView() was called.
+   *
+   * @private
+   */
+  private mergeViewIntoSettings(xml: string): string {
+    if (this._documentView === undefined) {
+      return xml;
+    }
+
+    // Remove any existing w:view element
+    xml = xml.replace(/<w:view\b[^>]*\/?>\s*/g, '');
+
+    // Insert as first child of w:settings (element #1 per CT_Settings)
+    const viewXml = `<w:view w:val="${XMLBuilder.escapeXmlAttribute(this._documentView)}"/>`;
+    xml = xml.replace(/(<w:settings\b[^>]*>)/, `$1\n  ${viewXml}`);
 
     return xml;
   }
@@ -3412,9 +3454,12 @@ export class Document {
     const esc = XMLBuilder.escapeXmlAttribute;
     let protXml = `\n  <w:documentProtection w:edit="${esc(prot.edit)}" w:enforcement="${prot.enforcement ? '1' : '0'}"`;
     if (prot.cryptProviderType) protXml += ` w:cryptProviderType="${esc(prot.cryptProviderType)}"`;
-    if (prot.cryptAlgorithmClass) protXml += ` w:cryptAlgorithmClass="${esc(prot.cryptAlgorithmClass)}"`;
-    if (prot.cryptAlgorithmType) protXml += ` w:cryptAlgorithmType="${esc(prot.cryptAlgorithmType)}"`;
-    if (prot.cryptAlgorithmSid) protXml += ` w:cryptAlgorithmSid="${esc(String(prot.cryptAlgorithmSid))}"`;
+    if (prot.cryptAlgorithmClass)
+      protXml += ` w:cryptAlgorithmClass="${esc(prot.cryptAlgorithmClass)}"`;
+    if (prot.cryptAlgorithmType)
+      protXml += ` w:cryptAlgorithmType="${esc(prot.cryptAlgorithmType)}"`;
+    if (prot.cryptAlgorithmSid)
+      protXml += ` w:cryptAlgorithmSid="${esc(String(prot.cryptAlgorithmSid))}"`;
     if (prot.cryptSpinCount) protXml += ` w:cryptSpinCount="${esc(String(prot.cryptSpinCount))}"`;
     if (prot.hash) protXml += ` w:hash="${esc(prot.hash)}"`;
     if (prot.salt) protXml += ` w:salt="${esc(prot.salt)}"`;
@@ -3528,7 +3573,7 @@ export class Document {
 
     // Insert the block before defaultTabStop (schema order preserved since array is ordered)
     if (preElements.length > 0) {
-      const preBlock = preElements.map(e => '\n  ' + e).join('');
+      const preBlock = preElements.map((e) => '\n  ' + e).join('');
       if (/<w:defaultTabStop\b/.test(xml)) {
         xml = xml.replace(/<w:defaultTabStop\b/, preBlock + '\n  <w:defaultTabStop');
       } else {
@@ -3542,9 +3587,15 @@ export class Document {
     if (mod.has('defaultTabStop') && this._defaultTabStop !== undefined) {
       const hasDTS = /<w:defaultTabStop\b[^>]*\/?>/.test(xml);
       if (hasDTS) {
-        xml = xml.replace(/<w:defaultTabStop\b[^>]*\/?>/, `<w:defaultTabStop w:val="${this._defaultTabStop}"/>`);
+        xml = xml.replace(
+          /<w:defaultTabStop\b[^>]*\/?>/,
+          `<w:defaultTabStop w:val="${this._defaultTabStop}"/>`
+        );
       } else {
-        xml = xml.replace(/<\/w:settings>/, `  <w:defaultTabStop w:val="${this._defaultTabStop}"/>\n</w:settings>`);
+        xml = xml.replace(
+          /<\/w:settings>/,
+          `  <w:defaultTabStop w:val="${this._defaultTabStop}"/>\n</w:settings>`
+        );
       }
     }
 
@@ -3565,9 +3616,12 @@ export class Document {
     }
 
     if (postElements.length > 0) {
-      const postBlock = postElements.map(e => '\n  ' + e).join('');
+      const postBlock = postElements.map((e) => '\n  ' + e).join('');
       if (/<w:characterSpacingControl\b/.test(xml)) {
-        xml = xml.replace(/<w:characterSpacingControl\b/, postBlock + '\n  <w:characterSpacingControl');
+        xml = xml.replace(
+          /<w:characterSpacingControl\b/,
+          postBlock + '\n  <w:characterSpacingControl'
+        );
       } else {
         xml = xml.replace(/<\/w:settings>/, postBlock + '\n</w:settings>');
       }
@@ -3643,7 +3697,11 @@ export class Document {
    * @param col - Column index (0-based)
    * @returns The resolved ShadingConfig, or undefined if no shading applies
    */
-  getComputedCellShading(table: Table, row: number, col: number): import("../elements/CommonTypes").ShadingConfig | undefined {
+  getComputedCellShading(
+    table: Table,
+    row: number,
+    col: number
+  ): import('../elements/CommonTypes').ShadingConfig | undefined {
     const tableRow = table.getRow(row);
     if (!tableRow) return undefined;
     const cell = tableRow.getCell(col);
@@ -3819,12 +3877,7 @@ export class Document {
    * console.log(`Updated ${count} elements`);
    * ```
    */
-  applyStyleToAll(
-    styleId: string,
-    predicate: (
-      element: BodyElement
-    ) => boolean
-  ): number {
+  applyStyleToAll(styleId: string, predicate: (element: BodyElement) => boolean): number {
     let count = 0;
 
     for (const element of this.bodyElements) {
@@ -3914,10 +3967,7 @@ export class Document {
    * console.log(`Updated ${count} paragraphs`);
    * ```
    */
-  applyStyleToAllParagraphsWithStyle(
-    currentStyleId: string,
-    newStyleId: string
-  ): number {
+  applyStyleToAllParagraphsWithStyle(currentStyleId: string, newStyleId: string): number {
     let count = 0;
 
     // Check body paragraphs
@@ -4071,7 +4121,7 @@ export class Document {
    * console.log(`Updated ${count} tables`);
    * ```
    */
-  setAllTablesLayout(layout: "auto" | "fixed"): number {
+  setAllTablesLayout(layout: 'auto' | 'fixed'): number {
     const tables = this.getTables();
 
     for (const table of tables) {
@@ -4178,17 +4228,17 @@ export class Document {
   fixTODHyperlinks(): number {
     console.warn(
       'DEPRECATION WARNING: fixTODHyperlinks() is deprecated. ' +
-      'Use Template_UI WordDocumentProcessor.fixExistingTopHyperlinks() instead.'
+        'Use Template_UI WordDocumentProcessor.fixExistingTopHyperlinks() instead.'
     );
     let count = 0;
 
     // Ensure _top bookmark exists at document start
-    if (!this.hasBookmark("_top")) {
+    if (!this.hasBookmark('_top')) {
       const paragraphs = this.getAllParagraphs();
       if (paragraphs.length > 0) {
         const firstPara = paragraphs[0];
         if (firstPara) {
-          const bookmark = new Bookmark({ name: "_top" });
+          const bookmark = new Bookmark({ name: '_top' });
           const registered = this.bookmarkManager.register(bookmark);
           firstPara.addBookmark(registered);
         }
@@ -4202,23 +4252,23 @@ export class Document {
       const text = hyperlink.getText().toLowerCase();
 
       // Match variations: "top of document", "top of the document", etc.
-      if (text.includes("top") && text.includes("document")) {
+      if (text.includes('top') && text.includes('document')) {
         // Update text
-        hyperlink.setText("Top of the Document");
+        hyperlink.setText('Top of the Document');
 
         // Update formatting
         hyperlink.setFormatting({
-          font: "Verdana",
+          font: 'Verdana',
           size: 12,
-          underline: "single",
-          color: "0000FF",
+          underline: 'single',
+          color: '0000FF',
         });
 
         // Update anchor to _top
-        hyperlink.setAnchor("_top");
+        hyperlink.setAnchor('_top');
 
         // Set paragraph alignment to right
-        paragraph.setAlignment("right");
+        paragraph.setAlignment('right');
 
         count++;
       }
@@ -4261,7 +4311,7 @@ export class Document {
         const firstCell = cells[0];
         if (firstCell) {
           const text = firstCell.getText().toLowerCase();
-          if (text.includes("if")) {
+          if (text.includes('if')) {
             hasIfColumn = true;
             break;
           }
@@ -4349,7 +4399,7 @@ export class Document {
           /** Header row text formatting */
           headerRowFormatting?: {
             bold?: boolean;
-            alignment?: "left" | "center" | "right" | "justify";
+            alignment?: 'left' | 'center' | 'right' | 'justify';
             font?: string;
             size?: number;
             color?: string;
@@ -4374,23 +4424,25 @@ export class Document {
     singleCellTablesShaded: number;
   } {
     // Handle different parameter combinations
-    let options: {
-      autofitToWindow?: boolean;
-      singleCellShading?: string;
-      headerRowShading?: string;
-      headerRowFormatting?: {
-        bold?: boolean;
-        alignment?: "left" | "center" | "right" | "justify";
-        font?: string;
-        size?: number;
-        color?: string;
-        spacingBefore?: number;
-        spacingAfter?: number;
-      };
-      cellMargins?: { top?: number; bottom?: number; left?: number; right?: number };
-      skipSingleCellTables?: boolean;
-    } | undefined;
-    if (typeof colorOrOptions === "string") {
+    let options:
+      | {
+          autofitToWindow?: boolean;
+          singleCellShading?: string;
+          headerRowShading?: string;
+          headerRowFormatting?: {
+            bold?: boolean;
+            alignment?: 'left' | 'center' | 'right' | 'justify';
+            font?: string;
+            size?: number;
+            color?: string;
+            spacingBefore?: number;
+            spacingAfter?: number;
+          };
+          cellMargins?: { top?: number; bottom?: number; left?: number; right?: number };
+          skipSingleCellTables?: boolean;
+        }
+      | undefined;
+    if (typeof colorOrOptions === 'string') {
       if (multiCellColor) {
         // Two colors provided: applyStandardTableFormatting('BFBFBF', 'E9E9E9')
         options = {
@@ -4407,15 +4459,13 @@ export class Document {
 
     // Default values
     const singleCellShading = options?.singleCellShading?.toUpperCase();
-    const headerRowShading = (
-      options?.headerRowShading || "E9E9E9"
-    ).toUpperCase();
+    const headerRowShading = (options?.headerRowShading || 'E9E9E9').toUpperCase();
     const headerRowFormatting = {
       bold: options?.headerRowFormatting?.bold !== false,
-      alignment: options?.headerRowFormatting?.alignment || ("center" as const),
-      font: options?.headerRowFormatting?.font || "Verdana",
+      alignment: options?.headerRowFormatting?.alignment || ('center' as const),
+      font: options?.headerRowFormatting?.font || 'Verdana',
       size: options?.headerRowFormatting?.size || 12,
-      color: options?.headerRowFormatting?.color || "000000",
+      color: options?.headerRowFormatting?.color || '000000',
       spacingBefore: options?.headerRowFormatting?.spacingBefore ?? 60,
       spacingAfter: options?.headerRowFormatting?.spacingAfter ?? 60,
     };
@@ -4425,8 +4475,7 @@ export class Document {
       left: options?.cellMargins?.left ?? 115, // 0.08 inches
       right: options?.cellMargins?.right ?? 115, // 0.08 inches
     };
-    const skipSingleCellTables =
-      options?.skipSingleCellTables !== false && !singleCellShading;
+    const skipSingleCellTables = options?.skipSingleCellTables !== false && !singleCellShading;
 
     // Statistics
     let tablesProcessed = 0;
@@ -4443,14 +4492,14 @@ export class Document {
 
       // Apply borders to all cells (always applied to all tables)
       table.setAllBorders({
-        style: "single",
+        style: 'single',
         size: 4,
-        color: "000000",
+        color: '000000',
       });
 
       // Set table width to autofit to window (always applied to all tables)
-      table.setLayout("auto");
-      table.setWidthType("pct");
+      table.setLayout('auto');
+      table.setWidthType('pct');
       table.setWidth(5000);
 
       // Handle 1x1 (single-cell) tables separately
@@ -4483,10 +4532,7 @@ export class Document {
           for (const para of cell.getParagraphs()) {
             // Skip paragraphs that are part of numbered or bulleted lists
             const numPr = para.getFormatting().numbering;
-            if (
-              numPr &&
-              (numPr.level !== undefined || numPr.numId !== undefined)
-            ) {
+            if (numPr && (numPr.level !== undefined || numPr.numId !== undefined)) {
               continue; // Preserve list formatting
             }
 
@@ -4524,17 +4570,16 @@ export class Document {
           const currentPattern = currentShading?.pattern?.toLowerCase();
 
           // Check if color is a valid 6-character hex code (not 'auto' or other special values)
-          const isValidHexColor = /^[0-9A-F]{6}$/i.test(currentColor || "");
-          const hasHexFillShading =
-            currentColor && currentColor !== "FFFFFF" && isValidHexColor;
+          const isValidHexColor = /^[0-9A-F]{6}$/i.test(currentColor || '');
+          const hasHexFillShading = currentColor && currentColor !== 'FFFFFF' && isValidHexColor;
 
           // Check if cell has pattern-based shading (like pct10, pct20, etc.)
           // Patterns like 'clear' or 'nil' don't count as shading
           const hasPatternShading =
             currentPattern &&
-            currentPattern !== "clear" &&
-            currentPattern !== "nil" &&
-            currentPattern !== "auto";
+            currentPattern !== 'clear' &&
+            currentPattern !== 'nil' &&
+            currentPattern !== 'auto';
 
           if (hasHexFillShading || hasPatternShading) {
             // Apply the color passed to the method
@@ -4545,14 +4590,11 @@ export class Document {
             for (const para of cell.getParagraphs()) {
               // Skip paragraphs that are part of numbered or bulleted lists
               const numPr = para.getFormatting().numbering;
-              if (
-                numPr &&
-                (numPr.level !== undefined || numPr.numId !== undefined)
-              ) {
+              if (numPr && (numPr.level !== undefined || numPr.numId !== undefined)) {
                 continue; // Preserve list formatting
               }
 
-              para.setAlignment("center");
+              para.setAlignment('center');
               para.setSpaceBefore(60); // 3pt
               para.setSpaceAfter(60); // 3pt
 
@@ -4562,11 +4604,11 @@ export class Document {
                   continue;
                 }
                 run.setBold(true);
-                run.setFont("Verdana", 12);
+                run.setFont('Verdana', 12);
                 // Preserve white font - don't change color if run is white (FFFFFF)
                 const currentColor = run.getColor()?.toUpperCase();
                 if (currentColor !== 'FFFFFF') {
-                  run.setColor("000000");
+                  run.setColor('000000');
                 }
               }
             }
@@ -4643,7 +4685,7 @@ export class Document {
           if (relId && largeImageIds.has(relId)) {
             // Remove indentation before centering
             paragraph.formatting.indentation = undefined;
-            paragraph.setAlignment("center");
+            paragraph.setAlignment('center');
             count++;
             break; // Only count paragraph once
           }
@@ -4745,7 +4787,7 @@ export class Document {
       if (hasLargeImage) {
         // Remove indentation before centering
         paragraph.formatting.indentation = undefined;
-        paragraph.setAlignment("center");
+        paragraph.setAlignment('center');
         count++;
       }
     }
@@ -4772,7 +4814,7 @@ export class Document {
 
       if (numbering) {
         // Has numbering - it's a list item
-        paragraph.setLineSpacing(spacingTwips, "auto");
+        paragraph.setLineSpacing(spacingTwips, 'auto');
         count++;
       }
     }
@@ -4801,9 +4843,9 @@ export class Document {
 
     // Create a standard numbered list
     const standardNumId = this.numberingManager.createNumberedList(3, [
-      "decimal",
-      "lowerLetter",
-      "lowerRoman",
+      'decimal',
+      'lowerLetter',
+      'lowerRoman',
     ]);
 
     // Collect all paragraphs with numbering and identify numbered lists
@@ -4818,9 +4860,7 @@ export class Document {
       const instance = this.numberingManager.getInstance(numbering.numId);
       if (!instance) continue;
 
-      const abstractNum = this.numberingManager.getAbstractNumbering(
-        instance.getAbstractNumId()
-      );
+      const abstractNum = this.numberingManager.getAbstractNumbering(instance.getAbstractNumId());
       if (!abstractNum) continue;
 
       // Check if level 0 is a numbered format (not bullet)
@@ -4829,7 +4869,7 @@ export class Document {
 
       const format = level0.getFormat();
       // Numbered formats: decimal, lowerRoman, upperRoman, lowerLetter, upperLetter, etc.
-      if (format !== "bullet") {
+      if (format !== 'bullet') {
         numberedParas.push({ para, level: numbering.level });
       }
     }
@@ -4866,11 +4906,7 @@ export class Document {
     let count = 0;
 
     // Create a standard bullet list with custom bullets
-    const standardNumId = this.numberingManager.createBulletList(3, [
-      "•",
-      "○",
-      "■",
-    ]);
+    const standardNumId = this.numberingManager.createBulletList(3, ['•', '○', '■']);
 
     // Collect all paragraphs with numbering and identify bullet lists
     const paragraphs = this.getAllParagraphs();
@@ -4884,9 +4920,7 @@ export class Document {
       const instance = this.numberingManager.getInstance(numbering.numId);
       if (!instance) continue;
 
-      const abstractNum = this.numberingManager.getAbstractNumbering(
-        instance.getAbstractNumId()
-      );
+      const abstractNum = this.numberingManager.getAbstractNumbering(instance.getAbstractNumId());
       if (!abstractNum) continue;
 
       // Check if level 0 is a bullet format
@@ -4894,7 +4928,7 @@ export class Document {
       if (!level0) continue;
 
       const format = level0.getFormat();
-      if (format === "bullet") {
+      if (format === 'bullet') {
         bulletParas.push({ para, level: numbering.level });
       }
     }
@@ -4982,11 +5016,11 @@ export class Document {
 
     // 3. Scan headers and footers for numId references
     this.collectNumIdsFromElements(
-      this.headerFooterManager.getAllHeaders().flatMap(entry => entry.header.getElements()),
+      this.headerFooterManager.getAllHeaders().flatMap((entry) => entry.header.getElements()),
       usedNumIds
     );
     this.collectNumIdsFromElements(
-      this.headerFooterManager.getAllFooters().flatMap(entry => entry.footer.getElements()),
+      this.headerFooterManager.getAllFooters().flatMap((entry) => entry.footer.getElements()),
       usedNumIds
     );
 
@@ -5190,7 +5224,9 @@ export class Document {
         // Add synthetic bookmarkEnd to the last paragraph in the document body
         const lastPara = this.getLastParagraph();
         if (lastPara) {
-          lastPara.addBookmarkEnd(new Bookmark({ id, name: `_repair_${id}`, skipNormalization: true }));
+          lastPara.addBookmarkEnd(
+            new Bookmark({ id, name: `_repair_${id}`, skipNormalization: true })
+          );
           this.logger.warn(`Bookmark validation: added missing bookmarkEnd for ID ${id}`);
           repairs++;
         }
@@ -5341,7 +5377,10 @@ export class Document {
    * Handles both paragraph numbering and raw nested content in tables.
    * @private
    */
-  private collectNumIdsFromElements(elements: (Paragraph | Table)[], usedNumIds: Set<number>): void {
+  private collectNumIdsFromElements(
+    elements: (Paragraph | Table)[],
+    usedNumIds: Set<number>
+  ): void {
     for (const element of elements) {
       if (element instanceof Paragraph) {
         this.collectNumIdsFromParagraphs([element], usedNumIds);
@@ -5439,7 +5478,7 @@ export class Document {
             if (!alreadyHasBlank) {
               // Insert blank paragraph with Normal style after this list item
               const blankPara = new Paragraph();
-              blankPara.setStyle("Normal");
+              blankPara.setStyle('Normal');
 
               // Insert at position i+1 (after current element)
               this.bodyElements.splice(i + 1, 0, blankPara);
@@ -5476,10 +5515,10 @@ export class Document {
 
     // Step 1: Remove relationship entries for headers and footers
     const headerRels = this.relationshipManager.getRelationshipsByType(
-      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header'
     );
     const footerRels = this.relationshipManager.getRelationshipsByType(
-      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer'
     );
 
     for (const rel of [...headerRels, ...footerRels]) {
@@ -5690,10 +5729,7 @@ export class Document {
    * doc.createParagraph('Letter').setNumbering(listId, 1);          // a.
    * ```
    */
-  createNumberedList(
-    levels = 3,
-    formats?: ("decimal" | "lowerLetter" | "lowerRoman")[]
-  ): number {
+  createNumberedList(levels = 3, formats?: ('decimal' | 'lowerLetter' | 'lowerRoman')[]): number {
     return this.numberingManager.createNumberedList(levels, formats);
   }
 
@@ -5703,6 +5739,31 @@ export class Document {
    */
   createMultiLevelList(): number {
     return this.numberingManager.createMultiLevelList();
+  }
+
+  /**
+   * Creates a new numbering instance that restarts numbering for an existing list
+   *
+   * This creates a new `<w:num>` referencing the same abstract numbering as the
+   * given numId, but with a level override to restart counting at the specified value.
+   *
+   * @param numId The existing numbering instance ID to base the restart on
+   * @param level The level to restart (0-8, default: 0)
+   * @param startValue The value to restart from (>= 1, default: 1)
+   * @returns The new numId to use with paragraph.setNumbering()
+   *
+   * @example
+   * ```typescript
+   * const listId = doc.createNumberedList();
+   * doc.createParagraph('First list item 1').setNumbering(listId, 0);
+   * doc.createParagraph('First list item 2').setNumbering(listId, 0);
+   *
+   * const restartId = doc.restartNumbering(listId);
+   * doc.createParagraph('Second list item 1').setNumbering(restartId, 0);
+   * ```
+   */
+  restartNumbering(numId: number, level?: number, startValue?: number): number {
+    return this.numberingManager.restartNumbering(numId, level, startValue);
   }
 
   /**
@@ -5750,12 +5811,7 @@ export class Document {
     leftIndent: number,
     hangingIndent?: number
   ): this {
-    this.numberingManager.setListIndentation(
-      numId,
-      level,
-      leftIndent,
-      hangingIndent
-    );
+    this.numberingManager.setListIndentation(numId, level, leftIndent, hangingIndent);
     return this;
   }
 
@@ -5805,14 +5861,13 @@ export class Document {
 
     for (const instance of instances) {
       const abstractNumId = instance.getAbstractNumId();
-      const abstractNum =
-        this.numberingManager.getAbstractNumbering(abstractNumId);
+      const abstractNum = this.numberingManager.getAbstractNumbering(abstractNumId);
 
       if (!abstractNum) continue;
 
       // Only process bullet lists (skip numbered lists)
       const level0 = abstractNum.getLevel(0);
-      if (level0?.getFormat() !== "bullet") continue;
+      if (level0?.getFormat() !== 'bullet') continue;
 
       // Update all 9 levels (0-8) with standard formatting
       for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
@@ -5820,11 +5875,11 @@ export class Document {
         if (!numLevel) continue;
 
         // Alternate bullets: even levels = solid (•), odd levels = open (○)
-        const bullet = levelIndex % 2 === 0 ? "•" : "○";
+        const bullet = levelIndex % 2 === 0 ? '•' : '○';
         numLevel.setText(bullet);
 
         // Set bullet font to Arial (Unicode bullets require a regular font, not Symbol)
-        numLevel.setFont("Arial");
+        numLevel.setFont('Arial');
 
         // Set bullet size to 12pt (24 half-points)
         numLevel.setFontSize(24);
@@ -5875,14 +5930,13 @@ export class Document {
 
     for (const instance of instances) {
       const abstractNumId = instance.getAbstractNumId();
-      const abstractNum =
-        this.numberingManager.getAbstractNumbering(abstractNumId);
+      const abstractNum = this.numberingManager.getAbstractNumbering(abstractNumId);
 
       if (!abstractNum) continue;
 
       // Only process numbered lists (skip bullet lists)
       const level0 = abstractNum.getLevel(0);
-      if (!level0 || level0.getFormat() === "bullet") continue;
+      if (!level0 || level0.getFormat() === 'bullet') continue;
 
       // Update all 9 levels (0-8) with standard formatting
       for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
@@ -5890,7 +5944,7 @@ export class Document {
         if (!numLevel) continue;
 
         // Set number font to Verdana 12pt
-        numLevel.setFont("Verdana");
+        numLevel.setFont('Verdana');
         numLevel.setFontSize(24); // 12pt = 24 half-points
 
         // Indentation: 0.5" per level (720 twips)
@@ -5901,7 +5955,7 @@ export class Document {
         numLevel.setHangingIndent(360);
 
         // Set alignment to left
-        numLevel.setAlignment("left");
+        numLevel.setAlignment('left');
       }
 
       // Apply paragraph formatting to all paragraphs using this list
@@ -5927,7 +5981,7 @@ export class Document {
         // Apply font to all runs in the paragraph
         const runs = para.getRuns();
         for (const run of runs) {
-          run.setFont("Verdana", 12);
+          run.setFont('Verdana', 12);
         }
 
         // Apply paragraph spacing
@@ -5991,7 +6045,7 @@ export class Document {
     // Find the paragraph index in bodyElements
     const paraIndex = this.bodyElements.indexOf(para);
     if (paraIndex === -1) {
-      throw new Error("Paragraph not found in document body elements");
+      throw new Error('Paragraph not found in document body elements');
     }
 
     // Create 1x1 table
@@ -5999,7 +6053,7 @@ export class Document {
     const cell = table.getCell(0, 0);
 
     if (!cell) {
-      throw new Error("Failed to get cell from newly created table");
+      throw new Error('Failed to get cell from newly created table');
     }
 
     // Move paragraph to cell
@@ -6031,7 +6085,7 @@ export class Document {
     // Set table width (percentage of page width)
     if (options.tableWidthPercent !== undefined) {
       table.setWidth(options.tableWidthPercent);
-      table.setWidthType("pct");
+      table.setWidthType('pct');
     }
 
     // Insert table where paragraph was
@@ -6043,30 +6097,30 @@ export class Document {
   // Default style configurations for applyStyles()
   private static readonly DEFAULT_HEADING1_CONFIG: StyleConfig = {
     run: {
-      font: "Verdana",
+      font: 'Verdana',
       size: 18,
       bold: true,
-      color: "000000",
+      color: '000000',
     },
     paragraph: {
-      alignment: "left",
-      spacing: { before: 0, after: 240, line: 240, lineRule: "auto" },
+      alignment: 'left',
+      spacing: { before: 0, after: 240, line: 240, lineRule: 'auto' },
     },
   };
 
   private static readonly DEFAULT_HEADING2_CONFIG: Heading2Config = {
     run: {
-      font: "Verdana",
+      font: 'Verdana',
       size: 14,
       bold: true,
-      color: "000000",
+      color: '000000',
     },
     paragraph: {
-      alignment: "left",
-      spacing: { before: 120, after: 120, line: 240, lineRule: "auto" },
+      alignment: 'left',
+      spacing: { before: 120, after: 120, line: 240, lineRule: 'auto' },
     },
     tableOptions: {
-      shading: "BFBFBF",
+      shading: 'BFBFBF',
       marginTop: 0,
       marginBottom: 0,
       marginLeft: 115,
@@ -6077,38 +6131,38 @@ export class Document {
 
   private static readonly DEFAULT_HEADING3_CONFIG: StyleConfig = {
     run: {
-      font: "Verdana",
+      font: 'Verdana',
       size: 12,
       bold: true,
-      color: "000000",
+      color: '000000',
     },
     paragraph: {
-      alignment: "left",
-      spacing: { before: 60, after: 60, line: 240, lineRule: "auto" },
+      alignment: 'left',
+      spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' },
     },
   };
 
   private static readonly DEFAULT_NORMAL_CONFIG: StyleConfig = {
     run: {
-      font: "Verdana",
+      font: 'Verdana',
       size: 12,
-      color: "000000",
+      color: '000000',
     },
     paragraph: {
-      alignment: "left",
-      spacing: { before: 60, after: 60, line: 240, lineRule: "auto" },
+      alignment: 'left',
+      spacing: { before: 60, after: 60, line: 240, lineRule: 'auto' },
     },
   };
 
   private static readonly DEFAULT_LIST_PARAGRAPH_CONFIG: StyleConfig = {
     run: {
-      font: "Verdana",
+      font: 'Verdana',
       size: 12,
-      color: "000000",
+      color: '000000',
     },
     paragraph: {
-      alignment: "left",
-      spacing: { before: 0, after: 60, line: 240, lineRule: "auto" },
+      alignment: 'left',
+      spacing: { before: 0, after: 60, line: 240, lineRule: 'auto' },
       indentation: { left: 360, hanging: 360 },
       contextualSpacing: true,
     },
@@ -6227,35 +6281,31 @@ export class Document {
     };
 
     // Get existing styles from StylesManager
-    const heading1 = this.stylesManager.getStyle("Heading1");
-    const heading2 = this.stylesManager.getStyle("Heading2");
-    const heading3 = this.stylesManager.getStyle("Heading3");
-    const normal = this.stylesManager.getStyle("Normal");
-    const listParagraph = this.stylesManager.getStyle("ListParagraph");
+    const heading1 = this.stylesManager.getStyle('Heading1');
+    const heading2 = this.stylesManager.getStyle('Heading2');
+    const heading3 = this.stylesManager.getStyle('Heading3');
+    const normal = this.stylesManager.getStyle('Normal');
+    const listParagraph = this.stylesManager.getStyle('ListParagraph');
 
     // Merge provided options with ACTUAL current style values (not hardcoded defaults)
     // This allows users to only specify properties they want to change
     const h1Config = {
       run: {
-        ...(heading1?.getRunFormatting() ||
-          Document.DEFAULT_HEADING1_CONFIG.run),
+        ...(heading1?.getRunFormatting() || Document.DEFAULT_HEADING1_CONFIG.run),
         ...options?.heading1?.run,
       },
       paragraph: {
-        ...(heading1?.getParagraphFormatting() ||
-          Document.DEFAULT_HEADING1_CONFIG.paragraph),
+        ...(heading1?.getParagraphFormatting() || Document.DEFAULT_HEADING1_CONFIG.paragraph),
         ...options?.heading1?.paragraph,
       },
     };
     const h2Config = {
       run: {
-        ...(heading2?.getRunFormatting() ||
-          Document.DEFAULT_HEADING2_CONFIG.run),
+        ...(heading2?.getRunFormatting() || Document.DEFAULT_HEADING2_CONFIG.run),
         ...options?.heading2?.run,
       },
       paragraph: {
-        ...(heading2?.getParagraphFormatting() ||
-          Document.DEFAULT_HEADING2_CONFIG.paragraph),
+        ...(heading2?.getParagraphFormatting() || Document.DEFAULT_HEADING2_CONFIG.paragraph),
         ...options?.heading2?.paragraph,
       },
       tableOptions: {
@@ -6265,13 +6315,11 @@ export class Document {
     };
     const h3Config = {
       run: {
-        ...(heading3?.getRunFormatting() ||
-          Document.DEFAULT_HEADING3_CONFIG.run),
+        ...(heading3?.getRunFormatting() || Document.DEFAULT_HEADING3_CONFIG.run),
         ...options?.heading3?.run,
       },
       paragraph: {
-        ...(heading3?.getParagraphFormatting() ||
-          Document.DEFAULT_HEADING3_CONFIG.paragraph),
+        ...(heading3?.getParagraphFormatting() || Document.DEFAULT_HEADING3_CONFIG.paragraph),
         ...options?.heading3?.paragraph,
       },
     };
@@ -6281,15 +6329,13 @@ export class Document {
         ...options?.normal?.run,
       },
       paragraph: {
-        ...(normal?.getParagraphFormatting() ||
-          Document.DEFAULT_NORMAL_CONFIG.paragraph),
+        ...(normal?.getParagraphFormatting() || Document.DEFAULT_NORMAL_CONFIG.paragraph),
         ...options?.normal?.paragraph,
       },
     };
     const listParaConfig = {
       run: {
-        ...(listParagraph?.getRunFormatting() ||
-          Document.DEFAULT_LIST_PARAGRAPH_CONFIG.run),
+        ...(listParagraph?.getRunFormatting() || Document.DEFAULT_LIST_PARAGRAPH_CONFIG.run),
         ...options?.listParagraph?.run,
       },
       paragraph: {
@@ -6300,14 +6346,12 @@ export class Document {
     };
 
     // Extract preserve blank lines option (defaults to true)
-    const preserveBlankLines =
-      options?.preserveBlankLinesAfterHeading2Tables ?? true;
+    const preserveBlankLines = options?.preserveBlankLinesAfterHeading2Tables ?? true;
 
     // Modify Heading1 definition
     if (heading1 && h1Config.run && h1Config.paragraph) {
       if (h1Config.run) heading1.setRunFormatting(h1Config.run);
-      if (h1Config.paragraph)
-        heading1.setParagraphFormatting(h1Config.paragraph);
+      if (h1Config.paragraph) heading1.setParagraphFormatting(h1Config.paragraph);
       // Mark style as modified so it gets included in mergeStylesWithOriginal()
       this.addStyle(heading1);
       results.heading1 = true;
@@ -6316,8 +6360,7 @@ export class Document {
     // Modify Heading2 definition
     if (heading2 && h2Config.run && h2Config.paragraph) {
       if (h2Config.run) heading2.setRunFormatting(h2Config.run);
-      if (h2Config.paragraph)
-        heading2.setParagraphFormatting(h2Config.paragraph);
+      if (h2Config.paragraph) heading2.setParagraphFormatting(h2Config.paragraph);
       // Mark style as modified so it gets included in mergeStylesWithOriginal()
       this.addStyle(heading2);
       results.heading2 = true;
@@ -6326,8 +6369,7 @@ export class Document {
     // Modify Heading3 definition
     if (heading3 && h3Config.run && h3Config.paragraph) {
       if (h3Config.run) heading3.setRunFormatting(h3Config.run);
-      if (h3Config.paragraph)
-        heading3.setParagraphFormatting(h3Config.paragraph);
+      if (h3Config.paragraph) heading3.setParagraphFormatting(h3Config.paragraph);
       // Mark style as modified so it gets included in mergeStylesWithOriginal()
       this.addStyle(heading3);
       results.heading3 = true;
@@ -6336,8 +6378,7 @@ export class Document {
     // Modify Normal definition
     if (normal && normalConfig.run && normalConfig.paragraph) {
       if (normalConfig.run) normal.setRunFormatting(normalConfig.run);
-      if (normalConfig.paragraph)
-        normal.setParagraphFormatting(normalConfig.paragraph);
+      if (normalConfig.paragraph) normal.setParagraphFormatting(normalConfig.paragraph);
       // Mark style as modified so it gets included in mergeStylesWithOriginal()
       this.addStyle(normal);
 
@@ -6345,12 +6386,11 @@ export class Document {
       // Default is true - changes to Normal automatically apply to NormalWeb
       const shouldLinkNormalWeb = options?.linkNormalWebToNormal !== false;
       if (shouldLinkNormalWeb) {
-        const normalWeb = this.stylesManager.getStyle("NormalWeb");
+        const normalWeb = this.stylesManager.getStyle('NormalWeb');
         if (normalWeb) {
           // Apply same formatting to NormalWeb
           if (normalConfig.run) normalWeb.setRunFormatting(normalConfig.run);
-          if (normalConfig.paragraph)
-            normalWeb.setParagraphFormatting(normalConfig.paragraph);
+          if (normalConfig.paragraph) normalWeb.setParagraphFormatting(normalConfig.paragraph);
           // Mark as modified for selective merging during save
           this.addStyle(normalWeb);
         }
@@ -6361,8 +6401,7 @@ export class Document {
 
     // Modify List Paragraph definition
     if (listParagraph && listParaConfig.run && listParaConfig.paragraph) {
-      if (listParaConfig.run)
-        listParagraph.setRunFormatting(listParaConfig.run);
+      if (listParaConfig.run) listParagraph.setRunFormatting(listParaConfig.run);
       if (listParaConfig.paragraph) {
         // Validate indentation: hanging must not exceed left to prevent negative bullet position
         const indent = listParaConfig.paragraph.indentation;
@@ -6371,7 +6410,7 @@ export class Document {
             const logger = getGlobalLogger();
             logger.warn(
               `[Document] ListParagraph indentation: hanging (${indent.hanging}) > left (${indent.left}). ` +
-              `Capping hanging to left to prevent negative bullet position.`
+                `Capping hanging to left to prevent negative bullet position.`
             );
             indent.hanging = indent.left;
           }
@@ -6426,12 +6465,12 @@ export class Document {
       const styleId = para.getStyle();
 
       // Process Heading1 paragraphs
-      if (styleId === "Heading1" && heading1) {
+      if (styleId === 'Heading1' && heading1) {
         // Save white font status BEFORE clearing (clearDirectFormattingConflicts clears color)
         const allRuns = this.getAllRunsFromParagraph(para);
         const whiteFontRuns = new Set(
           options?.preserveWhiteFont
-            ? allRuns.filter(run => run.getColor()?.toUpperCase() === 'FFFFFF')
+            ? allRuns.filter((run) => run.getColor()?.toUpperCase() === 'FFFFFF')
             : []
         );
 
@@ -6450,7 +6489,7 @@ export class Document {
             run.setItalic(h1Config.run?.italic ?? false);
           }
           if (!h1Preserve.underline) {
-            run.setUnderline(h1Config.run?.underline ? "single" : false);
+            run.setUnderline(h1Config.run?.underline ? 'single' : false);
           }
           // Apply font, color, and size - skip color if run was white font
           if (h1Config.run?.font) {
@@ -6472,25 +6511,13 @@ export class Document {
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (
-            !h1Preserve.bold &&
-            h1Config.run?.bold === false &&
-            markProps.bold
-          ) {
+          if (!h1Preserve.bold && h1Config.run?.bold === false && markProps.bold) {
             delete markProps.bold;
           }
-          if (
-            !h1Preserve.italic &&
-            h1Config.run?.italic === false &&
-            markProps.italic
-          ) {
+          if (!h1Preserve.italic && h1Config.run?.italic === false && markProps.italic) {
             delete markProps.italic;
           }
-          if (
-            !h1Preserve.underline &&
-            h1Config.run?.underline === false &&
-            markProps.underline
-          ) {
+          if (!h1Preserve.underline && h1Config.run?.underline === false && markProps.underline) {
             delete markProps.underline;
           }
           // Update paragraph mark font, color, size
@@ -6509,10 +6536,11 @@ export class Document {
       }
 
       // Process Heading2 paragraphs
-      else if (styleId === "Heading2" && heading2) {
+      else if (styleId === 'Heading2' && heading2) {
         // Check if paragraph has actual text content (skip empty paragraphs)
-        const hasContent = this.getAllRunsFromParagraph(para)
-          .some((run) => run.getText().trim().length > 0);
+        const hasContent = this.getAllRunsFromParagraph(para).some(
+          (run) => run.getText().trim().length > 0
+        );
 
         if (!hasContent) {
           // Skip empty Heading2 paragraphs - don't wrap them in tables
@@ -6545,8 +6573,7 @@ export class Document {
             const isMultiCellTable = !(rowCount === 1 && colCount === 1);
             const cellFormatting = cell.getFormatting();
             const cellHasShading = !!(
-              cellFormatting?.shading?.fill ||
-              cellFormatting?.shading?.pattern
+              cellFormatting?.shading?.fill || cellFormatting?.shading?.pattern
             );
 
             if (isMultiCellTable && cellHasShading && para.formatting.alignment) {
@@ -6559,7 +6586,7 @@ export class Document {
         const allRuns = this.getAllRunsFromParagraph(para);
         const whiteFontRuns = new Set(
           options?.preserveWhiteFont
-            ? allRuns.filter(run => run.getColor()?.toUpperCase() === 'FFFFFF')
+            ? allRuns.filter((run) => run.getColor()?.toUpperCase() === 'FFFFFF')
             : []
         );
 
@@ -6584,7 +6611,7 @@ export class Document {
             run.setItalic(h2Config.run?.italic ?? false);
           }
           if (!h2Preserve.underline) {
-            run.setUnderline(h2Config.run?.underline ? "single" : false);
+            run.setUnderline(h2Config.run?.underline ? 'single' : false);
           }
           // Apply font, color, and size - skip color if run was white font
           if (h2Config.run?.font) {
@@ -6606,25 +6633,13 @@ export class Document {
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (
-            !h2Preserve.bold &&
-            h2Config.run?.bold === false &&
-            markProps.bold
-          ) {
+          if (!h2Preserve.bold && h2Config.run?.bold === false && markProps.bold) {
             delete markProps.bold;
           }
-          if (
-            !h2Preserve.italic &&
-            h2Config.run?.italic === false &&
-            markProps.italic
-          ) {
+          if (!h2Preserve.italic && h2Config.run?.italic === false && markProps.italic) {
             delete markProps.italic;
           }
-          if (
-            !h2Preserve.underline &&
-            h2Config.run?.underline === false &&
-            markProps.underline
-          ) {
+          if (!h2Preserve.underline && h2Config.run?.underline === false && markProps.underline) {
             delete markProps.underline;
           }
           // Update paragraph mark font, color, size
@@ -6670,13 +6685,13 @@ export class Document {
             });
             if (table) {
               table.setWidth(h2Config.tableOptions.tableWidthPercent);
-              table.setWidthType("pct");
+              table.setWidthType('pct');
             }
           }
         } else {
           // Paragraph is not in a table - wrap it using config
           const table = this.wrapParagraphInTable(para, {
-            shading: h2Config.tableOptions?.shading ?? "BFBFBF",
+            shading: h2Config.tableOptions?.shading ?? 'BFBFBF',
             marginTop: h2Config.tableOptions?.marginTop ?? 0,
             marginBottom: h2Config.tableOptions?.marginBottom ?? 0,
             marginLeft: h2Config.tableOptions?.marginLeft ?? 115,
@@ -6707,7 +6722,7 @@ export class Document {
                 // Runs with text count as content
                 if ((item as any).getText) {
                   const text = (item as any).getText().trim();
-                  if (text !== "") return false;
+                  if (text !== '') return false;
                 }
               }
 
@@ -6732,12 +6747,12 @@ export class Document {
       }
 
       // Process Heading3 paragraphs
-      else if (styleId === "Heading3" && heading3) {
+      else if (styleId === 'Heading3' && heading3) {
         // Save white font status BEFORE clearing (clearDirectFormattingConflicts clears color)
         const allRuns = this.getAllRunsFromParagraph(para);
         const whiteFontRuns = new Set(
           options?.preserveWhiteFont
-            ? allRuns.filter(run => run.getColor()?.toUpperCase() === 'FFFFFF')
+            ? allRuns.filter((run) => run.getColor()?.toUpperCase() === 'FFFFFF')
             : []
         );
 
@@ -6756,7 +6771,7 @@ export class Document {
             run.setItalic(h3Config.run?.italic ?? false);
           }
           if (!h3Preserve.underline) {
-            run.setUnderline(h3Config.run?.underline ? "single" : false);
+            run.setUnderline(h3Config.run?.underline ? 'single' : false);
           }
           // Apply font, color, and size - skip color if run was white font
           if (h3Config.run?.font) {
@@ -6778,25 +6793,13 @@ export class Document {
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (
-            !h3Preserve.bold &&
-            h3Config.run?.bold === false &&
-            markProps.bold
-          ) {
+          if (!h3Preserve.bold && h3Config.run?.bold === false && markProps.bold) {
             delete markProps.bold;
           }
-          if (
-            !h3Preserve.italic &&
-            h3Config.run?.italic === false &&
-            markProps.italic
-          ) {
+          if (!h3Preserve.italic && h3Config.run?.italic === false && markProps.italic) {
             delete markProps.italic;
           }
-          if (
-            !h3Preserve.underline &&
-            h3Config.run?.underline === false &&
-            markProps.underline
-          ) {
+          if (!h3Preserve.underline && h3Config.run?.underline === false && markProps.underline) {
             delete markProps.underline;
           }
           // Update paragraph mark font, color, size
@@ -6815,7 +6818,7 @@ export class Document {
       }
 
       // Process List Paragraph paragraphs
-      else if (styleId === "ListParagraph" && listParagraph) {
+      else if (styleId === 'ListParagraph' && listParagraph) {
         // Check for mis-styled paragraphs: ListParagraph + left:0 + no numbering
         // These are not actual list items - change them to Normal style
         const paraIndentation = para.getFormatting().indentation;
@@ -6823,7 +6826,7 @@ export class Document {
         if (paraIndentation?.left === 0 && !hasNumbering) {
           // This paragraph has ListParagraph style but explicitly overrides indent to 0
           // and has no numbering - it should be Normal style, not ListParagraph
-          para.setStyle("Normal");
+          para.setStyle('Normal');
 
           // Preserve existing bold formatting and white font before applying Normal style
           const allRuns = this.getAllRunsFromParagraph(para);
@@ -6909,7 +6912,7 @@ export class Document {
             run.setItalic(listParaConfig.run?.italic ?? false);
           }
           if (!listParaPreserve.underline) {
-            run.setUnderline(listParaConfig.run?.underline ? "single" : false);
+            run.setUnderline(listParaConfig.run?.underline ? 'single' : false);
           }
           // Apply font, color, and size - skip color if run was white font
           if (listParaConfig.run?.font) {
@@ -6931,11 +6934,7 @@ export class Document {
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (
-            !listParaPreserve.bold &&
-            listParaConfig.run?.bold === false &&
-            markProps.bold
-          ) {
+          if (!listParaPreserve.bold && listParaConfig.run?.bold === false && markProps.bold) {
             delete markProps.bold;
           }
           if (
@@ -6969,7 +6968,12 @@ export class Document {
 
       // Process Normal paragraphs (including undefined style which defaults to Normal)
       // Also process NormalWeb paragraphs when linkNormalWebToNormal is enabled (default: true)
-      else if ((styleId === "Normal" || styleId === undefined || (styleId === "NormalWeb" && options?.linkNormalWebToNormal !== false)) && normal) {
+      else if (
+        (styleId === 'Normal' ||
+          styleId === undefined ||
+          (styleId === 'NormalWeb' && options?.linkNormalWebToNormal !== false)) &&
+        normal
+      ) {
         // Save formatting that should be preserved BEFORE clearing
         const allRuns = this.getAllRunsFromParagraph(para);
         const preservedFormatting = allRuns.map((run) => {
@@ -6984,8 +6988,8 @@ export class Document {
         });
 
         // Save center alignment BEFORE clearing if preserveCenterAlignment is set
-        const savedCenterAlignment = options?.normal?.preserveCenterAlignment &&
-          para.getAlignment() === 'center';
+        const savedCenterAlignment =
+          options?.normal?.preserveCenterAlignment && para.getAlignment() === 'center';
 
         para.clearDirectFormattingConflicts(normal);
 
@@ -7021,7 +7025,7 @@ export class Document {
             run.setItalic(normalConfig.run?.italic ?? false);
           }
           if (!normalPreserve.underline) {
-            run.setUnderline(normalConfig.run?.underline ? "single" : false);
+            run.setUnderline(normalConfig.run?.underline ? 'single' : false);
           }
           // Apply font, color, and size - skip color if run was white font
           if (normalConfig.run?.font) {
@@ -7044,18 +7048,10 @@ export class Document {
         // Update paragraph mark properties to match configuration
         if (para.formatting.paragraphMarkRunProperties) {
           const markProps = para.formatting.paragraphMarkRunProperties;
-          if (
-            !normalPreserve.bold &&
-            normalConfig.run?.bold === false &&
-            markProps.bold
-          ) {
+          if (!normalPreserve.bold && normalConfig.run?.bold === false && markProps.bold) {
             delete markProps.bold;
           }
-          if (
-            !normalPreserve.italic &&
-            normalConfig.run?.italic === false &&
-            markProps.italic
-          ) {
+          if (!normalPreserve.italic && normalConfig.run?.italic === false && markProps.italic) {
             delete markProps.italic;
           }
           if (
@@ -7141,8 +7137,9 @@ export class Document {
     indentPerLevel?: number;
   }): { formatted: number[] } {
     // Filter valid levels, deduplicate, and sort
-    const validLevels = (options.levels ?? [1, 2, 3, 4, 5, 6, 7, 8, 9])
-      .filter((l) => l >= 1 && l <= 9);
+    const validLevels = (options.levels ?? [1, 2, 3, 4, 5, 6, 7, 8, 9]).filter(
+      (l) => l >= 1 && l <= 9
+    );
     const levels = [...new Set(validLevels)].sort((a, b) => a - b);
     const formatted: number[] = [];
 
@@ -7244,14 +7241,14 @@ export class Document {
       const styleId = style.getStyleId();
 
       switch (styleId) {
-        case "Heading1":
+        case 'Heading1':
           options.heading1 = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
           };
           break;
 
-        case "Heading2":
+        case 'Heading2':
           options.heading2 = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
@@ -7259,21 +7256,21 @@ export class Document {
           };
           break;
 
-        case "Heading3":
+        case 'Heading3':
           options.heading3 = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
           };
           break;
 
-        case "Normal":
+        case 'Normal':
           options.normal = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
           };
           break;
 
-        case "ListParagraph":
+        case 'ListParagraph':
           options.listParagraph = {
             run: style.getRunFormatting() as any,
             paragraph: style.getParagraphFormatting() as any,
@@ -7313,8 +7310,8 @@ export class Document {
    */
   public updateTableStyleShading(oldColor: string, newColor: string): number {
     // Normalize colors (uppercase, no #)
-    const normalizedOld = oldColor.replace("#", "").toUpperCase();
-    const normalizedNew = newColor.replace("#", "").toUpperCase();
+    const normalizedOld = oldColor.replace('#', '').toUpperCase();
+    const normalizedNew = newColor.replace('#', '').toUpperCase();
 
     if (normalizedOld === normalizedNew) {
       return 0; // No change needed
@@ -7330,10 +7327,7 @@ export class Document {
 
     // Pattern to match shading elements with fill attribute containing the old color
     // Matches: w:fill="A5A5A5" (case-insensitive)
-    const fillPattern = new RegExp(
-      `(w:fill=["'])${normalizedOld}(["'])`,
-      "gi"
-    );
+    const fillPattern = new RegExp(`(w:fill=["'])${normalizedOld}(["'])`, 'gi');
 
     // Replace all occurrences
     stylesXml = stylesXml.replace(fillPattern, (match, prefix, suffix) => {
@@ -7343,10 +7337,7 @@ export class Document {
 
     // Also handle color attribute in shading elements
     // Matches: w:color="A5A5A5" within shd elements
-    const colorPattern = new RegExp(
-      `(<w:shd[^>]*w:color=["'])${normalizedOld}(["'])`,
-      "gi"
-    );
+    const colorPattern = new RegExp(`(<w:shd[^>]*w:color=["'])${normalizedOld}(["'])`, 'gi');
 
     stylesXml = stylesXml.replace(colorPattern, (match, prefix, suffix) => {
       updateCount++;
@@ -7392,28 +7383,22 @@ export class Document {
     let totalUpdated = 0;
 
     // Default colors commonly used in table styles
-    const defaultReplaceColors = ["A5A5A5", "C0C0C0", "D9D9D9", "E7E6E6"];
+    const defaultReplaceColors = ['A5A5A5', 'C0C0C0', 'D9D9D9', 'E7E6E6'];
     const colorsToReplace = settings.replaceColors || defaultReplaceColors;
 
     // Replace header-type colors with header shading
     if (settings.headerShading) {
       for (const oldColor of colorsToReplace) {
-        totalUpdated += this.updateTableStyleShading(
-          oldColor,
-          settings.headerShading
-        );
+        totalUpdated += this.updateTableStyleShading(oldColor, settings.headerShading);
       }
     }
 
     // If data shading differs from header, apply it to lighter colors
     if (settings.dataShading && settings.dataShading !== settings.headerShading) {
       // Typically data cells use lighter shading
-      const dataColors = ["D9D9D9", "E7E6E6", "F2F2F2"];
+      const dataColors = ['D9D9D9', 'E7E6E6', 'F2F2F2'];
       for (const oldColor of dataColors) {
-        totalUpdated += this.updateTableStyleShading(
-          oldColor,
-          settings.dataShading
-        );
+        totalUpdated += this.updateTableStyleShading(oldColor, settings.dataShading);
       }
     }
 
@@ -7485,8 +7470,8 @@ export class Document {
     const {
       bold = false,
       fontSize = 24, // 12pt
-      color = "000000",
-      font = "Arial",
+      color = '000000',
+      font = 'Arial',
     } = options || {};
 
     let listsUpdated = 0;
@@ -7496,14 +7481,13 @@ export class Document {
 
     for (const instance of instances) {
       const abstractNumId = instance.getAbstractNumId();
-      const abstractNum =
-        this.numberingManager.getAbstractNumbering(abstractNumId);
+      const abstractNum = this.numberingManager.getAbstractNumbering(abstractNumId);
 
       if (!abstractNum) continue;
 
       // Only process bullet lists (skip numbered lists)
       const level0 = abstractNum.getLevel(0);
-      if (level0?.getFormat() !== "bullet") continue;
+      if (level0?.getFormat() !== 'bullet') continue;
 
       // Update all 9 levels (0-8) with formatting only (preserve existing symbols)
       for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
@@ -7564,8 +7548,8 @@ export class Document {
     const {
       bold = false,
       fontSize = 24, // 12pt
-      color = "000000",
-      font = "Verdana",
+      color = '000000',
+      font = 'Verdana',
     } = options || {};
 
     let listsUpdated = 0;
@@ -7575,14 +7559,13 @@ export class Document {
 
     for (const instance of instances) {
       const abstractNumId = instance.getAbstractNumId();
-      const abstractNum =
-        this.numberingManager.getAbstractNumbering(abstractNumId);
+      const abstractNum = this.numberingManager.getAbstractNumbering(abstractNumId);
 
       if (!abstractNum) continue;
 
       // Only process numbered lists (skip bullet lists)
       const level0 = abstractNum.getLevel(0);
-      if (!level0 || level0.getFormat() === "bullet") continue;
+      if (!level0 || level0.getFormat() === 'bullet') continue;
 
       // Update all 9 levels (0-8)
       for (let levelIndex = 0; levelIndex < 9; levelIndex++) {
@@ -7633,12 +7616,7 @@ export class Document {
     color?: string;
     underline?: boolean;
   }): number {
-    const {
-      font = "Verdana",
-      size = 12,
-      color = "0000FF",
-      underline = true,
-    } = options || {};
+    const { font = 'Verdana', size = 12, color = '0000FF', underline = true } = options || {};
 
     const hyperlinks = this.getHyperlinks();
 
@@ -7647,13 +7625,12 @@ export class Document {
         font: font,
         size: size,
         color: color,
-        underline: underline ? "single" : false,
+        underline: underline ? 'single' : false,
       });
     }
 
     return hyperlinks.length;
   }
-
 
   /**
    * Applies Heading 1 style to paragraphs with H1-like style names
@@ -7677,7 +7654,7 @@ export class Document {
    * ```
    */
   public applyH1(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching("Heading1", options, (style) =>
+    return this.applyStyleToMatching('Heading1', options, (style) =>
       /^(heading\s*1|header\s*1|h1)$/i.test(style)
     );
   }
@@ -7694,7 +7671,7 @@ export class Document {
    * ```
    */
   public applyH2(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching("Heading2", options, (style) =>
+    return this.applyStyleToMatching('Heading2', options, (style) =>
       /^(heading\s*2|header\s*2|h2)$/i.test(style)
     );
   }
@@ -7711,7 +7688,7 @@ export class Document {
    * ```
    */
   public applyH3(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching("Heading3", options, (style) =>
+    return this.applyStyleToMatching('Heading3', options, (style) =>
       /^(heading\s*3|header\s*3|h3)$/i.test(style)
     );
   }
@@ -7726,16 +7703,13 @@ export class Document {
       options?.paragraphs ||
       this.getAllParagraphs().filter((p) => {
         const style = p.getStyle();
-        return (
-          !style ||
-          !/^(heading|header|h\d|list|toc|tod|caution|table)/i.test(style)
-        );
+        return !style || !/^(heading|header|h\d|list|toc|tod|caution|table)/i.test(style);
       });
 
     let count = 0;
     for (const para of targets) {
       if (para.isPreserved()) continue;
-      para.setStyle("Normal");
+      para.setStyle('Normal');
 
       if (options?.keepProperties && options.keepProperties.length > 0) {
         this.clearFormattingExcept(para, options.keepProperties);
@@ -7758,7 +7732,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyNumList(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching("ListParagraph", options, (style) =>
+    return this.applyStyleToMatching('ListParagraph', options, (style) =>
       /^(list\s*number|numbered\s*list|list\s*paragraph)$/i.test(style)
     );
   }
@@ -7769,7 +7743,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyBulletList(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching("ListParagraph", options, (style) =>
+    return this.applyStyleToMatching('ListParagraph', options, (style) =>
       /^(list\s*bullet|bullet\s*list|list\s*paragraph)$/i.test(style)
     );
   }
@@ -7780,7 +7754,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyTOC(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching("TOC", options, (style) =>
+    return this.applyStyleToMatching('TOC', options, (style) =>
       /^(toc|table\s*of\s*contents|toc\s*heading)$/i.test(style)
     );
   }
@@ -7791,7 +7765,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyTOD(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching("TopOfDocument", options, (style) =>
+    return this.applyStyleToMatching('TopOfDocument', options, (style) =>
       /^(tod|top\s*of\s*document|document\s*top)$/i.test(style)
     );
   }
@@ -7802,7 +7776,7 @@ export class Document {
    * @returns Number of paragraphs updated
    */
   public applyCaution(options?: StyleApplyOptions): number {
-    return this.applyStyleToMatching("Caution", options, (style) =>
+    return this.applyStyleToMatching('Caution', options, (style) =>
       /^(caution|warning|important|alert)$/i.test(style)
     );
   }
@@ -7823,7 +7797,7 @@ export class Document {
       for (const cell of firstRow.getCells()) {
         for (const para of cell.getParagraphs()) {
           if (para.isPreserved()) continue;
-          para.setStyle("TableHeader");
+          para.setStyle('TableHeader');
 
           if (options?.keepProperties && options.keepProperties.length > 0) {
             this.clearFormattingExcept(para, options.keepProperties);
@@ -7872,9 +7846,9 @@ export class Document {
         if (options.color) run.setColor(options.color);
         if (options.emphasis) {
           options.emphasis.forEach((emp) => {
-            if (emp === "bold") run.setBold(true);
-            if (emp === "italic") run.setItalic(true);
-            if (emp === "underline") run.setUnderline("single");
+            if (emp === 'bold') run.setBold(true);
+            if (emp === 'italic') run.setItalic(true);
+            if (emp === 'underline') run.setUnderline('single');
           });
         }
       }
@@ -7927,10 +7901,7 @@ export class Document {
    * Helper method to selectively clear formatting while preserving specific properties
    * @private
    */
-  private clearFormattingExcept(
-    para: Paragraph,
-    keepProperties: string[]
-  ): void {
+  private clearFormattingExcept(para: Paragraph, keepProperties: string[]): void {
     // Save properties to keep
     const savedProps: Record<string, unknown> = {};
     const formatting = para.formatting as Record<string, unknown>;
@@ -7967,21 +7938,15 @@ export class Document {
 
       // Restore saved properties using appropriate setters
       if (runSavedProps.bold !== undefined) run.setBold(runSavedProps.bold);
-      if (runSavedProps.italic !== undefined)
-        run.setItalic(runSavedProps.italic);
-      if (runSavedProps.underline !== undefined)
-        run.setUnderline(runSavedProps.underline);
+      if (runSavedProps.italic !== undefined) run.setItalic(runSavedProps.italic);
+      if (runSavedProps.underline !== undefined) run.setUnderline(runSavedProps.underline);
       if (runSavedProps.color !== undefined) run.setColor(runSavedProps.color);
       if (runSavedProps.font !== undefined) run.setFont(runSavedProps.font);
       if (runSavedProps.size !== undefined) run.setSize(runSavedProps.size);
-      if (runSavedProps.highlight !== undefined)
-        run.setHighlight(runSavedProps.highlight);
-      if (runSavedProps.strike !== undefined)
-        run.setStrike(runSavedProps.strike);
-      if (runSavedProps.subscript !== undefined)
-        run.setSubscript(runSavedProps.subscript);
-      if (runSavedProps.superscript !== undefined)
-        run.setSuperscript(runSavedProps.superscript);
+      if (runSavedProps.highlight !== undefined) run.setHighlight(runSavedProps.highlight);
+      if (runSavedProps.strike !== undefined) run.setStrike(runSavedProps.strike);
+      if (runSavedProps.subscript !== undefined) run.setSubscript(runSavedProps.subscript);
+      if (runSavedProps.superscript !== undefined) run.setSuperscript(runSavedProps.superscript);
     }
   }
 
@@ -8097,7 +8062,7 @@ export class Document {
 
     for (const match of tMatches) {
       hasTableSwitch = true;
-      const content = (match[1] || "").trim();
+      const content = (match[1] || '').trim();
       if (!content) continue;
 
       // --- Case 1: Range format "X-Y" ---
@@ -8114,7 +8079,7 @@ export class Document {
       // --- Case 2: Style format "StyleName,Level," (e.g., "Heading 2,2,") ---
       // Split by comma, expect pattern: styleName, level, [optional trailing comma]
       const parts = content
-        .split(",")
+        .split(',')
         .map((p) => p.trim())
         .filter(Boolean);
       for (let i = 0; i < parts.length; i += 2) {
@@ -8174,14 +8139,14 @@ export class Document {
 
         // Decode XML entities in instruction
         const fieldInstruction = match[1]
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
           .replace(/&quot;/g, '"')
           .replace(/&apos;/g, "'");
 
         // Check if instruction contains \t switches (style-specific TOC)
-        if (!fieldInstruction.includes("\\t")) {
+        if (!fieldInstruction.includes('\\t')) {
           continue; // Outline-based TOC, no style names to sync
         }
 
@@ -8192,11 +8157,11 @@ export class Document {
         if (updatedInstruction !== fieldInstruction) {
           // Re-encode for XML
           const encodedInstruction = updatedInstruction
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&apos;");
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
 
           // Replace the instruction
           const updatedInstrXml = `<w:instrText xml:space="preserve">${encodedInstruction}</w:instrText>`;
@@ -8217,7 +8182,7 @@ export class Document {
     } catch (error: unknown) {
       // Log error but don't fail the save
       this.logger.error(
-        "Error syncing TOC field instructions - document will save with original instructions",
+        'Error syncing TOC field instructions - document will save with original instructions',
         error instanceof Error
           ? { message: error.message, stack: error.stack }
           : { error: String(error) }
@@ -8230,9 +8195,7 @@ export class Document {
    * Helper to sync TOC instruction within an XML fragment
    * @private
    */
-  private syncTOCInstructionInXml(
-    xml: string
-  ): { xml: string; changed: boolean } {
+  private syncTOCInstructionInXml(xml: string): { xml: string; changed: boolean } {
     const instrMatch = /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/.exec(xml);
     if (!instrMatch?.[1]) {
       return { xml, changed: false };
@@ -8240,14 +8203,14 @@ export class Document {
 
     // Decode XML entities in instruction
     const fieldInstruction = instrMatch[1]
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
       .replace(/&apos;/g, "'");
 
     // Check if instruction contains \t switches (style-specific TOC)
-    if (!fieldInstruction.includes("\\t")) {
+    if (!fieldInstruction.includes('\\t')) {
       return { xml, changed: false };
     }
 
@@ -8260,11 +8223,11 @@ export class Document {
 
     // Re-encode for XML
     const encodedInstruction = updatedInstruction
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&apos;");
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
 
     const updatedXml = xml.replace(
       /<w:instrText[^>]*>[\s\S]*?<\/w:instrText>/,
@@ -8298,7 +8261,10 @@ export class Document {
 
       // Parse style names and levels from the switch content
       // Format: "StyleName,Level," or "StyleName,Level,StyleName2,Level2,..."
-      const parts = content.split(',').map(p => p.trim()).filter(Boolean);
+      const parts = content
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean);
       const updatedParts: string[] = [];
 
       for (let i = 0; i < parts.length; i += 2) {
@@ -8463,31 +8429,30 @@ export class Document {
     docXml: string,
     levels: number[]
   ): { level: number; text: string; bookmark: string }[] {
-    const headings: { level: number; text: string; bookmark: string }[] =
-      [];
+    const headings: { level: number; text: string; bookmark: string }[] = [];
     const levelSet = new Set(levels);
 
     try {
       // Parse document.xml to object structure
       const parsed = XMLParser.parseToObject(docXml, { trimValues: false });
-      const document = parsed["w:document"];
+      const document = parsed['w:document'];
       if (!document) {
         return headings;
       }
 
-      const body = (document as any)["w:body"];
+      const body = (document as any)['w:body'];
       if (!body) {
         return headings;
       }
 
       // Helper function to extract heading info from a parsed paragraph object
       const extractHeading = (para: any): void => {
-        const pPr = para["w:pPr"];
-        if (!pPr?.["w:pStyle"]) {
+        const pPr = para['w:pPr'];
+        if (!pPr?.['w:pStyle']) {
           return;
         }
 
-        const styleVal = pPr["w:pStyle"]["@_w:val"];
+        const styleVal = pPr['w:pStyle']['@_w:val'];
         if (!styleVal) {
           return;
         }
@@ -8506,26 +8471,27 @@ export class Document {
         }
 
         // Extract bookmark (use any existing bookmark, prioritize "_heading" or "_Toc")
-        let bookmark = "";
-        const bookmarkStart = para["w:bookmarkStart"];
+        let bookmark = '';
+        const bookmarkStart = para['w:bookmarkStart'];
         if (bookmarkStart) {
-          const bookmarkArray = Array.isArray(bookmarkStart)
-            ? bookmarkStart
-            : [bookmarkStart];
-          
+          const bookmarkArray = Array.isArray(bookmarkStart) ? bookmarkStart : [bookmarkStart];
+
           // First try to find preferred bookmark types
           for (const bm of bookmarkArray) {
-            const bmName = bm["@_w:name"];
-            if (bmName && (bmName.toLowerCase().includes("_heading") || bmName.toLowerCase().includes("_toc"))) {
+            const bmName = bm['@_w:name'];
+            if (
+              bmName &&
+              (bmName.toLowerCase().includes('_heading') || bmName.toLowerCase().includes('_toc'))
+            ) {
               bookmark = bmName;
               break;
             }
           }
-          
+
           // If no preferred bookmark found, use the first available bookmark
           if (!bookmark && bookmarkArray.length > 0) {
             const firstBm = bookmarkArray[0];
-            const bmName = firstBm["@_w:name"];
+            const bmName = firstBm['@_w:name'];
             if (bmName) {
               bookmark = bmName;
             }
@@ -8533,17 +8499,17 @@ export class Document {
         }
 
         // Extract text from runs
-        let text = "";
-        const runs = para["w:r"];
+        let text = '';
+        const runs = para['w:r'];
         if (runs) {
           const runArray = Array.isArray(runs) ? runs : [runs];
           for (const run of runArray) {
-            const textElement = run["w:t"];
+            const textElement = run['w:t'];
             if (textElement) {
-              if (typeof textElement === "string") {
+              if (typeof textElement === 'string') {
                 text += textElement;
-              } else if (textElement["#text"]) {
-                text += textElement["#text"];
+              } else if (textElement['#text']) {
+                text += textElement['#text'];
               }
             }
           }
@@ -8568,7 +8534,7 @@ export class Document {
       };
 
       // Search in direct paragraphs
-      const paragraphs = body["w:p"];
+      const paragraphs = body['w:p'];
       if (paragraphs) {
         const paraArray = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
         for (const para of paraArray) {
@@ -8577,26 +8543,24 @@ export class Document {
       }
 
       // Search in tables (this is critical - many documents have headings in tables)
-      const tables = body["w:tbl"];
+      const tables = body['w:tbl'];
       if (tables) {
         const tableArray = Array.isArray(tables) ? tables : [tables];
         for (const table of tableArray) {
-          const rows = table["w:tr"];
+          const rows = table['w:tr'];
           if (!rows) continue;
 
           const rowArray = Array.isArray(rows) ? rows : [rows];
           for (const row of rowArray) {
-            const cells = row["w:tc"];
+            const cells = row['w:tc'];
             if (!cells) continue;
 
             const cellArray = Array.isArray(cells) ? cells : [cells];
             for (const cell of cellArray) {
-              const cellParas = cell["w:p"];
+              const cellParas = cell['w:p'];
               if (!cellParas) continue;
 
-              const cellParaArray = Array.isArray(cellParas)
-                ? cellParas
-                : [cellParas];
+              const cellParaArray = Array.isArray(cellParas) ? cellParas : [cellParas];
               for (const para of cellParaArray) {
                 extractHeading(para);
               }
@@ -8606,7 +8570,7 @@ export class Document {
       }
     } catch (error: unknown) {
       defaultLogger.error(
-        "Error parsing document.xml for headings:",
+        'Error parsing document.xml for headings:',
         error instanceof Error
           ? { message: error.message, stack: error.stack }
           : { error: String(error) }
@@ -8624,8 +8588,7 @@ export class Document {
   private findHeadingsForTOC(
     levels: number[]
   ): { level: number; text: string; bookmark: string }[] {
-    const headings: { level: number; text: string; bookmark: string }[] =
-      [];
+    const headings: { level: number; text: string; bookmark: string }[] = [];
     const levelSet = new Set(levels);
 
     // Iterate through body elements
@@ -8646,8 +8609,7 @@ export class Document {
 
               if (text) {
                 // Create or get bookmark for this heading
-                const bookmark =
-                  this.bookmarkManager.createHeadingBookmark(text);
+                const bookmark = this.bookmarkManager.createHeadingBookmark(text);
 
                 headings.push({
                   level: headingLevel,
@@ -8682,30 +8644,28 @@ export class Document {
   ): string {
     const sdtId = Math.floor(Math.random() * 2000000000) - 1000000000;
 
-    let tocXml = "<w:sdt>";
+    let tocXml = '<w:sdt>';
 
     // SDT properties
-    tocXml += "<w:sdtPr>";
+    tocXml += '<w:sdtPr>';
     tocXml += `<w:id w:val="${sdtId}"/>`;
-    tocXml += "<w:docPartObj>";
+    tocXml += '<w:docPartObj>';
     tocXml += '<w:docPartGallery w:val="Table of Contents"/>';
     tocXml += '<w:docPartUnique w:val="1"/>';
-    tocXml += "</w:docPartObj>";
-    tocXml += "</w:sdtPr>";
+    tocXml += '</w:docPartObj>';
+    tocXml += '</w:sdtPr>';
 
     // SDT content
-    tocXml += "<w:sdtContent>";
+    tocXml += '<w:sdtContent>';
 
     // Calculate minimum level for relative indentation
     // If TOC shows only Heading 2s, minLevel=2, so Heading 2 gets 0" indent
-    const minLevel =
-      headings.length > 0 ? Math.min(...headings.map((h) => h.level)) : 1;
+    const minLevel = headings.length > 0 ? Math.min(...headings.map((h) => h.level)) : 1;
 
     // First paragraph: field begin + instruction + separator + first entry (if any)
-    tocXml += "<w:p>";
-    tocXml += "<w:pPr>";
-    tocXml +=
-      '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+    tocXml += '<w:p>';
+    tocXml += '<w:pPr>';
+    tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
 
     // Add indentation for first entry relative to minimum level (0.25" per level)
     if (headings.length > 0 && headings[0]) {
@@ -8715,17 +8675,17 @@ export class Document {
       }
     }
 
-    tocXml += "</w:pPr>";
+    tocXml += '</w:pPr>';
 
     // Field begin
     tocXml += '<w:r><w:fldChar w:fldCharType="begin"/></w:r>';
 
     // Field instruction (preserve original switches)
-    tocXml += "<w:r>";
+    tocXml += '<w:r>';
     tocXml += `<w:instrText xml:space="preserve">${this.escapeXml(
       originalInstrText
     )}</w:instrText>`;
-    tocXml += "</w:r>";
+    tocXml += '</w:r>';
 
     // Field separator
     tocXml += '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
@@ -8735,17 +8695,16 @@ export class Document {
       tocXml += this.buildTOCEntryXML(headings[0]);
     }
 
-    tocXml += "</w:p>";
+    tocXml += '</w:p>';
 
     // Remaining entries (each in its own paragraph)
     for (let i = 1; i < headings.length; i++) {
       const heading = headings[i];
       if (!heading) continue;
 
-      tocXml += "<w:p>";
-      tocXml += "<w:pPr>";
-      tocXml +=
-        '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+      tocXml += '<w:p>';
+      tocXml += '<w:pPr>';
+      tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
 
       // Add indentation relative to minimum level (0.25" per level above minimum)
       const indent = (heading.level - minLevel) * 360;
@@ -8753,22 +8712,21 @@ export class Document {
         tocXml += `<w:ind w:left="${indent}"/>`;
       }
 
-      tocXml += "</w:pPr>";
+      tocXml += '</w:pPr>';
       tocXml += this.buildTOCEntryXML(heading);
-      tocXml += "</w:p>";
+      tocXml += '</w:p>';
     }
 
     // Final paragraph with field end
-    tocXml += "<w:p>";
-    tocXml += "<w:pPr>";
-    tocXml +=
-      '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
-    tocXml += "</w:pPr>";
+    tocXml += '<w:p>';
+    tocXml += '<w:pPr>';
+    tocXml += '<w:spacing w:after="0" w:before="0" w:line="240" w:lineRule="auto"/>';
+    tocXml += '</w:pPr>';
     tocXml += '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
-    tocXml += "</w:p>";
+    tocXml += '</w:p>';
 
-    tocXml += "</w:sdtContent>";
-    tocXml += "</w:sdt>";
+    tocXml += '</w:sdtContent>';
+    tocXml += '</w:sdt>';
 
     return tocXml;
   }
@@ -8779,27 +8737,22 @@ export class Document {
    * @param heading Heading information
    * @returns XML string for the TOC entry
    */
-  private buildTOCEntryXML(heading: {
-    level: number;
-    text: string;
-    bookmark: string;
-  }): string {
+  private buildTOCEntryXML(heading: { level: number; text: string; bookmark: string }): string {
     const escapedText = this.escapeXml(heading.text);
 
-    let xml = "";
+    let xml = '';
     xml += `<w:hyperlink w:anchor="${this.escapeXml(heading.bookmark)}">`;
-    xml += "<w:r>";
-    xml += "<w:rPr>";
-    xml +=
-      '<w:rFonts w:ascii="Verdana" w:hAnsi="Verdana" w:cs="Verdana" w:eastAsia="Verdana"/>';
+    xml += '<w:r>';
+    xml += '<w:rPr>';
+    xml += '<w:rFonts w:ascii="Verdana" w:hAnsi="Verdana" w:cs="Verdana" w:eastAsia="Verdana"/>';
     xml += '<w:color w:val="0000FF"/>';
     xml += '<w:sz w:val="24"/>';
     xml += '<w:szCs w:val="24"/>';
     xml += '<w:u w:val="single"/>';
-    xml += "</w:rPr>";
+    xml += '</w:rPr>';
     xml += `<w:t xml:space="preserve">${escapedText}</w:t>`;
-    xml += "</w:r>";
-    xml += "</w:hyperlink>";
+    xml += '</w:r>';
+    xml += '</w:hyperlink>';
 
     return xml;
   }
@@ -8812,11 +8765,11 @@ export class Document {
    */
   private escapeXml(text: string): string {
     return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&apos;");
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 
   /**
@@ -8833,7 +8786,7 @@ export class Document {
     await handler.load(filePath);
 
     // Get document.xml
-    const docXml = handler.getFileAsString("word/document.xml");
+    const docXml = handler.getFileAsString('word/document.xml');
     if (!docXml) {
       return 0;
     }
@@ -8843,7 +8796,7 @@ export class Document {
 
     // Update and save if changes were made
     if (modifiedXml !== docXml) {
-      handler.updateFile("word/document.xml", modifiedXml);
+      handler.updateFile('word/document.xml', modifiedXml);
       await handler.save(filePath);
 
       // Count TOCs that were populated
@@ -8880,9 +8833,9 @@ export class Document {
           if (!instrMatch?.[1]) continue;
 
           const fieldInstruction = instrMatch[1]
-            .replace(/&amp;/g, "&")
-            .replace(/&lt;/g, "<")
-            .replace(/&gt;/g, ">")
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
             .replace(/&quot;/g, '"')
             .replace(/&apos;/g, "'");
 
@@ -8894,7 +8847,7 @@ export class Document {
           modifiedXml = modifiedXml.replace(tocXml, newTocXml);
         } catch (error: unknown) {
           this.logger.error(
-            "Error populating SDT TOC",
+            'Error populating SDT TOC',
             error instanceof Error
               ? { message: error.message, stack: error.stack }
               : { error: String(error) }
@@ -8919,9 +8872,9 @@ export class Document {
           if (!instrText) continue;
 
           const fieldInstruction = instrText
-            .replace(/&amp;/g, "&")
-            .replace(/&lt;/g, "<")
-            .replace(/&gt;/g, ">")
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
             .replace(/&quot;/g, '"')
             .replace(/&apos;/g, "'");
 
@@ -8956,12 +8909,10 @@ export class Document {
           const newTocXml = this.generateSimpleTOCXML(headings, fieldInstruction);
           modifiedXml = modifiedXml.replace(fullTocXml, newTocXml);
 
-          this.logger.info(
-            `Populated simple TOC with ${headings.length} heading entries`
-          );
+          this.logger.info(`Populated simple TOC with ${headings.length} heading entries`);
         } catch (error: unknown) {
           this.logger.error(
-            "Error populating simple TOC",
+            'Error populating simple TOC',
             error instanceof Error
               ? { message: error.message, stack: error.stack }
               : { error: String(error) }
@@ -8996,29 +8947,29 @@ export class Document {
 
       // Escape text for XML
       const escapedText = heading.text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 
       // Create hyperlinked TOC entry paragraph
       entries.push(
         `<w:p>` +
-        `<w:pPr><w:pStyle w:val="${tocStyle}"/></w:pPr>` +
-        `<w:hyperlink w:anchor="${heading.bookmark}" w:history="1">` +
-        `<w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr>` +
-        `<w:t>${escapedText}</w:t></w:r>` +
-        `</w:hyperlink>` +
-        `</w:p>`
+          `<w:pPr><w:pStyle w:val="${tocStyle}"/></w:pPr>` +
+          `<w:hyperlink w:anchor="${heading.bookmark}" w:history="1">` +
+          `<w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr>` +
+          `<w:t>${escapedText}</w:t></w:r>` +
+          `</w:hyperlink>` +
+          `</w:p>`
       );
     }
 
     // Escape field instruction for XML
     const escapedInstruction = fieldInstruction
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
 
     // Build the complete TOC field structure
     return (
@@ -9030,7 +8981,7 @@ export class Document {
       `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
       `</w:p>` +
       // TOC entry paragraphs (between separate and end)
-      entries.join("") +
+      entries.join('') +
       // Last paragraph: fldChar end
       `<w:p>` +
       `<w:pPr><w:pStyle w:val="TOC2"/></w:pPr>` +
@@ -9094,11 +9045,7 @@ export class Document {
    * @param orientation Page orientation
    * @returns This document for chaining
    */
-  setPageSize(
-    width: number,
-    height: number,
-    orientation?: "portrait" | "landscape"
-  ): this {
+  setPageSize(width: number, height: number, orientation?: 'portrait' | 'landscape'): this {
     this.section.setPageSize(width, height, orientation);
     return this;
   }
@@ -9108,7 +9055,7 @@ export class Document {
    * @param orientation Page orientation
    * @returns This document for chaining
    */
-  setPageOrientation(orientation: "portrait" | "landscape"): this {
+  setPageOrientation(orientation: 'portrait' | 'landscape'): this {
     this.section.setOrientation(orientation);
     return this;
   }
@@ -9138,15 +9085,13 @@ export class Document {
    */
   setHeader(header: Header): this {
     // Generate relationship for header
-    const relationship = this.relationshipManager.addHeader(
-      `${header.getFilename(1)}`
-    );
+    const relationship = this.relationshipManager.addHeader(`${header.getFilename(1)}`);
 
     // Register with manager
     this.headerFooterManager.registerHeader(header, relationship.getId());
 
     // Link to section
-    this.section.setHeaderReference("default", relationship.getId());
+    this.section.setHeaderReference('default', relationship.getId());
 
     return this;
   }
@@ -9169,7 +9114,7 @@ export class Document {
     this.headerFooterManager.registerHeader(header, relationship.getId());
 
     // Link to section
-    this.section.setHeaderReference("first", relationship.getId());
+    this.section.setHeaderReference('first', relationship.getId());
 
     return this;
   }
@@ -9189,7 +9134,7 @@ export class Document {
     this.headerFooterManager.registerHeader(header, relationship.getId());
 
     // Link to section
-    this.section.setHeaderReference("even", relationship.getId());
+    this.section.setHeaderReference('even', relationship.getId());
 
     return this;
   }
@@ -9201,15 +9146,13 @@ export class Document {
    */
   setFooter(footer: Footer): this {
     // Generate relationship for footer
-    const relationship = this.relationshipManager.addFooter(
-      `${footer.getFilename(1)}`
-    );
+    const relationship = this.relationshipManager.addFooter(`${footer.getFilename(1)}`);
 
     // Register with manager
     this.headerFooterManager.registerFooter(footer, relationship.getId());
 
     // Link to section
-    this.section.setFooterReference("default", relationship.getId());
+    this.section.setFooterReference('default', relationship.getId());
 
     return this;
   }
@@ -9232,7 +9175,7 @@ export class Document {
     this.headerFooterManager.registerFooter(footer, relationship.getId());
 
     // Link to section
-    this.section.setFooterReference("first", relationship.getId());
+    this.section.setFooterReference('first', relationship.getId());
 
     return this;
   }
@@ -9252,7 +9195,7 @@ export class Document {
     this.headerFooterManager.registerFooter(footer, relationship.getId());
 
     // Link to section
-    this.section.setFooterReference("even", relationship.getId());
+    this.section.setFooterReference('even', relationship.getId());
 
     return this;
   }
@@ -9272,7 +9215,7 @@ export class Document {
    * @param type Header type to remove (default, first, even)
    * @returns This document for chaining
    */
-  removeHeader(type: "default" | "first" | "even"): this {
+  removeHeader(type: 'default' | 'first' | 'even'): this {
     const sectionProps = this.section.getProperties();
 
     // Get the relationship ID from section properties
@@ -9318,7 +9261,7 @@ export class Document {
    * @param type Footer type to remove (default, first, even)
    * @returns This document for chaining
    */
-  removeFooter(type: "default" | "first" | "even"): this {
+  removeFooter(type: 'default' | 'first' | 'even'): this {
     const sectionProps = this.section.getProperties();
 
     // Get the relationship ID from section properties
@@ -9367,7 +9310,7 @@ export class Document {
 
     // Remove each header type
     if (sectionProps.headers) {
-      const types = Object.keys(sectionProps.headers) as ("default" | "first" | "even")[];
+      const types = Object.keys(sectionProps.headers) as ('default' | 'first' | 'even')[];
       for (const type of types) {
         this.removeHeader(type);
       }
@@ -9389,7 +9332,7 @@ export class Document {
 
     // Remove each footer type
     if (sectionProps.footers) {
-      const types = Object.keys(sectionProps.footers) as ("default" | "first" | "even")[];
+      const types = Object.keys(sectionProps.footers) as ('default' | 'first' | 'even')[];
       for (const type of types) {
         this.removeFooter(type);
       }
@@ -9408,9 +9351,7 @@ export class Document {
    */
   addImage(image: Image): this {
     // Generate relationship ID
-    const target = `media/image${
-      this.imageManager.getImageCount() + 1
-    }.${image.getExtension()}`;
+    const target = `media/image${this.imageManager.getImageCount() + 1}.${image.getExtension()}`;
     const relationship = this.relationshipManager.addImage(target);
 
     // Register image with manager
@@ -9522,7 +9463,7 @@ export class Document {
    */
   private updateRelationships(): void {
     const xml = this.relationshipManager.generateXml();
-    this.zipHandler.updateFile("word/_rels/document.xml.rels", xml);
+    this.zipHandler.updateFile('word/_rels/document.xml.rels', xml);
   }
 
   /**
@@ -9533,26 +9474,29 @@ export class Document {
       // Comments were modified — regenerate from in-memory model
       if (this.commentManager.getCount() > 0) {
         const xml = this.commentManager.generateCommentsXml();
-        this.zipHandler.addFile("word/comments.xml", xml);
+        this.zipHandler.addFile('word/comments.xml', xml);
 
-        const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.COMMENTS);
+        const existingRels = this.relationshipManager.getRelationshipsByType(
+          RelationshipType.COMMENTS
+        );
         if (existingRels.length === 0) {
           this.relationshipManager.addComments();
         }
       } else {
         // All comments removed — clean up comments.xml and its relationship
-        this.zipHandler.removeFile("word/comments.xml");
-        const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.COMMENTS);
+        this.zipHandler.removeFile('word/comments.xml');
+        const existingRels = this.relationshipManager.getRelationshipsByType(
+          RelationshipType.COMMENTS
+        );
         for (const rel of existingRels) {
           this.relationshipManager.removeRelationship(rel.getId());
         }
       }
       // Remove companion files since regenerated comments lack w14:paraId
       this.removeCommentCompanionFiles();
-
     } else if (this._originalCommentsXml) {
       // Passthrough — preserve original comments.xml exactly
-      this.zipHandler.addFile("word/comments.xml", this._originalCommentsXml);
+      this.zipHandler.addFile('word/comments.xml', this._originalCommentsXml);
 
       // Preserve companion files as-is
       for (const [path, content] of this._originalCommentCompanionFiles) {
@@ -9560,17 +9504,20 @@ export class Document {
       }
 
       // Ensure comments relationship exists
-      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.COMMENTS);
+      const existingRels = this.relationshipManager.getRelationshipsByType(
+        RelationshipType.COMMENTS
+      );
       if (existingRels.length === 0) {
         this.relationshipManager.addComments();
       }
-
     } else if (this.commentManager.getCount() > 0) {
       // New comments created on a document that had no original comments
       const xml = this.commentManager.generateCommentsXml();
-      this.zipHandler.addFile("word/comments.xml", xml);
+      this.zipHandler.addFile('word/comments.xml', xml);
 
-      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.COMMENTS);
+      const existingRels = this.relationshipManager.getRelationshipsByType(
+        RelationshipType.COMMENTS
+      );
       if (existingRels.length === 0) {
         this.relationshipManager.addComments();
       }
@@ -9578,7 +9525,11 @@ export class Document {
   }
 
   private removeCommentCompanionFiles(): void {
-    const companionPaths = [DOCX_PATHS.COMMENTS_EXTENDED, DOCX_PATHS.COMMENTS_IDS, DOCX_PATHS.COMMENTS_EXTENSIBLE];
+    const companionPaths = [
+      DOCX_PATHS.COMMENTS_EXTENDED,
+      DOCX_PATHS.COMMENTS_IDS,
+      DOCX_PATHS.COMMENTS_EXTENSIBLE,
+    ];
     for (const filePath of companionPaths) {
       this.zipHandler.removeFile(filePath);
       const fileName = filePath.replace('word/', '');
@@ -9595,7 +9546,9 @@ export class Document {
       const xml = this.footnoteManager.generateFootnotesXml();
       this.zipHandler.addFile(DOCX_PATHS.FOOTNOTES, xml);
 
-      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.FOOTNOTES);
+      const existingRels = this.relationshipManager.getRelationshipsByType(
+        RelationshipType.FOOTNOTES
+      );
       if (existingRels.length === 0) {
         this.relationshipManager.addFootnotes();
       }
@@ -9603,14 +9556,16 @@ export class Document {
       // Per OOXML, relationships are part-scoped: hyperlinks in footnotes.xml
       // need word/_rels/footnotes.xml.rels, not word/_rels/document.xml.rels
       this.generatePartLevelHyperlinkRels(
-        this.footnoteManager.getAllFootnotes().flatMap(fn => fn.getParagraphs()),
+        this.footnoteManager.getAllFootnotes().flatMap((fn) => fn.getParagraphs()),
         'word/_rels/footnotes.xml.rels'
       );
     } else if (this._originalFootnotesXml) {
       // Passthrough — preserve original XML exactly
       this.zipHandler.addFile(DOCX_PATHS.FOOTNOTES, this._originalFootnotesXml);
 
-      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.FOOTNOTES);
+      const existingRels = this.relationshipManager.getRelationshipsByType(
+        RelationshipType.FOOTNOTES
+      );
       if (existingRels.length === 0) {
         this.relationshipManager.addFootnotes();
       }
@@ -9622,7 +9577,9 @@ export class Document {
       const xml = this.endnoteManager.generateEndnotesXml();
       this.zipHandler.addFile(DOCX_PATHS.ENDNOTES, xml);
 
-      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.ENDNOTES);
+      const existingRels = this.relationshipManager.getRelationshipsByType(
+        RelationshipType.ENDNOTES
+      );
       if (existingRels.length === 0) {
         this.relationshipManager.addEndnotes();
       }
@@ -9630,14 +9587,16 @@ export class Document {
       // Per OOXML, relationships are part-scoped: hyperlinks in endnotes.xml
       // need word/_rels/endnotes.xml.rels, not word/_rels/document.xml.rels
       this.generatePartLevelHyperlinkRels(
-        this.endnoteManager.getAllEndnotes().flatMap(en => en.getParagraphs()),
+        this.endnoteManager.getAllEndnotes().flatMap((en) => en.getParagraphs()),
         'word/_rels/endnotes.xml.rels'
       );
     } else if (this._originalEndnotesXml) {
       // Passthrough — preserve original XML exactly
       this.zipHandler.addFile(DOCX_PATHS.ENDNOTES, this._originalEndnotesXml);
 
-      const existingRels = this.relationshipManager.getRelationshipsByType(RelationshipType.ENDNOTES);
+      const existingRels = this.relationshipManager.getRelationshipsByType(
+        RelationshipType.ENDNOTES
+      );
       if (existingRels.length === 0) {
         this.relationshipManager.addEndnotes();
       }
@@ -9700,7 +9659,8 @@ export class Document {
 
     if (hyperlinkRels.length > 0) {
       let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-      xml += '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n';
+      xml +=
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n';
       for (const rel of hyperlinkRels) {
         const escapedId = XMLBuilder.escapeXmlAttribute(rel.id);
         const escapedUrl = XMLBuilder.escapeXmlAttribute(rel.url);
@@ -9781,14 +9741,23 @@ export class Document {
     if (missingAuthors.length === 0) return;
 
     // Build person elements for missing authors
-    const personElements = missingAuthors.map(author => {
-      const escapedAuthor = author.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `<w15:person w15:author="${escapedAuthor}"><w15:presenceInfo w15:providerId="None" w15:userId="${escapedAuthor}"/></w15:person>`;
-    }).join('');
+    const personElements = missingAuthors
+      .map((author) => {
+        const escapedAuthor = author
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        return `<w15:person w15:author="${escapedAuthor}"><w15:presenceInfo w15:providerId="None" w15:userId="${escapedAuthor}"/></w15:person>`;
+      })
+      .join('');
 
     if (existingPeopleXml) {
       // Insert new person elements before closing tag
-      const updatedXml = existingPeopleXml.replace('</w15:people>', `${personElements}</w15:people>`);
+      const updatedXml = existingPeopleXml.replace(
+        '</w15:people>',
+        `${personElements}</w15:people>`
+      );
       this.zipHandler.updateFile('word/people.xml', updatedXml);
     } else {
       // Create new people.xml
@@ -9803,7 +9772,10 @@ export class Document {
       this.relationshipManager.addPeople();
     }
 
-    this.logger.info('Updated people.xml with missing authors', { added: missingAuthors.length, authors: missingAuthors });
+    this.logger.info('Updated people.xml with missing authors', {
+      added: missingAuthors.length,
+      authors: missingAuthors,
+    });
   }
 
   /**
@@ -9847,11 +9819,9 @@ export class Document {
       this.properties.customProperties &&
       Object.keys(this.properties.customProperties).length > 0
     ) {
-      const customXml = this.generator.generateCustomProps(
-        this.properties.customProperties
-      );
+      const customXml = this.generator.generateCustomProps(this.properties.customProperties);
       if (customXml) {
-        this.zipHandler.addFile("docProps/custom.xml", customXml);
+        this.zipHandler.addFile('docProps/custom.xml', customXml);
       }
     }
   }
@@ -9868,13 +9838,17 @@ export class Document {
     const overrides = new Set<string>();
 
     // Extract all <Default Extension="..." ContentType="..."/> entries
-    const defaultMatches = xml.matchAll(/<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"\s*\/>/g);
+    const defaultMatches = xml.matchAll(
+      /<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"\s*\/>/g
+    );
     for (const match of defaultMatches) {
       defaults.add(`${match[1]}|${match[2]}`); // Store as "ext|mimetype"
     }
 
     // Extract all <Override PartName="..." ContentType="..."/> entries
-    const overrideMatches = xml.matchAll(/<Override\s+PartName="([^"]+)"\s+ContentType="([^"]+)"\s*\/>/g);
+    const overrideMatches = xml.matchAll(
+      /<Override\s+PartName="([^"]+)"\s+ContentType="([^"]+)"\s*\/>/g
+    );
     for (const match of overrideMatches) {
       overrides.add(`${match[1]}|${match[2]}`); // Store as "path|mimetype"
     }
@@ -9888,21 +9862,19 @@ export class Document {
    */
   private updateContentTypesWithImagesHeadersFootersAndComments(): void {
     const hasCustomProps =
-      this.properties.customProperties &&
-      Object.keys(this.properties.customProperties).length > 0;
+      this.properties.customProperties && Object.keys(this.properties.customProperties).length > 0;
 
-    const contentTypes =
-      this.generator.generateContentTypesWithImagesHeadersFootersAndComments(
-        this.imageManager,
-        this.headerFooterManager,
-        this.commentManager,
-        this.zipHandler, // Pass zipHandler to check file existence
-        undefined, // fontManager (optional)
-        hasCustomProps, // Flag to include custom.xml override
-        this._originalContentTypes, // Pass preserved original entries for round-trip fidelity
-        this.footnoteManager,
-        this.endnoteManager
-      );
+    const contentTypes = this.generator.generateContentTypesWithImagesHeadersFootersAndComments(
+      this.imageManager,
+      this.headerFooterManager,
+      this.commentManager,
+      this.zipHandler, // Pass zipHandler to check file existence
+      undefined, // fontManager (optional)
+      hasCustomProps, // Flag to include custom.xml override
+      this._originalContentTypes, // Pass preserved original entries for round-trip fidelity
+      this.footnoteManager,
+      this.endnoteManager
+    );
     this.zipHandler.updateFile(DOCX_PATHS.CONTENT_TYPES, contentTypes);
   }
 
@@ -9983,14 +9955,9 @@ export class Document {
    * @param bookmarkOrName - Bookmark object or bookmark name
    * @returns The bookmark that was added
    */
-  addBookmarkToParagraph(
-    paragraph: Paragraph,
-    bookmarkOrName: Bookmark | string
-  ): Bookmark {
+  addBookmarkToParagraph(paragraph: Paragraph, bookmarkOrName: Bookmark | string): Bookmark {
     const bookmark =
-      typeof bookmarkOrName === "string"
-        ? this.createBookmark(bookmarkOrName)
-        : bookmarkOrName;
+      typeof bookmarkOrName === 'string' ? this.createBookmark(bookmarkOrName) : bookmarkOrName;
 
     paragraph.addBookmark(bookmark);
     return bookmark;
@@ -10032,7 +9999,7 @@ export class Document {
     anchor: string;
     hyperlink: (text: string, formatting?: RunFormatting) => Hyperlink;
   } {
-    const BOOKMARK_NAME = "_top";
+    const BOOKMARK_NAME = '_top';
 
     // Check if _top bookmark already exists
     let bookmark = this.getBookmark(BOOKMARK_NAME);
@@ -10190,10 +10157,10 @@ export class Document {
    * }
    * ```
    */
-  validateAndFixRevisions(options?: {
-    validation?: ValidationOptions;
-    autoFix?: AutoFixOptions;
-  }): { validation: ValidationResult; fix: AutoFixResult } {
+  validateAndFixRevisions(options?: { validation?: ValidationOptions; autoFix?: AutoFixOptions }): {
+    validation: ValidationResult;
+    fix: AutoFixResult;
+  } {
     // First validate
     const validation = this.validateRevisions(options?.validation);
 
@@ -10246,12 +10213,7 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created and registered revision
    */
-  createRevisionFromText(
-    type: RevisionType,
-    author: string,
-    text: string,
-    date?: Date
-  ): Revision {
+  createRevisionFromText(type: RevisionType, author: string, text: string, date?: Date): Revision {
     const revision = Revision.fromText(type, author, text, date);
     return this.revisionManager.register(revision);
   }
@@ -10272,7 +10234,10 @@ export class Document {
    * @param runIndex - Optional run index within the paragraph
    * @returns RevisionLocation with paragraph index, or undefined if not found
    */
-  private createRevisionLocation(paragraph: Paragraph, runIndex?: number): RevisionLocation | undefined {
+  private createRevisionLocation(
+    paragraph: Paragraph,
+    runIndex?: number
+  ): RevisionLocation | undefined {
     const paragraphIndex = this.findParagraphIndex(paragraph);
     if (paragraphIndex === -1) {
       return undefined; // Paragraph not found in document
@@ -10292,13 +10257,8 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created revision with location set
    */
-  trackInsertion(
-    paragraph: Paragraph,
-    author: string,
-    text: string,
-    date?: Date
-  ): Revision {
-    const revision = this.createRevisionFromText("insert", author, text, date);
+  trackInsertion(paragraph: Paragraph, author: string, text: string, date?: Date): Revision {
+    const revision = this.createRevisionFromText('insert', author, text, date);
 
     // Set location for changelog/tracking purposes
     const location = this.createRevisionLocation(paragraph);
@@ -10320,13 +10280,8 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created revision with location set
    */
-  trackDeletion(
-    paragraph: Paragraph,
-    author: string,
-    text: string,
-    date?: Date
-  ): Revision {
-    const revision = this.createRevisionFromText("delete", author, text, date);
+  trackDeletion(paragraph: Paragraph, author: string, text: string, date?: Date): Revision {
+    const revision = this.createRevisionFromText('delete', author, text, date);
 
     // Set location for changelog/tracking purposes
     const location = this.createRevisionLocation(paragraph);
@@ -10391,11 +10346,7 @@ export class Document {
    * doc.trackParagraphMarkDeletion(para, 'Alice');
    * // In Word, this shows the ¶ symbol as deleted
    */
-  trackParagraphMarkDeletion(
-    paragraph: Paragraph,
-    author: string,
-    date?: Date
-  ): Paragraph {
+  trackParagraphMarkDeletion(paragraph: Paragraph, author: string, date?: Date): Paragraph {
     const revisionId = this.revisionManager.consumeNextId();
     paragraph.markParagraphMarkAsDeleted(revisionId, author, date);
     return paragraph;
@@ -10589,15 +10540,13 @@ export class Document {
         this.trackFormatting = options.trackFormatting;
       }
       if (options.showInsertionsAndDeletions !== undefined) {
-        this.revisionViewSettings.showInsertionsAndDeletions =
-          options.showInsertionsAndDeletions;
+        this.revisionViewSettings.showInsertionsAndDeletions = options.showInsertionsAndDeletions;
       }
       if (options.showFormatting !== undefined) {
         this.revisionViewSettings.showFormatting = options.showFormatting;
       }
       if (options.showInkAnnotations !== undefined) {
-        this.revisionViewSettings.showInkAnnotations =
-          options.showInkAnnotations;
+        this.revisionViewSettings.showInkAnnotations = options.showInkAnnotations;
       }
     }
 
@@ -10736,6 +10685,41 @@ export class Document {
     }
     // Bind tracking to section
     this.bindTrackingToElement(this.section);
+
+    // Headers
+    for (const entry of this.headerFooterManager.getAllHeaders()) {
+      for (const element of entry.header.getElements()) {
+        this.bindTrackingToElement(element);
+      }
+    }
+
+    // Footers
+    for (const entry of this.headerFooterManager.getAllFooters()) {
+      for (const element of entry.footer.getElements()) {
+        this.bindTrackingToElement(element);
+      }
+    }
+
+    // Footnotes
+    for (const footnote of this.footnoteManager.getAllFootnotes()) {
+      for (const para of footnote.getParagraphs()) {
+        this.bindTrackingToElement(para);
+      }
+    }
+
+    // Endnotes
+    for (const endnote of this.endnoteManager.getAllEndnotes()) {
+      for (const para of endnote.getParagraphs()) {
+        this.bindTrackingToElement(para);
+      }
+    }
+
+    // Comments
+    for (const comment of this.commentManager.getAllCommentsWithReplies()) {
+      for (const run of comment.getRuns()) {
+        this.bindTrackingToElement(run);
+      }
+    }
   }
 
   /**
@@ -10790,7 +10774,7 @@ export class Document {
   setRsidRoot(rsidRoot: string): this {
     // Validate RSID format (8 hex characters)
     if (!/^[0-9A-Fa-f]{8}$/.test(rsidRoot)) {
-      throw new Error("RSID must be an 8-character hexadecimal value");
+      throw new Error('RSID must be an 8-character hexadecimal value');
     }
     this.rsidRoot = rsidRoot.toUpperCase();
     this.rsids.add(this.rsidRoot);
@@ -10806,7 +10790,7 @@ export class Document {
   addRsid(rsid: string): this {
     // Validate RSID format
     if (!/^[0-9A-Fa-f]{8}$/.test(rsid)) {
-      throw new Error("RSID must be an 8-character hexadecimal value");
+      throw new Error('RSID must be an 8-character hexadecimal value');
     }
     this.rsids.add(rsid.toUpperCase());
     this._settingsModified = true;
@@ -10821,7 +10805,7 @@ export class Document {
     const rsid = Math.floor(Math.random() * 0xffffffff)
       .toString(16)
       .toUpperCase()
-      .padStart(8, "0");
+      .padStart(8, '0');
     this.rsids.add(rsid);
     this._settingsModified = true;
     return rsid;
@@ -10848,7 +10832,7 @@ export class Document {
    * @param protection - Document protection settings
    */
   protectDocument(protection: {
-    edit: "readOnly" | "comments" | "trackedChanges" | "forms";
+    edit: 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
     enforcement?: boolean;
     password?: string;
     cryptProviderType?: string;
@@ -10871,17 +10855,11 @@ export class Document {
     // If password provided, generate hash and salt
     if (protection.password) {
       // For now, use a simple hash. In production, use proper cryptographic functions
-      const crypto = require("crypto");
-      const salt = crypto.randomBytes(16).toString("base64");
+      const crypto = require('crypto');
+      const salt = crypto.randomBytes(16).toString('base64');
       const hash = crypto
-        .pbkdf2Sync(
-          protection.password,
-          salt,
-          protection.cryptSpinCount || 100000,
-          32,
-          "sha512"
-        )
-        .toString("base64");
+        .pbkdf2Sync(protection.password, salt, protection.cryptSpinCount || 100000, 32, 'sha512')
+        .toString('base64');
 
       this.documentProtection.hash = hash;
       this.documentProtection.salt = salt;
@@ -10934,7 +10912,9 @@ export class Document {
    * Gets the document background per ECMA-376 Part 1 §17.2.1
    * @returns Background properties or undefined
    */
-  getDocumentBackground(): { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } | undefined {
+  getDocumentBackground():
+    | { color?: string; themeColor?: string; themeTint?: string; themeShade?: string }
+    | undefined {
     return this._documentBackground ? { ...this._documentBackground } : undefined;
   }
 
@@ -10942,13 +10922,37 @@ export class Document {
    * Sets the document background per ECMA-376 Part 1 §17.2.1
    * @param background - Background properties (color, themeColor, etc.) or undefined to remove
    */
-  setDocumentBackground(background: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } | undefined): void {
+  setDocumentBackground(
+    background:
+      | { color?: string; themeColor?: string; themeTint?: string; themeShade?: string }
+      | undefined
+  ): void {
     this._documentBackground = background ? { ...background } : undefined;
   }
 
   /**
    * Gets whether even and odd headers/footers are enabled (w:evenAndOddHeaders)
    */
+  /**
+   * Gets the document view type (w:view) per ECMA-376 Part 1 §17.15.1.92.
+   * Common values: 'print', 'web', 'outline', 'masterPages', 'normal', 'none'.
+   * @returns The view type string, or undefined if not set
+   */
+  getDocumentView(): string | undefined {
+    return this._documentView;
+  }
+
+  /**
+   * Sets the document view type (w:view) per ECMA-376 Part 1 §17.15.1.92.
+   * Controls which view mode Word uses when opening the document.
+   * Common values: 'print' (Print Layout), 'web' (Web Layout), 'outline', 'normal' (Draft).
+   * @param view - The view type to set
+   */
+  setDocumentView(view: string): void {
+    this._documentView = view;
+    this._settingsModified = true;
+  }
+
   getEvenAndOddHeaders(): boolean {
     return this._evenAndOddHeaders ?? false;
   }
@@ -11143,12 +11147,14 @@ export class Document {
    * @returns CompatibilityInfo with all parsed settings
    */
   getCompatibilityInfo(): CompatibilityInfo {
-    return this._compatInfo ?? {
-      mode: CompatibilityMode.Word2007,
-      isLegacyMode: true,
-      compatSettings: [],
-      legacyFlags: [],
-    };
+    return (
+      this._compatInfo ?? {
+        mode: CompatibilityMode.Word2007,
+        isLegacyMode: true,
+        compatSettings: [],
+        legacyFlags: [],
+      }
+    );
   }
 
   /**
@@ -11228,7 +11234,7 @@ export class Document {
       previousMode: currentMode,
       newMode: 15,
       removedFlags: [],
-      addedSettings: MODERN_COMPAT_SETTINGS.map(s => s.name),
+      addedSettings: MODERN_COMPAT_SETTINGS.map((s) => s.name),
       namespacesExpanded: nsResult.expanded,
       changed: currentMode !== CompatibilityMode.Word2013Plus,
     };
@@ -11248,12 +11254,7 @@ export class Document {
     previousProperties: Record<string, any>,
     date?: Date
   ): Revision {
-    const revision = Revision.createRunPropertiesChange(
-      author,
-      content,
-      previousProperties,
-      date
-    );
+    const revision = Revision.createRunPropertiesChange(author, content, previousProperties, date);
     return this.revisionManager.register(revision);
   }
 
@@ -11311,12 +11312,7 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created and registered revision
    */
-  createMoveFrom(
-    author: string,
-    content: Run | Run[],
-    moveId: string,
-    date?: Date
-  ): Revision {
+  createMoveFrom(author: string, content: Run | Run[], moveId: string, date?: Date): Revision {
     const revision = Revision.createMoveFrom(author, content, moveId, date);
     return this.revisionManager.register(revision);
   }
@@ -11329,12 +11325,7 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created and registered revision
    */
-  createMoveTo(
-    author: string,
-    content: Run | Run[],
-    moveId: string,
-    date?: Date
-  ): Revision {
+  createMoveTo(author: string, content: Run | Run[], moveId: string, date?: Date): Revision {
     const revision = Revision.createMoveTo(author, content, moveId, date);
     return this.revisionManager.register(revision);
   }
@@ -11360,9 +11351,7 @@ export class Document {
     moveToRangeEnd: RangeMarker;
   } {
     // Generate unique move ID and name
-    const moveId = `move${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
+    const moveId = `move${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const moveName = `move${Date.now()}`;
 
     // Get unique IDs for range markers (use revision manager's next ID)
@@ -11378,12 +11367,7 @@ export class Document {
     const moveFromRangeEnd = RangeMarker.createMoveFromEnd(rangeIdStart);
 
     // Create range markers for moveTo
-    const moveToRangeStart = RangeMarker.createMoveToStart(
-      rangeIdStart,
-      moveName,
-      author,
-      date
-    );
+    const moveToRangeStart = RangeMarker.createMoveToStart(rangeIdStart, moveName, author, date);
     const moveToRangeEnd = RangeMarker.createMoveToEnd(rangeIdStart);
 
     // Create the actual move revisions
@@ -11408,11 +11392,7 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created and registered revision
    */
-  createTableCellInsert(
-    author: string,
-    content: Run | Run[],
-    date?: Date
-  ): Revision {
+  createTableCellInsert(author: string, content: Run | Run[], date?: Date): Revision {
     const revision = Revision.createTableCellInsert(author, content, date);
     return this.revisionManager.register(revision);
   }
@@ -11424,11 +11404,7 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created and registered revision
    */
-  createTableCellDelete(
-    author: string,
-    content: Run | Run[],
-    date?: Date
-  ): Revision {
+  createTableCellDelete(author: string, content: Run | Run[], date?: Date): Revision {
     const revision = Revision.createTableCellDelete(author, content, date);
     return this.revisionManager.register(revision);
   }
@@ -11440,11 +11416,7 @@ export class Document {
    * @param date - Optional date (defaults to now)
    * @returns The created and registered revision
    */
-  createTableCellMerge(
-    author: string,
-    content: Run | Run[],
-    date?: Date
-  ): Revision {
+  createTableCellMerge(author: string, content: Run | Run[], date?: Date): Revision {
     const revision = Revision.createTableCellMerge(author, content, date);
     return this.revisionManager.register(revision);
   }
@@ -11463,12 +11435,7 @@ export class Document {
     previousProperties: Record<string, any>,
     date?: Date
   ): Revision {
-    const revision = Revision.createNumberingChange(
-      author,
-      content,
-      previousProperties,
-      date
-    );
+    const revision = Revision.createNumberingChange(author, content, previousProperties, date);
     return this.revisionManager.register(revision);
   }
 
@@ -11522,11 +11489,7 @@ export class Document {
    * const comment = doc.createComment('Alice', run, 'A');
    * ```
    */
-  createComment(
-    author: string,
-    content: string | Run | Run[],
-    initials?: string
-  ): Comment {
+  createComment(author: string, content: string | Run | Run[], initials?: string): Comment {
     this._commentsModified = true;
     return this.commentManager.createComment(author, content, initials);
   }
@@ -11546,12 +11509,7 @@ export class Document {
     initials?: string
   ): Comment {
     this._commentsModified = true;
-    return this.commentManager.createReply(
-      parentCommentId,
-      author,
-      content,
-      initials
-    );
+    return this.commentManager.createReply(parentCommentId, author, content, initials);
   }
 
   /**
@@ -11623,7 +11581,7 @@ export class Document {
     initials?: string
   ): Comment {
     const comment =
-      typeof commentOrAuthor === "string"
+      typeof commentOrAuthor === 'string'
         ? this.createComment(commentOrAuthor, content!, initials)
         : commentOrAuthor;
 
@@ -11666,9 +11624,7 @@ export class Document {
    * @param commentId - ID of the top-level comment
    * @returns Object with the comment and its replies, or undefined if not found
    */
-  getCommentThread(
-    commentId: number
-  ): { comment: Comment; replies: Comment[] } | undefined {
+  getCommentThread(commentId: number): { comment: Comment; replies: Comment[] } | undefined {
     return this.commentManager.getCommentThread(commentId);
   }
 
@@ -11947,16 +11903,16 @@ export class Document {
 
   /**
    * Strips all tracked changes from the document
-   * 
+   *
    * Removes all revision markup (<w:ins>, <w:del>, <w:moveFrom>, <w:moveTo>) from the document's XML
-   * and cleans up related metadata. This effectively "accepts" all changes without using Word's 
+   * and cleans up related metadata. This effectively "accepts" all changes without using Word's
    * built-in Accept Changes feature.
-   * 
+   *
    * **IMPORTANT**: This operation:
    * 1. Modifies the raw XML in the ZIP package to remove all tracked changes
    * 2. Clears Revision objects from the in-memory object model to prevent re-serialization
    * 3. Sets flag to prevent XML regeneration on save (preserves the cleaned XML)
-   * 
+   *
    * What gets removed:
    * - All insertion markers (<w:ins>) - content is kept, wrapper removed
    * - All deletion markers (<w:del>) - entire element including content removed
@@ -11966,22 +11922,22 @@ export class Document {
    * - Revision authors from word/people.xml
    * - Track changes settings from word/settings.xml
    * - Revision count from docProps/core.xml
-   * 
+   *
    * @returns This document instance for method chaining
-   * 
+   *
    * @example
    * ```typescript
    * // Load document with tracked changes
    * const doc = await Document.load('document-with-revisions.docx');
-   * 
+   *
    * // Strip all tracked changes
    * await doc.stripTrackedChanges();
-   * 
+   *
    * // Now process the document as normal
    * doc.applyStyles();
    * await doc.save('cleaned.docx');
    * ```
-   * 
+   *
    * @example
    * ```typescript
    * // Check for tracked changes first
@@ -11992,7 +11948,7 @@ export class Document {
    * }
    * await doc.save('output.docx');
    * ```
-   * 
+   *
    * @deprecated Use {@link acceptAllRevisions} instead - this method will be removed in a future version
    */
   async stripTrackedChanges(): Promise<this> {
@@ -12002,7 +11958,7 @@ export class Document {
 
   /**
    * Accepts all tracked changes in the document
-   * 
+   *
    * Processes all revision markup following Microsoft's official OpenXML SDK approach:
    * - Insertions (<w:ins>): Keep the inserted content, remove wrapper tags
    * - Deletions (<w:del>): Remove entirely (content was deleted, so discard it)
@@ -12010,32 +11966,32 @@ export class Document {
    * - Move To (<w:moveTo>): Keep content, remove wrapper (destination of moved content)
    * - Property changes: Remove all tracking elements
    * - Range markers: Remove all boundary markers
-   * 
+   *
    * Also cleans up metadata:
    * - Revision authors from word/people.xml
    * - Track changes settings from word/settings.xml
    * - Revision count from docProps/core.xml
-   * 
+   *
    * **IMPORTANT**: This operation:
    * 1. Modifies the raw XML in the ZIP package
    * 2. Clears Revision objects from the in-memory object model
    * 3. Sets flag to prevent XML regeneration on save (preserves the cleaned XML)
-   * 
+   *
    * @returns This document instance for method chaining
-   * 
+   *
    * @example
    * ```typescript
    * // Load document with tracked changes
    * const doc = await Document.load('document-with-revisions.docx');
-   * 
+   *
    * // Accept all tracked changes
    * await doc.acceptAllRevisions();
-   * 
+   *
    * // Now process the document as normal
    * doc.applyStyles();
    * await doc.save('cleaned.docx');
    * ```
-   * 
+   *
    * @example
    * ```typescript
    * // Check for tracked changes first
@@ -12046,7 +12002,7 @@ export class Document {
    * }
    * await doc.save('output.docx');
    * ```
-   * 
+   *
    * @see https://learn.microsoft.com/en-us/office/open-xml/how-to-accept-all-revisions
    */
   async acceptAllRevisions(): Promise<this> {
@@ -12119,7 +12075,10 @@ export class Document {
    * await doc.save('output.docx');
    * ```
    */
-  consolidateAllRevisions(timeWindowMs = 1000): { paragraphsProcessed: number; revisionsConsolidated: number } {
+  consolidateAllRevisions(timeWindowMs = 1000): {
+    paragraphsProcessed: number;
+    revisionsConsolidated: number;
+  } {
     let paragraphsProcessed = 0;
     let totalConsolidated = 0;
 
@@ -12242,16 +12201,16 @@ export class Document {
    */
   private clearRevisionsFromAllParagraphs(): void {
     let clearedCount = 0;
-    
+
     // Clear revisions from all paragraphs in the document
     for (const para of this.getAllParagraphs()) {
       const revisions = para.getRevisions();
-      
+
       if (revisions.length > 0) {
         // Filter out all Revision objects from paragraph content
         const content = para.getContent();
-        const nonRevisionContent = content.filter(item => !(item instanceof Revision));
-        
+        const nonRevisionContent = content.filter((item) => !(item instanceof Revision));
+
         // Replace paragraph content with filtered version
         para.clearContent();
         for (const item of nonRevisionContent) {
@@ -12263,11 +12222,11 @@ export class Document {
             para.addField(item);
           }
         }
-        
+
         clearedCount += revisions.length;
       }
     }
-    
+
     if (clearedCount > 0) {
       this.logger.info(`Cleared ${clearedCount} Revision object(s) from in-memory document model`);
     }
@@ -12510,7 +12469,7 @@ export class Document {
       // ZipWriter stores all content as Buffer internally, but DocumentPart expects string for text
       let content: string | Buffer = file.content;
       if (!file.isBinary && Buffer.isBuffer(file.content)) {
-        content = file.content.toString("utf-8");
+        content = file.content.toString('utf-8');
       }
 
       return {
@@ -12588,7 +12547,7 @@ export class Document {
         }
       }
       // Remove relationships targeting this part from _rels/.rels
-      const relsXml = this.zipHandler.getFileAsString("_rels/.rels");
+      const relsXml = this.zipHandler.getFileAsString('_rels/.rels');
       if (relsXml) {
         const target = partName.replace(/^\//, '');
         const relPattern = new RegExp(
@@ -12597,7 +12556,7 @@ export class Document {
         );
         const cleaned = relsXml.replace(relPattern, '');
         if (cleaned !== relsXml) {
-          this.zipHandler.updateFile("_rels/.rels", cleaned);
+          this.zipHandler.updateFile('_rels/.rels', cleaned);
         }
       }
       // Track removed parts to skip regeneration during save
@@ -12663,17 +12622,14 @@ export class Document {
     const contentTypes = new Map<string, string>();
 
     try {
-      const contentTypesXml = this.zipHandler.getFileAsString(
-        "[Content_Types].xml"
-      );
+      const contentTypesXml = this.zipHandler.getFileAsString('[Content_Types].xml');
       if (!contentTypesXml) {
         return contentTypes;
       }
 
       // Parse content types XML
       // Match Default elements (by extension)
-      const defaultPattern =
-        /<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"/g;
+      const defaultPattern = /<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"/g;
       let match;
       while ((match = defaultPattern.exec(contentTypesXml)) !== null) {
         if (match[1] && match[2]) {
@@ -12682,8 +12638,7 @@ export class Document {
       }
 
       // Match Override elements (by part name)
-      const overridePattern =
-        /<Override\s+PartName="([^"]+)"\s+ContentType="([^"]+)"/g;
+      const overridePattern = /<Override\s+PartName="([^"]+)"\s+ContentType="([^"]+)"/g;
       while ((match = overridePattern.exec(contentTypesXml)) !== null) {
         if (match[1] && match[2]) {
           contentTypes.set(match[1], match[2]);
@@ -12730,13 +12685,13 @@ export class Document {
       }
 
       // If already a string, return as-is
-      if (typeof part.content === "string") {
+      if (typeof part.content === 'string') {
         return part.content;
       }
 
       // If Buffer, decode as UTF-8 (standard for XML files)
       if (Buffer.isBuffer(part.content)) {
-        return part.content.toString("utf8");
+        return part.content.toString('utf8');
       }
 
       return null;
@@ -12823,8 +12778,8 @@ export class Document {
    * ```
    */
   async setRawXml(partName: string, xmlContent: string): Promise<void> {
-    if (typeof xmlContent !== "string") {
-      throw new Error("XML content must be a string");
+    if (typeof xmlContent !== 'string') {
+      throw new Error('XML content must be a string');
     }
 
     // Use setPart to update the part (handles both string and binary detection)
@@ -12850,19 +12805,14 @@ export class Document {
    * await doc.addContentType('.json', 'application/json');
    * ```
    */
-  async addContentType(
-    partNameOrExtension: string,
-    contentType: string
-  ): Promise<boolean> {
+  async addContentType(partNameOrExtension: string, contentType: string): Promise<boolean> {
     try {
-      let contentTypesXml = this.zipHandler.getFileAsString(
-        "[Content_Types].xml"
-      );
+      let contentTypesXml = this.zipHandler.getFileAsString('[Content_Types].xml');
       if (!contentTypesXml) {
         return false;
       }
 
-      const isExtension = partNameOrExtension.startsWith(".");
+      const isExtension = partNameOrExtension.startsWith('.');
 
       if (isExtension) {
         // Add as Default element (for extensions)
@@ -12871,7 +12821,7 @@ export class Document {
         // Check if already exists
         const existingPattern = new RegExp(
           `<Default\\s+Extension="${extension}"\\s+ContentType="[^"]+"/?>`,
-          "g"
+          'g'
         );
         if (existingPattern.test(contentTypesXml)) {
           // Update existing
@@ -12882,13 +12832,13 @@ export class Document {
         } else {
           // Add new before closing tag
           contentTypesXml = contentTypesXml.replace(
-            "</Types>",
+            '</Types>',
             `  <Default Extension="${extension}" ContentType="${contentType}"/>\n</Types>`
           );
         }
       } else {
         // Add as Override element (for specific parts)
-        const partName = partNameOrExtension.startsWith("/")
+        const partName = partNameOrExtension.startsWith('/')
           ? partNameOrExtension
           : `/${partNameOrExtension}`;
 
@@ -12896,9 +12846,9 @@ export class Document {
         const existingPattern = new RegExp(
           `<Override\\s+PartName="${partName.replace(
             /[.*+?^${}()|[\]\\]/g,
-            "\\$&"
+            '\\$&'
           )}"\\s+ContentType="[^"]+"/?>`,
-          "g"
+          'g'
         );
         if (existingPattern.test(contentTypesXml)) {
           // Update existing
@@ -12909,14 +12859,14 @@ export class Document {
         } else {
           // Add new before closing tag
           contentTypesXml = contentTypesXml.replace(
-            "</Types>",
+            '</Types>',
             `  <Override PartName="${partName}" ContentType="${contentType}"/>\n</Types>`
           );
         }
       }
 
       // Update the content types file
-      this.zipHandler.updateFile("[Content_Types].xml", contentTypesXml);
+      this.zipHandler.updateFile('[Content_Types].xml', contentTypesXml);
       return true;
     } catch (error: unknown) {
       return false;
@@ -12944,9 +12894,7 @@ export class Document {
 
     try {
       // Get all .rels files
-      const relsPaths = this.zipHandler
-        .getFilePaths()
-        .filter((path) => path.endsWith(".rels"));
+      const relsPaths = this.zipHandler.getFilePaths().filter((path) => path.endsWith('.rels'));
 
       for (const relsPath of relsPaths) {
         const relsContent = this.zipHandler.getFileAsString(relsPath);
@@ -12961,22 +12909,16 @@ export class Document {
           const rels: ParsedRelationship[] = [];
 
           // Use XMLParser to extract all Relationship elements
-          const relationshipElements = XMLParser.extractElements(
-            relsContent,
-            "Relationship"
-          );
+          const relationshipElements = XMLParser.extractElements(relsContent, 'Relationship');
 
           for (const relElement of relationshipElements) {
             const rel: ParsedRelationship = {};
 
             // Extract attributes using XMLParser
-            const id = XMLParser.extractAttribute(relElement, "Id");
-            const type = XMLParser.extractAttribute(relElement, "Type");
-            const target = XMLParser.extractAttribute(relElement, "Target");
-            const targetMode = XMLParser.extractAttribute(
-              relElement,
-              "TargetMode"
-            );
+            const id = XMLParser.extractAttribute(relElement, 'Id');
+            const type = XMLParser.extractAttribute(relElement, 'Type');
+            const target = XMLParser.extractAttribute(relElement, 'Target');
+            const targetMode = XMLParser.extractAttribute(relElement, 'TargetMode');
 
             if (id) rel.id = id;
             if (type) rel.type = type;
@@ -13025,19 +12967,15 @@ export class Document {
    */
   async getRelationships(
     partName: string
-  ): Promise<
-    { id?: string; type?: string; target?: string; targetMode?: string }[]
-  > {
+  ): Promise<{ id?: string; type?: string; target?: string; targetMode?: string }[]> {
     try {
       // Construct the .rels path from the part name
       // For 'word/document.xml' -> 'word/_rels/document.xml.rels'
-      const lastSlash = partName.lastIndexOf("/");
+      const lastSlash = partName.lastIndexOf('/');
       const relsPath =
         lastSlash === -1
           ? `_rels/${partName}.rels`
-          : `${partName.substring(0, lastSlash)}/_rels/${partName.substring(
-              lastSlash + 1
-            )}.rels`;
+          : `${partName.substring(0, lastSlash)}/_rels/${partName.substring(lastSlash + 1)}.rels`;
 
       const relsContent = this.zipHandler.getFileAsString(relsPath);
       if (!relsContent) {
@@ -13054,19 +12992,16 @@ export class Document {
       const relationships: ParsedRelationship[] = [];
 
       // Use XMLParser to extract all Relationship elements
-      const relationshipElements = XMLParser.extractElements(
-        relsContent,
-        "Relationship"
-      );
+      const relationshipElements = XMLParser.extractElements(relsContent, 'Relationship');
 
       for (const relElement of relationshipElements) {
         const rel: ParsedRelationship = {};
 
         // Extract attributes using XMLParser
-        const id = XMLParser.extractAttribute(relElement, "Id");
-        const type = XMLParser.extractAttribute(relElement, "Type");
-        const target = XMLParser.extractAttribute(relElement, "Target");
-        const targetMode = XMLParser.extractAttribute(relElement, "TargetMode");
+        const id = XMLParser.extractAttribute(relElement, 'Id');
+        const type = XMLParser.extractAttribute(relElement, 'Type');
+        const target = XMLParser.extractAttribute(relElement, 'Target');
+        const targetMode = XMLParser.extractAttribute(relElement, 'TargetMode');
 
         if (id) rel.id = id;
         if (type) rel.type = type;
@@ -13089,9 +13024,7 @@ export class Document {
    */
   private getContentTypeForPart(partName: string): string | undefined {
     try {
-      const contentTypesXml = this.zipHandler.getFileAsString(
-        "[Content_Types].xml"
-      );
+      const contentTypesXml = this.zipHandler.getFileAsString('[Content_Types].xml');
       if (!contentTypesXml) {
         return undefined;
       }
@@ -13100,9 +13033,9 @@ export class Document {
       const overridePattern = new RegExp(
         `<Override\\s+PartName="${partName.replace(
           /[.*+?^${}()|[\]\\]/g,
-          "\\$&"
+          '\\$&'
         )}"\\s+ContentType="([^"]+)"`,
-        "i"
+        'i'
       );
       const overrideMatch = contentTypesXml.match(overridePattern);
       if (overrideMatch) {
@@ -13110,13 +13043,11 @@ export class Document {
       }
 
       // Check for extension default
-      const ext = partName.substring(partName.lastIndexOf("."));
+      const ext = partName.substring(partName.lastIndexOf('.'));
       if (ext) {
         const defaultPattern = new RegExp(
-          `<Default\\s+Extension="${ext.substring(
-            1
-          )}"\\s+ContentType="([^"]+)"`,
-          "i"
+          `<Default\\s+Extension="${ext.substring(1)}"\\s+ContentType="([^"]+)"`,
+          'i'
         );
         const defaultMatch = contentTypesXml.match(defaultPattern);
         if (defaultMatch) {
@@ -13208,8 +13139,8 @@ export class Document {
         if (wholeWord) {
           // Create word boundary regex
           const wordPattern = new RegExp(
-            `\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-            caseSensitive ? "g" : "gi"
+            `\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+            caseSensitive ? 'g' : 'gi'
           );
           let match;
           while ((match = wordPattern.exec(runText)) !== null) {
@@ -13225,9 +13156,7 @@ export class Document {
         } else {
           // Simple substring search
           let startIndex = 0;
-          while (
-            (startIndex = compareText.indexOf(searchText, startIndex)) !== -1
-          ) {
+          while ((startIndex = compareText.indexOf(searchText, startIndex)) !== -1) {
             results.push({
               paragraph,
               paragraphIndex: pIndex,
@@ -13264,18 +13193,13 @@ export class Document {
                 const run = runs[rIndex];
                 if (!run) continue;
                 const runText = run.getText();
-                const compareText = caseSensitive
-                  ? runText
-                  : runText.toLowerCase();
+                const compareText = caseSensitive ? runText : runText.toLowerCase();
 
                 if (wholeWord) {
                   // Create word boundary regex
                   const wordPattern = new RegExp(
-                    `\\b${searchText.replace(
-                      /[.*+?^${}()|[\]\\]/g,
-                      "\\$&"
-                    )}\\b`,
-                    caseSensitive ? "g" : "gi"
+                    `\\b${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+                    caseSensitive ? 'g' : 'gi'
                   );
                   let match;
                   while ((match = wordPattern.exec(runText)) !== null) {
@@ -13291,12 +13215,7 @@ export class Document {
                 } else {
                   // Simple substring search
                   let startIndex = 0;
-                  while (
-                    (startIndex = compareText.indexOf(
-                      searchText,
-                      startIndex
-                    )) !== -1
-                  ) {
+                  while ((startIndex = compareText.indexOf(searchText, startIndex)) !== -1) {
                     results.push({
                       paragraph,
                       paragraphIndex: -1, // Not in main body, in table
@@ -13339,12 +13258,9 @@ export class Document {
    * }
    * ```
    */
-  findParagraphsByText(
-    pattern: string | RegExp
-  ): { paragraph: Paragraph; matches: string[] }[] {
+  findParagraphsByText(pattern: string | RegExp): { paragraph: Paragraph; matches: string[] }[] {
     const results: { paragraph: Paragraph; matches: string[] }[] = [];
-    const regex =
-      typeof pattern === "string" ? new RegExp(pattern, "gi") : pattern;
+    const regex = typeof pattern === 'string' ? new RegExp(pattern, 'gi') : pattern;
 
     for (const paragraph of this.getAllParagraphs()) {
       const text = paragraph.getText();
@@ -13404,13 +13320,13 @@ export class Document {
   getRunsByColor(color: string): Run[] {
     const results: Run[] = [];
     // Normalize color - remove # and convert to uppercase
-    const normalizedColor = color.replace(/^#/, "").toUpperCase();
+    const normalizedColor = color.replace(/^#/, '').toUpperCase();
 
     for (const paragraph of this.getAllParagraphs()) {
       for (const run of paragraph.getRuns()) {
         const formatting = run.getFormatting();
         if (formatting.color) {
-          const runColor = formatting.color.replace(/^#/, "").toUpperCase();
+          const runColor = formatting.color.replace(/^#/, '').toUpperCase();
           if (runColor === normalizedColor) {
             results.push(run);
           }
@@ -13583,7 +13499,7 @@ export class Document {
           sizes.set(formatting.size, (sizes.get(formatting.size) || 0) + 1);
         }
         if (formatting.color) {
-          const normalizedColor = formatting.color.toUpperCase().replace(/^#/, "");
+          const normalizedColor = formatting.color.toUpperCase().replace(/^#/, '');
           colors.set(normalizedColor, (colors.get(normalizedColor) || 0) + 1);
         }
       }
@@ -13683,8 +13599,8 @@ export class Document {
         if (wholeWord) {
           // Use word boundary regex for whole word replacement
           const wordPattern = new RegExp(
-            `\\b${find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-            caseSensitive ? "g" : "gi"
+            `\\b${find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+            caseSensitive ? 'g' : 'gi'
           );
           const matches = originalText.match(wordPattern);
           if (matches) {
@@ -13694,8 +13610,8 @@ export class Document {
         } else {
           // Simple substring replacement
           const searchPattern = new RegExp(
-            find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-            caseSensitive ? "g" : "gi"
+            find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+            caseSensitive ? 'g' : 'gi'
           );
           const matches = originalText.match(searchPattern);
           if (matches) {
@@ -13765,7 +13681,7 @@ export class Document {
       caseSensitive = false,
       wholeWord = false,
       trackChanges = false,
-      author = "Unknown",
+      author = 'Unknown',
     } = options || {};
 
     let count = 0;
@@ -13773,17 +13689,15 @@ export class Document {
 
     // Convert pattern to RegExp if it's a string
     let regex: RegExp;
-    if (typeof pattern === "string") {
+    if (typeof pattern === 'string') {
       // Escape special regex characters
-      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const boundaryPattern = wholeWord ? `\\b${escaped}\\b` : escaped;
-      const flags = caseSensitive ? "g" : "gi";
+      const flags = caseSensitive ? 'g' : 'gi';
       regex = new RegExp(boundaryPattern, flags);
     } else {
       // Use provided RegExp, ensure global flag
-      const flags = pattern.flags.includes("g")
-        ? pattern.flags
-        : pattern.flags + "g";
+      const flags = pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g';
       regex = new RegExp(pattern.source, flags);
     }
 
@@ -13811,15 +13725,23 @@ export class Document {
 
             if (useGranular) {
               for (const seg of segments) {
-                if (seg.type === "equal") {
+                if (seg.type === 'equal') {
                   newContent.push(new Run(seg.text, formatting));
-                } else if (seg.type === "delete") {
-                  const delRev = Revision.createDeletion(author, new Run(seg.text, formatting), now);
+                } else if (seg.type === 'delete') {
+                  const delRev = Revision.createDeletion(
+                    author,
+                    new Run(seg.text, formatting),
+                    now
+                  );
                   this.revisionManager.register(delRev);
                   revisions.push(delRev);
                   newContent.push(delRev);
-                } else if (seg.type === "insert") {
-                  const insRev = Revision.createInsertion(author, new Run(seg.text, formatting), now);
+                } else if (seg.type === 'insert') {
+                  const insRev = Revision.createInsertion(
+                    author,
+                    new Run(seg.text, formatting),
+                    now
+                  );
                   this.revisionManager.register(insRev);
                   revisions.push(insRev);
                   newContent.push(insRev);
@@ -13827,7 +13749,11 @@ export class Document {
               }
             } else {
               // Whole-run delete + insert
-              const deletion = Revision.createDeletion(author, new Run(originalText, formatting), now);
+              const deletion = Revision.createDeletion(
+                author,
+                new Run(originalText, formatting),
+                now
+              );
               this.revisionManager.register(deletion);
               revisions.push(deletion);
               newContent.push(deletion);
@@ -13953,7 +13879,7 @@ export class Document {
       if (includeSpaces) {
         totalChars += text.length;
       } else {
-        totalChars += text.replace(/\s/g, "").length;
+        totalChars += text.replace(/\s/g, '').length;
       }
     }
 
@@ -13976,7 +13902,7 @@ export class Document {
             if (includeSpaces) {
               totalChars += text.length;
             } else {
-              totalChars += text.replace(/\s/g, "").length;
+              totalChars += text.replace(/\s/g, '').length;
             }
           }
         }
@@ -13994,7 +13920,7 @@ export class Document {
   removeParagraph(paragraphOrIndex: Paragraph | number): boolean {
     let index: number;
 
-    if (typeof paragraphOrIndex === "number") {
+    if (typeof paragraphOrIndex === 'number') {
       index = paragraphOrIndex;
     } else {
       // Find the index of the paragraph
@@ -14031,7 +13957,7 @@ export class Document {
   removeTable(tableOrIndex: Table | number): boolean {
     let index: number;
 
-    if (typeof tableOrIndex === "number") {
+    if (typeof tableOrIndex === 'number') {
       // If number provided, find the nth table
       const tables = this.getTables();
       if (tableOrIndex >= 0 && tableOrIndex < tables.length) {
@@ -14065,9 +13991,7 @@ export class Document {
   private validateParagraph(paragraph: Paragraph): void {
     // Type validation
     if (!(paragraph instanceof Paragraph)) {
-      throw new Error(
-        "insertParagraphAt: parameter must be a Paragraph instance"
-      );
+      throw new Error('insertParagraphAt: parameter must be a Paragraph instance');
     }
 
     // Check for duplicate paragraph IDs
@@ -14110,19 +14034,19 @@ export class Document {
   private validateTable(table: Table): void {
     // Type validation
     if (!(table instanceof Table)) {
-      throw new Error("insertTableAt: parameter must be a Table instance");
+      throw new Error('insertTableAt: parameter must be a Table instance');
     }
 
     // Content validation - table must have rows
     const rows = table.getRows();
     if (rows.length === 0) {
-      throw new Error("insertTableAt: table must have at least one row");
+      throw new Error('insertTableAt: table must have at least one row');
     }
 
     // Check first row has cells (rows.length > 0 already checked above)
     const firstRow = rows[0];
     if (firstRow?.getCells().length === 0) {
-      throw new Error("insertTableAt: table rows must have at least one cell");
+      throw new Error('insertTableAt: table rows must have at least one cell');
     }
 
     // Warn about missing table styles
@@ -14142,27 +14066,25 @@ export class Document {
   private validateToc(toc: TableOfContentsElement): void {
     // Type validation
     if (!(toc instanceof TableOfContentsElement)) {
-      throw new Error(
-        "insertTocAt: parameter must be a TableOfContentsElement instance"
-      );
+      throw new Error('insertTocAt: parameter must be a TableOfContentsElement instance');
     }
 
     // Check if document has heading styles for TOC to reference
     const hasHeadings = [
-      "Heading1",
-      "Heading2",
-      "Heading3",
-      "Heading4",
-      "Heading5",
-      "Heading6",
-      "Heading7",
-      "Heading8",
-      "Heading9",
+      'Heading1',
+      'Heading2',
+      'Heading3',
+      'Heading4',
+      'Heading5',
+      'Heading6',
+      'Heading7',
+      'Heading8',
+      'Heading9',
     ].some((style) => this.stylesManager.hasStyle(style));
 
     if (!hasHeadings) {
       defaultLogger.warn(
-        "No heading styles found in document. Table of Contents may not display entries correctly."
+        'No heading styles found in document. Table of Contents may not display entries correctly.'
       );
     }
   }
@@ -14491,8 +14413,7 @@ export class Document {
    * ```
    */
   getHyperlinks(): { hyperlink: Hyperlink; paragraph: Paragraph }[] {
-    const hyperlinks: { hyperlink: Hyperlink; paragraph: Paragraph }[] =
-      [];
+    const hyperlinks: { hyperlink: Hyperlink; paragraph: Paragraph }[] = [];
 
     // Helper function to extract hyperlinks from paragraph content,
     // including those inside Revision elements (w:ins, w:del, etc.)
@@ -14520,8 +14441,7 @@ export class Document {
       for (const row of table.getRows()) {
         for (const cell of row.getCells()) {
           // TableCell has getParagraphs method
-          const cellParagraphs =
-            cell instanceof TableCell ? cell.getParagraphs() : [];
+          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
           for (const para of cellParagraphs) {
             extractHyperlinksFromParagraph(para);
           }
@@ -14558,7 +14478,9 @@ export class Document {
       }
     };
 
-    const scanElement = (element: BodyElement | Paragraph | Table | StructuredDocumentTag): void => {
+    const scanElement = (
+      element: BodyElement | Paragraph | Table | StructuredDocumentTag
+    ): void => {
       if (element instanceof Paragraph) {
         scanParagraph(element);
       } else if (element instanceof Table) {
@@ -14644,8 +14566,7 @@ export class Document {
     resetFormatting?: boolean;
     cleanupRelationships?: boolean;
   }): number {
-    const { resetFormatting = false, cleanupRelationships = false } =
-      options || {};
+    const { resetFormatting = false, cleanupRelationships = false } = options || {};
 
     // Guard: Skip when track changes is enabled - prevents field structure corruption
     // The mergeConsecutiveHyperlinks() method uses clearContent() + addHyperlink()
@@ -14654,7 +14575,7 @@ export class Document {
     if (this.trackChangesEnabled) {
       defaultLogger.warn(
         'defragmentHyperlinks skipped: track changes is enabled. ' +
-        'Call defragmentHyperlinks before enableTrackChanges() to avoid field corruption.'
+          'Call defragmentHyperlinks before enableTrackChanges() to avoid field corruption.'
       );
       return 0;
     }
@@ -14683,8 +14604,7 @@ export class Document {
     for (const table of this.getTables()) {
       for (const row of table.getRows()) {
         for (const cell of row.getCells()) {
-          const cellParagraphs =
-            cell instanceof TableCell ? cell.getParagraphs() : [];
+          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
           for (const para of cellParagraphs) {
             const originalContent = para.getContent();
 
@@ -14706,12 +14626,9 @@ export class Document {
       const referencedIds = this.collectAllReferencedHyperlinkIds();
 
       // Remove orphaned hyperlink relationships
-      const removedCount =
-        this.relationshipManager.removeOrphanedHyperlinks(referencedIds);
+      const removedCount = this.relationshipManager.removeOrphanedHyperlinks(referencedIds);
       if (removedCount > 0) {
-        defaultLogger.info(
-          `Cleaned up ${removedCount} orphaned hyperlink relationship(s)`
-        );
+        defaultLogger.info(`Cleaned up ${removedCount} orphaned hyperlink relationship(s)`);
       }
     }
 
@@ -14795,8 +14712,7 @@ export class Document {
     for (const table of this.getTables()) {
       for (const row of table.getRows()) {
         for (const cell of row.getCells()) {
-          const cellParagraphs =
-            cell instanceof TableCell ? cell.getParagraphs() : [];
+          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
           for (const para of cellParagraphs) {
             for (const field of para.getFields()) {
               results.push({ field, paragraph: para, table });
@@ -14857,7 +14773,10 @@ export class Document {
     await this.imageManager.loadAllImageData();
 
     // 2. Group images by filename (avoid processing same file twice)
-    const imagesByFilename = new Map<string, { image: Image; relationshipId: string; filename: string }[]>();
+    const imagesByFilename = new Map<
+      string,
+      { image: Image; relationshipId: string; filename: string }[]
+    >();
     for (const entry of this.imageManager.getAllImages()) {
       const group = imagesByFilename.get(entry.filename) || [];
       group.push(entry);
@@ -14915,7 +14834,11 @@ export class Document {
    * Handles both document body and header/footer relationships.
    * @private
    */
-  private updateImageRelationshipTarget(relId: string, oldFilename: string, newFilename: string): void {
+  private updateImageRelationshipTarget(
+    relId: string,
+    oldFilename: string,
+    newFilename: string
+  ): void {
     // Try document body relationship manager first
     const rel = this.relationshipManager.getRelationship(relId);
     if (rel) {
@@ -14976,8 +14899,7 @@ export class Document {
     for (const table of this.getTables()) {
       for (const row of table.getRows()) {
         for (const cell of row.getCells()) {
-          const cellParagraphs =
-            cell instanceof TableCell ? cell.getParagraphs() : [];
+          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
           for (const para of cellParagraphs) {
             runs.push(...para.getRuns());
           }
@@ -15017,9 +14939,10 @@ export class Document {
    * });
    * ```
    */
-  hyperlinkEmails(options?: {
-    formatting?: RunFormatting;
-  }): { emailsLinked: number; paragraphsModified: number } {
+  hyperlinkEmails(options?: { formatting?: RunFormatting }): {
+    emailsLinked: number;
+    paragraphsModified: number;
+  } {
     // Default formatting: Verdana 12pt, Underline, no bold, #0000FF
     const defaultFormatting: RunFormatting = {
       font: 'Verdana',
@@ -15136,23 +15059,23 @@ export class Document {
    */
   removeFormattingFromAll(
     type:
-      | "bold"
-      | "italic"
-      | "underline"
-      | "strike"
-      | "dstrike"
-      | "highlight"
-      | "color"
-      | "font"
-      | "size"
-      | "subscript"
-      | "superscript"
-      | "smallCaps"
-      | "allCaps"
-      | "outline"
-      | "shadow"
-      | "emboss"
-      | "imprint"
+      | 'bold'
+      | 'italic'
+      | 'underline'
+      | 'strike'
+      | 'dstrike'
+      | 'highlight'
+      | 'color'
+      | 'font'
+      | 'size'
+      | 'subscript'
+      | 'superscript'
+      | 'smallCaps'
+      | 'allCaps'
+      | 'outline'
+      | 'shadow'
+      | 'emboss'
+      | 'imprint'
   ): number {
     let modifiedCount = 0;
 
@@ -15221,9 +15144,7 @@ export class Document {
    * });
    * ```
    */
-  updateAllHyperlinks(
-    formatter: (hyperlink: Hyperlink, paragraph: Paragraph) => void
-  ): number {
+  updateAllHyperlinks(formatter: (hyperlink: Hyperlink, paragraph: Paragraph) => void): number {
     // Get all hyperlinks with their containing paragraphs
     const hyperlinks = this.getHyperlinks();
 
@@ -15296,7 +15217,7 @@ export class Document {
 
       this.bodyElements.forEach((element, index) => {
         if (element instanceof Paragraph) {
-          const isEmpty = element.getText().trim() === "";
+          const isEmpty = element.getText().trim() === '';
           if (isEmpty && lastWasEmpty) {
             toRemove.push(index);
           }
@@ -15327,7 +15248,7 @@ export class Document {
       }
 
       if (standardLineSpacing !== undefined) {
-        para.setLineSpacing(standardLineSpacing, "auto");
+        para.setLineSpacing(standardLineSpacing, 'auto');
         normalized++;
       }
 
@@ -15352,8 +15273,7 @@ export class Document {
     for (const table of this.getTables()) {
       for (const row of table.getRows()) {
         for (const cell of row.getCells()) {
-          const cellParagraphs =
-            cell instanceof TableCell ? cell.getParagraphs() : [];
+          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
           for (const para of cellParagraphs) {
             if (standardParagraphSpacing) {
               if (standardParagraphSpacing.before !== undefined) {
@@ -15367,7 +15287,7 @@ export class Document {
             }
 
             if (standardLineSpacing !== undefined) {
-              para.setLineSpacing(standardLineSpacing, "auto");
+              para.setLineSpacing(standardLineSpacing, 'auto');
               normalized++;
             }
 
@@ -15456,13 +15376,13 @@ export class Document {
 
   /**
    * Rebuilds all Table of Contents in the document
-   * 
+   *
    * Analyzes each TOC in the document, parses its field instructions to determine
    * which heading levels to include, searches for matching headings (including those
    * in nested tables), and returns a summary of TOC instructions and heading counts.
-   * 
+   *
    * **NEW: This method now also populates the TOCs with hyperlinked entries automatically!**
-   * 
+   *
    * The method:
    * 1. Removes SDT wrappers around tables if found (uses clearCustom helper)
    * 2. Ensures `_top` bookmark exists at document start for TOC linking
@@ -15475,7 +15395,7 @@ export class Document {
    * 9. **Updates document.xml with the populated TOC**
    * 10. Retains field instructions so TOCs can be manually updated later
    * 11. Returns summary: [instruction, [h1Count, h2Count, h3Count, ...]]
-   * 
+   *
    * **Key Features:**
    * - No arguments required - analyzes the current document state
    * - Searches nested tables when counting headings
@@ -15486,19 +15406,19 @@ export class Document {
    * - **Field instructions preserved for manual updates**
    * - **No page numbers displayed (pure hyperlink navigation)**
    * - Returns summary data for diagnostics and verification
-   * 
+   *
    * **Output Format:**
    * Returns a 2D array where each row contains:
    * - Index 0: The TOC field instruction text (e.g., "TOC \\o \"1-3\"")
    * - Index 1: Array of heading counts by level (e.g., [5, 12, 8] = 5 H1s, 12 H2s, 8 H3s)
-   * 
+   *
    * @returns Two-dimensional array of [instruction, headingCounts[]] for each TOC
-   * 
+   *
    * @example
    * ```typescript
    * const doc = await Document.load('document.docx');
    * const tocInfo = doc.rebuildTOCs();
-   * 
+   *
    * console.log(`Found ${tocInfo.length} Table(s) of Contents`);
    * for (const [instruction, counts] of tocInfo) {
    *   console.log(`TOC Instruction: ${instruction}`);
@@ -15508,59 +15428,59 @@ export class Document {
    *     }
    *   });
    * }
-   * 
+   *
    * // TOCs are now populated with hyperlinks - save the document
    * await doc.save('output.docx');
    * // When opened in Word, TOCs will display with clickable links, no manual update needed
    * ```
-   * 
+   *
    * @example
    * ```typescript
    * // Rebuild TOCs and save with populated entries
    * const doc = await Document.load('input.docx');
    * const tocSummary = doc.rebuildTOCs();
    * await doc.save('output.docx');
-   * 
+   *
    * console.log(`Processed ${tocSummary.length} TOCs with hyperlinked entries`);
    * ```
    */
   public rebuildTOCs(): [string, number[]][] {
     const results: [string, number[]][] = [];
-    
+
     // Step 1: Remove SDT wrappers around tables if found (helper already exists)
     this.clearCustom();
-    
+
     // Step 2: Ensure _top bookmark exists at document start
     this.addTopBookmark();
-    
+
     // Step 3: Get document.xml to scan for TOC elements
     const docXml = this.zipHandler.getFileAsString('word/document.xml');
     if (!docXml) {
       return results;
     }
-    
+
     // Step 4: Find all TOC SDT elements
     const tocRegex = /<w:sdt>[\s\S]*?<w:docPartGallery w:val="Table of Contents"[\s\S]*?<\/w:sdt>/g;
     const tocMatches = Array.from(docXml.matchAll(tocRegex));
-    
+
     if (tocMatches.length === 0) {
       return results;
     }
-    
+
     // Step 5: For each TOC, parse instructions and count headings
     for (const match of tocMatches) {
       try {
         const tocXml = match[0];
-        
+
         // Extract field instruction
         const instrMatch = /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/.exec(tocXml);
         if (!instrMatch?.[1]) {
           continue;
         }
-        
+
         // TypeScript type narrowing: assign to const variable
         const instrText = instrMatch[1];
-        
+
         // Decode XML entities
         const fieldInstruction = instrText
           .replace(/&/g, '&')
@@ -15568,23 +15488,23 @@ export class Document {
           .replace(/>/g, '>')
           .replace(/"/g, '"')
           .replace(/'/g, "'");
-        
+
         // Parse the instruction to get heading levels
         const levels = this.parseTOCFieldInstruction(fieldInstruction);
-        
+
         // Find all headings in document (including nested tables)
         const headings = this.findHeadingsForTOCFromXML(docXml, levels);
-        
+
         // Count headings by level (create array with counts for each level 1-9)
         const headingCounts: number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0]; // Indices 0-8 for levels 1-9
-        
+
         for (const heading of headings) {
           if (heading.level >= 1 && heading.level <= 9) {
             const index = heading.level - 1;
             headingCounts[index] = (headingCounts[index] || 0) + 1;
           }
         }
-        
+
         // Add to results: [instruction, counts]
         results.push([fieldInstruction, headingCounts]);
       } catch (error: unknown) {
@@ -15598,20 +15518,18 @@ export class Document {
         continue;
       }
     }
-    
+
     // Step 6: Populate all TOCs in the document with hyperlinked entries
     // This modifies the XML to include pre-populated TOC entries with hyperlinks
     const populatedXml = this.populateAllTOCsInXML(docXml);
-    
+
     // Step 7: Update document.xml with the populated TOCs
     if (populatedXml !== docXml) {
       this.zipHandler.updateFile('word/document.xml', populatedXml);
-      
-      this.logger.info(
-        `Successfully populated ${results.length} TOC(s) with hyperlinked entries`
-      );
+
+      this.logger.info(`Successfully populated ${results.length} TOC(s) with hyperlinked entries`);
     }
-    
+
     return results;
   }
 
@@ -15643,14 +15561,14 @@ export class Document {
    * ```
    */
   normalizeTableBorders(options?: {
-    style?: "single" | "double" | "dotted" | "dashed" | "thick" | "none";
+    style?: 'single' | 'double' | 'dotted' | 'dashed' | 'thick' | 'none';
     size?: number;
     color?: string;
   }): number {
     const border: TableBorder = {
-      style: options?.style ?? "single",
+      style: options?.style ?? 'single',
       size: options?.size ?? 4,
-      color: options?.color ?? "000000",
+      color: options?.color ?? '000000',
     };
 
     return this.applyBordersToAllTables(border);
@@ -15701,8 +15619,8 @@ export class Document {
 
     // Create regex pattern
     const pattern = matchCase
-      ? new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")
-      : new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      ? new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+      : new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
 
     // Process body paragraphs
     for (const para of this.getAllParagraphs()) {
@@ -15786,36 +15704,36 @@ export class Document {
 
     // [Content_Types].xml - minimal
     zipHandler.addFile(
-      "[Content_Types].xml",
+      '[Content_Types].xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
         '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
         '  <Default Extension="xml" ContentType="application/xml"/>\n' +
         '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>\n' +
-        "</Types>"
+        '</Types>'
     );
 
     // _rels/.rels - only reference parts that actually exist
     zipHandler.addFile(
-      "_rels/.rels",
+      '_rels/.rels',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
         '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>\n' +
-        "</Relationships>"
+        '</Relationships>'
     );
 
     // word/document.xml - empty body
     zipHandler.addFile(
-      "word/document.xml",
+      'word/document.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">\n' +
-        "  <w:body/>\n" +
-        "</w:document>"
+        '  <w:body/>\n' +
+        '</w:document>'
     );
 
     // word/_rels/document.xml.rels - empty relationships
     zipHandler.addFile(
-      "word/_rels/document.xml.rels",
+      'word/_rels/document.xml.rels',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
     );

@@ -48,11 +48,11 @@
  * @see {@link https://www.ecma-international.org/publications-and-standards/standards/ecma-376/ | ECMA-376 Part 1 §17.16.22}
  */
 
-import { XMLElement } from "../xml/XMLBuilder";
-import { Run, RunFormatting } from "./Run";
-import { Revision } from "./Revision";
-import { validateRunText } from "../utils/validation";
-import { defaultLogger } from "../utils/logger";
+import { XMLElement } from '../xml/XMLBuilder';
+import { Run, RunFormatting } from './Run';
+import { Revision } from './Revision';
+import { validateRunText } from '../utils/validation';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Hyperlink properties
@@ -103,6 +103,8 @@ export class Hyperlink {
   private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
   /** Parent paragraph reference for automatic tracking */
   private _parentParagraph?: import('./Paragraph').Paragraph;
+  /** Baseline formatting captured before first tracked formatting change */
+  private _preTrackingFormatting?: RunFormatting;
 
   /**
    * Creates a new hyperlink
@@ -133,21 +135,21 @@ export class Hyperlink {
 
     // Handle empty/invisible hyperlinks (no display text)
     if (this._isEmpty) {
-      this.text = "";
+      this.text = '';
       this.formatting = {};
-      this.run = new Run("", {});
+      this.run = new Run('', {});
       return;
     }
 
     // Text fallback: properties.text → url → 'Link'
     // NOTE: Do NOT use anchor (bookmark ID) as display text - it should only be used for navigation
     // Using bookmark IDs as visible text causes TOC corruption (Issue: TOC shows "HEADING=II.MNKE7E8NA385_" instead of proper headings)
-    this.text = properties.text || this.url || "Link";
+    this.text = properties.text || this.url || 'Link';
 
     // Validate text for XML patterns
     // Default to auto-cleaning XML patterns unless explicitly disabled (matches Run behavior)
     const validation = validateRunText(this.text, {
-      context: "Hyperlink text",
+      context: 'Hyperlink text',
       autoClean: properties.formatting?.cleanXmlFromText !== false,
       warnToConsole: true,
     });
@@ -159,10 +161,10 @@ export class Hyperlink {
 
     // Create run with default hyperlink styling (Verdana 12pt blue underlined)
     this.formatting = {
-      font: "Verdana",
+      font: 'Verdana',
       size: 12,
-      color: "0000FF", // Standard hyperlink blue
-      underline: "single",
+      color: '0000FF', // Standard hyperlink blue
+      underline: 'single',
       ...properties.formatting,
     };
 
@@ -193,6 +195,56 @@ export class Hyperlink {
    */
   _getParentParagraph(): import('./Paragraph').Paragraph | undefined {
     return this._parentParagraph;
+  }
+
+  /**
+   * Applies an rPrChange to the inner Run, tracking the delta between
+   * the baseline formatting and the current formatting.
+   *
+   * On first call, captures `previousFormatting` as the baseline.
+   * Subsequent calls always compare against the same baseline so that
+   * multiple sequential formatting changes produce a single merged rPrChange.
+   *
+   * @internal
+   */
+  private _applyFormattingRPrChange(previousFormatting: RunFormatting): void {
+    // Capture baseline on first tracked formatting change
+    if (!this._preTrackingFormatting) {
+      this._preTrackingFormatting = { ...previousFormatting };
+    }
+
+    // Build previousProperties from the baseline (only changed keys)
+    const baseline = this._preTrackingFormatting;
+    const current = this.formatting;
+    const previousProperties: Partial<RunFormatting> = {};
+    let hasChanges = false;
+
+    for (const key of Object.keys(baseline) as (keyof RunFormatting)[]) {
+      if (baseline[key] !== current[key]) {
+        (previousProperties as Record<string, unknown>)[key] = baseline[key];
+        hasChanges = true;
+      }
+    }
+    // Also check for keys in current that weren't in baseline (new properties)
+    for (const key of Object.keys(current) as (keyof RunFormatting)[]) {
+      if (!(key in baseline) && current[key] !== undefined) {
+        // Property didn't exist before — previous value is undefined
+        (previousProperties as Record<string, unknown>)[key] = undefined;
+        hasChanges = true;
+      }
+    }
+
+    if (!hasChanges) return;
+
+    const revisionId = this.trackingContext!.getRevisionManager().consumeNextId();
+    const author = this.trackingContext!.getAuthor();
+
+    this.run.setPropertyChangeRevision({
+      id: revisionId,
+      author,
+      date: new Date(),
+      previousProperties,
+    });
   }
 
   /**
@@ -322,7 +374,7 @@ export class Hyperlink {
     // Validate text for XML patterns
     // Default to auto-cleaning unless explicitly disabled (matches Run behavior)
     const validation = validateRunText(text, {
-      context: "Hyperlink.setText",
+      context: 'Hyperlink.setText',
       autoClean: this.formatting.cleanXmlFromText !== false,
       warnToConsole: true,
     });
@@ -331,11 +383,42 @@ export class Hyperlink {
     const cleanedText = validation.cleanedText || text;
 
     const previousValue = this.text;
-    this.text = cleanedText;
-    this.run.setText(cleanedText); // Run.setText also validates
-    if (this.trackingContext?.isEnabled() && previousValue !== cleanedText) {
-      this.trackingContext.trackHyperlinkChange(this, 'text', previousValue, cleanedText);
+
+    // Skip if text unchanged
+    if (previousValue === cleanedText) {
+      return this;
     }
+
+    // If tracking enabled AND has parent paragraph, create delete/insert revision pair
+    if (this.trackingContext?.isEnabled() && this._parentParagraph) {
+      const author = this.trackingContext.getAuthor();
+
+      // Clone current state for deletion (before applying changes)
+      const oldHyperlink = this.clone();
+
+      // Apply the change to this hyperlink
+      this.text = cleanedText;
+      this.run.setText(cleanedText);
+
+      // Create delete/insert revision pair
+      const deletion = Revision.createDeletion(author, [oldHyperlink]);
+      const insertion = Revision.createInsertion(author, [this]);
+
+      // Replace this hyperlink with the revision pair in parent paragraph
+      this._parentParagraph.replaceContent(this, [deletion, insertion]);
+
+      // Clear parent reference since we're now inside a revision
+      this._parentParagraph = undefined;
+
+      // Clear baseline formatting (fresh start inside insertion)
+      this._preTrackingFormatting = undefined;
+
+      return this;
+    }
+
+    // Non-tracking path (original behavior)
+    this.text = cleanedText;
+    this.run.setText(cleanedText);
     return this;
   }
 
@@ -362,10 +445,41 @@ export class Hyperlink {
    */
   setTooltip(tooltip: string): this {
     const previousValue = this.tooltip;
-    this.tooltip = tooltip;
-    if (this.trackingContext?.isEnabled() && previousValue !== tooltip) {
-      this.trackingContext.trackHyperlinkChange(this, 'tooltip', previousValue, tooltip);
+
+    // Skip if tooltip unchanged
+    if (previousValue === tooltip) {
+      return this;
     }
+
+    // If tracking enabled AND has parent paragraph, create delete/insert revision pair
+    // Tooltip is a w:hyperlink attribute — no OOXML property-change element exists for it
+    if (this.trackingContext?.isEnabled() && this._parentParagraph) {
+      const author = this.trackingContext.getAuthor();
+
+      // Clone current state for deletion (before applying changes)
+      const oldHyperlink = this.clone();
+
+      // Apply the change to this hyperlink
+      this.tooltip = tooltip;
+
+      // Create delete/insert revision pair
+      const deletion = Revision.createDeletion(author, [oldHyperlink]);
+      const insertion = Revision.createInsertion(author, [this]);
+
+      // Replace this hyperlink with the revision pair in parent paragraph
+      this._parentParagraph.replaceContent(this, [deletion, insertion]);
+
+      // Clear parent reference since we're now inside a revision
+      this._parentParagraph = undefined;
+
+      // Clear baseline formatting (fresh start inside insertion)
+      this._preTrackingFormatting = undefined;
+
+      return this;
+    }
+
+    // Non-tracking path
+    this.tooltip = tooltip;
     return this;
   }
 
@@ -436,7 +550,7 @@ export class Hyperlink {
       this.url = url;
       this.relationshipId = undefined;
       if (this.run.getText() === oldUrl) {
-        this.text = url || this.anchor || "Link";
+        this.text = url || this.anchor || 'Link';
         this.run.setText(this.text);
       }
 
@@ -464,7 +578,7 @@ export class Hyperlink {
     // This preserves user-provided text (even if it's "Link")
     // Use run.getText() to ensure we check the actual current text, not stale cache
     if (this.run.getText() === oldUrl) {
-      this.text = url || this.anchor || "Link";
+      this.text = url || this.anchor || 'Link';
       this.run.setText(this.text);
     }
 
@@ -519,7 +633,7 @@ export class Hyperlink {
         this.relationshipId = undefined;
       }
       if (this.run.getText() === oldAnchor) {
-        this.text = anchor || this.url || "Link";
+        this.text = anchor || this.url || 'Link';
         this.run.setText(this.text);
       }
 
@@ -552,7 +666,7 @@ export class Hyperlink {
     // Update text ONLY if it was auto-generated from the old anchor
     // Use run.getText() to ensure we check the actual current text, not stale cache
     if (this.run.getText() === oldAnchor) {
-      this.text = anchor || this.url || "Link";
+      this.text = anchor || this.url || 'Link';
       this.run.setText(this.text);
     }
 
@@ -585,7 +699,7 @@ export class Hyperlink {
    */
   setFormatting(formatting: RunFormatting, options?: { replace?: boolean }): this {
     // Update stored formatting
-    const previousValue = { ...this.formatting };
+    const previousFormatting = { ...this.formatting };
     if (options?.replace) {
       // Replace mode: new formatting replaces ALL existing properties
       this.formatting = { ...formatting };
@@ -598,7 +712,7 @@ export class Hyperlink {
     this.run = new Run(currentText, this.formatting);
     this.text = currentText; // Keep cache in sync
     if (this.trackingContext?.isEnabled()) {
-      this.trackingContext.trackHyperlinkChange(this, 'formatting', previousValue, this.formatting);
+      this._applyFormattingRPrChange(previousFormatting);
     }
     return this;
   }
@@ -682,11 +796,11 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setColor(color: string): this {
-    const previousValue = this.formatting.color;
+    const previousFormatting = { ...this.formatting };
     this.formatting.color = color;
     this.run = new Run(this.text, this.formatting);
-    if (this.trackingContext?.isEnabled() && previousValue !== color) {
-      this.trackingContext.trackHyperlinkChange(this, 'color', previousValue, color);
+    if (this.trackingContext?.isEnabled() && previousFormatting.color !== color) {
+      this._applyFormattingRPrChange(previousFormatting);
     }
     return this;
   }
@@ -696,12 +810,12 @@ export class Hyperlink {
    * @param underline Underline style ('single', 'double', etc.)
    * @returns This hyperlink for chaining
    */
-  setUnderline(underline: boolean | "single" | "double" | "dotted" | "thick" | "dash"): this {
-    const previousValue = this.formatting.underline;
+  setUnderline(underline: boolean | 'single' | 'double' | 'dotted' | 'thick' | 'dash'): this {
+    const previousFormatting = { ...this.formatting };
     this.formatting.underline = underline;
     this.run = new Run(this.text, this.formatting);
-    if (this.trackingContext?.isEnabled() && previousValue !== underline) {
-      this.trackingContext.trackHyperlinkChange(this, 'underline', previousValue, underline);
+    if (this.trackingContext?.isEnabled() && previousFormatting.underline !== underline) {
+      this._applyFormattingRPrChange(previousFormatting);
     }
     return this;
   }
@@ -712,11 +826,11 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setBold(bold = true): this {
-    const previousValue = this.formatting.bold;
+    const previousFormatting = { ...this.formatting };
     this.formatting.bold = bold;
     this.run = new Run(this.text, this.formatting);
-    if (this.trackingContext?.isEnabled() && previousValue !== bold) {
-      this.trackingContext.trackHyperlinkChange(this, 'bold', previousValue, bold);
+    if (this.trackingContext?.isEnabled() && previousFormatting.bold !== bold) {
+      this._applyFormattingRPrChange(previousFormatting);
     }
     return this;
   }
@@ -727,11 +841,11 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setItalic(italic = true): this {
-    const previousValue = this.formatting.italic;
+    const previousFormatting = { ...this.formatting };
     this.formatting.italic = italic;
     this.run = new Run(this.text, this.formatting);
-    if (this.trackingContext?.isEnabled() && previousValue !== italic) {
-      this.trackingContext.trackHyperlinkChange(this, 'italic', previousValue, italic);
+    if (this.trackingContext?.isEnabled() && previousFormatting.italic !== italic) {
+      this._applyFormattingRPrChange(previousFormatting);
     }
     return this;
   }
@@ -742,11 +856,11 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setFont(font: string): this {
-    const previousValue = this.formatting.font;
+    const previousFormatting = { ...this.formatting };
     this.formatting.font = font;
     this.run = new Run(this.text, this.formatting);
-    if (this.trackingContext?.isEnabled() && previousValue !== font) {
-      this.trackingContext.trackHyperlinkChange(this, 'font', previousValue, font);
+    if (this.trackingContext?.isEnabled() && previousFormatting.font !== font) {
+      this._applyFormattingRPrChange(previousFormatting);
     }
     return this;
   }
@@ -757,11 +871,11 @@ export class Hyperlink {
    * @returns This hyperlink for chaining
    */
   setSize(size: number): this {
-    const previousValue = this.formatting.size;
+    const previousFormatting = { ...this.formatting };
     this.formatting.size = size;
     this.run = new Run(this.text, this.formatting);
-    if (this.trackingContext?.isEnabled() && previousValue !== size) {
-      this.trackingContext.trackHyperlinkChange(this, 'size', previousValue, size);
+    if (this.trackingContext?.isEnabled() && previousFormatting.size !== size) {
+      this._applyFormattingRPrChange(previousFormatting);
     }
     return this;
   }
@@ -849,16 +963,16 @@ export class Hyperlink {
 
     // External link validation
     if (!this.url) {
-      issues.push("No URL or anchor specified");
+      issues.push('No URL or anchor specified');
       return { valid: false, issues, fixed, originalUrl };
     }
 
     // Fix common issues
     if (fixCommonIssues && fixedUrl) {
       // Fix 1: Add missing protocol
-      if (!(/^[a-z]+:\/\//i.exec(fixedUrl))) {
-        fixedUrl = "https://" + fixedUrl;
-        fixed.push("Added missing protocol (https://)");
+      if (!/^[a-z]+:\/\//i.exec(fixedUrl)) {
+        fixedUrl = 'https://' + fixedUrl;
+        fixed.push('Added missing protocol (https://)');
       }
 
       // Fix 2: Fix double slashes (except after protocol)
@@ -866,29 +980,29 @@ export class Hyperlink {
       if (protocolMatch?.[1]) {
         const protocol = protocolMatch[1];
         const rest = fixedUrl.substring(protocol.length);
-        const fixedRest = rest.replace(/\/\//g, "/");
+        const fixedRest = rest.replace(/\/\//g, '/');
         if (rest !== fixedRest) {
           fixedUrl = protocol + fixedRest;
-          fixed.push("Fixed double slashes");
+          fixed.push('Fixed double slashes');
         }
       }
 
       // Fix 3: Encode spaces
-      if (fixedUrl.includes(" ")) {
-        fixedUrl = fixedUrl.replace(/ /g, "%20");
-        fixed.push("Encoded spaces as %20");
+      if (fixedUrl.includes(' ')) {
+        fixedUrl = fixedUrl.replace(/ /g, '%20');
+        fixed.push('Encoded spaces as %20');
       }
 
       // Fix 4: Remove trailing slashes for non-root URLs
       if (/^https?:\/\/[^/]+\/.+\/$/.exec(fixedUrl)) {
-        fixedUrl = fixedUrl.replace(/\/$/, "");
-        fixed.push("Removed trailing slash");
+        fixedUrl = fixedUrl.replace(/\/$/, '');
+        fixed.push('Removed trailing slash');
       }
 
       // Fix 5: Fix common typos
-      fixedUrl = fixedUrl.replace(/^http:\/\//i, "https://"); // Prefer HTTPS
-      if (fixedUrl !== this.url && fixedUrl.startsWith("https://")) {
-        fixed.push("Upgraded HTTP to HTTPS");
+      fixedUrl = fixedUrl.replace(/^http:\/\//i, 'https://'); // Prefer HTTPS
+      if (fixedUrl !== this.url && fixedUrl.startsWith('https://')) {
+        fixed.push('Upgraded HTTP to HTTPS');
       }
 
       // Update URL if fixes were applied
@@ -900,10 +1014,8 @@ export class Hyperlink {
     // Check accessibility (HTTP HEAD request)
     if (checkAccessibility && fixedUrl?.match(/^https?:\/\//i)) {
       // Check if fetch is available (Node.js 18+ or browser)
-      if (typeof fetch === "undefined") {
-        issues.push(
-          "Network validation unavailable: fetch API not supported in this environment"
-        );
+      if (typeof fetch === 'undefined') {
+        issues.push('Network validation unavailable: fetch API not supported in this environment');
       } else {
         try {
           // Use fetch with AbortController for timeout
@@ -911,40 +1023,33 @@ export class Hyperlink {
           const timeoutId = setTimeout(() => controller.abort(), timeout);
 
           const response = await fetch(fixedUrl, {
-            method: "HEAD",
+            method: 'HEAD',
             signal: controller.signal,
-            redirect: "follow",
+            redirect: 'follow',
           });
 
           clearTimeout(timeoutId);
 
           if (!response.ok) {
-            issues.push(
-              `HTTP ${response.status}: ${response.statusText || "Error"}`
-            );
+            issues.push(`HTTP ${response.status}: ${response.statusText || 'Error'}`);
           }
         } catch (error: unknown) {
           // Type guard for error objects with name and message properties
           const isErrorWithName = (err: unknown): err is { name: string } => {
-            return typeof err === "object" && err !== null && "name" in err;
+            return typeof err === 'object' && err !== null && 'name' in err;
           };
-          const isErrorWithMessage = (
-            err: unknown
-          ): err is { message: string } => {
-            return typeof err === "object" && err !== null && "message" in err;
+          const isErrorWithMessage = (err: unknown): err is { message: string } => {
+            return typeof err === 'object' && err !== null && 'message' in err;
           };
 
-          if (isErrorWithName(error) && error.name === "AbortError") {
+          if (isErrorWithName(error) && error.name === 'AbortError') {
             issues.push(`Timeout after ${timeout}ms`);
-          } else if (
-            isErrorWithMessage(error) &&
-            error.message?.includes("fetch")
-          ) {
+          } else if (isErrorWithMessage(error) && error.message?.includes('fetch')) {
             issues.push(`Unreachable: ${error.message}`);
           } else if (isErrorWithMessage(error)) {
             issues.push(`Network error: ${error.message}`);
           } else {
-            issues.push("Network error: Unknown error");
+            issues.push('Network error: Unknown error');
           }
         }
       }
@@ -966,9 +1071,9 @@ export class Hyperlink {
    */
   resetToStandardFormatting(): this {
     const standardFormatting: RunFormatting = {
-      font: "Verdana",
-      color: "0000FF", // Standard hyperlink blue
-      underline: "single",
+      font: 'Verdana',
+      color: '0000FF', // Standard hyperlink blue
+      underline: 'single',
       // Clear any other formatting that might be causing issues
       bold: false,
       italic: false,
@@ -1030,6 +1135,12 @@ export class Hyperlink {
     // Copy the run with its formatting
     if (this.run) {
       cloned.run = new Run(this.run.getText(), { ...this.run.getFormatting() });
+
+      // Preserve rPrChange from the original run (formatting tracked changes)
+      const existingRPrChange = this.run.getPropertyChangeRevision();
+      if (existingRPrChange) {
+        cloned.run.setPropertyChangeRevision({ ...existingRPrChange });
+      }
     }
 
     return cloned;
@@ -1049,8 +1160,8 @@ export class Hyperlink {
     // VALIDATION: Hyperlink must have url OR anchor (unless it's an empty hyperlink with relationshipId)
     if (!this.url && !this.anchor && !this.relationshipId) {
       throw new Error(
-        "CRITICAL: Hyperlink must have either a URL (external link), anchor (internal link), or relationshipId. " +
-          "Cannot generate valid XML for hyperlink without destination."
+        'CRITICAL: Hyperlink must have either a URL (external link), anchor (internal link), or relationshipId. ' +
+          'Cannot generate valid XML for hyperlink without destination.'
       );
     }
 
@@ -1069,12 +1180,12 @@ export class Hyperlink {
 
     // External link - add relationship ID
     if (this.relationshipId) {
-      attributes["r:id"] = this.relationshipId;
+      attributes['r:id'] = this.relationshipId;
     }
 
     // Internal link - uses anchor
     if (this.anchor) {
-      attributes["w:anchor"] = this.anchor;
+      attributes['w:anchor'] = this.anchor;
     }
 
     // Tooltip - explicitly escape attribute value for safety
@@ -1082,28 +1193,28 @@ export class Hyperlink {
     if (this.tooltip) {
       // Note: XMLBuilder.elementToString() will escape this via escapeXmlAttribute()
       // when generating the actual XML string. We store the raw value here.
-      attributes["w:tooltip"] = this.tooltip;
+      attributes['w:tooltip'] = this.tooltip;
     }
 
     // Target frame attribute (e.g., "_blank" for new window)
     if (this.tgtFrame) {
-      attributes["w:tgtFrame"] = this.tgtFrame;
+      attributes['w:tgtFrame'] = this.tgtFrame;
     }
 
     // History tracking attribute
     if (this.history) {
-      attributes["w:history"] = this.history;
+      attributes['w:history'] = this.history;
     }
 
     // Document location attribute (ECMA-376 §17.16.22)
     if (this.docLocation) {
-      attributes["w:docLocation"] = this.docLocation;
+      attributes['w:docLocation'] = this.docLocation;
     }
 
     // Empty/invisible hyperlinks have no children (self-closing element)
     if (this._isEmpty) {
       return {
-        name: "w:hyperlink",
+        name: 'w:hyperlink',
         attributes,
         children: [],
       };
@@ -1113,7 +1224,7 @@ export class Hyperlink {
     const runXml = this.run.toXML();
 
     return {
-      name: "w:hyperlink",
+      name: 'w:hyperlink',
       attributes,
       children: [runXml],
     };
@@ -1125,11 +1236,7 @@ export class Hyperlink {
    * @param text Display text
    * @param formatting Optional formatting
    */
-  static createExternal(
-    url: string,
-    text: string,
-    formatting?: RunFormatting
-  ): Hyperlink {
+  static createExternal(url: string, text: string, formatting?: RunFormatting): Hyperlink {
     return new Hyperlink({ url, text, formatting });
   }
 
@@ -1139,11 +1246,7 @@ export class Hyperlink {
    * @param text Display text
    * @param formatting Optional formatting
    */
-  static createInternal(
-    anchor: string,
-    text: string,
-    formatting?: RunFormatting
-  ): Hyperlink {
+  static createInternal(anchor: string, text: string, formatting?: RunFormatting): Hyperlink {
     return new Hyperlink({ anchor, text, formatting });
   }
 
@@ -1153,11 +1256,7 @@ export class Hyperlink {
    * @param text Display text (defaults to URL)
    * @param formatting Optional formatting
    */
-  static createWebLink(
-    url: string,
-    text?: string,
-    formatting?: RunFormatting
-  ): Hyperlink {
+  static createWebLink(url: string, text?: string, formatting?: RunFormatting): Hyperlink {
     return new Hyperlink({
       url,
       text: text || url,
@@ -1171,11 +1270,7 @@ export class Hyperlink {
    * @param text Display text (defaults to email)
    * @param formatting Optional formatting
    */
-  static createEmail(
-    email: string,
-    text?: string,
-    formatting?: RunFormatting
-  ): Hyperlink {
+  static createEmail(email: string, text?: string, formatting?: RunFormatting): Hyperlink {
     return new Hyperlink({
       url: `mailto:${email}`,
       text: text || email,

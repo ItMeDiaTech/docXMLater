@@ -6,9 +6,9 @@
  * paragraphs in the document.
  */
 
-import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
-import { NumberingLevel } from "./NumberingLevel";
-import { defaultLogger } from "../utils/logger";
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { NumberingLevel } from './NumberingLevel';
+import { defaultLogger } from '../utils/logger';
 
 /**
  * Properties for creating an abstract numbering definition
@@ -58,7 +58,7 @@ export class AbstractNumbering {
    */
   constructor(idOrProps: number | AbstractNumberingProperties, name?: string) {
     // Support both simple (numId) and object constructor patterns
-    if (typeof idOrProps === "number") {
+    if (typeof idOrProps === 'number') {
       // Simple constructor: new AbstractNumbering(id)
       this.abstractNumId = idOrProps;
       this.name = name;
@@ -70,8 +70,7 @@ export class AbstractNumbering {
       this.abstractNumId = properties.abstractNumId;
       this.name = properties.name;
       this.levels = new Map();
-      this.multiLevelType =
-        properties.multiLevelType !== undefined ? properties.multiLevelType : 1;
+      this.multiLevelType = properties.multiLevelType !== undefined ? properties.multiLevelType : 1;
       this.numStyleLink = properties.numStyleLink;
       this.styleLink = properties.styleLink;
       this.tmpl = properties.tmpl;
@@ -91,11 +90,11 @@ export class AbstractNumbering {
    */
   private validate(): void {
     if (this.abstractNumId < 0) {
-      throw new Error("Abstract numbering ID must be non-negative");
+      throw new Error('Abstract numbering ID must be non-negative');
     }
 
     if (this.levels.size > 9) {
-      throw new Error("Cannot have more than 9 levels (0-8)");
+      throw new Error('Cannot have more than 9 levels (0-8)');
     }
   }
 
@@ -134,11 +133,11 @@ export class AbstractNumbering {
    */
   getMultiLevelType(): string {
     if (this.multiLevelType === 1) {
-      return "multilevel";
+      return 'multilevel';
     } else if (this.multiLevelType === 2) {
-      return "hybridMultilevel";
+      return 'hybridMultilevel';
     } else {
-      return "singleLevel";
+      return 'singleLevel';
     }
   }
 
@@ -146,12 +145,10 @@ export class AbstractNumbering {
    * Sets the multi-level type
    * @param type The multi-level type ('multilevel' or 'singleLevel')
    */
-  setMultiLevelType(
-    type: "multilevel" | "singleLevel" | "hybridMultilevel"
-  ): this {
-    if (type === "multilevel") {
+  setMultiLevelType(type: 'multilevel' | 'singleLevel' | 'hybridMultilevel'): this {
+    if (type === 'multilevel') {
       this.multiLevelType = 1;
-    } else if (type === "hybridMultilevel") {
+    } else if (type === 'hybridMultilevel') {
       this.multiLevelType = 2;
     } else {
       this.multiLevelType = 0;
@@ -243,9 +240,7 @@ export class AbstractNumbering {
    * Gets all levels
    */
   getAllLevels(): NumberingLevel[] {
-    return Array.from(this.levels.values()).sort(
-      (a, b) => a.getLevel() - b.getLevel()
-    );
+    return Array.from(this.levels.values()).sort((a, b) => a.getLevel() - b.getLevel());
   }
 
   /**
@@ -289,35 +284,35 @@ export class AbstractNumbering {
     // Add multiLevelType
     let multiLevelTypeValue: string;
     if (this.multiLevelType === 1) {
-      multiLevelTypeValue = "multilevel";
+      multiLevelTypeValue = 'multilevel';
     } else if (this.multiLevelType === 2) {
-      multiLevelTypeValue = "hybridMultilevel";
+      multiLevelTypeValue = 'hybridMultilevel';
     } else {
-      multiLevelTypeValue = "singleLevel";
+      multiLevelTypeValue = 'singleLevel';
     }
 
     children.push(
-      XMLBuilder.wSelf("multiLevelType", {
-        "w:val": multiLevelTypeValue,
+      XMLBuilder.wSelf('multiLevelType', {
+        'w:val': multiLevelTypeValue,
       })
     );
 
     // Add template code (position 3 per CT_AbstractNum)
     if (this.tmpl) {
-      children.push(XMLBuilder.wSelf("tmpl", { "w:val": this.tmpl }));
+      children.push(XMLBuilder.wSelf('tmpl', { 'w:val': this.tmpl }));
     }
 
     // Add name if present
     if (this.name) {
-      children.push(XMLBuilder.wSelf("name", { "w:val": this.name }));
+      children.push(XMLBuilder.wSelf('name', { 'w:val': this.name }));
     }
 
     // Add styleLink / numStyleLink if present
     if (this.styleLink) {
-      children.push(XMLBuilder.wSelf("styleLink", { "w:val": this.styleLink }));
+      children.push(XMLBuilder.wSelf('styleLink', { 'w:val': this.styleLink }));
     }
     if (this.numStyleLink) {
-      children.push(XMLBuilder.wSelf("numStyleLink", { "w:val": this.numStyleLink }));
+      children.push(XMLBuilder.wSelf('numStyleLink', { 'w:val': this.numStyleLink }));
     }
 
     // Add all levels in order
@@ -332,8 +327,8 @@ export class AbstractNumbering {
     }
 
     return XMLBuilder.w(
-      "abstractNum",
-      { "w:abstractNumId": this.abstractNumId.toString() },
+      'abstractNum',
+      { 'w:abstractNumId': this.abstractNumId.toString() },
       children
     );
   }
@@ -368,14 +363,14 @@ export class AbstractNumbering {
   ): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
       abstractNumId,
-      name: "Bullet List",
+      name: 'Bullet List',
       multiLevelType: 1,
     });
 
     for (let i = 0; i < levels && i < 9; i++) {
       if (bullets && bullets.length > 0) {
         // Custom bullets provided - use them with default font
-        const bullet = bullets[i % bullets.length] || "•";
+        const bullet = bullets[i % bullets.length] || '•';
         abstractNum.addLevel(NumberingLevel.createBulletLevel(i, bullet));
       } else {
         // No custom bullets - use Word-native encoding (correct font per level)
@@ -395,33 +390,39 @@ export class AbstractNumbering {
   static createNumberedList(
     abstractNumId: number,
     levels = 9,
-    formats: ("decimal" | "lowerLetter" | "lowerRoman" | "upperLetter" | "upperRoman")[] = ["decimal", "lowerLetter", "lowerRoman", "upperLetter", "upperRoman"]
+    formats: ('decimal' | 'lowerLetter' | 'lowerRoman' | 'upperLetter' | 'upperRoman')[] = [
+      'decimal',
+      'lowerLetter',
+      'lowerRoman',
+      'upperLetter',
+      'upperRoman',
+    ]
   ): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
       abstractNumId,
-      name: "Numbered List",
+      name: 'Numbered List',
       multiLevelType: 1,
     });
 
     for (let i = 0; i < levels && i < 9; i++) {
-      const format = formats[i % formats.length] || "decimal";
+      const format = formats[i % formats.length] || 'decimal';
       const template = `%${i + 1}.`;
 
       let level: NumberingLevel;
       switch (format) {
-        case "lowerLetter":
+        case 'lowerLetter':
           level = NumberingLevel.createLowerLetterLevel(i, template);
           break;
-        case "lowerRoman":
+        case 'lowerRoman':
           level = NumberingLevel.createLowerRomanLevel(i, template);
           break;
-        case "upperLetter":
+        case 'upperLetter':
           level = NumberingLevel.createUpperLetterLevel(i, template);
           break;
-        case "upperRoman":
+        case 'upperRoman':
           level = NumberingLevel.createUpperRomanLevel(i, template);
           break;
-        case "decimal":
+        case 'decimal':
         default:
           level = NumberingLevel.createDecimalLevel(i, template);
           break;
@@ -440,21 +441,21 @@ export class AbstractNumbering {
   static createMultiLevelList(abstractNumId: number): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
       abstractNumId,
-      name: "Multi-Level List",
+      name: 'Multi-Level List',
       multiLevelType: 1,
     });
 
     // Level 0: 1, 2, 3, ...
-    abstractNum.addLevel(NumberingLevel.createDecimalLevel(0, "%1."));
+    abstractNum.addLevel(NumberingLevel.createDecimalLevel(0, '%1.'));
 
     // Level 1: a, b, c, ...
-    abstractNum.addLevel(NumberingLevel.createLowerLetterLevel(1, "%2."));
+    abstractNum.addLevel(NumberingLevel.createLowerLetterLevel(1, '%2.'));
 
     // Level 2: i, ii, iii, ...
-    abstractNum.addLevel(NumberingLevel.createLowerRomanLevel(2, "%3."));
+    abstractNum.addLevel(NumberingLevel.createLowerRomanLevel(2, '%3.'));
 
     // Level 3: 1, 2, 3, ... (with more indent)
-    abstractNum.addLevel(NumberingLevel.createDecimalLevel(3, "%4."));
+    abstractNum.addLevel(NumberingLevel.createDecimalLevel(3, '%4.'));
 
     return abstractNum;
   }
@@ -466,36 +467,36 @@ export class AbstractNumbering {
   static createOutlineList(abstractNumId: number): AbstractNumbering {
     const abstractNum = new AbstractNumbering({
       abstractNumId,
-      name: "Outline List",
+      name: 'Outline List',
       multiLevelType: 1,
     });
 
     // Level 0: I, II, III, ...
-    abstractNum.addLevel(NumberingLevel.createUpperRomanLevel(0, "%1."));
+    abstractNum.addLevel(NumberingLevel.createUpperRomanLevel(0, '%1.'));
 
     // Level 1: A, B, C, ...
-    abstractNum.addLevel(NumberingLevel.createUpperLetterLevel(1, "%2."));
+    abstractNum.addLevel(NumberingLevel.createUpperLetterLevel(1, '%2.'));
 
     // Level 2: 1, 2, 3, ...
-    abstractNum.addLevel(NumberingLevel.createDecimalLevel(2, "%3."));
+    abstractNum.addLevel(NumberingLevel.createDecimalLevel(2, '%3.'));
 
     // Level 3: a, b, c, ...
-    abstractNum.addLevel(NumberingLevel.createLowerLetterLevel(3, "%4."));
+    abstractNum.addLevel(NumberingLevel.createLowerLetterLevel(3, '%4.'));
 
     // Level 4: i, ii, iii, ...
-    abstractNum.addLevel(NumberingLevel.createLowerRomanLevel(4, "%5."));
+    abstractNum.addLevel(NumberingLevel.createLowerRomanLevel(4, '%5.'));
 
     // Level 5: A, B, C, ... (repeating)
-    abstractNum.addLevel(NumberingLevel.createUpperLetterLevel(5, "%6."));
+    abstractNum.addLevel(NumberingLevel.createUpperLetterLevel(5, '%6.'));
 
     // Level 6: 1, 2, 3, ... (repeating)
-    abstractNum.addLevel(NumberingLevel.createDecimalLevel(6, "%7."));
+    abstractNum.addLevel(NumberingLevel.createDecimalLevel(6, '%7.'));
 
     // Level 7: a, b, c, ... (repeating)
-    abstractNum.addLevel(NumberingLevel.createLowerLetterLevel(7, "%8."));
+    abstractNum.addLevel(NumberingLevel.createLowerLetterLevel(7, '%8.'));
 
     // Level 8: i, ii, iii, ... (repeating)
-    abstractNum.addLevel(NumberingLevel.createLowerRomanLevel(8, "%9."));
+    abstractNum.addLevel(NumberingLevel.createLowerRomanLevel(8, '%9.'));
 
     return abstractNum;
   }
@@ -517,7 +518,7 @@ export class AbstractNumbering {
     // Extract abstractNumId (required)
     const abstractNumIdMatch = /<w:abstractNum[^>]*w:abstractNumId="([^"]+)"/.exec(xml);
     if (!abstractNumIdMatch?.[1]) {
-      throw new Error("Missing required w:abstractNumId attribute");
+      throw new Error('Missing required w:abstractNumId attribute');
     }
     const abstractNumId = parseInt(abstractNumIdMatch[1], 10);
 
@@ -531,9 +532,9 @@ export class AbstractNumbering {
     let multiLevelType = 1; // default to multilevel
     if (multiLevelTypeMatch?.[1]) {
       const value = multiLevelTypeMatch[1];
-      if (value === "singleLevel") multiLevelType = 0;
-      else if (value === "multilevel") multiLevelType = 1;
-      else if (value === "hybridMultilevel") multiLevelType = 2;
+      if (value === 'singleLevel') multiLevelType = 0;
+      else if (value === 'multilevel') multiLevelType = 1;
+      else if (value === 'hybridMultilevel') multiLevelType = 2;
     }
 
     // Extract numStyleLink (optional, ECMA-376 §17.9.21)

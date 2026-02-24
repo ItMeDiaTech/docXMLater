@@ -16,7 +16,7 @@ import {
   ImageAnchor,
   PositionAnchor,
   HorizontalAlignment,
-  VerticalAlignment
+  VerticalAlignment,
 } from './Image';
 
 /**
@@ -24,16 +24,16 @@ import {
  * Based on ECMA-376 Part 1 §20.1.10.56 ST_ShapeType
  */
 export type ShapeType =
-  | 'rect'              // Rectangle
-  | 'ellipse'           // Circle/Ellipse
-  | 'rightArrow'        // Right arrow
-  | 'leftArrow'         // Left arrow
-  | 'upArrow'           // Up arrow
-  | 'downArrow'         // Down arrow
+  | 'rect' // Rectangle
+  | 'ellipse' // Circle/Ellipse
+  | 'rightArrow' // Right arrow
+  | 'leftArrow' // Left arrow
+  | 'upArrow' // Up arrow
+  | 'downArrow' // Down arrow
   | 'straightConnector1' // Straight line
-  | 'roundRect'         // Rounded rectangle
-  | 'triangle'          // Triangle
-  | 'diamond';          // Diamond
+  | 'roundRect' // Rounded rectangle
+  | 'triangle' // Triangle
+  | 'diamond'; // Diamond
 
 /**
  * Shape fill configuration
@@ -54,7 +54,18 @@ export interface ShapeOutline {
   /** Outline width in EMUs */
   width: number;
   /** Line dash style */
-  style?: 'solid' | 'dash' | 'dot' | 'dashDot' | 'lgDash' | 'lgDashDot' | 'lgDashDotDot' | 'sysDash' | 'sysDot' | 'sysDashDot' | 'sysDashDotDot';
+  style?:
+    | 'solid'
+    | 'dash'
+    | 'dot'
+    | 'dashDot'
+    | 'lgDash'
+    | 'lgDashDot'
+    | 'lgDashDotDot'
+    | 'sysDash'
+    | 'sysDot'
+    | 'sysDashDot'
+    | 'sysDashDotDot';
   /** Line cap style (ECMA-376 §20.1.10.31) */
   cap?: 'flat' | 'rnd' | 'sq';
   /** Line join style (ECMA-376 §20.1.10.32) */

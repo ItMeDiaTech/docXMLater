@@ -136,7 +136,7 @@ describe('ECMA-376 Gap Analysis Phase B', () => {
       const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
       const para = doc.getParagraphs()[0]!;
       const content = para.getContent();
-      const field = content.find(c => c instanceof ComplexField) as ComplexField | undefined;
+      const field = content.find((c) => c instanceof ComplexField) as ComplexField | undefined;
       expect(field).toBeDefined();
       const ffd = field!.getFormFieldData();
       expect(ffd).toBeDefined();
@@ -176,7 +176,7 @@ describe('ECMA-376 Gap Analysis Phase B', () => {
       const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
       const para = doc.getParagraphs()[0]!;
       const content = para.getContent();
-      const field = content.find(c => c instanceof ComplexField) as ComplexField | undefined;
+      const field = content.find((c) => c instanceof ComplexField) as ComplexField | undefined;
       expect(field).toBeDefined();
       const ffd = field!.getFormFieldData();
       expect(ffd).toBeDefined();
@@ -214,7 +214,7 @@ describe('ECMA-376 Gap Analysis Phase B', () => {
       const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
       const para = doc.getParagraphs()[0]!;
       const content = para.getContent();
-      const field = content.find(c => c instanceof ComplexField) as ComplexField | undefined;
+      const field = content.find((c) => c instanceof ComplexField) as ComplexField | undefined;
       expect(field).toBeDefined();
       const ffd = field!.getFormFieldData();
       expect(ffd).toBeDefined();

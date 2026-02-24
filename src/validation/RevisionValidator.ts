@@ -83,15 +83,13 @@ export class RevisionValidator {
     }
 
     // Apply max issues limit
-    const limitedIssues = options?.maxIssues
-      ? allIssues.slice(0, options.maxIssues)
-      : allIssues;
+    const limitedIssues = options?.maxIssues ? allIssues.slice(0, options.maxIssues) : allIssues;
 
     // Separate by severity
-    let errors = limitedIssues.filter(i => i.severity === 'error');
-    let warnings = limitedIssues.filter(i => i.severity === 'warning');
-    const infos = limitedIssues.filter(i => i.severity === 'info');
-    const autoFixable = limitedIssues.filter(i => i.autoFixable);
+    let errors = limitedIssues.filter((i) => i.severity === 'error');
+    let warnings = limitedIssues.filter((i) => i.severity === 'warning');
+    const infos = limitedIssues.filter((i) => i.severity === 'info');
+    const autoFixable = limitedIssues.filter((i) => i.autoFixable);
 
     // Handle warningsAsErrors option
     if (options?.warningsAsErrors) {
@@ -160,11 +158,13 @@ export class RevisionValidator {
       if (indices.length > 1) {
         const rule = REVISION_RULES.DUPLICATE_ID;
         if (rule) {
-          issues.push(createIssueFromRule(
-            rule,
-            { revisionId: id },
-            `Duplicate revision ID ${id} found at ${indices.length} locations (indices: ${indices.join(', ')})`
-          ));
+          issues.push(
+            createIssueFromRule(
+              rule,
+              { revisionId: id },
+              `Duplicate revision ID ${id} found at ${indices.length} locations (indices: ${indices.join(', ')})`
+            )
+          );
         }
       }
     }
@@ -201,22 +201,26 @@ export class RevisionValidator {
     // Check for orphaned moveFrom
     for (const [moveId, rev] of moveFromIds) {
       if (!moveToIds.has(moveId)) {
-        issues.push(createIssueFromRule(
-          REVISION_RULES.ORPHANED_MOVE_FROM,
-          { revisionId: rev.getId() },
-          `moveFrom with moveId="${moveId}" has no matching moveTo`
-        ));
+        issues.push(
+          createIssueFromRule(
+            REVISION_RULES.ORPHANED_MOVE_FROM,
+            { revisionId: rev.getId() },
+            `moveFrom with moveId="${moveId}" has no matching moveTo`
+          )
+        );
       }
     }
 
     // Check for orphaned moveTo
     for (const [moveId, rev] of moveToIds) {
       if (!moveFromIds.has(moveId)) {
-        issues.push(createIssueFromRule(
-          REVISION_RULES.ORPHANED_MOVE_TO,
-          { revisionId: rev.getId() },
-          `moveTo with moveId="${moveId}" has no matching moveFrom`
-        ));
+        issues.push(
+          createIssueFromRule(
+            REVISION_RULES.ORPHANED_MOVE_TO,
+            { revisionId: rev.getId() },
+            `moveTo with moveId="${moveId}" has no matching moveFrom`
+          )
+        );
       }
     }
 
@@ -237,10 +241,9 @@ export class RevisionValidator {
     for (const rev of revisions) {
       const author = rev.getAuthor();
       if (!author || author.trim() === '') {
-        issues.push(createIssueFromRule(
-          REVISION_RULES.MISSING_AUTHOR,
-          { revisionId: rev.getId() }
-        ));
+        issues.push(
+          createIssueFromRule(REVISION_RULES.MISSING_AUTHOR, { revisionId: rev.getId() })
+        );
       }
     }
 
@@ -262,16 +265,15 @@ export class RevisionValidator {
       const date = rev.getDate();
 
       if (!date) {
-        issues.push(createIssueFromRule(
-          REVISION_RULES.MISSING_DATE,
-          { revisionId: rev.getId() }
-        ));
+        issues.push(createIssueFromRule(REVISION_RULES.MISSING_DATE, { revisionId: rev.getId() }));
       } else if (isNaN(date.getTime())) {
-        issues.push(createIssueFromRule(
-          REVISION_RULES.INVALID_DATE_FORMAT,
-          { revisionId: rev.getId() },
-          `Revision ${rev.getId()} has an invalid date`
-        ));
+        issues.push(
+          createIssueFromRule(
+            REVISION_RULES.INVALID_DATE_FORMAT,
+            { revisionId: rev.getId() },
+            `Revision ${rev.getId()} has an invalid date`
+          )
+        );
       }
     }
 
@@ -309,14 +311,16 @@ export class RevisionValidator {
       }
 
       const runs = rev.getRuns();
-      const hasContent = runs.length > 0 && runs.some(r => r.getText().length > 0);
+      const hasContent = runs.length > 0 && runs.some((r) => r.getText().length > 0);
 
       if (!hasContent) {
-        issues.push(createIssueFromRule(
-          REVISION_RULES.EMPTY_REVISION,
-          { revisionId: rev.getId() },
-          `Revision ${rev.getId()} (type: ${type}) has no content`
-        ));
+        issues.push(
+          createIssueFromRule(
+            REVISION_RULES.EMPTY_REVISION,
+            { revisionId: rev.getId() },
+            `Revision ${rev.getId()} (type: ${type}) has no content`
+          )
+        );
       }
     }
 
@@ -337,7 +341,7 @@ export class RevisionValidator {
     if (revisions.length === 0) return issues;
 
     // Use Set for O(n) lookup instead of sorting
-    const idSet = new Set(revisions.map(r => r.getId()));
+    const idSet = new Set(revisions.map((r) => r.getId()));
     const ids = Array.from(idSet);
 
     if (ids.length === 0) return issues;
@@ -354,11 +358,13 @@ export class RevisionValidator {
     }
 
     if (missingIds.length > 0) {
-      issues.push(createIssueFromRule(
-        REVISION_RULES.NON_SEQUENTIAL_IDS,
-        undefined,
-        `Revision IDs are not sequential. Missing IDs: ${missingIds.slice(0, 10).join(', ')}${missingIds.length > 10 ? ` (and ${missingIds.length - 10} more)` : ''}`
-      ));
+      issues.push(
+        createIssueFromRule(
+          REVISION_RULES.NON_SEQUENTIAL_IDS,
+          undefined,
+          `Revision IDs are not sequential. Missing IDs: ${missingIds.slice(0, 10).join(', ')}${missingIds.length > 10 ? ` (and ${missingIds.length - 10} more)` : ''}`
+        )
+      );
     }
 
     return issues;
@@ -376,11 +382,13 @@ export class RevisionValidator {
     const issues: ValidationIssue[] = [];
 
     if (revisions.length > 1000) {
-      issues.push(createIssueFromRule(
-        REVISION_RULES.LARGE_REVISION_COUNT,
-        undefined,
-        `Document has ${revisions.length} revisions (>1000). Consider accepting or rejecting some.`
-      ));
+      issues.push(
+        createIssueFromRule(
+          REVISION_RULES.LARGE_REVISION_COUNT,
+          undefined,
+          `Document has ${revisions.length} revisions (>1000). Consider accepting or rejecting some.`
+        )
+      );
     }
 
     return issues;
@@ -408,11 +416,13 @@ export class RevisionValidator {
     }
 
     if (oldCount > 0) {
-      issues.push(createIssueFromRule(
-        REVISION_RULES.OLD_REVISION_DATE,
-        undefined,
-        `${oldCount} revision(s) are older than 1 year. Consider reviewing and accepting.`
-      ));
+      issues.push(
+        createIssueFromRule(
+          REVISION_RULES.OLD_REVISION_DATE,
+          undefined,
+          `${oldCount} revision(s) are older than 1 year. Consider reviewing and accepting.`
+        )
+      );
     }
 
     return issues;

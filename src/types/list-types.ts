@@ -6,21 +6,21 @@
  */
 
 /** High-level list category */
-export type ListCategory = "numbered" | "bullet" | "none";
+export type ListCategory = 'numbered' | 'bullet' | 'none';
 
 /** Specific number format patterns */
 export type NumberFormat =
-  | "decimal" // 1. 2. 3.
-  | "lowerLetter" // a. b. c.
-  | "upperLetter" // A. B. C.
-  | "lowerRoman" // i. ii. iii.
-  | "upperRoman"; // I. II. III.
+  | 'decimal' // 1. 2. 3.
+  | 'lowerLetter' // a. b. c.
+  | 'upperLetter' // A. B. C.
+  | 'lowerRoman' // i. ii. iii.
+  | 'upperRoman'; // I. II. III.
 
 /** Specific bullet format patterns */
 export type BulletFormat =
-  | "bullet" // • ● ○
-  | "dash" // - – —
-  | "arrow"; // ► ▸
+  | 'bullet' // • ● ○
+  | 'dash' // - – —
+  | 'arrow'; // ► ▸
 
 /**
  * Result of detecting list type for a single paragraph
@@ -82,7 +82,7 @@ export interface ListAnalysis {
   };
 
   /** Recommended action */
-  recommendedAction: "normalize" | "none";
+  recommendedAction: 'normalize' | 'none';
 }
 
 /**
@@ -90,8 +90,8 @@ export interface ListAnalysis {
  */
 export interface IndentationLevel {
   level: number;
-  textIndent: number;      // in inches
-  symbolIndent: number;    // in inches
+  textIndent: number; // in inches
+  symbolIndent: number; // in inches
   bulletChar?: string;
   numberedFormat?: NumberFormat | string;
 }
@@ -107,7 +107,7 @@ export interface ListNormalizationOptions {
   bulletStyleNumId?: number;
 
   /** Processing scope */
-  scope?: "cell" | "table" | "document";
+  scope?: 'cell' | 'table' | 'document';
 
   /**
    * If true, convert ALL list items to majority type.
@@ -146,7 +146,7 @@ export interface ListNormalizationReport {
   /** Detailed per-paragraph results */
   details: {
     originalText: string;
-    action: "normalized" | "skipped" | "error";
+    action: 'normalized' | 'skipped' | 'error';
     reason?: string;
   }[];
 }

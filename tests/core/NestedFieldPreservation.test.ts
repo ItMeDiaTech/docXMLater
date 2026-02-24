@@ -1,10 +1,10 @@
 /**
  * Tests for nested complex field preservation
- * 
+ *
  * Verifies that deeply nested fields (e.g., INCLUDEPICTURE multiplication from
  * email-pasted images) are preserved with correct begin/separate/end balance
  * during round-trip through docxmlater.
- * 
+ *
  * Bug: assembleComplexFields() had no nesting depth counter, causing nested
  * fields to be flattened into a single ComplexField with concatenated instrTexts
  * and orphaned end markers, corrupting the document's field structure.
@@ -20,7 +20,7 @@ async function createDocxFromXml(documentXml: string): Promise<Buffer> {
   const zipHandler = new ZipHandler();
 
   zipHandler.addFile(
-    "[Content_Types].xml",
+    '[Content_Types].xml',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -30,7 +30,7 @@ async function createDocxFromXml(documentXml: string): Promise<Buffer> {
   );
 
   zipHandler.addFile(
-    "_rels/.rels",
+    '_rels/.rels',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
@@ -38,13 +38,13 @@ async function createDocxFromXml(documentXml: string): Promise<Buffer> {
   );
 
   zipHandler.addFile(
-    "word/_rels/document.xml.rels",
+    'word/_rels/document.xml.rels',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 </Relationships>`
   );
 
-  zipHandler.addFile("word/document.xml", documentXml);
+  zipHandler.addFile('word/document.xml', documentXml);
 
   return await zipHandler.toBuffer();
 }

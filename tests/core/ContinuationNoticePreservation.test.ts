@@ -56,7 +56,7 @@ describe('ContinuationNotice preservation', () => {
     // Verify all special types are present
     const allFn = fm.getAllFootnotesWithSpecial();
     expect(allFn.length).toBe(3);
-    expect(allFn.map(f => f.getType())).toEqual(
+    expect(allFn.map((f) => f.getType())).toEqual(
       expect.arrayContaining([
         FootnoteType.Separator,
         FootnoteType.ContinuationSeparator,
@@ -66,7 +66,7 @@ describe('ContinuationNotice preservation', () => {
 
     const allEn = em.getAllEndnotesWithSpecial();
     expect(allEn.length).toBe(3);
-    expect(allEn.map(e => e.getType())).toEqual(
+    expect(allEn.map((e) => e.getType())).toEqual(
       expect.arrayContaining([
         EndnoteType.Separator,
         EndnoteType.ContinuationSeparator,
@@ -96,19 +96,25 @@ describe('ContinuationNotice preservation', () => {
     const JSZip = require('jszip');
     const zip = await JSZip.loadAsync(buf);
 
-    zip.file('word/footnotes.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    zip.file(
+      'word/footnotes.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>
   <w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>
   <w:footnote w:type="continuationNotice" w:id="1"><w:p/></w:footnote>
-</w:footnotes>`);
+</w:footnotes>`
+    );
 
-    zip.file('word/endnotes.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    zip.file(
+      'word/endnotes.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>
   <w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>
   <w:endnote w:type="continuationNotice" w:id="1"><w:p/></w:endnote>
-</w:endnotes>`);
+</w:endnotes>`
+    );
 
     const modifiedBuf = await zip.generateAsync({ type: 'nodebuffer' });
     const doc2 = await Document.loadFromBuffer(modifiedBuf);
@@ -143,13 +149,16 @@ describe('ContinuationNotice preservation', () => {
     const JSZip = require('jszip');
     const zip = await JSZip.loadAsync(buf);
 
-    zip.file('word/footnotes.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    zip.file(
+      'word/footnotes.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>
   <w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>
   <w:footnote w:type="continuationNotice" w:id="1"><w:p/></w:footnote>
   <w:footnote w:id="2"><w:p><w:r><w:t>User footnote</w:t></w:r></w:p></w:footnote>
-</w:footnotes>`);
+</w:footnotes>`
+    );
 
     const modifiedBuf = await zip.generateAsync({ type: 'nodebuffer' });
     const doc2 = await Document.loadFromBuffer(modifiedBuf);

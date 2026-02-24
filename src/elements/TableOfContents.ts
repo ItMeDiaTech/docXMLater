@@ -432,8 +432,8 @@ export class TableOfContents {
     if (tocParagraph.children!.length !== 5) {
       throw new Error(
         `CRITICAL: TOC field structure incomplete. Expected 5 elements ` +
-        `(begin, instruction, separate, content, end), got ${tocParagraph.children!.length}. ` +
-        `This would create an invalid OpenXML document per ECMA-376 §17.16.5.`
+          `(begin, instruction, separate, content, end), got ${tocParagraph.children!.length}. ` +
+          `This would create an invalid OpenXML document per ECMA-376 §17.16.5.`
       );
     }
 
@@ -442,7 +442,7 @@ export class TableOfContents {
     // Wrap TOC content in SDT (Structured Document Tag) for Word native integration
     const sdtWrapper = XMLBuilder.createSDT(sdtContent, {
       docPartGallery: 'Table of Contents',
-      docPartUnique: true
+      docPartUnique: true,
     });
 
     return [sdtWrapper];
@@ -528,7 +528,7 @@ export class TableOfContents {
     if (styles.length > 0 && typeof styles[0] === 'string') {
       this.includeStyles = (styles as string[]).map((styleName, index) => ({
         styleName,
-        level: index + 1 // Default: assign sequential levels
+        level: index + 1, // Default: assign sequential levels
       }));
     } else {
       this.includeStyles = styles as { styleName: string; level: number }[];
@@ -606,7 +606,8 @@ export class TableOfContents {
     if (options.numberingFormat !== undefined) this.numberingFormat = options.numberingFormat;
     if (options.noIndent !== undefined) this.noIndent = options.noIndent;
     if (options.customIndents !== undefined) this.customIndents = options.customIndents;
-    if (options.spaceBetweenEntries !== undefined) this.spaceBetweenEntries = options.spaceBetweenEntries;
+    if (options.spaceBetweenEntries !== undefined)
+      this.spaceBetweenEntries = options.spaceBetweenEntries;
     if (options.hyperlinkColor !== undefined) this.hyperlinkColor = options.hyperlinkColor;
     return this;
   }
@@ -621,7 +622,7 @@ export class TableOfContents {
     // Convert string[] to object format
     const stylesWithLevels = styles.map((styleName, index) => ({
       styleName,
-      level: index + 1 // Default: assign sequential levels
+      level: index + 1, // Default: assign sequential levels
     }));
     return new TableOfContents({
       ...options,
@@ -639,7 +640,7 @@ export class TableOfContents {
     // Convert string[] to object format if provided
     const stylesWithLevels = styles?.map((styleName, index) => ({
       styleName,
-      level: index + 1 // Default: assign sequential levels
+      level: index + 1, // Default: assign sequential levels
     }));
     return new TableOfContents({
       title: title || 'Contents',
@@ -655,7 +656,10 @@ export class TableOfContents {
    * @param format - Numbering format (decimal, roman, alpha)
    * @returns New TableOfContents instance
    */
-  static createNumbered(title?: string, format: 'decimal' | 'roman' | 'alpha' = 'decimal'): TableOfContents {
+  static createNumbered(
+    title?: string,
+    format: 'decimal' | 'roman' | 'alpha' = 'decimal'
+  ): TableOfContents {
     return new TableOfContents({
       title: title || 'Table of Contents',
       numbered: true,
@@ -669,7 +673,10 @@ export class TableOfContents {
    * @param options - Additional TOC options
    * @returns New TableOfContents instance
    */
-  static createWithSpacing(spaceBetweenEntries: number, options?: Partial<TOCProperties>): TableOfContents {
+  static createWithSpacing(
+    spaceBetweenEntries: number,
+    options?: Partial<TOCProperties>
+  ): TableOfContents {
     return new TableOfContents({
       ...options,
       spaceBetweenEntries,
@@ -682,7 +689,10 @@ export class TableOfContents {
    * @param options - Additional TOC options
    * @returns New TableOfContents instance
    */
-  static createWithHyperlinkColor(color: string, options?: Partial<TOCProperties>): TableOfContents {
+  static createWithHyperlinkColor(
+    color: string,
+    options?: Partial<TOCProperties>
+  ): TableOfContents {
     return new TableOfContents({
       ...options,
       hyperlinkColor: color,

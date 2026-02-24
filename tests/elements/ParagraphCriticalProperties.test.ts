@@ -285,7 +285,12 @@ describe('Paragraph - Critical Properties (Batch 1)', () => {
     it('should handle all text direction values', async () => {
       const doc = Document.create();
       const directions: ('lrTb' | 'tbRl' | 'btLr' | 'lrTbV' | 'tbRlV' | 'tbLrV')[] = [
-        'lrTb', 'tbRl', 'btLr', 'lrTbV', 'tbRlV', 'tbLrV'
+        'lrTb',
+        'tbRl',
+        'btLr',
+        'lrTbV',
+        'tbRlV',
+        'tbLrV',
       ];
 
       for (const direction of directions) {
@@ -349,7 +354,11 @@ describe('Paragraph - Critical Properties (Batch 1)', () => {
     it('should handle all text alignment values', async () => {
       const doc = Document.create();
       const alignments: ('top' | 'center' | 'baseline' | 'bottom' | 'auto')[] = [
-        'top', 'center', 'baseline', 'bottom', 'auto'
+        'top',
+        'center',
+        'baseline',
+        'bottom',
+        'auto',
       ];
 
       for (const alignment of alignments) {

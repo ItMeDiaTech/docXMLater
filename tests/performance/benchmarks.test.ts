@@ -39,7 +39,9 @@ describe('Performance Benchmarks', () => {
     // Generate 100 pages (approx 50 paragraphs per page)
     for (let page = 0; page < 100; page++) {
       for (let para = 0; para < 50; para++) {
-        doc.createParagraph(`Page ${page + 1}, Paragraph ${para + 1}: Lorem ipsum dolor sit amet, consectetur adipiscing elit.`);
+        doc.createParagraph(
+          `Page ${page + 1}, Paragraph ${para + 1}: Lorem ipsum dolor sit amet, consectetur adipiscing elit.`
+        );
       }
     }
 

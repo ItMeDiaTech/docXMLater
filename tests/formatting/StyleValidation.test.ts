@@ -22,7 +22,7 @@ describe('Style Validation Features', () => {
       expect(styles.length).toBeGreaterThan(0);
 
       // Should have at least Normal style
-      const normalStyle = styles.find(s => s.getStyleId() === 'Normal');
+      const normalStyle = styles.find((s) => s.getStyleId() === 'Normal');
       expect(normalStyle).toBeDefined();
     });
 
@@ -31,13 +31,13 @@ describe('Style Validation Features', () => {
         styleId: 'CustomStyle1',
         name: 'Custom Style 1',
         type: 'paragraph',
-        basedOn: 'Normal'
+        basedOn: 'Normal',
       });
 
       doc.addStyle(customStyle);
       const styles = doc.getStyles();
 
-      const found = styles.find(s => s.getStyleId() === 'CustomStyle1');
+      const found = styles.find((s) => s.getStyleId() === 'CustomStyle1');
       expect(found).toBeDefined();
       expect(found?.getName()).toBe('Custom Style 1');
     });
@@ -48,7 +48,7 @@ describe('Style Validation Features', () => {
       const customStyle = Style.create({
         styleId: 'ToRemove',
         name: 'To Remove',
-        type: 'paragraph'
+        type: 'paragraph',
       });
 
       doc.addStyle(customStyle);
@@ -73,8 +73,8 @@ describe('Style Validation Features', () => {
         type: 'paragraph',
         runFormatting: {
           bold: false,
-          size: 10
-        }
+          size: 10,
+        },
       });
 
       doc.addStyle(style);
@@ -84,8 +84,8 @@ describe('Style Validation Features', () => {
         runFormatting: {
           bold: true,
           size: 12,
-          color: 'FF0000'
-        }
+          color: 'FF0000',
+        },
       });
 
       expect(updated).toBe(true);
@@ -101,15 +101,17 @@ describe('Style Validation Features', () => {
     });
 
     it('should preserve styleId during update', () => {
-      doc.addStyle(Style.create({
-        styleId: 'PreserveId',
-        name: 'Test',
-        type: 'paragraph'
-      }));
+      doc.addStyle(
+        Style.create({
+          styleId: 'PreserveId',
+          name: 'Test',
+          type: 'paragraph',
+        })
+      );
 
       doc.updateStyle('PreserveId', {
         styleId: 'AttemptedChange', // Should be ignored
-        name: 'New Name'
+        name: 'New Name',
       });
 
       const style = doc.getStyle('PreserveId');
@@ -131,15 +133,19 @@ describe('Style Validation Features', () => {
       expect(xml).toContain('<?xml version="1.0"');
       expect(xml).toContain('<w:styles');
       expect(xml).toContain('</w:styles>');
-      expect(xml).toContain('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"');
+      expect(xml).toContain(
+        'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+      );
     });
 
     it('should include all styles in XML', () => {
-      doc.addStyle(Style.create({
-        styleId: 'TestInXml',
-        name: 'Test In XML',
-        type: 'paragraph'
-      }));
+      doc.addStyle(
+        Style.create({
+          styleId: 'TestInXml',
+          name: 'Test In XML',
+          type: 'paragraph',
+        })
+      );
 
       const xml = doc.getStylesXml();
 
@@ -166,11 +172,13 @@ describe('Style Validation Features', () => {
 
     it('should clear styles manager when setting XML', () => {
       // Add a style through API
-      doc.addStyle(Style.create({
-        styleId: 'WillBeCleared',
-        name: 'Will Be Cleared',
-        type: 'paragraph'
-      }));
+      doc.addStyle(
+        Style.create({
+          styleId: 'WillBeCleared',
+          name: 'Will Be Cleared',
+          type: 'paragraph',
+        })
+      );
 
       // Set new XML
       const minimalXml = `<?xml version="1.0"?>
@@ -195,7 +203,7 @@ describe('Style Validation Features', () => {
         styleId: 'Valid',
         name: 'Valid Style',
         type: 'paragraph',
-        basedOn: 'Normal'
+        basedOn: 'Normal',
       });
 
       expect(style.isValid()).toBe(true);
@@ -205,14 +213,14 @@ describe('Style Validation Features', () => {
       const noId = new Style({
         styleId: '',
         name: 'No ID',
-        type: 'paragraph'
+        type: 'paragraph',
       });
       expect(noId.isValid()).toBe(false);
 
       const noName = new Style({
         styleId: 'HasId',
         name: '',
-        type: 'paragraph'
+        type: 'paragraph',
       });
       expect(noName.isValid()).toBe(false);
     });
@@ -221,7 +229,7 @@ describe('Style Validation Features', () => {
       const style = new Style({
         styleId: 'BadType',
         name: 'Bad Type',
-        type: 'invalid' as any
+        type: 'invalid' as any,
       });
 
       expect(style.isValid()).toBe(false);
@@ -232,7 +240,7 @@ describe('Style Validation Features', () => {
         styleId: 'Circular',
         name: 'Circular',
         type: 'paragraph',
-        basedOn: 'Circular' // Based on itself
+        basedOn: 'Circular', // Based on itself
       });
 
       expect(style.isValid()).toBe(false);
@@ -244,8 +252,8 @@ describe('Style Validation Features', () => {
         name: 'Bad Size',
         type: 'paragraph',
         runFormatting: {
-          size: -5 // Invalid
-        }
+          size: -5, // Invalid
+        },
       });
       expect(badSize.isValid()).toBe(false);
 
@@ -254,8 +262,8 @@ describe('Style Validation Features', () => {
         name: 'Bad Color',
         type: 'paragraph',
         runFormatting: {
-          color: 'GGGGGG' // Invalid hex
-        }
+          color: 'GGGGGG', // Invalid hex
+        },
       });
       expect(badColor.isValid()).toBe(false);
 
@@ -264,8 +272,8 @@ describe('Style Validation Features', () => {
         name: 'Bad Highlight',
         type: 'paragraph',
         runFormatting: {
-          highlight: 'invalidColor' as any
-        }
+          highlight: 'invalidColor' as any,
+        },
       });
       expect(badHighlight.isValid()).toBe(false);
     });
@@ -281,19 +289,19 @@ describe('Style Validation Features', () => {
             before: 100,
             after: 200,
             line: 240,
-            lineRule: 'auto'
+            lineRule: 'auto',
           },
           indentation: {
             left: 720,
-            firstLine: 360
-          }
+            firstLine: 360,
+          },
         },
         runFormatting: {
           bold: true,
           size: 14,
           color: 'FF0000',
-          highlight: 'yellow'
-        }
+          highlight: 'yellow',
+        },
       });
 
       expect(style.isValid()).toBe(true);
@@ -340,7 +348,9 @@ describe('Style Validation Features', () => {
       const result = StylesManager.validate(xml);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.includes('Missing required <w:styles> root element'))).toBe(true);
+      expect(
+        result.errors.some((e) => e.includes('Missing required <w:styles> root element'))
+      ).toBe(true);
     });
 
     it('should detect duplicate style IDs', () => {
@@ -357,7 +367,9 @@ describe('Style Validation Features', () => {
       const result = StylesManager.validate(xml);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.includes('Duplicate style ID found: "Duplicate"'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Duplicate style ID found: "Duplicate"'))).toBe(
+        true
+      );
     });
 
     it('should detect missing required attributes', () => {
@@ -371,7 +383,9 @@ describe('Style Validation Features', () => {
       const result = StylesManager.validate(xml);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.includes('without required w:styleId attribute'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('without required w:styleId attribute'))).toBe(
+        true
+      );
     });
 
     it('should detect circular references', () => {
@@ -386,7 +400,7 @@ describe('Style Validation Features', () => {
       const result = StylesManager.validate(xml);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.includes('Circular reference detected'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Circular reference detected'))).toBe(true);
     });
 
     it('should detect XML corruption patterns', () => {
@@ -400,7 +414,7 @@ describe('Style Validation Features', () => {
       const result = StylesManager.validate(xml);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.includes('double-encoding corruption'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('double-encoding corruption'))).toBe(true);
     });
 
     it('should warn about missing Normal style', () => {
@@ -414,7 +428,7 @@ describe('Style Validation Features', () => {
       const result = StylesManager.validate(xml);
 
       expect(result.isValid).toBe(true);
-      expect(result.warnings.some(w => w.includes('Missing "Normal" style'))).toBe(true);
+      expect(result.warnings.some((w) => w.includes('Missing "Normal" style'))).toBe(true);
     });
 
     it('should detect malformed style tags', () => {
@@ -429,7 +443,7 @@ describe('Style Validation Features', () => {
 
       expect(result.isValid).toBe(false);
       // Missing required attributes
-      expect(result.errors.some(e => e.includes('without') && e.includes('required'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('without') && e.includes('required'))).toBe(true);
     });
   });
 

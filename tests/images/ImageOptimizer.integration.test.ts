@@ -16,22 +16,22 @@ import { Image } from '../../src/elements/Image';
 // Test Helpers
 // =============================================================================
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 function crc32(buf: Buffer): number {
   const table = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
     let c = n;
     for (let k = 0; k < 8; k++) {
-      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
     }
     table[n] = c;
   }
-  let crc = 0xFFFFFFFF;
+  let crc = 0xffffffff;
   for (let i = 0; i < buf.length; i++) {
-    crc = table[(crc ^ buf[i]!) & 0xFF]! ^ (crc >>> 8);
+    crc = table[(crc ^ buf[i]!) & 0xff]! ^ (crc >>> 8);
   }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
 function buildChunk(type: string, data: Buffer): Buffer {
@@ -57,7 +57,7 @@ function buildSuboptimalPng(width: number, height: number): Buffer {
   for (let y = 0; y < height; y++) {
     rawData[y * rowSize] = 0;
     for (let x = 0; x < width; x++) {
-      rawData[y * rowSize + 1 + x * 3] = 0xFF;
+      rawData[y * rowSize + 1 + x * 3] = 0xff;
       rawData[y * rowSize + 1 + x * 3 + 1] = 0x00;
       rawData[y * rowSize + 1 + x * 3 + 2] = 0x00;
     }
@@ -81,7 +81,8 @@ function buildBmp24(width: number, height: number): Buffer {
   const fileSize = 54 + pixelDataSize;
   const buf = Buffer.alloc(fileSize);
 
-  buf[0] = 0x42; buf[1] = 0x4D;
+  buf[0] = 0x42;
+  buf[1] = 0x4d;
   buf.writeUInt32LE(fileSize, 2);
   buf.writeUInt32LE(54, 10);
   buf.writeUInt32LE(40, 14);
@@ -95,7 +96,7 @@ function buildBmp24(width: number, height: number): Buffer {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const offset = 54 + y * rowSize + x * 3;
-      buf[offset] = 0xFF;     // B
+      buf[offset] = 0xff; // B
       buf[offset + 1] = 0x00; // G
       buf[offset + 2] = 0x00; // R
     }
@@ -108,16 +109,28 @@ function buildMinimalJpeg(): Buffer {
   // Smallest valid JPEG: SOI + APP0 (JFIF) + minimal DQT + SOF0 + DHT + SOS + EOI
   // For testing purposes, a minimal JPEG header is sufficient
   return Buffer.from([
-    0xFF, 0xD8, // SOI
-    0xFF, 0xE0, // APP0
-    0x00, 0x10, // Length: 16
-    0x4A, 0x46, 0x49, 0x46, 0x00, // JFIF\0
-    0x01, 0x01, // Version 1.1
+    0xff,
+    0xd8, // SOI
+    0xff,
+    0xe0, // APP0
+    0x00,
+    0x10, // Length: 16
+    0x4a,
+    0x46,
+    0x49,
+    0x46,
+    0x00, // JFIF\0
+    0x01,
+    0x01, // Version 1.1
     0x00, // Density units
-    0x00, 0x01, // X density
-    0x00, 0x01, // Y density
-    0x00, 0x00, // Thumbnail
-    0xFF, 0xD9, // EOI
+    0x00,
+    0x01, // X density
+    0x00,
+    0x01, // Y density
+    0x00,
+    0x00, // Thumbnail
+    0xff,
+    0xd9, // EOI
   ]);
 }
 
@@ -239,9 +252,9 @@ describe('Document.optimizeImages() Integration', () => {
     expect(images.length).toBe(3);
 
     // Find each by checking type
-    const extensions = images.map(i => i.image.getExtension());
-    expect(extensions.filter(e => e === 'png').length).toBe(2); // Original PNG + converted BMP
-    expect(extensions.filter(e => e === 'jpeg').length).toBe(1); // JPEG unchanged
+    const extensions = images.map((i) => i.image.getExtension());
+    expect(extensions.filter((e) => e === 'png').length).toBe(2); // Original PNG + converted BMP
+    expect(extensions.filter((e) => e === 'jpeg').length).toBe(1); // JPEG unchanged
   });
 
   it('should save and reload a document with optimized images', async () => {

@@ -5,13 +5,12 @@
  * should be skipped during parsing, not parsed as empty elements.
  */
 
+import { Document } from '../../src/core/Document';
+import { ZipHandler } from '../../src/zip/ZipHandler';
 
-import { Document } from "../../src/core/Document";
-import { ZipHandler } from "../../src/zip/ZipHandler";
-
-describe("Body-Level Deletion Detection", () => {
-  describe("isPositionInsideDel detection", () => {
-    it("should skip tables wrapped in w:del at body level", async () => {
+describe('Body-Level Deletion Detection', () => {
+  describe('isPositionInsideDel detection', () => {
+    it('should skip tables wrapped in w:del at body level', async () => {
       // Create a minimal DOCX with a table wrapped in w:del
       const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -44,14 +43,14 @@ describe("Body-Level Deletion Detection", () => {
       const tables = doc.getTables();
 
       expect(paragraphs.length).toBe(2);
-      expect(paragraphs[0]!.getText()).toBe("Before deleted table");
-      expect(paragraphs[1]!.getText()).toBe("After deleted table");
+      expect(paragraphs[0]!.getText()).toBe('Before deleted table');
+      expect(paragraphs[1]!.getText()).toBe('After deleted table');
       expect(tables.length).toBe(0); // Deleted table should not appear
 
       doc.dispose();
     });
 
-    it("should skip paragraphs wrapped in w:del at body level", async () => {
+    it('should skip paragraphs wrapped in w:del at body level', async () => {
       const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
@@ -77,13 +76,13 @@ describe("Body-Level Deletion Detection", () => {
 
       // Should have 2 paragraphs (deleted one should be skipped)
       expect(paragraphs.length).toBe(2);
-      expect(paragraphs[0]!.getText()).toBe("First paragraph");
-      expect(paragraphs[1]!.getText()).toBe("Third paragraph");
+      expect(paragraphs[0]!.getText()).toBe('First paragraph');
+      expect(paragraphs[1]!.getText()).toBe('Third paragraph');
 
       doc.dispose();
     });
 
-    it("should preserve non-deleted tables", async () => {
+    it('should preserve non-deleted tables', async () => {
       const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
@@ -117,7 +116,7 @@ describe("Body-Level Deletion Detection", () => {
       doc.dispose();
     });
 
-    it("should handle multiple deleted elements", async () => {
+    it('should handle multiple deleted elements', async () => {
       const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
@@ -155,15 +154,15 @@ describe("Body-Level Deletion Detection", () => {
       const tables = doc.getTables();
 
       expect(paragraphs.length).toBe(3);
-      expect(paragraphs[0]!.getText()).toBe("Keep 1");
-      expect(paragraphs[1]!.getText()).toBe("Keep 2");
-      expect(paragraphs[2]!.getText()).toBe("Keep 3");
+      expect(paragraphs[0]!.getText()).toBe('Keep 1');
+      expect(paragraphs[1]!.getText()).toBe('Keep 2');
+      expect(paragraphs[2]!.getText()).toBe('Keep 3');
       expect(tables.length).toBe(0); // Both deleted elements skipped
 
       doc.dispose();
     });
 
-    it("should NOT skip paragraphs containing paragraph-level w:del (run deletions)", async () => {
+    it('should NOT skip paragraphs containing paragraph-level w:del (run deletions)', async () => {
       // CRITICAL TEST: This was the bug that caused 98% content loss
       // Paragraph-level w:del (deletions inside paragraphs wrapping runs) should NOT
       // cause the entire paragraph to be skipped. Only body-level w:del should be skipped.
@@ -201,7 +200,7 @@ describe("Body-Level Deletion Detection", () => {
       doc.dispose();
     });
 
-    it("should NOT skip paragraphs with multiple run-level deletions", async () => {
+    it('should NOT skip paragraphs with multiple run-level deletions', async () => {
       // Simulates a complex document with many w:del elements inside paragraphs
       const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -230,9 +229,9 @@ describe("Body-Level Deletion Detection", () => {
 
       // ALL paragraphs should be preserved despite run-level deletions
       expect(paragraphs.length).toBe(3);
-      expect(paragraphs[0]!.getText()).toContain("Para 1");
-      expect(paragraphs[1]!.getText()).toBe("Para 2");
-      expect(paragraphs[2]!.getText()).toContain("Para 3");
+      expect(paragraphs[0]!.getText()).toContain('Para 1');
+      expect(paragraphs[1]!.getText()).toBe('Para 2');
+      expect(paragraphs[2]!.getText()).toContain('Para 3');
 
       doc.dispose();
     });
@@ -247,7 +246,7 @@ async function createMinimalDocx(documentXml: string): Promise<ZipHandler> {
 
   // [Content_Types].xml
   zipHandler.addFile(
-    "[Content_Types].xml",
+    '[Content_Types].xml',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -258,7 +257,7 @@ async function createMinimalDocx(documentXml: string): Promise<ZipHandler> {
 
   // _rels/.rels
   zipHandler.addFile(
-    "_rels/.rels",
+    '_rels/.rels',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
@@ -267,14 +266,14 @@ async function createMinimalDocx(documentXml: string): Promise<ZipHandler> {
 
   // word/_rels/document.xml.rels
   zipHandler.addFile(
-    "word/_rels/document.xml.rels",
+    'word/_rels/document.xml.rels',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 </Relationships>`
   );
 
   // word/document.xml
-  zipHandler.addFile("word/document.xml", documentXml);
+  zipHandler.addFile('word/document.xml', documentXml);
 
   return zipHandler;
 }

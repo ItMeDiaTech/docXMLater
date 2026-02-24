@@ -25,10 +25,9 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .setTableFormatting({
-          indent: 720, // 0.5 inch
-        });
+      }).setTableFormatting({
+        indent: 720, // 0.5 inch
+      });
 
       const props = style.getProperties();
       expect(props.tableStyle?.table?.indent).toBe(720);
@@ -39,10 +38,9 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .setTableFormatting({
-          cellSpacing: 100,
-        });
+      }).setTableFormatting({
+        cellSpacing: 100,
+      });
 
       const props = style.getProperties();
       expect(props.tableStyle?.table?.cellSpacing).toBe(100);
@@ -53,17 +51,16 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .setTableFormatting({
-          borders: {
-            top: { style: 'single', size: 6, color: '000000' },
-            bottom: { style: 'double', size: 8, color: 'FF0000' },
-            left: { style: 'dashed', size: 4, color: '0000FF' },
-            right: { style: 'dotted', size: 4, color: '00FF00' },
-            insideH: { style: 'single', size: 2, color: 'CCCCCC' },
-            insideV: { style: 'single', size: 2, color: 'CCCCCC' },
-          },
-        });
+      }).setTableFormatting({
+        borders: {
+          top: { style: 'single', size: 6, color: '000000' },
+          bottom: { style: 'double', size: 8, color: 'FF0000' },
+          left: { style: 'dashed', size: 4, color: '0000FF' },
+          right: { style: 'dotted', size: 4, color: '00FF00' },
+          insideH: { style: 'single', size: 2, color: 'CCCCCC' },
+          insideV: { style: 'single', size: 2, color: 'CCCCCC' },
+        },
+      });
 
       const props = style.getProperties();
       expect(props.tableStyle?.table?.borders?.top).toEqual({
@@ -80,15 +77,14 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .setTableFormatting({
-          cellMargins: {
-            top: 50,
-            bottom: 50,
-            left: 100,
-            right: 100,
-          },
-        });
+      }).setTableFormatting({
+        cellMargins: {
+          top: 50,
+          bottom: 50,
+          left: 100,
+          right: 100,
+        },
+      });
 
       const props = style.getProperties();
       expect(props.tableStyle?.table?.cellMargins).toEqual({
@@ -104,13 +100,12 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .setTableFormatting({
-          shading: {
-            fill: 'F0F0F0',
-            pattern: 'clear',
-          },
-        });
+      }).setTableFormatting({
+        shading: {
+          fill: 'F0F0F0',
+          pattern: 'clear',
+        },
+      });
 
       const props = style.getProperties();
       expect(props.tableStyle?.table?.shading?.fill).toBe('F0F0F0');
@@ -121,10 +116,9 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .setTableFormatting({
-          alignment: 'center',
-        });
+      }).setTableFormatting({
+        alignment: 'center',
+      });
 
       const props = style.getProperties();
       expect(props.tableStyle?.table?.alignment).toBe('center');
@@ -135,10 +129,9 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .setTableCellFormatting({
-          verticalAlignment: 'center',
-        });
+      }).setTableCellFormatting({
+        verticalAlignment: 'center',
+      });
 
       const props = style.getProperties();
       expect(props.tableStyle?.cell?.verticalAlignment).toBe('center');
@@ -149,11 +142,10 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .setTableRowFormatting({
-          height: 500,
-          heightRule: 'exact',
-        });
+      }).setTableRowFormatting({
+        height: 500,
+        heightRule: 'exact',
+      });
 
       const props = style.getProperties();
       expect(props.tableStyle?.row?.height).toBe(500);
@@ -167,16 +159,15 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'firstRow',
-          cellFormatting: {
-            shading: { fill: 'D0CECE' },
-          },
-          runFormatting: {
-            bold: true,
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'firstRow',
+        cellFormatting: {
+          shading: { fill: 'D0CECE' },
+        },
+        runFormatting: {
+          bold: true,
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -190,15 +181,14 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'lastRow',
-          cellFormatting: {
-            borders: {
-              top: { style: 'double', size: 6, color: '000000' },
-            },
+      }).addConditionalFormatting({
+        type: 'lastRow',
+        cellFormatting: {
+          borders: {
+            top: { style: 'double', size: 6, color: '000000' },
           },
-        });
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -211,14 +201,13 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'firstCol',
-          runFormatting: {
-            bold: true,
-            color: '000000',
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'firstCol',
+        runFormatting: {
+          bold: true,
+          color: '000000',
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -231,13 +220,12 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'lastCol',
-          cellFormatting: {
-            shading: { fill: 'E0E0E0' },
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'lastCol',
+        cellFormatting: {
+          shading: { fill: 'E0E0E0' },
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -269,13 +257,12 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'band2Horz',
-          cellFormatting: {
-            shading: { fill: 'FFFFFF' },
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'band2Horz',
+        cellFormatting: {
+          shading: { fill: 'FFFFFF' },
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -307,13 +294,12 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'band2Vert',
-          cellFormatting: {
-            shading: { fill: 'FFFFFF' },
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'band2Vert',
+        cellFormatting: {
+          shading: { fill: 'FFFFFF' },
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -325,13 +311,12 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'nwCell',
-          cellFormatting: {
-            shading: { fill: 'A0A0A0' },
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'nwCell',
+        cellFormatting: {
+          shading: { fill: 'A0A0A0' },
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -343,13 +328,12 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'neCell',
-          cellFormatting: {
-            shading: { fill: 'B0B0B0' },
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'neCell',
+        cellFormatting: {
+          shading: { fill: 'B0B0B0' },
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -361,13 +345,12 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'swCell',
-          cellFormatting: {
-            shading: { fill: 'C0C0C0' },
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'swCell',
+        cellFormatting: {
+          shading: { fill: 'C0C0C0' },
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -379,13 +362,12 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'TestTable',
         name: 'Test Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'seCell',
-          cellFormatting: {
-            shading: { fill: 'D0D0D0' },
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'seCell',
+        cellFormatting: {
+          shading: { fill: 'D0D0D0' },
+        },
+      });
 
       const props = style.getProperties();
       const conditional = props.tableStyle?.conditionalFormatting?.[0];
@@ -420,7 +402,7 @@ describe('TableStyles - Phase 5.1', () => {
       expect(xml.attributes?.['w:styleId']).toBe('CompleteTable');
 
       // Check for tblPr element
-      const tblPr = xml.children?.find(c => typeof c !== 'string' && c.name === 'w:tblPr');
+      const tblPr = xml.children?.find((c) => typeof c !== 'string' && c.name === 'w:tblPr');
       expect(tblPr).toBeDefined();
     });
 
@@ -429,21 +411,26 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'BorderedTable',
         name: 'Bordered Table',
         type: 'table',
-      })
-        .setTableFormatting({
-          borders: {
-            top: { style: 'single', size: 6, color: 'FF0000' },
-            bottom: { style: 'double', size: 8, color: '0000FF' },
-            insideH: { style: 'dashed', size: 4, color: '00FF00' },
-          },
-        });
+      }).setTableFormatting({
+        borders: {
+          top: { style: 'single', size: 6, color: 'FF0000' },
+          bottom: { style: 'double', size: 8, color: '0000FF' },
+          insideH: { style: 'dashed', size: 4, color: '00FF00' },
+        },
+      });
 
       const xml = style.toXML();
-      const tblPr = xml.children?.filter(c => typeof c !== 'string').find((c: any) => c.name === 'w:tblPr');
-      const borders = (tblPr as any)?.children?.filter((c: any) => typeof c !== 'string').find((c: any) => c.name === 'w:tblBorders');
+      const tblPr = xml.children
+        ?.filter((c) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:tblPr');
+      const borders = (tblPr as any)?.children
+        ?.filter((c: any) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:tblBorders');
       expect(borders).toBeDefined();
 
-      const topBorder = (borders as any)?.children?.filter((c: any) => typeof c !== 'string').find((c: any) => c.name === 'w:top');
+      const topBorder = (borders as any)?.children
+        ?.filter((c: any) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:top');
       expect(topBorder?.attributes?.['w:val']).toBe('single');
       expect(topBorder?.attributes?.['w:sz']).toBe(6);
       expect(topBorder?.attributes?.['w:color']).toBe('FF0000');
@@ -454,18 +441,21 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'ShadedTable',
         name: 'Shaded Table',
         type: 'table',
-      })
-        .setTableCellFormatting({
-          shading: {
-            fill: 'F0F0F0',
-            pattern: 'clear',
-            color: 'auto',
-          },
-        });
+      }).setTableCellFormatting({
+        shading: {
+          fill: 'F0F0F0',
+          pattern: 'clear',
+          color: 'auto',
+        },
+      });
 
       const xml = style.toXML();
-      const tcPr = xml.children?.filter(c => typeof c !== 'string').find((c: any) => c.name === 'w:tcPr');
-      const shading = (tcPr as any)?.children?.filter((c: any) => typeof c !== 'string').find((c: any) => c.name === 'w:shd');
+      const tcPr = xml.children
+        ?.filter((c) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:tcPr');
+      const shading = (tcPr as any)?.children
+        ?.filter((c: any) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:shd');
       expect(shading).toBeDefined();
       expect(shading?.attributes?.['w:fill']).toBe('F0F0F0');
     });
@@ -475,22 +465,27 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'MarginTable',
         name: 'Margin Table',
         type: 'table',
-      })
-        .setTableFormatting({
-          cellMargins: {
-            top: 50,
-            bottom: 50,
-            left: 100,
-            right: 100,
-          },
-        });
+      }).setTableFormatting({
+        cellMargins: {
+          top: 50,
+          bottom: 50,
+          left: 100,
+          right: 100,
+        },
+      });
 
       const xml = style.toXML();
-      const tblPr = xml.children?.filter(c => typeof c !== 'string').find((c: any) => c.name === 'w:tblPr');
-      const margins = (tblPr as any)?.children?.filter((c: any) => typeof c !== 'string').find((c: any) => c.name === 'w:tblCellMar');
+      const tblPr = xml.children
+        ?.filter((c) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:tblPr');
+      const margins = (tblPr as any)?.children
+        ?.filter((c: any) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:tblCellMar');
       expect(margins).toBeDefined();
 
-      const leftMargin = (margins as any)?.children?.filter((c: any) => typeof c !== 'string').find((c: any) => c.name === 'w:left');
+      const leftMargin = (margins as any)?.children
+        ?.filter((c: any) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:left');
       expect(leftMargin?.attributes?.['w:w']).toBe(100);
     });
 
@@ -499,26 +494,31 @@ describe('TableStyles - Phase 5.1', () => {
         styleId: 'ConditionalTable',
         name: 'Conditional Table',
         type: 'table',
-      })
-        .addConditionalFormatting({
-          type: 'firstRow',
-          cellFormatting: {
-            shading: { fill: 'D0CECE' },
-          },
-          runFormatting: {
-            bold: true,
-          },
-        });
+      }).addConditionalFormatting({
+        type: 'firstRow',
+        cellFormatting: {
+          shading: { fill: 'D0CECE' },
+        },
+        runFormatting: {
+          bold: true,
+        },
+      });
 
       const xml = style.toXML();
-      const tblStylePr = xml.children?.filter(c => typeof c !== 'string').find((c: any) => c.name === 'w:tblStylePr');
+      const tblStylePr = xml.children
+        ?.filter((c) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:tblStylePr');
       expect(tblStylePr).toBeDefined();
       expect((tblStylePr as any)?.attributes?.['w:type']).toBe('firstRow');
 
-      const tcPr = (tblStylePr as any)?.children?.filter((c: any) => typeof c !== 'string').find((c: any) => c.name === 'w:tcPr');
+      const tcPr = (tblStylePr as any)?.children
+        ?.filter((c: any) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:tcPr');
       expect(tcPr).toBeDefined();
 
-      const rPr = (tblStylePr as any)?.children?.filter((c: any) => typeof c !== 'string').find((c: any) => c.name === 'w:rPr');
+      const rPr = (tblStylePr as any)?.children
+        ?.filter((c: any) => typeof c !== 'string')
+        .find((c: any) => c.name === 'w:rPr');
       expect(rPr).toBeDefined();
     });
   });

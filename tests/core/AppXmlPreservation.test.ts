@@ -2,17 +2,17 @@
  * Tests for app.xml preservation during round-trip
  */
 
-import { Document } from "../../src/core/Document";
-import { ZipHandler } from "../../src/zip/ZipHandler";
-import { DOCX_PATHS } from "../../src/zip/types";
+import { Document } from '../../src/core/Document';
+import { ZipHandler } from '../../src/zip/ZipHandler';
+import { DOCX_PATHS } from '../../src/zip/types';
 
-describe("App.xml Preservation", () => {
+describe('App.xml Preservation', () => {
   /**
    * Helper: create a minimal DOCX buffer with custom app.xml
    */
   async function createDocxWithAppXml(appXml: string): Promise<Buffer> {
     const doc = Document.create();
-    doc.createParagraph("Test content");
+    doc.createParagraph('Test content');
     const buffer = await doc.toBuffer();
 
     // Post-process: inject custom app.xml
@@ -56,7 +56,7 @@ describe("App.xml Preservation", () => {
   <AppVersion>16.0000</AppVersion>
 </Properties>`;
 
-  it("should preserve original app.xml when no properties are modified", async () => {
+  it('should preserve original app.xml when no properties are modified', async () => {
     const buffer = await createDocxWithAppXml(richAppXml);
     const doc = await Document.loadFromBuffer(buffer);
 
@@ -73,69 +73,69 @@ describe("App.xml Preservation", () => {
     expect(savedAppXml).toBe(richAppXml);
   });
 
-  it("should preserve HeadingPairs and TotalTime when company is updated", async () => {
+  it('should preserve HeadingPairs and TotalTime when company is updated', async () => {
     const buffer = await createDocxWithAppXml(richAppXml);
     const doc = await Document.loadFromBuffer(buffer);
 
-    doc.setCompany("New Company");
+    doc.setCompany('New Company');
     const outputBuffer = await doc.toBuffer();
     doc.dispose();
 
     const zip = new ZipHandler();
     await zip.loadFromBuffer(outputBuffer);
-    const savedAppXml = zip.getFileAsString(DOCX_PATHS.APP_PROPS) || "";
+    const savedAppXml = zip.getFileAsString(DOCX_PATHS.APP_PROPS) || '';
     zip.clear();
 
     // Company should be updated
-    expect(savedAppXml).toContain("<Company>New Company</Company>");
+    expect(savedAppXml).toContain('<Company>New Company</Company>');
 
     // Original metadata should be preserved
-    expect(savedAppXml).toContain("<TotalTime>42</TotalTime>");
-    expect(savedAppXml).toContain("<Pages>5</Pages>");
-    expect(savedAppXml).toContain("<Words>1234</Words>");
-    expect(savedAppXml).toContain("<HeadingPairs>");
-    expect(savedAppXml).toContain("My Document Title");
-    expect(savedAppXml).toContain("<Template>Normal.dotm</Template>");
+    expect(savedAppXml).toContain('<TotalTime>42</TotalTime>');
+    expect(savedAppXml).toContain('<Pages>5</Pages>');
+    expect(savedAppXml).toContain('<Words>1234</Words>');
+    expect(savedAppXml).toContain('<HeadingPairs>');
+    expect(savedAppXml).toContain('My Document Title');
+    expect(savedAppXml).toContain('<Template>Normal.dotm</Template>');
   });
 
-  it("should update Application and AppVersion when changed", async () => {
+  it('should update Application and AppVersion when changed', async () => {
     const buffer = await createDocxWithAppXml(richAppXml);
     const doc = await Document.loadFromBuffer(buffer);
 
-    doc.setApplication("Custom App");
-    doc.setAppVersion("2.0.0");
+    doc.setApplication('Custom App');
+    doc.setAppVersion('2.0.0');
     const outputBuffer = await doc.toBuffer();
     doc.dispose();
 
     const zip = new ZipHandler();
     await zip.loadFromBuffer(outputBuffer);
-    const savedAppXml = zip.getFileAsString(DOCX_PATHS.APP_PROPS) || "";
+    const savedAppXml = zip.getFileAsString(DOCX_PATHS.APP_PROPS) || '';
     zip.clear();
 
-    expect(savedAppXml).toContain("<Application>Custom App</Application>");
-    expect(savedAppXml).toContain("<AppVersion>2.0.0</AppVersion>");
+    expect(savedAppXml).toContain('<Application>Custom App</Application>');
+    expect(savedAppXml).toContain('<AppVersion>2.0.0</AppVersion>');
     // Company should remain unchanged
-    expect(savedAppXml).toContain("<Company>Acme Corp</Company>");
+    expect(savedAppXml).toContain('<Company>Acme Corp</Company>');
   });
 
-  it("should generate app.xml from scratch for new documents", async () => {
+  it('should generate app.xml from scratch for new documents', async () => {
     const doc = Document.create();
-    doc.createParagraph("New doc");
-    doc.setCompany("Test Corp");
+    doc.createParagraph('New doc');
+    doc.setCompany('Test Corp');
 
     const outputBuffer = await doc.toBuffer();
     doc.dispose();
 
     const zip = new ZipHandler();
     await zip.loadFromBuffer(outputBuffer);
-    const savedAppXml = zip.getFileAsString(DOCX_PATHS.APP_PROPS) || "";
+    const savedAppXml = zip.getFileAsString(DOCX_PATHS.APP_PROPS) || '';
     zip.clear();
 
-    expect(savedAppXml).toContain("<Company>Test Corp</Company>");
-    expect(savedAppXml).toContain("<Application>docxmlater</Application>");
+    expect(savedAppXml).toContain('<Company>Test Corp</Company>');
+    expect(savedAppXml).toContain('<Application>docxmlater</Application>');
   });
 
-  it("should reset _originalAppPropsXml on dispose", async () => {
+  it('should reset _originalAppPropsXml on dispose', async () => {
     const buffer = await createDocxWithAppXml(richAppXml);
     const doc = await Document.loadFromBuffer(buffer);
 

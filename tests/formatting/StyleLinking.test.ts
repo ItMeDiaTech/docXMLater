@@ -258,7 +258,7 @@ describe('Normal and NormalWeb Style Linking', () => {
       });
 
       // Run should now have Normal config formatting (bold cleared, color changed)
-      const runs = doc.getParagraphs().filter(p => p.getStyle() === 'NormalWeb');
+      const runs = doc.getParagraphs().filter((p) => p.getStyle() === 'NormalWeb');
       expect(runs.length).toBeGreaterThan(0);
       const updatedRun = runs[0]!.getRuns()[0]!;
       expect(updatedRun.getFont()).toBe('Verdana');
@@ -291,7 +291,7 @@ describe('Normal and NormalWeb Style Linking', () => {
       });
 
       // Run should retain original direct formatting
-      const nwParas = doc.getParagraphs().filter(p => p.getStyle() === 'NormalWeb');
+      const nwParas = doc.getParagraphs().filter((p) => p.getStyle() === 'NormalWeb');
       expect(nwParas.length).toBeGreaterThan(0);
       const keptRun = nwParas[0]!.getRuns()[0]!;
       expect(keptRun.getFont()).toBe('Times New Roman');
@@ -322,7 +322,7 @@ describe('Normal and NormalWeb Style Linking', () => {
       });
 
       // White font should be preserved
-      const nwParas = doc.getParagraphs().filter(p => p.getStyle() === 'NormalWeb');
+      const nwParas = doc.getParagraphs().filter((p) => p.getStyle() === 'NormalWeb');
       const whiteRun = nwParas[0]!.getRuns()[0]!;
       expect(whiteRun.getColor()).toBe('FFFFFF');
       // Other formatting should still be updated
@@ -352,7 +352,7 @@ describe('Normal and NormalWeb Style Linking', () => {
       });
 
       // Bold should be preserved because preserveBold is true
-      const nwParas = doc.getParagraphs().filter(p => p.getStyle() === 'NormalWeb');
+      const nwParas = doc.getParagraphs().filter((p) => p.getStyle() === 'NormalWeb');
       const boldRun = nwParas[0]!.getRuns()[0]!;
       expect(boldRun.getFormatting().bold).toBe(true);
       // Font and size should still be updated
@@ -396,8 +396,8 @@ describe('Normal and NormalWeb Style Linking', () => {
 
       // Both Normal and NormalWeb should get the same treatment
       const allParas = doc.getParagraphs();
-      const normalParas = allParas.filter(p => p.getStyle() === 'Normal');
-      const nwParas = allParas.filter(p => p.getStyle() === 'NormalWeb');
+      const normalParas = allParas.filter((p) => p.getStyle() === 'Normal');
+      const nwParas = allParas.filter((p) => p.getStyle() === 'NormalWeb');
 
       // At least one of each
       expect(normalParas.length).toBeGreaterThan(0);
@@ -440,7 +440,7 @@ describe('Normal and NormalWeb Style Linking', () => {
       });
 
       // Paragraph mark properties should be updated
-      const nwParas = doc.getParagraphs().filter(p => p.getStyle() === 'NormalWeb');
+      const nwParas = doc.getParagraphs().filter((p) => p.getStyle() === 'NormalWeb');
       const markProps = nwParas[0]!.formatting.paragraphMarkRunProperties;
       expect(markProps).toBeDefined();
       expect(markProps!.font).toBe('Verdana');
@@ -471,7 +471,7 @@ describe('Normal and NormalWeb Style Linking', () => {
       });
 
       // Center alignment should be preserved
-      const nwParas = doc.getParagraphs().filter(p => p.getStyle() === 'NormalWeb');
+      const nwParas = doc.getParagraphs().filter((p) => p.getStyle() === 'NormalWeb');
       expect(nwParas[0]!.getAlignment()).toBe('center');
 
       doc.dispose();

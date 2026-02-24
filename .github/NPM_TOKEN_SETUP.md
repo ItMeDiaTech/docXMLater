@@ -36,12 +36,14 @@ You already have an npm token since you can publish manually. To create a new au
 After adding the secret, you can test it:
 
 **Option 1: Push a new tag**
+
 ```bash
 git tag v0.23.2-test
 git push origin v0.23.2-test
 ```
 
 **Option 2: Re-run the failed workflow**
+
 1. Go to: https://github.com/ItMeDiaTech/docXMLater/actions
 2. Click on the failed "Publish to npm" workflow
 3. Click **Re-run all jobs**
@@ -69,11 +71,12 @@ The workflow is located at: `.github/workflows/publish.yml`
 It triggers when you push tags matching `v*.*.*` pattern (e.g., `v0.23.1`).
 
 The relevant line that needs the token:
+
 ```yaml
 - name: Publish to npm
   run: npm publish --provenance --access public
   env:
-    NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}  # ← This needs to be set
+    NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # ← This needs to be set
 ```
 
 ## Troubleshooting
@@ -81,6 +84,7 @@ The relevant line that needs the token:
 ### Workflow still fails after adding token
 
 Check that:
+
 - Token name is exactly `NPM_TOKEN` (case sensitive)
 - Token type is **Automation** (not Publish or Read-only)
 - Token hasn't expired

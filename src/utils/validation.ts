@@ -28,8 +28,20 @@ export function validateDocxStructure(filePaths: string[]): void {
  */
 export function isBinaryFile(filePath: string): boolean {
   const binaryExtensions = [
-    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.ico',
-    '.emf', '.wmf', '.bin', '.dat', '.ttf', '.otf', '.woff',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.bmp',
+    '.tiff',
+    '.ico',
+    '.emf',
+    '.wmf',
+    '.bin',
+    '.dat',
+    '.ttf',
+    '.otf',
+    '.woff',
   ];
 
   const extension = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
@@ -59,8 +71,8 @@ export function normalizePath(path: string): string {
   if (/%2[eE]|%2[fF]|%5[cC]/.test(path)) {
     throw new Error(
       `Invalid file path: "${path}" contains URL-encoded characters (%2E, %2F, %5C). ` +
-      `This could be an attempt to bypass path validation. ` +
-      `Only plain characters are allowed in DOCX file paths.`
+        `This could be an attempt to bypass path validation. ` +
+        `Only plain characters are allowed in DOCX file paths.`
     );
   }
 
@@ -70,8 +82,8 @@ export function normalizePath(path: string): string {
   if (normalized.includes('../') || normalized.includes('/..') || normalized === '..') {
     throw new Error(
       `Invalid file path: "${path}" contains path traversal sequence (..). ` +
-      `This could be a malicious DOCX file attempting directory traversal. ` +
-      `DOCX archives must only contain relative paths within the archive.`
+        `This could be a malicious DOCX file attempting directory traversal. ` +
+        `DOCX archives must only contain relative paths within the archive.`
     );
   }
 
@@ -80,8 +92,8 @@ export function normalizePath(path: string): string {
   if (/^[a-zA-Z]:/.test(normalized)) {
     throw new Error(
       `Invalid file path: "${path}" appears to be an absolute Windows path. ` +
-      `Absolute paths are not allowed in DOCX archives. ` +
-      `Only relative paths within the archive are permitted.`
+        `Absolute paths are not allowed in DOCX archives. ` +
+        `Only relative paths within the archive are permitted.`
     );
   }
 
@@ -90,7 +102,7 @@ export function normalizePath(path: string): string {
   if (path.startsWith('/') && normalized.startsWith('/')) {
     throw new Error(
       `Invalid file path: "${path}" appears to be an absolute Unix path. ` +
-      `Only relative paths are allowed in DOCX archives.`
+        `Only relative paths are allowed in DOCX archives.`
     );
   }
 
@@ -110,9 +122,9 @@ export function isValidZipBuffer(buffer: Buffer): boolean {
 
   // Check for ZIP signature: PK\x03\x04 or PK\x05\x06 (for empty archives)
   return (
-    (buffer[0] === 0x50 && buffer[1] === 0x4B) &&
-    ((buffer[2] === 0x03 && buffer[3] === 0x04) ||
-     (buffer[2] === 0x05 && buffer[3] === 0x06))
+    buffer[0] === 0x50 &&
+    buffer[1] === 0x4b &&
+    ((buffer[2] === 0x03 && buffer[3] === 0x04) || (buffer[2] === 0x05 && buffer[3] === 0x06))
   );
 }
 
@@ -184,13 +196,20 @@ export function normalizeColor(color: string): string {
   if (!/^[0-9A-Fa-f]{3}$|^[0-9A-Fa-f]{6}$/.test(hex)) {
     throw new Error(
       `Invalid color format: "${color}". Expected 3 or 6-character hex ` +
-      `(e.g., "FF0000", "#FF0000", "F00", or "#F00")`
+        `(e.g., "FF0000", "#FF0000", "F00", or "#F00")`
     );
   }
 
   // Expand 3-character to 6-character
   if (hex.length === 3) {
-    return (hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2)).toUpperCase();
+    return (
+      hex.charAt(0) +
+      hex.charAt(0) +
+      hex.charAt(1) +
+      hex.charAt(1) +
+      hex.charAt(2) +
+      hex.charAt(2)
+    ).toUpperCase();
   }
 
   return hex.toUpperCase();
@@ -252,11 +271,7 @@ export function validateNumberingId(numId: number, fieldName = 'numbering ID'): 
  * @param maxLevel - Maximum allowed level (default 8)
  * @throws {Error} If the level is invalid
  */
-export function validateLevel(
-  level: number,
-  fieldName = 'level',
-  maxLevel = 8
-): void {
+export function validateLevel(level: number, fieldName = 'level', maxLevel = 8): void {
   if (!Number.isInteger(level)) {
     throw new Error(`${fieldName} must be an integer, got ${level}`);
   }
@@ -283,9 +298,7 @@ export function validateAlignment(
   }
 
   if (!allowed.includes(alignment)) {
-    throw new Error(
-      `Invalid ${fieldName}: '${alignment}' (allowed: ${allowed.join(', ')})`
-    );
+    throw new Error(`Invalid ${fieldName}: '${alignment}' (allowed: ${allowed.join(', ')})`);
   }
 }
 
@@ -372,9 +385,7 @@ export function validateEmus(value: number, fieldName = 'EMUs'): void {
   // Reasonable maximum: 50 million EMUs (about 55 inches)
   const MAX_EMUS = 50000000;
   if (value > MAX_EMUS) {
-    throw new Error(
-      `${fieldName} exceeds maximum ${MAX_EMUS} (about 55 inches), got ${value}`
-    );
+    throw new Error(`${fieldName} exceeds maximum ${MAX_EMUS} (about 55 inches), got ${value}`);
   }
 }
 
@@ -421,8 +432,8 @@ export function detectXmlInText(text: string, context?: string): TextValidationR
     const contextStr = context ? ` in ${context}` : '';
     warnings.push(
       `Text${contextStr} contains XML-like markup: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}". ` +
-      `This will be displayed as literal text in the document. ` +
-      `If you intended to add formatting, use the appropriate API methods instead.`
+        `This will be displayed as literal text in the document. ` +
+        `If you intended to add formatting, use the appropriate API methods instead.`
     );
   }
 
@@ -432,7 +443,7 @@ export function detectXmlInText(text: string, context?: string): TextValidationR
     const contextStr = context ? ` in ${context}` : '';
     warnings.push(
       `Text${contextStr} contains escaped XML entities (e.g., &lt;, &gt;, &quot;). ` +
-      `These will appear as literal characters in the document.`
+        `These will appear as literal characters in the document.`
     );
   }
 
@@ -443,7 +454,7 @@ export function detectXmlInText(text: string, context?: string): TextValidationR
       const contextStr = context ? ` in ${context}` : '';
       warnings.push(
         `Text${contextStr} contains a known problematic XML pattern that suggests ` +
-        `the text may have been corrupted by previous processing.`
+          `the text may have been corrupted by previous processing.`
       );
       break;
     }
@@ -526,8 +537,8 @@ export function validateRunText(
     // Add a note about cleaning
     result.warnings.push(
       `Text has been automatically cleaned. ` +
-      `Original: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}" ` +
-      `Cleaned: "${result.cleanedText.substring(0, 50)}${result.cleanedText.length > 50 ? '...' : ''}"`
+        `Original: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}" ` +
+        `Cleaned: "${result.cleanedText.substring(0, 50)}${result.cleanedText.length > 50 ? '...' : ''}"`
     );
   }
 
@@ -535,7 +546,7 @@ export function validateRunText(
   if (warnToConsole && result.warnings.length > 0 && typeof console !== 'undefined') {
     const contextStr = context ? ` [${context}]` : '';
     defaultLogger.warn(`DocXML Text Validation Warning${contextStr}:`);
-    result.warnings.forEach(warning => defaultLogger.warn(`  - ${warning}`));
+    result.warnings.forEach((warning) => defaultLogger.warn(`  - ${warning}`));
   }
 
   return result;

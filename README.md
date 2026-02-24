@@ -31,7 +31,7 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 
 - Numbered lists (decimal, roman, alpha)
 - Bulleted lists with various bullet styles
-- Multi-level lists with custom numbering
+- Multi-level lists with custom numbering and restart control
 - Tables with formatting, borders, shading
 - Cell spanning (merge cells horizontally and vertically)
 - Advanced table properties (margins, widths, alignment)
@@ -99,17 +99,17 @@ npm install docxmlater
 ### Creating a New Document
 
 ```typescript
-import { Document } from "docxmlater";
+import { Document } from 'docxmlater';
 
 // Create a new document
 const doc = Document.create();
 
 // Add a paragraph
 const para = doc.createParagraph();
-para.addText("Hello, World!", { bold: true, fontSize: 24 });
+para.addText('Hello, World!', { bold: true, fontSize: 24 });
 
 // Save to file
-await doc.save("hello.docx");
+await doc.save('hello.docx');
 
 // Don't forget to dispose
 doc.dispose();
@@ -118,27 +118,27 @@ doc.dispose();
 ### Loading and Modifying Documents
 
 ```typescript
-import { Document } from "docxmlater";
+import { Document } from 'docxmlater';
 
 // Load existing document
-const doc = await Document.load("input.docx");
+const doc = await Document.load('input.docx');
 
 // Find and replace text
-doc.replaceText(/old text/g, "new text");
+doc.replaceText(/old text/g, 'new text');
 
 // Add a new paragraph
 const para = doc.createParagraph();
-para.addText("Added paragraph", { italic: true });
+para.addText('Added paragraph', { italic: true });
 
 // Save modifications
-await doc.save("output.docx");
+await doc.save('output.docx');
 doc.dispose();
 ```
 
 ### Working with Tables
 
 ```typescript
-import { Document } from "docxmlater";
+import { Document } from 'docxmlater';
 
 const doc = Document.create();
 
@@ -147,65 +147,65 @@ const table = doc.createTable(3, 4);
 
 // Set header row
 const headerRow = table.getRow(0);
-headerRow.getCell(0).addParagraph().addText("Column 1", { bold: true });
-headerRow.getCell(1).addParagraph().addText("Column 2", { bold: true });
-headerRow.getCell(2).addParagraph().addText("Column 3", { bold: true });
-headerRow.getCell(3).addParagraph().addText("Column 4", { bold: true });
+headerRow.getCell(0).addParagraph().addText('Column 1', { bold: true });
+headerRow.getCell(1).addParagraph().addText('Column 2', { bold: true });
+headerRow.getCell(2).addParagraph().addText('Column 3', { bold: true });
+headerRow.getCell(3).addParagraph().addText('Column 4', { bold: true });
 
 // Add data
-table.getRow(1).getCell(0).addParagraph().addText("Data 1");
-table.getRow(1).getCell(1).addParagraph().addText("Data 2");
+table.getRow(1).getCell(0).addParagraph().addText('Data 1');
+table.getRow(1).getCell(1).addParagraph().addText('Data 2');
 
 // Apply borders
 table.setBorders({
-  top: { style: "single", size: 4, color: "000000" },
-  bottom: { style: "single", size: 4, color: "000000" },
-  left: { style: "single", size: 4, color: "000000" },
-  right: { style: "single", size: 4, color: "000000" },
-  insideH: { style: "single", size: 4, color: "000000" },
-  insideV: { style: "single", size: 4, color: "000000" },
+  top: { style: 'single', size: 4, color: '000000' },
+  bottom: { style: 'single', size: 4, color: '000000' },
+  left: { style: 'single', size: 4, color: '000000' },
+  right: { style: 'single', size: 4, color: '000000' },
+  insideH: { style: 'single', size: 4, color: '000000' },
+  insideV: { style: 'single', size: 4, color: '000000' },
 });
 
-await doc.save("table.docx");
+await doc.save('table.docx');
 doc.dispose();
 ```
 
 ### Adding Images
 
 ```typescript
-import { Document } from "docxmlater";
-import { readFileSync } from "fs";
+import { Document } from 'docxmlater';
+import { readFileSync } from 'fs';
 
 const doc = Document.create();
 
 // Load image from file
-const imageBuffer = readFileSync("photo.jpg");
+const imageBuffer = readFileSync('photo.jpg');
 
 // Add image to document
 const para = doc.createParagraph();
 await para.addImage(imageBuffer, {
   width: 400,
   height: 300,
-  format: "jpg",
+  format: 'jpg',
 });
 
-await doc.save("with-image.docx");
+await doc.save('with-image.docx');
 doc.dispose();
 ```
 
 ### Hyperlink Management
 
 ```typescript
-import { Document } from "docxmlater";
+import { Document } from 'docxmlater';
 
-const doc = await Document.load("document.docx");
+const doc = await Document.load('document.docx');
 
 // Get all hyperlinks
 const hyperlinks = doc.getHyperlinks();
 console.log(`Found ${hyperlinks.length} hyperlinks`);
 
 // Update URLs in batch (30-50% faster than manual iteration)
-doc.updateHyperlinkUrls("http://old-domain.com", "https://new-domain.com");
+doc.updateHyperlinkUrls('http://old-domain.com', 'https://new-domain.com');
 
 // Fix fragmented hyperlinks from Google Docs
 const mergedCount = doc.defragmentHyperlinks({
@@ -213,27 +213,27 @@ const mergedCount = doc.defragmentHyperlinks({
 });
 console.log(`Merged ${mergedCount} fragmented hyperlinks`);
 
-await doc.save("updated.docx");
+await doc.save('updated.docx');
 doc.dispose();
 ```
 
 ### Custom Styles
 
 ```typescript
-import { Document, Style } from "docxmlater";
+import { Document, Style } from 'docxmlater';
 
 const doc = Document.create();
 
 // Create custom paragraph style
-const customStyle = new Style("CustomHeading", "paragraph");
-customStyle.setName("Custom Heading");
+const customStyle = new Style('CustomHeading', 'paragraph');
+customStyle.setName('Custom Heading');
 customStyle.setRunFormatting({
   bold: true,
   fontSize: 32,
-  color: "0070C0",
+  color: '0070C0',
 });
 customStyle.setParagraphFormatting({
-  alignment: "center",
+  alignment: 'center',
   spacingAfter: 240,
 });
 
@@ -242,19 +242,19 @@ doc.getStylesManager().addStyle(customStyle);
 
 // Apply style to paragraph
 const para = doc.createParagraph();
-para.addText("Styled Heading");
-para.applyStyle("CustomHeading");
+para.addText('Styled Heading');
+para.applyStyle('CustomHeading');
 
-await doc.save("styled.docx");
+await doc.save('styled.docx');
 doc.dispose();
 ```
 
 ### Compatibility Mode Detection and Upgrade
 
 ```typescript
-import { Document, CompatibilityMode } from "docxmlater";
+import { Document, CompatibilityMode } from 'docxmlater';
 
-const doc = await Document.load("legacy.docx");
+const doc = await Document.load('legacy.docx');
 
 // Check compatibility mode
 console.log(`Mode: ${doc.getCompatibilityMode()}`); // e.g., 12 (Word 2007)
@@ -270,7 +270,7 @@ if (doc.isCompatibilityMode()) {
   console.log(`Added ${report.addedSettings.length} modern settings`);
 }
 
-await doc.save("modern.docx");
+await doc.save('modern.docx');
 doc.dispose();
 ```
 
@@ -303,6 +303,7 @@ const doc = await Document.load('document.docx', {
 ```
 
 **Revision Handling Options:**
+
 - `'accept'` (default): Removes revision markup, keeps inserted content, removes deleted content
 - `'strip'`: Removes all revision markup completely
 - `'preserve'`: Keeps tracked changes as-is (may cause Word "unreadable content" errors)
@@ -361,8 +362,9 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `clearFootnotes()` / `clearEndnotes()` - Remove all notes
 - `getFootnoteManager()` / `getEndnoteManager()` - Access note managers
 
-**Numbering Cleanup:**
+**Numbering:**
 
+- `restartNumbering(numId, level?, startValue?)` - Restart list numbering (creates new instance with startOverride)
 - `cleanupUnusedNumbering()` - Remove unused numbering definitions (scans body, headers, footers, footnotes, endnotes)
 - `consolidateNumbering(options?)` - Merge duplicate abstract numbering definitions
 - `validateNumberingReferences()` - Fix orphaned numId references
@@ -538,7 +540,7 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 **Unit Conversions:**
 
 ```typescript
-import { twipsToPoints, inchesToTwips, emusToPixels } from "docxmlater";
+import { twipsToPoints, inchesToTwips, emusToPixels } from 'docxmlater';
 
 const points = twipsToPoints(240); // 240 twips = 12 points
 const twips = inchesToTwips(1); // 1 inch = 1440 twips
@@ -548,10 +550,10 @@ const pixels = emusToPixels(914400, 96); // 914400 EMUs = 96 pixels at 96 DPI
 **Validation:**
 
 ```typescript
-import { validateRunText, detectXmlInText, cleanXmlFromText } from "docxmlater";
+import { validateRunText, detectXmlInText, cleanXmlFromText } from 'docxmlater';
 
 // Detect XML patterns in text
-const result = validateRunText("Some <w:t>text</w:t>");
+const result = validateRunText('Some <w:t>text</w:t>');
 if (result.hasXml) {
   console.warn(result.message);
   const cleaned = cleanXmlFromText(result.text);
@@ -561,9 +563,9 @@ if (result.hasXml) {
 **Corruption Detection:**
 
 ```typescript
-import { detectCorruptionInDocument } from "docxmlater";
+import { detectCorruptionInDocument } from 'docxmlater';
 
-const doc = await Document.load("suspect.docx");
+const doc = await Document.load('suspect.docx');
 const report = detectCorruptionInDocument(doc);
 
 if (report.isCorrupted) {
@@ -588,26 +590,26 @@ import {
   RunFormatting,
   ParagraphFormatting,
   DocumentProperties,
-} from "docxmlater";
+} from 'docxmlater';
 
 // Type-safe formatting
 const formatting: RunFormatting = {
   bold: true,
   fontSize: 12,
-  color: "FF0000",
+  color: 'FF0000',
 };
 
 // Type-safe document properties
 const properties: DocumentProperties = {
-  title: "My Document",
-  author: "John Doe",
+  title: 'My Document',
+  author: 'John Doe',
   created: new Date(),
 };
 ```
 
 ## Version History
 
-**Current Version: 10.0.4**
+**Current Version: 10.1.6**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
@@ -615,7 +617,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 The framework includes comprehensive test coverage:
 
-- **2,823 test cases** across 129 test suites
+- **3,084 test cases** across 143 test suites
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks
@@ -676,13 +678,14 @@ The XML parser uses position-based parsing instead of regular expressions, preve
 ### Input Validation
 
 **Size Limits:**
+
 - Default document size limit: 150 MB (configurable)
 - Warning threshold: 50 MB
 - XML content size validation before parsing
 
 ```typescript
 // Configure size limits
-const doc = await Document.load("large.docx", {
+const doc = await Document.load('large.docx', {
   sizeLimits: {
     warningSizeMB: 100,
     maxSizeMB: 500,
@@ -691,11 +694,12 @@ const doc = await Document.load("large.docx", {
 ```
 
 **Nesting Depth:**
+
 - Maximum XML nesting depth: 256 (configurable)
 - Prevents stack overflow attacks
 
 ```typescript
-import { XMLParser } from "docxmlater";
+import { XMLParser } from 'docxmlater';
 
 // Parse with custom depth limit
 const obj = XMLParser.parseToObject(xml, {
@@ -706,6 +710,7 @@ const obj = XMLParser.parseToObject(xml, {
 ### Path Traversal Prevention
 
 File paths within DOCX archives are validated to prevent directory traversal attacks:
+
 - Blocks `../` path sequences
 - Blocks absolute paths
 - Validates URL-encoded path components
@@ -713,6 +718,7 @@ File paths within DOCX archives are validated to prevent directory traversal att
 ### XML Injection Prevention
 
 All text content is properly escaped using:
+
 - `XMLBuilder.escapeXmlText()` for element content
 - `XMLBuilder.escapeXmlAttribute()` for attribute values
 

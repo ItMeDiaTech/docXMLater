@@ -2,20 +2,20 @@
  * Tests for content addition/deletion tracking in Paragraph and Run
  */
 
-import { Document } from "../../src/core/Document";
-import { Paragraph } from "../../src/elements/Paragraph";
-import { Run } from "../../src/elements/Run";
-import { Revision } from "../../src/elements/Revision";
-import { Hyperlink } from "../../src/elements/Hyperlink";
+import { Document } from '../../src/core/Document';
+import { Paragraph } from '../../src/elements/Paragraph';
+import { Run } from '../../src/elements/Run';
+import { Revision } from '../../src/elements/Revision';
+import { Hyperlink } from '../../src/elements/Hyperlink';
 
-describe("Content Tracking", () => {
-  describe("Paragraph.addRun() with tracking", () => {
-    it("should wrap run in insert revision when tracking enabled", async () => {
+describe('Content Tracking', () => {
+  describe('Paragraph.addRun() with tracking', () => {
+    it('should wrap run in insert revision when tracking enabled', async () => {
       const doc = new Document();
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
 
       const para = doc.createParagraph();
-      const run = new Run("Tracked text");
+      const run = new Run('Tracked text');
       para.addRun(run);
 
       // Content should contain a revision, not the plain run
@@ -24,16 +24,16 @@ describe("Content Tracking", () => {
       expect(content[0]).toBeInstanceOf(Revision);
 
       const revision = content[0] as Revision;
-      expect(revision.getType()).toBe("insert");
-      expect(revision.getAuthor()).toBe("TestUser");
+      expect(revision.getType()).toBe('insert');
+      expect(revision.getAuthor()).toBe('TestUser');
     });
 
-    it("should add run directly when tracking disabled", () => {
+    it('should add run directly when tracking disabled', () => {
       const doc = new Document();
       // Don't enable track changes
 
       const para = doc.createParagraph();
-      const run = new Run("Plain text");
+      const run = new Run('Plain text');
       para.addRun(run);
 
       const content = para.getContent();
@@ -42,37 +42,37 @@ describe("Content Tracking", () => {
       expect(content[0]).toBe(run);
     });
 
-    it("should set parent reference on run", () => {
+    it('should set parent reference on run', () => {
       const doc = new Document();
       const para = doc.createParagraph();
-      const run = new Run("Test");
+      const run = new Run('Test');
       para.addRun(run);
 
       expect(run._getParentParagraph()).toBe(para);
     });
   });
 
-  describe("Paragraph.addText() with tracking", () => {
-    it("should wrap created run in insert revision when tracking enabled", async () => {
+  describe('Paragraph.addText() with tracking', () => {
+    it('should wrap created run in insert revision when tracking enabled', async () => {
       const doc = new Document();
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
 
       const para = doc.createParagraph();
-      para.addText("Tracked text");
+      para.addText('Tracked text');
 
       const content = para.getContent();
       expect(content.length).toBe(1);
       expect(content[0]).toBeInstanceOf(Revision);
 
       const revision = content[0] as Revision;
-      expect(revision.getType()).toBe("insert");
+      expect(revision.getType()).toBe('insert');
     });
 
-    it("should add run directly when tracking disabled", () => {
+    it('should add run directly when tracking disabled', () => {
       const doc = new Document();
 
       const para = doc.createParagraph();
-      para.addText("Plain text");
+      para.addText('Plain text');
 
       const content = para.getContent();
       expect(content.length).toBe(1);
@@ -80,32 +80,32 @@ describe("Content Tracking", () => {
     });
   });
 
-  describe("Paragraph.addHyperlink() with tracking", () => {
-    it("should wrap hyperlink in insert revision when tracking enabled", async () => {
+  describe('Paragraph.addHyperlink() with tracking', () => {
+    it('should wrap hyperlink in insert revision when tracking enabled', async () => {
       const doc = new Document();
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
 
       const para = doc.createParagraph();
-      para.addHyperlink("https://example.com");
+      para.addHyperlink('https://example.com');
 
       const content = para.getContent();
       expect(content.length).toBe(1);
       expect(content[0]).toBeInstanceOf(Revision);
 
       const revision = content[0] as Revision;
-      expect(revision.getType()).toBe("insert");
+      expect(revision.getType()).toBe('insert');
     });
   });
 
-  describe("Paragraph.clearContent() with tracking", () => {
-    it("should wrap content in delete revisions when tracking enabled", async () => {
+  describe('Paragraph.clearContent() with tracking', () => {
+    it('should wrap content in delete revisions when tracking enabled', async () => {
       const doc = new Document();
       const para = doc.createParagraph();
-      para.addText("Text 1");
-      para.addText("Text 2");
+      para.addText('Text 1');
+      para.addText('Text 2');
 
       // Enable tracking AFTER adding content
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
 
       // Now clear content
       para.clearContent();
@@ -118,15 +118,15 @@ describe("Content Tracking", () => {
 
       const rev1 = content[0] as Revision;
       const rev2 = content[1] as Revision;
-      expect(rev1.getType()).toBe("delete");
-      expect(rev2.getType()).toBe("delete");
+      expect(rev1.getType()).toBe('delete');
+      expect(rev2.getType()).toBe('delete');
     });
 
-    it("should clear content directly when tracking disabled", () => {
+    it('should clear content directly when tracking disabled', () => {
       const doc = new Document();
       const para = doc.createParagraph();
-      para.addText("Text 1");
-      para.addText("Text 2");
+      para.addText('Text 1');
+      para.addText('Text 2');
 
       para.clearContent();
 
@@ -135,15 +135,15 @@ describe("Content Tracking", () => {
     });
   });
 
-  describe("Paragraph.removeContentAt() with tracking", () => {
-    it("should wrap removed item in delete revision when tracking enabled", async () => {
+  describe('Paragraph.removeContentAt() with tracking', () => {
+    it('should wrap removed item in delete revision when tracking enabled', async () => {
       const doc = new Document();
       const para = doc.createParagraph();
-      para.addText("Text 1");
-      para.addText("Text 2");
+      para.addText('Text 1');
+      para.addText('Text 2');
 
       // Enable tracking AFTER adding content
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
 
       // Remove first item
       para.removeContentAt(0);
@@ -155,24 +155,24 @@ describe("Content Tracking", () => {
       expect(content[1]).toBeInstanceOf(Run); // Second item unchanged
 
       const rev = content[0] as Revision;
-      expect(rev.getType()).toBe("delete");
+      expect(rev.getType()).toBe('delete');
     });
   });
 
-  describe("Run.setText() with tracking", () => {
-    it("should create fine-grained revisions when text changes with tracking", async () => {
+  describe('Run.setText() with tracking', () => {
+    it('should create fine-grained revisions when text changes with tracking', async () => {
       const doc = new Document();
       const para = doc.createParagraph();
-      para.addText("Original text");
+      para.addText('Original text');
 
       // Enable tracking AFTER adding content
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
 
       // Get the run and change its text
       const runs = para.getRuns();
       expect(runs.length).toBe(1);
 
-      runs[0]!.setText("New text");
+      runs[0]!.setText('New text');
 
       // "Original text" → "New text" shares suffix " text"
       // Fine-grained: delete("Original") + insert("New") + equal(" text")
@@ -184,25 +184,25 @@ describe("Content Tracking", () => {
       const equalRun = content[2] as Run;
 
       expect(deleteRev).toBeInstanceOf(Revision);
-      expect(deleteRev.getType()).toBe("delete");
-      expect(deleteRev.getRuns()[0]!.getText()).toBe("Original");
+      expect(deleteRev.getType()).toBe('delete');
+      expect(deleteRev.getRuns()[0]!.getText()).toBe('Original');
 
       expect(insertRev).toBeInstanceOf(Revision);
-      expect(insertRev.getType()).toBe("insert");
-      expect(insertRev.getRuns()[0]!.getText()).toBe("New");
+      expect(insertRev.getType()).toBe('insert');
+      expect(insertRev.getRuns()[0]!.getText()).toBe('New');
 
       expect(equalRun).toBeInstanceOf(Run);
-      expect(equalRun.getText()).toBe(" text");
+      expect(equalRun.getText()).toBe(' text');
     });
 
-    it("should not create revisions when text changes without tracking", () => {
+    it('should not create revisions when text changes without tracking', () => {
       const doc = new Document();
       const para = doc.createParagraph();
-      para.addText("Original text");
+      para.addText('Original text');
 
       // No tracking enabled
       const runs = para.getRuns();
-      runs[0]!.setText("New text");
+      runs[0]!.setText('New text');
 
       // Content should still be a single run
       const content = para.getContent();
@@ -210,18 +210,18 @@ describe("Content Tracking", () => {
       expect(content[0]).toBeInstanceOf(Run);
 
       const run = content[0] as Run;
-      expect(run.getText()).toBe("New text");
+      expect(run.getText()).toBe('New text');
     });
 
-    it("should not create revisions when text unchanged", async () => {
+    it('should not create revisions when text unchanged', async () => {
       const doc = new Document();
       const para = doc.createParagraph();
-      para.addText("Same text");
+      para.addText('Same text');
 
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
 
       const runs = para.getRuns();
-      runs[0]!.setText("Same text"); // Same value
+      runs[0]!.setText('Same text'); // Same value
 
       // Content should remain unchanged
       const content = para.getContent();
@@ -229,39 +229,39 @@ describe("Content Tracking", () => {
       expect(content[0]).toBeInstanceOf(Run);
     });
 
-    it("should not create revisions for runs without parent", async () => {
+    it('should not create revisions for runs without parent', async () => {
       const doc = new Document();
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
 
       // Create a standalone run (not added to paragraph)
-      const run = new Run("Original");
-      run.setText("New");
+      const run = new Run('Original');
+      run.setText('New');
 
       // No error, and text is changed
-      expect(run.getText()).toBe("New");
+      expect(run.getText()).toBe('New');
     });
   });
 
-  describe("RevisionManager registration", () => {
-    it("should register insert revisions with RevisionManager", async () => {
+  describe('RevisionManager registration', () => {
+    it('should register insert revisions with RevisionManager', async () => {
       const doc = new Document();
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
 
       const para = doc.createParagraph();
-      para.addText("Text 1");
-      para.addText("Text 2");
+      para.addText('Text 1');
+      para.addText('Text 2');
 
       // Check RevisionManager has the revisions
       const revManager = doc.getRevisionManager();
       expect(revManager.getInsertionCount()).toBe(2);
     });
 
-    it("should register delete revisions with RevisionManager", async () => {
+    it('should register delete revisions with RevisionManager', async () => {
       const doc = new Document();
       const para = doc.createParagraph();
-      para.addText("Text 1");
+      para.addText('Text 1');
 
-      doc.enableTrackChanges({ author: "TestUser" });
+      doc.enableTrackChanges({ author: 'TestUser' });
       para.clearContent();
 
       const revManager = doc.getRevisionManager();

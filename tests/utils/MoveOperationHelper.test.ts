@@ -115,10 +115,7 @@ describe('MoveOperationHelper', () => {
     });
 
     it('should handle array of runs as content', () => {
-      const runs = [
-        new Run('first '),
-        new Run('second'),
-      ];
+      const runs = [new Run('first '), new Run('second')];
       const moveOp = MoveOperationHelper.createMoveOperation({
         author: 'TestAuthor',
         content: runs,
@@ -277,12 +274,11 @@ describe('MoveOperationHelper', () => {
 
       // Check source order via XML generation
       const sourceXml = sourcePara.toXML();
-      const sourceChildren = (sourceXml.children?.filter((c: any) => typeof c === 'object') || []) as any[];
+      const sourceChildren = (sourceXml.children?.filter((c: any) => typeof c === 'object') ||
+        []) as any[];
 
       // Skip w:pPr if present, then check order
-      const contentChildren = sourceChildren.filter(
-        (c: any) => c.name !== 'w:pPr'
-      );
+      const contentChildren = sourceChildren.filter((c: any) => c.name !== 'w:pPr');
 
       expect(contentChildren.length).toBeGreaterThanOrEqual(3);
       expect(contentChildren[0]?.name).toBe('w:moveFromRangeStart');

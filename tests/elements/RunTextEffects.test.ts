@@ -51,10 +51,7 @@ describe('Run Text Effects - Round Trip Tests', () => {
     });
 
     it('should support method chaining with outline', () => {
-      const run = new Run('Text')
-        .setOutline()
-        .setBold()
-        .setItalic();
+      const run = new Run('Text').setOutline().setBold().setItalic();
 
       expect(run.getFormatting().outline).toBe(true);
       expect(run.getFormatting().bold).toBe(true);
@@ -89,10 +86,7 @@ describe('Run Text Effects - Round Trip Tests', () => {
     });
 
     it('should support method chaining with shadow', () => {
-      const run = new Run('Text')
-        .setShadow()
-        .setOutline()
-        .setBold();
+      const run = new Run('Text').setShadow().setOutline().setBold();
 
       expect(run.getFormatting().shadow).toBe(true);
       expect(run.getFormatting().outline).toBe(true);
@@ -148,10 +142,7 @@ describe('Run Text Effects - Round Trip Tests', () => {
     });
 
     it('should work with multiple effects combined', () => {
-      const run = new Run('Text')
-        .setOutline()
-        .setShadow()
-        .setEmboss();
+      const run = new Run('Text').setOutline().setShadow().setEmboss();
 
       expect(run.getFormatting().outline).toBe(true);
       expect(run.getFormatting().shadow).toBe(true);

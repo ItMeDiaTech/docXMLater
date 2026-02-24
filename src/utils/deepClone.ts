@@ -54,7 +54,7 @@ export function deepClone<T>(obj: T): T {
   // Handle Set
   if (obj instanceof Set) {
     const setCopy = new Set();
-    obj.forEach(value => {
+    obj.forEach((value) => {
       setCopy.add(deepClone(value));
     });
     return setCopy as T;
@@ -75,4 +75,3 @@ export function deepClone<T>(obj: T): T {
 
   return objCopy as T;
 }
-

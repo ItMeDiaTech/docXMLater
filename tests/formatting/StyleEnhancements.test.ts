@@ -372,10 +372,10 @@ describe('Style Enhancements - Phase 5.3', () => {
       expect(quickStyles.length).toBeGreaterThan(0);
 
       // Should include our quick style
-      expect(quickStyles.some(s => s.getStyleId() === 'QuickStyle1')).toBe(true);
+      expect(quickStyles.some((s) => s.getStyleId() === 'QuickStyle1')).toBe(true);
 
       // Should NOT include hidden style
-      expect(quickStyles.some(s => s.getStyleId() === 'HiddenStyle1')).toBe(false);
+      expect(quickStyles.some((s) => s.getStyleId() === 'HiddenStyle1')).toBe(false);
     });
 
     it('should get visible styles', () => {
@@ -398,8 +398,8 @@ describe('Style Enhancements - Phase 5.3', () => {
 
       const visibleStyles = manager.getVisibleStyles();
 
-      expect(visibleStyles.some(s => s.getStyleId() === 'Visible1')).toBe(true);
-      expect(visibleStyles.some(s => s.getStyleId() === 'Hidden1')).toBe(false);
+      expect(visibleStyles.some((s) => s.getStyleId() === 'Visible1')).toBe(true);
+      expect(visibleStyles.some((s) => s.getStyleId() === 'Hidden1')).toBe(false);
     });
 
     it('should get styles sorted by priority', () => {

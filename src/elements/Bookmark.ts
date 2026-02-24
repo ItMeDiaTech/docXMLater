@@ -34,7 +34,9 @@ export class Bookmark {
     this.id = properties.id ?? 0; // ID will be assigned by BookmarkManager
     // Preserve exact bookmark names when loading from documents (Word allows =, ., etc.)
     // Only normalize when creating new bookmarks programmatically
-    this.name = properties.skipNormalization ? properties.name : this.normalizeName(properties.name);
+    this.name = properties.skipNormalization
+      ? properties.name
+      : this.normalizeName(properties.name);
   }
 
   /**

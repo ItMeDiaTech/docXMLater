@@ -29,7 +29,7 @@ describe('Run Content Gap Tests', () => {
       const run = new Run('Before');
       run.addTab().appendText('After');
       const content = run.getContent();
-      expect(content.some(c => c.type === 'tab')).toBe(true);
+      expect(content.some((c) => c.type === 'tab')).toBe(true);
     });
 
     test('should generate w:tab in XML', () => {
@@ -37,7 +37,7 @@ describe('Run Content Gap Tests', () => {
       run.addTab();
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      expect(children.some(c => c.name === 'w:tab')).toBe(true);
+      expect(children.some((c) => c.name === 'w:tab')).toBe(true);
     });
 
     test('should round-trip tab', async () => {
@@ -51,7 +51,7 @@ describe('Run Content Gap Tests', () => {
       const buffer = await doc.toBuffer();
       const loaded = await Document.loadFromBuffer(buffer);
       const loadedContent = loaded.getParagraphs()[0]?.getRuns()[0]?.getContent();
-      expect(loadedContent?.some(c => c.type === 'tab')).toBe(true);
+      expect(loadedContent?.some((c) => c.type === 'tab')).toBe(true);
 
       doc.dispose();
       loaded.dispose();
@@ -63,7 +63,7 @@ describe('Run Content Gap Tests', () => {
       const run = new Run('Text');
       run.addBreak();
       const content = run.getContent();
-      expect(content.some(c => c.type === 'break')).toBe(true);
+      expect(content.some((c) => c.type === 'break')).toBe(true);
     });
 
     test('should round-trip page break', async () => {
@@ -77,7 +77,7 @@ describe('Run Content Gap Tests', () => {
       const buffer = await doc.toBuffer();
       const loaded = await Document.loadFromBuffer(buffer);
       const content = loaded.getParagraphs()[0]?.getRuns()[0]?.getContent();
-      const breakContent = content?.find(c => c.type === 'break');
+      const breakContent = content?.find((c) => c.type === 'break');
       expect(breakContent).toBeDefined();
       expect(breakContent?.breakType).toBe('page');
 
@@ -96,7 +96,7 @@ describe('Run Content Gap Tests', () => {
       const buffer = await doc.toBuffer();
       const loaded = await Document.loadFromBuffer(buffer);
       const content = loaded.getParagraphs()[0]?.getRuns()[0]?.getContent();
-      const breakContent = content?.find(c => c.type === 'break');
+      const breakContent = content?.find((c) => c.type === 'break');
       expect(breakContent).toBeDefined();
       expect(breakContent?.breakType).toBe('column');
 
@@ -109,7 +109,7 @@ describe('Run Content Gap Tests', () => {
     test('should add carriage return', () => {
       const run = new Run('Text');
       run.addCarriageReturn();
-      expect(run.getContent().some(c => c.type === 'carriageReturn')).toBe(true);
+      expect(run.getContent().some((c) => c.type === 'carriageReturn')).toBe(true);
     });
 
     test('should generate w:cr in XML', () => {
@@ -117,7 +117,7 @@ describe('Run Content Gap Tests', () => {
       run.addCarriageReturn();
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      expect(children.some(c => c.name === 'w:cr')).toBe(true);
+      expect(children.some((c) => c.name === 'w:cr')).toBe(true);
     });
   });
 
@@ -131,7 +131,7 @@ describe('Run Content Gap Tests', () => {
       const run = Run.createFromContent(content);
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      expect(children.some(c => c.name === 'w:softHyphen')).toBe(true);
+      expect(children.some((c) => c.name === 'w:softHyphen')).toBe(true);
     });
   });
 
@@ -145,7 +145,7 @@ describe('Run Content Gap Tests', () => {
       const run = Run.createFromContent(content);
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      expect(children.some(c => c.name === 'w:noBreakHyphen')).toBe(true);
+      expect(children.some((c) => c.name === 'w:noBreakHyphen')).toBe(true);
     });
   });
 
@@ -157,7 +157,7 @@ describe('Run Content Gap Tests', () => {
       const run = Run.createFromContent(content);
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      const sym = children.find(c => c.name === 'w:sym');
+      const sym = children.find((c) => c.name === 'w:sym');
       expect(sym).toBeDefined();
       expect(sym?.attributes?.['w:font']).toBe('Wingdings');
       expect(sym?.attributes?.['w:char']).toBe('F0FC');
@@ -166,25 +166,28 @@ describe('Run Content Gap Tests', () => {
 
   describe('pageNumber (via createFromContent)', () => {
     test('should generate w:pgNum in XML', () => {
-      const content: RunContent[] = [
-        { type: 'pageNumber' },
-      ];
+      const content: RunContent[] = [{ type: 'pageNumber' }];
       const run = Run.createFromContent(content);
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      expect(children.some(c => c.name === 'w:pgNum')).toBe(true);
+      expect(children.some((c) => c.name === 'w:pgNum')).toBe(true);
     });
   });
 
   describe('positionTab (via createFromContent)', () => {
     test('should generate w:ptab in XML with attributes', () => {
       const content: RunContent[] = [
-        { type: 'positionTab', ptabAlignment: 'center', ptabRelativeTo: 'margin', ptabLeader: 'dot' },
+        {
+          type: 'positionTab',
+          ptabAlignment: 'center',
+          ptabRelativeTo: 'margin',
+          ptabLeader: 'dot',
+        },
       ];
       const run = Run.createFromContent(content);
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      const ptab = children.find(c => c.name === 'w:ptab');
+      const ptab = children.find((c) => c.name === 'w:ptab');
       expect(ptab).toBeDefined();
       expect(ptab?.attributes?.['w:alignment']).toBe('center');
       expect(ptab?.attributes?.['w:relativeTo']).toBe('margin');
@@ -201,7 +204,7 @@ describe('Run Content Gap Tests', () => {
       const run = Run.createFromContent(content);
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      expect(children.some(c => c.name === 'w:lastRenderedPageBreak')).toBe(true);
+      expect(children.some((c) => c.name === 'w:lastRenderedPageBreak')).toBe(true);
     });
   });
 
@@ -211,7 +214,7 @@ describe('Run Content Gap Tests', () => {
       const run = Run.createFromContent(content);
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      expect(children.some(c => c.name === 'w:separator')).toBe(true);
+      expect(children.some((c) => c.name === 'w:separator')).toBe(true);
     });
 
     test('should generate w:continuationSeparator in XML', () => {
@@ -219,7 +222,7 @@ describe('Run Content Gap Tests', () => {
       const run = Run.createFromContent(content);
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      expect(children.some(c => c.name === 'w:continuationSeparator')).toBe(true);
+      expect(children.some((c) => c.name === 'w:continuationSeparator')).toBe(true);
     });
   });
 
@@ -229,7 +232,7 @@ describe('Run Content Gap Tests', () => {
       const run = Run.createFromContent(content);
       const xml = run.toXML();
       const children = filterXMLElements(xml.children);
-      expect(children.some(c => c.name === 'w:annotationRef')).toBe(true);
+      expect(children.some((c) => c.name === 'w:annotationRef')).toBe(true);
     });
   });
 
@@ -249,7 +252,7 @@ describe('Run Content Gap Tests', () => {
         const run = Run.createFromContent(content);
         const xml = run.toXML();
         const children = filterXMLElements(xml.children);
-        expect(children.some(c => c.name === xmlName)).toBe(true);
+        expect(children.some((c) => c.name === xmlName)).toBe(true);
       }
     });
   });
@@ -263,7 +266,7 @@ describe('Run Content Gap Tests', () => {
         const run = Run.createFromContent(content);
         const xml = run.toXML();
         const children = filterXMLElements(xml.children);
-        const fldChar = children.find(c => c.name === 'w:fldChar');
+        const fldChar = children.find((c) => c.name === 'w:fldChar');
         expect(fldChar).toBeDefined();
         expect(fldChar?.attributes?.['w:fldCharType']).toBe(fldCharType);
       }
@@ -285,10 +288,10 @@ describe('Run Content Gap Tests', () => {
       const content = loaded.getParagraphs()[0]?.getRuns()[0]?.getContent();
 
       expect(content).toBeDefined();
-      expect(content!.some(c => c.type === 'text' && c.value === 'Before')).toBe(true);
-      expect(content!.some(c => c.type === 'tab')).toBe(true);
-      expect(content!.some(c => c.type === 'text' && c.value === 'Middle')).toBe(true);
-      expect(content!.some(c => c.type === 'break')).toBe(true);
+      expect(content!.some((c) => c.type === 'text' && c.value === 'Before')).toBe(true);
+      expect(content!.some((c) => c.type === 'tab')).toBe(true);
+      expect(content!.some((c) => c.type === 'text' && c.value === 'Middle')).toBe(true);
+      expect(content!.some((c) => c.type === 'break')).toBe(true);
 
       doc.dispose();
       loaded.dispose();

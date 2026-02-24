@@ -191,9 +191,7 @@ export class NumberingInstance {
     const children: XMLElement[] = [];
 
     // Reference to abstract numbering
-    children.push(
-      XMLBuilder.wSelf('abstractNumId', { 'w:val': this.abstractNumId.toString() })
-    );
+    children.push(XMLBuilder.wSelf('abstractNumId', { 'w:val': this.abstractNumId.toString() }));
 
     // Add level overrides if any are set
     for (const [level, startValue] of this.levelOverrides) {
@@ -202,9 +200,7 @@ export class NumberingInstance {
       children.push({
         name: 'w:lvlOverride',
         attributes: { 'w:ilvl': level.toString() },
-        children: [
-          XMLBuilder.wSelf('startOverride', { 'w:val': startValue.toString() })
-        ]
+        children: [XMLBuilder.wSelf('startOverride', { 'w:val': startValue.toString() })],
       });
     }
 

@@ -347,7 +347,13 @@ export interface RevisionLocation {
   /** Section index (0-based) - only for section revisions */
   sectionIndex?: number;
   /** Header/footer type if revision is in header/footer */
-  headerFooterType?: 'header' | 'footer' | 'firstHeader' | 'firstFooter' | 'evenHeader' | 'evenFooter';
+  headerFooterType?:
+    | 'header'
+    | 'footer'
+    | 'firstHeader'
+    | 'firstFooter'
+    | 'evenHeader'
+    | 'evenFooter';
 }
 
 /**
@@ -372,7 +378,8 @@ export function isRunPropertyChange(change: AnyPropertyChange): change is RunPro
   }
   // Check for typical run properties - must have at least one identifiable property
   const props = change.previousProperties as Partial<RunFormatting>;
-  return props.bold !== undefined ||
+  return (
+    props.bold !== undefined ||
     props.italic !== undefined ||
     props.font !== undefined ||
     props.size !== undefined ||
@@ -383,21 +390,26 @@ export function isRunPropertyChange(change: AnyPropertyChange): change is RunPro
     props.smallCaps !== undefined ||
     props.allCaps !== undefined ||
     props.subscript !== undefined ||
-    props.superscript !== undefined;
+    props.superscript !== undefined
+  );
 }
 
 /**
  * Type guard to check if a property change is a ParagraphPropertyChange
  */
-export function isParagraphPropertyChange(change: AnyPropertyChange): change is ParagraphPropertyChange {
-  return 'previousProperties' in change &&
+export function isParagraphPropertyChange(
+  change: AnyPropertyChange
+): change is ParagraphPropertyChange {
+  return (
+    'previousProperties' in change &&
     !('elementType' in change) &&
     !('previousNumId' in change) &&
     // Check for typical paragraph properties
     ((change.previousProperties as ParagraphFormattingPartial).alignment !== undefined ||
-     (change.previousProperties as ParagraphFormattingPartial).leftIndent !== undefined ||
-     (change.previousProperties as ParagraphFormattingPartial).spaceBefore !== undefined ||
-     (change.previousProperties as ParagraphFormattingPartial).style !== undefined);
+      (change.previousProperties as ParagraphFormattingPartial).leftIndent !== undefined ||
+      (change.previousProperties as ParagraphFormattingPartial).spaceBefore !== undefined ||
+      (change.previousProperties as ParagraphFormattingPartial).style !== undefined)
+  );
 }
 
 /**
@@ -413,13 +425,16 @@ export function isTablePropertyChange(change: AnyPropertyChange): change is Tabl
  * Checks for section-specific properties: page size, margins, orientation, columns, etc.
  * Per ECMA-376, section properties are distinct from run/paragraph properties.
  */
-export function isSectionPropertyChange(change: AnyPropertyChange): change is SectionPropertyChange {
+export function isSectionPropertyChange(
+  change: AnyPropertyChange
+): change is SectionPropertyChange {
   if (!('previousProperties' in change) || 'elementType' in change || 'previousNumId' in change) {
     return false;
   }
   // Check for section-specific properties
   const props = change.previousProperties as Record<string, any>;
-  return props.pageWidth !== undefined ||
+  return (
+    props.pageWidth !== undefined ||
     props.pageHeight !== undefined ||
     props.orientation !== undefined ||
     props.marginTop !== undefined ||
@@ -431,7 +446,8 @@ export function isSectionPropertyChange(change: AnyPropertyChange): change is Se
     props.footerDistance !== undefined ||
     props.gutterMargin !== undefined ||
     props.pageNumberStart !== undefined ||
-    props.sectionType !== undefined;
+    props.sectionType !== undefined
+  );
 }
 
 /**

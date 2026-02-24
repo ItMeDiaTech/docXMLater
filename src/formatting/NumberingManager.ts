@@ -132,7 +132,7 @@ export class NumberingManager {
       }
     });
 
-    instancesToRemove.forEach(numId => {
+    instancesToRemove.forEach((numId) => {
       this.instances.delete(numId);
       this._removedNumIds.add(numId);
     });
@@ -198,9 +198,7 @@ export class NumberingManager {
    * Gets all numbering instances
    */
   getAllInstances(): NumberingInstance[] {
-    return Array.from(this.instances.values()).sort(
-      (a, b) => a.getNumId() - b.getNumId()
-    );
+    return Array.from(this.instances.values()).sort((a, b) => a.getNumId() - b.getNumId());
   }
 
   /**
@@ -324,10 +322,7 @@ export class NumberingManager {
    * @param levels Number of levels (default: 9)
    * @param formats Array of formats for each level
    */
-  createNumberedList(
-    levels = 9,
-    formats?: ('decimal' | 'lowerLetter' | 'lowerRoman')[]
-  ): number {
+  createNumberedList(levels = 9, formats?: ('decimal' | 'lowerLetter' | 'lowerRoman')[]): number {
     // Create abstract numbering
     const abstractNumId = this.nextAbstractNumId++;
     // Only pass formats if it's defined, so defaults are used otherwise
@@ -418,6 +413,48 @@ export class NumberingManager {
   }
 
   /**
+   * Creates a new numbering instance that restarts numbering for an existing list
+   *
+   * This creates a new `<w:num>` referencing the same `<w:abstractNum>` as the
+   * given numId, but with a `<w:lvlOverride>/<w:startOverride>` to restart
+   * counting at the specified value.
+   *
+   * @param numId The existing numbering instance ID to base the restart on
+   * @param level The level to restart (0-8, default: 0)
+   * @param startValue The value to restart from (>= 1, default: 1)
+   * @returns The new numId to use with paragraph.setNumbering()
+   *
+   * @example
+   * ```typescript
+   * const listId = manager.createNumberedList();
+   * // ... add items ...
+   * const restartId = manager.restartNumbering(listId);
+   * // restartId starts counting from 1 again, same list style
+   * ```
+   */
+  restartNumbering(numId: number, level = 0, startValue = 1): number {
+    if (level < 0 || level > 8) {
+      throw new Error(`Invalid level ${level}. Level must be between 0 and 8.`);
+    }
+    if (startValue < 1) {
+      throw new Error(`Invalid startValue ${startValue}. Start value must be at least 1.`);
+    }
+
+    const existingInstance = this.getInstance(numId);
+    if (!existingInstance) {
+      throw new Error(`Numbering instance ${numId} does not exist`);
+    }
+
+    const abstractNumId = existingInstance.getAbstractNumId();
+    const newNumId = this.nextNumId++;
+    const newInstance = NumberingInstance.create({ numId: newNumId, abstractNumId });
+    newInstance.setLevelOverride(level, startValue);
+    this.addInstance(newInstance);
+
+    return newNumId;
+  }
+
+  /**
    * Gets the framework's standard indentation for a list level
    *
    * The framework uses a consistent indentation scheme:
@@ -443,7 +480,7 @@ export class NumberingManager {
     }
 
     return {
-      leftIndent: 720 + (level * 360),
+      leftIndent: 720 + level * 360,
       hangingIndent: 360,
     };
   }
@@ -617,7 +654,10 @@ export class NumberingManager {
    * @param usedNumIds Set of numIds currently used by paragraphs
    * @returns Object with counts of removed instances and abstract numberings
    */
-  cleanupUnusedNumbering(usedNumIds: Set<number>): { instancesRemoved: number; abstractsRemoved: number } {
+  cleanupUnusedNumbering(usedNumIds: Set<number>): {
+    instancesRemoved: number;
+    abstractsRemoved: number;
+  } {
     let instancesRemoved = 0;
     let abstractsRemoved = 0;
 
@@ -638,7 +678,7 @@ export class NumberingManager {
 
     // Step 2: Find abstract numberings still referenced by remaining instances
     const referencedAbstractNumIds = new Set<number>();
-    this.instances.forEach(instance => {
+    this.instances.forEach((instance) => {
       referencedAbstractNumIds.add(instance.getAbstractNumId());
     });
 
@@ -747,9 +787,9 @@ export class NumberingManager {
       const props = level.getProperties();
       parts.push(
         `${props.level}|${props.format}|${props.text}|${props.font}|${props.fontSize}|` +
-        `${props.color}|${props.leftIndent}|${props.hangingIndent}|${props.alignment}|` +
-        `${props.start}|${props.bold}|${props.italic}|${props.underline ?? ''}|` +
-        `${props.suffix}|${props.isLegalNumberingStyle}|${props.lvlRestart ?? ''}`
+          `${props.color}|${props.leftIndent}|${props.hangingIndent}|${props.alignment}|` +
+          `${props.start}|${props.bold}|${props.italic}|${props.underline ?? ''}|` +
+          `${props.suffix}|${props.isLegalNumberingStyle}|${props.lvlRestart ?? ''}`
       );
     }
 
@@ -766,20 +806,24 @@ export class NumberingManager {
 
     // Add all abstract numberings
     const abstractNumberings = this.getAllAbstractNumberings();
-    abstractNumberings.forEach(abstractNum => {
+    abstractNumberings.forEach((abstractNum) => {
       children.push(abstractNum.toXML());
     });
 
     // Add all numbering instances
     const instances = this.getAllInstances();
-    instances.forEach(instance => {
+    instances.forEach((instance) => {
       children.push(instance.toXML());
     });
 
-    const numbering = XMLBuilder.w('numbering', {
-      'xmlns:w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-      'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
-    }, children);
+    const numbering = XMLBuilder.w(
+      'numbering',
+      {
+        'xmlns:w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+        'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+      },
+      children
+    );
 
     builder.element(numbering.name, numbering.attributes, numbering.children);
 
@@ -795,20 +839,24 @@ export class NumberingManager {
 
     // Add all abstract numberings
     const abstractNumberings = this.getAllAbstractNumberings();
-    abstractNumberings.forEach(abstractNum => {
+    abstractNumberings.forEach((abstractNum) => {
       children.push(abstractNum.toXML());
     });
 
     // Add all numbering instances
     const instances = this.getAllInstances();
-    instances.forEach(instance => {
+    instances.forEach((instance) => {
       children.push(instance.toXML());
     });
 
-    return XMLBuilder.w('numbering', {
-      'xmlns:w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-      'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
-    }, children);
+    return XMLBuilder.w(
+      'numbering',
+      {
+        'xmlns:w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+        'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+      },
+      children
+    );
   }
 
   /**

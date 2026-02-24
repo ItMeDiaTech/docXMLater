@@ -3,30 +3,30 @@
  * Supports paragraph, character, table, and numbering styles
  */
 
-import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
-import { ParagraphFormatting } from "../elements/Paragraph";
-import { RunFormatting } from "../elements/Run";
-import { ShadingConfig, ShadingPattern, buildShadingAttributes } from "../elements/CommonTypes";
-import { Heading2TableOptions } from "../types/styleConfig";
-import { deepClone } from "../utils/deepClone";
-import { pointsToHalfPoints } from "../utils/units";
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { ParagraphFormatting } from '../elements/Paragraph';
+import { RunFormatting } from '../elements/Run';
+import { ShadingConfig, ShadingPattern, buildShadingAttributes } from '../elements/CommonTypes';
+import { Heading2TableOptions } from '../types/styleConfig';
+import { deepClone } from '../utils/deepClone';
+import { pointsToHalfPoints } from '../utils/units';
 
 /**
  * Style type
  */
-export type StyleType = "paragraph" | "character" | "table" | "numbering";
+export type StyleType = 'paragraph' | 'character' | 'table' | 'numbering';
 
 /**
  * Table alignment
  */
-export type TableAlignment = "left" | "center" | "right";
+export type TableAlignment = 'left' | 'center' | 'right';
 
 /**
  * Border properties
  */
 export interface BorderProperties {
   /** Border style */
-  style?: "none" | "single" | "double" | "dashed" | "dotted" | "thick";
+  style?: 'none' | 'single' | 'double' | 'dashed' | 'dotted' | 'thick';
   /** Border size in eighths of a point */
   size?: number;
   /** Border spacing/padding in points */
@@ -108,7 +108,7 @@ export interface TableCellStyleFormatting {
   /** Cell-specific margins */
   margins?: CellMargins;
   /** Vertical alignment in cell */
-  verticalAlignment?: "top" | "center" | "bottom";
+  verticalAlignment?: 'top' | 'center' | 'bottom';
 }
 
 /**
@@ -122,26 +122,26 @@ export interface TableRowStyleFormatting {
   /** Row height in twips */
   height?: number;
   /** Row height rule */
-  heightRule?: "auto" | "exact" | "atLeast";
+  heightRule?: 'auto' | 'exact' | 'atLeast';
 }
 
 /**
  * Conditional formatting type for table regions
  */
 export type ConditionalFormattingType =
-  | "wholeTable" // Entire table
-  | "firstRow" // First row
-  | "lastRow" // Last row
-  | "firstCol" // First column
-  | "lastCol" // Last column
-  | "band1Vert" // Odd column banding
-  | "band2Vert" // Even column banding
-  | "band1Horz" // Odd row banding
-  | "band2Horz" // Even row banding
-  | "nwCell" // Northwest (top-left) corner cell
-  | "neCell" // Northeast (top-right) corner cell
-  | "swCell" // Southwest (bottom-left) corner cell
-  | "seCell"; // Southeast (bottom-right) corner cell
+  | 'wholeTable' // Entire table
+  | 'firstRow' // First row
+  | 'lastRow' // Last row
+  | 'firstCol' // First column
+  | 'lastCol' // Last column
+  | 'band1Vert' // Odd column banding
+  | 'band2Vert' // Even column banding
+  | 'band1Horz' // Odd row banding
+  | 'band2Horz' // Even row banding
+  | 'nwCell' // Northwest (top-left) corner cell
+  | 'neCell' // Northeast (top-right) corner cell
+  | 'swCell' // Southwest (bottom-left) corner cell
+  | 'seCell'; // Southeast (bottom-right) corner cell
 
 /**
  * Conditional table formatting for a specific region
@@ -398,7 +398,7 @@ export class Style {
    */
   setUiPriority(priority: number): this {
     if (priority < 0 || priority > 99) {
-      throw new Error("UI priority must be between 0 and 99");
+      throw new Error('UI priority must be between 0 and 99');
     }
     this.properties.uiPriority = priority;
     return this;
@@ -555,7 +555,7 @@ export class Style {
       this.properties.tableStyle = {};
     }
     if (size < 0) {
-      throw new Error("Row band size must be non-negative");
+      throw new Error('Row band size must be non-negative');
     }
     this.properties.tableStyle.rowBandSize = size;
     return this;
@@ -571,7 +571,7 @@ export class Style {
       this.properties.tableStyle = {};
     }
     if (size < 0) {
-      throw new Error("Column band size must be non-negative");
+      throw new Error('Column band size must be non-negative');
     }
     this.properties.tableStyle.colBandSize = size;
     return this;
@@ -607,21 +607,12 @@ export class Style {
   isValid(): boolean {
     try {
       // Required fields
-      if (
-        !this.properties.styleId ||
-        !this.properties.name ||
-        !this.properties.type
-      ) {
+      if (!this.properties.styleId || !this.properties.name || !this.properties.type) {
         return false;
       }
 
       // Valid type
-      const validTypes: StyleType[] = [
-        "paragraph",
-        "character",
-        "table",
-        "numbering",
-      ];
+      const validTypes: StyleType[] = ['paragraph', 'character', 'table', 'numbering'];
       if (!validTypes.includes(this.properties.type)) {
         return false;
       }
@@ -637,14 +628,7 @@ export class Style {
 
         // Check alignment
         if (pf.alignment) {
-          const validAlignments = [
-            "left",
-            "center",
-            "right",
-            "justify",
-            "both",
-            "distribute",
-          ];
+          const validAlignments = ['left', 'center', 'right', 'justify', 'both', 'distribute'];
           if (!validAlignments.includes(pf.alignment)) {
             return false;
           }
@@ -656,10 +640,7 @@ export class Style {
           if (spacing.before !== undefined && spacing.before < 0) return false;
           if (spacing.after !== undefined && spacing.after < 0) return false;
           if (spacing.line !== undefined && spacing.line < 0) return false;
-          if (
-            spacing.lineRule &&
-            !["auto", "exact", "atLeast"].includes(spacing.lineRule)
-          ) {
+          if (spacing.lineRule && !['auto', 'exact', 'atLeast'].includes(spacing.lineRule)) {
             return false;
           }
         }
@@ -690,23 +671,23 @@ export class Style {
         // Check highlight color
         if (rf.highlight) {
           const validHighlights = [
-            "black",
-            "blue",
-            "cyan",
-            "darkBlue",
-            "darkCyan",
-            "darkGray",
-            "darkGreen",
-            "darkMagenta",
-            "darkRed",
-            "darkYellow",
-            "green",
-            "lightGray",
-            "magenta",
-            "none",
-            "red",
-            "white",
-            "yellow",
+            'black',
+            'blue',
+            'cyan',
+            'darkBlue',
+            'darkCyan',
+            'darkGray',
+            'darkGreen',
+            'darkMagenta',
+            'darkRed',
+            'darkYellow',
+            'green',
+            'lightGray',
+            'magenta',
+            'none',
+            'red',
+            'white',
+            'yellow',
           ];
           if (!validHighlights.includes(rf.highlight)) {
             return false;
@@ -738,132 +719,120 @@ export class Style {
    */
   toXML(): XMLElement {
     const styleAttrs: Record<string, string> = {
-      "w:type": this.properties.type,
-      "w:styleId": this.properties.styleId,
+      'w:type': this.properties.type,
+      'w:styleId': this.properties.styleId,
     };
 
     if (this.properties.isDefault) {
-      styleAttrs["w:default"] = "1";
+      styleAttrs['w:default'] = '1';
     }
 
     if (this.properties.customStyle) {
-      styleAttrs["w:customStyle"] = "1";
+      styleAttrs['w:customStyle'] = '1';
     }
 
     const styleChildren: XMLElement[] = [];
 
     // Add style name
-    styleChildren.push(
-      XMLBuilder.wSelf("name", { "w:val": this.properties.name })
-    );
+    styleChildren.push(XMLBuilder.wSelf('name', { 'w:val': this.properties.name }));
 
     // aliases - Alternative names (must follow name per CT_Style)
     if (this.properties.aliases) {
-      styleChildren.push(
-        XMLBuilder.wSelf("aliases", { "w:val": this.properties.aliases })
-      );
+      styleChildren.push(XMLBuilder.wSelf('aliases', { 'w:val': this.properties.aliases }));
     }
 
     // Add basedOn
     if (this.properties.basedOn) {
-      styleChildren.push(
-        XMLBuilder.wSelf("basedOn", { "w:val": this.properties.basedOn })
-      );
+      styleChildren.push(XMLBuilder.wSelf('basedOn', { 'w:val': this.properties.basedOn }));
     }
 
     // Add next
     if (this.properties.next) {
-      styleChildren.push(
-        XMLBuilder.wSelf("next", { "w:val": this.properties.next })
-      );
+      styleChildren.push(XMLBuilder.wSelf('next', { 'w:val': this.properties.next }));
     }
 
     // Add link (linked character/paragraph style)
     if (this.properties.link) {
-      styleChildren.push(
-        XMLBuilder.wSelf("link", { "w:val": this.properties.link })
-      );
+      styleChildren.push(XMLBuilder.wSelf('link', { 'w:val': this.properties.link }));
     }
 
     // Add autoRedefine
     if (this.properties.autoRedefine) {
-      styleChildren.push(XMLBuilder.wSelf("autoRedefine"));
+      styleChildren.push(XMLBuilder.wSelf('autoRedefine'));
     }
 
     // Add metadata properties — ordered per ECMA-376 CT_Style
     // uiPriority - Sort order in style picker
     if (this.properties.uiPriority !== undefined) {
       styleChildren.push(
-        XMLBuilder.wSelf("uiPriority", {
-          "w:val": String(this.properties.uiPriority),
+        XMLBuilder.wSelf('uiPriority', {
+          'w:val': String(this.properties.uiPriority),
         })
       );
     }
 
     // semiHidden - Hide from recommended list
     if (this.properties.semiHidden) {
-      styleChildren.push(XMLBuilder.wSelf("semiHidden"));
+      styleChildren.push(XMLBuilder.wSelf('semiHidden'));
     }
 
     // unhideWhenUsed - Auto-show when applied
     if (this.properties.unhideWhenUsed) {
-      styleChildren.push(XMLBuilder.wSelf("unhideWhenUsed"));
+      styleChildren.push(XMLBuilder.wSelf('unhideWhenUsed'));
     }
 
     // qFormat - Quick style gallery appearance
     if (this.properties.qFormat !== undefined) {
       if (this.properties.qFormat) {
-        styleChildren.push(XMLBuilder.wSelf("qFormat"));
+        styleChildren.push(XMLBuilder.wSelf('qFormat'));
       }
     } else if (!this.properties.customStyle) {
       // Default: built-in styles have qFormat
-      styleChildren.push(XMLBuilder.wSelf("qFormat"));
+      styleChildren.push(XMLBuilder.wSelf('qFormat'));
     }
 
     // locked - Prevent modification
     if (this.properties.locked) {
-      styleChildren.push(XMLBuilder.wSelf("locked"));
+      styleChildren.push(XMLBuilder.wSelf('locked'));
     }
 
     // personal - User-specific style
     if (this.properties.personal) {
-      styleChildren.push(XMLBuilder.wSelf("personal"));
+      styleChildren.push(XMLBuilder.wSelf('personal'));
     }
 
     // personalCompose - Style for composing new messages
     if (this.properties.personalCompose) {
-      styleChildren.push(XMLBuilder.wSelf("personalCompose"));
+      styleChildren.push(XMLBuilder.wSelf('personalCompose'));
     }
 
     // personalReply - Style for replying to messages
     if (this.properties.personalReply) {
-      styleChildren.push(XMLBuilder.wSelf("personalReply"));
+      styleChildren.push(XMLBuilder.wSelf('personalReply'));
     }
 
     // Add paragraph properties
     if (this.properties.paragraphFormatting || this.properties.numPr) {
-      const pPr = this.generateParagraphProperties(
-        this.properties.paragraphFormatting || {}
-      );
+      const pPr = this.generateParagraphProperties(this.properties.paragraphFormatting || {});
       // Add numPr (numbering properties) if present - styles can inherit list formatting
       if (this.properties.numPr) {
         const numPrChildren: XMLElement[] = [];
         if (this.properties.numPr.ilvl !== undefined) {
           numPrChildren.push(
-            XMLBuilder.wSelf("ilvl", { "w:val": String(this.properties.numPr.ilvl) })
+            XMLBuilder.wSelf('ilvl', { 'w:val': String(this.properties.numPr.ilvl) })
           );
         }
         if (this.properties.numPr.numId !== undefined) {
           numPrChildren.push(
-            XMLBuilder.wSelf("numId", { "w:val": String(this.properties.numPr.numId) })
+            XMLBuilder.wSelf('numId', { 'w:val': String(this.properties.numPr.numId) })
           );
         }
         if (numPrChildren.length > 0) {
           // Insert numPr at the beginning of pPr children (per ECMA-376 element order)
           if (pPr.children) {
-            pPr.children.unshift(XMLBuilder.w("numPr", undefined, numPrChildren));
+            pPr.children.unshift(XMLBuilder.w('numPr', undefined, numPrChildren));
           } else {
-            pPr.children = [XMLBuilder.w("numPr", undefined, numPrChildren)];
+            pPr.children = [XMLBuilder.w('numPr', undefined, numPrChildren)];
           }
         }
       }
@@ -895,9 +864,7 @@ export class Style {
 
       // Add trPr (table row properties) — per CT_Style: tblPr → trPr → tcPr
       if (this.properties.tableStyle.row) {
-        const trPr = this.generateTableRowProperties(
-          this.properties.tableStyle.row
-        );
+        const trPr = this.generateTableRowProperties(this.properties.tableStyle.row);
         if (trPr.children && trPr.children.length > 0) {
           styleChildren.push(trPr);
         }
@@ -905,9 +872,7 @@ export class Style {
 
       // Add tcPr (table cell properties)
       if (this.properties.tableStyle.cell) {
-        const tcPr = this.generateTableCellProperties(
-          this.properties.tableStyle.cell
-        );
+        const tcPr = this.generateTableCellProperties(this.properties.tableStyle.cell);
         if (tcPr.children && tcPr.children.length > 0) {
           styleChildren.push(tcPr);
         }
@@ -915,8 +880,7 @@ export class Style {
 
       // Add conditional formatting (tblStylePr)
       if (this.properties.tableStyle.conditionalFormatting) {
-        for (const conditional of this.properties.tableStyle
-          .conditionalFormatting) {
+        for (const conditional of this.properties.tableStyle.conditionalFormatting) {
           const tblStylePr = this.generateConditionalFormatting(conditional);
           if (tblStylePr.children && tblStylePr.children.length > 0) {
             styleChildren.push(tblStylePr);
@@ -925,38 +889,36 @@ export class Style {
       }
     }
 
-    return XMLBuilder.w("style", styleAttrs, styleChildren);
+    return XMLBuilder.w('style', styleAttrs, styleChildren);
   }
 
   /**
    * Generates paragraph properties XML
    */
-  private generateParagraphProperties(
-    formatting: ParagraphFormatting
-  ): XMLElement {
+  private generateParagraphProperties(formatting: ParagraphFormatting): XMLElement {
     const pPrChildren: XMLElement[] = [];
 
     // Ordered per ECMA-376 CT_PPrBase
     if (formatting.keepNext) {
-      pPrChildren.push(XMLBuilder.wSelf("keepNext"));
+      pPrChildren.push(XMLBuilder.wSelf('keepNext'));
     }
     if (formatting.keepLines) {
-      pPrChildren.push(XMLBuilder.wSelf("keepLines"));
+      pPrChildren.push(XMLBuilder.wSelf('keepLines'));
     }
     if (formatting.pageBreakBefore) {
-      pPrChildren.push(XMLBuilder.wSelf("pageBreakBefore"));
+      pPrChildren.push(XMLBuilder.wSelf('pageBreakBefore'));
     }
 
     // Add spacing
     if (formatting.spacing) {
       const spc = formatting.spacing;
       const attributes: Record<string, number | string> = {};
-      if (spc.before !== undefined) attributes["w:before"] = spc.before;
-      if (spc.after !== undefined) attributes["w:after"] = spc.after;
-      if (spc.line !== undefined) attributes["w:line"] = spc.line;
-      if (spc.lineRule) attributes["w:lineRule"] = spc.lineRule;
+      if (spc.before !== undefined) attributes['w:before'] = spc.before;
+      if (spc.after !== undefined) attributes['w:after'] = spc.after;
+      if (spc.line !== undefined) attributes['w:line'] = spc.line;
+      if (spc.lineRule) attributes['w:lineRule'] = spc.lineRule;
       if (Object.keys(attributes).length > 0) {
-        pPrChildren.push(XMLBuilder.wSelf("spacing", attributes));
+        pPrChildren.push(XMLBuilder.wSelf('spacing', attributes));
       }
     }
 
@@ -964,38 +926,36 @@ export class Style {
     if (formatting.indentation) {
       const ind = formatting.indentation;
       const attributes: Record<string, number> = {};
-      if (ind.left !== undefined) attributes["w:left"] = ind.left;
-      if (ind.right !== undefined) attributes["w:right"] = ind.right;
-      if (ind.firstLine !== undefined)
-        attributes["w:firstLine"] = ind.firstLine;
-      if (ind.hanging !== undefined) attributes["w:hanging"] = ind.hanging;
+      if (ind.left !== undefined) attributes['w:left'] = ind.left;
+      if (ind.right !== undefined) attributes['w:right'] = ind.right;
+      if (ind.firstLine !== undefined) attributes['w:firstLine'] = ind.firstLine;
+      if (ind.hanging !== undefined) attributes['w:hanging'] = ind.hanging;
       if (Object.keys(attributes).length > 0) {
-        pPrChildren.push(XMLBuilder.wSelf("ind", attributes));
+        pPrChildren.push(XMLBuilder.wSelf('ind', attributes));
       }
     }
 
     // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
     // Removes spacing between paragraphs of the same style
     if (formatting.contextualSpacing) {
-      pPrChildren.push(XMLBuilder.wSelf("contextualSpacing", { "w:val": "1" }));
+      pPrChildren.push(XMLBuilder.wSelf('contextualSpacing', { 'w:val': '1' }));
     }
 
     // Add alignment
     if (formatting.alignment) {
       // Map 'justify' to 'both' per ECMA-376 (Word uses 'both' for justified text)
-      const alignmentValue =
-        formatting.alignment === "justify" ? "both" : formatting.alignment;
-      pPrChildren.push(XMLBuilder.wSelf("jc", { "w:val": alignmentValue }));
+      const alignmentValue = formatting.alignment === 'justify' ? 'both' : formatting.alignment;
+      pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': alignmentValue }));
     }
 
     // Add outline level for TOC support (Heading 1 = 0, Heading 2 = 1, etc.)
     if (formatting.outlineLevel !== undefined) {
       pPrChildren.push(
-        XMLBuilder.wSelf("outlineLvl", { "w:val": formatting.outlineLevel.toString() })
+        XMLBuilder.wSelf('outlineLvl', { 'w:val': formatting.outlineLevel.toString() })
       );
     }
 
-    return XMLBuilder.w("pPr", undefined, pPrChildren);
+    return XMLBuilder.w('pPr', undefined, pPrChildren);
   }
 
   /**
@@ -1007,63 +967,55 @@ export class Style {
     // Add formatting elements — ordered per ECMA-376 CT_RPr
     if (formatting.font) {
       rPrChildren.push(
-        XMLBuilder.wSelf("rFonts", {
-          "w:ascii": formatting.font,
-          "w:hAnsi": formatting.font,
-          "w:cs": formatting.font,
+        XMLBuilder.wSelf('rFonts', {
+          'w:ascii': formatting.font,
+          'w:hAnsi': formatting.font,
+          'w:cs': formatting.font,
         })
       );
     }
     if (formatting.bold) {
-      rPrChildren.push(XMLBuilder.wSelf("b"));
+      rPrChildren.push(XMLBuilder.wSelf('b'));
     }
     if (formatting.italic) {
-      rPrChildren.push(XMLBuilder.wSelf("i"));
+      rPrChildren.push(XMLBuilder.wSelf('i'));
     }
     if (formatting.allCaps) {
-      rPrChildren.push(XMLBuilder.wSelf("caps"));
+      rPrChildren.push(XMLBuilder.wSelf('caps'));
     }
     if (formatting.smallCaps) {
-      rPrChildren.push(XMLBuilder.wSelf("smallCaps"));
+      rPrChildren.push(XMLBuilder.wSelf('smallCaps'));
     }
     if (formatting.strike) {
-      rPrChildren.push(XMLBuilder.wSelf("strike"));
+      rPrChildren.push(XMLBuilder.wSelf('strike'));
     }
     if (formatting.dstrike) {
-      rPrChildren.push(XMLBuilder.wSelf("dstrike"));
+      rPrChildren.push(XMLBuilder.wSelf('dstrike'));
     }
     if (formatting.color) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("color", { "w:val": formatting.color })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': formatting.color }));
     }
     if (formatting.size !== undefined) {
       const halfPoints = pointsToHalfPoints(formatting.size);
-      rPrChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints }));
-      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": halfPoints }));
+      rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': halfPoints }));
+      rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': halfPoints }));
     }
     if (formatting.highlight) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("highlight", { "w:val": formatting.highlight })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('highlight', { 'w:val': formatting.highlight }));
     }
     if (formatting.underline) {
       const underlineValue =
-        typeof formatting.underline === "string"
-          ? formatting.underline
-          : "single";
-      rPrChildren.push(XMLBuilder.wSelf("u", { "w:val": underlineValue }));
+        typeof formatting.underline === 'string' ? formatting.underline : 'single';
+      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': underlineValue }));
     }
     if (formatting.subscript) {
-      rPrChildren.push(XMLBuilder.wSelf("vertAlign", { "w:val": "subscript" }));
+      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
     }
     if (formatting.superscript) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("vertAlign", { "w:val": "superscript" })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'superscript' }));
     }
 
-    return XMLBuilder.w("rPr", undefined, rPrChildren);
+    return XMLBuilder.w('rPr', undefined, rPrChildren);
   }
 
   /**
@@ -1083,8 +1035,8 @@ export class Style {
     // Row band size (must come first)
     if (tableStyle.rowBandSize !== undefined) {
       tblPrChildren.push(
-        XMLBuilder.wSelf("tblStyleRowBandSize", {
-          "w:val": tableStyle.rowBandSize,
+        XMLBuilder.wSelf('tblStyleRowBandSize', {
+          'w:val': tableStyle.rowBandSize,
         })
       );
     }
@@ -1092,8 +1044,8 @@ export class Style {
     // Column band size
     if (tableStyle.colBandSize !== undefined) {
       tblPrChildren.push(
-        XMLBuilder.wSelf("tblStyleColBandSize", {
-          "w:val": tableStyle.colBandSize,
+        XMLBuilder.wSelf('tblStyleColBandSize', {
+          'w:val': tableStyle.colBandSize,
         })
       );
     }
@@ -1103,17 +1055,15 @@ export class Style {
 
     // Table alignment
     if (formatting.alignment) {
-      tblPrChildren.push(
-        XMLBuilder.wSelf("jc", { "w:val": formatting.alignment })
-      );
+      tblPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': formatting.alignment }));
     }
 
     // Cell spacing
     if (formatting.cellSpacing !== undefined) {
       tblPrChildren.push(
-        XMLBuilder.wSelf("tblCellSpacing", {
-          "w:w": formatting.cellSpacing,
-          "w:type": "dxa",
+        XMLBuilder.wSelf('tblCellSpacing', {
+          'w:w': formatting.cellSpacing,
+          'w:type': 'dxa',
         })
       );
     }
@@ -1121,23 +1071,18 @@ export class Style {
     // Table indentation
     if (formatting.indent !== undefined) {
       tblPrChildren.push(
-        XMLBuilder.wSelf("tblInd", {
-          "w:w": formatting.indent,
-          "w:type": "dxa",
+        XMLBuilder.wSelf('tblInd', {
+          'w:w': formatting.indent,
+          'w:type': 'dxa',
         })
       );
     }
 
     // Table borders
     if (formatting.borders) {
-      const borderElements = this.generateBorderElements(
-        formatting.borders,
-        false
-      );
+      const borderElements = this.generateBorderElements(formatting.borders, false);
       if (borderElements.length > 0) {
-        tblPrChildren.push(
-          XMLBuilder.w("tblBorders", undefined, borderElements)
-        );
+        tblPrChildren.push(XMLBuilder.w('tblBorders', undefined, borderElements));
       }
     }
 
@@ -1151,62 +1096,55 @@ export class Style {
       const marginElements: XMLElement[] = [];
       if (formatting.cellMargins.top !== undefined) {
         marginElements.push(
-          XMLBuilder.wSelf("top", {
-            "w:w": formatting.cellMargins.top,
-            "w:type": "dxa",
+          XMLBuilder.wSelf('top', {
+            'w:w': formatting.cellMargins.top,
+            'w:type': 'dxa',
           })
         );
       }
       if (formatting.cellMargins.left !== undefined) {
         marginElements.push(
-          XMLBuilder.wSelf("left", {
-            "w:w": formatting.cellMargins.left,
-            "w:type": "dxa",
+          XMLBuilder.wSelf('left', {
+            'w:w': formatting.cellMargins.left,
+            'w:type': 'dxa',
           })
         );
       }
       if (formatting.cellMargins.bottom !== undefined) {
         marginElements.push(
-          XMLBuilder.wSelf("bottom", {
-            "w:w": formatting.cellMargins.bottom,
-            "w:type": "dxa",
+          XMLBuilder.wSelf('bottom', {
+            'w:w': formatting.cellMargins.bottom,
+            'w:type': 'dxa',
           })
         );
       }
       if (formatting.cellMargins.right !== undefined) {
         marginElements.push(
-          XMLBuilder.wSelf("right", {
-            "w:w": formatting.cellMargins.right,
-            "w:type": "dxa",
+          XMLBuilder.wSelf('right', {
+            'w:w': formatting.cellMargins.right,
+            'w:type': 'dxa',
           })
         );
       }
       if (marginElements.length > 0) {
-        tblPrChildren.push(
-          XMLBuilder.w("tblCellMar", undefined, marginElements)
-        );
+        tblPrChildren.push(XMLBuilder.w('tblCellMar', undefined, marginElements));
       }
     }
 
-    return XMLBuilder.w("tblPr", undefined, tblPrChildren);
+    return XMLBuilder.w('tblPr', undefined, tblPrChildren);
   }
 
   /**
    * Generates table cell properties XML (tcPr) - Phase 5.1
    */
-  private generateTableCellProperties(
-    formatting: TableCellStyleFormatting
-  ): XMLElement {
+  private generateTableCellProperties(formatting: TableCellStyleFormatting): XMLElement {
     const tcPrChildren: XMLElement[] = [];
 
     // Cell borders
     if (formatting.borders) {
-      const borderElements = this.generateBorderElements(
-        formatting.borders,
-        true
-      );
+      const borderElements = this.generateBorderElements(formatting.borders, true);
       if (borderElements.length > 0) {
-        tcPrChildren.push(XMLBuilder.w("tcBorders", undefined, borderElements));
+        tcPrChildren.push(XMLBuilder.w('tcBorders', undefined, borderElements));
       }
     }
 
@@ -1220,57 +1158,53 @@ export class Style {
       const marginElements: XMLElement[] = [];
       if (formatting.margins.top !== undefined) {
         marginElements.push(
-          XMLBuilder.wSelf("top", {
-            "w:w": formatting.margins.top,
-            "w:type": "dxa",
+          XMLBuilder.wSelf('top', {
+            'w:w': formatting.margins.top,
+            'w:type': 'dxa',
           })
         );
       }
       if (formatting.margins.left !== undefined) {
         marginElements.push(
-          XMLBuilder.wSelf("left", {
-            "w:w": formatting.margins.left,
-            "w:type": "dxa",
+          XMLBuilder.wSelf('left', {
+            'w:w': formatting.margins.left,
+            'w:type': 'dxa',
           })
         );
       }
       if (formatting.margins.bottom !== undefined) {
         marginElements.push(
-          XMLBuilder.wSelf("bottom", {
-            "w:w": formatting.margins.bottom,
-            "w:type": "dxa",
+          XMLBuilder.wSelf('bottom', {
+            'w:w': formatting.margins.bottom,
+            'w:type': 'dxa',
           })
         );
       }
       if (formatting.margins.right !== undefined) {
         marginElements.push(
-          XMLBuilder.wSelf("right", {
-            "w:w": formatting.margins.right,
-            "w:type": "dxa",
+          XMLBuilder.wSelf('right', {
+            'w:w': formatting.margins.right,
+            'w:type': 'dxa',
           })
         );
       }
       if (marginElements.length > 0) {
-        tcPrChildren.push(XMLBuilder.w("tcMar", undefined, marginElements));
+        tcPrChildren.push(XMLBuilder.w('tcMar', undefined, marginElements));
       }
     }
 
     // Vertical alignment
     if (formatting.verticalAlignment) {
-      tcPrChildren.push(
-        XMLBuilder.wSelf("vAlign", { "w:val": formatting.verticalAlignment })
-      );
+      tcPrChildren.push(XMLBuilder.wSelf('vAlign', { 'w:val': formatting.verticalAlignment }));
     }
 
-    return XMLBuilder.w("tcPr", undefined, tcPrChildren);
+    return XMLBuilder.w('tcPr', undefined, tcPrChildren);
   }
 
   /**
    * Generates table row properties XML (trPr) - Phase 5.1
    */
-  private generateTableRowProperties(
-    formatting: TableRowStyleFormatting
-  ): XMLElement {
+  private generateTableRowProperties(formatting: TableRowStyleFormatting): XMLElement {
     const trPrChildren: XMLElement[] = [];
 
     // Style-level trPr has a restricted content model compared to inline trPr.
@@ -1279,30 +1213,26 @@ export class Style {
 
     // Can't split row across pages
     if (formatting.cantSplit) {
-      trPrChildren.push(XMLBuilder.wSelf("cantSplit"));
+      trPrChildren.push(XMLBuilder.wSelf('cantSplit'));
     }
 
     // Header row
     if (formatting.isHeader) {
-      trPrChildren.push(XMLBuilder.wSelf("tblHeader"));
+      trPrChildren.push(XMLBuilder.wSelf('tblHeader'));
     }
 
-    return XMLBuilder.w("trPr", undefined, trPrChildren);
+    return XMLBuilder.w('trPr', undefined, trPrChildren);
   }
 
   /**
    * Generates conditional formatting XML (tblStylePr) - Phase 5.1
    */
-  private generateConditionalFormatting(
-    conditional: ConditionalTableFormatting
-  ): XMLElement {
+  private generateConditionalFormatting(conditional: ConditionalTableFormatting): XMLElement {
     const tblStylePrChildren: XMLElement[] = [];
 
     // Add paragraph properties if specified
     if (conditional.paragraphFormatting) {
-      const pPr = this.generateParagraphProperties(
-        conditional.paragraphFormatting
-      );
+      const pPr = this.generateParagraphProperties(conditional.paragraphFormatting);
       if (pPr.children && pPr.children.length > 0) {
         tblStylePrChildren.push(pPr);
       }
@@ -1318,11 +1248,7 @@ export class Style {
 
     // Add table properties if specified
     if (conditional.tableFormatting) {
-      const tblPr = this.generateTableProperties(
-        conditional.tableFormatting,
-        {},
-        true
-      );
+      const tblPr = this.generateTableProperties(conditional.tableFormatting, {}, true);
       if (tblPr.children && tblPr.children.length > 0) {
         tblStylePrChildren.push(tblPr);
       }
@@ -1344,11 +1270,7 @@ export class Style {
       }
     }
 
-    return XMLBuilder.w(
-      "tblStylePr",
-      { "w:type": conditional.type },
-      tblStylePrChildren
-    );
+    return XMLBuilder.w('tblStylePr', { 'w:type': conditional.type }, tblStylePrChildren);
   }
 
   /**
@@ -1363,22 +1285,15 @@ export class Style {
     const borderElements: XMLElement[] = [];
 
     // Ordered per ECMA-376 CT_TblBorders / CT_TcBorders: top, left, bottom, right
-    const borderProps = [
-      "top",
-      "left",
-      "bottom",
-      "right",
-      "insideH",
-      "insideV",
-    ] as const;
+    const borderProps = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'] as const;
     for (const prop of borderProps) {
       const border = borders[prop];
       if (border) {
         const attrs: Record<string, string | number> = {};
-        if (border.style) attrs["w:val"] = border.style;
-        if (border.size !== undefined) attrs["w:sz"] = border.size;
-        if (border.space !== undefined) attrs["w:space"] = border.space;
-        if (border.color) attrs["w:color"] = border.color;
+        if (border.style) attrs['w:val'] = border.style;
+        if (border.size !== undefined) attrs['w:sz'] = border.size;
+        if (border.space !== undefined) attrs['w:space'] = border.space;
+        if (border.color) attrs['w:color'] = border.color;
 
         if (Object.keys(attrs).length > 0) {
           borderElements.push(XMLBuilder.wSelf(prop, attrs));
@@ -1391,28 +1306,24 @@ export class Style {
       const cellBorders = borders as CellBorders;
       if (cellBorders.tl2br) {
         const attrs: Record<string, string | number> = {};
-        if (cellBorders.tl2br.style) attrs["w:val"] = cellBorders.tl2br.style;
-        if (cellBorders.tl2br.size !== undefined)
-          attrs["w:sz"] = cellBorders.tl2br.size;
-        if (cellBorders.tl2br.space !== undefined)
-          attrs["w:space"] = cellBorders.tl2br.space;
-        if (cellBorders.tl2br.color) attrs["w:color"] = cellBorders.tl2br.color;
+        if (cellBorders.tl2br.style) attrs['w:val'] = cellBorders.tl2br.style;
+        if (cellBorders.tl2br.size !== undefined) attrs['w:sz'] = cellBorders.tl2br.size;
+        if (cellBorders.tl2br.space !== undefined) attrs['w:space'] = cellBorders.tl2br.space;
+        if (cellBorders.tl2br.color) attrs['w:color'] = cellBorders.tl2br.color;
 
         if (Object.keys(attrs).length > 0) {
-          borderElements.push(XMLBuilder.wSelf("tl2br", attrs));
+          borderElements.push(XMLBuilder.wSelf('tl2br', attrs));
         }
       }
       if (cellBorders.tr2bl) {
         const attrs: Record<string, string | number> = {};
-        if (cellBorders.tr2bl.style) attrs["w:val"] = cellBorders.tr2bl.style;
-        if (cellBorders.tr2bl.size !== undefined)
-          attrs["w:sz"] = cellBorders.tr2bl.size;
-        if (cellBorders.tr2bl.space !== undefined)
-          attrs["w:space"] = cellBorders.tr2bl.space;
-        if (cellBorders.tr2bl.color) attrs["w:color"] = cellBorders.tr2bl.color;
+        if (cellBorders.tr2bl.style) attrs['w:val'] = cellBorders.tr2bl.style;
+        if (cellBorders.tr2bl.size !== undefined) attrs['w:sz'] = cellBorders.tr2bl.size;
+        if (cellBorders.tr2bl.space !== undefined) attrs['w:space'] = cellBorders.tr2bl.space;
+        if (cellBorders.tr2bl.color) attrs['w:color'] = cellBorders.tr2bl.color;
 
         if (Object.keys(attrs).length > 0) {
-          borderElements.push(XMLBuilder.wSelf("tr2bl", attrs));
+          borderElements.push(XMLBuilder.wSelf('tr2bl', attrs));
         }
       }
     }
@@ -1425,7 +1336,7 @@ export class Style {
    */
   private generateShadingElement(shading: ShadingProperties): XMLElement {
     const attrs = buildShadingAttributes(shading);
-    return XMLBuilder.wSelf("shd", attrs);
+    return XMLBuilder.wSelf('shd', attrs);
   }
 
   /**
@@ -1443,26 +1354,26 @@ export class Style {
    */
   static createNormalStyle(): Style {
     return new Style({
-      styleId: "Normal",
-      name: "Normal",
-      type: "paragraph",
+      styleId: 'Normal',
+      name: 'Normal',
+      type: 'paragraph',
       isDefault: true,
-      next: "Normal",
+      next: 'Normal',
       qFormat: true,
       uiPriority: 0,
       paragraphFormatting: {
-        alignment: "left",
+        alignment: 'left',
         spacing: {
           before: 60, // 3pt
           after: 60, // 3pt
           line: 240, // Single line spacing
-          lineRule: "auto",
+          lineRule: 'auto',
         },
       },
       runFormatting: {
-        font: "Verdana",
+        font: 'Verdana',
         size: 12,
-        color: "000000",
+        color: '000000',
       },
     });
   }
@@ -1474,46 +1385,44 @@ export class Style {
    */
   static createHeadingStyle(level: number): Style {
     if (level < 1 || level > 9) {
-      throw new Error("Heading level must be between 1 and 9");
+      throw new Error('Heading level must be between 1 and 9');
     }
 
     // Font sizes: H1=18pt, H2=14pt, H3=12pt, H4-9=12pt
     const sizes = [18, 14, 12, 12, 12, 12, 12, 12, 12];
 
     // Spacing before: H1=0pt, H2=6pt, H3=3pt, H4-9=6pt (in twips: 1pt = 20 twips)
-    const spacingBefore =
-      level === 1 ? 0 : level === 2 ? 120 : level === 3 ? 60 : 120;
+    const spacingBefore = level === 1 ? 0 : level === 2 ? 120 : level === 3 ? 60 : 120;
 
     // Spacing after: H1=12pt, H2=6pt, H3=3pt, H4-9=6pt (in twips)
-    const spacingAfter =
-      level === 1 ? 240 : level === 2 ? 120 : level === 3 ? 60 : 120;
+    const spacingAfter = level === 1 ? 240 : level === 2 ? 120 : level === 3 ? 60 : 120;
 
     return new Style({
       styleId: `Heading${level}`,
       name: `Heading ${level}`,
-      type: "paragraph",
-      basedOn: "Normal",
-      next: "Normal",
+      type: 'paragraph',
+      basedOn: 'Normal',
+      next: 'Normal',
       link: `Heading${level}Char`,
       qFormat: true,
       uiPriority: 9,
       paragraphFormatting: {
-        alignment: "left",
+        alignment: 'left',
         spacing: {
           before: spacingBefore,
           after: spacingAfter,
           line: 240, // Single line spacing
-          lineRule: "auto",
+          lineRule: 'auto',
         },
         keepNext: true,
         keepLines: true,
         outlineLevel: level - 1, // Heading 1 = 0, Heading 2 = 1, etc. Required for TOC
       },
       runFormatting: {
-        font: "Verdana",
+        font: 'Verdana',
         size: sizes[level - 1],
         bold: true,
-        color: "000000",
+        color: '000000',
       },
     });
   }
@@ -1525,7 +1434,7 @@ export class Style {
    */
   static createHeadingCharStyle(level: number): Style {
     if (level < 1 || level > 9) {
-      throw new Error("Heading level must be between 1 and 9");
+      throw new Error('Heading level must be between 1 and 9');
     }
 
     // Font sizes: H1=18pt, H2=14pt, H3=12pt, H4-9=12pt
@@ -1534,15 +1443,15 @@ export class Style {
     return new Style({
       styleId: `Heading${level}Char`,
       name: `Heading ${level} Char`,
-      type: "character",
+      type: 'character',
       link: `Heading${level}`,
       qFormat: true,
       uiPriority: 9,
       runFormatting: {
-        font: "Verdana",
+        font: 'Verdana',
         size: sizes[level - 1],
         bold: true,
-        color: "000000",
+        color: '000000',
       },
     });
   }
@@ -1553,20 +1462,20 @@ export class Style {
    */
   static createTitleStyle(): Style {
     return new Style({
-      styleId: "Title",
-      name: "Title",
-      type: "paragraph",
-      basedOn: "Normal",
-      next: "Normal",
+      styleId: 'Title',
+      name: 'Title',
+      type: 'paragraph',
+      basedOn: 'Normal',
+      next: 'Normal',
       paragraphFormatting: {
         spacing: {
           after: 120,
         },
       },
       runFormatting: {
-        font: "Verdana",
+        font: 'Verdana',
         size: 28,
-        color: "000000",
+        color: '000000',
       },
     });
   }
@@ -1577,20 +1486,20 @@ export class Style {
    */
   static createSubtitleStyle(): Style {
     return new Style({
-      styleId: "Subtitle",
-      name: "Subtitle",
-      type: "paragraph",
-      basedOn: "Normal",
-      next: "Normal",
+      styleId: 'Subtitle',
+      name: 'Subtitle',
+      type: 'paragraph',
+      basedOn: 'Normal',
+      next: 'Normal',
       paragraphFormatting: {
         spacing: {
           after: 120,
         },
       },
       runFormatting: {
-        font: "Verdana",
+        font: 'Verdana',
         size: 14,
-        color: "000000",
+        color: '000000',
         italic: true,
       },
     });
@@ -1602,15 +1511,15 @@ export class Style {
    */
   static createListParagraphStyle(): Style {
     return new Style({
-      styleId: "ListParagraph",
-      name: "List Paragraph",
-      type: "paragraph",
-      basedOn: "Normal",
-      next: "ListParagraph",
+      styleId: 'ListParagraph',
+      name: 'List Paragraph',
+      type: 'paragraph',
+      basedOn: 'Normal',
+      next: 'ListParagraph',
       qFormat: true,
       uiPriority: 34,
       paragraphFormatting: {
-        alignment: "left",
+        alignment: 'left',
         indentation: {
           left: 720, // 0.5 inch (text indentation)
           hanging: 360, // 0.25 inch (bullet/number indentation)
@@ -1619,14 +1528,14 @@ export class Style {
           before: 0, // 0pt
           after: 60, // 3pt
           line: 240, // Single line spacing
-          lineRule: "auto",
+          lineRule: 'auto',
         },
         contextualSpacing: true, // No space between similar paragraphs
       },
       runFormatting: {
-        font: "Verdana",
+        font: 'Verdana',
         size: 12,
-        color: "000000",
+        color: '000000',
       },
     });
   }
@@ -1637,16 +1546,16 @@ export class Style {
    */
   static createTOCHeadingStyle(): Style {
     return new Style({
-      styleId: "TOCHeading",
-      name: "TOC Heading",
-      type: "paragraph",
-      basedOn: "Heading1",
-      next: "Normal",
+      styleId: 'TOCHeading',
+      name: 'TOC Heading',
+      type: 'paragraph',
+      basedOn: 'Heading1',
+      next: 'Normal',
       runFormatting: {
         bold: true,
-        font: "Verdana",
+        font: 'Verdana',
         size: 14,
-        color: "000000", // Black
+        color: '000000', // Black
       },
       paragraphFormatting: {
         spacing: {
@@ -1674,7 +1583,7 @@ export class Style {
     }
   ): Style {
     if (level < 1 || level > 9) {
-      throw new Error("TOC level must be between 1 and 9");
+      throw new Error('TOC level must be between 1 and 9');
     }
 
     // Default indentation: 220 twips per level (11pt)
@@ -1683,8 +1592,8 @@ export class Style {
     return Style.create({
       styleId: `TOC${level}`,
       name: `toc ${level}`,
-      type: "paragraph",
-      basedOn: "Normal",
+      type: 'paragraph',
+      basedOn: 'Normal',
       uiPriority: 39,
       semiHidden: true,
       unhideWhenUsed: true,
@@ -1702,10 +1611,10 @@ export class Style {
    */
   static createTableNormalStyle(): Style {
     return new Style({
-      styleId: "TableNormal",
-      name: "Table Normal",
-      type: "table",
-      basedOn: "Normal",
+      styleId: 'TableNormal',
+      name: 'Table Normal',
+      type: 'table',
+      basedOn: 'Normal',
       tableStyle: {
         table: {
           cellMargins: {
@@ -1727,19 +1636,19 @@ export class Style {
    */
   static createTableGridStyle(): Style {
     return new Style({
-      styleId: "TableGrid",
-      name: "Table Grid",
-      type: "table",
-      basedOn: "TableNormal",
+      styleId: 'TableGrid',
+      name: 'Table Grid',
+      type: 'table',
+      basedOn: 'TableNormal',
       tableStyle: {
         table: {
           borders: {
-            top: { style: "single", size: 4, color: "000000" },
-            bottom: { style: "single", size: 4, color: "000000" },
-            left: { style: "single", size: 4, color: "000000" },
-            right: { style: "single", size: 4, color: "000000" },
-            insideH: { style: "single", size: 4, color: "000000" },
-            insideV: { style: "single", size: 4, color: "000000" },
+            top: { style: 'single', size: 4, color: '000000' },
+            bottom: { style: 'single', size: 4, color: '000000' },
+            left: { style: 'single', size: 4, color: '000000' },
+            right: { style: 'single', size: 4, color: '000000' },
+            insideH: { style: 'single', size: 4, color: '000000' },
+            insideV: { style: 'single', size: 4, color: '000000' },
           },
           cellMargins: {
             top: 0,
@@ -1822,16 +1731,13 @@ export class Style {
 
       // Merge top-level paragraph properties
       if (otherProps.paragraphFormatting.alignment) {
-        this.properties.paragraphFormatting.alignment =
-          otherProps.paragraphFormatting.alignment;
+        this.properties.paragraphFormatting.alignment = otherProps.paragraphFormatting.alignment;
       }
       if (otherProps.paragraphFormatting.keepNext !== undefined) {
-        this.properties.paragraphFormatting.keepNext =
-          otherProps.paragraphFormatting.keepNext;
+        this.properties.paragraphFormatting.keepNext = otherProps.paragraphFormatting.keepNext;
       }
       if (otherProps.paragraphFormatting.keepLines !== undefined) {
-        this.properties.paragraphFormatting.keepLines =
-          otherProps.paragraphFormatting.keepLines;
+        this.properties.paragraphFormatting.keepLines = otherProps.paragraphFormatting.keepLines;
       }
       if (otherProps.paragraphFormatting.pageBreakBefore !== undefined) {
         this.properties.paragraphFormatting.pageBreakBefore =

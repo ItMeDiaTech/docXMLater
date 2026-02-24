@@ -2,7 +2,16 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/', 'coverage/', '**/*.js', '**/*.d.ts', 'node_modules/', '**/__tests__/', '**/*.test.ts', '**/*.spec.ts'],
+    ignores: [
+      'dist/',
+      'coverage/',
+      '**/*.js',
+      '**/*.d.ts',
+      'node_modules/',
+      '**/__tests__/',
+      '**/*.test.ts',
+      '**/*.spec.ts',
+    ],
   },
   ...tseslint.configs.recommendedTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
@@ -18,10 +27,13 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/strict-boolean-expressions': 'off',
       'no-fallthrough': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unsafe-assignment': 'warn',
       '@typescript-eslint/no-unsafe-member-access': 'warn',
@@ -53,5 +65,5 @@ export default tseslint.config(
       '@typescript-eslint/non-nullable-type-assertion-style': 'warn',
       '@typescript-eslint/prefer-string-starts-ends-with': 'warn',
     },
-  },
+  }
 );

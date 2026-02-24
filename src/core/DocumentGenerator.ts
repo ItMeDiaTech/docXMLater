@@ -3,31 +3,31 @@
  * Converts structured data to OpenXML format
  */
 
-import { CommentManager } from "../elements/CommentManager";
-import { EndnoteManager } from "../elements/EndnoteManager";
-import { FontManager } from "../elements/FontManager";
-import { FootnoteManager } from "../elements/FootnoteManager";
-import { HeaderFooterManager } from "../elements/HeaderFooterManager";
-import { Hyperlink } from "../elements/Hyperlink";
-import { ImageManager } from "../elements/ImageManager";
-import { Paragraph } from "../elements/Paragraph";
-import { Revision } from "../elements/Revision";
-import { isHyperlinkContent } from "../elements/RevisionContent";
-import { Section } from "../elements/Section";
-import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
-import { Table } from "../elements/Table";
-import { TableOfContentsElement } from "../elements/TableOfContentsElement";
-import { AlternateContent } from "../elements/AlternateContent";
-import { MathParagraph } from "../elements/MathElement";
-import { CustomXmlBlock } from "../elements/CustomXml";
-import { PreservedElement } from "../elements/PreservedElement";
-import { formatDateForXml } from "../utils/dateFormatting";
-import { getGlobalLogger, createScopedLogger, ILogger } from "../utils/logger";
-import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
-import { DocumentProperties } from "./Document";
-import { BodyElement } from "./DocumentContent";
-import { RelationshipManager } from "./RelationshipManager";
-import { TrackChangesSettings } from "../types/settings-types";
+import { CommentManager } from '../elements/CommentManager';
+import { EndnoteManager } from '../elements/EndnoteManager';
+import { FontManager } from '../elements/FontManager';
+import { FootnoteManager } from '../elements/FootnoteManager';
+import { HeaderFooterManager } from '../elements/HeaderFooterManager';
+import { Hyperlink } from '../elements/Hyperlink';
+import { ImageManager } from '../elements/ImageManager';
+import { Paragraph } from '../elements/Paragraph';
+import { Revision } from '../elements/Revision';
+import { isHyperlinkContent } from '../elements/RevisionContent';
+import { Section } from '../elements/Section';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
+import { Table } from '../elements/Table';
+import { TableOfContentsElement } from '../elements/TableOfContentsElement';
+import { AlternateContent } from '../elements/AlternateContent';
+import { MathParagraph } from '../elements/MathElement';
+import { CustomXmlBlock } from '../elements/CustomXml';
+import { PreservedElement } from '../elements/PreservedElement';
+import { formatDateForXml } from '../utils/dateFormatting';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { DocumentProperties } from './Document';
+import { BodyElement } from './DocumentContent';
+import { RelationshipManager } from './RelationshipManager';
+import { TrackChangesSettings } from '../types/settings-types';
 
 // Create scoped logger for DocumentGenerator operations
 function getLogger(): ILogger {
@@ -101,7 +101,12 @@ export class DocumentGenerator {
     bodyElements: BodyElement[],
     section: Section,
     namespaces: Record<string, string>,
-    documentBackground?: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string }
+    documentBackground?: {
+      color?: string;
+      themeColor?: string;
+      themeTint?: string;
+      themeShade?: string;
+    }
   ): string {
     const logger = getLogger();
     logger.info('Generating document.xml', { elementCount: bodyElements.length });
@@ -122,11 +127,11 @@ export class DocumentGenerator {
     let preBodyContent: XMLElement[] | undefined;
     if (documentBackground) {
       const bgAttrs: Record<string, string> = {};
-      if (documentBackground.color) bgAttrs["w:color"] = documentBackground.color;
-      if (documentBackground.themeColor) bgAttrs["w:themeColor"] = documentBackground.themeColor;
-      if (documentBackground.themeTint) bgAttrs["w:themeTint"] = documentBackground.themeTint;
-      if (documentBackground.themeShade) bgAttrs["w:themeShade"] = documentBackground.themeShade;
-      preBodyContent = [XMLBuilder.wSelf("background", bgAttrs)];
+      if (documentBackground.color) bgAttrs['w:color'] = documentBackground.color;
+      if (documentBackground.themeColor) bgAttrs['w:themeColor'] = documentBackground.themeColor;
+      if (documentBackground.themeTint) bgAttrs['w:themeTint'] = documentBackground.themeTint;
+      if (documentBackground.themeShade) bgAttrs['w:themeShade'] = documentBackground.themeShade;
+      preBodyContent = [XMLBuilder.wSelf('background', bgAttrs)];
     }
 
     const result = XMLBuilder.createDocument(bodyXmls, namespaces, preBodyContent);
@@ -152,47 +157,31 @@ export class DocumentGenerator {
                    xmlns:dcterms="http://purl.org/dc/terms/"
                    xmlns:dcmitype="http://purl.org/dc/dcmitype/"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>${XMLBuilder.sanitizeXmlContent(properties.title || "")}</dc:title>
-  <dc:subject>${XMLBuilder.sanitizeXmlContent(
-    properties.subject || ""
-  )}</dc:subject>
-  <dc:creator>${XMLBuilder.sanitizeXmlContent(
-    properties.creator || "DocXML"
-  )}</dc:creator>
-  <cp:keywords>${XMLBuilder.sanitizeXmlContent(
-    properties.keywords || ""
-  )}</cp:keywords>
-  <dc:description>${XMLBuilder.sanitizeXmlContent(
-    properties.description || ""
-  )}</dc:description>
+  <dc:title>${XMLBuilder.sanitizeXmlContent(properties.title || '')}</dc:title>
+  <dc:subject>${XMLBuilder.sanitizeXmlContent(properties.subject || '')}</dc:subject>
+  <dc:creator>${XMLBuilder.sanitizeXmlContent(properties.creator || 'DocXML')}</dc:creator>
+  <cp:keywords>${XMLBuilder.sanitizeXmlContent(properties.keywords || '')}</cp:keywords>
+  <dc:description>${XMLBuilder.sanitizeXmlContent(properties.description || '')}</dc:description>
   <cp:lastModifiedBy>${XMLBuilder.sanitizeXmlContent(
-    properties.lastModifiedBy || properties.creator || "DocXML"
+    properties.lastModifiedBy || properties.creator || 'DocXML'
   )}</cp:lastModifiedBy>
   <cp:revision>${properties.revision || 1}</cp:revision>${
     properties.category
-      ? `\n  <cp:category>${XMLBuilder.sanitizeXmlContent(
-          properties.category
-        )}</cp:category>`
-      : ""
+      ? `\n  <cp:category>${XMLBuilder.sanitizeXmlContent(properties.category)}</cp:category>`
+      : ''
   }${
     properties.contentStatus
       ? `\n  <cp:contentStatus>${XMLBuilder.sanitizeXmlContent(
           properties.contentStatus
         )}</cp:contentStatus>`
-      : ""
+      : ''
   }${
     properties.language
-      ? `\n  <dc:language>${XMLBuilder.sanitizeXmlContent(
-          properties.language
-        )}</dc:language>`
-      : ""
+      ? `\n  <dc:language>${XMLBuilder.sanitizeXmlContent(properties.language)}</dc:language>`
+      : ''
   }
-  <dcterms:created xsi:type="dcterms:W3CDTF">${formatDate(
-    created
-  )}</dcterms:created>
-  <dcterms:modified xsi:type="dcterms:W3CDTF">${formatDate(
-    modified
-  )}</dcterms:modified>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${formatDate(created)}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${formatDate(modified)}</dcterms:modified>
 </cp:coreProperties>`;
   }
 
@@ -204,22 +193,20 @@ export class DocumentGenerator {
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
             xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
   <Application>${XMLBuilder.sanitizeXmlContent(
-    properties.application || "docxmlater"
+    properties.application || 'docxmlater'
   )}</Application>
   <DocSecurity>0</DocSecurity>
   <ScaleCrop>false</ScaleCrop>
-  <Company>${XMLBuilder.sanitizeXmlContent(properties.company || "")}</Company>${
+  <Company>${XMLBuilder.sanitizeXmlContent(properties.company || '')}</Company>${
     properties.manager
-      ? `\n  <Manager>${XMLBuilder.sanitizeXmlContent(
-          properties.manager
-        )}</Manager>`
-      : ""
+      ? `\n  <Manager>${XMLBuilder.sanitizeXmlContent(properties.manager)}</Manager>`
+      : ''
   }
   <LinksUpToDate>false</LinksUpToDate>
   <SharedDoc>false</SharedDoc>
   <HyperlinksChanged>false</HyperlinksChanged>
   <AppVersion>${XMLBuilder.sanitizeXmlContent(
-    properties.appVersion || properties.version || "1.0.0"
+    properties.appVersion || properties.version || '1.0.0'
   )}</AppVersion>
 </Properties>`;
   }
@@ -227,11 +214,9 @@ export class DocumentGenerator {
   /**
    * Generates docProps/custom.xml with custom properties
    */
-  generateCustomProps(
-    customProps: Record<string, string | number | boolean | Date>
-  ): string {
+  generateCustomProps(customProps: Record<string, string | number | boolean | Date>): string {
     if (!customProps || Object.keys(customProps).length === 0) {
-      return "";
+      return '';
     }
 
     const formatCustomValue = (
@@ -239,23 +224,23 @@ export class DocumentGenerator {
       value: string | number | boolean | Date,
       pid: number
     ): string => {
-      if (typeof value === "string") {
+      if (typeof value === 'string') {
         return `  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="${pid}" name="${XMLBuilder.sanitizeXmlContent(
           key
         )}">
     <vt:lpwstr>${XMLBuilder.sanitizeXmlContent(value)}</vt:lpwstr>
   </property>`;
-      } else if (typeof value === "number") {
+      } else if (typeof value === 'number') {
         return `  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="${pid}" name="${XMLBuilder.sanitizeXmlContent(
           key
         )}">
     <vt:r8>${value}</vt:r8>
   </property>`;
-      } else if (typeof value === "boolean") {
+      } else if (typeof value === 'boolean') {
         return `  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="${pid}" name="${XMLBuilder.sanitizeXmlContent(
           key
         )}">
-    <vt:bool>${value ? "true" : "false"}</vt:bool>
+    <vt:bool>${value ? 'true' : 'false'}</vt:bool>
   </property>`;
       } else if (value instanceof Date) {
         return `  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="${pid}" name="${XMLBuilder.sanitizeXmlContent(
@@ -264,13 +249,13 @@ export class DocumentGenerator {
     <vt:filetime>${value.toISOString()}</vt:filetime>
   </property>`;
       }
-      return "";
+      return '';
     };
 
     const properties = Object.entries(customProps)
       .map(([key, value], index) => formatCustomValue(key, value, index + 2))
-      .filter((prop) => prop !== "")
-      .join("\n");
+      .filter((prop) => prop !== '')
+      .join('\n');
 
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
@@ -318,11 +303,16 @@ ${properties}
     // Also detect image files in the archive not tracked by ImageManager
     // (e.g., numPicBullet images referenced by numbering.xml.rels)
     const mediaExtensions = new Map<string, string>([
-      ['png', 'image/png'], ['jpeg', 'image/jpeg'], ['jpg', 'image/jpeg'],
-      ['gif', 'image/gif'], ['bmp', 'image/bmp'], ['tiff', 'image/tiff'],
-      ['emf', 'image/x-emf'], ['wmf', 'image/x-wmf'],
+      ['png', 'image/png'],
+      ['jpeg', 'image/jpeg'],
+      ['jpg', 'image/jpeg'],
+      ['gif', 'image/gif'],
+      ['bmp', 'image/bmp'],
+      ['tiff', 'image/tiff'],
+      ['emf', 'image/x-emf'],
+      ['wmf', 'image/x-wmf'],
     ]);
-    for (const file of (zipHandler.getFilePaths?.() || [])) {
+    for (const file of zipHandler.getFilePaths?.() || []) {
       if (file.startsWith('word/media/')) {
         const ext = file.split('.').pop()?.toLowerCase();
         if (ext && mediaExtensions.has(ext)) {
@@ -348,30 +338,44 @@ ${properties}
     // Also create a Set for efficient file existence checks
     const files = zipHandler.getFilePaths?.() || [];
     const filesInArchive = new Set(files);
-    const hasTtfFonts = files.some((f: string) => f.endsWith(".ttf"));
+    const hasTtfFonts = files.some((f: string) => f.endsWith('.ttf'));
     if (hasTtfFonts) {
       generatedDefaults.add('ttf|application/x-font-ttf');
     }
 
     // Override types - only add if file exists in archive
-    generatedOverrides.add('/word/document.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml');
+    generatedOverrides.add(
+      '/word/document.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'
+    );
     if (filesInArchive.has('word/styles.xml')) {
-      generatedOverrides.add('/word/styles.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml');
+      generatedOverrides.add(
+        '/word/styles.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml'
+      );
     }
     if (filesInArchive.has('word/numbering.xml')) {
-      generatedOverrides.add('/word/numbering.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml');
+      generatedOverrides.add(
+        '/word/numbering.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml'
+      );
     }
     if (filesInArchive.has('word/fontTable.xml')) {
-      generatedOverrides.add('/word/fontTable.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml');
+      generatedOverrides.add(
+        '/word/fontTable.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml'
+      );
     }
     if (filesInArchive.has('word/settings.xml')) {
-      generatedOverrides.add('/word/settings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml');
+      generatedOverrides.add(
+        '/word/settings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml'
+      );
     }
     if (filesInArchive.has('word/webSettings.xml')) {
-      generatedOverrides.add('/word/webSettings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml');
+      generatedOverrides.add(
+        '/word/webSettings.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml'
+      );
     }
     if (filesInArchive.has('word/theme/theme1.xml')) {
-      generatedOverrides.add('/word/theme/theme1.xml|application/vnd.openxmlformats-officedocument.theme+xml');
+      generatedOverrides.add(
+        '/word/theme/theme1.xml|application/vnd.openxmlformats-officedocument.theme+xml'
+      );
     }
 
     // Headers - only add if file actually exists in archive
@@ -379,7 +383,9 @@ ${properties}
     for (const entry of headers) {
       const filePath = `word/${entry.filename}`;
       if (filesInArchive.has(filePath)) {
-        generatedOverrides.add(`/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml`);
+        generatedOverrides.add(
+          `/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml`
+        );
       }
     }
 
@@ -388,80 +394,104 @@ ${properties}
     for (const entry of footers) {
       const filePath = `word/${entry.filename}`;
       if (filesInArchive.has(filePath)) {
-        generatedOverrides.add(`/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml`);
+        generatedOverrides.add(
+          `/word/${entry.filename}|application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml`
+        );
       }
     }
 
     // Comments
     if (hasComments) {
-      generatedOverrides.add('/word/comments.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml');
+      generatedOverrides.add(
+        '/word/comments.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml'
+      );
     }
 
     // Footnotes
-    const hasFootnotes = (footnoteManager && footnoteManager.getCount() > 0) || filesInArchive.has('word/footnotes.xml');
+    const hasFootnotes =
+      (footnoteManager && footnoteManager.getCount() > 0) ||
+      filesInArchive.has('word/footnotes.xml');
     if (hasFootnotes) {
-      generatedOverrides.add('/word/footnotes.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml');
+      generatedOverrides.add(
+        '/word/footnotes.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml'
+      );
     }
 
     // Endnotes
-    const hasEndnotes = (endnoteManager && endnoteManager.getCount() > 0) || filesInArchive.has('word/endnotes.xml');
+    const hasEndnotes =
+      (endnoteManager && endnoteManager.getCount() > 0) || filesInArchive.has('word/endnotes.xml');
     if (hasEndnotes) {
-      generatedOverrides.add('/word/endnotes.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml');
+      generatedOverrides.add(
+        '/word/endnotes.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml'
+      );
     }
 
     // People (track changes authors)
     if (filesInArchive.has('word/people.xml')) {
-      generatedOverrides.add('/word/people.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml');
+      generatedOverrides.add(
+        '/word/people.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml'
+      );
     }
 
     // Comment companion files (passthrough)
     if (filesInArchive.has('word/commentsExtended.xml')) {
-      generatedOverrides.add('/word/commentsExtended.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml');
+      generatedOverrides.add(
+        '/word/commentsExtended.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml'
+      );
     }
     if (filesInArchive.has('word/commentsIds.xml')) {
-      generatedOverrides.add('/word/commentsIds.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml');
+      generatedOverrides.add(
+        '/word/commentsIds.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml'
+      );
     }
     if (filesInArchive.has('word/commentsExtensible.xml')) {
-      generatedOverrides.add('/word/commentsExtensible.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml');
+      generatedOverrides.add(
+        '/word/commentsExtensible.xml|application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml'
+      );
     }
 
     // Core properties (only add if file exists)
-    if (zipHandler.hasFile?.("docProps/core.xml") || filesInArchive.has('docProps/core.xml')) {
-      generatedOverrides.add('/docProps/core.xml|application/vnd.openxmlformats-package.core-properties+xml');
+    if (zipHandler.hasFile?.('docProps/core.xml') || filesInArchive.has('docProps/core.xml')) {
+      generatedOverrides.add(
+        '/docProps/core.xml|application/vnd.openxmlformats-package.core-properties+xml'
+      );
     }
 
     // App.xml if it exists
-    if (zipHandler.hasFile?.("docProps/app.xml")) {
-      generatedOverrides.add('/docProps/app.xml|application/vnd.openxmlformats-officedocument.extended-properties+xml');
+    if (zipHandler.hasFile?.('docProps/app.xml')) {
+      generatedOverrides.add(
+        '/docProps/app.xml|application/vnd.openxmlformats-officedocument.extended-properties+xml'
+      );
     }
 
     // Custom properties if exists or will be created
-    if (zipHandler.hasFile?.("docProps/custom.xml") || hasCustomProperties) {
-      generatedOverrides.add('/docProps/custom.xml|application/vnd.openxmlformats-officedocument.custom-properties+xml');
+    if (zipHandler.hasFile?.('docProps/custom.xml') || hasCustomProperties) {
+      generatedOverrides.add(
+        '/docProps/custom.xml|application/vnd.openxmlformats-officedocument.custom-properties+xml'
+      );
     }
 
     // CustomXML entries if they exist
-    if (zipHandler.hasFile?.("customXML/item1.xml")) {
+    if (zipHandler.hasFile?.('customXML/item1.xml')) {
       generatedOverrides.add('/customXML/item1.xml|application/xml');
     }
-    if (zipHandler.hasFile?.("customXML/itemProps1.xml")) {
-      generatedOverrides.add('/customXML/itemProps1.xml|application/vnd.openxmlformats-officedocument.customXmlProperties+xml');
+    if (zipHandler.hasFile?.('customXML/itemProps1.xml')) {
+      generatedOverrides.add(
+        '/customXML/itemProps1.xml|application/vnd.openxmlformats-officedocument.customXmlProperties+xml'
+      );
     }
 
     // Merge with original entries, but ONLY keep overrides for files that actually exist
     // This prevents corruption when headers/footers are removed but their Content_Types entries
     // from the original document would otherwise be preserved
-    const allDefaults = new Set([
-      ...generatedDefaults,
-      ...(originalContentTypes?.defaults || [])
-    ]);
+    const allDefaults = new Set([...generatedDefaults, ...(originalContentTypes?.defaults || [])]);
 
     // filesInArchive was created earlier (line 318) for header/footer validation
     // Reuse it here to filter original overrides as well
 
     // Filter original overrides to only include files that exist in the archive
     const filteredOriginalOverrides: string[] = [];
-    for (const entry of (originalContentTypes?.overrides || [])) {
+    for (const entry of originalContentTypes?.overrides || []) {
       const parts = entry.split('|');
       const partName = parts[0] || '';
       // Convert /word/footer1.xml to word/footer1.xml for comparison
@@ -471,10 +501,7 @@ ${properties}
       }
     }
 
-    const allOverrides = new Set([
-      ...generatedOverrides,
-      ...filteredOriginalOverrides
-    ]);
+    const allOverrides = new Set([...generatedOverrides, ...filteredOriginalOverrides]);
 
     // Build XML from merged sets
     let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
@@ -551,12 +578,13 @@ ${properties}
     };
 
     // Helper to recursively scan any element type for hyperlinks
-    const scanElement = (element: BodyElement | Paragraph | Table | StructuredDocumentTag): void => {
+    const scanElement = (
+      element: BodyElement | Paragraph | Table | StructuredDocumentTag
+    ): void => {
       if (element instanceof Paragraph) {
         // Scan paragraph content for hyperlinks
         scanParagraph(element);
-      }
-      else if (element instanceof Table) {
+      } else if (element instanceof Table) {
         // Scan all cells in the table
         for (let row = 0; row < element.getRowCount(); row++) {
           for (let col = 0; col < element.getColumnCount(); col++) {
@@ -579,8 +607,7 @@ ${properties}
             }
           }
         }
-      }
-      else if (element instanceof StructuredDocumentTag) {
+      } else if (element instanceof StructuredDocumentTag) {
         // Recursively scan SDT content (can contain Paragraphs, Tables, or nested SDTs)
         const content = element.getContent();
         for (const item of content) {
@@ -631,7 +658,7 @@ ${properties}
 
     // Step 2: Remove ONLY orphaned relationships (not used by any hyperlink)
     const allHyperlinkRels = relationshipManager.getRelationshipsByType(
-      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink'
     );
 
     for (const rel of allHyperlinkRels) {
@@ -679,11 +706,12 @@ ${properties}
 
     // Helper to recursively process any element type for hyperlinks
     // Mirrors the pattern in clearOrphanedHyperlinkRelationships() for consistency
-    const processElement = (element: BodyElement | Paragraph | Table | StructuredDocumentTag): void => {
+    const processElement = (
+      element: BodyElement | Paragraph | Table | StructuredDocumentTag
+    ): void => {
       if (element instanceof Paragraph) {
         this.processHyperlinksInParagraph(element, relationshipManager);
-      }
-      else if (element instanceof Table) {
+      } else if (element instanceof Table) {
         // Process all cells in the table
         for (let row = 0; row < element.getRowCount(); row++) {
           for (let col = 0; col < element.getColumnCount(); col++) {
@@ -697,8 +725,7 @@ ${properties}
             }
           }
         }
-      }
-      else if (element instanceof StructuredDocumentTag) {
+      } else if (element instanceof StructuredDocumentTag) {
         // Recursively process SDT content (can contain Paragraphs, Tables, or nested SDTs)
         const content = element.getContent();
         for (const item of content) {
@@ -768,11 +795,7 @@ ${properties}
 
     for (const item of content) {
       // Direct hyperlink in paragraph
-      if (
-        item instanceof Hyperlink &&
-        item.isExternal() &&
-        !item.getRelationshipId()
-      ) {
+      if (item instanceof Hyperlink && item.isExternal() && !item.getRelationshipId()) {
         this.registerHyperlinkRelationship(item, relationshipManager);
       }
 
@@ -902,8 +925,10 @@ ${properties}
     if (settings.doNotSaveAsSingleFile) children += '\n  <w:doNotSaveAsSingleFile/>';
     if (settings.doNotOrganizeInFolder) children += '\n  <w:doNotOrganizeInFolder/>';
     if (settings.doNotUseLongFileNames) children += '\n  <w:doNotUseLongFileNames/>';
-    if (settings.pixelsPerInch !== undefined) children += `\n  <w:pixelsPerInch w:val="${settings.pixelsPerInch}"/>`;
-    if (settings.targetScreenSz) children += `\n  <w:targetScreenSz w:val="${settings.targetScreenSz}"/>`;
+    if (settings.pixelsPerInch !== undefined)
+      children += `\n  <w:pixelsPerInch w:val="${settings.pixelsPerInch}"/>`;
+    if (settings.targetScreenSz)
+      children += `\n  <w:targetScreenSz w:val="${settings.targetScreenSz}"/>`;
     if (settings.encoding) children += `\n  <w:encoding w:val="${settings.encoding}"/>`;
 
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -928,7 +953,11 @@ ${properties}
     if (trackChangesSettings?.revisionView) {
       const view = trackChangesSettings.revisionView;
       // Only emit revisionView if it differs from defaults (all true)
-      if (!view.showInsertionsAndDeletions || !view.showFormatting || view.showInkAnnotations === false) {
+      if (
+        !view.showInsertionsAndDeletions ||
+        !view.showFormatting ||
+        view.showInkAnnotations === false
+      ) {
         xml += `\n  <w:revisionView w:insDel="${view.showInsertionsAndDeletions ? '1' : '0'}" w:formatting="${view.showFormatting ? '1' : '0'}"`;
         if (view.showInkAnnotations !== undefined) {
           xml += ` w:inkAnnotations="${view.showInkAnnotations ? '1' : '0'}"`;

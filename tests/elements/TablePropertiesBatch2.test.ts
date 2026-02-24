@@ -12,14 +12,13 @@
  * 8. gridSpan - Already exists as columnSpan (verification tests)
  */
 
+import { Table } from '../../src/elements/Table';
+import { Document } from '../../src/core/Document';
+import * as path from 'path';
 
-import { Table } from "../../src/elements/Table";
-import { Document } from "../../src/core/Document";
-import * as path from "path";
-
-describe("Table Properties Batch 2 - Cell-Level Properties", () => {
-  describe("Text Direction (textDirection)", () => {
-    test("should set and serialize tbRl (top-to-bottom, right-to-left)", async () => {
+describe('Table Properties Batch 2 - Cell-Level Properties', () => {
+  describe('Text Direction (textDirection)', () => {
+    test('should set and serialize tbRl (top-to-bottom, right-to-left)', async () => {
       const table = new Table(2, 2);
       const cell = table.getRow(0)!.getCell(0)!;
       cell.setTextDirection('tbRl');
@@ -28,7 +27,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-textdir-tbrl.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-textdir-tbrl.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -38,7 +37,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(cell2.getFormatting().textDirection).toBe('tbRl');
     });
 
-    test("should set and serialize lrTb (left-to-right, top-to-bottom)", async () => {
+    test('should set and serialize lrTb (left-to-right, top-to-bottom)', async () => {
       const table = new Table(2, 2);
       const cell = table.getRow(0)!.getCell(0)!;
       cell.setTextDirection('lrTb');
@@ -47,7 +46,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-textdir-lrtb.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-textdir-lrtb.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -57,7 +56,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(cell2.getFormatting().textDirection).toBe('lrTb');
     });
 
-    test("should preserve textDirection through round-trip", async () => {
+    test('should preserve textDirection through round-trip', async () => {
       const table = new Table(1, 3);
       table.getRow(0)!.getCell(0)!.setTextDirection('tbRl').createParagraph('Col 1');
       table.getRow(0)!.getCell(1)!.setTextDirection('lrTb').createParagraph('Col 2');
@@ -66,7 +65,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-textdir-roundtrip.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-textdir-roundtrip.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -78,8 +77,8 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
     });
   });
 
-  describe("Fit Text (tcFitText)", () => {
-    test("should set and serialize fitText property", async () => {
+  describe('Fit Text (tcFitText)', () => {
+    test('should set and serialize fitText property', async () => {
       const table = new Table(2, 2);
       const cell = table.getRow(0)!.getCell(0)!;
       cell.setFitText(true);
@@ -89,7 +88,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-fittext.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-fittext.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -99,7 +98,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(cell2.getFormatting().fitText).toBe(true);
     });
 
-    test("should preserve fitText through round-trip", async () => {
+    test('should preserve fitText through round-trip', async () => {
       const table = new Table(1, 2);
       table.getRow(0)!.getCell(0)!.setFitText(true).createParagraph('Fitted');
       table.getRow(0)!.getCell(1)!.createParagraph('Normal');
@@ -107,7 +106,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-fittext-roundtrip.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-fittext-roundtrip.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -118,8 +117,8 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
     });
   });
 
-  describe("No Wrap (noWrap)", () => {
-    test("should set and serialize noWrap property", async () => {
+  describe('No Wrap (noWrap)', () => {
+    test('should set and serialize noWrap property', async () => {
       const table = new Table(2, 2);
       const cell = table.getRow(0)!.getCell(0)!;
       cell.setNoWrap(true);
@@ -128,7 +127,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-nowrap.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-nowrap.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -138,7 +137,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(cell2.getFormatting().noWrap).toBe(true);
     });
 
-    test("should preserve noWrap through round-trip", async () => {
+    test('should preserve noWrap through round-trip', async () => {
       const table = new Table(1, 2);
       table.getRow(0)!.getCell(0)!.setNoWrap(true).createParagraph('No wrap cell');
       table.getRow(0)!.getCell(1)!.createParagraph('Normal cell');
@@ -146,7 +145,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-nowrap-roundtrip.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-nowrap-roundtrip.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -157,8 +156,8 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
     });
   });
 
-  describe("Hide Mark (hideMark)", () => {
-    test("should set and serialize hideMark property", async () => {
+  describe('Hide Mark (hideMark)', () => {
+    test('should set and serialize hideMark property', async () => {
       const table = new Table(2, 2);
       const cell = table.getRow(0)!.getCell(0)!;
       cell.setHideMark(true);
@@ -167,7 +166,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-hidemark.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-hidemark.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -177,7 +176,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(cell2.getFormatting().hideMark).toBe(true);
     });
 
-    test("should preserve hideMark through round-trip", async () => {
+    test('should preserve hideMark through round-trip', async () => {
       const table = new Table(1, 2);
       table.getRow(0)!.getCell(0)!.setHideMark(true).createParagraph('Hidden mark');
       table.getRow(0)!.getCell(1)!.createParagraph('Normal mark');
@@ -185,7 +184,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-hidemark-roundtrip.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-hidemark-roundtrip.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -196,8 +195,8 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
     });
   });
 
-  describe("Conditional Style (cnfStyle)", () => {
-    test("should set and serialize cnfStyle property", async () => {
+  describe('Conditional Style (cnfStyle)', () => {
+    test('should set and serialize cnfStyle property', async () => {
       const table = new Table(2, 2);
       const cell = table.getRow(0)!.getCell(0)!;
       cell.setConditionalStyle('100000000000'); // First row formatting
@@ -206,7 +205,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-cnfstyle.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-cnfstyle.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -216,7 +215,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(cell2.getFormatting().cnfStyle).toBe('100000000000');
     });
 
-    test("should preserve cnfStyle through round-trip", async () => {
+    test('should preserve cnfStyle through round-trip', async () => {
       const table = new Table(2, 2);
       table.getRow(0)!.getCell(0)!.setConditionalStyle('100000000000').createParagraph('First row');
       table.getRow(1)!.getCell(0)!.setConditionalStyle('010000000000').createParagraph('Last row');
@@ -224,7 +223,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-cnfstyle-roundtrip.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-cnfstyle-roundtrip.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -235,8 +234,8 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
     });
   });
 
-  describe("Width Type (tcW type)", () => {
-    test("should set and serialize auto width type", async () => {
+  describe('Width Type (tcW type)', () => {
+    test('should set and serialize auto width type', async () => {
       const table = new Table(2, 3);
       const cell = table.getRow(0)!.getCell(0)!;
       cell.setWidthType(0, 'auto');
@@ -245,7 +244,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-width-auto.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-width-auto.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -255,7 +254,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(cell2.getFormatting().widthType).toBe('auto');
     });
 
-    test("should set and serialize percentage width type", async () => {
+    test('should set and serialize percentage width type', async () => {
       const table = new Table(2, 3);
       const cell = table.getRow(0)!.getCell(0)!;
       cell.setWidthType(2500, 'pct'); // 50% (2500/50)
@@ -264,7 +263,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-width-pct.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-width-pct.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -275,7 +274,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(cell2.getFormatting().widthType).toBe('pct');
     });
 
-    test("should preserve width types through round-trip", async () => {
+    test('should preserve width types through round-trip', async () => {
       const table = new Table(1, 3);
       table.getRow(0)!.getCell(0)!.setWidthType(0, 'auto').createParagraph('Auto');
       table.getRow(0)!.getCell(1)!.setWidthType(2880, 'dxa').createParagraph('2 inches');
@@ -284,7 +283,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-width-types-roundtrip.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-width-types-roundtrip.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -298,12 +297,16 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
     });
   });
 
-  describe("Vertical Merge (vMerge)", () => {
-    test("should set and serialize restart vMerge", async () => {
+  describe('Vertical Merge (vMerge)', () => {
+    test('should set and serialize restart vMerge', async () => {
       const table = new Table(3, 2);
 
       // First cell starts the merge
-      table.getRow(0)!.getCell(0)!.setVerticalMerge('restart').createParagraph('Merged cell (start)');
+      table
+        .getRow(0)!
+        .getCell(0)!
+        .setVerticalMerge('restart')
+        .createParagraph('Merged cell (start)');
       // Second cell continues the merge
       table.getRow(1)!.getCell(0)!.setVerticalMerge('continue');
       // Third cell continues the merge
@@ -317,7 +320,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-vmerge-restart.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-vmerge-restart.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -326,7 +329,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(table2!.getRow(0)!.getCell(0)!.getFormatting().vMerge).toBe('restart');
     });
 
-    test("should set and serialize continue vMerge", async () => {
+    test('should set and serialize continue vMerge', async () => {
       const table = new Table(2, 2);
       table.getRow(0)!.getCell(0)!.setVerticalMerge('restart').createParagraph('Start');
       table.getRow(1)!.getCell(0)!.setVerticalMerge('continue');
@@ -334,7 +337,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-vmerge-continue.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-vmerge-continue.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -343,7 +346,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(table2!.getRow(1)!.getCell(0)!.getFormatting().vMerge).toBe('continue');
     });
 
-    test("should handle multi-row vertical merge scenario", async () => {
+    test('should handle multi-row vertical merge scenario', async () => {
       const table = new Table(4, 3);
 
       // Column 1: Merge rows 0-2
@@ -367,7 +370,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-vmerge-multirow.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-vmerge-multirow.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -387,8 +390,8 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
     });
   });
 
-  describe("Combined Properties", () => {
-    test("should handle multiple cell properties together", async () => {
+  describe('Combined Properties', () => {
+    test('should handle multiple cell properties together', async () => {
       const table = new Table(2, 2);
       const cell = table.getRow(0)!.getCell(0)!;
 
@@ -403,7 +406,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       const doc = Document.create();
       doc.addTable(table);
 
-      const outputPath = path.join(__dirname, "../output/test-cell-batch2-combined.docx");
+      const outputPath = path.join(__dirname, '../output/test-cell-batch2-combined.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -419,7 +422,7 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       expect(cell2.getFormatting().widthType).toBe('dxa');
     });
 
-    test("should preserve all properties through multi-cycle round-trip", async () => {
+    test('should preserve all properties through multi-cycle round-trip', async () => {
       const table = new Table(2, 2);
       const cell = table.getRow(0)!.getCell(0)!;
 
@@ -434,12 +437,12 @@ describe("Table Properties Batch 2 - Cell-Level Properties", () => {
       doc.addTable(table);
 
       // Cycle 1
-      const path1 = path.join(__dirname, "../output/test-cell-batch2-cycle1.docx");
+      const path1 = path.join(__dirname, '../output/test-cell-batch2-cycle1.docx');
       await doc.save(path1);
       const doc2 = await Document.load(path1);
 
       // Cycle 2
-      const path2 = path.join(__dirname, "../output/test-cell-batch2-cycle2.docx");
+      const path2 = path.join(__dirname, '../output/test-cell-batch2-cycle2.docx');
       await doc2.save(path2);
       const doc3 = await Document.load(path2);
 

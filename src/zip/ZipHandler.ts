@@ -52,11 +52,11 @@ export class ZipHandler {
       logger.error('Document exceeds maximum size', { sizeMB: sizeMB.toFixed(1), maxSizeMB });
       throw new Error(
         `Document size (${sizeMB.toFixed(1)}MB) exceeds maximum supported size (${maxSizeMB}MB). ` +
-        `This would likely cause out-of-memory errors. Consider:\n` +
-        `- Compressing/optimizing images\n` +
-        `- Splitting into multiple documents\n` +
-        `- Processing on a machine with more memory\n` +
-        `- Increasing maxSizeMB via LoadOptions.sizeLimits (not recommended)`
+          `This would likely cause out-of-memory errors. Consider:\n` +
+          `- Compressing/optimizing images\n` +
+          `- Splitting into multiple documents\n` +
+          `- Processing on a machine with more memory\n` +
+          `- Increasing maxSizeMB via LoadOptions.sizeLimits (not recommended)`
       );
     }
 
@@ -144,11 +144,7 @@ export class ZipHandler {
    * @param content - File content (string or Buffer)
    * @param options - Options for adding the file
    */
-  addFile(
-    filePath: string,
-    content: string | Buffer,
-    options: AddFileOptions = {}
-  ): void {
+  addFile(filePath: string, content: string | Buffer, options: AddFileOptions = {}): void {
     this.writer.addFile(filePath, content, options);
   }
 
@@ -168,11 +164,7 @@ export class ZipHandler {
    * @param options - Options for updating the file
    * @returns True if the file was updated, false if it didn't exist
    */
-  updateFile(
-    filePath: string,
-    content: string | Buffer,
-    options: AddFileOptions = {}
-  ): boolean {
+  updateFile(filePath: string, content: string | Buffer, options: AddFileOptions = {}): boolean {
     if (!this.hasFile(filePath)) {
       return false;
     }
@@ -221,8 +213,8 @@ export class ZipHandler {
     if (file.isBinary) {
       throw new Error(
         `Cannot convert binary file "${filePath}" to string. ` +
-        `Binary files (images, fonts, etc.) cannot be safely converted to UTF-8 strings. ` +
-        `Use getFileAsBuffer() instead to access the raw bytes.`
+          `Binary files (images, fonts, etc.) cannot be safely converted to UTF-8 strings. ` +
+          `Use getFileAsBuffer() instead to access the raw bytes.`
       );
     }
 

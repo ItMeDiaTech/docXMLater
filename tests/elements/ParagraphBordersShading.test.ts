@@ -27,7 +27,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
         top: { style: 'single', size: 4, color: '000000', space: 1 },
         bottom: { style: 'single', size: 4, color: '000000', space: 1 },
         left: { style: 'double', size: 6, color: 'FF0000', space: 2 },
-        right: { style: 'double', size: 6, color: 'FF0000', space: 2 }
+        right: { style: 'double', size: 6, color: 'FF0000', space: 2 },
       });
       doc.addParagraph(para);
 
@@ -43,10 +43,30 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       const formatting = loadedPara?.getFormatting();
 
       expect(formatting?.borders).toBeDefined();
-      expect(formatting?.borders?.top).toEqual({ style: 'single', size: 4, color: '000000', space: 1 });
-      expect(formatting?.borders?.bottom).toEqual({ style: 'single', size: 4, color: '000000', space: 1 });
-      expect(formatting?.borders?.left).toEqual({ style: 'double', size: 6, color: 'FF0000', space: 2 });
-      expect(formatting?.borders?.right).toEqual({ style: 'double', size: 6, color: 'FF0000', space: 2 });
+      expect(formatting?.borders?.top).toEqual({
+        style: 'single',
+        size: 4,
+        color: '000000',
+        space: 1,
+      });
+      expect(formatting?.borders?.bottom).toEqual({
+        style: 'single',
+        size: 4,
+        color: '000000',
+        space: 1,
+      });
+      expect(formatting?.borders?.left).toEqual({
+        style: 'double',
+        size: 6,
+        color: 'FF0000',
+        space: 2,
+      });
+      expect(formatting?.borders?.right).toEqual({
+        style: 'double',
+        size: 6,
+        color: 'FF0000',
+        space: 2,
+      });
     });
 
     it('should round-trip paragraph with top and bottom borders only', async () => {
@@ -55,7 +75,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.addText('Paragraph with top/bottom borders');
       para.setBorder({
         top: { style: 'thick', size: 8, color: '0000FF' },
-        bottom: { style: 'thick', size: 8, color: '0000FF' }
+        bottom: { style: 'thick', size: 8, color: '0000FF' },
       });
       doc.addParagraph(para);
 
@@ -76,7 +96,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.addText('Paragraph with dashed borders');
       para.setBorder({
         top: { style: 'dashed', size: 4, color: '00FF00', space: 1 },
-        bottom: { style: 'dotted', size: 4, color: '00FF00', space: 1 }
+        bottom: { style: 'dotted', size: 4, color: '00FF00', space: 1 },
       });
       doc.addParagraph(para);
 
@@ -95,7 +115,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.addText('Testing file save/load with borders');
       para.setBorder({
         top: { style: 'single', size: 4, color: 'FF0000', space: 1 },
-        left: { style: 'single', size: 4, color: 'FF0000', space: 1 }
+        left: { style: 'single', size: 4, color: 'FF0000', space: 1 },
       });
       doc.addParagraph(para);
 
@@ -106,8 +126,18 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       const paragraphs = loadedDoc.getParagraphs();
 
       const formatting = paragraphs[0]?.getFormatting();
-      expect(formatting?.borders?.top).toEqual({ style: 'single', size: 4, color: 'FF0000', space: 1 });
-      expect(formatting?.borders?.left).toEqual({ style: 'single', size: 4, color: 'FF0000', space: 1 });
+      expect(formatting?.borders?.top).toEqual({
+        style: 'single',
+        size: 4,
+        color: 'FF0000',
+        space: 1,
+      });
+      expect(formatting?.borders?.left).toEqual({
+        style: 'single',
+        size: 4,
+        color: 'FF0000',
+        space: 1,
+      });
 
       // Cleanup
       if (fs.existsSync(filePath)) {
@@ -141,7 +171,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.setShading({
         fill: 'FFFF00',
         color: '000000',
-        pattern: 'diagStripe'
+        pattern: 'diagStripe',
       });
       doc.addParagraph(para);
 
@@ -162,7 +192,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.setShading({
         fill: '00FF00',
         color: '0000FF',
-        pattern: 'horzCross'
+        pattern: 'horzCross',
       });
       doc.addParagraph(para);
 
@@ -205,7 +235,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.setTabs([
         { position: 720, val: 'left' },
         { position: 1440, val: 'center', leader: 'dot' },
-        { position: 2160, val: 'right', leader: 'underscore' }
+        { position: 2160, val: 'right', leader: 'underscore' },
       ]);
       doc.addParagraph(para);
 
@@ -225,9 +255,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       const doc = Document.create();
       const para = new Paragraph();
       para.addText('Paragraph with decimal tab');
-      para.setTabs([
-        { position: 1440, val: 'decimal', leader: 'dot' }
-      ]);
+      para.setTabs([{ position: 1440, val: 'decimal', leader: 'dot' }]);
       doc.addParagraph(para);
 
       const buffer = await doc.toBuffer();
@@ -243,9 +271,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       const doc = Document.create();
       const para = new Paragraph();
       para.addText('Paragraph with bar tab');
-      para.setTabs([
-        { position: 1440, val: 'bar' }
-      ]);
+      para.setTabs([{ position: 1440, val: 'bar' }]);
       doc.addParagraph(para);
 
       const buffer = await doc.toBuffer();
@@ -262,7 +288,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.addText('Testing file save/load with tabs');
       para.setTabs([
         { position: 720, val: 'left', leader: 'dot' },
-        { position: 2880, val: 'right', leader: 'hyphen' }
+        { position: 2880, val: 'right', leader: 'hyphen' },
       ]);
       doc.addParagraph(para);
 
@@ -291,12 +317,12 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para.addText('Paragraph with all features');
       para.setBorder({
         top: { style: 'single', size: 4, color: '000000' },
-        bottom: { style: 'single', size: 4, color: '000000' }
+        bottom: { style: 'single', size: 4, color: '000000' },
       });
       para.setShading({ fill: 'FFFF00', pattern: 'solid' });
       para.setTabs([
         { position: 720, val: 'left' },
-        { position: 1440, val: 'center' }
+        { position: 1440, val: 'center' },
       ]);
       doc.addParagraph(para);
 
@@ -325,7 +351,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       para1.addText('Paragraph 1: With borders');
       para1.setBorder({
         top: { style: 'double', size: 8, color: 'FF0000' },
-        bottom: { style: 'double', size: 8, color: 'FF0000' }
+        bottom: { style: 'double', size: 8, color: 'FF0000' },
       });
       doc.addParagraph(para1);
 
@@ -345,7 +371,7 @@ describe('Paragraph Borders, Shading, and Tabs - Round Trip Tests', () => {
       const para4 = new Paragraph();
       para4.addText('Paragraph 4: With everything');
       para4.setBorder({
-        left: { style: 'single', size: 4, color: '0000FF' }
+        left: { style: 'single', size: 4, color: '0000FF' },
       });
       para4.setShading({ fill: 'FFFF00', pattern: 'solid' });
       para4.setTabs([{ position: 720, val: 'left' }]);

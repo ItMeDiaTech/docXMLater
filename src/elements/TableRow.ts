@@ -284,8 +284,8 @@ export class TableRow {
       `Row grid alignment mismatch: has ${actualSpan} grid columns but expected ${expectedColumns}. ` +
       `Cell count: ${this.cells.length}. ` +
       (actualSpan < expectedColumns
-        ? "Missing cells or incorrect columnSpan values."
-        : "Extra cells or excessive columnSpan values.");
+        ? 'Missing cells or incorrect columnSpan values.'
+        : 'Extra cells or excessive columnSpan values.');
 
     defaultLogger.warn(`[TableRow] ${message}`);
 
@@ -659,10 +659,12 @@ export class TableRow {
 
     // Add table width exception (w:tblW)
     if (exceptions.width !== undefined) {
-      children.push(XMLBuilder.wSelf('tblW', {
-        'w:w': exceptions.width,
-        'w:type': 'dxa'
-      }));
+      children.push(
+        XMLBuilder.wSelf('tblW', {
+          'w:w': exceptions.width,
+          'w:type': 'dxa',
+        })
+      );
     }
 
     // Add table justification exception (w:jc)
@@ -672,18 +674,22 @@ export class TableRow {
 
     // Add cell spacing exception (w:tblCellSpacing)
     if (exceptions.cellSpacing !== undefined) {
-      children.push(XMLBuilder.wSelf('tblCellSpacing', {
-        'w:w': exceptions.cellSpacing,
-        'w:type': 'dxa'
-      }));
+      children.push(
+        XMLBuilder.wSelf('tblCellSpacing', {
+          'w:w': exceptions.cellSpacing,
+          'w:type': 'dxa',
+        })
+      );
     }
 
     // Add table indentation exception (w:tblInd)
     if (exceptions.indentation !== undefined) {
-      children.push(XMLBuilder.wSelf('tblInd', {
-        'w:w': exceptions.indentation,
-        'w:type': 'dxa'
-      }));
+      children.push(
+        XMLBuilder.wSelf('tblInd', {
+          'w:w': exceptions.indentation,
+          'w:type': 'dxa',
+        })
+      );
     }
 
     // Add table borders exception (w:tblBorders)
@@ -702,8 +708,10 @@ export class TableRow {
       if (exceptions.shading.fill) shdAttrs['w:fill'] = exceptions.shading.fill;
       if (exceptions.shading.themeColor) shdAttrs['w:themeColor'] = exceptions.shading.themeColor;
       if (exceptions.shading.themeFill) shdAttrs['w:themeFill'] = exceptions.shading.themeFill;
-      if (exceptions.shading.themeFillShade) shdAttrs['w:themeFillShade'] = exceptions.shading.themeFillShade;
-      if (exceptions.shading.themeFillTint) shdAttrs['w:themeFillTint'] = exceptions.shading.themeFillTint;
+      if (exceptions.shading.themeFillShade)
+        shdAttrs['w:themeFillShade'] = exceptions.shading.themeFillShade;
+      if (exceptions.shading.themeFillTint)
+        shdAttrs['w:themeFillTint'] = exceptions.shading.themeFillTint;
       if (exceptions.shading.themeShade) shdAttrs['w:themeShade'] = exceptions.shading.themeShade;
       if (exceptions.shading.themeTint) shdAttrs['w:themeTint'] = exceptions.shading.themeTint;
       children.push(XMLBuilder.w('shd', shdAttrs));
@@ -719,7 +727,14 @@ export class TableRow {
   private buildBordersXML(borders: TableBorders): XMLElement[] {
     const children: XMLElement[] = [];
 
-    const borderNames: (keyof TableBorders)[] = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'];
+    const borderNames: (keyof TableBorders)[] = [
+      'top',
+      'left',
+      'bottom',
+      'right',
+      'insideH',
+      'insideV',
+    ];
 
     for (const name of borderNames) {
       const border = borders[name];
@@ -772,18 +787,22 @@ export class TableRow {
 
     // 5. wBefore
     if (this.formatting.wBefore !== undefined) {
-      trPrChildren.push(XMLBuilder.wSelf('wBefore', {
-        'w:w': this.formatting.wBefore,
-        'w:type': this.formatting.wBeforeType || 'dxa',
-      }));
+      trPrChildren.push(
+        XMLBuilder.wSelf('wBefore', {
+          'w:w': this.formatting.wBefore,
+          'w:type': this.formatting.wBeforeType || 'dxa',
+        })
+      );
     }
 
     // 6. wAfter
     if (this.formatting.wAfter !== undefined) {
-      trPrChildren.push(XMLBuilder.wSelf('wAfter', {
-        'w:w': this.formatting.wAfter,
-        'w:type': this.formatting.wAfterType || 'dxa',
-      }));
+      trPrChildren.push(
+        XMLBuilder.wSelf('wAfter', {
+          'w:w': this.formatting.wAfter,
+          'w:type': this.formatting.wAfterType || 'dxa',
+        })
+      );
     }
 
     // 7. cantSplit
@@ -809,10 +828,12 @@ export class TableRow {
 
     // 10. tblCellSpacing
     if (this.formatting.cellSpacing !== undefined) {
-      trPrChildren.push(XMLBuilder.wSelf('tblCellSpacing', {
-        'w:w': this.formatting.cellSpacing,
-        'w:type': this.formatting.cellSpacingType || 'dxa',
-      }));
+      trPrChildren.push(
+        XMLBuilder.wSelf('tblCellSpacing', {
+          'w:w': this.formatting.cellSpacing,
+          'w:type': this.formatting.cellSpacingType || 'dxa',
+        })
+      );
     }
 
     // 11. jc (map 'start'/'end' to valid ST_JcTable values)
@@ -850,16 +871,20 @@ export class TableRow {
           prevTrPrChildren.push(XMLBuilder.wSelf('gridAfter', { 'w:val': prev.gridAfter }));
         }
         if (prev.wBefore !== undefined) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('wBefore', {
-            'w:w': prev.wBefore,
-            'w:type': prev.wBeforeType || 'dxa',
-          }));
+          prevTrPrChildren.push(
+            XMLBuilder.wSelf('wBefore', {
+              'w:w': prev.wBefore,
+              'w:type': prev.wBeforeType || 'dxa',
+            })
+          );
         }
         if (prev.wAfter !== undefined) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('wAfter', {
-            'w:w': prev.wAfter,
-            'w:type': prev.wAfterType || 'dxa',
-          }));
+          prevTrPrChildren.push(
+            XMLBuilder.wSelf('wAfter', {
+              'w:w': prev.wAfter,
+              'w:type': prev.wAfterType || 'dxa',
+            })
+          );
         }
         if (prev.cantSplit) {
           prevTrPrChildren.push(XMLBuilder.wSelf('cantSplit'));
@@ -873,14 +898,18 @@ export class TableRow {
           prevTrPrChildren.push(XMLBuilder.wSelf('tblHeader'));
         }
         if (prev.cellSpacing !== undefined) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('tblCellSpacing', {
-            'w:w': prev.cellSpacing,
-            'w:type': prev.cellSpacingType || 'dxa',
-          }));
+          prevTrPrChildren.push(
+            XMLBuilder.wSelf('tblCellSpacing', {
+              'w:w': prev.cellSpacing,
+              'w:type': prev.cellSpacingType || 'dxa',
+            })
+          );
         }
         if (prev.justification) {
           const jcPrevMap: Record<string, string> = { start: 'left', end: 'right' };
-          prevTrPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': jcPrevMap[prev.justification] || prev.justification }));
+          prevTrPrChildren.push(
+            XMLBuilder.wSelf('jc', { 'w:val': jcPrevMap[prev.justification] || prev.justification })
+          );
         }
         if (prev.hidden) {
           prevTrPrChildren.push(XMLBuilder.wSelf('hidden'));
@@ -900,7 +929,9 @@ export class TableRow {
 
     // Add table property exceptions (tblPrEx) if present
     if (this.formatting.tablePropertyExceptions) {
-      const tblPrExChildren = this.buildTablePropertyExceptionsXML(this.formatting.tablePropertyExceptions);
+      const tblPrExChildren = this.buildTablePropertyExceptionsXML(
+        this.formatting.tablePropertyExceptions
+      );
       if (tblPrExChildren.length > 0) {
         rowChildren.push(XMLBuilder.w('tblPrEx', undefined, tblPrExChildren));
       }

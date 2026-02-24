@@ -3,62 +3,62 @@
  * A run is the smallest unit of text formatting in a Word document
  */
 
-import { deepClone } from "../utils/deepClone";
-import { formatDateForXml } from "../utils/dateFormatting";
-import { logSerialization, logTextDirection } from "../utils/diagnostics";
-import { defaultLogger } from "../utils/logger";
-import { normalizeColor, validateRunText } from "../utils/validation";
-import { pointsToHalfPoints } from "../utils/units";
-import { diffText, diffHasUnchangedParts } from "../utils/textDiff";
-import { getActiveConditionalsInPriorityOrder } from "../utils/cnfStyleDecoder";
-import { XMLBuilder, XMLElement } from "../xml/XMLBuilder";
+import { deepClone } from '../utils/deepClone';
+import { formatDateForXml } from '../utils/dateFormatting';
+import { logSerialization, logTextDirection } from '../utils/diagnostics';
+import { defaultLogger } from '../utils/logger';
+import { normalizeColor, validateRunText } from '../utils/validation';
+import { pointsToHalfPoints } from '../utils/units';
+import { diffText, diffHasUnchangedParts } from '../utils/textDiff';
+import { getActiveConditionalsInPriorityOrder } from '../utils/cnfStyleDecoder';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import {
   ShadingPattern as CommonShadingPattern,
   ShadingConfig,
   buildShadingAttributes,
   ExtendedBorderStyle,
   BorderDefinition,
-} from "./CommonTypes";
-import type { RunPropertyChange } from "./PropertyChangeTypes";
+} from './CommonTypes';
+import type { RunPropertyChange } from './PropertyChangeTypes';
 // Type-only import to avoid circular dependency (Revision imports Run)
-import type { Revision as RevisionType } from "./Revision";
+import type { Revision as RevisionType } from './Revision';
 
 /**
  * Run content element types
  * Per ECMA-376 Part 1 §17.3.3 EG_RunInnerContent, runs can contain multiple types of content
  */
 export type RunContentType =
-  | "text" // <w:t> - Regular text
-  | "tab" // <w:tab/> - Tab character (used in TOC entries)
-  | "break" // <w:br/> - Line/page/column break
-  | "carriageReturn" // <w:cr/> - Carriage return
-  | "softHyphen" // <w:softHyphen/> - Optional hyphen
-  | "noBreakHyphen" // <w:noBreakHyphen/> - Non-breaking hyphen
-  | "instructionText" // <w:instrText> - Field instruction text
-  | "fieldChar" // <w:fldChar/> - Field character markers
-  | "vml" // <w:pict> - VML/legacy graphics (preserved as raw XML)
-  | "lastRenderedPageBreak" // <w:lastRenderedPageBreak/> - Last rendered page break position
-  | "separator" // <w:separator/> - Footnote/endnote separator line
-  | "continuationSeparator" // <w:continuationSeparator/> - Continuation separator line
-  | "pageNumber" // <w:pgNum/> - Page number field
-  | "annotationRef" // <w:annotationRef/> - Annotation reference marker
-  | "dayShort" // <w:dayShort/> - Short date day field
-  | "dayLong" // <w:dayLong/> - Long date day field
-  | "monthShort" // <w:monthShort/> - Short month field
-  | "monthLong" // <w:monthLong/> - Long month field
-  | "yearShort" // <w:yearShort/> - Short year field
-  | "yearLong" // <w:yearLong/> - Long year field
-  | "symbol" // <w:sym/> - Symbol character with font and char code
-  | "positionTab" // <w:ptab/> - Absolute position tab
-  | "embeddedObject" // <w:object> - Embedded OLE object (preserved as raw XML)
-  | "footnoteReference" // <w:footnoteReference/> - Footnote reference marker
-  | "endnoteReference"; // <w:endnoteReference/> - Endnote reference marker
+  | 'text' // <w:t> - Regular text
+  | 'tab' // <w:tab/> - Tab character (used in TOC entries)
+  | 'break' // <w:br/> - Line/page/column break
+  | 'carriageReturn' // <w:cr/> - Carriage return
+  | 'softHyphen' // <w:softHyphen/> - Optional hyphen
+  | 'noBreakHyphen' // <w:noBreakHyphen/> - Non-breaking hyphen
+  | 'instructionText' // <w:instrText> - Field instruction text
+  | 'fieldChar' // <w:fldChar/> - Field character markers
+  | 'vml' // <w:pict> - VML/legacy graphics (preserved as raw XML)
+  | 'lastRenderedPageBreak' // <w:lastRenderedPageBreak/> - Last rendered page break position
+  | 'separator' // <w:separator/> - Footnote/endnote separator line
+  | 'continuationSeparator' // <w:continuationSeparator/> - Continuation separator line
+  | 'pageNumber' // <w:pgNum/> - Page number field
+  | 'annotationRef' // <w:annotationRef/> - Annotation reference marker
+  | 'dayShort' // <w:dayShort/> - Short date day field
+  | 'dayLong' // <w:dayLong/> - Long date day field
+  | 'monthShort' // <w:monthShort/> - Short month field
+  | 'monthLong' // <w:monthLong/> - Long month field
+  | 'yearShort' // <w:yearShort/> - Short year field
+  | 'yearLong' // <w:yearLong/> - Long year field
+  | 'symbol' // <w:sym/> - Symbol character with font and char code
+  | 'positionTab' // <w:ptab/> - Absolute position tab
+  | 'embeddedObject' // <w:object> - Embedded OLE object (preserved as raw XML)
+  | 'footnoteReference' // <w:footnoteReference/> - Footnote reference marker
+  | 'endnoteReference'; // <w:endnoteReference/> - Endnote reference marker
 
 /**
  * Break type for <w:br> elements
  * Per ECMA-376 Part 1 §17.18.3
  */
-export type BreakType = "page" | "column" | "textWrapping";
+export type BreakType = 'page' | 'column' | 'textWrapping';
 
 /**
  * Run content element
@@ -72,7 +72,7 @@ export interface RunContent {
   /** Break type (only for 'break' type) */
   breakType?: BreakType;
   /** Field character subtype (only for 'fieldChar' type) */
-  fieldCharType?: "begin" | "separate" | "end";
+  fieldCharType?: 'begin' | 'separate' | 'end';
   /** Whether the field char is marked dirty */
   fieldCharDirty?: boolean;
   /** Whether the field char is locked */
@@ -148,7 +148,7 @@ export interface EastAsianLayout {
   /** Combine characters into single character space */
   combine?: boolean;
   /** Bracket characters for combined text */
-  combineBrackets?: "none" | "round" | "square" | "angle" | "curly";
+  combineBrackets?: 'none' | 'round' | 'square' | 'angle' | 'curly';
 }
 
 /**
@@ -217,29 +217,29 @@ export interface FormFieldData {
 /**
  * Emphasis mark type - decorative marks above/below text
  */
-export type EmphasisMark = "dot" | "comma" | "circle" | "underDot";
+export type EmphasisMark = 'dot' | 'comma' | 'circle' | 'underDot';
 
 /**
  * Theme color values per ECMA-376 Part 1 Section 17.18.96 (ST_ThemeColor)
  * These reference colors defined in the document's theme (theme1.xml)
  */
 export type ThemeColorValue =
-  | "dark1"
-  | "light1"
-  | "dark2"
-  | "light2"
-  | "accent1"
-  | "accent2"
-  | "accent3"
-  | "accent4"
-  | "accent5"
-  | "accent6"
-  | "hyperlink"
-  | "followedHyperlink"
-  | "background1"
-  | "text1"
-  | "background2"
-  | "text2";
+  | 'dark1'
+  | 'light1'
+  | 'dark2'
+  | 'light2'
+  | 'accent1'
+  | 'accent2'
+  | 'accent3'
+  | 'accent4'
+  | 'accent5'
+  | 'accent6'
+  | 'hyperlink'
+  | 'followedHyperlink'
+  | 'background1'
+  | 'text1'
+  | 'background2'
+  | 'text2';
 
 /**
  * Text formatting options for a run
@@ -272,7 +272,7 @@ export interface RunFormatting {
   /** Language code (e.g., 'en-US', 'fr-FR', 'es-ES') */
   language?: string;
   /** Underline text. Use "none" to explicitly override style underline. */
-  underline?: boolean | "single" | "double" | "thick" | "dotted" | "dash" | "none";
+  underline?: boolean | 'single' | 'double' | 'thick' | 'dotted' | 'dash' | 'none';
   /** Underline color in hex format (without #) per ECMA-376 Part 1 §17.3.2.40 */
   underlineColor?: string;
   /** Underline theme color reference per ECMA-376 Part 1 §17.3.2.40 */
@@ -314,22 +314,22 @@ export interface RunFormatting {
   themeShade?: number;
   /** Highlight color */
   highlight?:
-    | "yellow"
-    | "green"
-    | "cyan"
-    | "magenta"
-    | "blue"
-    | "red"
-    | "darkBlue"
-    | "darkCyan"
-    | "darkGreen"
-    | "darkMagenta"
-    | "darkRed"
-    | "darkYellow"
-    | "darkGray"
-    | "lightGray"
-    | "black"
-    | "white";
+    | 'yellow'
+    | 'green'
+    | 'cyan'
+    | 'magenta'
+    | 'blue'
+    | 'red'
+    | 'darkBlue'
+    | 'darkCyan'
+    | 'darkGreen'
+    | 'darkMagenta'
+    | 'darkRed'
+    | 'darkYellow'
+    | 'darkGray'
+    | 'lightGray'
+    | 'black'
+    | 'white';
   /** Small caps */
   smallCaps?: boolean;
   /** All caps */
@@ -354,15 +354,15 @@ export interface RunFormatting {
   specVanish?: boolean;
   /** Text effect/animation type */
   effect?:
-    | "none"
-    | "lights"
-    | "blinkBackground"
-    | "sparkleText"
-    | "marchingBlackAnts"
-    | "marchingRedAnts"
-    | "shimmer"
-    | "antsBlack"
-    | "antsRed";
+    | 'none'
+    | 'lights'
+    | 'blinkBackground'
+    | 'sparkleText'
+    | 'marchingBlackAnts'
+    | 'marchingRedAnts'
+    | 'shimmer'
+    | 'antsBlack'
+    | 'antsRed';
   /** Fit text to width in twips (1/20th of a point) */
   fitText?: number;
   /** East Asian typography layout options */
@@ -424,9 +424,7 @@ export class Run {
     if (text === undefined || text === null) {
       defaultLogger.warn(
         `DocXML Text Validation Warning [Run constructor]:\n` +
-          `  - Received ${
-            text === undefined ? "undefined" : "null"
-          } text value\n` +
+          `  - Received ${text === undefined ? 'undefined' : 'null'} text value\n` +
           `  - Converting to empty string for Word compatibility`
       );
     }
@@ -436,7 +434,7 @@ export class Run {
 
     // Validate text for XML patterns
     const validation = validateRunText(text, {
-      context: "Run constructor",
+      context: 'Run constructor',
       autoClean: shouldClean,
       warnToConsole: true, // Enable warnings to help catch data quality issues
     });
@@ -445,7 +443,7 @@ export class Run {
     const cleanedText = validation.cleanedText || text;
 
     // Convert undefined/null to empty string for consistent XML generation
-    const normalizedText = cleanedText ?? "";
+    const normalizedText = cleanedText ?? '';
 
     // Parse text to extract special characters into separate content elements
     this.content = this.parseTextWithSpecialCharacters(normalizedText);
@@ -463,64 +461,64 @@ export class Run {
    */
   private parseTextWithSpecialCharacters(text: string): RunContent[] {
     if (!text) {
-      return [{ type: "text", value: "" }];
+      return [{ type: 'text', value: '' }];
     }
 
     const content: RunContent[] = [];
-    let currentText = "";
+    let currentText = '';
 
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
 
       switch (char) {
-        case "\t":
+        case '\t':
           // Add accumulated text before tab
           if (currentText) {
-            content.push({ type: "text", value: currentText });
-            currentText = "";
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
           }
           // Add tab element
-          content.push({ type: "tab" });
+          content.push({ type: 'tab' });
           break;
 
-        case "\n":
+        case '\n':
           // Add accumulated text before newline
           if (currentText) {
-            content.push({ type: "text", value: currentText });
-            currentText = "";
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
           }
           // Add break element
-          content.push({ type: "break" });
+          content.push({ type: 'break' });
           break;
 
-        case "\u2011": // Non-breaking hyphen
+        case '\u2011': // Non-breaking hyphen
           // Add accumulated text before non-breaking hyphen
           if (currentText) {
-            content.push({ type: "text", value: currentText });
-            currentText = "";
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
           }
           // Add non-breaking hyphen element
-          content.push({ type: "noBreakHyphen" });
+          content.push({ type: 'noBreakHyphen' });
           break;
 
-        case "\r": // Carriage return
+        case '\r': // Carriage return
           // Add accumulated text before carriage return
           if (currentText) {
-            content.push({ type: "text", value: currentText });
-            currentText = "";
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
           }
           // Add carriage return element
-          content.push({ type: "carriageReturn" });
+          content.push({ type: 'carriageReturn' });
           break;
 
-        case "\u00AD": // Soft hyphen
+        case '\u00AD': // Soft hyphen
           // Add accumulated text before soft hyphen
           if (currentText) {
-            content.push({ type: "text", value: currentText });
-            currentText = "";
+            content.push({ type: 'text', value: currentText });
+            currentText = '';
           }
           // Add soft hyphen element
-          content.push({ type: "softHyphen" });
+          content.push({ type: 'softHyphen' });
           break;
 
         default:
@@ -532,12 +530,12 @@ export class Run {
 
     // Add any remaining text
     if (currentText) {
-      content.push({ type: "text", value: currentText });
+      content.push({ type: 'text', value: currentText });
     }
 
     // If no content was added (empty string), add empty text element
     if (content.length === 0) {
-      content.push({ type: "text", value: "" });
+      content.push({ type: 'text', value: '' });
     }
 
     return content;
@@ -561,27 +559,27 @@ export class Run {
     return this.content
       .map((c) => {
         switch (c.type) {
-          case "text":
-            return c.value || "";
-          case "tab":
-            return "\t";
-          case "break":
-            return "\n";
-          case "carriageReturn":
-            return "\r";
-          case "softHyphen":
-            return "\u00AD";
-          case "noBreakHyphen":
-            return "\u2011";
-          case "instructionText":
-            return "";
-          case "fieldChar":
-            return "";
+          case 'text':
+            return c.value || '';
+          case 'tab':
+            return '\t';
+          case 'break':
+            return '\n';
+          case 'carriageReturn':
+            return '\r';
+          case 'softHyphen':
+            return '\u00AD';
+          case 'noBreakHyphen':
+            return '\u2011';
+          case 'instructionText':
+            return '';
+          case 'fieldChar':
+            return '';
           default:
-            return "";
+            return '';
         }
       })
-      .join("");
+      .join('');
   }
 
   /**
@@ -617,9 +615,7 @@ export class Run {
     if (text === undefined || text === null) {
       defaultLogger.warn(
         `DocXML Text Validation Warning [Run.setText]:\n` +
-          `  - Received ${
-            text === undefined ? "undefined" : "null"
-          } text value\n` +
+          `  - Received ${text === undefined ? 'undefined' : 'null'} text value\n` +
           `  - Converting to empty string for Word compatibility`
       );
     }
@@ -630,7 +626,7 @@ export class Run {
 
     // Validate text for XML patterns
     const validation = validateRunText(text, {
-      context: "Run.setText",
+      context: 'Run.setText',
       autoClean: shouldClean,
       warnToConsole: true, // Enable warnings to help catch data quality issues
     });
@@ -639,29 +635,38 @@ export class Run {
     const cleanedText = validation.cleanedText || text;
 
     // Convert undefined/null to empty string for consistent XML generation
-    const normalizedText = cleanedText ?? "";
+    const normalizedText = cleanedText ?? '';
 
     // Check if current content is all instructionText - preserve the type
     // This is critical for TOC field instructions and other field codes
     // Without this, calling setText() on a run with instrText would convert it to w:t
     // which causes field instruction codes to appear as visible text in Word
-    const isAllInstructionText = this.content.length > 0 &&
-      this.content.every(c => c.type === "instructionText");
+    const isAllInstructionText =
+      this.content.length > 0 && this.content.every((c) => c.type === 'instructionText');
 
     if (isAllInstructionText) {
       // Preserve instructionText type - just update the value
-      this.content = [{ type: "instructionText", value: normalizedText }];
+      this.content = [{ type: 'instructionText', value: normalizedText }];
     } else {
       // Normal behavior - parse text to extract special characters into separate content elements
       this.content = this.parseTextWithSpecialCharacters(normalizedText);
     }
 
     // Track text change if tracking is enabled and text actually changed
-    if (this.trackingContext?.isEnabled() && this._parentParagraph && oldText !== normalizedText && oldText) {
+    if (
+      this.trackingContext?.isEnabled() &&
+      this._parentParagraph &&
+      oldText !== normalizedText &&
+      oldText
+    ) {
       // Check if original content had non-text types that getText() can't faithfully represent
       // (VML, fieldChar, symbol, embeddedObject) — if so, fall back to whole-run replacement
-      const hasNonTextContent = oldContent.some(c =>
-        c.type === 'vml' || c.type === 'fieldChar' || c.type === 'symbol' || c.type === 'embeddedObject'
+      const hasNonTextContent = oldContent.some(
+        (c) =>
+          c.type === 'vml' ||
+          c.type === 'fieldChar' ||
+          c.type === 'symbol' ||
+          c.type === 'embeddedObject'
       );
 
       const segments = hasNonTextContent ? [] : diffText(oldText, normalizedText);
@@ -757,7 +762,7 @@ export class Run {
    * Gets the underline style
    * @returns Underline style (string, boolean, or undefined)
    */
-  getUnderline(): boolean | "none" | "single" | "double" | "dotted" | "thick" | "dash" | undefined {
+  getUnderline(): boolean | 'none' | 'single' | 'double' | 'dotted' | 'thick' | 'dash' | undefined {
     return this.formatting.underline;
   }
 
@@ -864,7 +869,7 @@ export class Run {
     }
 
     // Check table conditional formatting
-    return this.getConditionalFormattingProperty("bold");
+    return this.getConditionalFormattingProperty('bold');
   }
 
   /**
@@ -878,7 +883,7 @@ export class Run {
     if (this.formatting.italic !== undefined) {
       return this.formatting.italic;
     }
-    return this.getConditionalFormattingProperty("italic");
+    return this.getConditionalFormattingProperty('italic');
   }
 
   /**
@@ -892,7 +897,7 @@ export class Run {
     if (this.formatting.color !== undefined) {
       return this.formatting.color;
     }
-    return this.getConditionalFormattingProperty("color");
+    return this.getConditionalFormattingProperty('color');
   }
 
   /**
@@ -906,7 +911,7 @@ export class Run {
     if (this.formatting.font !== undefined) {
       return this.formatting.font;
     }
-    return this.getConditionalFormattingProperty("font");
+    return this.getConditionalFormattingProperty('font');
   }
 
   /**
@@ -920,7 +925,7 @@ export class Run {
     if (this.formatting.size !== undefined) {
       return this.formatting.size;
     }
-    return this.getConditionalFormattingProperty("size");
+    return this.getConditionalFormattingProperty('size');
   }
 
   /**
@@ -946,7 +951,7 @@ export class Run {
    * ```
    */
   isHyperlinkStyled(): boolean {
-    return this.formatting.characterStyle === "Hyperlink";
+    return this.formatting.characterStyle === 'Hyperlink';
   }
 
   /**
@@ -993,7 +998,7 @@ export class Run {
 
           // Fallback: check wholeTable conditional (applies to all cells)
           const wholeTable = tableStyleProps.conditionalFormatting.find(
-            (cf) => cf.type === "wholeTable"
+            (cf) => cf.type === 'wholeTable'
           );
           if (wholeTable?.runFormatting?.[property] !== undefined) {
             return wholeTable.runFormatting[property];
@@ -1004,20 +1009,20 @@ export class Run {
 
     // Apply Word's default formatting when no explicit style
     // Per Word behavior: firstRow, firstCol, lastRow, lastCol get bold by default
-    if (property === "bold" && activeConditionals.length > 0) {
+    if (property === 'bold' && activeConditionals.length > 0) {
       const table = cell._getParentRow()?._getParentTable();
       if (table) {
         const tblLookFlags = table.getTblLookFlags();
 
         // Check if cell's conditional matches enabled tblLook flags
         for (const conditionalType of activeConditionals) {
-          if (conditionalType === "firstRow" && tblLookFlags.firstRow)
+          if (conditionalType === 'firstRow' && tblLookFlags.firstRow)
             return true as RunFormatting[K];
-          if (conditionalType === "lastRow" && tblLookFlags.lastRow)
+          if (conditionalType === 'lastRow' && tblLookFlags.lastRow)
             return true as RunFormatting[K];
-          if (conditionalType === "firstCol" && tblLookFlags.firstColumn)
+          if (conditionalType === 'firstCol' && tblLookFlags.firstColumn)
             return true as RunFormatting[K];
-          if (conditionalType === "lastCol" && tblLookFlags.lastColumn)
+          if (conditionalType === 'lastCol' && tblLookFlags.lastColumn)
             return true as RunFormatting[K];
         }
       }
@@ -1247,7 +1252,12 @@ export class Run {
     const previousValue = this.formatting.complexScriptItalic;
     this.formatting.complexScriptItalic = italic;
     if (this.trackingContext?.isEnabled() && previousValue !== italic) {
-      this.trackingContext.trackRunPropertyChange(this, 'complexScriptItalic', previousValue, italic);
+      this.trackingContext.trackRunPropertyChange(
+        this,
+        'complexScriptItalic',
+        previousValue,
+        italic
+      );
     }
     return this;
   }
@@ -1343,7 +1353,7 @@ export class Run {
    * run.setUnderline(false);     // Remove underline
    * ```
    */
-  setUnderline(underline: RunFormatting["underline"] = true): this {
+  setUnderline(underline: RunFormatting['underline'] = true): this {
     const previousValue = this.formatting.underline;
     this.formatting.underline = underline;
     if (this.trackingContext?.isEnabled() && previousValue !== underline) {
@@ -1369,7 +1379,11 @@ export class Run {
    * @param themeShade - Optional shade (0-255)
    * @returns This run for method chaining
    */
-  setUnderlineThemeColor(themeColor: ThemeColorValue, themeTint?: number, themeShade?: number): this {
+  setUnderlineThemeColor(
+    themeColor: ThemeColorValue,
+    themeTint?: number,
+    themeShade?: number
+  ): this {
     this.formatting.underlineThemeColor = themeColor;
     if (themeTint !== undefined) this.formatting.underlineThemeTint = themeTint;
     if (themeShade !== undefined) this.formatting.underlineThemeShade = themeShade;
@@ -1648,7 +1662,7 @@ export class Run {
    * run.setHighlight('darkGreen');  // Dark green highlight
    * ```
    */
-  setHighlight(highlight: RunFormatting["highlight"]): this {
+  setHighlight(highlight: RunFormatting['highlight']): this {
     const previousValue = this.formatting.highlight;
     this.formatting.highlight = highlight;
     if (this.trackingContext?.isEnabled() && previousValue !== highlight) {
@@ -1838,7 +1852,12 @@ export class Run {
     const previousValue = this.formatting.complexScript;
     this.formatting.complexScript = complexScript;
     if (this.trackingContext?.isEnabled() && previousValue !== complexScript) {
-      this.trackingContext.trackRunPropertyChange(this, 'complexScript', previousValue, complexScript);
+      this.trackingContext.trackRunPropertyChange(
+        this,
+        'complexScript',
+        previousValue,
+        complexScript
+      );
     }
     return this;
   }
@@ -1978,15 +1997,15 @@ export class Run {
    */
   setEffect(
     effect:
-      | "none"
-      | "lights"
-      | "blinkBackground"
-      | "sparkleText"
-      | "marchingBlackAnts"
-      | "marchingRedAnts"
-      | "shimmer"
-      | "antsBlack"
-      | "antsRed"
+      | 'none'
+      | 'lights'
+      | 'blinkBackground'
+      | 'sparkleText'
+      | 'marchingBlackAnts'
+      | 'marchingRedAnts'
+      | 'shimmer'
+      | 'antsBlack'
+      | 'antsRed'
   ): this {
     const previousValue = this.formatting.effect;
     this.formatting.effect = effect;
@@ -2071,26 +2090,33 @@ export class Run {
         // This ensures all 30+ run properties are serialized in correct schema order,
         // rather than the subset previously handled by manual serialization.
         const prevRPr = this.propertyChangeRevision.previousProperties
-          ? Run.generateRunPropertiesXML(this.propertyChangeRevision.previousProperties as RunFormatting)
+          ? Run.generateRunPropertiesXML(
+              this.propertyChangeRevision.previousProperties as RunFormatting
+            )
           : null;
-        const rPrChangeChildren: XMLElement[] = prevRPr ? [prevRPr] : [];
 
-        // Create w:rPrChange element with attributes
-        const rPrChange: XMLElement = {
-          name: 'w:rPrChange',
-          attributes: {
-            'w:id': this.propertyChangeRevision.id.toString(),
-            'w:author': this.propertyChangeRevision.author,
-            'w:date': formatDateForXml(this.propertyChangeRevision.date),
-          },
-          children: rPrChangeChildren,
-        };
+        // Only emit rPrChange if there are actual previous properties to serialize.
+        // Per ECMA-376 §17.13.5.32, rPrChange requires a child w:rPr (minOccurs=1).
+        // When previous properties are all undefined (inherited from styles, not explicit),
+        // emitting an empty or self-closing rPrChange causes Word to strip all formatting
+        // in "Original" markup view, which is visually destructive.
+        if (prevRPr) {
+          const rPrChange: XMLElement = {
+            name: 'w:rPrChange',
+            attributes: {
+              'w:id': this.propertyChangeRevision.id.toString(),
+              'w:author': this.propertyChangeRevision.author,
+              'w:date': formatDateForXml(this.propertyChangeRevision.date),
+            },
+            children: [prevRPr],
+          };
 
-        // Add rPrChange to rPr children (must come last per ECMA-376)
-        if (rPrElement.children) {
-          rPrElement.children.push(rPrChange);
-        } else {
-          rPrElement.children = [rPrChange];
+          // Add rPrChange to rPr children (must come last per ECMA-376)
+          if (rPrElement.children) {
+            rPrElement.children.push(rPrChange);
+          } else {
+            rPrElement.children = [rPrChange];
+          }
         }
       }
 
@@ -2100,161 +2126,180 @@ export class Run {
     // Add run content elements (text, tabs, breaks, etc.) in order
     for (const contentElement of this.content) {
       switch (contentElement.type) {
-        case "text":
+        case 'text':
           // Always generate <w:t> element, even for empty strings
           // This ensures proper Word compatibility and round-trip preservation
           runChildren.push(
             XMLBuilder.w(
-              "t",
+              't',
               {
-                "xml:space": "preserve",
+                'xml:space': 'preserve',
               },
-              [contentElement.value || ""]
+              [contentElement.value || '']
             )
           );
           break;
 
-        case "tab":
-          runChildren.push(XMLBuilder.wSelf("tab"));
+        case 'tab':
+          runChildren.push(XMLBuilder.wSelf('tab'));
           break;
 
-        case "break":
+        case 'break':
           {
             const attrs: Record<string, string> = {};
             if (contentElement.breakType) {
-              attrs["w:type"] = contentElement.breakType;
+              attrs['w:type'] = contentElement.breakType;
             }
             runChildren.push(
-              XMLBuilder.wSelf(
-                "br",
-                Object.keys(attrs).length > 0 ? attrs : undefined
-              )
+              XMLBuilder.wSelf('br', Object.keys(attrs).length > 0 ? attrs : undefined)
             );
           }
           break;
 
-        case "carriageReturn":
-          runChildren.push(XMLBuilder.wSelf("cr"));
+        case 'carriageReturn':
+          runChildren.push(XMLBuilder.wSelf('cr'));
           break;
 
-        case "softHyphen":
-          runChildren.push(XMLBuilder.wSelf("softHyphen"));
+        case 'softHyphen':
+          runChildren.push(XMLBuilder.wSelf('softHyphen'));
           break;
 
-        case "noBreakHyphen":
-          runChildren.push(XMLBuilder.wSelf("noBreakHyphen"));
+        case 'noBreakHyphen':
+          runChildren.push(XMLBuilder.wSelf('noBreakHyphen'));
           break;
 
-        case "instructionText":
+        case 'instructionText':
           runChildren.push(
-            XMLBuilder.w("instrText", { "xml:space": "preserve" }, [
-              contentElement.value || "",
-            ])
+            XMLBuilder.w('instrText', { 'xml:space': 'preserve' }, [contentElement.value || ''])
           );
           break;
 
-        case "fieldChar": {
+        case 'fieldChar': {
           if (!contentElement.fieldCharType) {
             break;
           }
           const fldCharAttrs: Record<string, string> = {
-            "w:fldCharType": contentElement.fieldCharType,
+            'w:fldCharType': contentElement.fieldCharType,
           };
           if (contentElement.fieldCharDirty !== undefined) {
-            fldCharAttrs["w:dirty"] = contentElement.fieldCharDirty ? "1" : "0";
+            fldCharAttrs['w:dirty'] = contentElement.fieldCharDirty ? '1' : '0';
           }
           if (contentElement.fieldCharLocked !== undefined) {
-            fldCharAttrs["w:fldLock"] = contentElement.fieldCharLocked ? "1" : "0";
+            fldCharAttrs['w:fldLock'] = contentElement.fieldCharLocked ? '1' : '0';
           }
           // Generate ffData for begin field chars with form field data
-          if (contentElement.formFieldData && contentElement.fieldCharType === "begin") {
+          if (contentElement.formFieldData && contentElement.fieldCharType === 'begin') {
             const ffDataChildren: (string | XMLElement)[] = [];
             const ffd = contentElement.formFieldData;
             if (ffd.name !== undefined) {
-              ffDataChildren.push(XMLBuilder.wSelf("name", { "w:val": ffd.name }));
+              ffDataChildren.push(XMLBuilder.wSelf('name', { 'w:val': ffd.name }));
             }
             if (ffd.enabled !== undefined) {
               if (ffd.enabled) {
-                ffDataChildren.push(XMLBuilder.wSelf("enabled"));
+                ffDataChildren.push(XMLBuilder.wSelf('enabled'));
               } else {
-                ffDataChildren.push(XMLBuilder.wSelf("enabled", { "w:val": "0" }));
+                ffDataChildren.push(XMLBuilder.wSelf('enabled', { 'w:val': '0' }));
               }
             }
             if (ffd.calcOnExit !== undefined) {
-              ffDataChildren.push(XMLBuilder.wSelf("calcOnExit", { "w:val": ffd.calcOnExit ? "1" : "0" }));
+              ffDataChildren.push(
+                XMLBuilder.wSelf('calcOnExit', { 'w:val': ffd.calcOnExit ? '1' : '0' })
+              );
             }
             if (ffd.helpText) {
-              ffDataChildren.push(XMLBuilder.wSelf("helpText", { "w:type": "text", "w:val": ffd.helpText }));
+              ffDataChildren.push(
+                XMLBuilder.wSelf('helpText', { 'w:type': 'text', 'w:val': ffd.helpText })
+              );
             }
             if (ffd.statusText) {
-              ffDataChildren.push(XMLBuilder.wSelf("statusText", { "w:type": "text", "w:val": ffd.statusText }));
+              ffDataChildren.push(
+                XMLBuilder.wSelf('statusText', { 'w:type': 'text', 'w:val': ffd.statusText })
+              );
             }
             if (ffd.entryMacro) {
-              ffDataChildren.push(XMLBuilder.wSelf("entryMacro", { "w:val": ffd.entryMacro }));
+              ffDataChildren.push(XMLBuilder.wSelf('entryMacro', { 'w:val': ffd.entryMacro }));
             }
             if (ffd.exitMacro) {
-              ffDataChildren.push(XMLBuilder.wSelf("exitMacro", { "w:val": ffd.exitMacro }));
+              ffDataChildren.push(XMLBuilder.wSelf('exitMacro', { 'w:val': ffd.exitMacro }));
             }
             if (ffd.fieldType) {
               switch (ffd.fieldType.type) {
                 case 'textInput': {
                   const tiChildren: (string | XMLElement)[] = [];
                   if (ffd.fieldType.inputType) {
-                    tiChildren.push(XMLBuilder.wSelf("type", { "w:val": ffd.fieldType.inputType }));
+                    tiChildren.push(XMLBuilder.wSelf('type', { 'w:val': ffd.fieldType.inputType }));
                   }
                   if (ffd.fieldType.defaultValue !== undefined) {
-                    tiChildren.push(XMLBuilder.wSelf("default", { "w:val": ffd.fieldType.defaultValue }));
+                    tiChildren.push(
+                      XMLBuilder.wSelf('default', { 'w:val': ffd.fieldType.defaultValue })
+                    );
                   }
                   if (ffd.fieldType.maxLength !== undefined) {
-                    tiChildren.push(XMLBuilder.wSelf("maxLength", { "w:val": ffd.fieldType.maxLength.toString() }));
+                    tiChildren.push(
+                      XMLBuilder.wSelf('maxLength', { 'w:val': ffd.fieldType.maxLength.toString() })
+                    );
                   }
                   if (ffd.fieldType.format) {
-                    tiChildren.push(XMLBuilder.wSelf("format", { "w:val": ffd.fieldType.format }));
+                    tiChildren.push(XMLBuilder.wSelf('format', { 'w:val': ffd.fieldType.format }));
                   }
-                  ffDataChildren.push(XMLBuilder.w("textInput", {}, tiChildren));
+                  ffDataChildren.push(XMLBuilder.w('textInput', {}, tiChildren));
                   break;
                 }
                 case 'checkBox': {
                   const cbChildren: (string | XMLElement)[] = [];
                   if (ffd.fieldType.size !== undefined && ffd.fieldType.size !== 'auto') {
-                    cbChildren.push(XMLBuilder.wSelf("size", { "w:val": ffd.fieldType.size.toString() }));
+                    cbChildren.push(
+                      XMLBuilder.wSelf('size', { 'w:val': ffd.fieldType.size.toString() })
+                    );
                   } else {
-                    cbChildren.push(XMLBuilder.wSelf("sizeAuto"));
+                    cbChildren.push(XMLBuilder.wSelf('sizeAuto'));
                   }
                   if (ffd.fieldType.defaultChecked !== undefined) {
-                    cbChildren.push(XMLBuilder.wSelf("default", { "w:val": ffd.fieldType.defaultChecked ? "1" : "0" }));
+                    cbChildren.push(
+                      XMLBuilder.wSelf('default', {
+                        'w:val': ffd.fieldType.defaultChecked ? '1' : '0',
+                      })
+                    );
                   }
                   if (ffd.fieldType.checked !== undefined) {
-                    cbChildren.push(XMLBuilder.wSelf("checked", { "w:val": ffd.fieldType.checked ? "1" : "0" }));
+                    cbChildren.push(
+                      XMLBuilder.wSelf('checked', { 'w:val': ffd.fieldType.checked ? '1' : '0' })
+                    );
                   }
-                  ffDataChildren.push(XMLBuilder.w("checkBox", {}, cbChildren));
+                  ffDataChildren.push(XMLBuilder.w('checkBox', {}, cbChildren));
                   break;
                 }
                 case 'dropDownList': {
                   const ddChildren: (string | XMLElement)[] = [];
                   if (ffd.fieldType.result !== undefined) {
-                    ddChildren.push(XMLBuilder.wSelf("result", { "w:val": ffd.fieldType.result.toString() }));
+                    ddChildren.push(
+                      XMLBuilder.wSelf('result', { 'w:val': ffd.fieldType.result.toString() })
+                    );
                   }
                   if (ffd.fieldType.defaultResult !== undefined) {
-                    ddChildren.push(XMLBuilder.wSelf("default", { "w:val": ffd.fieldType.defaultResult.toString() }));
+                    ddChildren.push(
+                      XMLBuilder.wSelf('default', {
+                        'w:val': ffd.fieldType.defaultResult.toString(),
+                      })
+                    );
                   }
                   if (ffd.fieldType.listEntries) {
                     for (const entry of ffd.fieldType.listEntries) {
-                      ddChildren.push(XMLBuilder.wSelf("listEntry", { "w:val": entry }));
+                      ddChildren.push(XMLBuilder.wSelf('listEntry', { 'w:val': entry }));
                     }
                   }
-                  ffDataChildren.push(XMLBuilder.w("ddList", {}, ddChildren));
+                  ffDataChildren.push(XMLBuilder.w('ddList', {}, ddChildren));
                   break;
                 }
               }
             }
             runChildren.push(
-              XMLBuilder.w("fldChar", fldCharAttrs, [XMLBuilder.w("ffData", {}, ffDataChildren)])
+              XMLBuilder.w('fldChar', fldCharAttrs, [XMLBuilder.w('ffData', {}, ffDataChildren)])
             );
           } else {
             runChildren.push(
               XMLBuilder.wSelf(
-                "fldChar",
+                'fldChar',
                 Object.keys(fldCharAttrs).length > 0 ? fldCharAttrs : undefined
               )
             );
@@ -2263,102 +2308,103 @@ export class Run {
         }
 
         // Simple marker elements (self-closing, no attributes)
-        case "lastRenderedPageBreak":
-          runChildren.push(XMLBuilder.wSelf("lastRenderedPageBreak"));
+        case 'lastRenderedPageBreak':
+          runChildren.push(XMLBuilder.wSelf('lastRenderedPageBreak'));
           break;
 
-        case "separator":
-          runChildren.push(XMLBuilder.wSelf("separator"));
+        case 'separator':
+          runChildren.push(XMLBuilder.wSelf('separator'));
           break;
 
-        case "continuationSeparator":
-          runChildren.push(XMLBuilder.wSelf("continuationSeparator"));
+        case 'continuationSeparator':
+          runChildren.push(XMLBuilder.wSelf('continuationSeparator'));
           break;
 
-        case "pageNumber":
-          runChildren.push(XMLBuilder.wSelf("pgNum"));
+        case 'pageNumber':
+          runChildren.push(XMLBuilder.wSelf('pgNum'));
           break;
 
-        case "annotationRef":
-          runChildren.push(XMLBuilder.wSelf("annotationRef"));
+        case 'annotationRef':
+          runChildren.push(XMLBuilder.wSelf('annotationRef'));
           break;
 
-        case "dayShort":
-          runChildren.push(XMLBuilder.wSelf("dayShort"));
+        case 'dayShort':
+          runChildren.push(XMLBuilder.wSelf('dayShort'));
           break;
 
-        case "dayLong":
-          runChildren.push(XMLBuilder.wSelf("dayLong"));
+        case 'dayLong':
+          runChildren.push(XMLBuilder.wSelf('dayLong'));
           break;
 
-        case "monthShort":
-          runChildren.push(XMLBuilder.wSelf("monthShort"));
+        case 'monthShort':
+          runChildren.push(XMLBuilder.wSelf('monthShort'));
           break;
 
-        case "monthLong":
-          runChildren.push(XMLBuilder.wSelf("monthLong"));
+        case 'monthLong':
+          runChildren.push(XMLBuilder.wSelf('monthLong'));
           break;
 
-        case "yearShort":
-          runChildren.push(XMLBuilder.wSelf("yearShort"));
+        case 'yearShort':
+          runChildren.push(XMLBuilder.wSelf('yearShort'));
           break;
 
-        case "yearLong":
-          runChildren.push(XMLBuilder.wSelf("yearLong"));
+        case 'yearLong':
+          runChildren.push(XMLBuilder.wSelf('yearLong'));
           break;
 
         // Symbol character (w:sym) per ECMA-376 Part 1 §17.3.3.30
-        case "symbol": {
+        case 'symbol': {
           const symAttrs: Record<string, string> = {};
-          if (contentElement.symbolFont) symAttrs["w:font"] = contentElement.symbolFont;
-          if (contentElement.symbolChar) symAttrs["w:char"] = contentElement.symbolChar;
-          runChildren.push(XMLBuilder.wSelf("sym", symAttrs));
+          if (contentElement.symbolFont) symAttrs['w:font'] = contentElement.symbolFont;
+          if (contentElement.symbolChar) symAttrs['w:char'] = contentElement.symbolChar;
+          runChildren.push(XMLBuilder.wSelf('sym', symAttrs));
           break;
         }
 
         // Absolute position tab (w:ptab) per ECMA-376 Part 1 §17.3.3.23
-        case "positionTab": {
+        case 'positionTab': {
           const ptabAttrs: Record<string, string> = {};
-          if (contentElement.ptabAlignment) ptabAttrs["w:alignment"] = contentElement.ptabAlignment;
-          if (contentElement.ptabRelativeTo) ptabAttrs["w:relativeTo"] = contentElement.ptabRelativeTo;
-          if (contentElement.ptabLeader) ptabAttrs["w:leader"] = contentElement.ptabLeader;
-          runChildren.push(XMLBuilder.wSelf("ptab", ptabAttrs));
+          if (contentElement.ptabAlignment) ptabAttrs['w:alignment'] = contentElement.ptabAlignment;
+          if (contentElement.ptabRelativeTo)
+            ptabAttrs['w:relativeTo'] = contentElement.ptabRelativeTo;
+          if (contentElement.ptabLeader) ptabAttrs['w:leader'] = contentElement.ptabLeader;
+          runChildren.push(XMLBuilder.wSelf('ptab', ptabAttrs));
           break;
         }
 
         // Footnote reference (w:footnoteReference) per ECMA-376 Part 1 §17.11.13
-        case "footnoteReference": {
+        case 'footnoteReference': {
           const fnAttrs: Record<string, string | number> = {};
-          if (contentElement.footnoteId !== undefined) fnAttrs["w:id"] = contentElement.footnoteId;
-          runChildren.push(XMLBuilder.wSelf("footnoteReference", fnAttrs));
+          if (contentElement.footnoteId !== undefined) fnAttrs['w:id'] = contentElement.footnoteId;
+          runChildren.push(XMLBuilder.wSelf('footnoteReference', fnAttrs));
           break;
         }
 
         // Endnote reference (w:endnoteReference) per ECMA-376 Part 1 §17.11.2
-        case "endnoteReference": {
+        case 'endnoteReference': {
           const enAttrs: Record<string, string | number> = {};
-          if (contentElement.endnoteId !== undefined) enAttrs["w:id"] = contentElement.endnoteId;
-          runChildren.push(XMLBuilder.wSelf("endnoteReference", enAttrs));
+          if (contentElement.endnoteId !== undefined) enAttrs['w:id'] = contentElement.endnoteId;
+          runChildren.push(XMLBuilder.wSelf('endnoteReference', enAttrs));
           break;
         }
 
         // Embedded OLE object (w:object) - preserved as raw XML
-        case "embeddedObject":
+        case 'embeddedObject':
           if (contentElement.rawXml) {
             runChildren.push({
-              name: "__rawXml",
+              name: '__rawXml',
               rawXml: contentElement.rawXml,
             });
           }
           break;
 
-        case "vml":
+        case 'vml':
           // VML graphics (w:pict) - include raw XML without modification
           // This preserves legacy Word graphics like icons and symbols
           if (contentElement.rawXml) {
             // Use special __rawXml element name for passthrough (no wrapper element)
             runChildren.push({
-              name: "__rawXml",
+              name: '__rawXml',
               rawXml: contentElement.rawXml,
             });
           }
@@ -2366,7 +2412,7 @@ export class Run {
       }
     }
 
-    return XMLBuilder.w("r", undefined, runChildren);
+    return XMLBuilder.w('r', undefined, runChildren);
   }
 
   /**
@@ -2462,7 +2508,7 @@ export class Run {
    * ```
    */
   addTab(): this {
-    this.content.push({ type: "tab" });
+    this.content.push({ type: 'tab' });
     return this;
   }
 
@@ -2485,7 +2531,7 @@ export class Run {
    * ```
    */
   addBreak(breakType?: BreakType): this {
-    this.content.push({ type: "break", breakType });
+    this.content.push({ type: 'break', breakType });
     return this;
   }
 
@@ -2507,7 +2553,7 @@ export class Run {
    */
   appendText(text: string): this {
     if (text) {
-      this.content.push({ type: "text", value: text });
+      this.content.push({ type: 'text', value: text });
     }
     return this;
   }
@@ -2517,7 +2563,7 @@ export class Run {
    * @returns This run for method chaining
    */
   addCarriageReturn(): this {
-    this.content.push({ type: "carriageReturn" });
+    this.content.push({ type: 'carriageReturn' });
     return this;
   }
 
@@ -2528,10 +2574,7 @@ export class Run {
    * @param formatting - Run formatting options
    * @returns New Run instance
    */
-  static createFromContent(
-    content: RunContent[],
-    formatting: RunFormatting = {}
-  ): Run {
+  static createFromContent(content: RunContent[], formatting: RunFormatting = {}): Run {
     const run = Object.create(Run.prototype) as Run;
     run.content = content;
     const { cleanXmlFromText, ...displayFormatting } = formatting;
@@ -2548,9 +2591,7 @@ export class Run {
    * @param formatting - Run formatting options
    * @returns XMLElement representing <w:rPr> or null if no formatting
    */
-  static generateRunPropertiesXML(
-    formatting: RunFormatting
-  ): XMLElement | null {
+  static generateRunPropertiesXML(formatting: RunFormatting): XMLElement | null {
     const rPrChildren: XMLElement[] = [];
 
     // ECMA-376 Part 1 §17.3.2.28 CT_RPr element ordering
@@ -2559,115 +2600,125 @@ export class Run {
     // 1. w:rStyle — Character style reference
     if (formatting.characterStyle) {
       rPrChildren.push(
-        XMLBuilder.wSelf("rStyle", {
-          "w:val": formatting.characterStyle,
+        XMLBuilder.wSelf('rStyle', {
+          'w:val': formatting.characterStyle,
         })
       );
     }
 
     // 2. w:rFonts — Font family
-    if (formatting.font || formatting.fontHAnsi || formatting.fontEastAsia || formatting.fontCs || formatting.fontHint ||
-        formatting.fontAsciiTheme || formatting.fontHAnsiTheme || formatting.fontEastAsiaTheme || formatting.fontCsTheme) {
+    if (
+      formatting.font ||
+      formatting.fontHAnsi ||
+      formatting.fontEastAsia ||
+      formatting.fontCs ||
+      formatting.fontHint ||
+      formatting.fontAsciiTheme ||
+      formatting.fontHAnsiTheme ||
+      formatting.fontEastAsiaTheme ||
+      formatting.fontCsTheme
+    ) {
       const rFontsAttrs: Record<string, string> = {};
-      if (formatting.font) rFontsAttrs["w:ascii"] = formatting.font;
-      rFontsAttrs["w:hAnsi"] = formatting.fontHAnsi || formatting.font || "";
-      if (formatting.fontEastAsia) rFontsAttrs["w:eastAsia"] = formatting.fontEastAsia;
-      rFontsAttrs["w:cs"] = formatting.fontCs || formatting.font || "";
-      if (formatting.fontHint) rFontsAttrs["w:hint"] = formatting.fontHint;
+      if (formatting.font) rFontsAttrs['w:ascii'] = formatting.font;
+      rFontsAttrs['w:hAnsi'] = formatting.fontHAnsi || formatting.font || '';
+      if (formatting.fontEastAsia) rFontsAttrs['w:eastAsia'] = formatting.fontEastAsia;
+      rFontsAttrs['w:cs'] = formatting.fontCs || formatting.font || '';
+      if (formatting.fontHint) rFontsAttrs['w:hint'] = formatting.fontHint;
       // Theme font references per ECMA-376 Part 1 §17.3.2.26
-      if (formatting.fontAsciiTheme) rFontsAttrs["w:asciiTheme"] = formatting.fontAsciiTheme;
-      if (formatting.fontHAnsiTheme) rFontsAttrs["w:hAnsiTheme"] = formatting.fontHAnsiTheme;
-      if (formatting.fontEastAsiaTheme) rFontsAttrs["w:eastAsiaTheme"] = formatting.fontEastAsiaTheme;
-      if (formatting.fontCsTheme) rFontsAttrs["w:cstheme"] = formatting.fontCsTheme;
+      if (formatting.fontAsciiTheme) rFontsAttrs['w:asciiTheme'] = formatting.fontAsciiTheme;
+      if (formatting.fontHAnsiTheme) rFontsAttrs['w:hAnsiTheme'] = formatting.fontHAnsiTheme;
+      if (formatting.fontEastAsiaTheme)
+        rFontsAttrs['w:eastAsiaTheme'] = formatting.fontEastAsiaTheme;
+      if (formatting.fontCsTheme) rFontsAttrs['w:cstheme'] = formatting.fontCsTheme;
 
       // Remove empty string values (only include attributes that have actual values)
       for (const key of Object.keys(rFontsAttrs)) {
-        if (rFontsAttrs[key] === "") delete rFontsAttrs[key];
+        if (rFontsAttrs[key] === '') delete rFontsAttrs[key];
       }
 
       if (Object.keys(rFontsAttrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf("rFonts", rFontsAttrs));
+        rPrChildren.push(XMLBuilder.wSelf('rFonts', rFontsAttrs));
       }
     }
 
     // 3. w:b — Bold
     if (formatting.bold) {
-      rPrChildren.push(XMLBuilder.wSelf("b", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('b', { 'w:val': '1' }));
     }
 
     // 4. w:bCs — Bold complex script
     if (formatting.complexScriptBold) {
-      rPrChildren.push(XMLBuilder.wSelf("bCs", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('bCs', { 'w:val': '1' }));
     }
 
     // 5. w:i — Italic
     if (formatting.italic) {
-      rPrChildren.push(XMLBuilder.wSelf("i", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('i', { 'w:val': '1' }));
     }
 
     // 6. w:iCs — Italic complex script
     if (formatting.complexScriptItalic) {
-      rPrChildren.push(XMLBuilder.wSelf("iCs", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('iCs', { 'w:val': '1' }));
     }
 
     // 7. w:caps — All caps
     if (formatting.allCaps) {
-      rPrChildren.push(XMLBuilder.wSelf("caps", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('caps', { 'w:val': '1' }));
     }
 
     // 8. w:smallCaps — Small caps
     if (formatting.smallCaps) {
-      rPrChildren.push(XMLBuilder.wSelf("smallCaps", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('smallCaps', { 'w:val': '1' }));
     }
 
     // 9. w:strike — Single strikethrough
     if (formatting.strike) {
-      rPrChildren.push(XMLBuilder.wSelf("strike", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('strike', { 'w:val': '1' }));
     }
 
     // 10. w:dstrike — Double strikethrough
     if (formatting.dstrike) {
-      rPrChildren.push(XMLBuilder.wSelf("dstrike", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('dstrike', { 'w:val': '1' }));
     }
 
     // 11. w:outline — Outline text effect
     if (formatting.outline) {
-      rPrChildren.push(XMLBuilder.wSelf("outline", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('outline', { 'w:val': '1' }));
     }
 
     // 12. w:shadow — Shadow text effect
     if (formatting.shadow) {
-      rPrChildren.push(XMLBuilder.wSelf("shadow", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('shadow', { 'w:val': '1' }));
     }
 
     // 13. w:emboss — Emboss text effect
     if (formatting.emboss) {
-      rPrChildren.push(XMLBuilder.wSelf("emboss", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('emboss', { 'w:val': '1' }));
     }
 
     // 14. w:imprint — Imprint/engrave text effect
     if (formatting.imprint) {
-      rPrChildren.push(XMLBuilder.wSelf("imprint", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('imprint', { 'w:val': '1' }));
     }
 
     // 15. w:noProof — No proofing
     if (formatting.noProof) {
-      rPrChildren.push(XMLBuilder.wSelf("noProof", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('noProof', { 'w:val': '1' }));
     }
 
     // 16. w:snapToGrid — Snap to grid
     if (formatting.snapToGrid) {
-      rPrChildren.push(XMLBuilder.wSelf("snapToGrid", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('snapToGrid', { 'w:val': '1' }));
     }
 
     // 17. w:vanish — Hidden text
     if (formatting.vanish) {
-      rPrChildren.push(XMLBuilder.wSelf("vanish", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('vanish', { 'w:val': '1' }));
     }
 
     // 18. w:webHidden — Web hidden
     if (formatting.webHidden) {
-      rPrChildren.push(XMLBuilder.wSelf("webHidden", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('webHidden', { 'w:val': '1' }));
     }
 
     // 19. w:color — Text color
@@ -2676,68 +2727,61 @@ export class Run {
     if (formatting.color || formatting.themeColor) {
       const colorAttrs: Record<string, string> = {};
 
-      colorAttrs["w:val"] = formatting.color || "000000";
+      colorAttrs['w:val'] = formatting.color || '000000';
       if (formatting.themeColor) {
-        colorAttrs["w:themeColor"] = formatting.themeColor;
+        colorAttrs['w:themeColor'] = formatting.themeColor;
       }
       if (formatting.themeTint !== undefined) {
-        colorAttrs["w:themeTint"] = formatting.themeTint
+        colorAttrs['w:themeTint'] = formatting.themeTint
           .toString(16)
           .toUpperCase()
-          .padStart(2, "0");
+          .padStart(2, '0');
       }
       if (formatting.themeShade !== undefined) {
-        colorAttrs["w:themeShade"] = formatting.themeShade
+        colorAttrs['w:themeShade'] = formatting.themeShade
           .toString(16)
           .toUpperCase()
-          .padStart(2, "0");
+          .padStart(2, '0');
       }
 
-      rPrChildren.push(XMLBuilder.wSelf("color", colorAttrs));
+      rPrChildren.push(XMLBuilder.wSelf('color', colorAttrs));
     }
 
     // 20. w:spacing — Character spacing
     if (formatting.characterSpacing !== undefined) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("spacing", { "w:val": formatting.characterSpacing })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('spacing', { 'w:val': formatting.characterSpacing }));
     }
 
     // 21. w:w — Horizontal scaling
     if (formatting.scaling !== undefined) {
-      rPrChildren.push(XMLBuilder.wSelf("w", { "w:val": formatting.scaling }));
+      rPrChildren.push(XMLBuilder.wSelf('w', { 'w:val': formatting.scaling }));
     }
 
     // 22. w:kern — Kerning
     if (formatting.kerning !== undefined && formatting.kerning !== null) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("kern", { "w:val": formatting.kerning })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('kern', { 'w:val': formatting.kerning }));
     }
 
     // 23. w:position — Vertical position
     if (formatting.position !== undefined) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("position", { "w:val": formatting.position })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('position', { 'w:val': formatting.position }));
     }
 
     // 24/25. w:sz / w:szCs — Font size / Font size complex script
     if (formatting.size !== undefined) {
       const halfPoints = pointsToHalfPoints(formatting.size);
-      rPrChildren.push(XMLBuilder.wSelf("sz", { "w:val": halfPoints }));
-      const csHalfPoints = formatting.sizeCs !== undefined ? pointsToHalfPoints(formatting.sizeCs) : halfPoints;
-      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
+      rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': halfPoints }));
+      const csHalfPoints =
+        formatting.sizeCs !== undefined ? pointsToHalfPoints(formatting.sizeCs) : halfPoints;
+      rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': csHalfPoints }));
     } else if (formatting.sizeCs !== undefined) {
       const csHalfPoints = pointsToHalfPoints(formatting.sizeCs);
-      rPrChildren.push(XMLBuilder.wSelf("szCs", { "w:val": csHalfPoints }));
+      rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': csHalfPoints }));
     }
 
     // 26. w:highlight — Highlight color
     if (formatting.highlight) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("highlight", { "w:val": formatting.highlight })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('highlight', { 'w:val': formatting.highlight }));
     }
 
     // 27. w:u — Underline
@@ -2745,39 +2789,40 @@ export class Run {
     // we need to output <w:u w:val="none"/> to prevent the style's underline from being inherited.
     if (formatting.underline) {
       const underlineValue =
-        typeof formatting.underline === "string"
-          ? formatting.underline
-          : "single";
-      const uAttrs: Record<string, string | number> = { "w:val": underlineValue };
-      if (formatting.underlineColor) uAttrs["w:color"] = formatting.underlineColor;
-      if (formatting.underlineThemeColor) uAttrs["w:themeColor"] = formatting.underlineThemeColor;
-      if (formatting.underlineThemeTint !== undefined) uAttrs["w:themeTint"] = formatting.underlineThemeTint.toString(16).toUpperCase().padStart(2, '0');
-      if (formatting.underlineThemeShade !== undefined) uAttrs["w:themeShade"] = formatting.underlineThemeShade.toString(16).toUpperCase().padStart(2, '0');
-      rPrChildren.push(XMLBuilder.wSelf("u", uAttrs));
+        typeof formatting.underline === 'string' ? formatting.underline : 'single';
+      const uAttrs: Record<string, string | number> = { 'w:val': underlineValue };
+      if (formatting.underlineColor) uAttrs['w:color'] = formatting.underlineColor;
+      if (formatting.underlineThemeColor) uAttrs['w:themeColor'] = formatting.underlineThemeColor;
+      if (formatting.underlineThemeTint !== undefined)
+        uAttrs['w:themeTint'] = formatting.underlineThemeTint
+          .toString(16)
+          .toUpperCase()
+          .padStart(2, '0');
+      if (formatting.underlineThemeShade !== undefined)
+        uAttrs['w:themeShade'] = formatting.underlineThemeShade
+          .toString(16)
+          .toUpperCase()
+          .padStart(2, '0');
+      rPrChildren.push(XMLBuilder.wSelf('u', uAttrs));
     } else if (formatting.underline === false && formatting.characterStyle) {
-      rPrChildren.push(XMLBuilder.wSelf("u", { "w:val": "none" }));
+      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': 'none' }));
     }
 
     // 28. w:effect — Text effect/animation
     if (formatting.effect) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("effect", { "w:val": formatting.effect })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('effect', { 'w:val': formatting.effect }));
     }
 
     // 29. w:bdr — Text border
     if (formatting.border) {
       const bdrAttrs: Record<string, string | number> = {};
-      if (formatting.border.style) bdrAttrs["w:val"] = formatting.border.style;
-      if (formatting.border.size !== undefined)
-        bdrAttrs["w:sz"] = formatting.border.size;
-      if (formatting.border.color)
-        bdrAttrs["w:color"] = formatting.border.color;
-      if (formatting.border.space !== undefined)
-        bdrAttrs["w:space"] = formatting.border.space;
+      if (formatting.border.style) bdrAttrs['w:val'] = formatting.border.style;
+      if (formatting.border.size !== undefined) bdrAttrs['w:sz'] = formatting.border.size;
+      if (formatting.border.color) bdrAttrs['w:color'] = formatting.border.color;
+      if (formatting.border.space !== undefined) bdrAttrs['w:space'] = formatting.border.space;
 
       if (Object.keys(bdrAttrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf("bdr", bdrAttrs));
+        rPrChildren.push(XMLBuilder.wSelf('bdr', bdrAttrs));
       }
     }
 
@@ -2785,70 +2830,61 @@ export class Run {
     if (formatting.shading) {
       const shdAttrs = buildShadingAttributes(formatting.shading);
       if (Object.keys(shdAttrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf("shd", shdAttrs));
+        rPrChildren.push(XMLBuilder.wSelf('shd', shdAttrs));
       }
     }
 
     // 31. w:fitText — Fit text to width
     if (formatting.fitText !== undefined) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("fitText", { "w:val": formatting.fitText })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('fitText', { 'w:val': formatting.fitText }));
     }
 
     // 32. w:vertAlign — Subscript/superscript
     if (formatting.subscript) {
-      rPrChildren.push(XMLBuilder.wSelf("vertAlign", { "w:val": "subscript" }));
+      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
     }
     if (formatting.superscript) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("vertAlign", { "w:val": "superscript" })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'superscript' }));
     }
 
     // 33. w:rtl — Right-to-left text
     if (formatting.rtl) {
-      rPrChildren.push(XMLBuilder.wSelf("rtl", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('rtl', { 'w:val': '1' }));
     }
 
     // 34. w:cs — Complex script flag
     if (formatting.complexScript) {
-      rPrChildren.push(XMLBuilder.wSelf("cs", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('cs', { 'w:val': '1' }));
     }
 
     // 35. w:em — Emphasis marks
     if (formatting.emphasis) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("em", { "w:val": formatting.emphasis })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('em', { 'w:val': formatting.emphasis }));
     }
 
     // 36. w:lang — Language
     if (formatting.language) {
-      rPrChildren.push(
-        XMLBuilder.wSelf("lang", { "w:val": formatting.language })
-      );
+      rPrChildren.push(XMLBuilder.wSelf('lang', { 'w:val': formatting.language }));
     }
 
     // 37. w:eastAsianLayout — East Asian layout
     if (formatting.eastAsianLayout) {
       const layout = formatting.eastAsianLayout;
       const attrs: Record<string, string | number> = {};
-      if (layout.id !== undefined) attrs["w:id"] = layout.id;
-      if (layout.vert) attrs["w:vert"] = "1";
-      if (layout.vertCompress) attrs["w:vertCompress"] = "1";
-      if (layout.combine) attrs["w:combine"] = "1";
-      if (layout.combineBrackets)
-        attrs["w:combineBrackets"] = layout.combineBrackets;
+      if (layout.id !== undefined) attrs['w:id'] = layout.id;
+      if (layout.vert) attrs['w:vert'] = '1';
+      if (layout.vertCompress) attrs['w:vertCompress'] = '1';
+      if (layout.combine) attrs['w:combine'] = '1';
+      if (layout.combineBrackets) attrs['w:combineBrackets'] = layout.combineBrackets;
 
       if (Object.keys(attrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf("eastAsianLayout", attrs));
+        rPrChildren.push(XMLBuilder.wSelf('eastAsianLayout', attrs));
       }
     }
 
     // 38. w:specVanish — Special vanish
     if (formatting.specVanish) {
-      rPrChildren.push(XMLBuilder.wSelf("specVanish", { "w:val": "1" }));
+      rPrChildren.push(XMLBuilder.wSelf('specVanish', { 'w:val': '1' }));
     }
 
     // 39. w:oMath — (not currently generated)
@@ -2856,7 +2892,7 @@ export class Run {
     // 40. Raw w14: namespace elements (Word 2010+ text effects, after all schema elements)
     if (formatting.rawW14Properties && formatting.rawW14Properties.length > 0) {
       for (const rawXml of formatting.rawW14Properties) {
-        rPrChildren.push({ name: "__rawXml", rawXml } as XMLElement);
+        rPrChildren.push({ name: '__rawXml', rawXml } as XMLElement);
       }
     }
 
@@ -2865,7 +2901,7 @@ export class Run {
       return null;
     }
 
-    return XMLBuilder.w("rPr", undefined, rPrChildren);
+    return XMLBuilder.w('rPr', undefined, rPrChildren);
   }
 
   /**
@@ -2921,8 +2957,7 @@ export class Run {
     if (index < 0) index = 0;
     if (index > currentText.length) index = currentText.length;
 
-    const newText =
-      currentText.slice(0, index) + text + currentText.slice(index);
+    const newText = currentText.slice(0, index) + text + currentText.slice(index);
     this.setText(newText);
     return this;
   }

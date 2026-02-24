@@ -42,7 +42,9 @@ function createNumberedAbstractNum(id: number): AbstractNumbering {
 function createCustomBulletAbstractNum(id: number, font: string): AbstractNumbering {
   const abstractNum = new AbstractNumbering({ abstractNumId: id, multiLevelType: 1 });
   for (let i = 0; i < 9; i++) {
-    abstractNum.addLevel(NumberingLevel.createBulletLevel(i, undefined, i === 0 ? font : undefined));
+    abstractNum.addLevel(
+      NumberingLevel.createBulletLevel(i, undefined, i === 0 ? font : undefined)
+    );
   }
   return abstractNum;
 }
@@ -58,7 +60,9 @@ describe('NumberingInstance.setAbstractNumId()', () => {
 
   it('should reject negative IDs', () => {
     const instance = NumberingInstance.create({ numId: 1, abstractNumId: 5 });
-    expect(() => instance.setAbstractNumId(-1)).toThrow('Abstract numbering ID must be non-negative');
+    expect(() => instance.setAbstractNumId(-1)).toThrow(
+      'Abstract numbering ID must be non-negative'
+    );
   });
 
   it('should support method chaining', () => {
@@ -453,7 +457,7 @@ async function createDocxWithNumbering(
     // Add minimal 1x1 PNG files so the validator doesn't report missing parts
     const minimalPng = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAB' +
-      'Nl7BcQAAAABJRU5ErkJggg==',
+        'Nl7BcQAAAABJRU5ErkJggg==',
       'base64'
     );
     zipHandler.addFile('word/media/image1.png', minimalPng);

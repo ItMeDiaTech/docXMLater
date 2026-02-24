@@ -318,7 +318,8 @@ describe('XMLParser.parseToObject', () => {
     it('should correctly parse nested self-closing tags with same name (rPrChange bug fix)', () => {
       // This tests the fix for the bug where w:rPr containing w:rPrChange (which itself contains self-closing w:rPr)
       // was incorrectly parsed, causing w:b and w:bCs to be promoted to the wrong level
-      const xml = '<w:r><w:rPr><w:b/><w:bCs/><w:rPrChange w:id="1"><w:rPr/></w:rPrChange></w:rPr><w:t>Text</w:t></w:r>';
+      const xml =
+        '<w:r><w:rPr><w:b/><w:bCs/><w:rPrChange w:id="1"><w:rPr/></w:rPrChange></w:rPr><w:t>Text</w:t></w:r>';
       const result: any = XMLParser.parseToObject(xml, { trimValues: false });
 
       // w:b and w:bCs should be inside w:rPr, not siblings of it

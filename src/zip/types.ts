@@ -87,7 +87,7 @@ export type FileMap = Map<string, ZipFile>;
 export const REQUIRED_DOCX_FILES = [
   '[Content_Types].xml',
   '_rels/.rels',
-  'word/document.xml'
+  'word/document.xml',
 ] as const;
 
 /**

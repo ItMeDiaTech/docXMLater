@@ -7,7 +7,13 @@
 // PUBLIC API — Core Document Classes
 // =============================================================================
 
-export { Document, DocumentProperties, DocumentOptions, DocumentLoadOptions, DocumentPart } from './core/Document';
+export {
+  Document,
+  DocumentProperties,
+  DocumentOptions,
+  DocumentLoadOptions,
+  DocumentPart,
+} from './core/Document';
 
 // =============================================================================
 // PUBLIC API — Document Elements
@@ -103,7 +109,15 @@ export {
   isHyperlinkInstruction,
   ParsedHyperlinkInstruction,
 } from './elements/FieldHelpers';
-export { StructuredDocumentTag, SDTProperties, SDTLockType, SDTContent, SDTPlaceholder, SDTDataBinding, ContentControlType } from './elements/StructuredDocumentTag';
+export {
+  StructuredDocumentTag,
+  SDTProperties,
+  SDTLockType,
+  SDTContent,
+  SDTPlaceholder,
+  SDTDataBinding,
+  ContentControlType,
+} from './elements/StructuredDocumentTag';
 export { TableOfContents, TOCProperties } from './elements/TableOfContents';
 export { TableOfContentsElement } from './elements/TableOfContentsElement';
 export { AlternateContent } from './elements/AlternateContent';
@@ -181,7 +195,12 @@ export {
 // =============================================================================
 
 export { Style, StyleType, StyleProperties } from './formatting/Style';
-export { StylesManager, ValidationResult, LatentStylesConfig, LatentStyleException } from './formatting/StylesManager';
+export {
+  StylesManager,
+  ValidationResult,
+  LatentStylesConfig,
+  LatentStyleException,
+} from './formatting/StylesManager';
 export {
   NumberingLevel,
   NumberFormat,
@@ -190,14 +209,8 @@ export {
   WORD_NATIVE_BULLETS,
   WordNativeBullet,
 } from './formatting/NumberingLevel';
-export {
-  AbstractNumbering,
-  AbstractNumberingProperties,
-} from './formatting/AbstractNumbering';
-export {
-  NumberingInstance,
-  NumberingInstanceProperties,
-} from './formatting/NumberingInstance';
+export { AbstractNumbering, AbstractNumberingProperties } from './formatting/AbstractNumbering';
+export { NumberingInstance, NumberingInstanceProperties } from './formatting/NumberingInstance';
 export {
   NumberingManager,
   NumberingConsolidationOptions,
@@ -211,12 +224,7 @@ export {
   Heading2Config,
   ApplyCustomFormattingOptions,
 } from './types/styleConfig';
-export {
-  FormatOptions,
-  StyleApplyOptions,
-  EmphasisType,
-  ListPrefix,
-} from './types/formatting';
+export { FormatOptions, StyleApplyOptions, EmphasisType, ListPrefix } from './types/formatting';
 
 // =============================================================================
 // PUBLIC API — Managers
@@ -230,7 +238,12 @@ export { FootnoteManager } from './elements/FootnoteManager';
 export { EndnoteManager } from './elements/EndnoteManager';
 export { HeaderFooterManager } from './elements/HeaderFooterManager';
 export { FontManager, FontFormat, FontEntry } from './elements/FontManager';
-export { DrawingManager, DrawingElement, DrawingType, PreservedDrawing } from './managers/DrawingManager';
+export {
+  DrawingManager,
+  DrawingElement,
+  DrawingType,
+  PreservedDrawing,
+} from './managers/DrawingManager';
 
 // =============================================================================
 // PUBLIC API — Image Optimization
@@ -290,11 +303,7 @@ export {
   IndentationLevel,
 } from './types/list-types';
 
-export {
-  CompatibilityMode,
-  CompatibilityInfo,
-  CompatSetting,
-} from './types/compatibility-types';
+export { CompatibilityMode, CompatibilityInfo, CompatSetting } from './types/compatibility-types';
 
 export {
   DocumentProtection,
@@ -484,11 +493,7 @@ export { decodeCnfStyle, getActiveConditionalsInPriorityOrder } from './utils/cn
 // UTILITIES — Cleanup
 // =============================================================================
 
-export {
-  CleanupHelper,
-  CleanupOptions,
-  CleanupReport,
-} from './helpers/CleanupHelper';
+export { CleanupHelper, CleanupOptions, CleanupReport } from './helpers/CleanupHelper';
 
 // =============================================================================
 // INTERNAL — ZIP Handling (advanced usage)

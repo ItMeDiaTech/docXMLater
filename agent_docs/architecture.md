@@ -26,18 +26,21 @@ index.ts (public API re-exports)
 ## Data Flow
 
 ### Load Path
+
 1. `Document.load(buffer)` → `ZipReader.read()` extracts ZIP entries
 2. `Parser.parse()` converts XML strings → object model (using XMLParser)
 3. Styles, numbering, relationships are parsed into managers
 4. Original XML preserved in `_original*Xml` fields for round-trip fidelity
 
 ### Save Path
+
 1. `Document.save()` → `Generator.generate()` converts object model → XML
 2. Dirty flags checked — only modified parts are regenerated
 3. Unmodified parts use original XML verbatim
 4. `ZipWriter.write()` assembles ZIP archive → Buffer
 
 ### Modification
+
 - Properties set via methods (e.g., `run.setBold(true)`) update in-memory model
 - No immediate XML generation — deferred to save time
 - Generator checks `if (property)` before emitting — defaults naturally omitted

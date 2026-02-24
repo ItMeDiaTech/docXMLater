@@ -6,23 +6,22 @@
  * independent of the text runs in the paragraph.
  */
 
+import { Paragraph } from '../../src/elements/Paragraph';
+import { Document } from '../../src/core/Document';
+import * as path from 'path';
 
-import { Paragraph } from "../../src/elements/Paragraph";
-import { Document } from "../../src/core/Document";
-import * as path from "path";
-
-describe("Paragraph Mark Run Properties", () => {
-  describe("Basic Formatting", () => {
-    test("should set and serialize bold paragraph mark", async () => {
+describe('Paragraph Mark Run Properties', () => {
+  describe('Basic Formatting', () => {
+    test('should set and serialize bold paragraph mark', async () => {
       const para = new Paragraph();
-      para.addText("Normal text");
+      para.addText('Normal text');
       para.setParagraphMarkFormatting({ bold: true });
 
       const doc = Document.create();
       doc.addParagraph(para);
 
       // Save and reload
-      const outputPath = path.join(__dirname, "../output/test-para-mark-bold.docx");
+      const outputPath = path.join(__dirname, '../output/test-para-mark-bold.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -33,16 +32,16 @@ describe("Paragraph Mark Run Properties", () => {
       expect(para2!.getFormatting().paragraphMarkRunProperties?.bold).toBe(true);
     });
 
-    test("should set and serialize colored paragraph mark", async () => {
+    test('should set and serialize colored paragraph mark', async () => {
       const para = new Paragraph();
-      para.addText("Normal text");
-      para.setParagraphMarkFormatting({ color: "FF0000" });
+      para.addText('Normal text');
+      para.setParagraphMarkFormatting({ color: 'FF0000' });
 
       const doc = Document.create();
       doc.addParagraph(para);
 
       // Save and reload
-      const outputPath = path.join(__dirname, "../output/test-para-mark-color.docx");
+      const outputPath = path.join(__dirname, '../output/test-para-mark-color.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -50,19 +49,19 @@ describe("Paragraph Mark Run Properties", () => {
       expect(para2).toBeDefined();
 
       expect(para2!.getFormatting().paragraphMarkRunProperties).toBeDefined();
-      expect(para2!.getFormatting().paragraphMarkRunProperties?.color).toBe("FF0000");
+      expect(para2!.getFormatting().paragraphMarkRunProperties?.color).toBe('FF0000');
     });
 
-    test("should set and serialize font for paragraph mark", async () => {
+    test('should set and serialize font for paragraph mark', async () => {
       const para = new Paragraph();
-      para.addText("Normal text");
-      para.setParagraphMarkFormatting({ font: "Courier New", size: 14 });
+      para.addText('Normal text');
+      para.setParagraphMarkFormatting({ font: 'Courier New', size: 14 });
 
       const doc = Document.create();
       doc.addParagraph(para);
 
       // Save and reload
-      const outputPath = path.join(__dirname, "../output/test-para-mark-font.docx");
+      const outputPath = path.join(__dirname, '../output/test-para-mark-font.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -70,29 +69,29 @@ describe("Paragraph Mark Run Properties", () => {
       expect(para2).toBeDefined();
 
       expect(para2!.getFormatting().paragraphMarkRunProperties).toBeDefined();
-      expect(para2!.getFormatting().paragraphMarkRunProperties?.font).toBe("Courier New");
+      expect(para2!.getFormatting().paragraphMarkRunProperties?.font).toBe('Courier New');
       expect(para2!.getFormatting().paragraphMarkRunProperties?.size).toBe(14);
     });
   });
 
-  describe("Advanced Formatting", () => {
-    test("should set and serialize multiple paragraph mark properties", async () => {
+  describe('Advanced Formatting', () => {
+    test('should set and serialize multiple paragraph mark properties', async () => {
       const para = new Paragraph();
-      para.addText("Normal text");
+      para.addText('Normal text');
       para.setParagraphMarkFormatting({
         bold: true,
         italic: true,
-        color: "0000FF",
-        font: "Arial",
+        color: '0000FF',
+        font: 'Arial',
         size: 12,
-        underline: "double"
+        underline: 'double',
       });
 
       const doc = Document.create();
       doc.addParagraph(para);
 
       // Save and reload
-      const outputPath = path.join(__dirname, "../output/test-para-mark-multi.docx");
+      const outputPath = path.join(__dirname, '../output/test-para-mark-multi.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -102,22 +101,22 @@ describe("Paragraph Mark Run Properties", () => {
       expect(markProps).toBeDefined();
       expect(markProps?.bold).toBe(true);
       expect(markProps?.italic).toBe(true);
-      expect(markProps?.color).toBe("0000FF");
-      expect(markProps?.font).toBe("Arial");
+      expect(markProps?.color).toBe('0000FF');
+      expect(markProps?.font).toBe('Arial');
       expect(markProps?.size).toBe(12);
-      expect(markProps?.underline).toBe("double");
+      expect(markProps?.underline).toBe('double');
     });
 
-    test("should set and serialize hidden paragraph mark", async () => {
+    test('should set and serialize hidden paragraph mark', async () => {
       const para = new Paragraph();
-      para.addText("Visible text");
+      para.addText('Visible text');
       para.setParagraphMarkFormatting({ vanish: true });
 
       const doc = Document.create();
       doc.addParagraph(para);
 
       // Save and reload
-      const outputPath = path.join(__dirname, "../output/test-para-mark-hidden.docx");
+      const outputPath = path.join(__dirname, '../output/test-para-mark-hidden.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -128,16 +127,16 @@ describe("Paragraph Mark Run Properties", () => {
       expect(para2!.getFormatting().paragraphMarkRunProperties?.vanish).toBe(true);
     });
 
-    test("should set and serialize highlighted paragraph mark", async () => {
+    test('should set and serialize highlighted paragraph mark', async () => {
       const para = new Paragraph();
-      para.addText("Normal text");
-      para.setParagraphMarkFormatting({ highlight: "yellow" });
+      para.addText('Normal text');
+      para.setParagraphMarkFormatting({ highlight: 'yellow' });
 
       const doc = Document.create();
       doc.addParagraph(para);
 
       // Save and reload
-      const outputPath = path.join(__dirname, "../output/test-para-mark-highlight.docx");
+      const outputPath = path.join(__dirname, '../output/test-para-mark-highlight.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -145,25 +144,25 @@ describe("Paragraph Mark Run Properties", () => {
       expect(para2).toBeDefined();
 
       expect(para2!.getFormatting().paragraphMarkRunProperties).toBeDefined();
-      expect(para2!.getFormatting().paragraphMarkRunProperties?.highlight).toBe("yellow");
+      expect(para2!.getFormatting().paragraphMarkRunProperties?.highlight).toBe('yellow');
     });
   });
 
-  describe("Complex Script Support", () => {
-    test("should set and serialize complex script formatting for paragraph mark", async () => {
+  describe('Complex Script Support', () => {
+    test('should set and serialize complex script formatting for paragraph mark', async () => {
       const para = new Paragraph();
-      para.addText("Normal text");
+      para.addText('Normal text');
       para.setParagraphMarkFormatting({
         complexScriptBold: true,
         complexScriptItalic: true,
-        rtl: true
+        rtl: true,
       });
 
       const doc = Document.create();
       doc.addParagraph(para);
 
       // Save and reload
-      const outputPath = path.join(__dirname, "../output/test-para-mark-complex.docx");
+      const outputPath = path.join(__dirname, '../output/test-para-mark-complex.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -177,11 +176,11 @@ describe("Paragraph Mark Run Properties", () => {
     });
   });
 
-  describe("XML Generation", () => {
-    test("should generate correct XML structure for paragraph mark properties", () => {
+  describe('XML Generation', () => {
+    test('should generate correct XML structure for paragraph mark properties', () => {
       const para = new Paragraph();
-      para.addText("Text");
-      para.setParagraphMarkFormatting({ bold: true, color: "FF0000" });
+      para.addText('Text');
+      para.setParagraphMarkFormatting({ bold: true, color: 'FF0000' });
 
       const xml = para.toXML();
       const xmlStr = JSON.stringify(xml);
@@ -195,19 +194,16 @@ describe("Paragraph Mark Run Properties", () => {
       expect(xmlStr).toContain('"FF0000"');
     });
 
-    test("should not generate empty rPr when no paragraph mark properties set", () => {
+    test('should not generate empty rPr when no paragraph mark properties set', () => {
       const para = new Paragraph();
-      para.addText("Text");
+      para.addText('Text');
 
       const xml = para.toXML();
       const xmlStr = JSON.stringify(xml);
 
       // Should not contain rPr in pPr (only in w:r)
       // The paragraph itself should not have rPr unless explicitly set
-      const pPrSection = xmlStr.substring(
-        xmlStr.indexOf('"pPr"'),
-        xmlStr.indexOf('"w:r"')
-      );
+      const pPrSection = xmlStr.substring(xmlStr.indexOf('"pPr"'), xmlStr.indexOf('"w:r"'));
 
       // If no paragraph mark properties, pPr might be empty or not contain rPr
       // This is implementation-specific, but we're testing that it doesn't error
@@ -215,31 +211,31 @@ describe("Paragraph Mark Run Properties", () => {
     });
   });
 
-  describe("Round-trip Verification", () => {
-    test("should preserve paragraph mark properties through multiple save/load cycles", async () => {
+  describe('Round-trip Verification', () => {
+    test('should preserve paragraph mark properties through multiple save/load cycles', async () => {
       const para = new Paragraph();
-      para.addText("Test");
+      para.addText('Test');
       para.setParagraphMarkFormatting({
         bold: true,
         italic: true,
-        underline: "single",
-        color: "00FF00",
-        font: "Times New Roman",
-        size: 16
+        underline: 'single',
+        color: '00FF00',
+        font: 'Times New Roman',
+        size: 16,
       });
 
       const doc1 = Document.create();
       doc1.addParagraph(para);
 
       // First save
-      const path1 = path.join(__dirname, "../output/test-para-mark-roundtrip1.docx");
+      const path1 = path.join(__dirname, '../output/test-para-mark-roundtrip1.docx');
       await doc1.save(path1);
 
       // First load
       const doc2 = await Document.load(path1);
 
       // Second save
-      const path2 = path.join(__dirname, "../output/test-para-mark-roundtrip2.docx");
+      const path2 = path.join(__dirname, '../output/test-para-mark-roundtrip2.docx');
       await doc2.save(path2);
 
       // Second load
@@ -251,33 +247,33 @@ describe("Paragraph Mark Run Properties", () => {
       expect(markProps).toBeDefined();
       expect(markProps?.bold).toBe(true);
       expect(markProps?.italic).toBe(true);
-      expect(markProps?.underline).toBe("single");
-      expect(markProps?.color).toBe("00FF00");
-      expect(markProps?.font).toBe("Times New Roman");
+      expect(markProps?.underline).toBe('single');
+      expect(markProps?.color).toBe('00FF00');
+      expect(markProps?.font).toBe('Times New Roman');
       expect(markProps?.size).toBe(16);
     });
 
-    test("should handle paragraphs with both run and paragraph mark properties", async () => {
+    test('should handle paragraphs with both run and paragraph mark properties', async () => {
       const para = new Paragraph();
 
       // Add runs with different formatting
-      para.addText("Bold text", { bold: true });
-      para.addText(" Normal text");
-      para.addText(" Italic text", { italic: true });
+      para.addText('Bold text', { bold: true });
+      para.addText(' Normal text');
+      para.addText(' Italic text', { italic: true });
 
       // Set paragraph mark properties (different from runs)
       para.setParagraphMarkFormatting({
         bold: true,
-        color: "FF0000",
-        font: "Arial",
-        size: 14
+        color: 'FF0000',
+        font: 'Arial',
+        size: 14,
       });
 
       const doc = Document.create();
       doc.addParagraph(para);
 
       // Save and reload
-      const outputPath = path.join(__dirname, "../output/test-para-mark-mixed.docx");
+      const outputPath = path.join(__dirname, '../output/test-para-mark-mixed.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -293,16 +289,16 @@ describe("Paragraph Mark Run Properties", () => {
       const markProps = para2!.getFormatting().paragraphMarkRunProperties;
       expect(markProps).toBeDefined();
       expect(markProps?.bold).toBe(true);
-      expect(markProps?.color).toBe("FF0000");
-      expect(markProps?.font).toBe("Arial");
+      expect(markProps?.color).toBe('FF0000');
+      expect(markProps?.font).toBe('Arial');
       expect(markProps?.size).toBe(14);
     });
   });
 
-  describe("Edge Cases", () => {
-    test("should handle undefined paragraph mark properties gracefully", () => {
+  describe('Edge Cases', () => {
+    test('should handle undefined paragraph mark properties gracefully', () => {
       const para = new Paragraph();
-      para.addText("Text");
+      para.addText('Text');
 
       expect(para.getFormatting().paragraphMarkRunProperties).toBeUndefined();
 
@@ -311,21 +307,21 @@ describe("Paragraph Mark Run Properties", () => {
       expect(xml).toBeDefined();
     });
 
-    test("should overwrite previous paragraph mark properties", async () => {
+    test('should overwrite previous paragraph mark properties', async () => {
       const para = new Paragraph();
-      para.addText("Text");
+      para.addText('Text');
 
       // Set first properties
-      para.setParagraphMarkFormatting({ bold: true, color: "FF0000" });
+      para.setParagraphMarkFormatting({ bold: true, color: 'FF0000' });
 
       // Overwrite with new properties
-      para.setParagraphMarkFormatting({ italic: true, color: "0000FF" });
+      para.setParagraphMarkFormatting({ italic: true, color: '0000FF' });
 
       const doc = Document.create();
       doc.addParagraph(para);
 
       // Save and reload
-      const outputPath = path.join(__dirname, "../output/test-para-mark-overwrite.docx");
+      const outputPath = path.join(__dirname, '../output/test-para-mark-overwrite.docx');
       await doc.save(outputPath);
 
       const doc2 = await Document.load(outputPath);
@@ -335,7 +331,7 @@ describe("Paragraph Mark Run Properties", () => {
       // Should have new properties, not old
       expect(markProps?.bold).toBeUndefined();
       expect(markProps?.italic).toBe(true);
-      expect(markProps?.color).toBe("0000FF");
+      expect(markProps?.color).toBe('0000FF');
     });
   });
 });

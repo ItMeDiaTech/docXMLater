@@ -67,6 +67,7 @@ npm publish
 The workflow is defined in `.github/workflows/publish.yml`
 
 Key features:
+
 - Triggers on tags matching `v*.*.*` pattern
 - Runs on Ubuntu latest
 - Requires Node.js 18

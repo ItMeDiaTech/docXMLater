@@ -6,7 +6,7 @@
  * representing whether a particular conditional format applies.
  */
 
-import { ConditionalFormattingType } from "../formatting/Style";
+import { ConditionalFormattingType } from '../formatting/Style';
 
 /**
  * Decoded cnfStyle flags
@@ -42,22 +42,19 @@ export interface CnfStyleFlags {
 /**
  * Maps flag names to ConditionalFormattingType values
  */
-export const CNF_TO_CONDITIONAL_MAP: Record<
-  keyof CnfStyleFlags,
-  ConditionalFormattingType
-> = {
-  firstRow: "firstRow",
-  lastRow: "lastRow",
-  firstCol: "firstCol",
-  lastCol: "lastCol",
-  band1Vert: "band1Vert",
-  band2Vert: "band2Vert",
-  band1Horz: "band1Horz",
-  band2Horz: "band2Horz",
-  neCell: "neCell",
-  nwCell: "nwCell",
-  seCell: "seCell",
-  swCell: "swCell",
+export const CNF_TO_CONDITIONAL_MAP: Record<keyof CnfStyleFlags, ConditionalFormattingType> = {
+  firstRow: 'firstRow',
+  lastRow: 'lastRow',
+  firstCol: 'firstCol',
+  lastCol: 'lastCol',
+  band1Vert: 'band1Vert',
+  band2Vert: 'band2Vert',
+  band1Horz: 'band1Horz',
+  band2Horz: 'band2Horz',
+  neCell: 'neCell',
+  nwCell: 'nwCell',
+  seCell: 'seCell',
+  swCell: 'swCell',
 };
 
 /**
@@ -86,20 +83,20 @@ const BIT_POSITIONS: Record<keyof CnfStyleFlags, number> = {
  */
 export const CONDITIONAL_PRIORITY_ORDER: (keyof CnfStyleFlags)[] = [
   // Corner cells (most specific)
-  "nwCell",
-  "neCell",
-  "swCell",
-  "seCell",
+  'nwCell',
+  'neCell',
+  'swCell',
+  'seCell',
   // Edge rows/columns
-  "firstRow",
-  "lastRow",
-  "firstCol",
-  "lastCol",
+  'firstRow',
+  'lastRow',
+  'firstCol',
+  'lastCol',
   // Banding (least specific)
-  "band1Horz",
-  "band2Horz",
-  "band1Vert",
-  "band2Vert",
+  'band1Horz',
+  'band2Horz',
+  'band1Vert',
+  'band2Vert',
 ];
 
 /**
@@ -118,21 +115,21 @@ export const CONDITIONAL_PRIORITY_ORDER: (keyof CnfStyleFlags)[] = [
 export function decodeCnfStyle(cnfStyle: string): CnfStyleFlags {
   // Pad to 12 characters if shorter (handles legacy or truncated values)
   // Use padEnd because the string represents left-to-right bit positions
-  const normalized = cnfStyle.padEnd(12, "0");
+  const normalized = cnfStyle.padEnd(12, '0');
 
   return {
-    firstRow: normalized.startsWith("1"),
-    lastRow: normalized[BIT_POSITIONS.lastRow] === "1",
-    firstCol: normalized[BIT_POSITIONS.firstCol] === "1",
-    lastCol: normalized[BIT_POSITIONS.lastCol] === "1",
-    band1Vert: normalized[BIT_POSITIONS.band1Vert] === "1",
-    band2Vert: normalized[BIT_POSITIONS.band2Vert] === "1",
-    band1Horz: normalized[BIT_POSITIONS.band1Horz] === "1",
-    band2Horz: normalized[BIT_POSITIONS.band2Horz] === "1",
-    neCell: normalized[BIT_POSITIONS.neCell] === "1",
-    nwCell: normalized[BIT_POSITIONS.nwCell] === "1",
-    seCell: normalized[BIT_POSITIONS.seCell] === "1",
-    swCell: normalized[BIT_POSITIONS.swCell] === "1",
+    firstRow: normalized.startsWith('1'),
+    lastRow: normalized[BIT_POSITIONS.lastRow] === '1',
+    firstCol: normalized[BIT_POSITIONS.firstCol] === '1',
+    lastCol: normalized[BIT_POSITIONS.lastCol] === '1',
+    band1Vert: normalized[BIT_POSITIONS.band1Vert] === '1',
+    band2Vert: normalized[BIT_POSITIONS.band2Vert] === '1',
+    band1Horz: normalized[BIT_POSITIONS.band1Horz] === '1',
+    band2Horz: normalized[BIT_POSITIONS.band2Horz] === '1',
+    neCell: normalized[BIT_POSITIONS.neCell] === '1',
+    nwCell: normalized[BIT_POSITIONS.nwCell] === '1',
+    seCell: normalized[BIT_POSITIONS.seCell] === '1',
+    swCell: normalized[BIT_POSITIONS.swCell] === '1',
   };
 }
 
@@ -149,15 +146,15 @@ export function decodeCnfStyle(cnfStyle: string): CnfStyleFlags {
  * ```
  */
 export function encodeCnfStyle(flags: Partial<CnfStyleFlags>): string {
-  const bits = new Array(12).fill("0");
+  const bits = new Array(12).fill('0');
 
   for (const [key, position] of Object.entries(BIT_POSITIONS)) {
     if (flags[key as keyof CnfStyleFlags]) {
-      bits[position] = "1";
+      bits[position] = '1';
     }
   }
 
-  return bits.join("");
+  return bits.join('');
 }
 
 /**
@@ -172,9 +169,7 @@ export function encodeCnfStyle(flags: Partial<CnfStyleFlags>): string {
  * console.log(types); // ['firstRow', 'lastRow']
  * ```
  */
-export function getActiveConditionals(
-  cnfStyle: string
-): ConditionalFormattingType[] {
+export function getActiveConditionals(cnfStyle: string): ConditionalFormattingType[] {
   const flags = decodeCnfStyle(cnfStyle);
   const active: ConditionalFormattingType[] = [];
 

@@ -113,8 +113,9 @@ describe('AbstractNumbering Template', () => {
     const loaded = await Document.loadFromBuffer(buffer);
 
     const loadedNm = loaded.getNumberingManager();
-    const loadedAbstract = loadedNm.getAllAbstractNumberings()
-      .find(a => a.getTemplate() === '04090001');
+    const loadedAbstract = loadedNm
+      .getAllAbstractNumberings()
+      .find((a) => a.getTemplate() === '04090001');
     expect(loadedAbstract).toBeDefined();
 
     doc.dispose();

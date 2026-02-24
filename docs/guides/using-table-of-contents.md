@@ -25,24 +25,24 @@ doc.addStyle(Style.createTOC4Style());
 
 // Create TOC with 4 levels, hyperlinks, no page numbers
 const toc = TableOfContents.create({
-  title: "Table of Contents",
+  title: 'Table of Contents',
   showPageNumbers: false,
   useHyperlinks: true,
-  levels: 4
+  levels: 4,
 });
 
 // Add TOC to document
 doc.addTableOfContents(toc);
 
 // Add some sample headings
-doc.addHeading("Chapter 1", "Heading1");
-doc.addParagraph("This is the first chapter.");
-doc.addHeading("Section 1.1", "Heading2");
-doc.addParagraph("Content for section 1.1.");
-doc.addHeading("Section 1.2", "Heading3");
-doc.addParagraph("Content for section 1.2.");
-doc.addHeading("Section 1.3", "Heading4");
-doc.addParagraph("Content for section 1.3.");
+doc.addHeading('Chapter 1', 'Heading1');
+doc.addParagraph('This is the first chapter.');
+doc.addHeading('Section 1.1', 'Heading2');
+doc.addParagraph('Content for section 1.1.');
+doc.addHeading('Section 1.2', 'Heading3');
+doc.addParagraph('Content for section 1.2.');
+doc.addHeading('Section 1.3', 'Heading4');
+doc.addParagraph('Content for section 1.3.');
 
 // Generate document
 const docx = doc.save();
@@ -56,23 +56,23 @@ Creates a new Table of Contents with the specified options.
 
 ### Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|--------|-------------|
-| `title` | string | "Table of Contents" | TOC title text |
-| `levels` | number | 3 | Number of heading levels to include (1-9) |
-| `showPageNumbers` | boolean | true | Whether to show page numbers |
-| `useHyperlinks` | boolean | false | Whether to use hyperlinks instead of page numbers |
-| `rightAlignPageNumbers` | boolean | true | Whether to right-align page numbers |
-| `tabLeader` | string | "dot" | Tab leader character for page numbers |
-| `style` | string | "TOC" | Custom TOC style name |
-| `fieldSwitches` | string | undefined | Additional field switches |
-| `hideInWebLayout` | boolean | false | Hide page numbers in web layout (\z switch) |
-| `numbered` | boolean | false | Whether TOC entries should be numbered |
-| `numberingFormat` | string | "decimal" | Numbering format (decimal, roman, alpha) |
-| `noIndent` | boolean | false | Remove all indentation from TOC entries |
-| `customIndents` | number[] | undefined | Custom indentation for each TOC level |
-| `spaceBetweenEntries` | number | 0 | Space between TOC entries in twips |
-| `hyperlinkColor` | string | "0000FF" | Hyperlink color in hex |
+| Parameter               | Type     | Default             | Description                                       |
+| ----------------------- | -------- | ------------------- | ------------------------------------------------- |
+| `title`                 | string   | "Table of Contents" | TOC title text                                    |
+| `levels`                | number   | 3                   | Number of heading levels to include (1-9)         |
+| `showPageNumbers`       | boolean  | true                | Whether to show page numbers                      |
+| `useHyperlinks`         | boolean  | false               | Whether to use hyperlinks instead of page numbers |
+| `rightAlignPageNumbers` | boolean  | true                | Whether to right-align page numbers               |
+| `tabLeader`             | string   | "dot"               | Tab leader character for page numbers             |
+| `style`                 | string   | "TOC"               | Custom TOC style name                             |
+| `fieldSwitches`         | string   | undefined           | Additional field switches                         |
+| `hideInWebLayout`       | boolean  | false               | Hide page numbers in web layout (\z switch)       |
+| `numbered`              | boolean  | false               | Whether TOC entries should be numbered            |
+| `numberingFormat`       | string   | "decimal"           | Numbering format (decimal, roman, alpha)          |
+| `noIndent`              | boolean  | false               | Remove all indentation from TOC entries           |
+| `customIndents`         | number[] | undefined           | Custom indentation for each TOC level             |
+| `spaceBetweenEntries`   | number   | 0                   | Space between TOC entries in twips                |
+| `hyperlinkColor`        | string   | "0000FF"            | Hyperlink color in hex                            |
 
 ### Returns
 
@@ -81,34 +81,38 @@ Creates a new Table of Contents with the specified options.
 ### Examples
 
 #### Basic TOC
+
 ```typescript
 const toc = TableOfContents.create();
 ```
 
 #### TOC with 4 Levels and Hyperlinks
+
 ```typescript
 const toc = TableOfContents.create({
-  title: "Table of Contents",
+  title: 'Table of Contents',
   levels: 4,
   showPageNumbers: false,
-  useHyperlinks: true
+  useHyperlinks: true,
 });
 ```
 
 #### TOC without Page Numbers
+
 ```typescript
 const toc = TableOfContents.create({
-  title: "Table of Contents",
+  title: 'Table of Contents',
   showPageNumbers: false,
-  useHyperlinks: true
+  useHyperlinks: true,
 });
 ```
 
 #### Hyperlinked TOC with No Page Numbers in Web Layout
+
 ```typescript
 const toc = TableOfContents.createNoPageNumbers({
-  title: "Table of Contents",
-  levels: 4
+  title: 'Table of Contents',
+  levels: 4,
 });
 ```
 
@@ -118,13 +122,13 @@ const toc = TableOfContents.createNoPageNumbers({
 
 The TOC field instruction includes these switches automatically:
 
-| Switch | Purpose | Example |
-|--------|---------|--------|
-| `\o "1-4"` | Include outline levels 1-4 | `\o "1-3"` for 3 levels |
-| `\h` | Create hyperlinks | `\h` adds hyperlink support |
-| `\n` | Omit page numbers | `\n` removes page number display |
-| `\z` | Hide in web layout | `\z` hides page numbers in web view |
-| `\* MERGEFORMAT` | Preserve formatting | `\* MERGEFORMAT` maintains formatting on updates |
+| Switch           | Purpose                    | Example                                          |
+| ---------------- | -------------------------- | ------------------------------------------------ |
+| `\o "1-4"`       | Include outline levels 1-4 | `\o "1-3"` for 3 levels                          |
+| `\h`             | Create hyperlinks          | `\h` adds hyperlink support                      |
+| `\n`             | Omit page numbers          | `\n` removes page number display                 |
+| `\z`             | Hide in web layout         | `\z` hides page numbers in web view              |
+| `\* MERGEFORMAT` | Preserve formatting        | `\* MERGEFORMAT` maintains formatting on updates |
 
 ### Style Requirements
 
@@ -132,14 +136,15 @@ For proper TOC display, these styles must be added to your document:
 
 ```typescript
 // Required styles for 4-level TOC
-doc.addStyle(Style.createTOCHeadingStyle());  // TOC title
-doc.addStyle(Style.createTOC1Style());      // Level 1 entries
-doc.addStyle(Style.createTOC2Style());      // Level 2 entries
-doc.addStyle(Style.createTOC3Style());      // Level 3 entries
-doc.addStyle(Style.createTOC4Style());      // Level 4 entries
+doc.addStyle(Style.createTOCHeadingStyle()); // TOC title
+doc.addStyle(Style.createTOC1Style()); // Level 1 entries
+doc.addStyle(Style.createTOC2Style()); // Level 2 entries
+doc.addStyle(Style.createTOC3Style()); // Level 3 entries
+doc.addStyle(Style.createTOC4Style()); // Level 4 entries
 ```
 
 **TOC Style Properties:**
+
 - **Spacing:** 0pt before and after (no gaps between entries)
 - **Color:** Blue (#0000FF) for hyperlinks
 - **Font:** Verdana 12pt with underline
@@ -165,10 +170,10 @@ doc.addStyle(Style.createTOC4Style());
 
 // Add TOC
 const toc = TableOfContents.create({
-  title: "Table of Contents",
+  title: 'Table of Contents',
   levels: 4,
   showPageNumbers: false,
-  useHyperlinks: true
+  useHyperlinks: true,
 });
 
 doc.addTableOfContents(toc);
@@ -220,6 +225,7 @@ TOC \o "1-4" \h \z \n \* MERGEFORMAT
 ```
 
 Components:
+
 - `TOC` - Field type identifier
 - `\o "1-4"` - Include outline levels 1-4
 - `\h` - Create hyperlinks
@@ -236,8 +242,8 @@ The implementation includes comprehensive validation:
 if (tocParagraph.children!.length !== 5) {
   throw new Error(
     `CRITICAL: TOC field structure incomplete. Expected 5 elements ` +
-    `(begin, instruction, separate, content, end), got ${tocParagraph.children!.length}. ` +
-    `This would create an invalid OpenXML document per ECMA-376 §17.16.5.`
+      `(begin, instruction, separate, content, end), got ${tocParagraph.children!.length}. ` +
+      `This would create an invalid OpenXML document per ECMA-376 §17.16.5.`
   );
 }
 ```
@@ -247,11 +253,13 @@ if (tocParagraph.children!.length !== 5) {
 ### Common Issues
 
 #### TOC Not Displaying
+
 1. **Missing Field End:** Ensure the field structure has all 5 elements
 2. **Invalid SDT Structure:** Verify the SDT wrapper has correct properties
 3. **Missing Styles:** Ensure all TOC1-TOC4 styles are added to document
 
 #### TOC Not Updating
+
 1. **No Headings:** Ensure document contains heading styles (Heading1-Heading4)
 2. **Wrong Levels:** Check TOC levels match document heading levels
 
@@ -260,10 +268,10 @@ if (tocParagraph.children!.length !== 5) {
 ```typescript
 // Enable debug logging
 const toc = TableOfContents.create({
-  title: "Table of Contents",
+  title: 'Table of Contents',
   showPageNumbers: false,
   useHyperlinks: true,
-  levels: 4
+  levels: 4,
 });
 
 console.log('Field instruction:', toc.getFieldInstruction());

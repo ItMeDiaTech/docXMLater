@@ -3,7 +3,6 @@
  * Testing all 11 field types with factory methods
  */
 
-
 import { Field } from '../../src/elements/Field';
 
 describe('Field Types - Page Fields', () => {
@@ -63,11 +62,7 @@ describe('Field Types - Reference Fields', () => {
   });
 
   test('should create HYPERLINK field with tooltip', () => {
-    const field = Field.createHyperlink(
-      'https://example.com',
-      'Link',
-      'Visit Example'
-    );
+    const field = Field.createHyperlink('https://example.com', 'Link', 'Visit Example');
 
     expect(field.getInstruction()).toContain('\\o "Visit Example"');
   });
@@ -192,9 +187,7 @@ describe('Field Types - Formatting', () => {
     const xml = field.toXML();
 
     // fldSimple contains w:r which contains w:rPr
-    const run = xml.children!.find(
-      (child) => typeof child !== 'string' && child.name === 'w:r'
-    );
+    const run = xml.children!.find((child) => typeof child !== 'string' && child.name === 'w:r');
     expect(run).toBeDefined();
 
     const rPr = (run as any)?.children?.find(
@@ -220,9 +213,7 @@ describe('Field Types - Formatting', () => {
 
     const xml = field.toXML();
     // fldSimple contains w:r which contains w:rPr
-    const run = xml.children!.find(
-      (child) => typeof child !== 'string' && child.name === 'w:r'
-    );
+    const run = xml.children!.find((child) => typeof child !== 'string' && child.name === 'w:r');
     expect(run).toBeDefined();
 
     const rPr = (run as any)?.children?.find(
@@ -266,9 +257,7 @@ describe('Field Types - XML Generation', () => {
     const xml = field.toXML();
 
     // fldSimple contains w:r which contains w:t
-    const run = xml.children!.find(
-      (child) => typeof child !== 'string' && child.name === 'w:r'
-    );
+    const run = xml.children!.find((child) => typeof child !== 'string' && child.name === 'w:r');
     expect(run).toBeDefined();
 
     const textElement = (run as any)?.children?.find(

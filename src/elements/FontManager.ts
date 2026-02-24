@@ -281,10 +281,7 @@ export class FontManager {
    * @param zipFiles - Map of file paths to content (from ZipHandler)
    * @param contentTypesXml - Content of [Content_Types].xml
    */
-  loadFontsFromArchive(
-    zipFiles: Map<string, Buffer | string>,
-    contentTypesXml: string
-  ): void {
+  loadFontsFromArchive(zipFiles: Map<string, Buffer | string>, contentTypesXml: string): void {
     // First, detect which font formats are registered in Content_Types.xml
     const registeredExtensions = FontManager.parseFontExtensionsFromContentTypes(contentTypesXml);
 
@@ -333,7 +330,7 @@ export class FontManager {
     // Replace underscores with spaces and title case
     return nameWithoutCounter
       .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   }
 }

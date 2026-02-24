@@ -2,7 +2,11 @@
  * Tests for RevisionAwareProcessor
  */
 
-import { RevisionAwareProcessor, RevisionHandlingMode, SelectionCriteria } from '../../src/utils/RevisionAwareProcessor';
+import {
+  RevisionAwareProcessor,
+  RevisionHandlingMode,
+  SelectionCriteria,
+} from '../../src/utils/RevisionAwareProcessor';
 import { Revision, RevisionType } from '../../src/elements/Revision';
 import { RevisionManager } from '../../src/elements/RevisionManager';
 import { Run } from '../../src/elements/Run';
@@ -141,7 +145,7 @@ describe('RevisionAwareProcessor', () => {
 
       expect(result.success).toBe(true);
       expect(result.preservedRevisions).toHaveLength(1);
-      expect(result.log.some(l => l.details.includes('Processor'))).toBe(true);
+      expect(result.log.some((l) => l.details.includes('Processor'))).toBe(true);
     });
 
     it('should log processing actions', async () => {
@@ -153,8 +157,8 @@ describe('RevisionAwareProcessor', () => {
       });
 
       expect(result.log.length).toBeGreaterThan(0);
-      expect(result.log.some(l => l.action === 'start')).toBe(true);
-      expect(result.log.some(l => l.action === 'complete')).toBe(true);
+      expect(result.log.some((l) => l.action === 'start')).toBe(true);
+      expect(result.log.some((l) => l.action === 'complete')).toBe(true);
     });
   });
 
@@ -204,7 +208,11 @@ describe('RevisionAwareProcessor', () => {
       doc.addRevision('insert', 'Bob', 'This is a much longer text');
 
       const accepted = RevisionAwareProcessor.acceptSelective(doc as any, {
-        custom: (rev) => rev.getRuns().map(r => r.getText()).join('').length > 10,
+        custom: (rev) =>
+          rev
+            .getRuns()
+            .map((r) => r.getText())
+            .join('').length > 10,
       });
 
       expect(accepted).toHaveLength(1);

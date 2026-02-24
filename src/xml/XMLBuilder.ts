@@ -3,9 +3,9 @@
  * Provides a simple fluent API for generating WordprocessingML XML
  */
 
-import { removeInvalidXmlChars } from "../utils/xmlSanitization";
-import type { ShadingConfig } from "../elements/CommonTypes";
-import { buildShadingAttributes } from "../elements/CommonTypes";
+import { removeInvalidXmlChars } from '../utils/xmlSanitization';
+import type { ShadingConfig } from '../elements/CommonTypes';
+import { buildShadingAttributes } from '../elements/CommonTypes';
 
 /** Represents a parsed XML object from XMLParser.parseToObject() */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed XML has dynamic keys and recursive structure
@@ -34,25 +34,25 @@ export class XMLBuilder {
    * Self-closing these elements causes Word to not parse correctly or lose content.
    */
   private static readonly CANNOT_SELF_CLOSE = [
-    "w:t",
-    "w:r",
-    "w:p",
-    "w:tbl",
-    "w:tr",
-    "w:tc",
-    "w:body",
-    "w:document",
-    "w:hyperlink",
-    "w:sdt",
-    "w:sdtContent",
-    "w:sdtPr",
-    "w:pPr",
-    "w:rPr",
-    "w:sectPr",
-    "w:del", // Deletion revisions - container element, must have closing tag
-    "w:ins", // Insertion revisions - container element, must have closing tag
-    "w:moveFrom", // Move source markers - container element
-    "w:moveTo", // Move destination markers - container element
+    'w:t',
+    'w:r',
+    'w:p',
+    'w:tbl',
+    'w:tr',
+    'w:tc',
+    'w:body',
+    'w:document',
+    'w:hyperlink',
+    'w:sdt',
+    'w:sdtContent',
+    'w:sdtPr',
+    'w:pPr',
+    'w:rPr',
+    'w:sectPr',
+    'w:del', // Deletion revisions - container element, must have closing tag
+    'w:ins', // Insertion revisions - container element, must have closing tag
+    'w:moveFrom', // Move source markers - container element
+    'w:moveTo', // Move destination markers - container element
     // Note: w:bookmarkStart and w:bookmarkEnd MUST be self-closing per ECMA-376
   ];
 
@@ -92,7 +92,7 @@ export class XMLBuilder {
     if (name === 'w:t' || name === 't') {
       throw new Error(
         'Text elements (<w:t>) cannot be self-closing per ECMA-376. ' +
-        'Use element() with empty text content instead: XMLBuilder.w("t", attrs, [""])'
+          'Use element() with empty text content instead: XMLBuilder.w("t", attrs, [""])'
       );
     }
 
@@ -120,7 +120,7 @@ export class XMLBuilder {
    * @returns Generated XML string
    */
   build(includeDeclaration = false): string {
-    let xml = "";
+    let xml = '';
 
     if (includeDeclaration) {
       xml += '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
@@ -134,10 +134,10 @@ export class XMLBuilder {
    * Converts elements to XML string
    */
   private elementsToString(elements: (XMLElement | string)[]): string {
-    let xml = "";
+    let xml = '';
 
     for (const element of elements) {
-      if (typeof element === "string") {
+      if (typeof element === 'string') {
         xml += this.escapeXml(element);
       } else {
         xml += this.elementToString(element);
@@ -153,7 +153,7 @@ export class XMLBuilder {
   private elementToString(element: XMLElement): string {
     // Special case: raw XML passthrough (no wrapper element)
     // Used for VML and other legacy content that must be preserved exactly
-    if (element.name === "__rawXml" && element.rawXml) {
+    if (element.name === '__rawXml' && element.rawXml) {
       return element.rawXml;
     }
 
@@ -175,14 +175,14 @@ export class XMLBuilder {
     if (element.selfClosing) {
       if (XMLBuilder.CANNOT_SELF_CLOSE.includes(element.name)) {
         // Instead of throwing, force open/close tags for safety
-        xml += "></" + element.name + ">";
+        xml += '></' + element.name + '>';
         return xml;
       }
-      xml += "/>";
+      xml += '/>';
       return xml;
     }
 
-    xml += ">";
+    xml += '>';
 
     // Add raw XML content if present (for VML passthrough)
     if (element.rawXml) {
@@ -221,9 +221,9 @@ export class XMLBuilder {
    */
   static escapeXmlText(text: string): string {
     return removeInvalidXmlChars(text)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   /**
@@ -238,11 +238,11 @@ export class XMLBuilder {
    */
   static escapeXmlAttribute(value: string): string {
     return removeInvalidXmlChars(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&apos;");
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 
   /**
@@ -252,11 +252,11 @@ export class XMLBuilder {
    */
   static unescapeXml(text: string): string {
     return text
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
       .replace(/&apos;/g, "'")
-      .replace(/&amp;/g, "&"); // Must be last to avoid double-unescaping
+      .replace(/&amp;/g, '&'); // Must be last to avoid double-unescaping
   }
 
   /**
@@ -276,11 +276,11 @@ export class XMLBuilder {
     return (
       removeInvalidXmlChars(text)
         // Escape CDATA end marker to prevent CDATA injection
-        .replace(/\]\]>/g, "]]&gt;")
+        .replace(/\]\]>/g, ']]&gt;')
         // Standard XML escaping (& must be first to avoid double-escaping)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
     );
   }
 
@@ -289,32 +289,24 @@ export class XMLBuilder {
    */
   static createNamespaces(): Record<string, string> {
     return {
-      "xmlns:w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-      "xmlns:r":
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-      "xmlns:wp":
-        "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
-      "xmlns:a": "http://schemas.openxmlformats.org/drawingml/2006/main",
-      "xmlns:pic": "http://schemas.openxmlformats.org/drawingml/2006/picture",
-      "xmlns:w14": "http://schemas.microsoft.com/office/word/2010/wordml",
-      "xmlns:wpc":
-        "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas",
-      "xmlns:mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
-      "xmlns:o": "urn:schemas-microsoft-com:office:office",
-      "xmlns:v": "urn:schemas-microsoft-com:vml",
-      "xmlns:wp14":
-        "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
-      "xmlns:w10": "urn:schemas-microsoft-com:office:word",
-      "xmlns:w15": "http://schemas.microsoft.com/office/word/2012/wordml",
-      "xmlns:wpg":
-        "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
-      "xmlns:wpi":
-        "http://schemas.microsoft.com/office/word/2010/wordprocessingInk",
-      "xmlns:wne": "http://schemas.microsoft.com/office/word/2006/wordml",
-      "xmlns:wps":
-        "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
-      "xmlns:asvg":
-        "http://schemas.microsoft.com/office/drawing/2016/SVG/main",
+      'xmlns:w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+      'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+      'xmlns:wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+      'xmlns:a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+      'xmlns:pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture',
+      'xmlns:w14': 'http://schemas.microsoft.com/office/word/2010/wordml',
+      'xmlns:wpc': 'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas',
+      'xmlns:mc': 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+      'xmlns:o': 'urn:schemas-microsoft-com:office:office',
+      'xmlns:v': 'urn:schemas-microsoft-com:vml',
+      'xmlns:wp14': 'http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing',
+      'xmlns:w10': 'urn:schemas-microsoft-com:office:word',
+      'xmlns:w15': 'http://schemas.microsoft.com/office/word/2012/wordml',
+      'xmlns:wpg': 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup',
+      'xmlns:wpi': 'http://schemas.microsoft.com/office/word/2010/wordprocessingInk',
+      'xmlns:wne': 'http://schemas.microsoft.com/office/word/2006/wordml',
+      'xmlns:wps': 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+      'xmlns:asvg': 'http://schemas.microsoft.com/office/drawing/2016/SVG/main',
     };
   }
 
@@ -519,15 +511,11 @@ export class XMLBuilder {
    * @param cy - Height in EMUs
    * @returns Self-closing XMLElement
    */
-  static cxCy(
-    name: string,
-    cx: number,
-    cy: number
-  ): XMLElement {
+  static cxCy(name: string, cx: number, cy: number): XMLElement {
     return {
       name,
       attributes: { cx, cy },
-      selfClosing: true
+      selfClosing: true,
     };
   }
 
@@ -548,9 +536,7 @@ export class XMLBuilder {
     const sdtId = options?.id ?? Math.floor(Math.random() * 2000000000) - 1000000000;
 
     // Build SDT properties
-    const sdtPrChildren: XMLElement[] = [
-      XMLBuilder.wSelf('id', { 'w:val': sdtId })
-    ];
+    const sdtPrChildren: XMLElement[] = [XMLBuilder.wSelf('id', { 'w:val': sdtId })];
 
     // Add docPartObj if docPartGallery is specified
     if (options?.docPartGallery) {
@@ -558,8 +544,8 @@ export class XMLBuilder {
         XMLBuilder.w('docPartObj', undefined, [
           XMLBuilder.wSelf('docPartGallery', { 'w:val': options.docPartGallery }),
           XMLBuilder.wSelf('docPartUnique', {
-            'w:val': options?.docPartUnique !== false ? '1' : '0'
-          })
+            'w:val': options?.docPartUnique !== false ? '1' : '0',
+          }),
         ])
       );
     }
@@ -567,7 +553,7 @@ export class XMLBuilder {
     // Create complete SDT structure
     return XMLBuilder.w('sdt', undefined, [
       XMLBuilder.w('sdtPr', undefined, sdtPrChildren),
-      XMLBuilder.w('sdtContent', undefined, content)
+      XMLBuilder.w('sdtContent', undefined, content),
     ]);
   }
 
@@ -598,21 +584,21 @@ export class XMLBuilder {
     // Per ECMA-376, mc:Ignorable tells Word which namespace prefixes can be
     // safely ignored if the processor doesn't support them. Without it,
     // attributes like w14:paraId in raw XML passthrough zones cause corruption.
-    if (!allNamespaces["mc:Ignorable"]) {
+    if (!allNamespaces['mc:Ignorable']) {
       const ignorable: string[] = [];
-      if (allNamespaces["xmlns:w14"]) ignorable.push("w14");
-      if (allNamespaces["xmlns:w15"]) ignorable.push("w15");
-      if (allNamespaces["xmlns:wp14"]) ignorable.push("wp14");
-      if (allNamespaces["xmlns:w16se"]) ignorable.push("w16se");
-      if (allNamespaces["xmlns:w16cid"]) ignorable.push("w16cid");
-      if (allNamespaces["xmlns:w16"]) ignorable.push("w16");
-      if (allNamespaces["xmlns:w16cex"]) ignorable.push("w16cex");
-      if (allNamespaces["xmlns:w16sdtdh"]) ignorable.push("w16sdtdh");
-      if (allNamespaces["xmlns:w16sdtfl"]) ignorable.push("w16sdtfl");
-      if (allNamespaces["xmlns:w16du"]) ignorable.push("w16du");
-      if (allNamespaces["xmlns:asvg"]) ignorable.push("asvg");
+      if (allNamespaces['xmlns:w14']) ignorable.push('w14');
+      if (allNamespaces['xmlns:w15']) ignorable.push('w15');
+      if (allNamespaces['xmlns:wp14']) ignorable.push('wp14');
+      if (allNamespaces['xmlns:w16se']) ignorable.push('w16se');
+      if (allNamespaces['xmlns:w16cid']) ignorable.push('w16cid');
+      if (allNamespaces['xmlns:w16']) ignorable.push('w16');
+      if (allNamespaces['xmlns:w16cex']) ignorable.push('w16cex');
+      if (allNamespaces['xmlns:w16sdtdh']) ignorable.push('w16sdtdh');
+      if (allNamespaces['xmlns:w16sdtfl']) ignorable.push('w16sdtfl');
+      if (allNamespaces['xmlns:w16du']) ignorable.push('w16du');
+      if (allNamespaces['xmlns:asvg']) ignorable.push('asvg');
       if (ignorable.length > 0) {
-        allNamespaces["mc:Ignorable"] = ignorable.join(" ");
+        allNamespaces['mc:Ignorable'] = ignorable.join(' ');
       }
     } else {
       // mc:Ignorable was loaded from the original document — ensure every
@@ -620,7 +606,7 @@ export class XMLBuilder {
       // Without this, the validator rejects prefixes that appear in
       // mc:Ignorable but lack namespace declarations in the root element.
       const defaults = XMLBuilder.createNamespaces();
-      const prefixes = allNamespaces["mc:Ignorable"].split(/\s+/);
+      const prefixes = allNamespaces['mc:Ignorable'].split(/\s+/);
       for (const prefix of prefixes) {
         const nsKey = `xmlns:${prefix}`;
         if (!allNamespaces[nsKey] && defaults[nsKey]) {
@@ -633,8 +619,8 @@ export class XMLBuilder {
     if (preBodyContent) {
       documentChildren.push(...preBodyContent);
     }
-    documentChildren.push(XMLBuilder.w("body", undefined, bodyContent));
-    builder.element("w:document", allNamespaces, documentChildren);
+    documentChildren.push(XMLBuilder.w('body', undefined, bodyContent));
+    builder.element('w:document', allNamespaces, documentChildren);
 
     return builder.build(true);
   }
@@ -647,7 +633,7 @@ export class XMLBuilder {
     const builder = new XMLBuilder();
     const element = XMLBuilder.objectToElement(obj, rootName);
     if (element) {
-      if (typeof element === "string") {
+      if (typeof element === 'string') {
         builder.text(element);
       } else {
         builder.elements.push(element);
@@ -668,25 +654,25 @@ export class XMLBuilder {
       return null;
     }
 
-    if (typeof obj !== "object" || obj === null) {
+    if (typeof obj !== 'object' || obj === null) {
       return String(obj);
     }
 
     const attributes: Record<string, string | number | boolean> = {};
     const children: (XMLElement | string)[] = [];
 
-    if (obj["#text"] && Object.keys(obj).length === 1) {
-      return String(obj["#text"]);
+    if (obj['#text'] && Object.keys(obj).length === 1) {
+      return String(obj['#text']);
     }
 
     for (const key in obj) {
-      if (key.startsWith("@_")) {
+      if (key.startsWith('@_')) {
         const attrName = key.substring(2);
         // Validate attribute name is not empty after prefix removal
         if (attrName.length > 0) {
           attributes[attrName] = obj[key];
         }
-      } else if (key === "#text") {
+      } else if (key === '#text') {
         children.push(String(obj[key]));
       } else {
         const childObj = obj[key];
@@ -779,7 +765,7 @@ export class XMLBuilder {
       'w:val': border.style || 'single',
       'w:sz': border.size,
       'w:color': border.color,
-      'w:space': border.space
+      'w:space': border.space,
     });
 
     return XMLBuilder.wSelf(side, attrs);

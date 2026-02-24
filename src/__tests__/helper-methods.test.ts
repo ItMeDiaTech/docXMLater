@@ -331,7 +331,7 @@ describe('Paragraph Helper Methods', () => {
     it('should set paragraph borders', () => {
       para.setBorder({
         top: { style: 'single', size: 4, color: '000000' },
-        bottom: { style: 'double', size: 8, color: 'FF0000' }
+        bottom: { style: 'double', size: 8, color: 'FF0000' },
       });
 
       const formatting = para.getFormatting() as any;
@@ -345,7 +345,7 @@ describe('Paragraph Helper Methods', () => {
     it('should set paragraph shading', () => {
       para.setShading({
         fill: 'FFFF00',
-        pattern: 'solid'
+        pattern: 'solid',
       });
 
       const formatting = para.getFormatting() as any;
@@ -359,7 +359,7 @@ describe('Paragraph Helper Methods', () => {
     it('should set tab stops', () => {
       para.setTabs([
         { position: 720, val: 'left' },
-        { position: 1440, val: 'center', leader: 'dot' }
+        { position: 1440, val: 'center', leader: 'dot' },
       ]);
 
       const formatting = para.getFormatting() as any;

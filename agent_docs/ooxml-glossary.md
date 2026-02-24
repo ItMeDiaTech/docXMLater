@@ -44,12 +44,12 @@ Key ECMA-376 terminology used throughout this codebase.
 
 ## Namespaces
 
-| Prefix | URI | Usage |
-|--------|-----|-------|
-| w | wordprocessingml/2006/main | Core WML elements |
-| r | officeDocument/2006/relationships | Relationship references |
-| wp | drawingml/2006/wordprocessingDrawing | Drawing positioning |
-| a | drawingml/2006/main | DrawingML shapes/images |
-| pic | drawingml/2006/picture | Picture elements |
-| v | urn:schemas-microsoft-com:vml | Legacy VML shapes |
-| w14 | wordprocessingml/2010/wordml | Word 2010 extensions |
+| Prefix | URI                                  | Usage                   |
+| ------ | ------------------------------------ | ----------------------- |
+| w      | wordprocessingml/2006/main           | Core WML elements       |
+| r      | officeDocument/2006/relationships    | Relationship references |
+| wp     | drawingml/2006/wordprocessingDrawing | Drawing positioning     |
+| a      | drawingml/2006/main                  | DrawingML shapes/images |
+| pic    | drawingml/2006/picture               | Picture elements        |
+| v      | urn:schemas-microsoft-com:vml        | Legacy VML shapes       |
+| w14    | wordprocessingml/2010/wordml         | Word 2010 extensions    |

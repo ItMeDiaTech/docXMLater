@@ -25,69 +25,69 @@
  */
 export type ShadingPattern =
   // Solid patterns
-  | "clear" // No pattern (transparent)
-  | "solid" // Solid fill
+  | 'clear' // No pattern (transparent)
+  | 'solid' // Solid fill
   // Stripe patterns
-  | "horzStripe" // Horizontal stripes
-  | "vertStripe" // Vertical stripes
-  | "reverseDiagStripe" // Reverse diagonal stripes (/)
-  | "diagStripe" // Diagonal stripes (\)
+  | 'horzStripe' // Horizontal stripes
+  | 'vertStripe' // Vertical stripes
+  | 'reverseDiagStripe' // Reverse diagonal stripes (/)
+  | 'diagStripe' // Diagonal stripes (\)
   // Cross patterns
-  | "horzCross" // Horizontal cross-hatch
-  | "diagCross" // Diagonal cross-hatch
+  | 'horzCross' // Horizontal cross-hatch
+  | 'diagCross' // Diagonal cross-hatch
   // Thin stripe patterns
-  | "thinHorzStripe" // Thin horizontal stripes
-  | "thinVertStripe" // Thin vertical stripes
-  | "thinReverseDiagStripe" // Thin reverse diagonal stripes
-  | "thinDiagStripe" // Thin diagonal stripes
+  | 'thinHorzStripe' // Thin horizontal stripes
+  | 'thinVertStripe' // Thin vertical stripes
+  | 'thinReverseDiagStripe' // Thin reverse diagonal stripes
+  | 'thinDiagStripe' // Thin diagonal stripes
   // Thin cross patterns
-  | "thinHorzCross" // Thin horizontal cross-hatch
-  | "thinDiagCross" // Thin diagonal cross-hatch
+  | 'thinHorzCross' // Thin horizontal cross-hatch
+  | 'thinDiagCross' // Thin diagonal cross-hatch
   // Percentage fill patterns (5% increments with some extras)
-  | "pct5"
-  | "pct10"
-  | "pct12"
-  | "pct15"
-  | "pct20"
-  | "pct25"
-  | "pct30"
-  | "pct35"
-  | "pct37"
-  | "pct40"
-  | "pct45"
-  | "pct50"
-  | "pct55"
-  | "pct60"
-  | "pct62"
-  | "pct65"
-  | "pct70"
-  | "pct75"
-  | "pct80"
-  | "pct85"
-  | "pct87"
-  | "pct90"
-  | "pct95"
-  | "nil"; // Explicitly clear inherited shading (ECMA-376 §17.18.78)
+  | 'pct5'
+  | 'pct10'
+  | 'pct12'
+  | 'pct15'
+  | 'pct20'
+  | 'pct25'
+  | 'pct30'
+  | 'pct35'
+  | 'pct37'
+  | 'pct40'
+  | 'pct45'
+  | 'pct50'
+  | 'pct55'
+  | 'pct60'
+  | 'pct62'
+  | 'pct65'
+  | 'pct70'
+  | 'pct75'
+  | 'pct80'
+  | 'pct85'
+  | 'pct87'
+  | 'pct90'
+  | 'pct95'
+  | 'nil'; // Explicitly clear inherited shading (ECMA-376 §17.18.78)
 
 /**
  * Basic shading patterns (without percentage fills)
  * Use this for contexts where percentage patterns are not needed
  */
 export type BasicShadingPattern =
-  | "clear"
-  | "solid"
-  | "horzStripe"
-  | "vertStripe"
-  | "reverseDiagStripe"
-  | "diagStripe"
-  | "horzCross"
-  | "diagCross"
-  | "thinHorzStripe"
-  | "thinVertStripe"
-  | "thinReverseDiagStripe"
-  | "thinDiagStripe"
-  | "thinHorzCross"
-  | "thinDiagCross";
+  | 'clear'
+  | 'solid'
+  | 'horzStripe'
+  | 'vertStripe'
+  | 'reverseDiagStripe'
+  | 'diagStripe'
+  | 'horzCross'
+  | 'diagCross'
+  | 'thinHorzStripe'
+  | 'thinVertStripe'
+  | 'thinReverseDiagStripe'
+  | 'thinDiagStripe'
+  | 'thinHorzCross'
+  | 'thinDiagCross';
 
 // ============================================================================
 // BORDER STYLES
@@ -100,12 +100,12 @@ export type BasicShadingPattern =
  * This covers the most commonly used border styles.
  */
 export type BorderStyle =
-  | "none" // No border
-  | "single" // Single line
-  | "double" // Double line
-  | "dashed" // Dashed line
-  | "dotted" // Dotted line
-  | "thick"; // Thick single line
+  | 'none' // No border
+  | 'single' // Single line
+  | 'double' // Double line
+  | 'dashed' // Dashed line
+  | 'dotted' // Dotted line
+  | 'thick'; // Thick single line
 
 /**
  * Extended border styles including decorative effects
@@ -115,10 +115,10 @@ export type BorderStyle =
  */
 export type ExtendedBorderStyle =
   | BorderStyle
-  | "wave" // Wavy line
-  | "dashDotStroked" // Dash-dot stroked
-  | "threeDEmboss" // 3D embossed effect
-  | "threeDEngrave"; // 3D engraved effect
+  | 'wave' // Wavy line
+  | 'dashDotStroked' // Dash-dot stroked
+  | 'threeDEmboss' // 3D embossed effect
+  | 'threeDEngrave'; // 3D engraved effect
 
 /**
  * Full border style set per ECMA-376
@@ -126,22 +126,22 @@ export type ExtendedBorderStyle =
  */
 export type FullBorderStyle =
   | ExtendedBorderStyle
-  | "dotDash" // Dot-dash pattern
-  | "dotDotDash" // Dot-dot-dash pattern
-  | "triple" // Triple line
-  | "thinThickSmallGap"
-  | "thickThinSmallGap"
-  | "thinThickThinSmallGap"
-  | "thinThickMediumGap"
-  | "thickThinMediumGap"
-  | "thinThickThinMediumGap"
-  | "thinThickLargeGap"
-  | "thickThinLargeGap"
-  | "thinThickThinLargeGap"
-  | "dashSmallGap"
-  | "dashDotStroked"
-  | "outset"
-  | "inset";
+  | 'dotDash' // Dot-dash pattern
+  | 'dotDotDash' // Dot-dot-dash pattern
+  | 'triple' // Triple line
+  | 'thinThickSmallGap'
+  | 'thickThinSmallGap'
+  | 'thinThickThinSmallGap'
+  | 'thinThickMediumGap'
+  | 'thickThinMediumGap'
+  | 'thinThickThinMediumGap'
+  | 'thinThickLargeGap'
+  | 'thickThinLargeGap'
+  | 'thinThickThinLargeGap'
+  | 'dashSmallGap'
+  | 'dashDotStroked'
+  | 'outset'
+  | 'inset';
 
 /**
  * Generic border definition interface
@@ -190,11 +190,11 @@ export interface TableBorderDefinitions extends FourSidedBorders {
  * Consolidated from: Image.ts, Table.ts (TableHorizontalAlignment)
  */
 export type HorizontalAlignment =
-  | "left"
-  | "center"
-  | "right"
-  | "inside" // Toward binding edge
-  | "outside"; // Away from binding edge
+  | 'left'
+  | 'center'
+  | 'right'
+  | 'inside' // Toward binding edge
+  | 'outside'; // Away from binding edge
 
 /**
  * Vertical alignment for general use
@@ -202,25 +202,25 @@ export type HorizontalAlignment =
  * Consolidated from: Image.ts, Table.ts (TableVerticalAlignment)
  */
 export type VerticalAlignment =
-  | "top"
-  | "center"
-  | "bottom"
-  | "inside" // Toward top of page in header
-  | "outside"; // Toward bottom of page in footer
+  | 'top'
+  | 'center'
+  | 'bottom'
+  | 'inside' // Toward top of page in header
+  | 'outside'; // Toward bottom of page in footer
 
 /**
  * Vertical alignment for page content (Section-level)
  *
  * From: Section.ts - includes 'both' for justified vertical alignment
  */
-export type PageVerticalAlignment = "top" | "center" | "bottom" | "both";
+export type PageVerticalAlignment = 'top' | 'center' | 'bottom' | 'both';
 
 /**
  * Vertical alignment for table cells
  *
  * From: TableCell.ts (CellVerticalAlignment)
  */
-export type CellVerticalAlignment = "top" | "center" | "bottom";
+export type CellVerticalAlignment = 'top' | 'center' | 'bottom';
 
 /**
  * Paragraph text alignment
@@ -228,38 +228,28 @@ export type CellVerticalAlignment = "top" | "center" | "bottom";
  * From: Paragraph.ts (ParagraphAlignment)
  * Note: 'both' is an alias for 'justify' in some contexts
  */
-export type ParagraphAlignment =
-  | "left"
-  | "center"
-  | "right"
-  | "justify"
-  | "both";
+export type ParagraphAlignment = 'left' | 'center' | 'right' | 'justify' | 'both';
 
 /**
  * Table alignment (horizontal positioning)
  *
  * From: Table.ts (TableAlignment)
  */
-export type TableAlignment = "left" | "center" | "right";
+export type TableAlignment = 'left' | 'center' | 'right';
 
 /**
  * Row justification/alignment options
  *
  * From: TableRow.ts (RowJustification)
  */
-export type RowJustification = "left" | "center" | "right" | "start" | "end";
+export type RowJustification = 'left' | 'center' | 'right' | 'start' | 'end';
 
 /**
  * Text vertical alignment within line/cell
  *
  * From: Paragraph.ts (TextAlignment)
  */
-export type TextVerticalAlignment =
-  | "top"
-  | "center"
-  | "baseline"
-  | "bottom"
-  | "auto";
+export type TextVerticalAlignment = 'top' | 'center' | 'baseline' | 'bottom' | 'auto';
 
 /**
  * Tab stop alignment types
@@ -267,13 +257,13 @@ export type TextVerticalAlignment =
  * From: Paragraph.ts (TabAlignment)
  */
 export type TabAlignment =
-  | "clear" // Remove tab stop
-  | "left" // Left-aligned
-  | "center" // Center-aligned
-  | "right" // Right-aligned
-  | "decimal" // Decimal-aligned (for numbers)
-  | "bar" // Bar tab (vertical line)
-  | "num"; // List number alignment
+  | 'clear' // Remove tab stop
+  | 'left' // Left-aligned
+  | 'center' // Center-aligned
+  | 'right' // Right-aligned
+  | 'decimal' // Decimal-aligned (for numbers)
+  | 'bar' // Bar tab (vertical line)
+  | 'num'; // List number alignment
 
 // ============================================================================
 // POSITIONING & ANCHORING
@@ -284,26 +274,21 @@ export type TabAlignment =
  *
  * From: Image.ts (PositionAnchor)
  */
-export type PositionAnchor =
-  | "page"
-  | "margin"
-  | "column"
-  | "character"
-  | "paragraph";
+export type PositionAnchor = 'page' | 'margin' | 'column' | 'character' | 'paragraph';
 
 /**
  * Horizontal anchor for floating elements
  *
  * From: Table.ts (TableHorizontalAnchor), Paragraph.ts (FrameProperties.hAnchor)
  */
-export type HorizontalAnchor = "text" | "margin" | "page";
+export type HorizontalAnchor = 'text' | 'margin' | 'page';
 
 /**
  * Vertical anchor for floating elements
  *
  * From: Table.ts (TableVerticalAnchor), Paragraph.ts (FrameProperties.vAnchor)
  */
-export type VerticalAnchor = "text" | "margin" | "page";
+export type VerticalAnchor = 'text' | 'margin' | 'page';
 
 // ============================================================================
 // TEXT DIRECTION
@@ -316,19 +301,19 @@ export type VerticalAnchor = "text" | "margin" | "page";
  * Per ECMA-376 Part 1 Section 17.18.93 (ST_TextDirection)
  */
 export type TextDirection =
-  | "lrTb" // Left-to-right, top-to-bottom (Western default)
-  | "tbRl" // Top-to-bottom, right-to-left (East Asian vertical)
-  | "btLr" // Bottom-to-top, left-to-right
-  | "lrTbV" // Left-to-right, top-to-bottom (vertical variant)
-  | "tbRlV" // Top-to-bottom, right-to-left (vertical variant)
-  | "tbLrV"; // Top-to-bottom, left-to-right (vertical variant)
+  | 'lrTb' // Left-to-right, top-to-bottom (Western default)
+  | 'tbRl' // Top-to-bottom, right-to-left (East Asian vertical)
+  | 'btLr' // Bottom-to-top, left-to-right
+  | 'lrTbV' // Left-to-right, top-to-bottom (vertical variant)
+  | 'tbRlV' // Top-to-bottom, right-to-left (vertical variant)
+  | 'tbLrV'; // Top-to-bottom, left-to-right (vertical variant)
 
 /**
  * Simplified text direction for sections
  *
  * From: Section.ts
  */
-export type SectionTextDirection = "ltr" | "rtl" | "tbRl" | "btLr";
+export type SectionTextDirection = 'ltr' | 'rtl' | 'tbRl' | 'btLr';
 
 // ============================================================================
 // WIDTH TYPES
@@ -340,9 +325,9 @@ export type SectionTextDirection = "ltr" | "rtl" | "tbRl" | "btLr";
  * Consolidated from: Table.ts, TableCell.ts
  */
 export type WidthType =
-  | "auto" // Automatically determined
-  | "dxa" // Twips (twentieths of a point)
-  | "pct"; // Percentage (in fiftieths of a percent)
+  | 'auto' // Automatically determined
+  | 'dxa' // Twips (twentieths of a point)
+  | 'pct'; // Percentage (in fiftieths of a percent)
 
 // ============================================================================
 // SHADING CONFIGURATION
@@ -384,12 +369,12 @@ export interface ShadingConfig {
  * From: Paragraph.ts (TabLeader)
  */
 export type TabLeader =
-  | "none" // No leader
-  | "dot" // Dots ......
-  | "hyphen" // Hyphens ------
-  | "underscore" // Underscores ______
-  | "heavy" // Heavy line
-  | "middleDot"; // Middle dots
+  | 'none' // No leader
+  | 'dot' // Dots ......
+  | 'hyphen' // Hyphens ------
+  | 'underscore' // Underscores ______
+  | 'heavy' // Heavy line
+  | 'middleDot'; // Middle dots
 
 /**
  * Tab stop definition
@@ -414,44 +399,44 @@ export interface TabStop {
  */
 export function isShadingPattern(value: string): value is ShadingPattern {
   const patterns = [
-    "clear",
-    "solid",
-    "horzStripe",
-    "vertStripe",
-    "reverseDiagStripe",
-    "diagStripe",
-    "horzCross",
-    "diagCross",
-    "thinHorzStripe",
-    "thinVertStripe",
-    "thinReverseDiagStripe",
-    "thinDiagStripe",
-    "thinHorzCross",
-    "thinDiagCross",
-    "pct5",
-    "pct10",
-    "pct12",
-    "pct15",
-    "pct20",
-    "pct25",
-    "pct30",
-    "pct35",
-    "pct37",
-    "pct40",
-    "pct45",
-    "pct50",
-    "pct55",
-    "pct60",
-    "pct62",
-    "pct65",
-    "pct70",
-    "pct75",
-    "pct80",
-    "pct85",
-    "pct87",
-    "pct90",
-    "pct95",
-    "nil",
+    'clear',
+    'solid',
+    'horzStripe',
+    'vertStripe',
+    'reverseDiagStripe',
+    'diagStripe',
+    'horzCross',
+    'diagCross',
+    'thinHorzStripe',
+    'thinVertStripe',
+    'thinReverseDiagStripe',
+    'thinDiagStripe',
+    'thinHorzCross',
+    'thinDiagCross',
+    'pct5',
+    'pct10',
+    'pct12',
+    'pct15',
+    'pct20',
+    'pct25',
+    'pct30',
+    'pct35',
+    'pct37',
+    'pct40',
+    'pct45',
+    'pct50',
+    'pct55',
+    'pct60',
+    'pct62',
+    'pct65',
+    'pct70',
+    'pct75',
+    'pct80',
+    'pct85',
+    'pct87',
+    'pct90',
+    'pct95',
+    'nil',
   ];
   return patterns.includes(value);
 }
@@ -460,41 +445,35 @@ export function isShadingPattern(value: string): value is ShadingPattern {
  * Check if a value is a valid BorderStyle
  */
 export function isBorderStyle(value: string): value is BorderStyle {
-  return ["none", "single", "double", "dashed", "dotted", "thick"].includes(
-    value
-  );
+  return ['none', 'single', 'double', 'dashed', 'dotted', 'thick'].includes(value);
 }
 
 /**
  * Check if a value is a valid HorizontalAlignment
  */
-export function isHorizontalAlignment(
-  value: string
-): value is HorizontalAlignment {
-  return ["left", "center", "right", "inside", "outside"].includes(value);
+export function isHorizontalAlignment(value: string): value is HorizontalAlignment {
+  return ['left', 'center', 'right', 'inside', 'outside'].includes(value);
 }
 
 /**
  * Check if a value is a valid VerticalAlignment
  */
 export function isVerticalAlignment(value: string): value is VerticalAlignment {
-  return ["top", "center", "bottom", "inside", "outside"].includes(value);
+  return ['top', 'center', 'bottom', 'inside', 'outside'].includes(value);
 }
 
 /**
  * Check if a value is a valid ParagraphAlignment
  */
-export function isParagraphAlignment(
-  value: string
-): value is ParagraphAlignment {
-  return ["left", "center", "right", "justify", "both"].includes(value);
+export function isParagraphAlignment(value: string): value is ParagraphAlignment {
+  return ['left', 'center', 'right', 'justify', 'both'].includes(value);
 }
 
 /**
  * Check if a value is a valid WidthType
  */
 export function isWidthType(value: string): value is WidthType {
-  return ["auto", "dxa", "pct"].includes(value);
+  return ['auto', 'dxa', 'pct'].includes(value);
 }
 
 // ============================================================================
@@ -505,9 +484,9 @@ export function isWidthType(value: string): value is WidthType {
  * Default border definition
  */
 export const DEFAULT_BORDER: BorderDefinition = {
-  style: "single",
+  style: 'single',
   size: 4, // 0.5pt (4 eighths)
-  color: "000000",
+  color: '000000',
   space: 0,
 };
 
@@ -515,9 +494,9 @@ export const DEFAULT_BORDER: BorderDefinition = {
  * No border definition
  */
 export const NO_BORDER: BorderDefinition = {
-  style: "none",
+  style: 'none',
   size: 0,
-  color: "auto",
+  color: 'auto',
   space: 0,
 };
 
@@ -529,21 +508,17 @@ export const NO_BORDER: BorderDefinition = {
  * Builds XML attributes for a w:shd element from a ShadingConfig.
  * Shared across all element types for consistent shading generation.
  */
-export function buildShadingAttributes(
-  shading: ShadingConfig
-): Record<string, string> {
+export function buildShadingAttributes(shading: ShadingConfig): Record<string, string> {
   const attrs: Record<string, string> = {};
   // w:val is REQUIRED per ECMA-376 — default to "clear" if no pattern specified
-  attrs["w:val"] = shading.pattern || "clear";
-  if (shading.fill) attrs["w:fill"] = shading.fill;
-  if (shading.color) attrs["w:color"] = shading.color;
-  if (shading.themeFill) attrs["w:themeFill"] = shading.themeFill;
-  if (shading.themeColor) attrs["w:themeColor"] = shading.themeColor;
-  if (shading.themeFillTint)
-    attrs["w:themeFillTint"] = shading.themeFillTint;
-  if (shading.themeFillShade)
-    attrs["w:themeFillShade"] = shading.themeFillShade;
-  if (shading.themeTint) attrs["w:themeTint"] = shading.themeTint;
-  if (shading.themeShade) attrs["w:themeShade"] = shading.themeShade;
+  attrs['w:val'] = shading.pattern || 'clear';
+  if (shading.fill) attrs['w:fill'] = shading.fill;
+  if (shading.color) attrs['w:color'] = shading.color;
+  if (shading.themeFill) attrs['w:themeFill'] = shading.themeFill;
+  if (shading.themeColor) attrs['w:themeColor'] = shading.themeColor;
+  if (shading.themeFillTint) attrs['w:themeFillTint'] = shading.themeFillTint;
+  if (shading.themeFillShade) attrs['w:themeFillShade'] = shading.themeFillShade;
+  if (shading.themeTint) attrs['w:themeTint'] = shading.themeTint;
+  if (shading.themeShade) attrs['w:themeShade'] = shading.themeShade;
   return attrs;
 }

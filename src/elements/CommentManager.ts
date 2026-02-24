@@ -148,8 +148,8 @@ export class CommentManager {
    */
   getAllComments(): Comment[] {
     return Array.from(this.comments.values())
-      .filter(entry => !entry.comment.isReply())
-      .map(entry => entry.comment);
+      .filter((entry) => !entry.comment.isReply())
+      .map((entry) => entry.comment);
   }
 
   /**
@@ -157,7 +157,7 @@ export class CommentManager {
    * @returns Array of all comments
    */
   getAllCommentsWithReplies(): Comment[] {
-    return Array.from(this.comments.values()).map(entry => entry.comment);
+    return Array.from(this.comments.values()).map((entry) => entry.comment);
   }
 
   /**
@@ -215,8 +215,8 @@ export class CommentManager {
    */
   getCommentsByAuthor(author: string): Comment[] {
     return Array.from(this.comments.values())
-      .map(entry => entry.comment)
-      .filter(comment => comment.getAuthor() === author);
+      .map((entry) => entry.comment)
+      .filter((comment) => comment.getAuthor() === author);
   }
 
   /**
@@ -227,8 +227,8 @@ export class CommentManager {
    */
   getCommentsByDateRange(startDate: Date, endDate: Date): Comment[] {
     return Array.from(this.comments.values())
-      .map(entry => entry.comment)
-      .filter(comment => {
+      .map((entry) => entry.comment)
+      .filter((comment) => {
         const commentDate = comment.getDate();
         return commentDate >= startDate && commentDate <= endDate;
       });
@@ -279,11 +279,7 @@ export class CommentManager {
    * @param initials - Optional author initials
    * @returns The created and registered comment
    */
-  createComment(
-    author: string,
-    content: string | Run | Run[],
-    initials?: string
-  ): Comment {
+  createComment(author: string, content: string | Run | Run[], initials?: string): Comment {
     const comment = Comment.create(author, content, initials);
     return this.register(comment);
   }
@@ -346,8 +342,8 @@ export class CommentManager {
   findCommentsByText(searchText: string): Comment[] {
     const lowerSearch = searchText.toLowerCase();
     return Array.from(this.comments.values())
-      .map(entry => entry.comment)
-      .filter(comment => comment.getText().toLowerCase().includes(lowerSearch));
+      .map((entry) => entry.comment)
+      .filter((comment) => comment.getText().toLowerCase().includes(lowerSearch));
   }
 
   /**
@@ -356,8 +352,8 @@ export class CommentManager {
    */
   getResolvedComments(): Comment[] {
     return Array.from(this.comments.values())
-      .map(entry => entry.comment)
-      .filter(comment => comment.isResolved());
+      .map((entry) => entry.comment)
+      .filter((comment) => comment.isResolved());
   }
 
   /**
@@ -366,8 +362,8 @@ export class CommentManager {
    */
   getUnresolvedComments(): Comment[] {
     return Array.from(this.comments.values())
-      .map(entry => entry.comment)
-      .filter(comment => !comment.isResolved());
+      .map((entry) => entry.comment)
+      .filter((comment) => !comment.isResolved());
   }
 
   /**
@@ -423,13 +419,14 @@ export class CommentManager {
     }
 
     // Build XML manually for comments
-    const hasReplies = comments.some(c => c.isReply());
+    const hasReplies = comments.some((c) => c.isReply());
     let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     xml += '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
     xml += ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
     if (hasReplies) {
       xml += ' xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"';
-      xml += ' xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="w15"';
+      xml +=
+        ' xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="w15"';
     }
     xml += '>\n';
 

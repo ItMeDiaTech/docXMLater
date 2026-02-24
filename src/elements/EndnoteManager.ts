@@ -47,9 +47,11 @@ export class EndnoteManager {
    */
   private isSpecialEndnote(endnote: Endnote): boolean {
     const type = endnote.getType();
-    return type === EndnoteType.Separator ||
-           type === EndnoteType.ContinuationSeparator ||
-           type === EndnoteType.ContinuationNotice;
+    return (
+      type === EndnoteType.Separator ||
+      type === EndnoteType.ContinuationSeparator ||
+      type === EndnoteType.ContinuationNotice
+    );
   }
 
   /**
@@ -108,7 +110,7 @@ export class EndnoteManager {
    */
   getAllEndnotes(): Endnote[] {
     return Array.from(this.endnotes.values())
-      .filter(e => !this.isSpecialEndnote(e))
+      .filter((e) => !this.isSpecialEndnote(e))
       .sort((a, b) => a.getId() - b.getId());
   }
 
@@ -116,8 +118,7 @@ export class EndnoteManager {
    * Gets all endnotes including special ones
    */
   getAllEndnotesWithSpecial(): Endnote[] {
-    return Array.from(this.endnotes.values())
-      .sort((a, b) => a.getId() - b.getId());
+    return Array.from(this.endnotes.values()).sort((a, b) => a.getId() - b.getId());
   }
 
   /**
@@ -208,18 +209,14 @@ export class EndnoteManager {
       name: 'w:endnotes',
       attributes: {
         'xmlns:w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-        'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+        'xmlns:r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
       },
-      children: endnotes.map(e => e.toXML())
+      children: endnotes.map((e) => e.toXML()),
     };
 
     // Build XML using XMLBuilder
     const builder = new XMLBuilder();
-    builder.element(
-      endnotesElement.name,
-      endnotesElement.attributes,
-      endnotesElement.children
-    );
+    builder.element(endnotesElement.name, endnotesElement.attributes, endnotesElement.children);
     return builder.build(true);
   }
 

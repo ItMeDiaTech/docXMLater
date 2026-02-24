@@ -3,117 +3,111 @@
  * Nested tables (w:tbl inside w:tc) should be preserved exactly as raw XML
  */
 
-import { Document } from "../../src/core/Document";
-import { Table } from "../../src/elements/Table";
-import { TableCell } from "../../src/elements/TableCell";
+import { Document } from '../../src/core/Document';
+import { Table } from '../../src/elements/Table';
+import { TableCell } from '../../src/elements/TableCell';
 
-describe("NestedTablePreservation", () => {
-  describe("TableCell raw nested content", () => {
-    it("should store and retrieve raw nested content", () => {
+describe('NestedTablePreservation', () => {
+  describe('TableCell raw nested content', () => {
+    it('should store and retrieve raw nested content', () => {
       const cell = new TableCell();
-      cell.createParagraph("Before nested table");
+      cell.createParagraph('Before nested table');
 
       const nestedTableXml =
         '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Nested</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
-      cell.addRawNestedContent(1, nestedTableXml, "table");
+      cell.addRawNestedContent(1, nestedTableXml, 'table');
 
-      cell.createParagraph("After nested table");
+      cell.createParagraph('After nested table');
 
       expect(cell.hasNestedTables()).toBe(true);
       expect(cell.hasRawNestedContent()).toBe(true);
 
       const rawContent = cell.getRawNestedContent();
       expect(rawContent).toHaveLength(1);
-      expect(rawContent[0]?.type).toBe("table");
+      expect(rawContent[0]?.type).toBe('table');
       expect(rawContent[0]?.position).toBe(1);
       expect(rawContent[0]?.xml).toBe(nestedTableXml);
     });
 
-    it("should update raw nested content", () => {
+    it('should update raw nested content', () => {
       const cell = new TableCell();
-      cell.addRawNestedContent(0, "<w:tbl>original</w:tbl>", "table");
+      cell.addRawNestedContent(0, '<w:tbl>original</w:tbl>', 'table');
 
-      const updated = cell.updateRawNestedContent(
-        0,
-        "<w:tbl>updated</w:tbl>"
-      );
+      const updated = cell.updateRawNestedContent(0, '<w:tbl>updated</w:tbl>');
       expect(updated).toBe(true);
 
       const rawContent = cell.getRawNestedContent();
-      expect(rawContent[0]?.xml).toBe("<w:tbl>updated</w:tbl>");
+      expect(rawContent[0]?.xml).toBe('<w:tbl>updated</w:tbl>');
     });
 
-    it("should return false when updating invalid index", () => {
+    it('should return false when updating invalid index', () => {
       const cell = new TableCell();
-      const updated = cell.updateRawNestedContent(0, "<w:tbl>test</w:tbl>");
+      const updated = cell.updateRawNestedContent(0, '<w:tbl>test</w:tbl>');
       expect(updated).toBe(false);
     });
 
-    it("should clear raw nested content", () => {
+    it('should clear raw nested content', () => {
       const cell = new TableCell();
-      cell.addRawNestedContent(0, "<w:tbl>test</w:tbl>", "table");
+      cell.addRawNestedContent(0, '<w:tbl>test</w:tbl>', 'table');
 
       expect(cell.hasRawNestedContent()).toBe(true);
       cell.clearRawNestedContent();
       expect(cell.hasRawNestedContent()).toBe(false);
     });
 
-    it("should handle SDT content type", () => {
+    it('should handle SDT content type', () => {
       const cell = new TableCell();
-      cell.addRawNestedContent(0, "<w:sdt>content</w:sdt>", "sdt");
+      cell.addRawNestedContent(0, '<w:sdt>content</w:sdt>', 'sdt');
 
       expect(cell.hasNestedTables()).toBe(false);
       expect(cell.hasRawNestedContent()).toBe(true);
 
       const rawContent = cell.getRawNestedContent();
-      expect(rawContent[0]?.type).toBe("sdt");
+      expect(rawContent[0]?.type).toBe('sdt');
     });
   });
 
-  describe("TableCell toXML with nested content", () => {
-    it("should include nested table in XML output", () => {
+  describe('TableCell toXML with nested content', () => {
+    it('should include nested table in XML output', () => {
       const cell = new TableCell();
-      cell.createParagraph("Text before");
+      cell.createParagraph('Text before');
 
       const nestedTableXml =
         '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Nested</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
-      cell.addRawNestedContent(1, nestedTableXml, "table");
+      cell.addRawNestedContent(1, nestedTableXml, 'table');
 
-      cell.createParagraph("Text after");
+      cell.createParagraph('Text after');
 
       const xmlElement = cell.toXML();
-      expect(xmlElement.name).toBe("w:tc");
+      expect(xmlElement.name).toBe('w:tc');
 
       // The XML should contain the nested table between paragraphs
       // Check that children include the raw XML element
       const children = xmlElement.children || [];
       const hasRawXml = children.some(
-        (child) =>
-          typeof child === "object" &&
-          "name" in child &&
-          child.name === "__rawXml"
+        (child) => typeof child === 'object' && 'name' in child && child.name === '__rawXml'
       );
       expect(hasRawXml).toBe(true);
     });
 
-    it("should preserve multiple nested tables at different positions", () => {
+    it('should preserve multiple nested tables at different positions', () => {
       const cell = new TableCell();
-      cell.createParagraph("Para 1");
-      cell.createParagraph("Para 2");
-      cell.createParagraph("Para 3");
+      cell.createParagraph('Para 1');
+      cell.createParagraph('Para 2');
+      cell.createParagraph('Para 3');
 
       // Add nested table after para 1 (position 1)
       cell.addRawNestedContent(
         1,
         '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table1</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
-        "table"
+        'table'
       );
 
       // Add nested table after para 3 (position 3)
       cell.addRawNestedContent(
         3,
         '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
-        "table"
+        'table'
       );
 
       const xmlElement = cell.toXML();
@@ -121,22 +115,19 @@ describe("NestedTablePreservation", () => {
 
       // Count raw XML elements
       const rawXmlElements = children.filter(
-        (child) =>
-          typeof child === "object" &&
-          "name" in child &&
-          child.name === "__rawXml"
+        (child) => typeof child === 'object' && 'name' in child && child.name === '__rawXml'
       );
       expect(rawXmlElements).toHaveLength(2);
     });
 
-    it("should handle cell with only nested table and no paragraphs", () => {
+    it('should handle cell with only nested table and no paragraphs', () => {
       const cell = new TableCell();
 
       // Add nested table without any paragraphs
       cell.addRawNestedContent(
         0,
         '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Only Table</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
-        "table"
+        'table'
       );
 
       const xmlElement = cell.toXML();
@@ -144,24 +135,20 @@ describe("NestedTablePreservation", () => {
 
       // Should have at least one empty paragraph (ECMA-376 requirement)
       const hasParagraph = children.some(
-        (child) =>
-          typeof child === "object" && "name" in child && child.name === "w:p"
+        (child) => typeof child === 'object' && 'name' in child && child.name === 'w:p'
       );
       expect(hasParagraph).toBe(true);
 
       // Should have the nested table
       const hasRawXml = children.some(
-        (child) =>
-          typeof child === "object" &&
-          "name" in child &&
-          child.name === "__rawXml"
+        (child) => typeof child === 'object' && 'name' in child && child.name === '__rawXml'
       );
       expect(hasRawXml).toBe(true);
     });
   });
 
-  describe("Document load/save with nested tables", () => {
-    it("should preserve nested tables when loading and saving", async () => {
+  describe('Document load/save with nested tables', () => {
+    it('should preserve nested tables when loading and saving', async () => {
       // Create a document with nested table structure
       const cellXml = `<w:tc>
         <w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>
@@ -178,16 +165,16 @@ describe("NestedTablePreservation", () => {
       </w:tc>`;
 
       // Verify the XML contains nested table
-      expect(cellXml).toContain("<w:tbl>");
-      expect(cellXml).toContain("Cell 1");
-      expect(cellXml).toContain("Cell 2");
+      expect(cellXml).toContain('<w:tbl>');
+      expect(cellXml).toContain('Cell 1');
+      expect(cellXml).toContain('Cell 2');
     });
   });
 
-  describe("Deep nesting scenarios", () => {
-    it("should preserve 5 levels of nested tables", () => {
+  describe('Deep nesting scenarios', () => {
+    it('should preserve 5 levels of nested tables', () => {
       const cell = new TableCell();
-      cell.createParagraph("Outer content");
+      cell.createParagraph('Outer content');
 
       // Create 5-level deep nested table structure
       const level5NestedTableXml = `<w:tbl>
@@ -226,7 +213,7 @@ describe("NestedTablePreservation", () => {
         </w:tc></w:tr>
       </w:tbl>`;
 
-      cell.addRawNestedContent(1, level5NestedTableXml, "table");
+      cell.addRawNestedContent(1, level5NestedTableXml, 'table');
 
       expect(cell.hasNestedTables()).toBe(true);
 
@@ -234,20 +221,20 @@ describe("NestedTablePreservation", () => {
       expect(rawContent).toHaveLength(1);
 
       // Verify all 5 levels are preserved in the stored XML
-      expect(rawContent[0]?.xml).toContain("Level 1");
-      expect(rawContent[0]?.xml).toContain("Level 2");
-      expect(rawContent[0]?.xml).toContain("Level 3");
-      expect(rawContent[0]?.xml).toContain("Level 4");
-      expect(rawContent[0]?.xml).toContain("Level 5 - Deepest");
+      expect(rawContent[0]?.xml).toContain('Level 1');
+      expect(rawContent[0]?.xml).toContain('Level 2');
+      expect(rawContent[0]?.xml).toContain('Level 3');
+      expect(rawContent[0]?.xml).toContain('Level 4');
+      expect(rawContent[0]?.xml).toContain('Level 5 - Deepest');
 
       // Count nested w:tbl tags (should be 5)
       const tblMatches = rawContent[0]?.xml.match(/<w:tbl>/g);
       expect(tblMatches).toHaveLength(5);
     });
 
-    it("should handle nested tables with revision markers", () => {
+    it('should handle nested tables with revision markers', () => {
       const cell = new TableCell();
-      cell.createParagraph("Content with revisions");
+      cell.createParagraph('Content with revisions');
 
       // Nested table containing revision markup (w:ins, w:del)
       const nestedTableWithRevisionsXml = `<w:tbl>
@@ -267,31 +254,34 @@ describe("NestedTablePreservation", () => {
         </w:tc></w:tr>
       </w:tbl>`;
 
-      cell.addRawNestedContent(1, nestedTableWithRevisionsXml, "table");
+      cell.addRawNestedContent(1, nestedTableWithRevisionsXml, 'table');
 
       const rawContent = cell.getRawNestedContent();
-      expect(rawContent[0]?.xml).toContain("<w:ins");
-      expect(rawContent[0]?.xml).toContain("<w:del");
-      expect(rawContent[0]?.xml).toContain("Inserted text");
-      expect(rawContent[0]?.xml).toContain("Deleted text");
+      expect(rawContent[0]?.xml).toContain('<w:ins');
+      expect(rawContent[0]?.xml).toContain('<w:del');
+      expect(rawContent[0]?.xml).toContain('Inserted text');
+      expect(rawContent[0]?.xml).toContain('Deleted text');
     });
 
-    it("should handle multiple nested tables at different positions in same cell", () => {
+    it('should handle multiple nested tables at different positions in same cell', () => {
       const cell = new TableCell();
-      cell.createParagraph("Para 1");
-      cell.createParagraph("Para 2");
-      cell.createParagraph("Para 3");
-      cell.createParagraph("Para 4");
-      cell.createParagraph("Para 5");
+      cell.createParagraph('Para 1');
+      cell.createParagraph('Para 2');
+      cell.createParagraph('Para 3');
+      cell.createParagraph('Para 4');
+      cell.createParagraph('Para 5');
 
       // Add 3 nested tables at positions 1, 3, and 5
-      const table1 = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table A</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
-      const table2 = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table B</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
-      const table3 = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table C</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+      const table1 =
+        '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table A</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+      const table2 =
+        '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table B</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+      const table3 =
+        '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table C</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
 
-      cell.addRawNestedContent(1, table1, "table");
-      cell.addRawNestedContent(3, table2, "table");
-      cell.addRawNestedContent(5, table3, "table");
+      cell.addRawNestedContent(1, table1, 'table');
+      cell.addRawNestedContent(3, table2, 'table');
+      cell.addRawNestedContent(5, table3, 'table');
 
       const rawContent = cell.getRawNestedContent();
       expect(rawContent).toHaveLength(3);
@@ -302,14 +292,14 @@ describe("NestedTablePreservation", () => {
       expect(rawContent[2]?.position).toBe(5);
 
       // Verify content
-      expect(rawContent[0]?.xml).toContain("Table A");
-      expect(rawContent[1]?.xml).toContain("Table B");
-      expect(rawContent[2]?.xml).toContain("Table C");
+      expect(rawContent[0]?.xml).toContain('Table A');
+      expect(rawContent[1]?.xml).toContain('Table B');
+      expect(rawContent[2]?.xml).toContain('Table C');
     });
 
-    it("should handle nested SDT containing nested table", () => {
+    it('should handle nested SDT containing nested table', () => {
       const cell = new TableCell();
-      cell.createParagraph("Content before SDT");
+      cell.createParagraph('Content before SDT');
 
       // SDT (Structured Document Tag) containing a nested table
       const sdtWithNestedTableXml = `<w:sdt>
@@ -327,22 +317,22 @@ describe("NestedTablePreservation", () => {
         </w:sdtContent>
       </w:sdt>`;
 
-      cell.addRawNestedContent(1, sdtWithNestedTableXml, "sdt");
+      cell.addRawNestedContent(1, sdtWithNestedTableXml, 'sdt');
 
       const rawContent = cell.getRawNestedContent();
       expect(rawContent).toHaveLength(1);
-      expect(rawContent[0]?.type).toBe("sdt");
-      expect(rawContent[0]?.xml).toContain("<w:sdt>");
-      expect(rawContent[0]?.xml).toContain("<w:tbl>");
-      expect(rawContent[0]?.xml).toContain("Nested in SDT");
+      expect(rawContent[0]?.type).toBe('sdt');
+      expect(rawContent[0]?.xml).toContain('<w:sdt>');
+      expect(rawContent[0]?.xml).toContain('<w:tbl>');
+      expect(rawContent[0]?.xml).toContain('Nested in SDT');
     });
 
-    it("should handle large nested table structures without performance degradation", () => {
+    it('should handle large nested table structures without performance degradation', () => {
       const cell = new TableCell();
-      cell.createParagraph("Start content");
+      cell.createParagraph('Start content');
 
       // Generate a larger nested structure (10 nested tables with multiple rows)
-      let largeNestedXml = "";
+      let largeNestedXml = '';
       for (let i = 0; i < 10; i++) {
         largeNestedXml += `<w:tbl>
           <w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr>
@@ -355,13 +345,13 @@ describe("NestedTablePreservation", () => {
           </w:tr>`;
         }
 
-        largeNestedXml += "</w:tbl>";
+        largeNestedXml += '</w:tbl>';
       }
 
       const startTime = performance.now();
 
       // Add all 10 tables
-      cell.addRawNestedContent(1, largeNestedXml, "table");
+      cell.addRawNestedContent(1, largeNestedXml, 'table');
 
       // Generate XML output
       const xmlElement = cell.toXML();
@@ -378,14 +368,14 @@ describe("NestedTablePreservation", () => {
     });
   });
 
-  describe("Edge cases", () => {
-    it("should handle nested table with minimal valid structure", () => {
+  describe('Edge cases', () => {
+    it('should handle nested table with minimal valid structure', () => {
       const cell = new TableCell();
 
       // Minimal valid nested table per ECMA-376 (table, row, cell, paragraph)
       const minimalNestedTableXml = '<w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>';
 
-      cell.addRawNestedContent(0, minimalNestedTableXml, "table");
+      cell.addRawNestedContent(0, minimalNestedTableXml, 'table');
 
       expect(cell.hasNestedTables()).toBe(true);
 
@@ -393,9 +383,9 @@ describe("NestedTablePreservation", () => {
       expect(rawContent[0]?.xml).toBe(minimalNestedTableXml);
     });
 
-    it("should handle nested table with merged cells (gridSpan and vMerge)", () => {
+    it('should handle nested table with merged cells (gridSpan and vMerge)', () => {
       const cell = new TableCell();
-      cell.createParagraph("Before merged table");
+      cell.createParagraph('Before merged table');
 
       // Nested table with horizontal merge (gridSpan) and vertical merge (vMerge)
       const mergedCellsTableXml = `<w:tbl>
@@ -425,16 +415,16 @@ describe("NestedTablePreservation", () => {
         </w:tr>
       </w:tbl>`;
 
-      cell.addRawNestedContent(1, mergedCellsTableXml, "table");
+      cell.addRawNestedContent(1, mergedCellsTableXml, 'table');
 
       const rawContent = cell.getRawNestedContent();
-      expect(rawContent[0]?.xml).toContain("<w:gridSpan");
-      expect(rawContent[0]?.xml).toContain("<w:vMerge");
-      expect(rawContent[0]?.xml).toContain("Merged horizontally");
-      expect(rawContent[0]?.xml).toContain("Vertical merge start");
+      expect(rawContent[0]?.xml).toContain('<w:gridSpan');
+      expect(rawContent[0]?.xml).toContain('<w:vMerge');
+      expect(rawContent[0]?.xml).toContain('Merged horizontally');
+      expect(rawContent[0]?.xml).toContain('Vertical merge start');
     });
 
-    it("should handle nested table with complex borders and shading", () => {
+    it('should handle nested table with complex borders and shading', () => {
       const cell = new TableCell();
 
       // Nested table with detailed border and shading formatting
@@ -471,17 +461,17 @@ describe("NestedTablePreservation", () => {
         </w:tr>
       </w:tbl>`;
 
-      cell.addRawNestedContent(0, formattedNestedTableXml, "table");
+      cell.addRawNestedContent(0, formattedNestedTableXml, 'table');
 
       const rawContent = cell.getRawNestedContent();
-      expect(rawContent[0]?.xml).toContain("<w:tblBorders>");
+      expect(rawContent[0]?.xml).toContain('<w:tblBorders>');
       expect(rawContent[0]?.xml).toContain('w:val="double"');
       expect(rawContent[0]?.xml).toContain('w:fill="EEEEEE"');
       expect(rawContent[0]?.xml).toContain('w:fill="CCFFCC"');
       expect(rawContent[0]?.xml).toContain('w:val="diagStripe"');
     });
 
-    it("should handle nested table with hyperlinks and bookmarks", () => {
+    it('should handle nested table with hyperlinks and bookmarks', () => {
       const cell = new TableCell();
 
       // Nested table containing hyperlinks and bookmarks
@@ -502,29 +492,29 @@ describe("NestedTablePreservation", () => {
         </w:tc></w:tr>
       </w:tbl>`;
 
-      cell.addRawNestedContent(0, nestedWithLinksXml, "table");
+      cell.addRawNestedContent(0, nestedWithLinksXml, 'table');
 
       const rawContent = cell.getRawNestedContent();
-      expect(rawContent[0]?.xml).toContain("<w:bookmarkStart");
-      expect(rawContent[0]?.xml).toContain("<w:bookmarkEnd");
-      expect(rawContent[0]?.xml).toContain("<w:hyperlink");
-      expect(rawContent[0]?.xml).toContain("Bookmarked text");
-      expect(rawContent[0]?.xml).toContain("Link text");
+      expect(rawContent[0]?.xml).toContain('<w:bookmarkStart');
+      expect(rawContent[0]?.xml).toContain('<w:bookmarkEnd');
+      expect(rawContent[0]?.xml).toContain('<w:hyperlink');
+      expect(rawContent[0]?.xml).toContain('Bookmarked text');
+      expect(rawContent[0]?.xml).toContain('Link text');
     });
 
-    it("should handle empty cell with only nested content", () => {
+    it('should handle empty cell with only nested content', () => {
       const cell = new TableCell();
 
       // No paragraphs added explicitly - only nested table
       cell.addRawNestedContent(
         0,
         '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Only nested</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
-        "table"
+        'table'
       );
 
       // toXML should still produce valid output with minimum paragraph
       const xmlElement = cell.toXML();
-      expect(xmlElement.name).toBe("w:tc");
+      expect(xmlElement.name).toBe('w:tc');
 
       // Children should exist
       const children = xmlElement.children || [];

@@ -15,12 +15,12 @@
  * cleanup.all(); // Run all cleanups
  */
 
-import type { Document } from "../core/Document";
-import { Field, ComplexField } from "../elements/Field";
-import { Hyperlink } from "../elements/Hyperlink";
-import { Paragraph } from "../elements/Paragraph";
-import { Table } from "../elements/Table";
-import { StructuredDocumentTag } from "../elements/StructuredDocumentTag";
+import type { Document } from '../core/Document';
+import { Field, ComplexField } from '../elements/Field';
+import { Hyperlink } from '../elements/Hyperlink';
+import { Paragraph } from '../elements/Paragraph';
+import { Table } from '../elements/Table';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
 
 export interface CleanupOptions {
   /** Unlock all SDTs to enable editing */
@@ -263,31 +263,31 @@ export class CleanupHelper {
     return before - after;
   }
 
-    private cleanupStyles(): number {
-      // Implementation for unused styles removal
-  // Scan all paragraphs and runs for used styles
-      const usedStyles = new Set<string>();
-  for (const para of this.doc.getAllParagraphs()) {
-    const paraStyle = para.getFormatting().style;
-    if (paraStyle) usedStyles.add(paraStyle);
-    for (const run of para.getRuns()) {
-      const runStyle = run.getFormatting().characterStyle;
-      if (runStyle) usedStyles.add(runStyle);
-    }
-  }
-
-      // Remove unused styles
-      let removed = 0;
-      const allStyles = this.doc.getStylesManager().getAllStyles();
-      for (const style of allStyles) {
-        if (!usedStyles.has(style.getStyleId())) {
-          this.doc.getStylesManager().removeStyle(style.getStyleId());
-          removed++;
-        }
+  private cleanupStyles(): number {
+    // Implementation for unused styles removal
+    // Scan all paragraphs and runs for used styles
+    const usedStyles = new Set<string>();
+    for (const para of this.doc.getAllParagraphs()) {
+      const paraStyle = para.getFormatting().style;
+      if (paraStyle) usedStyles.add(paraStyle);
+      for (const run of para.getRuns()) {
+        const runStyle = run.getFormatting().characterStyle;
+        if (runStyle) usedStyles.add(runStyle);
       }
-
-      return removed;
     }
+
+    // Remove unused styles
+    let removed = 0;
+    const allStyles = this.doc.getStylesManager().getAllStyles();
+    for (const style of allStyles) {
+      if (!usedStyles.has(style.getStyleId())) {
+        this.doc.getStylesManager().removeStyle(style.getStyleId());
+        removed++;
+      }
+    }
+
+    return removed;
+  }
 
   private cleanupRelationships(): number {
     // Use comprehensive scanning that includes raw nested content (nested tables),
@@ -382,10 +382,10 @@ export class CleanupHelper {
   private formatInternalHyperlinks(): number {
     let count = 0;
     const formatting = {
-      font: "Verdana",
+      font: 'Verdana',
       size: 12,
-      color: "0000FF",
-      underline: "single" as const,
+      color: '0000FF',
+      underline: 'single' as const,
     };
 
     // Process body paragraphs
@@ -430,10 +430,10 @@ export class CleanupHelper {
   private formatAllHyperlinks(): number {
     let count = 0;
     const formatting = {
-      font: "Verdana",
+      font: 'Verdana',
       size: 12,
-      color: "0000FF",
-      underline: "single" as const,
+      color: '0000FF',
+      underline: 'single' as const,
     };
 
     // Helper to process paragraph content

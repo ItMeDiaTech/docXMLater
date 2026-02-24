@@ -396,11 +396,7 @@ describe('Hyperlink Parsing', () => {
     });
 
     it('should properly escape special characters in tooltip attribute', async () => {
-      const link = Hyperlink.createExternal(
-        'https://example.com',
-        'Link',
-        undefined
-      );
+      const link = Hyperlink.createExternal('https://example.com', 'Link', undefined);
       link.setRelationshipId('rId5');
       link.setTooltip('This is a "tooltip" with <special> & characters');
 
@@ -496,7 +492,7 @@ describe('Hyperlink Parsing', () => {
       // Update URLs
       const urlMap = new Map([
         ['https://old1.com', 'https://new1.com'],
-        ['https://old2.com', 'https://new2.com']
+        ['https://old2.com', 'https://new2.com'],
       ]);
 
       const updated = doc.updateHyperlinkUrls(urlMap);
@@ -616,7 +612,9 @@ describe('Hyperlink Parsing', () => {
       const hyperlink = paragraphs[0]!.getContent()[0] as Hyperlink;
 
       // URL should be combined with anchor
-      expect(hyperlink.getUrl()).toBe('https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c');
+      expect(hyperlink.getUrl()).toBe(
+        'https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c'
+      );
       // Anchor should be undefined since it's now part of URL
       expect(hyperlink.getAnchor()).toBeUndefined();
       // Should still be external
@@ -653,7 +651,9 @@ describe('Hyperlink Parsing', () => {
       // Create multiple hyperlinks with different patterns
       zipHandler.addFile('[Content_Types].xml', getContentTypesXml());
       zipHandler.addFile('_rels/.rels', getRootRelsXml());
-      zipHandler.addFile('word/document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      zipHandler.addFile(
+        'word/document.xml',
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <w:body>
@@ -672,14 +672,18 @@ describe('Hyperlink Parsing', () => {
       </w:hyperlink>
     </w:p>
   </w:body>
-</w:document>`);
-      zipHandler.addFile('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+</w:document>`
+      );
+      zipHandler.addFile(
+        'word/_rels/document.xml.rels',
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
   <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/base/" TargetMode="External"/>
   <Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://other.com/path/" TargetMode="External"/>
   <Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://noanchor.com/page" TargetMode="External"/>
-</Relationships>`);
+</Relationships>`
+      );
       zipHandler.addFile('word/styles.xml', getMinimalStylesXml());
       zipHandler.addFile('docProps/core.xml', getMinimalCoreXml());
       zipHandler.addFile('docProps/app.xml', getMinimalAppXml());
@@ -1226,7 +1230,9 @@ describe('Hyperlinks in Tables (processHyperlinks fix)', () => {
       const hyperlink = content[0] as Hyperlink;
       expect(hyperlink.getText()).toBe('View Document in Table');
       // The URL should be the combined URL (base + anchor)
-      expect(hyperlink.getUrl()).toBe('https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=test-doc-123');
+      expect(hyperlink.getUrl()).toBe(
+        'https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=test-doc-123'
+      );
       expect(hyperlink.isExternal()).toBe(true);
     });
 
@@ -1273,7 +1279,7 @@ describe('Hyperlinks in Tables (processHyperlinks fix)', () => {
       expect(hyperlinks.length).toBeGreaterThanOrEqual(1);
 
       // Find our specific hyperlink
-      const foundHyperlink = hyperlinks.find(h => h.hyperlink.getText() === 'Test Link');
+      const foundHyperlink = hyperlinks.find((h) => h.hyperlink.getText() === 'Test Link');
       expect(foundHyperlink).toBeDefined();
       expect(foundHyperlink!.hyperlink.getUrl()).toBe('https://example.com/test');
       expect(foundHyperlink!.hyperlink.getRelationshipId()).toBeDefined();
@@ -1368,10 +1374,10 @@ describe('Hyperlinks in Tables (processHyperlinks fix)', () => {
       expect(hyperlinks.length).toBeGreaterThanOrEqual(4);
 
       // Verify we can find each hyperlink by text (getHyperlinks returns { hyperlink, paragraph })
-      const link1 = hyperlinks.find(h => h.hyperlink.getText() === 'Link 1');
-      const link2 = hyperlinks.find(h => h.hyperlink.getText() === 'Link 2');
-      const link3 = hyperlinks.find(h => h.hyperlink.getText() === 'Link 3 (no anchor)');
-      const link4 = hyperlinks.find(h => h.hyperlink.getText() === 'Internal Link');
+      const link1 = hyperlinks.find((h) => h.hyperlink.getText() === 'Link 1');
+      const link2 = hyperlinks.find((h) => h.hyperlink.getText() === 'Link 2');
+      const link3 = hyperlinks.find((h) => h.hyperlink.getText() === 'Link 3 (no anchor)');
+      const link4 = hyperlinks.find((h) => h.hyperlink.getText() === 'Internal Link');
 
       expect(link1).toBeDefined();
       expect(link1!.hyperlink.getUrl()).toBe('https://example.com/base1/#!/view?docid=doc-001');

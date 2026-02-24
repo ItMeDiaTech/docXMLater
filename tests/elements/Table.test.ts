@@ -57,9 +57,9 @@ describe('TableCell', () => {
 
     it('should set shading', () => {
       const cell = new TableCell();
-      cell.setShading({fill: 'FF0000'});
+      cell.setShading({ fill: 'FF0000' });
       const formatting = cell.getFormatting();
-      expect(formatting.shading).toEqual({fill: 'FF0000'});
+      expect(formatting.shading).toEqual({ fill: 'FF0000' });
     });
 
     it('should set borders', () => {
@@ -76,7 +76,12 @@ describe('TableCell', () => {
     it('should set all borders at once', () => {
       const cell = new TableCell();
       const border = { style: 'thick' as const, size: 12, color: '0000FF' };
-      cell.setBorders({top: {style: border.style, size: border.size, color: border.color}, bottom: {style: border.style, size: border.size, color: border.color}, left: {style: border.style, size: border.size, color: border.color}, right: {style: border.style, size: border.size, color: border.color}});
+      cell.setBorders({
+        top: { style: border.style, size: border.size, color: border.color },
+        bottom: { style: border.style, size: border.size, color: border.color },
+        left: { style: border.style, size: border.size, color: border.color },
+        right: { style: border.style, size: border.size, color: border.color },
+      });
       const formatting = cell.getFormatting();
       expect(formatting.borders?.top).toEqual(border);
       expect(formatting.borders?.bottom).toEqual(border);
@@ -104,7 +109,7 @@ describe('TableCell', () => {
       const result = cell
         .setWidth(2880)
         .setVerticalAlignment('center')
-        .setShading({fill: 'CCCCCC'});
+        .setShading({ fill: 'CCCCCC' });
 
       const paragraph = cell.createParagraph('Chained content');
 
@@ -114,7 +119,7 @@ describe('TableCell', () => {
       const formatting = cell.getFormatting();
       expect(formatting.width).toBe(2880);
       expect(formatting.verticalAlignment).toBe('center');
-      expect(formatting.shading).toEqual({fill: 'CCCCCC'});
+      expect(formatting.shading).toEqual({ fill: 'CCCCCC' });
     });
   });
 
@@ -128,7 +133,7 @@ describe('TableCell', () => {
       expect(xml.children).toBeDefined();
 
       // Should have at least one paragraph
-      const paragraph = filterXMLElements(xml.children).find(c => c.name === 'w:p');
+      const paragraph = filterXMLElements(xml.children).find((c) => c.name === 'w:p');
       expect(paragraph).toBeDefined();
 
       // tcPr is optional - only added if cell has formatting
@@ -137,22 +142,22 @@ describe('TableCell', () => {
 
     it('should generate XML with formatting', () => {
       const cell = new TableCell();
-      cell.setWidth(2880).setShading({fill: 'FFFF00'}).setColumnSpan(2);
+      cell.setWidth(2880).setShading({ fill: 'FFFF00' }).setColumnSpan(2);
       const xml = cell.toXML();
 
-      const tcPr = filterXMLElements(xml.children).find(c => c.name === 'w:tcPr');
+      const tcPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tcPr');
       expect(tcPr?.children).toBeDefined();
 
       // Check for width
-      const tcW = filterXMLElements(tcPr?.children).find(c => c.name === 'w:tcW');
+      const tcW = filterXMLElements(tcPr?.children).find((c) => c.name === 'w:tcW');
       expect(tcW?.attributes?.['w:w']).toBe(2880);
 
       // Check for shading
-      const shd = filterXMLElements(tcPr?.children).find(c => c.name === 'w:shd');
+      const shd = filterXMLElements(tcPr?.children).find((c) => c.name === 'w:shd');
       expect(shd?.attributes?.['w:fill']).toBe('FFFF00');
 
       // Check for grid span
-      const gridSpan = filterXMLElements(tcPr?.children).find(c => c.name === 'w:gridSpan');
+      const gridSpan = filterXMLElements(tcPr?.children).find((c) => c.name === 'w:gridSpan');
       expect(gridSpan?.attributes?.['w:val']).toBe(2);
     });
   });
@@ -208,7 +213,7 @@ describe('TableRow', () => {
       const row = new TableRow(3);
       const cells = row.getCells();
       expect(cells).toHaveLength(3);
-      cells.forEach(cell => {
+      cells.forEach((cell) => {
         expect(cell).toBeInstanceOf(TableCell);
       });
     });
@@ -260,10 +265,10 @@ describe('TableRow', () => {
       row.clearHeight();
 
       const xml = row.toXML();
-      const trPr = filterXMLElements(xml.children).find(c => c.name === 'w:trPr');
+      const trPr = filterXMLElements(xml.children).find((c) => c.name === 'w:trPr');
       // trPr should either not exist or not contain trHeight
       if (trPr) {
-        const trHeight = filterXMLElements(trPr.children).find(c => c.name === 'w:trHeight');
+        const trHeight = filterXMLElements(trPr.children).find((c) => c.name === 'w:trHeight');
         expect(trHeight).toBeUndefined();
       }
     });
@@ -280,10 +285,7 @@ describe('TableRow', () => {
   describe('Method chaining', () => {
     it('should support method chaining', () => {
       const row = new TableRow();
-      const result = row
-        .setHeight(1440)
-        .setHeader(true)
-        .setCantSplit(true);
+      const result = row.setHeight(1440).setHeader(true).setCantSplit(true);
 
       expect(result).toBe(row);
       const formatting = row.getFormatting();
@@ -304,7 +306,7 @@ describe('TableRow', () => {
       expect(xml.name).toBe('w:tr');
 
       // Should have 2 cells
-      const cells = filterXMLElements(xml.children).filter(c => c.name === 'w:tc');
+      const cells = filterXMLElements(xml.children).filter((c) => c.name === 'w:tc');
       expect(cells).toHaveLength(2);
     });
 
@@ -313,16 +315,16 @@ describe('TableRow', () => {
       row.setHeight(1440, 'exact').setHeader(true);
 
       const xml = row.toXML();
-      const trPr = filterXMLElements(xml.children).find(c => c.name === 'w:trPr');
+      const trPr = filterXMLElements(xml.children).find((c) => c.name === 'w:trPr');
       expect(trPr).toBeDefined();
 
       // Check for height
-      const trHeight = filterXMLElements(trPr?.children).find(c => c.name === 'w:trHeight');
+      const trHeight = filterXMLElements(trPr?.children).find((c) => c.name === 'w:trHeight');
       expect(trHeight?.attributes?.['w:val']).toBe(1440);
       expect(trHeight?.attributes?.['w:hRule']).toBe('exact');
 
       // Check for header
-      const tblHeader = filterXMLElements(trPr?.children).find(c => c.name === 'w:tblHeader');
+      const tblHeader = filterXMLElements(trPr?.children).find((c) => c.name === 'w:tblHeader');
       expect(tblHeader).toBeDefined();
     });
   });
@@ -442,7 +444,7 @@ describe('Table', () => {
         left: border,
         right: border,
         insideH: border,
-        insideV: border
+        insideV: border,
       });
       const formatting = table.getFormatting();
       expect(formatting.borders?.top).toEqual(border);
@@ -581,39 +583,42 @@ describe('Table', () => {
 
       // Should have table properties
       const xmlElements = filterXMLElements(xml.children);
-      const tblPr = xmlElements.find(c => c.name === 'w:tblPr');
+      const tblPr = xmlElements.find((c) => c.name === 'w:tblPr');
       expect(tblPr).toBeDefined();
 
       // Should have table grid
-      const tblGrid = xmlElements.find(c => c.name === 'w:tblGrid');
+      const tblGrid = xmlElements.find((c) => c.name === 'w:tblGrid');
       expect(tblGrid).toBeDefined();
-      const gridCols = filterXMLElements(tblGrid?.children).filter(c => c.name === 'w:gridCol');
+      const gridCols = filterXMLElements(tblGrid?.children).filter((c) => c.name === 'w:gridCol');
       expect(gridCols).toHaveLength(2);
 
       // Should have 2 rows
-      const rows = xmlElements.filter(c => c.name === 'w:tr');
+      const rows = xmlElements.filter((c) => c.name === 'w:tr');
       expect(rows).toHaveLength(2);
     });
 
     it('should generate XML with formatting', () => {
       const table = new Table();
-      table.setWidth(8640).setAlignment('center').setBorders({
-        top: { style: 'single', size: 4 },
-      });
+      table
+        .setWidth(8640)
+        .setAlignment('center')
+        .setBorders({
+          top: { style: 'single', size: 4 },
+        });
 
       const xml = table.toXML();
-      const tblPr = filterXMLElements(xml.children).find(c => c.name === 'w:tblPr');
+      const tblPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tblPr');
 
       // Check width
-      const tblW = filterXMLElements(tblPr?.children).find(c => c.name === 'w:tblW');
+      const tblW = filterXMLElements(tblPr?.children).find((c) => c.name === 'w:tblW');
       expect(tblW?.attributes?.['w:w']).toBe(8640);
 
       // Check alignment
-      const jc = filterXMLElements(tblPr?.children).find(c => c.name === 'w:jc');
+      const jc = filterXMLElements(tblPr?.children).find((c) => c.name === 'w:jc');
       expect(jc?.attributes?.['w:val']).toBe('center');
 
       // Check borders
-      const tblBorders = filterXMLElements(tblPr?.children).find(c => c.name === 'w:tblBorders');
+      const tblBorders = filterXMLElements(tblPr?.children).find((c) => c.name === 'w:tblBorders');
       expect(tblBorders).toBeDefined();
     });
   });
@@ -881,10 +886,13 @@ describe('Table', () => {
       const table = new Table(2, 2);
       const border = { style: 'single' as const, size: 8, color: 'FF0000' };
 
-      table.setBorders({
-        top: border,
-        bottom: border,
-      }, { applyToCells: false });
+      table.setBorders(
+        {
+          top: border,
+          bottom: border,
+        },
+        { applyToCells: false }
+      );
 
       // Table-level borders should be set
       const formatting = table.getFormatting();
@@ -936,19 +944,19 @@ describe('Table', () => {
       const xml = table.toXML();
 
       // Check table-level borders (tblBorders)
-      const tblPr = filterXMLElements(xml.children).find(c => c.name === 'w:tblPr');
-      const tblBorders = filterXMLElements(tblPr?.children).find(c => c.name === 'w:tblBorders');
+      const tblPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tblPr');
+      const tblBorders = filterXMLElements(tblPr?.children).find((c) => c.name === 'w:tblBorders');
       expect(tblBorders).toBeDefined();
 
       // Check cell-level borders (tcBorders)
-      const tr = filterXMLElements(xml.children).find(c => c.name === 'w:tr');
-      const tc = filterXMLElements(tr?.children).find(c => c.name === 'w:tc');
-      const tcPr = filterXMLElements(tc?.children).find(c => c.name === 'w:tcPr');
-      const tcBorders = filterXMLElements(tcPr?.children).find(c => c.name === 'w:tcBorders');
+      const tr = filterXMLElements(xml.children).find((c) => c.name === 'w:tr');
+      const tc = filterXMLElements(tr?.children).find((c) => c.name === 'w:tc');
+      const tcPr = filterXMLElements(tc?.children).find((c) => c.name === 'w:tcPr');
+      const tcBorders = filterXMLElements(tcPr?.children).find((c) => c.name === 'w:tcBorders');
       expect(tcBorders).toBeDefined();
 
       // Verify border attributes
-      const topBorder = filterXMLElements(tcBorders?.children).find(c => c.name === 'w:top');
+      const topBorder = filterXMLElements(tcBorders?.children).find((c) => c.name === 'w:top');
       expect(topBorder?.attributes?.['w:val']).toBe('single');
       expect(topBorder?.attributes?.['w:sz']).toBe(4);
       expect(topBorder?.attributes?.['w:color']).toBe('000000');
@@ -960,7 +968,7 @@ describe('Table', () => {
 
       // Set initial row-level border exception (simulating a parsed document)
       row?.setTablePropertyExceptions({
-        borders: { top: { style: 'single', size: 2, color: 'AAAAAA' } }
+        borders: { top: { style: 'single', size: 2, color: 'AAAAAA' } },
       });
 
       // Update table borders - this should also update row-level exceptions
@@ -1003,15 +1011,18 @@ describe('Table', () => {
 
       // Set initial row-level border exception
       row?.setTablePropertyExceptions({
-        borders: { top: { style: 'single', size: 2, color: 'AAAAAA' } }
+        borders: { top: { style: 'single', size: 2, color: 'AAAAAA' } },
       });
 
       // Update borders with applyToCells: false
       const newBorder = { style: 'thick' as const, size: 12, color: 'FF0000' };
-      table.setBorders({
-        top: newBorder,
-        bottom: newBorder,
-      }, { applyToCells: false });
+      table.setBorders(
+        {
+          top: newBorder,
+          bottom: newBorder,
+        },
+        { applyToCells: false }
+      );
 
       // Row-level exception should remain unchanged
       const exceptions = table.getRow(0)?.getTablePropertyExceptions();
@@ -1054,6 +1065,91 @@ describe('Table', () => {
       const xml = table.toXML();
       const xmlStr = JSON.stringify(xml);
       expect(xmlStr).toContain('"autofit"');
+    });
+  });
+
+  // Regression: Bug fix — tblW/tcW must not use DXA values with pct type
+  // Per OOXML, w:type="pct" means the w:w value is on a 0-5000 scale
+  // (fiftieths of a percent). DXA values like 12960 with pct type are
+  // interpreted as 12960/50 = 259.2% of page width, blowing out tables.
+  describe('Width type consistency (tblW/tcW)', () => {
+    it('should serialize tblW with pct type using 5000-scale values', () => {
+      const table = new Table(1, 1);
+      table.setWidthType('pct');
+      table.setWidth(5000); // 100% page width
+
+      const xml = table.toXML();
+      const tblPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tblPr');
+      const tblW = filterXMLElements(tblPr?.children).find((c) => c.name === 'w:tblW');
+
+      expect(tblW?.attributes?.['w:w']).toBe(5000);
+      expect(tblW?.attributes?.['w:type']).toBe('pct');
+    });
+
+    it('should serialize tblW with dxa type using twip values', () => {
+      const table = new Table(1, 1);
+      table.setWidthType('dxa');
+      table.setWidth(12960);
+
+      const xml = table.toXML();
+      const tblPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tblPr');
+      const tblW = filterXMLElements(tblPr?.children).find((c) => c.name === 'w:tblW');
+
+      expect(tblW?.attributes?.['w:w']).toBe(12960);
+      expect(tblW?.attributes?.['w:type']).toBe('dxa');
+    });
+
+    it('should serialize tcW with pct type using 5000-scale values', () => {
+      const cell = new TableCell();
+      cell.setWidthType(5000, 'pct'); // 100% of table width
+
+      const xml = cell.toXML();
+      const tcPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tcPr');
+      const tcW = filterXMLElements(tcPr?.children).find((c) => c.name === 'w:tcW');
+
+      expect(tcW?.attributes?.['w:w']).toBe(5000);
+      expect(tcW?.attributes?.['w:type']).toBe('pct');
+    });
+
+    it('should serialize tcW with dxa type using twip values', () => {
+      const cell = new TableCell();
+      cell.setWidthType(12960, 'dxa');
+
+      const xml = cell.toXML();
+      const tcPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tcPr');
+      const tcW = filterXMLElements(tcPr?.children).find((c) => c.name === 'w:tcW');
+
+      expect(tcW?.attributes?.['w:w']).toBe(12960);
+      expect(tcW?.attributes?.['w:type']).toBe('dxa');
+    });
+
+    it('should default to dxa type when widthType is not set', () => {
+      const table = new Table(1, 1);
+      // Default constructor sets width to 9360 with no explicit widthType
+      const xml = table.toXML();
+      const tblPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tblPr');
+      const tblW = filterXMLElements(tblPr?.children).find((c) => c.name === 'w:tblW');
+
+      expect(tblW?.attributes?.['w:w']).toBe(9360);
+      expect(tblW?.attributes?.['w:type']).toBe('dxa');
+    });
+
+    it('should never write DXA values with pct type', () => {
+      // This test documents the invariant: if type is pct, value must be on 0-5000 scale
+      const table = new Table(1, 1);
+      table.setWidthType('pct');
+      table.setWidth(5000);
+
+      const xml = table.toXML();
+      const tblPr = filterXMLElements(xml.children).find((c) => c.name === 'w:tblPr');
+      const tblW = filterXMLElements(tblPr?.children).find((c) => c.name === 'w:tblW');
+
+      // With pct type, value should be <= 5000 (100%)
+      const widthValue = tblW?.attributes?.['w:w'] as number;
+      const widthType = tblW?.attributes?.['w:type'] as string;
+      if (widthType === 'pct') {
+        expect(widthValue).toBeLessThanOrEqual(5000);
+      }
     });
   });
 });

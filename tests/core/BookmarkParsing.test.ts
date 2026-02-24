@@ -48,7 +48,7 @@ describe('Bookmark Parsing', () => {
       const bookmark = new Bookmark({
         id: 42,
         name: 'TestBookmark',
-        skipNormalization: true
+        skipNormalization: true,
       });
 
       doc.getBookmarkManager().register(bookmark);
@@ -71,7 +71,7 @@ describe('Bookmark Parsing', () => {
       // Add bookmark with special characters (should be normalized)
       const bookmark = new Bookmark({
         name: 'My-Bookmark.Name!',
-        skipNormalization: false
+        skipNormalization: false,
       });
 
       doc.getBookmarkManager().register(bookmark);
@@ -97,8 +97,8 @@ describe('Bookmark Parsing', () => {
 
       // When loading from existing documents, preserve exact names
       const bookmark = new Bookmark({
-        name: '_Ref123456789',  // Word reference bookmark
-        skipNormalization: true  // Preserve exact name
+        name: '_Ref123456789', // Word reference bookmark
+        skipNormalization: true, // Preserve exact name
       });
 
       doc.getBookmarkManager().register(bookmark);
@@ -126,7 +126,7 @@ describe('Bookmark Parsing', () => {
       const refPara = doc.createParagraph('See ');
       const refField = new Field({
         type: 'REF',
-        instruction: 'REF ChapterOne \\h'  // \h for hyperlink
+        instruction: 'REF ChapterOne \\h', // \h for hyperlink
       });
       refPara.addField(refField);
 
@@ -217,8 +217,8 @@ describe('Bookmark Parsing', () => {
 
       // Find our bookmarks
       const bookmarkNames = bookmarks
-        .filter(b => b.getName().startsWith('Bookmark'))
-        .map(b => b.getName());
+        .filter((b) => b.getName().startsWith('Bookmark'))
+        .map((b) => b.getName());
 
       // They should maintain relative order
       const aIndex = bookmarkNames.indexOf('BookmarkA');

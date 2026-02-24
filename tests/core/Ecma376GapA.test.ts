@@ -62,7 +62,7 @@ describe('ECMA-376 Gap Analysis Phase A', () => {
     it('should set and generate underline theme color with tint/shade', () => {
       const run = new Run('Hello');
       run.setUnderline('double');
-      run.setUnderlineThemeColor('accent1', 0xBF, 0x40);
+      run.setUnderlineThemeColor('accent1', 0xbf, 0x40);
       const xml = XMLBuilder.elementToString(run.toXML());
       expect(xml).toContain('w:themeColor="accent1"');
       expect(xml).toContain('w:themeTint="BF"');
@@ -125,18 +125,14 @@ describe('ECMA-376 Gap Analysis Phase A', () => {
 
   describe('A3: Footnote/endnote references in runs', () => {
     it('should generate footnoteReference in toXML', () => {
-      const run = Run.createFromContent([
-        { type: 'footnoteReference', footnoteId: 1 },
-      ]);
+      const run = Run.createFromContent([{ type: 'footnoteReference', footnoteId: 1 }]);
       const xml = XMLBuilder.elementToString(run.toXML());
       expect(xml).toContain('<w:footnoteReference');
       expect(xml).toContain('w:id="1"');
     });
 
     it('should generate endnoteReference in toXML', () => {
-      const run = Run.createFromContent([
-        { type: 'endnoteReference', endnoteId: 2 },
-      ]);
+      const run = Run.createFromContent([{ type: 'endnoteReference', endnoteId: 2 }]);
       const xml = XMLBuilder.elementToString(run.toXML());
       expect(xml).toContain('<w:endnoteReference');
       expect(xml).toContain('w:id="2"');
@@ -148,7 +144,7 @@ describe('ECMA-376 Gap Analysis Phase A', () => {
       const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
       const runs = doc.getParagraphs()[0]?.getRuns() ?? [];
       const content = runs[0]?.getContent() ?? [];
-      const fnRef = content.find(c => c.type === 'footnoteReference');
+      const fnRef = content.find((c) => c.type === 'footnoteReference');
       expect(fnRef).toBeDefined();
       expect(fnRef!.footnoteId).toBe(3);
       doc.dispose();

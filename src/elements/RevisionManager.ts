@@ -29,10 +29,10 @@ export type IdExistsCallback = (existingId: number) => void;
  * Semantic category for grouping revisions.
  */
 export type RevisionCategory =
-  | 'content'      // Text insertions, deletions
-  | 'formatting'   // Run/paragraph property changes
-  | 'structural'   // Moves, section changes
-  | 'table';       // Table structure changes
+  | 'content' // Text insertions, deletions
+  | 'formatting' // Run/paragraph property changes
+  | 'structural' // Moves, section changes
+  | 'table'; // Table structure changes
 
 /**
  * Summary statistics for revisions.
@@ -112,7 +112,7 @@ export class RevisionManager {
     logger.debug('Revision registered', {
       id: revision.getId(),
       type: revision.getType(),
-      author: revision.getAuthor()
+      author: revision.getAuthor(),
     });
 
     return revision;
@@ -149,7 +149,7 @@ export class RevisionManager {
     logger.debug('Existing revision registered', {
       id: existingId,
       type: revision.getType(),
-      author: revision.getAuthor()
+      author: revision.getAuthor(),
     });
 
     return revision;
@@ -176,7 +176,7 @@ export class RevisionManager {
     }
 
     // Compute and cache
-    const result = this.revisions.filter(rev => rev.getType() === type);
+    const result = this.revisions.filter((rev) => rev.getType() === type);
     this.revisionsByTypeCache.set(type, result);
     return [...result];
   }
@@ -194,7 +194,7 @@ export class RevisionManager {
     }
 
     // Compute and cache
-    const result = this.revisions.filter(rev => rev.getAuthor() === author);
+    const result = this.revisions.filter((rev) => rev.getAuthor() === author);
     this.revisionsByAuthorCache.set(author, result);
     return [...result];
   }
@@ -274,9 +274,10 @@ export class RevisionManager {
    */
   findRevisionsByText(searchText: string): Revision[] {
     const lowerSearch = searchText.toLowerCase();
-    return this.revisions.filter(revision => {
-      const text = revision.getRuns()
-        .map(run => run.getText())
+    return this.revisions.filter((revision) => {
+      const text = revision
+        .getRuns()
+        .map((run) => run.getText())
         .join('')
         .toLowerCase();
       return text.includes(lowerSearch);
@@ -328,8 +329,8 @@ export class RevisionManager {
    * @returns Array of move-related revisions
    */
   getAllMoves(): Revision[] {
-    return this.revisions.filter(rev =>
-      rev.getType() === 'moveFrom' || rev.getType() === 'moveTo'
+    return this.revisions.filter(
+      (rev) => rev.getType() === 'moveFrom' || rev.getType() === 'moveTo'
     );
   }
 
@@ -354,10 +355,11 @@ export class RevisionManager {
    * @returns Array of table cell change revisions
    */
   getAllTableCellChanges(): Revision[] {
-    return this.revisions.filter(rev =>
-      rev.getType() === 'tableCellInsert' ||
-      rev.getType() === 'tableCellDelete' ||
-      rev.getType() === 'tableCellMerge'
+    return this.revisions.filter(
+      (rev) =>
+        rev.getType() === 'tableCellInsert' ||
+        rev.getType() === 'tableCellDelete' ||
+        rev.getType() === 'tableCellMerge'
     );
   }
 
@@ -374,14 +376,15 @@ export class RevisionManager {
    * @returns Array of all property change revisions
    */
   getAllPropertyChanges(): Revision[] {
-    return this.revisions.filter(rev =>
-      rev.getType() === 'runPropertiesChange' ||
-      rev.getType() === 'paragraphPropertiesChange' ||
-      rev.getType() === 'tablePropertiesChange' ||
-      rev.getType() === 'tableRowPropertiesChange' ||
-      rev.getType() === 'tableCellPropertiesChange' ||
-      rev.getType() === 'sectionPropertiesChange' ||
-      rev.getType() === 'numberingChange'
+    return this.revisions.filter(
+      (rev) =>
+        rev.getType() === 'runPropertiesChange' ||
+        rev.getType() === 'paragraphPropertiesChange' ||
+        rev.getType() === 'tablePropertiesChange' ||
+        rev.getType() === 'tableRowPropertiesChange' ||
+        rev.getType() === 'tableCellPropertiesChange' ||
+        rev.getType() === 'sectionPropertiesChange' ||
+        rev.getType() === 'numberingChange'
     );
   }
 
@@ -392,10 +395,10 @@ export class RevisionManager {
    */
   getMovePair(moveId: string): { moveFrom?: Revision; moveTo?: Revision } {
     const moveFrom = this.revisions.find(
-      rev => rev.getType() === 'moveFrom' && rev.getMoveId() === moveId
+      (rev) => rev.getType() === 'moveFrom' && rev.getMoveId() === moveId
     );
     const moveTo = this.revisions.find(
-      rev => rev.getType() === 'moveTo' && rev.getMoveId() === moveId
+      (rev) => rev.getType() === 'moveTo' && rev.getMoveId() === moveId
     );
     return { moveFrom, moveTo };
   }
@@ -452,7 +455,7 @@ export class RevisionManager {
    * @returns Array of revisions within the date range
    */
   getRevisionsByDateRange(startDate: Date, endDate: Date): Revision[] {
-    return this.revisions.filter(rev => {
+    return this.revisions.filter((rev) => {
       const revDate = rev.getDate();
       return revDate >= startDate && revDate <= endDate;
     });
@@ -552,39 +555,47 @@ export class RevisionManager {
     }
 
     // Compute and cache
-    const result = this.revisions.filter(rev => {
+    const result = this.revisions.filter((rev) => {
       const type = rev.getType();
       switch (category) {
         case 'content':
-          return type === 'insert' ||
-                 type === 'delete' ||
-                 // Internal tracking types for rich content changes
-                 type === 'imageChange' ||
-                 type === 'fieldChange' ||
-                 type === 'commentChange' ||
-                 type === 'contentControlChange' ||
-                 type === 'hyperlinkChange';
+          return (
+            type === 'insert' ||
+            type === 'delete' ||
+            // Internal tracking types for rich content changes
+            type === 'imageChange' ||
+            type === 'fieldChange' ||
+            type === 'commentChange' ||
+            type === 'contentControlChange' ||
+            type === 'hyperlinkChange'
+          );
 
         case 'formatting':
-          return type === 'runPropertiesChange' ||
-                 type === 'paragraphPropertiesChange' ||
-                 type === 'numberingChange';
+          return (
+            type === 'runPropertiesChange' ||
+            type === 'paragraphPropertiesChange' ||
+            type === 'numberingChange'
+          );
 
         case 'structural':
-          return type === 'moveFrom' ||
-                 type === 'moveTo' ||
-                 type === 'sectionPropertiesChange' ||
-                 // Bookmarks are structural markers
-                 type === 'bookmarkChange';
+          return (
+            type === 'moveFrom' ||
+            type === 'moveTo' ||
+            type === 'sectionPropertiesChange' ||
+            // Bookmarks are structural markers
+            type === 'bookmarkChange'
+          );
 
         case 'table':
-          return type === 'tablePropertiesChange' ||
-                 type === 'tableExceptionPropertiesChange' ||
-                 type === 'tableRowPropertiesChange' ||
-                 type === 'tableCellPropertiesChange' ||
-                 type === 'tableCellInsert' ||
-                 type === 'tableCellDelete' ||
-                 type === 'tableCellMerge';
+          return (
+            type === 'tablePropertiesChange' ||
+            type === 'tableExceptionPropertiesChange' ||
+            type === 'tableRowPropertiesChange' ||
+            type === 'tableCellPropertiesChange' ||
+            type === 'tableCellInsert' ||
+            type === 'tableCellDelete' ||
+            type === 'tableCellMerge'
+          );
 
         default:
           return false;
@@ -616,7 +627,7 @@ export class RevisionManager {
     if (paragraphIndex < 0) {
       return [];
     }
-    return this.revisions.filter(rev => {
+    return this.revisions.filter((rev) => {
       const loc = rev.getLocation();
       if (!loc) return false;
       return loc.paragraphIndex === paragraphIndex;
@@ -658,11 +669,7 @@ export class RevisionManager {
         type === 'numberingChange'
       ) {
         byCategory.formatting++;
-      } else if (
-        type === 'moveFrom' ||
-        type === 'moveTo' ||
-        type === 'sectionPropertiesChange'
-      ) {
+      } else if (type === 'moveFrom' || type === 'moveTo' || type === 'sectionPropertiesChange') {
         byCategory.structural++;
       } else if (
         type === 'tablePropertiesChange' ||
@@ -697,7 +704,7 @@ export class RevisionManager {
         ins: summary.byType.insertions,
         del: summary.byType.deletions,
         fmt: summary.byType.propertyChanges,
-        authors: summary.authors.length
+        authors: summary.authors.length,
       });
     }
 
@@ -711,7 +718,7 @@ export class RevisionManager {
    * @returns Revision with the specified ID, or undefined
    */
   getById(id: number): Revision | undefined {
-    return this.revisions.find(rev => rev.getId() === id);
+    return this.revisions.find((rev) => rev.getId() === id);
   }
 
   /**
@@ -721,7 +728,7 @@ export class RevisionManager {
    * @returns True if revision was found and removed
    */
   removeById(id: number): boolean {
-    const index = this.revisions.findIndex(rev => rev.getId() === id);
+    const index = this.revisions.findIndex((rev) => rev.getId() === id);
     if (index === -1) return false;
 
     this.revisions.splice(index, 1);
@@ -741,7 +748,7 @@ export class RevisionManager {
     categories?: RevisionCategory[];
     dateRange?: { start: Date; end: Date };
   }): Revision[] {
-    return this.revisions.filter(rev => {
+    return this.revisions.filter((rev) => {
       // Filter by types
       if (criteria.types && !criteria.types.includes(rev.getType())) {
         return false;
@@ -789,11 +796,7 @@ export class RevisionManager {
     ) {
       return 'formatting';
     }
-    if (
-      type === 'moveFrom' ||
-      type === 'moveTo' ||
-      type === 'sectionPropertiesChange'
-    ) {
+    if (type === 'moveFrom' || type === 'moveTo' || type === 'sectionPropertiesChange') {
       return 'structural';
     }
     if (
@@ -832,7 +835,7 @@ export class RevisionManager {
    * ```
    */
   getRevisionsForRun(paragraphIndex: number, runIndex: number): Revision[] {
-    return this.revisions.filter(rev => {
+    return this.revisions.filter((rev) => {
       const loc = rev.getLocation();
       if (!loc) return false;
       return loc.paragraphIndex === paragraphIndex && loc.runIndex === runIndex;
@@ -863,33 +866,30 @@ export class RevisionManager {
    * ```
    */
   getRevisionsByLocation(criteria: Partial<RevisionLocation>): Revision[] {
-    return this.revisions.filter(rev => {
+    return this.revisions.filter((rev) => {
       const loc = rev.getLocation();
       if (!loc) return false;
 
       // Check each criteria if specified
-      if (criteria.paragraphIndex !== undefined &&
-          loc.paragraphIndex !== criteria.paragraphIndex) {
+      if (criteria.paragraphIndex !== undefined && loc.paragraphIndex !== criteria.paragraphIndex) {
         return false;
       }
-      if (criteria.runIndex !== undefined &&
-          loc.runIndex !== criteria.runIndex) {
+      if (criteria.runIndex !== undefined && loc.runIndex !== criteria.runIndex) {
         return false;
       }
-      if (criteria.tableRow !== undefined &&
-          loc.tableRow !== criteria.tableRow) {
+      if (criteria.tableRow !== undefined && loc.tableRow !== criteria.tableRow) {
         return false;
       }
-      if (criteria.tableCell !== undefined &&
-          loc.tableCell !== criteria.tableCell) {
+      if (criteria.tableCell !== undefined && loc.tableCell !== criteria.tableCell) {
         return false;
       }
-      if (criteria.sectionIndex !== undefined &&
-          loc.sectionIndex !== criteria.sectionIndex) {
+      if (criteria.sectionIndex !== undefined && loc.sectionIndex !== criteria.sectionIndex) {
         return false;
       }
-      if (criteria.headerFooterType !== undefined &&
-          loc.headerFooterType !== criteria.headerFooterType) {
+      if (
+        criteria.headerFooterType !== undefined &&
+        loc.headerFooterType !== criteria.headerFooterType
+      ) {
         return false;
       }
 
@@ -903,7 +903,7 @@ export class RevisionManager {
    * @returns Array of revisions with location information
    */
   getRevisionsWithLocation(): Revision[] {
-    return this.revisions.filter(rev => rev.getLocation() !== undefined);
+    return this.revisions.filter((rev) => rev.getLocation() !== undefined);
   }
 
   /**
@@ -912,7 +912,7 @@ export class RevisionManager {
    * @returns Array of revisions without location information
    */
   getRevisionsWithoutLocation(): Revision[] {
-    return this.revisions.filter(rev => rev.getLocation() === undefined);
+    return this.revisions.filter((rev) => rev.getLocation() === undefined);
   }
 
   // ============================================================
@@ -1052,7 +1052,7 @@ export class RevisionManager {
    */
   getHighestId(): number {
     if (this.revisions.length === 0) return -1;
-    return Math.max(...this.revisions.map(r => r.getId()));
+    return Math.max(...this.revisions.map((r) => r.getId()));
   }
 
   /**

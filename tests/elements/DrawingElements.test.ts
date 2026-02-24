@@ -3,7 +3,6 @@
  * Phase 5.4: Drawing Elements
  */
 
-
 import { Shape, TextBox } from '../../src';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Document } from '../../src/core/Document';

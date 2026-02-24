@@ -1,106 +1,94 @@
-# docXMLater v5.0.0 Release Notes
+# docXMLater v10.1.6 Release Notes
 
-## Release Date: November 19, 2025
+## Release Date: February 24, 2026
 
-### Major Release
+### Feature Release
 
-This major version introduces significant enhancements, including a new CleanupHelper class and various fixes and improvements since the last documented release.
+This release adds a numbering restart helper and continues the ECMA-376 comprehensive gap analysis work with OOXML compliance fixes, expanded APIs, and extensive test coverage.
 
-## Key Features Added
+## Key Features
 
-### CleanupHelper
-- New utility class for comprehensive document cleanup
-- Methods include: unlockSDTs, removeSDTs, clearPreserveFlags, defragmentHyperlinks, cleanupNumbering, cleanupStyles, cleanupRelationships, removeCustomXML, unlockFields, unlockFrames, sanitizeTables
-- Preset configurations: googleDocsPreset, fullCleanupPreset, minimalPreset
-- Run all cleanups with `cleanup.all()` or selective with `cleanup.run(options)`
+### Numbering Restart Helper
 
-## Major Bug Fixes
+- `restartNumbering(numId, level?, startValue?)` on both `Document` and `NumberingManager`
+- Creates a new numbering instance referencing the same abstract numbering with a level override
+- Replaces the previous multi-step manual process
 
-### TOC Field Instruction Parsing
-- Enhanced support for \o switch formats (unquoted, single-quoted, double-quoted)
-- Fixed extraction bug for fields with multiple w:fldChar in single run
-- Added multi-paragraph support for field tracking
+```typescript
+const listId = doc.createNumberedList();
+doc.createParagraph('Item 1').setNumbering(listId, 0);
+doc.createParagraph('Item 2').setNumbering(listId, 0);
 
-### Other Fixes
-- Removed overly aggressive Document.cleanFormatting() method
-- Fixed type error in CleanupHelper for RunFormatting access
-- Various improvements to hyperlink handling, list formatting, and special character serialization
+// Restart numbering from 1
+const restartId = doc.restartNumbering(listId);
+doc.createParagraph('New item 1').setNumbering(restartId, 0);
+```
 
-## Breaking Changes
+### Settings API Expansion (10.1.0)
 
-- Removed Document.cleanFormatting() - Use Paragraph.clearDirectFormattingConflicts() instead
-- Updated list indentation formula to match Microsoft Word standards
-- Default bullet font changed from 'Symbol' to 'Calibri'
+- New getter/setter pairs for `hideSpellingErrors`, `hideGrammaticalErrors`, `defaultTabStop`, `updateFields`, `embedTrueTypeFonts`, `saveSubsetFonts`, `doNotTrackMoves`
+- Dirty-tracking for selective merging with original settings XML
 
-## What's Included
+### SDT and Numbering Enhancements (10.1.0)
 
-### New Features
-- CleanupHelper with 12 cleanup operations
-- Enhanced TOC parsing with 10 new regression tests
-- Special character handling in runs (tabs, newlines, hyphens)
+- Structured Document Tag: placeholder, data binding, showingPlaceholder support
+- Numbering: level pStyle association, full level overrides, AbstractNumbering template
+- Styles: latent styles support, `setPersonalCompose()`, `setPersonalReply()`
 
-### Improvements
-- WordDocumentProcessor optimizations
-- Expanded numbered list formats to 5 levels
-- Improved bullet symbol display
+### Hyperlink Attributes (10.1.0)
 
-### Test Improvements
-- 2073+ tests across 59 files
-- 100% pass rate
-- New coverage for TOC parsing, cleanup operations, special characters
+- `setDocLocation()`, `setTgtFrame()`, `setHistory()` with getters and round-trip support
+
+## Bug Fixes
+
+### Table Width Parsing (10.1.1)
+
+- Auto-sized tables (`w:tblW w:w="0" w:type="auto"`) now parse correctly
+- NaN-safe table property parsing prevents propagation from malformed input
+- Table indentation (`w:tblInd`) parsing from main `tblPr` properties
+
+### Paragraph Mark Revision Tracking (10.0.4)
+
+- Tracked deletions no longer leave blank lines in Simple Markup View
+- Full paragraph mark insertion/deletion tracking API
+
+### OOXML Compliance (10.0.3)
+
+- `tblStyleRowBandSize`/`tblStyleColBandSize` correctly limited to style definitions
+- Header/footer hyperlinks use part-scoped relationship files
+- Property change revisions properly skipped in paragraph content serialization
 
 ## Test Suite Status
 
-| Metric | Value |
-|--------|-------|
-| **Total Tests** | 2073+ |
-| **Passing** | 100% |
-| **Coverage** | Comprehensive across all modules |
-
-## Migration Guide
-
-See CHANGELOG.md for detailed migration notes, especially for list formatting changes.
+| Metric           | Value |
+| ---------------- | ----- |
+| **Test Suites**  | 143   |
+| **Total Tests**  | 3,084 |
+| **Passing**      | 100%  |
+| **Source Files** | 103   |
 
 ## Installation
 
 ```bash
-npm install docxmlater@5.0.0
-```
-
-## Usage Example
-
-```typescript
-import { Document, CleanupHelper } from 'docxmlater';
-
-const doc = await Document.load('document.docx');
-const cleanup = new CleanupHelper(doc);
-const report = cleanup.all(); // Run all cleanups
-console.log(report); // View cleanup statistics
-await doc.save('cleaned.docx');
-doc.dispose();
+npm install docxmlater@10.1.6
 ```
 
 ## Package Information
 
-| Field | Value |
-|-------|-------|
-| **Name** | docxmlater |
-| **Version** | 5.0.0 |
-| **License** | MIT |
+| Field          | Value                                     |
+| -------------- | ----------------------------------------- |
+| **Name**       | docxmlater                                |
+| **Version**    | 10.1.6                                    |
+| **License**    | MIT                                       |
 | **Repository** | https://github.com/ItMeDiaTech/docXMLater |
-| **npm** | https://www.npmjs.com/package/docxmlater |
+| **npm**        | https://www.npmjs.com/package/docxmlater  |
 
 ## Links
 
 - GitHub Repository: https://github.com/ItMeDiaTech/docXMLater
 - npm Package: https://www.npmjs.com/package/docxmlater
 - Documentation: https://github.com/ItMeDiaTech/docXMLater/tree/main/docs
-- Examples: https://github.com/ItMeDiaTech/docXMLater/tree/main/examples
 
 ## Previous Releases
 
 See CHANGELOG.md for complete version history.
-
----
-
-Ready to upgrade? Run `npm install docxmlater@5.0.0` to get the latest major version!

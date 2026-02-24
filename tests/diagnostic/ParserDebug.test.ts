@@ -1,4 +1,3 @@
-
 import { XMLParser } from '../../src/xml/XMLParser';
 import { XMLBuilder } from '../../src/xml/XMLBuilder';
 

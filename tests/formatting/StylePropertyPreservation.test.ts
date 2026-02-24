@@ -171,10 +171,10 @@ describe('Style Property Preservation', () => {
         styleId: 'Heading1',
         name: 'heading 1',
         type: 'paragraph',
-        basedOn: 'Title',     // Explicitly different
-        next: 'Heading2',     // Explicitly different
+        basedOn: 'Title', // Explicitly different
+        next: 'Heading2', // Explicitly different
         link: 'NewCharStyle', // Explicitly different
-        uiPriority: 1,        // Explicitly different
+        uiPriority: 1, // Explicitly different
       });
       manager.addStyle(replacement);
 

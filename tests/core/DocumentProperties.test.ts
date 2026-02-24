@@ -244,7 +244,7 @@ describe('Phase 5.5 - Document Properties (Extended)', () => {
         Project: 'Phase 5.5',
         Version: '1.0',
         BuildNumber: 1234,
-        IsRelease: true
+        IsRelease: true,
       });
       doc.createParagraph('Multi custom properties test');
 
@@ -319,7 +319,7 @@ describe('Phase 5.5 - Document Properties (Extended)', () => {
         TestCount: 12,
         PassingTests: 12,
         AllPassed: true,
-        TestDate: new Date('2025-10-23T18:00:00Z')
+        TestDate: new Date('2025-10-23T18:00:00Z'),
       });
 
       doc.createParagraph('Comprehensive property test document');

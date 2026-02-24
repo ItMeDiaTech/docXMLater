@@ -8,7 +8,6 @@ import { ZipHandler } from '../../src/zip/ZipHandler';
 import { XMLParser } from '../../src/xml/XMLParser';
 
 describe('Footnote/Endnote Save Pipeline', () => {
-
   describe('Programmatic creation', () => {
     it('should save footnotes created from scratch', async () => {
       const doc = Document.create();

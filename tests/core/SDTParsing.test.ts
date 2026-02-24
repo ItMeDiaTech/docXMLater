@@ -27,7 +27,7 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       expect(bodyElements.length).toBeGreaterThanOrEqual(1);
 
       // Find SDT in body elements
-      const loadedSdt = bodyElements.find(el => el instanceof StructuredDocumentTag);
+      const loadedSdt = bodyElements.find((el) => el instanceof StructuredDocumentTag);
       expect(loadedSdt).toBeDefined();
 
       if (loadedSdt instanceof StructuredDocumentTag) {
@@ -38,14 +38,17 @@ describe('SDT (Structured Document Tag) Parsing', () => {
     it('should parse plainText content controls', async () => {
       const doc = Document.create();
 
-      const sdt = StructuredDocumentTag.createPlainText([new Paragraph().addText('Plain text only')], false);
+      const sdt = StructuredDocumentTag.createPlainText(
+        [new Paragraph().addText('Plain text only')],
+        false
+      );
       doc.addBodyElement(sdt);
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
       const bodyElements = loadedDoc.getBodyElements();
-      const loadedSdt = bodyElements.find(el => el instanceof StructuredDocumentTag);
+      const loadedSdt = bodyElements.find((el) => el instanceof StructuredDocumentTag);
 
       expect(loadedSdt).toBeDefined();
       if (loadedSdt instanceof StructuredDocumentTag) {
@@ -59,7 +62,7 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const items = [
         { displayText: 'Option 1', value: 'opt1' },
         { displayText: 'Option 2', value: 'opt2' },
-        { displayText: 'Option 3', value: 'opt3' }
+        { displayText: 'Option 3', value: 'opt3' },
       ];
       const sdt = StructuredDocumentTag.createDropDownList(items);
       doc.addBodyElement(sdt);
@@ -67,8 +70,9 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       expect(loadedSdt.getControlType()).toBe('dropDownList');
@@ -87,8 +91,9 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       expect(loadedSdt.getControlType()).toBe('datePicker');
@@ -104,8 +109,9 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       expect(loadedSdt.getControlType()).toBe('checkbox');
@@ -121,8 +127,9 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       expect(loadedSdt.getControlType()).toBe('buildingBlock');
@@ -151,8 +158,9 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       expect(loadedSdt.getId()).toBe(12345);
@@ -175,8 +183,9 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       expect(loadedSdt.getLock()).toBe('contentLocked');
@@ -197,8 +206,9 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       // Note: isTemporary() always returns false until 'temporary' property is implemented
@@ -225,15 +235,16 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       const content = loadedSdt.getContent();
       expect(content).toHaveLength(3);
 
       // Verify paragraph text
-      const paragraphs = content.filter(c => c instanceof Paragraph) as Paragraph[];
+      const paragraphs = content.filter((c) => c instanceof Paragraph) as Paragraph[];
       expect(paragraphs.length).toBeGreaterThanOrEqual(3);
       expect(paragraphs[0]?.getText()).toContain('First');
       expect(paragraphs[1]?.getText()).toContain('Second');
@@ -258,14 +269,15 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       const content = loadedSdt.getContent();
 
       // Find table in content
-      const loadedTable = content.find(c => c instanceof Table) as Table;
+      const loadedTable = content.find((c) => c instanceof Table) as Table;
       expect(loadedTable).toBeDefined();
       expect(loadedTable.getRowCount()).toBe(3);
       expect(loadedTable.getColumnCount()).toBe(3);
@@ -292,14 +304,15 @@ describe('SDT (Structured Document Tag) Parsing', () => {
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       const content = loadedSdt.getContent();
 
       // Check for nested SDT
-      const nestedSdt = content.find(c => c instanceof StructuredDocumentTag);
+      const nestedSdt = content.find((c) => c instanceof StructuredDocumentTag);
       expect(nestedSdt).toBeDefined();
     });
   });
@@ -310,13 +323,16 @@ describe('SDT (Structured Document Tag) Parsing', () => {
 
       // TOC is typically a buildingBlock SDT
       const tocPara = new Paragraph().addText('Table of Contents');
-      const sdt = new StructuredDocumentTag({
-        controlType: 'buildingBlock',
-        buildingBlock: {
-          gallery: 'Table of Contents',
-          category: 'Built-In'
-        }
-      }, [tocPara]);
+      const sdt = new StructuredDocumentTag(
+        {
+          controlType: 'buildingBlock',
+          buildingBlock: {
+            gallery: 'Table of Contents',
+            category: 'Built-In',
+          },
+        },
+        [tocPara]
+      );
       doc.addBodyElement(sdt);
 
       const buffer = await doc.toBuffer();
@@ -324,7 +340,7 @@ describe('SDT (Structured Document Tag) Parsing', () => {
 
       // Verify TOC SDT was preserved
       const bodyElements = loadedDoc.getBodyElements();
-      const tocSdt = bodyElements.find(el => {
+      const tocSdt = bodyElements.find((el) => {
         if (el instanceof StructuredDocumentTag) {
           const bb = el.getBuildingBlockProperties();
           return bb?.gallery === 'Table of Contents';
@@ -340,41 +356,49 @@ describe('SDT (Structured Document Tag) Parsing', () => {
 
       // Google Docs wraps tables in SDTs with contentLocked
       const table = Table.create(2, 2);
-      const sdt = new StructuredDocumentTag({
-        lock: 'contentLocked',
-        controlType: 'richText'
-      }, [table]);
+      const sdt = new StructuredDocumentTag(
+        {
+          lock: 'contentLocked',
+          controlType: 'richText',
+        },
+        [table]
+      );
       doc.addBodyElement(sdt);
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
       // Find SDT with table
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       expect(loadedSdt.getLock()).toBe('contentLocked');
 
       // Verify table is preserved
       const content = loadedSdt.getContent();
-      const loadedTable = content.find(c => c instanceof Table);
+      const loadedTable = content.find((c) => c instanceof Table);
       expect(loadedTable).toBeDefined();
     });
 
     it('should handle empty SDT content', async () => {
       const doc = Document.create();
 
-      const sdt = new StructuredDocumentTag({
-        controlType: 'richText'
-      }, []);
+      const sdt = new StructuredDocumentTag(
+        {
+          controlType: 'richText',
+        },
+        []
+      );
       doc.addBodyElement(sdt);
 
       const buffer = await doc.toBuffer();
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
-      const loadedSdt = loadedDoc.getBodyElements()
-        .find(el => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      const loadedSdt = loadedDoc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
 
       expect(loadedSdt).toBeDefined();
       expect(loadedSdt.getContent()).toHaveLength(0);
