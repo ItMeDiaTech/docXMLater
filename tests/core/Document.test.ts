@@ -1193,6 +1193,170 @@ describe('Document', () => {
     });
   });
 
+  describe('applyStyles with preserved revisions', () => {
+    test('should not format runs inside delete revisions', async () => {
+      const { Revision } = await import('../../src/elements/Revision');
+      const { Run } = await import('../../src/elements/Run');
+
+      const doc = Document.create();
+      const style = Style.create({ styleId: 'Normal', name: 'Normal', type: 'paragraph' });
+      doc.addStyle(style);
+
+      const para = new Paragraph();
+      para.setStyle('Normal');
+      const normalRun = new Run('visible text');
+      para.addRun(normalRun);
+
+      const deletedRun = new Run('deleted text');
+      deletedRun.setFont('OldFont');
+      const delRevision = Revision.createDeletion('Author', deletedRun);
+      para.addRevision(delRevision);
+
+      doc.addParagraph(para);
+
+      doc.applyStyles({
+        normal: {
+          run: { font: 'NewFont', size: 12, color: '000000' },
+        },
+      });
+
+      // The deleted run should retain its original font
+      expect(deletedRun.getFont()).toBe('OldFont');
+      // The visible run should get the new font
+      expect(normalRun.getFont()).toBe('NewFont');
+
+      doc.dispose();
+    });
+
+    test('should not format runs inside moveFrom revisions', async () => {
+      const { Revision } = await import('../../src/elements/Revision');
+      const { Run } = await import('../../src/elements/Run');
+
+      const doc = Document.create();
+      const style = Style.create({ styleId: 'Normal', name: 'Normal', type: 'paragraph' });
+      doc.addStyle(style);
+
+      const para = new Paragraph();
+      para.setStyle('Normal');
+      const normalRun = new Run('visible text');
+      para.addRun(normalRun);
+
+      const moveFromRun = new Run('moved-away text');
+      moveFromRun.setFont('OldFont');
+      const moveFromRevision = Revision.createMoveFrom('Author', moveFromRun, 'move-1');
+      para.addRevision(moveFromRevision);
+
+      doc.addParagraph(para);
+
+      doc.applyStyles({
+        normal: {
+          run: { font: 'NewFont', size: 12, color: '000000' },
+        },
+      });
+
+      // The moveFrom run should retain its original font
+      expect(moveFromRun.getFont()).toBe('OldFont');
+      // The visible run should get the new font
+      expect(normalRun.getFont()).toBe('NewFont');
+
+      doc.dispose();
+    });
+
+    test('should apply formatting to runs inside insert revisions', async () => {
+      const { Revision } = await import('../../src/elements/Revision');
+      const { Run } = await import('../../src/elements/Run');
+
+      const doc = Document.create();
+      const style = Style.create({ styleId: 'Normal', name: 'Normal', type: 'paragraph' });
+      doc.addStyle(style);
+
+      const para = new Paragraph();
+      para.setStyle('Normal');
+
+      const insertedRun = new Run('inserted text');
+      const insRevision = Revision.createInsertion('Author', insertedRun);
+      para.addRevision(insRevision);
+
+      doc.addParagraph(para);
+
+      doc.applyStyles({
+        normal: {
+          run: { font: 'NewFont', size: 14, color: 'FF0000' },
+        },
+      });
+
+      expect(insertedRun.getFont()).toBe('NewFont');
+      expect(insertedRun.getSize()).toBe(14);
+
+      doc.dispose();
+    });
+
+    test('should apply formatting to runs inside moveTo revisions', async () => {
+      const { Revision } = await import('../../src/elements/Revision');
+      const { Run } = await import('../../src/elements/Run');
+
+      const doc = Document.create();
+      const style = Style.create({ styleId: 'Normal', name: 'Normal', type: 'paragraph' });
+      doc.addStyle(style);
+
+      const para = new Paragraph();
+      para.setStyle('Normal');
+
+      const moveToRun = new Run('moved-to text');
+      const moveToRevision = Revision.createMoveTo('Author', moveToRun, 'move-1');
+      para.addRevision(moveToRevision);
+
+      doc.addParagraph(para);
+
+      doc.applyStyles({
+        normal: {
+          run: { font: 'NewFont', size: 14, color: 'FF0000' },
+        },
+      });
+
+      expect(moveToRun.getFont()).toBe('NewFont');
+      expect(moveToRun.getSize()).toBe(14);
+
+      doc.dispose();
+    });
+
+    test('Heading2 hasContent should ignore deleted runs', async () => {
+      const { Revision } = await import('../../src/elements/Revision');
+      const { Run } = await import('../../src/elements/Run');
+
+      const doc = Document.create();
+
+      // Set up Heading2 style
+      const h2Style = Style.create({ styleId: 'Heading2', name: 'heading 2', type: 'paragraph' });
+      doc.addStyle(h2Style);
+
+      // Create a Heading2 paragraph with ONLY deleted content
+      const para = new Paragraph();
+      para.setStyle('Heading2');
+      const deletedRun = new Run('deleted heading text');
+      const delRevision = Revision.createDeletion('Author', deletedRun);
+      para.addRevision(delRevision);
+      doc.addParagraph(para);
+
+      // Apply styles with heading2 config — the paragraph should NOT be wrapped in a table
+      doc.applyStyles({
+        heading2: {
+          run: { font: 'Arial', size: 12, color: '000000' },
+          paragraph: {
+            spacing: { before: 120, after: 60, line: 240, lineRule: 'auto' as const },
+          },
+        },
+      });
+
+      // The paragraph should still exist as a paragraph (not wrapped in a table)
+      const bodyElements = doc.getBodyElements();
+      const tables = bodyElements.filter((el) => el instanceof Table);
+      expect(tables.length).toBe(0);
+
+      doc.dispose();
+    });
+  });
+
   describe('Revision Registration', () => {
     it('should register parsed revisions with RevisionManager after loading', async () => {
       // Create a document with revisions

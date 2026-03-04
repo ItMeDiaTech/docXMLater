@@ -627,6 +627,7 @@ export class ComplexField {
    */
   private _hasResultSection = false;
   private _formFieldData?: FormFieldData;
+  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
 
   /**
    * Creates a new complex field
@@ -685,6 +686,8 @@ export class ComplexField {
    */
   setResult(result: string): this {
     this.result = result;
+    this.resultRevisions = []; // Clear orphaned revisions from old text
+    this.resultContent = []; // Clear raw XML content since we have new text
     return this;
   }
 
@@ -842,6 +845,160 @@ export class ComplexField {
   }
 
   /**
+   * Sets the tracking context for automatic change tracking
+   * @internal
+   */
+  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+    this.trackingContext = context;
+  }
+
+  /**
+   * Gets the accepted (visible) text from resultContent XMLElements.
+   * Processes w:r (plain runs), w:ins (accepted insertions), skips w:del/w:moveFrom.
+   * Falls back to this.result if resultContent is empty.
+   */
+  getAcceptedResultText(): string {
+    if (this.resultContent.length === 0) {
+      return this.result || '';
+    }
+    let text = '';
+    for (const element of this.resultContent) {
+      if (element.name === 'w:r') {
+        text += this.extractTextFromRunXml(element);
+      } else if (element.name === 'w:ins') {
+        for (const child of element.children || []) {
+          if (typeof child !== 'string' && child.name === 'w:r') {
+            text += this.extractTextFromRunXml(child);
+          }
+        }
+      }
+      // Skip w:del, w:moveFrom (deleted/moved text not visible)
+    }
+    return text || this.result || '';
+  }
+
+  /**
+   * Extracts text content from a w:r (run) XMLElement
+   */
+  private extractTextFromRunXml(run: XMLElement): string {
+    let text = '';
+    for (const child of run.children || []) {
+      if (typeof child !== 'string' && (child.name === 'w:t' || child.name === 'w:delText')) {
+        for (const t of child.children || []) {
+          if (typeof t === 'string') text += t;
+        }
+      }
+    }
+    return text;
+  }
+
+  /**
+   * Sets the field result with tracked changes (del/ins pair).
+   * Creates a w:del wrapping the old text and a w:ins wrapping the new text,
+   * preserving formatting from the original result runs.
+   *
+   * @param newText - New result text to display
+   * @param author - Author name for the revision
+   * @param options - Optional formatting control
+   */
+  setTrackedResult(
+    newText: string,
+    author: string,
+    options?: {
+      formatting?: RunFormatting;
+      preserveFormatting?: boolean;
+    }
+  ): this {
+    const currentText = this.getAcceptedResultText();
+    if (currentText === newText) return this; // No-op if unchanged
+
+    const date = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+    // Get revision IDs from TrackingContext if available, else Date.now()-based
+    let delId: number, insId: number;
+    if (this.trackingContext) {
+      const rm = this.trackingContext.getRevisionManager();
+      delId = rm.consumeNextId();
+      insId = rm.consumeNextId();
+    } else {
+      const base = Date.now() % 100000000;
+      delId = base;
+      insId = base + 1;
+    }
+
+    // Resolve formatting: explicit > preserve > resultFormatting
+    let rPr: XMLElement | null = null;
+    if (options?.formatting) {
+      rPr = this.createRunProperties(options.formatting);
+    } else if (options?.preserveFormatting) {
+      rPr = this.extractFirstVisibleRunProperties();
+    }
+
+    // Build <w:del> with old text
+    const delRunChildren: (string | XMLElement)[] = [];
+    if (rPr) delRunChildren.push(rPr);
+    delRunChildren.push({
+      name: 'w:delText',
+      attributes: { 'xml:space': 'preserve' },
+      children: [currentText],
+    });
+    const delElement: XMLElement = {
+      name: 'w:del',
+      attributes: { 'w:id': String(delId), 'w:author': author, 'w:date': date },
+      children: [{ name: 'w:r', children: delRunChildren }],
+    };
+
+    // Build <w:ins> with new text
+    const insRunChildren: (string | XMLElement)[] = [];
+    if (rPr) insRunChildren.push(rPr);
+    insRunChildren.push({
+      name: 'w:t',
+      attributes: { 'xml:space': 'preserve' },
+      children: [newText],
+    });
+    const insElement: XMLElement = {
+      name: 'w:ins',
+      attributes: { 'w:id': String(insId), 'w:author': author, 'w:date': date },
+      children: [{ name: 'w:r', children: insRunChildren }],
+    };
+
+    // Replace content: resultContent takes priority in toXML()
+    this.resultContent = [delElement, insElement];
+    this.result = newText;
+    this.resultRevisions = [];
+
+    return this;
+  }
+
+  /**
+   * Extracts w:rPr from the first visible run in resultContent
+   */
+  private extractFirstVisibleRunProperties(): XMLElement | null {
+    for (const element of this.resultContent) {
+      if (element.name === 'w:r') {
+        const rPr = (element.children || []).find(
+          (c): c is XMLElement => typeof c !== 'string' && c.name === 'w:rPr'
+        );
+        if (rPr) return rPr;
+      } else if (element.name === 'w:ins') {
+        for (const child of element.children || []) {
+          if (typeof child !== 'string' && child.name === 'w:r') {
+            const rPr = (child.children || []).find(
+              (c): c is XMLElement => typeof c !== 'string' && c.name === 'w:rPr'
+            );
+            if (rPr) return rPr;
+          }
+        }
+      }
+    }
+    // Fall back to resultFormatting
+    if (this.resultFormatting) {
+      return this.createRunProperties(this.resultFormatting);
+    }
+    return null;
+  }
+
+  /**
    * Sets whether this field spans multiple paragraphs
    */
   setMultiParagraph(multiParagraph: boolean): this {
@@ -968,13 +1125,16 @@ export class ComplexField {
       });
     }
 
-    // 4a. Result revisions (tracked changes within the result section)
-    // These MUST appear between the separator and end marker per ECMA-376
-    // The revisions contain the actual field result content wrapped in w:ins or w:del
-    for (const revision of this.resultRevisions) {
-      const revisionXml = revision.toXML();
-      if (revisionXml) {
-        runs.push(revisionXml);
+    // 4a. Result revisions — only when NOT using resultContent
+    // When resultContent is populated (e.g., by DocumentParser with interleaved revision XML),
+    // it already includes revision elements in the correct interleaved position.
+    // Emitting them again here would cause duplication.
+    if (this.resultContent.length === 0) {
+      for (const revision of this.resultRevisions) {
+        const revisionXml = revision.toXML();
+        if (revisionXml) {
+          runs.push(revisionXml);
+        }
       }
     }
 

@@ -22,6 +22,7 @@ import type { Run } from '../elements/Run';
 import type { Hyperlink } from '../elements/Hyperlink';
 import { isRunContent, isHyperlinkContent, isImageRunContent } from '../elements/RevisionContent';
 import type { ImageRun } from '../elements/ImageRun';
+import { ComplexField } from '../elements/Field';
 import { Table } from '../elements/Table';
 import { Section } from '../elements/Section';
 import { getGlobalLogger, createScopedLogger, ILogger } from './logger';
@@ -543,6 +544,34 @@ function acceptRevisionsInParagraph(
 
       // If we reach here, this revision type is not being accepted
       // Keep it in the content
+      newContent.push(item);
+    } else if (item instanceof ComplexField && item.hasResultRevisions()) {
+      // Accept revisions nested inside ComplexField result sections
+      const fieldRevisions = item.getResultRevisions();
+      const revisionsToKeep: Revision[] = [];
+
+      for (const rev of fieldRevisions) {
+        const revType = rev.getType();
+        if (revType === 'insert' && options.acceptInsertions) {
+          result.insertionsAccepted++;
+        } else if (revType === 'delete' && options.acceptDeletions) {
+          result.deletionsAccepted++;
+        } else if (revType === 'moveTo' && options.acceptMoves) {
+          result.movesAccepted++;
+        } else if (revType === 'moveFrom' && options.acceptMoves) {
+          result.movesAccepted++;
+        } else {
+          revisionsToKeep.push(rev);
+        }
+      }
+
+      if (revisionsToKeep.length < fieldRevisions.length) {
+        // Some revisions were accepted — use getAcceptedResultText() for correct interleaved ordering
+        item.setResult(item.getAcceptedResultText());
+        if (revisionsToKeep.length > 0) {
+          item.setResultRevisions(revisionsToKeep);
+        }
+      }
       newContent.push(item);
     } else {
       // Non-revision content - keep as-is

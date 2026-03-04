@@ -2,9 +2,9 @@
  * RevisionContent - Defines valid content types for tracked changes (revisions)
  *
  * Per ECMA-376, w:ins and w:del elements can contain:
- * - w:r (runs) - Text with formatting
- * - w:r with w:drawing (image runs) - Images embedded in runs
- * - w:hyperlink - Hyperlinks with nested runs
+ * - w:r (runs) — Text with formatting
+ * - w:r with w:drawing (image runs) — Images embedded in runs
+ * - w:hyperlink — Hyperlinks with nested runs
  *
  * This module provides the type definitions and type guards for revision content.
  */

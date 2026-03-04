@@ -5,6 +5,27 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.9] - 2026-03-04
+
+### Fixed
+
+- **ComplexField revision acceptance text ordering**: `acceptAllRevisions()` now uses `getAcceptedResultText()` for correct interleaved ordering when accepting revisions inside ComplexField result sections. Previously, insertion text was appended to the end of the result instead of being merged in document order, producing wrong text like "Coverage...mmercial PA Appeals" instead of "Commercial PA Appeals - Coverage...".
+
+### Changed
+
+- **Dead code removal in `tryPromoteRevisionFieldCode()`**: Removed ~30 lines of unreachable field detection/promotion code after the early return guard for content revision types. Property change revisions never contain field sequences, so this code path was never executed.
+
+### Tests
+
+- Strengthened ComplexField acceptance test assertions from `toContain` fragments to exact `toBe` matching with correct interleaved text ordering
+- Added negative assertion for bare `w:instrText` in `w:del`-wrapped field round-trip test (only `w:delInstrText` should appear)
+
+### Statistics
+
+- 146 test suites, 3,120 tests passing
+
+---
+
 ## [10.1.7] - 2026-02-24
 
 ### Added

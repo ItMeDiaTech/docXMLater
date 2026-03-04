@@ -1192,14 +1192,6 @@ export class DocumentParser {
       }
     }
 
-    // Extract revision XMLs from paragraph content for raw XML parsing
-    const insXmls = XMLParser.extractElements(paraContent, 'w:ins');
-    const delXmls = XMLParser.extractElements(paraContent, 'w:del');
-    const moveFromXmls = XMLParser.extractElements(paraContent, 'w:moveFrom');
-    const moveToXmls = XMLParser.extractElements(paraContent, 'w:moveTo');
-    const bookmarkStartXmls = XMLParser.extractElements(paraContent, 'w:bookmarkStart');
-    const bookmarkEndXmls = XMLParser.extractElements(paraContent, 'w:bookmarkEnd');
-
     // Helper to extract raw run XML from paraContent using position
     const extractRunXmlAtPosition = (pos: number): string | null => {
       // Find the end of this run element
@@ -1226,6 +1218,46 @@ export class DocumentParser {
         }
       }
       return null;
+    };
+
+    // Helper to extract element XML at a known position, depth-aware
+    const extractElementXmlAtPosition = (pos: number, tagName: string): string => {
+      const openTag = `<${tagName}`;
+      const closeTag = `</${tagName}>`;
+      const openEnd = paraContent.indexOf('>', pos);
+      if (openEnd === -1) return '';
+      // Self-closing
+      if (paraContent[openEnd - 1] === '/') {
+        return paraContent.substring(pos, openEnd + 1);
+      }
+      let depth = 1;
+      let searchFrom = openEnd + 1;
+      while (depth > 0 && searchFrom < paraContent.length) {
+        const nextOpen = paraContent.indexOf(openTag, searchFrom);
+        const nextClose = paraContent.indexOf(closeTag, searchFrom);
+        if (nextClose === -1) break;
+        if (nextOpen !== -1 && nextOpen < nextClose) {
+          const charAfter = paraContent[nextOpen + openTag.length];
+          if (
+            charAfter === '>' ||
+            charAfter === ' ' ||
+            charAfter === '/' ||
+            charAfter === '\t' ||
+            charAfter === '\n' ||
+            charAfter === '\r'
+          ) {
+            depth++;
+          }
+          searchFrom = nextOpen + openTag.length;
+        } else {
+          depth--;
+          if (depth === 0) {
+            return paraContent.substring(pos, nextClose + closeTag.length);
+          }
+          searchFrom = nextClose + closeTag.length;
+        }
+      }
+      return '';
     };
 
     // Now process children in the order they were found
@@ -1297,19 +1329,32 @@ export class DocumentParser {
             ? [hyperlinks]
             : [];
         if (child.index < hyperlinkArray.length) {
-          const result = this.parseHyperlinkFromObject(
-            hyperlinkArray[child.index],
-            relationshipManager
-          );
-          if (result.hyperlink) {
-            paragraph.addHyperlink(result.hyperlink);
-          }
-          // Add any bookmarks found inside the hyperlink
-          for (const bookmark of result.bookmarkStarts) {
-            paragraph.addBookmarkStart(bookmark);
-          }
-          for (const bookmark of result.bookmarkEnds) {
-            paragraph.addBookmarkEnd(bookmark);
+          const hyperlinkObj = hyperlinkArray[child.index];
+
+          // Hyperlinks containing tracked changes (w:del/w:ins inside w:hyperlink)
+          // cannot survive parseHyperlinkFromObject round-trip — preserve as raw XML
+          const hasRevisionChildren =
+            hyperlinkObj['w:del'] ||
+            hyperlinkObj['w:ins'] ||
+            hyperlinkObj['w:moveFrom'] ||
+            hyperlinkObj['w:moveTo'];
+          if (hasRevisionChildren) {
+            const rawXml = extractElementXmlAtPosition(child.pos, 'w:hyperlink');
+            if (rawXml) {
+              paragraph.addContent(new PreservedElement(rawXml, 'w:hyperlink', 'inline'));
+            }
+          } else {
+            const result = this.parseHyperlinkFromObject(hyperlinkObj, relationshipManager);
+            if (result.hyperlink) {
+              paragraph.addHyperlink(result.hyperlink);
+            }
+            // Add any bookmarks found inside the hyperlink
+            for (const bookmark of result.bookmarkStarts) {
+              paragraph.addBookmarkStart(bookmark);
+            }
+            for (const bookmark of result.bookmarkEnds) {
+              paragraph.addBookmarkEnd(bookmark);
+            }
           }
         }
       } else if (child.type === 'w:fldSimple') {
@@ -1321,13 +1366,24 @@ export class DocumentParser {
             paragraph.addField(field);
           }
         }
-      } else if (child.type === 'w:ins') {
-        if (child.index < insXmls.length) {
-          const revisionXml = insXmls[child.index];
-          if (revisionXml) {
+      } else if (
+        child.type === 'w:ins' ||
+        child.type === 'w:del' ||
+        child.type === 'w:moveFrom' ||
+        child.type === 'w:moveTo'
+      ) {
+        const revisionXml = extractElementXmlAtPosition(child.pos, child.type);
+        if (revisionXml) {
+          // Detect nested revision elements (e.g., w:del inside w:ins)
+          const innerContent = revisionXml.substring(revisionXml.indexOf('>') + 1);
+          const hasNestedRevision = /<w:(del|moveFrom|moveTo|ins)\s/.test(innerContent);
+          if (hasNestedRevision) {
+            // Preserve entire nested structure as raw XML for round-trip fidelity
+            paragraph.addContent(new PreservedElement(revisionXml, child.type, 'inline'));
+          } else {
             const revResult = await this.parseRevisionFromXml(
               revisionXml,
-              'w:ins',
+              child.type,
               relationshipManager,
               zipHandler,
               imageManager
@@ -1335,76 +1391,6 @@ export class DocumentParser {
             if (revResult.revision) {
               paragraph.addRevision(revResult.revision);
             }
-            // Add any bookmarks found inside the revision to the paragraph
-            for (const bookmark of revResult.bookmarkStarts) {
-              paragraph.addBookmarkStart(bookmark);
-            }
-            for (const bookmark of revResult.bookmarkEnds) {
-              paragraph.addBookmarkEnd(bookmark);
-            }
-          }
-        }
-      } else if (child.type === 'w:del') {
-        if (child.index < delXmls.length) {
-          const revisionXml = delXmls[child.index];
-          if (revisionXml) {
-            const revResult = await this.parseRevisionFromXml(
-              revisionXml,
-              'w:del',
-              relationshipManager,
-              zipHandler,
-              imageManager
-            );
-            if (revResult.revision) {
-              paragraph.addRevision(revResult.revision);
-            }
-            // Add any bookmarks found inside the revision to the paragraph
-            for (const bookmark of revResult.bookmarkStarts) {
-              paragraph.addBookmarkStart(bookmark);
-            }
-            for (const bookmark of revResult.bookmarkEnds) {
-              paragraph.addBookmarkEnd(bookmark);
-            }
-          }
-        }
-      } else if (child.type === 'w:moveFrom') {
-        if (child.index < moveFromXmls.length) {
-          const revisionXml = moveFromXmls[child.index];
-          if (revisionXml) {
-            const revResult = await this.parseRevisionFromXml(
-              revisionXml,
-              'w:moveFrom',
-              relationshipManager,
-              zipHandler,
-              imageManager
-            );
-            if (revResult.revision) {
-              paragraph.addRevision(revResult.revision);
-            }
-            // Add any bookmarks found inside the revision to the paragraph
-            for (const bookmark of revResult.bookmarkStarts) {
-              paragraph.addBookmarkStart(bookmark);
-            }
-            for (const bookmark of revResult.bookmarkEnds) {
-              paragraph.addBookmarkEnd(bookmark);
-            }
-          }
-        }
-      } else if (child.type === 'w:moveTo') {
-        if (child.index < moveToXmls.length) {
-          const revisionXml = moveToXmls[child.index];
-          if (revisionXml) {
-            const revResult = await this.parseRevisionFromXml(
-              revisionXml,
-              'w:moveTo',
-              relationshipManager,
-              zipHandler,
-              imageManager
-            );
-            if (revResult.revision) {
-              paragraph.addRevision(revResult.revision);
-            }
-            // Add any bookmarks found inside the revision to the paragraph
             for (const bookmark of revResult.bookmarkStarts) {
               paragraph.addBookmarkStart(bookmark);
             }
@@ -1414,25 +1400,21 @@ export class DocumentParser {
           }
         }
       } else if (child.type === 'w:bookmarkStart') {
-        // Parse bookmark start element
-        if (child.index < bookmarkStartXmls.length) {
-          const bookmarkXml = bookmarkStartXmls[child.index];
-          if (bookmarkXml) {
-            const bookmark = this.parseBookmarkStart(bookmarkXml);
-            if (bookmark) {
-              paragraph.addBookmarkStart(bookmark);
-            }
+        const endPos = paraContent.indexOf('>', child.pos);
+        if (endPos !== -1) {
+          const bookmarkXml = paraContent.substring(child.pos, endPos + 1);
+          const bookmark = this.parseBookmarkStart(bookmarkXml);
+          if (bookmark) {
+            paragraph.addBookmarkStart(bookmark);
           }
         }
       } else if (child.type === 'w:bookmarkEnd') {
-        // Parse bookmark end element
-        if (child.index < bookmarkEndXmls.length) {
-          const bookmarkXml = bookmarkEndXmls[child.index];
-          if (bookmarkXml) {
-            const bookmark = this.parseBookmarkEnd(bookmarkXml);
-            if (bookmark) {
-              paragraph.addBookmarkEnd(bookmark);
-            }
+        const endPos = paraContent.indexOf('>', child.pos);
+        if (endPos !== -1) {
+          const bookmarkXml = paraContent.substring(child.pos, endPos + 1);
+          const bookmark = this.parseBookmarkEnd(bookmarkXml);
+          if (bookmark) {
+            paragraph.addBookmarkEnd(bookmark);
           }
         }
       } else if (child.type === 'w:commentRangeStart' || child.type === 'w:commentRangeEnd') {
@@ -2707,6 +2689,7 @@ export class DocumentParser {
     let fieldRuns: Run[] = [];
     let fieldRevisions: Revision[] = []; // Track revisions inside field result section
     let instructionRevisions: Revision[] = []; // Track revisions in instruction area
+    let orderedResultItems: Array<Run | Revision> = []; // Track interleaved order of result runs + revisions
     let fieldState: 'begin' | 'instruction' | 'separate' | 'result' | 'end' | null = null;
     let nestingDepth = 0;
     let hasNestedFields = false;
@@ -2767,6 +2750,7 @@ export class DocumentParser {
                     fieldRuns = [];
                     instructionRevisions = [];
                     fieldRevisions = [];
+                    orderedResultItems = [];
                     fieldState = null;
                     hasNestedFields = false;
                     fieldStartIndex = -1;
@@ -2819,6 +2803,7 @@ export class DocumentParser {
                     fieldRuns = [];
                     instructionRevisions = [];
                     fieldRevisions = [];
+                    orderedResultItems = [];
                     fieldState = null;
                     break;
                   }
@@ -2852,6 +2837,69 @@ export class DocumentParser {
                   if (isHyperlinkInstruction(instruction)) {
                     const parsed = parseHyperlinkInstruction(instruction);
                     if (parsed && resultText) {
+                      // HYPERLINK fields with tracked changes in the result region cannot be
+                      // converted to Hyperlink objects — the revisions would become orphaned
+                      // standalone paragraph content. Keep as ComplexField instead.
+                      if (fieldRevisions.length > 0) {
+                        const complexField = this.createComplexFieldFromRuns(fieldRuns);
+                        if (complexField) {
+                          // Build ordered resultContent for correct round-trip serialization
+                          if (orderedResultItems.length > 0) {
+                            const orderedContent: XMLElement[] = [];
+                            for (const resultItem of orderedResultItems) {
+                              if (resultItem instanceof Run) {
+                                orderedContent.push(resultItem.toXML());
+                              } else if (resultItem instanceof Revision) {
+                                const xml = resultItem.toXML();
+                                if (xml) orderedContent.push(xml);
+                              }
+                            }
+                            // Compute accepted text (non-revision runs + insertion text)
+                            let acceptedText = '';
+                            for (const resultItem of orderedResultItems) {
+                              if (resultItem instanceof Run) {
+                                acceptedText += resultItem.getText() || '';
+                              } else if (
+                                resultItem instanceof Revision &&
+                                resultItem.getType() === 'insert'
+                              ) {
+                                for (const child of resultItem.getRuns()) {
+                                  acceptedText += child.getText() || '';
+                                }
+                              }
+                            }
+                            // Set accepted text as the result (for getResult() API)
+                            complexField.setResult(acceptedText || complexField.getResult() || '');
+                            // Add ordered content for serialization (overrides the text-based path)
+                            for (const xmlEl of orderedContent) {
+                              complexField.addResultContent(xmlEl);
+                            }
+                          }
+                          // Attach revisions for tracking/acceptance
+                          for (const rev of fieldRevisions) {
+                            rev.setFieldContext({
+                              field: complexField,
+                              instruction: complexField.getInstruction(),
+                              position: 'result',
+                            });
+                          }
+                          complexField.setResultRevisions(fieldRevisions);
+                          groupedContent.push(complexField);
+                        } else {
+                          fieldRuns.forEach((run) => groupedContent.push(run));
+                          for (const revision of fieldRevisions) {
+                            groupedContent.push(revision);
+                          }
+                        }
+                        fieldRuns = [];
+                        instructionRevisions = [];
+                        fieldRevisions = [];
+                        orderedResultItems = [];
+                        fieldState = null;
+                        break;
+                      }
+
+                      // Normal path (no revisions) — convert to Hyperlink object
                       let hyperlink: Hyperlink;
                       if (parsed.url && parsed.url.trim() !== '') {
                         // External hyperlink (or combined external + anchor)
@@ -2894,6 +2942,7 @@ export class DocumentParser {
                         fieldRuns = [];
                         instructionRevisions = [];
                         fieldRevisions = [];
+                        orderedResultItems = [];
                         fieldState = null;
                         break;
                       }
@@ -2913,6 +2962,7 @@ export class DocumentParser {
                       fieldRuns = [];
                       instructionRevisions = [];
                       fieldRevisions = [];
+                      orderedResultItems = [];
                       fieldState = null;
                       break;
                     }
@@ -2947,6 +2997,7 @@ export class DocumentParser {
                   fieldRuns = [];
                   instructionRevisions = [];
                   fieldRevisions = [];
+                  orderedResultItems = [];
                   fieldState = null;
                 }
                 break;
@@ -2960,11 +3011,16 @@ export class DocumentParser {
         } else {
           // Regular run - check if we're inside a field result section
           if (nestingDepth > 0) {
-            // Inside a nested field - collect all runs to preserve raw structure
+            // Inside a field - collect all runs to preserve raw structure
             fieldRuns.push(item);
+            // Track result runs for interleaved ordering (only outer field level)
+            if (nestingDepth === 1 && (fieldState === 'separate' || fieldState === 'result')) {
+              orderedResultItems.push(item);
+            }
           } else if (fieldState === 'separate' || fieldState === 'result') {
             // This run is part of the field result - collect it
             fieldRuns.push(item);
+            orderedResultItems.push(item);
             fieldState = 'result';
           } else if (fieldState === 'begin' || fieldState === 'instruction') {
             // We're in the middle of parsing field instruction
@@ -2983,6 +3039,7 @@ export class DocumentParser {
             fieldRuns = [];
             instructionRevisions = [];
             fieldRevisions = [];
+            orderedResultItems = [];
             fieldState = null;
             groupedContent.push(item);
           } else {
@@ -2999,6 +3056,7 @@ export class DocumentParser {
           // Set preliminary field context (field reference will be set when ComplexField is created)
           item.setFieldContext({ position: 'result' });
           fieldRevisions.push(item);
+          orderedResultItems.push(item);
           fieldState = 'result';
           defaultLogger.debug(
             `Found revision inside complex field result: type=${item.getType()}, id=${item.getId()}`
@@ -3027,11 +3085,21 @@ export class DocumentParser {
           fieldRuns = [];
           instructionRevisions = [];
           fieldRevisions = [];
+          orderedResultItems = [];
           fieldState = null;
           groupedContent.push(item);
         } else {
-          // Normal revision outside of any field
-          groupedContent.push(item);
+          // Normal revision outside of any field — check if it contains a complete
+          // field code sequence (Scenario A: entire HYPERLINK fldChar sequence inside w:ins).
+          // parseRevisionFromXml() creates individual Runs from the fldChar/instrText/result
+          // elements, but assembleComplexFields() only sees the Revision wrapper.
+          // Promote complete field code sequences to ComplexField at the paragraph level.
+          const promoted = this.tryPromoteRevisionFieldCode(item);
+          if (promoted) {
+            groupedContent.push(promoted);
+          } else {
+            groupedContent.push(item);
+          }
         }
       } else {
         // Non-run content (hyperlinks, images, etc.)
@@ -3050,6 +3118,7 @@ export class DocumentParser {
           fieldRuns = [];
           instructionRevisions = [];
           fieldRevisions = [];
+          orderedResultItems = [];
           fieldState = null;
         }
         groupedContent.push(item);
@@ -3485,6 +3554,35 @@ export class DocumentParser {
     defaultLogger.debug(
       `Processed multi-paragraph field spanning paragraphs ${fieldTracker.startParagraphIndex} to ${affectedParagraphIndices[affectedParagraphIndices.length - 1]}`
     );
+  }
+
+  /**
+   * Checks if a Revision contains a complete field code sequence (fldChar begin → instrText →
+   * fldChar separate → result text → fldChar end) and promotes it to a ComplexField.
+   *
+   * This handles the case where an entire HYPERLINK field code is inside a tracked change
+   * (w:ins), producing Runs with fldChar tokens inside the Revision. Since assembleComplexFields()
+   * only sees the Revision wrapper (not the Runs inside), the field code is never assembled.
+   *
+   * @returns ComplexField if promotion succeeded, null otherwise
+   */
+  private tryPromoteRevisionFieldCode(revision: Revision): ComplexField | null {
+    const revType = revision.getType();
+    // Do not promote fields inside tracked change revisions.
+    // Keeping them as Revision objects preserves round-trip fidelity:
+    // - For w:del/w:moveFrom: createDeletedRunXml() converts w:t→w:delText, w:instrText→w:delInstrText
+    // - For w:ins/w:moveTo: normal Run.toXML() inside the revision wrapper
+    if (
+      revType === 'delete' ||
+      revType === 'insert' ||
+      revType === 'moveFrom' ||
+      revType === 'moveTo'
+    ) {
+      return null;
+    }
+
+    // Non-content revision types (property changes, table cell ops) never contain field sequences
+    return null;
   }
 
   /**
@@ -4554,6 +4652,9 @@ export class DocumentParser {
           paragraph.addRun(item);
         } else if (item instanceof Field) {
           paragraph.addField(item);
+        } else {
+          // Preserve all other content types: Revision, RangeMarker, Shape, TextBox, PreservedElement
+          paragraph.addContent(item);
         }
       }
     }

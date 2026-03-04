@@ -574,6 +574,15 @@ ${properties}
             }
           }
         }
+        // PreservedElements (raw XML passthrough) may contain r:id references
+        if (item instanceof PreservedElement) {
+          const rawXml = item.getRawXml();
+          const rIdPattern = /r:id="(rId\d+)"/g;
+          let rIdMatch: RegExpExecArray | null;
+          while ((rIdMatch = rIdPattern.exec(rawXml)) !== null) {
+            usedRelIds.add(rIdMatch[1]!);
+          }
+        }
       }
     };
 

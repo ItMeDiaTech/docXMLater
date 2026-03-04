@@ -1,76 +1,40 @@
-# docXMLater v10.1.7 Release Notes
+# docXMLater v10.2.9 Release Notes
 
-## Release Date: February 24, 2026
+## Release Date: March 4, 2026
 
-### Feature Release
+### Bug Fix Release
 
-This release adds a numbering restart helper and continues the ECMA-376 comprehensive gap analysis work with OOXML compliance fixes, expanded APIs, and extensive test coverage.
-
-## Key Features
-
-### Numbering Restart Helper
-
-- `restartNumbering(numId, level?, startValue?)` on both `Document` and `NumberingManager`
-- Creates a new numbering instance referencing the same abstract numbering with a level override
-- Replaces the previous multi-step manual process
-
-```typescript
-const listId = doc.createNumberedList();
-doc.createParagraph('Item 1').setNumbering(listId, 0);
-doc.createParagraph('Item 2').setNumbering(listId, 0);
-
-// Restart numbering from 1
-const restartId = doc.restartNumbering(listId);
-doc.createParagraph('New item 1').setNumbering(restartId, 0);
-```
-
-### Settings API Expansion (10.1.0)
-
-- New getter/setter pairs for `hideSpellingErrors`, `hideGrammaticalErrors`, `defaultTabStop`, `updateFields`, `embedTrueTypeFonts`, `saveSubsetFonts`, `doNotTrackMoves`
-- Dirty-tracking for selective merging with original settings XML
-
-### SDT and Numbering Enhancements (10.1.0)
-
-- Structured Document Tag: placeholder, data binding, showingPlaceholder support
-- Numbering: level pStyle association, full level overrides, AbstractNumbering template
-- Styles: latent styles support, `setPersonalCompose()`, `setPersonalReply()`
-
-### Hyperlink Attributes (10.1.0)
-
-- `setDocLocation()`, `setTgtFrame()`, `setHistory()` with getters and round-trip support
+This release fixes incorrect text ordering when accepting tracked changes inside ComplexField result sections, removes dead code from the parser, and strengthens test assertions.
 
 ## Bug Fixes
 
-### Table Width Parsing (10.1.1)
+### ComplexField Revision Acceptance Text Ordering
 
-- Auto-sized tables (`w:tblW w:w="0" w:type="auto"`) now parse correctly
-- NaN-safe table property parsing prevents propagation from malformed input
-- Table indentation (`w:tblInd`) parsing from main `tblPr` properties
+- `acceptAllRevisions()` now produces correct interleaved text when accepting revisions inside ComplexField HYPERLINK results
+- Previously, insertion text was appended to the end of the result string instead of being merged in document order
+- Example: interleaved content like "Co" + ins("mmercial...") + "verage..." now correctly produces "Commercial PA Appeals - Coverage Determination Denial Reasons (CMS-PRD1-086897)" instead of "Coverage Determination...(CMS-PRD1-086897)mmercial PA Appeals - Co"
+- Uses `getAcceptedResultText()` which processes `resultContent` XML elements in document order, including plain runs and insertions while skipping deletions
 
-### Paragraph Mark Revision Tracking (10.0.4)
+## Code Quality
 
-- Tracked deletions no longer leave blank lines in Simple Markup View
-- Full paragraph mark insertion/deletion tracking API
+### Dead Code Removal in DocumentParser
 
-### OOXML Compliance (10.0.3)
-
-- `tblStyleRowBandSize`/`tblStyleColBandSize` correctly limited to style definitions
-- Header/footer hyperlinks use part-scoped relationship files
-- Property change revisions properly skipped in paragraph content serialization
+- Removed ~30 lines of unreachable code in `tryPromoteRevisionFieldCode()` after the early return guard for content revision types (insert, delete, moveFrom, moveTo)
+- Property change revision types never contain field character sequences, so the downstream field detection and promotion logic was never executed
 
 ## Test Suite Status
 
 | Metric           | Value |
 | ---------------- | ----- |
-| **Test Suites**  | 143   |
-| **Total Tests**  | 3,084 |
+| **Test Suites**  | 146   |
+| **Total Tests**  | 3,120 |
 | **Passing**      | 100%  |
-| **Source Files** | 103   |
+| **Source Files** | 120   |
 
 ## Installation
 
 ```bash
-npm install docxmlater@10.1.7
+npm install docxmlater@10.2.9
 ```
 
 ## Package Information
@@ -78,7 +42,7 @@ npm install docxmlater@10.1.7
 | Field          | Value                                     |
 | -------------- | ----------------------------------------- |
 | **Name**       | docxmlater                                |
-| **Version**    | 10.1.7                                    |
+| **Version**    | 10.2.9                                    |
 | **License**    | MIT                                       |
 | **Repository** | https://github.com/ItMeDiaTech/docXMLater |
 | **npm**        | https://www.npmjs.com/package/docxmlater  |

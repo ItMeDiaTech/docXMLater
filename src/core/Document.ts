@@ -6190,7 +6190,11 @@ export class Document {
         // Direct run
         runs.push(item);
       } else if (item instanceof Revision) {
-        // Runs inside revision wrappers
+        // Skip deleted/moved-away content — these runs are inactive
+        const revType = item.getType();
+        if (revType === 'delete' || revType === 'moveFrom') {
+          continue;
+        }
         const revisionRuns = item.getRuns();
         runs.push(...revisionRuns);
       } else if (item instanceof Hyperlink) {
@@ -10744,6 +10748,19 @@ export class Document {
     if (element && typeof element.getHyperlinks === 'function') {
       for (const link of element.getHyperlinks()) {
         this.bindTrackingToElement(link);
+      }
+    }
+
+    // Bind to ComplexField instances in paragraph content
+    if (element && typeof element.getContent === 'function') {
+      for (const item of element.getContent()) {
+        if (
+          item &&
+          typeof item._setTrackingContext === 'function' &&
+          typeof item.getInstruction === 'function'
+        ) {
+          item._setTrackingContext(this.trackingContext);
+        }
       }
     }
 
