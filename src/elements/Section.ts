@@ -616,7 +616,9 @@ export class Section {
    * @param orientation Page orientation
    */
   setOrientation(orientation: PageOrientation): this {
-    const prev = this.properties.pageSize?.orientation;
+    const prevOrientation = this.properties.pageSize?.orientation;
+    // Capture full pageSize BEFORE mutation for tracking
+    const prevPageSize = this.properties.pageSize ? { ...this.properties.pageSize } : undefined;
     if (!this.properties.pageSize) {
       this.properties.pageSize = {
         width: PAGE_SIZES.LETTER.width,
@@ -635,8 +637,11 @@ export class Section {
       this.properties.pageSize.height = temp;
     }
 
-    if (this.trackingContext?.isEnabled() && prev !== orientation) {
-      this.trackingContext.trackSectionChange(this, 'orientation', prev, orientation);
+    if (this.trackingContext?.isEnabled() && prevOrientation !== orientation) {
+      // Track the full pageSize change (not just orientation) since width/height are swapped
+      this.trackingContext.trackSectionChange(this, 'pageSize', prevPageSize, {
+        ...this.properties.pageSize,
+      });
     }
     return this;
   }
@@ -1402,6 +1407,17 @@ export class Section {
               'w:val': tdMap[prev.textDirection] || prev.textDirection,
             })
           );
+        }
+        if (prev.docGrid) {
+          const dgAttrs: Record<string, string> = {};
+          if (prev.docGrid.type) dgAttrs['w:type'] = prev.docGrid.type;
+          if (prev.docGrid.linePitch !== undefined)
+            dgAttrs['w:linePitch'] = prev.docGrid.linePitch.toString();
+          if (prev.docGrid.charSpace !== undefined)
+            dgAttrs['w:charSpace'] = prev.docGrid.charSpace.toString();
+          if (Object.keys(dgAttrs).length > 0) {
+            prevChildren.push(XMLBuilder.wSelf('docGrid', dgAttrs));
+          }
         }
       }
       const prevSectPr = XMLBuilder.w('sectPr', undefined, prevChildren);
