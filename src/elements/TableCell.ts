@@ -1466,8 +1466,8 @@ export class TableCell {
       const prevTcPrChildren: XMLElement[] = [];
       const prev = this.tcPrChange.previousProperties;
       if (prev) {
-        // Ordered per CT_TcPr: tcW → tcBorders → shd → noWrap → tcMar →
-        // textDirection → tcFitText → vAlign → hideMark → cnfStyle
+        // Ordered per CT_TcPr: tcW → gridSpan → hMerge → vMerge → tcBorders → shd →
+        // noWrap → tcMar → textDirection → tcFitText → vAlign → hideMark → cnfStyle
         if (prev.width !== undefined) {
           prevTcPrChildren.push(
             XMLBuilder.wSelf('tcW', {
@@ -1475,6 +1475,19 @@ export class TableCell {
               'w:type': prev.widthType || 'dxa',
             })
           );
+        }
+        if (prev.columnSpan && prev.columnSpan > 1) {
+          prevTcPrChildren.push(XMLBuilder.wSelf('gridSpan', { 'w:val': prev.columnSpan }));
+        }
+        if (prev.hMerge) {
+          prevTcPrChildren.push(XMLBuilder.wSelf('hMerge', { 'w:val': prev.hMerge }));
+        }
+        if (prev.vMerge) {
+          if (prev.vMerge === 'restart') {
+            prevTcPrChildren.push(XMLBuilder.wSelf('vMerge', { 'w:val': 'restart' }));
+          } else {
+            prevTcPrChildren.push(XMLBuilder.wSelf('vMerge'));
+          }
         }
         if (prev.borders) {
           const borderElements: XMLElement[] = [];
