@@ -1160,3 +1160,326 @@ describe('Loaded table with indent captures correct tblPrChange', () => {
     loaded.dispose();
   });
 });
+
+// ============================================================================
+// Table Scrunching Bug Fixes — sectPrChange full snapshot
+// ============================================================================
+
+describe('Fix A: sectPrChange preserves full original section properties', () => {
+  let doc: Document;
+  let section: Section;
+
+  beforeEach(() => {
+    doc = createTrackedDocument();
+    section = doc.getSection();
+  });
+
+  afterEach(() => {
+    doc.dispose();
+  });
+
+  it('should include full previous properties in sectPrChange (not just delta)', () => {
+    // Change only orientation — sectPrChange should still include pageSize, margins, columns, type
+    section.setOrientation('landscape');
+    doc.flushPendingChanges();
+
+    const change = section.getSectPrChange();
+    expect(change).toBeDefined();
+    expect(change!.previousProperties).toBeDefined();
+
+    // Full snapshot should include ALL section properties, not just orientation
+    expect(change!.previousProperties.pageSize).toBeDefined();
+    expect(change!.previousProperties.pageSize.width).toBe(12240);
+    expect(change!.previousProperties.pageSize.height).toBe(15840);
+    expect(change!.previousProperties.margins).toBeDefined();
+    expect(change!.previousProperties.margins.top).toBe(1440);
+    expect(change!.previousProperties.margins.left).toBe(1440);
+    expect(change!.previousProperties.columns).toBeDefined();
+    expect(change!.previousProperties.type).toBe('nextPage');
+  });
+
+  it('should preserve original portrait pageSize when switching to landscape', () => {
+    section.setOrientation('landscape');
+    doc.flushPendingChanges();
+
+    const change = section.getSectPrChange();
+    expect(change).toBeDefined();
+    // The original was portrait, so the previous state should be portrait
+    expect(change!.previousProperties.pageSize.orientation).toBe('portrait');
+    expect(change!.previousProperties.pageSize.width).toBe(12240);
+    expect(change!.previousProperties.pageSize.height).toBe(15840);
+  });
+
+  it('should serialize full sectPrChange with pgSz, pgMar, cols in XML', () => {
+    section.setSectPrChange({
+      id: '100',
+      author: 'TestAuthor',
+      date: '2026-02-22T00:00:00Z',
+      previousProperties: {
+        pageSize: { width: 12240, height: 15840, orientation: 'portrait' },
+        margins: { top: 1440, bottom: 1440, left: 1440, right: 1440, header: 720, footer: 720 },
+        columns: { count: 1, space: 720 },
+        docGrid: { linePitch: 360 },
+      },
+    });
+    const xml = section.toXML();
+    const xmlStr = JSON.stringify(xml);
+    expect(xmlStr).toContain('sectPrChange');
+    expect(xmlStr).toContain('pgSz');
+    expect(xmlStr).toContain('pgMar');
+    expect(xmlStr).toContain('cols');
+    expect(xmlStr).toContain('docGrid');
+    expect(xmlStr).toContain('linePitch');
+  });
+
+  it('should include docGrid in sectPrChange when present', () => {
+    section.setSectPrChange({
+      id: '101',
+      author: 'TestAuthor',
+      date: '2026-02-22T00:00:00Z',
+      previousProperties: {
+        docGrid: { linePitch: 360, type: 'default' },
+      },
+    });
+    const xml = section.toXML();
+    const xmlStr = JSON.stringify(xml);
+    expect(xmlStr).toContain('docGrid');
+    expect(xmlStr).toContain('360');
+  });
+
+  it('should NOT produce empty sectPr in sectPrChange', () => {
+    // Changing just the orientation should produce a sectPrChange with populated content
+    section.setOrientation('landscape');
+    doc.flushPendingChanges();
+
+    const change = section.getSectPrChange();
+    expect(change).toBeDefined();
+    // Must NOT be empty — should have at least pageSize and margins
+    expect(Object.keys(change!.previousProperties).length).toBeGreaterThan(0);
+    expect(change!.previousProperties.pageSize).toBeDefined();
+    expect(change!.previousProperties.margins).toBeDefined();
+  });
+});
+
+// ============================================================================
+// Table Scrunching Bug Fixes — tblGridChange
+// ============================================================================
+
+describe('Fix B: tblGridChange created when modifying table grid', () => {
+  let doc: Document;
+  let table: Table;
+
+  beforeEach(() => {
+    doc = createTrackedDocument();
+    table = new Table(2, 2);
+    doc.addTable(table);
+  });
+
+  afterEach(() => {
+    doc.dispose();
+  });
+
+  it('should create tblGridChange when setTableGrid is called with previous grid', () => {
+    // First set a grid without tracking
+    doc.disableTrackChanges();
+    table.setTableGrid([4680, 4680]);
+    doc.enableTrackChanges({ author: 'TestAuthor' });
+
+    // Now modify the grid — should create tblGridChange
+    table.setTableGrid([6480, 6480]);
+
+    const gridChange = table.getTblGridChange();
+    expect(gridChange).toBeDefined();
+    expect(gridChange!.getAuthor()).toBe('TestAuthor');
+    expect(gridChange!.getPreviousGrid()).toEqual([{ width: 4680 }, { width: 4680 }]);
+  });
+
+  it('should NOT create tblGridChange when no previous grid exists', () => {
+    // Table has no explicit grid set — setTableGrid should not create tblGridChange
+    table.setTableGrid([6480, 6480]);
+    expect(table.getTblGridChange()).toBeUndefined();
+  });
+
+  it('should preserve first tblGridChange (original baseline)', () => {
+    doc.disableTrackChanges();
+    table.setTableGrid([4680, 4680]);
+    doc.enableTrackChanges({ author: 'TestAuthor' });
+
+    // First modification
+    table.setTableGrid([6480, 6480]);
+    // Second modification — should keep original grid, not intermediate
+    table.setTableGrid([3240, 3240, 3240, 3240]);
+
+    const gridChange = table.getTblGridChange();
+    expect(gridChange).toBeDefined();
+    expect(gridChange!.getPreviousGrid()).toEqual([{ width: 4680 }, { width: 4680 }]);
+  });
+
+  it('should serialize tblGridChange inside tblGrid element', () => {
+    doc.disableTrackChanges();
+    table.setTableGrid([4680, 4680]);
+    doc.enableTrackChanges({ author: 'TestAuthor' });
+    table.setTableGrid([6480, 6480]);
+
+    const xml = table.toXML();
+    const xmlStr = JSON.stringify(xml);
+    expect(xmlStr).toContain('tblGridChange');
+    expect(xmlStr).toContain('4680');
+  });
+
+  it('should NOT create tblPrChange for tableGrid (uses tblGridChange instead)', () => {
+    doc.disableTrackChanges();
+    table.setTableGrid([4680, 4680]);
+    doc.enableTrackChanges({ author: 'TestAuthor' });
+
+    table.setTableGrid([6480, 6480]);
+    doc.flushPendingChanges();
+
+    // tblGridChange should exist, NOT tblPrChange for tableGrid
+    expect(table.getTblGridChange()).toBeDefined();
+    // tblPrChange should NOT contain tableGrid
+    const tblPrChange = table.getTblPrChange();
+    if (tblPrChange) {
+      expect(tblPrChange.previousProperties.tableGrid).toBeUndefined();
+    }
+  });
+});
+
+// ============================================================================
+// Table Scrunching Bug Fixes — tblLook extended attributes
+// ============================================================================
+
+describe('Fix C: tblLook includes extended attributes', () => {
+  it('should serialize tblLook with extended attributes in tblPr', () => {
+    const table = new Table(1, 1, { tblLook: '04A0' });
+    const xml = table.toXML();
+    const xmlStr = JSON.stringify(xml);
+    expect(xmlStr).toContain('w:firstRow');
+    expect(xmlStr).toContain('w:lastRow');
+    expect(xmlStr).toContain('w:firstColumn');
+    expect(xmlStr).toContain('w:lastColumn');
+    expect(xmlStr).toContain('w:noHBand');
+    expect(xmlStr).toContain('w:noVBand');
+  });
+
+  it('should decode 04A0 correctly', () => {
+    // 0x04A0 = 0000 0100 1010 0000
+    // firstRow=1 (0x0020), lastRow=0, firstColumn=1 (0x0080), lastColumn=0
+    // noHBand=0, noVBand=1 (0x0400)
+    const table = new Table(1, 1, { tblLook: '04A0' });
+    const flags = table.getTblLookFlags();
+    expect(flags.firstRow).toBe(true);
+    expect(flags.lastRow).toBe(false);
+    expect(flags.firstColumn).toBe(true);
+    expect(flags.lastColumn).toBe(false);
+    expect(flags.noHBand).toBe(false);
+    expect(flags.noVBand).toBe(true);
+  });
+
+  it('should serialize extended tblLook in tblPrChange', () => {
+    const table = new Table(1, 1);
+    table.setTblPrChange({
+      id: '50',
+      author: 'TestAuthor',
+      date: '2026-02-22T00:00:00Z',
+      previousProperties: { tblLook: '04A0' },
+    });
+    const xml = table.toXML();
+    const xmlStr = JSON.stringify(xml);
+    // tblPrChange should contain extended tblLook attributes
+    expect(xmlStr).toContain('tblPrChange');
+    expect(xmlStr).toContain('w:firstRow');
+  });
+});
+
+// ============================================================================
+// Table Scrunching Bug Fixes — tcPrChange full snapshot
+// ============================================================================
+
+describe('Fix D: tcPrChange preserves full original cell properties', () => {
+  let doc: Document;
+  let table: Table;
+
+  beforeEach(() => {
+    doc = createTrackedDocument();
+    table = new Table(2, 2);
+    doc.addTable(table);
+  });
+
+  afterEach(() => {
+    doc.dispose();
+  });
+
+  it('should include full previous properties in tcPrChange (not just delta)', () => {
+    const cell = table.getRows()[0]!.getCells()[0]!;
+
+    // Set properties before tracking
+    doc.disableTrackChanges();
+    cell.setWidthType(5000, 'pct');
+    cell.setShading({
+      fill: 'BFBFBF',
+      pattern: 'clear',
+      themeFill: 'background1',
+      themeFillShade: 'BF',
+    });
+    doc.enableTrackChanges({ author: 'TestAuthor' });
+
+    // Change only the width
+    cell.setWidthType(12960, 'dxa');
+    doc.flushPendingChanges();
+
+    const change = cell.getTcPrChange();
+    expect(change).toBeDefined();
+    // Full snapshot should include ALL pre-existing properties, not just width
+    expect(change!.previousProperties.width).toBe(5000);
+    expect(change!.previousProperties.widthType).toBe('pct');
+    expect(change!.previousProperties.shading).toBeDefined();
+    expect(change!.previousProperties.shading.fill).toBe('BFBFBF');
+    expect(change!.previousProperties.shading.themeFill).toBe('background1');
+    expect(change!.previousProperties.shading.themeFillShade).toBe('BF');
+  });
+
+  it('should preserve theme attributes in shading', () => {
+    const cell = table.getRows()[0]!.getCells()[0]!;
+    cell.setTcPrChange({
+      id: '60',
+      author: 'TestAuthor',
+      date: '2026-02-22T00:00:00Z',
+      previousProperties: {
+        width: 5000,
+        widthType: 'pct',
+        shading: {
+          fill: 'BFBFBF',
+          pattern: 'clear',
+          themeFill: 'background1',
+          themeFillShade: 'BF',
+        },
+      },
+    });
+    const xml = cell.toXML();
+    const xmlStr = JSON.stringify(xml);
+    expect(xmlStr).toContain('tcPrChange');
+    expect(xmlStr).toContain('themeFill');
+    expect(xmlStr).toContain('themeFillShade');
+  });
+
+  it('should serialize gridSpan and vMerge in tcPrChange', () => {
+    const cell = table.getRows()[0]!.getCells()[0]!;
+    cell.setTcPrChange({
+      id: '61',
+      author: 'TestAuthor',
+      date: '2026-02-22T00:00:00Z',
+      previousProperties: {
+        width: 5000,
+        widthType: 'dxa',
+        columnSpan: 2,
+        vMerge: 'restart',
+      },
+    });
+    const xml = cell.toXML();
+    const xmlStr = JSON.stringify(xml);
+    expect(xmlStr).toContain('tcPrChange');
+    expect(xmlStr).toContain('gridSpan');
+    expect(xmlStr).toContain('vMerge');
+  });
+});
