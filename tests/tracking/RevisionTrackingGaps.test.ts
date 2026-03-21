@@ -358,9 +358,11 @@ describe('TableCell property change tracking', () => {
     expect(change).toBeDefined();
     expect(change!.author).toBe('TestAuthor');
     expect(change!.previousProperties).toBeDefined();
-    expect('width' in change!.previousProperties).toBe(true);
-    expect('verticalAlignment' in change!.previousProperties).toBe(true);
-    expect('shading' in change!.previousProperties).toBe(true);
+    // Full snapshot: properties not set before the change are absent from snapshot
+    // (they were undefined, meaning the cell had no explicit width/vAlign/shading)
+    expect('width' in change!.previousProperties).toBe(false);
+    expect('verticalAlignment' in change!.previousProperties).toBe(false);
+    expect('shading' in change!.previousProperties).toBe(false);
   });
 
   it('should serialize tcPrChange in toXML()', () => {

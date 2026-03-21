@@ -403,39 +403,91 @@ export class DocumentTrackingContext implements TrackingContext {
     }
 
     // Apply tcPrChange to each TableCell
+    // Per ECMA-376 §17.13.5.37, tcPrChange must contain FULL previous tcPr,
+    // not just the delta of changed properties.
     for (const [cell, changes] of cellChanges) {
-      this.applyElementPrChange(changes, (prevProps, getNextId, date) => {
-        const existing = cell.getTcPrChange();
-        if (existing) {
-          const merged = { ...(existing.previousProperties || {}), ...prevProps };
-          cell.setTcPrChange({ ...existing, previousProperties: merged });
-        } else {
-          cell.setTcPrChange({
-            author: this.author,
-            date,
-            id: String(getNextId()),
-            previousProperties: prevProps,
-          });
+      // Build full snapshot: start from current formatting, roll back changed properties
+      const currentFormatting = cell.getFormatting();
+      const fullPrevProps: Record<string, unknown> = {};
+
+      for (const [key, value] of Object.entries(currentFormatting)) {
+        if (value !== undefined) {
+          fullPrevProps[key] = value;
         }
-      });
+      }
+
+      // Roll back changed properties to their previous values
+      let latestTimestamp = 0;
+      for (const change of changes) {
+        if (change.previousValue !== undefined) {
+          fullPrevProps[change.property] = change.previousValue;
+        } else {
+          delete fullPrevProps[change.property];
+        }
+        if (change.timestamp > latestTimestamp) {
+          latestTimestamp = change.timestamp;
+        }
+      }
+
+      const date = formatDateForXml(new Date(latestTimestamp));
+
+      const existing = cell.getTcPrChange();
+      if (existing) {
+        // Merge: existing previous state takes precedence (it's the ORIGINAL baseline)
+        const merged = { ...fullPrevProps, ...(existing.previousProperties || {}) };
+        cell.setTcPrChange({ ...existing, previousProperties: merged });
+      } else {
+        cell.setTcPrChange({
+          author: this.author,
+          date,
+          id: String(this.revisionManager.consumeNextId()),
+          previousProperties: fullPrevProps,
+        });
+      }
     }
 
     // Apply sectPrChange to each Section
+    // Per ECMA-376 §17.13.5.32, sectPrChange must contain FULL previous sectPr,
+    // not just the delta of changed properties.
     for (const [section, changes] of sectionChanges) {
-      this.applyElementPrChange(changes, (prevProps, getNextId, date) => {
-        const existing = section.getSectPrChange();
-        if (existing) {
-          const merged = { ...(existing.previousProperties || {}), ...prevProps };
-          section.setSectPrChange({ ...existing, previousProperties: merged });
-        } else {
-          section.setSectPrChange({
-            author: this.author,
-            date,
-            id: String(getNextId()),
-            previousProperties: prevProps,
-          });
+      // Build full snapshot: start from current properties, roll back changed properties
+      const currentProps = section.getProperties();
+      const fullPrevProps: Record<string, unknown> = {};
+
+      for (const [key, value] of Object.entries(currentProps)) {
+        if (value !== undefined) {
+          fullPrevProps[key] = value;
         }
-      });
+      }
+
+      // Roll back changed properties to their previous values
+      let latestTimestamp = 0;
+      for (const change of changes) {
+        if (change.previousValue !== undefined) {
+          fullPrevProps[change.property] = change.previousValue;
+        } else {
+          delete fullPrevProps[change.property];
+        }
+        if (change.timestamp > latestTimestamp) {
+          latestTimestamp = change.timestamp;
+        }
+      }
+
+      const date = formatDateForXml(new Date(latestTimestamp));
+
+      const existing = section.getSectPrChange();
+      if (existing) {
+        // Merge: existing previous state takes precedence (it's the ORIGINAL baseline)
+        const merged = { ...fullPrevProps, ...(existing.previousProperties || {}) };
+        section.setSectPrChange({ ...existing, previousProperties: merged });
+      } else {
+        section.setSectPrChange({
+          author: this.author,
+          date,
+          id: String(this.revisionManager.consumeNextId()),
+          previousProperties: fullPrevProps,
+        });
+      }
     }
 
     // Apply rPrChange to each Run that has property changes

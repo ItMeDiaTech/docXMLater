@@ -9,6 +9,8 @@ import { Run } from './Run';
 import { Revision } from './Revision';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { deepClone } from '../utils/deepClone';
+import { TableGridChange } from './TableGridChange';
+import { formatDateForXml } from '../utils/dateFormatting';
 import {
   TableAlignment as CommonTableAlignment,
   BorderStyle,
@@ -144,6 +146,23 @@ export interface TableCellMargins {
 }
 
 /**
+ * Builds tblLook attributes including extended attributes (firstRow, lastRow, etc.)
+ * Per ECMA-376 Part 1 §17.4.57, Word expects both w:val and the extended boolean attributes.
+ */
+function buildTblLookAttributes(hex: string): Record<string, string> {
+  const value = parseInt(hex, 16) || 0;
+  return {
+    'w:val': hex,
+    'w:firstRow': (value & 0x0020) !== 0 ? '1' : '0',
+    'w:lastRow': (value & 0x0040) !== 0 ? '1' : '0',
+    'w:firstColumn': (value & 0x0080) !== 0 ? '1' : '0',
+    'w:lastColumn': (value & 0x0100) !== 0 ? '1' : '0',
+    'w:noHBand': (value & 0x0200) !== 0 ? '1' : '0',
+    'w:noVBand': (value & 0x0400) !== 0 ? '1' : '0',
+  };
+}
+
+/**
  * Table formatting options
  */
 export interface TableFormatting {
@@ -213,6 +232,8 @@ export class Table {
   private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
   /** Table property change tracking (w:tblPrChange) */
   private tblPrChange?: TblPrChange;
+  /** Table grid change tracking (w:tblGridChange) per ECMA-376 §17.13.5.35 */
+  private tblGridChange?: TableGridChange;
 
   /**
    * Creates a new Table
@@ -267,6 +288,20 @@ export class Table {
    */
   clearTblPrChange(): void {
     this.tblPrChange = undefined;
+  }
+
+  /**
+   * Gets the table grid change tracking info
+   */
+  getTblGridChange(): TableGridChange | undefined {
+    return this.tblGridChange;
+  }
+
+  /**
+   * Sets the table grid change tracking info
+   */
+  setTblGridChange(change: TableGridChange | undefined): void {
+    this.tblGridChange = change;
   }
 
   /**
@@ -1058,8 +1093,18 @@ export class Table {
   setTableGrid(widths: number[]): this {
     const prev = this.formatting.tableGrid;
     this.formatting.tableGrid = widths;
-    if (this.trackingContext?.isEnabled()) {
-      this.trackingContext.trackTableChange(this, 'tableGrid', prev, widths);
+    if (this.trackingContext?.isEnabled() && prev) {
+      // Create tblGridChange (not tblPrChange) per ECMA-376 §17.13.5.35
+      // Only create if there was a previous grid to record
+      if (!this.tblGridChange) {
+        const revisionManager = this.trackingContext.getRevisionManager();
+        this.tblGridChange = TableGridChange.create(
+          revisionManager.consumeNextId(),
+          prev.map((w) => ({ width: w })),
+          this.trackingContext.getAuthor(),
+          new Date()
+        );
+      }
     }
     return this;
   }
@@ -1587,7 +1632,9 @@ export class Table {
 
     // 15. tblLook
     if (this.formatting.tblLook) {
-      tblPrChildren.push(XMLBuilder.wSelf('tblLook', { 'w:val': this.formatting.tblLook }));
+      tblPrChildren.push(
+        XMLBuilder.wSelf('tblLook', buildTblLookAttributes(this.formatting.tblLook))
+      );
     }
 
     // Add table caption (accessibility)
@@ -1683,7 +1730,7 @@ export class Table {
           }
         }
         if (prev.tblLook) {
-          prevTblPrChildren.push(XMLBuilder.wSelf('tblLook', { 'w:val': prev.tblLook }));
+          prevTblPrChildren.push(XMLBuilder.wSelf('tblLook', buildTblLookAttributes(prev.tblLook)));
         }
         if (prev.tblStyleRowBandSize !== undefined) {
           prevTblPrChildren.push(
@@ -1738,6 +1785,10 @@ export class Table {
         // Auto width (default to 2880 twips = 2 inches)
         tblGridChildren.push(XMLBuilder.wSelf('gridCol', { 'w:w': 2880 }));
       }
+    }
+    // Add tblGridChange if present (per ECMA-376 §17.13.5.35, must be last child of tblGrid)
+    if (this.tblGridChange) {
+      tblGridChildren.push(this.tblGridChange.toXML());
     }
     tableChildren.push(XMLBuilder.w('tblGrid', undefined, tblGridChildren));
 
