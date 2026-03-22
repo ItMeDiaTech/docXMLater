@@ -7,6 +7,7 @@
 
 import { Relationship, RelationshipType } from './Relationship';
 import { XMLParser } from '../xml/XMLParser';
+import { sanitizeHyperlinkUrl } from '../utils/validation';
 
 /**
  * Manages relationships for a document or document part
@@ -381,10 +382,10 @@ export class RelationshipManager {
   static fromXml(xml: string): RelationshipManager {
     const manager = new RelationshipManager();
 
-    // Prevent ReDoS: validate input size (typical .rels files are < 10KB)
-    if (xml.length > 100000) {
+    // Prevent ReDoS: validate input size (typical .rels files are < 10KB, max 10MB)
+    if (xml.length > 10000000) {
       throw new Error(
-        'Relationships XML file too large (>100KB). Possible malicious input or corrupted file.'
+        'Relationships XML file too large (>10MB). Possible malicious input or corrupted file.'
       );
     }
 
@@ -412,11 +413,20 @@ export class RelationshipManager {
             ? targetMode
             : undefined;
 
+        // Sanitize hyperlink URLs (strip browser extension prefixes)
+        let sanitizedTarget = target;
+        if (type.endsWith('/hyperlink')) {
+          const result = sanitizeHyperlinkUrl(target);
+          if (result) {
+            sanitizedTarget = result.url;
+          }
+        }
+
         // Create and add relationship
         const relationship = Relationship.create({
           id,
           type,
-          target,
+          target: sanitizedTarget,
           targetMode: validatedTargetMode || 'Internal',
         });
 

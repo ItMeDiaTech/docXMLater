@@ -1543,6 +1543,7 @@ export class DocumentParser {
               imageManager
             );
             if (imageRun) {
+              imageRun.setRawRunXml(runXml);
               content.push(imageRun);
             }
           }
@@ -2642,7 +2643,7 @@ export class DocumentParser {
             const tabs = Array.isArray(tabArray) ? tabArray : [tabArray];
             previousProperties.tabs = tabs.map((tab: any) => ({
               val: tab['@_w:val'],
-              pos: tab['@_w:pos'] !== undefined ? parseInt(tab['@_w:pos'], 10) : undefined,
+              position: tab['@_w:pos'] !== undefined ? parseInt(tab['@_w:pos'], 10) : undefined,
               leader: tab['@_w:leader'],
             }));
           }
@@ -2686,6 +2687,7 @@ export class DocumentParser {
 
     const content = paragraph.getContent();
     const groupedContent: any[] = [];
+    // Invariant: only Run instances — non-Run items filtered at entry (line ~3109)
     let fieldRuns: Run[] = [];
     let fieldRevisions: Revision[] = []; // Track revisions inside field result section
     let instructionRevisions: Revision[] = []; // Track revisions in instruction area
@@ -2765,6 +2767,12 @@ export class DocumentParser {
                     // We need to reconstruct the original order based on field state transitions
                     let hasSep = false;
                     for (const run of fieldRuns) {
+                      if (!((run as unknown) instanceof Run)) {
+                        defaultLogger.warn(
+                          `Non-Run item in fieldRuns: ${(run as any)?.constructor?.name}`
+                        );
+                        continue;
+                      }
                       const runContent = run.getContent();
                       const fieldCharToken = runContent.find((c: any) => c.type === 'fieldChar');
 
@@ -2815,6 +2823,12 @@ export class DocumentParser {
                   let hasSeparate = false;
 
                   for (const run of fieldRuns) {
+                    if (!((run as unknown) instanceof Run)) {
+                      defaultLogger.warn(
+                        `Non-Run item in fieldRuns: ${(run as any)?.constructor?.name}`
+                      );
+                      continue;
+                    }
                     const runContent = run.getContent();
                     const instrText = runContent.find((c: any) => c.type === 'instructionText');
                     if (instrText) {
@@ -3104,8 +3118,12 @@ export class DocumentParser {
       } else {
         // Non-run content (hyperlinks, images, etc.)
         if (nestingDepth > 0) {
-          // Inside a nested field - keep collecting
-          fieldRuns.push(item as any);
+          // Non-Run items (e.g., w:proofErr) can't be processed as field runs.
+          // Drop them — Word regenerates these markers on open.
+          defaultLogger.debug(
+            `Dropping non-Run item inside field (depth=${nestingDepth}): ${(item as any)?.getElementType?.() || (item as any)?.constructor?.name}`
+          );
+          continue;
         } else if (fieldRuns.length > 0) {
           // Incomplete field - add as individual runs
           fieldRuns.forEach((run) => groupedContent.push(run));
@@ -3611,6 +3629,10 @@ export class DocumentParser {
     let formFieldData: any = undefined;
 
     for (const run of fieldRuns) {
+      if (!((run as unknown) instanceof Run)) {
+        defaultLogger.warn(`Non-Run item in fieldRuns: ${(run as any)?.constructor?.name}`);
+        continue;
+      }
       const runContent = run.getContent();
 
       // Check for fieldChar tokens
@@ -3655,6 +3677,10 @@ export class DocumentParser {
     const resultContentElements: XMLElement[] = [];
     let pastSeparator = false;
     for (const run of fieldRuns) {
+      if (!((run as unknown) instanceof Run)) {
+        defaultLogger.warn(`Non-Run item in fieldRuns: ${(run as any)?.constructor?.name}`);
+        continue;
+      }
       const rc = run.getContent();
       const fc = rc.find((c: any) => c.type === 'fieldChar');
       if (fc?.fieldCharType === 'separate') {

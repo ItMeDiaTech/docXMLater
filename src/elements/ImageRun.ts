@@ -24,6 +24,7 @@ import { XMLElement } from '../xml/XMLBuilder';
  */
 export class ImageRun extends Run {
   private imageElement: Image;
+  private _rawRunXml?: string;
 
   /**
    * Creates a new image run
@@ -34,6 +35,14 @@ export class ImageRun extends Run {
     // The text is irrelevant for image runs
     super('');
     this.imageElement = image;
+  }
+
+  setRawRunXml(xml: string): void {
+    this._rawRunXml = xml;
+  }
+
+  getRawRunXml(): string | undefined {
+    return this._rawRunXml;
   }
 
   /**
@@ -50,6 +59,9 @@ export class ImageRun extends Run {
    * @returns XMLElement with w:r containing w:drawing
    */
   toXML(): XMLElement {
+    if (this._rawRunXml) {
+      return { name: '__rawXml', rawXml: this._rawRunXml };
+    }
     const drawing = this.imageElement.toXML();
     return {
       name: 'w:r',

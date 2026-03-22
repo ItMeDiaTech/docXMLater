@@ -5,6 +5,31 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.3.5] - 2026-03-22
+
+### Fixed
+
+- **Browser extension URL prefix corruption in hyperlinks**: Hyperlink URLs wrapped by browser extensions (Chrome/Adobe Acrobat `chrome-extension://`, Firefox `moz-extension://`, Edge `extension://`) are now automatically stripped during document load via `RelationshipManager.fromXml()` and via `Hyperlink.validateAndFix()`. Also repairs broken protocols (`https:/` -> `https://`) that result from the stripping. New public API: `sanitizeHyperlinkUrl()`.
+- **ImageRun revision round-trip corruption**: Image runs inside tracked deletions/insertions (`w:del`/`w:ins`) now preserve the original raw `<w:r>` XML (including `w:rPr` with `w:noProof`) through round-trip. Previously, `ImageRun.toXML()` would regenerate minimal XML, dropping run properties and causing cell corruption when tracked changes were accepted in Word.
+- **Non-Run elements crashing field code parsing**: Elements like `w:proofErr` appearing inside complex field code sequences (e.g., HYPERLINK fields) no longer cause `TypeError` crashes. Non-Run items are now filtered out during field assembly with appropriate debug logging. Word regenerates these markers on open.
+- **Tab stop property name**: Corrected tab stop `pos` property to `position` for consistency with the public API.
+- **Table scrunching: full tcPrChange snapshots**: `gridSpan`, `hMerge`, and `vMerge` attributes now included in `tcPrChange` for complete cell merge state tracking during tracked changes.
+- **Table scrunching: full sectPrChange snapshots**: `pageSize` snapshot and `docGrid` serialization now included in `sectPrChange` for complete section property tracking.
+- **Table scrunching: tblLook extended attributes**: `tblLook` serialization now includes all extended attributes.
+- **Table scrunching: tblGridChange tracking**: Table grid changes now properly tracked through revisions.
+
+### Changed
+
+- **RelationshipManager XML size limit**: Increased from 100KB to 10MB to accommodate large documents with many relationships, while still providing protection against malicious input.
+- **.npmignore overhaul**: Comprehensive exclusion list to minimize published package size — excludes tests, dev configs, analysis scripts, and documentation not needed by consumers.
+
+### Statistics
+
+- 150 test suites, 3,156 tests passing
+- 103 source files
+
+---
+
 ## [10.2.9] - 2026-03-04
 
 ### Fixed

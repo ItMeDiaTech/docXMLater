@@ -778,4 +778,95 @@ describe('Complex Field Parsing', () => {
       expect(hasRevisions).toBe(false);
     });
   });
+
+  describe('Non-Run elements inside field codes (w:proofErr etc.)', () => {
+    it('should load HYPERLINK field containing w:proofErr without crashing', async () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+      <w:r><w:instrText xml:space="preserve"> HYPERLINK "https://example.com" </w:instrText></w:r>
+      <w:proofErr w:type="spellStart"/>
+      <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+      <w:r><w:rPr><w:color w:val="0000FF"/></w:rPr><w:t>Click here</w:t></w:r>
+      <w:proofErr w:type="spellEnd"/>
+      <w:r><w:fldChar w:fldCharType="end"/></w:r>
+    </w:p>
+  </w:body>
+</w:document>`;
+
+      const buffer = await createDocxFromXml(xml);
+      const doc = await Document.loadFromBuffer(buffer);
+      const paragraphs = doc.getAllParagraphs();
+      expect(paragraphs.length).toBe(1);
+
+      // Should assemble a Hyperlink from the field code
+      const content = paragraphs[0]!.getContent();
+      const hyperlink = content.find((c: any) => c.constructor.name === 'Hyperlink');
+      expect(hyperlink).toBeDefined();
+      expect((hyperlink as any).getUrl()).toBe('https://example.com');
+      expect((hyperlink as any).getText()).toBe('Click here');
+    });
+
+    it('should load HYPERLINK field with w:proofErr only in result section', async () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+      <w:r><w:instrText xml:space="preserve"> HYPERLINK "https://example.com" </w:instrText></w:r>
+      <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+      <w:proofErr w:type="spellStart"/>
+      <w:r><w:rPr><w:color w:val="0000FF"/></w:rPr><w:t>Clck here</w:t></w:r>
+      <w:proofErr w:type="spellEnd"/>
+      <w:r><w:fldChar w:fldCharType="end"/></w:r>
+    </w:p>
+  </w:body>
+</w:document>`;
+
+      const buffer = await createDocxFromXml(xml);
+      const doc = await Document.loadFromBuffer(buffer);
+      const paragraphs = doc.getAllParagraphs();
+      expect(paragraphs.length).toBe(1);
+
+      // Should assemble a Hyperlink despite w:proofErr in result area
+      const content = paragraphs[0]!.getContent();
+      const hyperlink = content.find((c: any) => c.constructor.name === 'Hyperlink');
+      expect(hyperlink).toBeDefined();
+      expect((hyperlink as any).getUrl()).toBe('https://example.com');
+      expect((hyperlink as any).getText()).toBe('Clck here');
+    });
+
+    it('should load MERGEFIELD field containing w:proofErr without crashing', async () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+      <w:r><w:instrText xml:space="preserve"> MERGEFIELD CustomerName </w:instrText></w:r>
+      <w:proofErr w:type="spellStart"/>
+      <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+      <w:r><w:t>«CustomerName»</w:t></w:r>
+      <w:proofErr w:type="spellEnd"/>
+      <w:r><w:fldChar w:fldCharType="end"/></w:r>
+    </w:p>
+  </w:body>
+</w:document>`;
+
+      const buffer = await createDocxFromXml(xml);
+      const doc = await Document.loadFromBuffer(buffer);
+      const paragraphs = doc.getAllParagraphs();
+      expect(paragraphs.length).toBe(1);
+
+      // Should assemble a ComplexField from the MERGEFIELD
+      const content = paragraphs[0]!.getContent();
+      const complexField = content.find((c: any) => c.constructor.name === 'ComplexField');
+      expect(complexField).toBeDefined();
+      expect((complexField as any).getInstruction()).toContain('MERGEFIELD');
+    });
+  });
 });

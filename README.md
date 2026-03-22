@@ -47,6 +47,7 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - Headers & footers (different first page, odd/even pages)
 - Hyperlinks (external URLs, internal bookmarks)
 - Hyperlink defragmentation utility (fixes fragmented links from Google Docs)
+- Hyperlink URL sanitization (strips browser extension prefixes from corrupted URLs)
 - Bookmarks and cross-references
 - Body-level bookmark support (bookmarks between block elements)
 - Shapes and text boxes

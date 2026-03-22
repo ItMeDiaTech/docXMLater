@@ -51,7 +51,7 @@
 import { XMLElement } from '../xml/XMLBuilder';
 import { Run, RunFormatting } from './Run';
 import { Revision } from './Revision';
-import { validateRunText } from '../utils/validation';
+import { validateRunText, sanitizeHyperlinkUrl } from '../utils/validation';
 import { defaultLogger } from '../utils/logger';
 
 /**
@@ -969,6 +969,13 @@ export class Hyperlink {
 
     // Fix common issues
     if (fixCommonIssues && fixedUrl) {
+      // Fix 0: Strip browser extension URL prefixes
+      const sanitizeResult = sanitizeHyperlinkUrl(fixedUrl);
+      if (sanitizeResult) {
+        fixedUrl = sanitizeResult.url;
+        fixed.push(...sanitizeResult.fixes);
+      }
+
       // Fix 1: Add missing protocol
       if (!/^[a-z]+:\/\//i.exec(fixedUrl)) {
         fixedUrl = 'https://' + fixedUrl;

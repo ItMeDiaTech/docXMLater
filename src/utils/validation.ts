@@ -551,3 +551,64 @@ export function validateRunText(
 
   return result;
 }
+
+/**
+ * Result of URL sanitization
+ */
+export interface SanitizeHyperlinkUrlResult {
+  /** The sanitized URL */
+  url: string;
+  /** List of fixes that were applied */
+  fixes: string[];
+}
+
+/**
+ * Sanitizes hyperlink URLs by removing browser extension prefixes and fixing
+ * broken protocols that result from the stripping.
+ *
+ * Known corruptions:
+ * - Chrome extensions (e.g. Adobe Acrobat) wrap URLs with `chrome-extension://[id]/`
+ * - Firefox extensions wrap URLs with `moz-extension://[uuid]/`
+ * - Edge extensions wrap URLs with `extension://[id]/`
+ * - After stripping, protocol may be broken (`https:/` instead of `https://`)
+ *
+ * @param url - The URL to sanitize
+ * @returns Object with sanitized URL and list of fixes, or null if no changes needed
+ */
+export function sanitizeHyperlinkUrl(url: string): SanitizeHyperlinkUrlResult | null {
+  if (!url) return null;
+
+  const fixes: string[] = [];
+  let sanitized = url;
+
+  // Strip known browser extension URL prefixes
+  const extensionPrefixes = [
+    { pattern: /^chrome-extension:\/\/[a-z]{32}\//i, name: 'Chrome extension' },
+    {
+      pattern: /^moz-extension:\/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\//i,
+      name: 'Firefox extension',
+    },
+    { pattern: /^extension:\/\/[a-z0-9]{32}\//i, name: 'Edge extension' },
+  ];
+
+  for (const { pattern, name } of extensionPrefixes) {
+    const match = pattern.exec(sanitized);
+    if (match) {
+      sanitized = sanitized.substring(match[0].length);
+      fixes.push(`Stripped ${name} URL prefix`);
+      break;
+    }
+  }
+
+  // Fix broken protocol after stripping (https:/ -> https://, http:/ -> http://)
+  const brokenProtocol = /^(https?:\/)([^/])/i.exec(sanitized);
+  if (brokenProtocol) {
+    sanitized =
+      brokenProtocol[1] + '/' + brokenProtocol[2] + sanitized.substring(brokenProtocol[0].length);
+    fixes.push('Fixed broken protocol (added missing slash)');
+  }
+
+  if (fixes.length === 0) return null;
+
+  return { url: sanitized, fixes };
+}

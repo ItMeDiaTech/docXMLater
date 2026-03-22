@@ -389,6 +389,8 @@ export {
   detectXmlInText,
   cleanXmlFromText,
   validateRunText,
+  sanitizeHyperlinkUrl,
+  SanitizeHyperlinkUrlResult,
   TextValidationResult,
 } from './utils/validation';
 export {

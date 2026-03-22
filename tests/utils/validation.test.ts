@@ -8,6 +8,7 @@ import {
   normalizePath,
   isValidZipBuffer,
   isTextContent,
+  sanitizeHyperlinkUrl,
 } from '../../src/utils/validation';
 import { MissingRequiredFileError } from '../../src/zip/errors';
 import { REQUIRED_DOCX_FILES } from '../../src/zip/types';
@@ -200,6 +201,71 @@ describe('Validation Utilities', () => {
 
     test('should handle empty buffer', () => {
       expect(isTextContent(Buffer.from([]))).toBe(true);
+    });
+  });
+
+  describe('sanitizeHyperlinkUrl', () => {
+    test('should strip Chrome extension prefix (Adobe Acrobat)', () => {
+      const url = 'chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https://example.com/doc.pdf';
+      const result = sanitizeHyperlinkUrl(url);
+      expect(result).not.toBeNull();
+      expect(result!.url).toBe('https://example.com/doc.pdf');
+      expect(result!.fixes).toContain('Stripped Chrome extension URL prefix');
+    });
+
+    test('should strip generic Chrome extension prefix (random 32-char ID)', () => {
+      const url = 'chrome-extension://abcdefghijklmnopqrstuvwxyzabcdef/https://example.com';
+      const result = sanitizeHyperlinkUrl(url);
+      expect(result).not.toBeNull();
+      expect(result!.url).toBe('https://example.com');
+    });
+
+    test('should strip Firefox moz-extension prefix', () => {
+      const url = 'moz-extension://a1b2c3d4-e5f6-7890-abcd-ef1234567890/https://example.com';
+      const result = sanitizeHyperlinkUrl(url);
+      expect(result).not.toBeNull();
+      expect(result!.url).toBe('https://example.com');
+      expect(result!.fixes).toContain('Stripped Firefox extension URL prefix');
+    });
+
+    test('should strip Edge extension prefix', () => {
+      const url = 'extension://abcdefghijklmnopqrstuvwxyz123456/https://example.com';
+      const result = sanitizeHyperlinkUrl(url);
+      expect(result).not.toBeNull();
+      expect(result!.url).toBe('https://example.com');
+      expect(result!.fixes).toContain('Stripped Edge extension URL prefix');
+    });
+
+    test('should fix broken protocol after stripping (https:/ -> https://)', () => {
+      const url = 'chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https:/example.com/path';
+      const result = sanitizeHyperlinkUrl(url);
+      expect(result).not.toBeNull();
+      expect(result!.url).toBe('https://example.com/path');
+      expect(result!.fixes).toHaveLength(2);
+      expect(result!.fixes).toContain('Stripped Chrome extension URL prefix');
+      expect(result!.fixes).toContain('Fixed broken protocol (added missing slash)');
+    });
+
+    test('should return null for clean URLs (no changes needed)', () => {
+      expect(sanitizeHyperlinkUrl('https://example.com')).toBeNull();
+      expect(sanitizeHyperlinkUrl('http://example.com/path')).toBeNull();
+      expect(sanitizeHyperlinkUrl('mailto:user@example.com')).toBeNull();
+      expect(sanitizeHyperlinkUrl('')).toBeNull();
+    });
+
+    test('should handle combined prefix + broken protocol', () => {
+      const url =
+        'chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https:/aetnao365.sharepoint.com/sites/test';
+      const result = sanitizeHyperlinkUrl(url);
+      expect(result).not.toBeNull();
+      expect(result!.url).toBe('https://aetnao365.sharepoint.com/sites/test');
+    });
+
+    test('should fix broken http:/ protocol', () => {
+      const url = 'chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/http:/example.com';
+      const result = sanitizeHyperlinkUrl(url);
+      expect(result).not.toBeNull();
+      expect(result!.url).toBe('http://example.com');
     });
   });
 });
