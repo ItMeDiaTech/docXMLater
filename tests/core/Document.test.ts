@@ -1046,6 +1046,133 @@ describe('Document', () => {
     });
   });
 
+  describe('ensureTopLinksAbove1x1Tables', () => {
+    test('should insert _top links above 1x1 tables, skipping the first', () => {
+      const doc = Document.create();
+      doc.addParagraph(new Paragraph().addText('Intro'));
+      doc.addTable(new Table(1, 1)); // 1st 1x1 table — skipped
+      doc.addParagraph(new Paragraph().addText('Section A'));
+      doc.addTable(new Table(1, 1)); // 2nd — needs link
+      doc.addParagraph(new Paragraph().addText('Section B'));
+      doc.addTable(new Table(1, 1)); // 3rd — needs link
+
+      const inserted = doc.ensureTopLinksAbove1x1Tables();
+
+      expect(inserted).toBe(2);
+      // Verify links were inserted before 2nd and 3rd 1x1 tables
+      const elements = doc.getBodyElements();
+      // Order should be: Intro, Table1, SectionA, _topLink, Table2, SectionB, _topLink, Table3
+      expect(elements.length).toBe(8); // 3 paras + 3 tables + 2 inserted
+    });
+
+    test('should not insert when links already exist', () => {
+      const doc = Document.create();
+      doc.addParagraph(new Paragraph().addText('Intro'));
+      doc.addTable(new Table(1, 1)); // 1st — skipped
+
+      // Add _top link paragraph before 2nd table
+      const linkPara = new Paragraph();
+      linkPara.addHyperlink(Hyperlink.createInternal('_top', 'Top of the Document'));
+      doc.addParagraph(linkPara);
+      doc.addTable(new Table(1, 1)); // 2nd — already has link
+
+      const inserted = doc.ensureTopLinksAbove1x1Tables();
+
+      expect(inserted).toBe(0);
+    });
+
+    test('should handle mixed presence of links', () => {
+      const doc = Document.create();
+      doc.addTable(new Table(1, 1)); // 1st — skipped
+
+      // 2nd has link
+      const linkPara = new Paragraph();
+      linkPara.addHyperlink(Hyperlink.createInternal('_top', 'Top'));
+      doc.addParagraph(linkPara);
+      doc.addTable(new Table(1, 1)); // 2nd — has link
+
+      // 3rd missing link
+      doc.addParagraph(new Paragraph().addText('No link here'));
+      doc.addTable(new Table(1, 1)); // 3rd — needs link
+
+      const inserted = doc.ensureTopLinksAbove1x1Tables();
+
+      expect(inserted).toBe(1);
+    });
+
+    test('should not insert when no 1x1 tables exist', () => {
+      const doc = Document.create();
+      doc.addParagraph(new Paragraph().addText('Text'));
+      doc.addTable(new Table(2, 3)); // Not 1x1
+      doc.addTable(new Table(5, 5)); // Not 1x1
+
+      const inserted = doc.ensureTopLinksAbove1x1Tables();
+
+      expect(inserted).toBe(0);
+    });
+
+    test('should not insert when only one 1x1 table exists', () => {
+      const doc = Document.create();
+      doc.addParagraph(new Paragraph().addText('Text'));
+      doc.addTable(new Table(1, 1)); // 1st — skipped, no others
+
+      const inserted = doc.ensureTopLinksAbove1x1Tables();
+
+      expect(inserted).toBe(0);
+    });
+
+    test('should ensure _top bookmark exists', () => {
+      const doc = Document.create();
+      doc.addTable(new Table(1, 1));
+      doc.addTable(new Table(1, 1));
+
+      expect(doc.hasBookmark('_top')).toBe(false);
+
+      doc.ensureTopLinksAbove1x1Tables();
+
+      expect(doc.hasBookmark('_top')).toBe(true);
+    });
+
+    test('should use custom display text', () => {
+      const doc = Document.create();
+      doc.addTable(new Table(1, 1)); // 1st — skipped
+      doc.addTable(new Table(1, 1)); // 2nd — needs link
+
+      doc.ensureTopLinksAbove1x1Tables({ text: 'Back to Top' });
+
+      const elements = doc.getBodyElements();
+      // Find the inserted paragraph (should be before the 2nd table)
+      const linkPara = elements.find(
+        (e) => e instanceof Paragraph && e.getText().includes('Back to Top')
+      );
+      expect(linkPara).toBeDefined();
+    });
+
+    test('should ignore non-1x1 tables interspersed', () => {
+      const doc = Document.create();
+      doc.addTable(new Table(1, 1)); // 1st 1x1 — skipped
+      doc.addTable(new Table(3, 3)); // Not 1x1 — ignored
+      doc.addTable(new Table(1, 1)); // 2nd 1x1 — needs link
+
+      const inserted = doc.ensureTopLinksAbove1x1Tables();
+
+      expect(inserted).toBe(1);
+    });
+
+    test('should be idempotent', () => {
+      const doc = Document.create();
+      doc.addTable(new Table(1, 1)); // 1st
+      doc.addTable(new Table(1, 1)); // 2nd
+      doc.addTable(new Table(1, 1)); // 3rd
+
+      const first = doc.ensureTopLinksAbove1x1Tables();
+      const second = doc.ensureTopLinksAbove1x1Tables();
+
+      expect(first).toBe(2);
+      expect(second).toBe(0);
+    });
+  });
+
   describe('Preserve Blank Lines After Heading 2 Tables', () => {
     describe('applyStyles with preserveBlankLinesAfterHeading2Tables', () => {
       test('should mark blank lines as preserved when option is true', () => {

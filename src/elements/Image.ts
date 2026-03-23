@@ -80,6 +80,8 @@ export interface ImageBorder {
   headEnd?: { type?: string; width?: string; length?: string };
   /** Tail end decoration */
   tailEnd?: { type?: string; width?: string; length?: string };
+  /** @internal Set by parser to suppress default fill in generator */
+  _fromParsed?: boolean;
 }
 
 /**
@@ -1486,7 +1488,8 @@ export class Image {
     if (typeof thicknessOrOptions === 'number') {
       this.border = { width: thicknessOrOptions };
     } else {
-      this.border = thicknessOrOptions;
+      this.border = { ...thicknessOrOptions };
+      delete this.border._fromParsed;
     }
 
     // Calculate space needed for border (half-width on each side)
@@ -1626,11 +1629,17 @@ export class Image {
       );
     }
 
+    // Fill group: a:noFill (before a:ln per ECMA-376 CT_ShapeProperties ordering)
+    if (this.border) {
+      // Bordered images use noFill for shape fill
+      spPrChildren.push(XMLBuilder.a('noFill'));
+    } else if (this._rawPassthrough.has('spPr-noFill')) {
+      // Preserve spPr-level a:noFill from loaded document (Bug C fix)
+      spPrChildren.push(XMLBuilder.a('noFill'));
+    }
+
     // Border (a:ln) - full model (Group C)
     if (this.border) {
-      // Add noFill element before the border line (required by Word)
-      spPrChildren.push(XMLBuilder.a('noFill'));
-
       const ptToEmu = 12700;
       const widthEmu = this.border.width * ptToEmu;
       const lnAttrs: Record<string, string> = { w: widthEmu.toString() };
@@ -1655,8 +1664,9 @@ export class Image {
             ? XMLBuilder.a(this.border.fill.type, { val: this.border.fill.value }, colorChildren)
             : XMLBuilder.a(this.border.fill.type, { val: this.border.fill.value });
         lnChildren.push(XMLBuilder.a('solidFill', undefined, [colorEl]));
-      } else {
-        // Default: scheme color tx1 (backward compat)
+      } else if (!this.border._fromParsed) {
+        // Default fill for programmatic borders only (setBorder API backward compat).
+        // Parsed borders without fill are intentionally left as-is.
         lnChildren.push(
           XMLBuilder.a('solidFill', undefined, [XMLBuilder.a('schemeClr', { val: 'tx1' })])
         );
@@ -1687,6 +1697,14 @@ export class Image {
       }
 
       spPrChildren.push(XMLBuilder.a('ln', lnAttrs, lnChildren));
+    }
+
+    // Zero-width a:ln passthrough (e.g., <a:ln><a:noFill/></a:ln>) (BUG 8 fix)
+    if (!this.border && this._rawPassthrough.has('zero-width-ln')) {
+      spPrChildren.push({
+        name: '__rawXml',
+        rawXml: this._rawPassthrough.get('zero-width-ln')!,
+      } as XMLElement);
     }
 
     // Group B: Inject raw spPr effects passthrough (effectLst, scene3d, sp3d, etc.)

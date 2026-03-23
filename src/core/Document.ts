@@ -13,7 +13,7 @@ import { MathParagraph } from '../elements/MathElement';
 import { CommentManager } from '../elements/CommentManager';
 import { Endnote } from '../elements/Endnote';
 import { EndnoteManager } from '../elements/EndnoteManager';
-import { Field } from '../elements/Field';
+import { Field, ComplexField } from '../elements/Field';
 import { Footnote } from '../elements/Footnote';
 import { FootnoteManager } from '../elements/FootnoteManager';
 import { Footer } from '../elements/Footer';
@@ -10044,6 +10044,87 @@ export class Document {
         return Hyperlink.createInternal(BOOKMARK_NAME, text, formatting);
       },
     };
+  }
+
+  /**
+   * Ensures a "Top of the Document" hyperlink exists above every 1x1 table
+   * except the first one. Skips tables that already have a _top link in the
+   * paragraph immediately above them.
+   *
+   * @param options Optional configuration
+   * @param options.text Display text for inserted links (default: 'Top of the Document')
+   * @param options.formatting Optional RunFormatting for the hyperlink
+   * @returns Number of links inserted
+   */
+  ensureTopLinksAbove1x1Tables(options?: { text?: string; formatting?: RunFormatting }): number {
+    const linkText = options?.text || 'Top of the Document';
+    const formatting = options?.formatting;
+
+    // Ensure _top bookmark exists at document start
+    this.addTopBookmark();
+
+    let insertedCount = 0;
+    let oneByOneCount = 0;
+
+    // Work directly with bodyElements array since indices shift on insert
+    let i = 0;
+    while (i < this.bodyElements.length) {
+      const element = this.bodyElements[i];
+
+      if (
+        element instanceof Table &&
+        element.getRowCount() === 1 &&
+        element.getColumnCount() === 1
+      ) {
+        oneByOneCount++;
+
+        // Skip the first 1x1 table
+        if (oneByOneCount > 1) {
+          // Check if paragraph immediately before has a _top link
+          const prevElement = i > 0 ? this.bodyElements[i - 1] : undefined;
+          const hasLink =
+            prevElement instanceof Paragraph && this._paragraphHasTopLink(prevElement);
+
+          if (!hasLink) {
+            // Insert a paragraph with _top hyperlink before this table
+            const para = new Paragraph();
+            const link = Hyperlink.createInternal('_top', linkText, {
+              color: '0000FF',
+              underline: 'single',
+              ...formatting,
+            });
+            para.addHyperlink(link);
+            this.bodyElements.splice(i, 0, para);
+            insertedCount++;
+            i++; // Skip past the inserted paragraph
+          }
+        }
+      }
+
+      i++;
+    }
+
+    return insertedCount;
+  }
+
+  /**
+   * Checks whether a paragraph contains a hyperlink with `_top` anchor.
+   * Handles both inline Hyperlink elements and ComplexField HYPERLINK _top.
+   * @internal
+   */
+  private _paragraphHasTopLink(paragraph: Paragraph): boolean {
+    for (const item of paragraph.getContent()) {
+      if (item instanceof Hyperlink && item.getAnchor() === '_top') {
+        return true;
+      }
+      if (item instanceof ComplexField && item.isHyperlinkField()) {
+        const parsed = item.getParsedHyperlink();
+        if (parsed?.anchor === '_top') {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**

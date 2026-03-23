@@ -5471,6 +5471,8 @@ export class DocumentParser {
       // --- Group A & C: Parse pic:spPr (shape properties) ---
       const spPrObj = picPicObj['pic:spPr'];
       let border: any = undefined;
+      let zeroWidthLnXml: string | null = null;
+      let hasSpPrNoFill = false;
       let rotation = 0;
       let flipH = false;
       let flipV = false;
@@ -5493,7 +5495,7 @@ export class DocumentParser {
         if (lnObj) {
           const widthEmu = parseInt(lnObj['@_w'] || '0', 10);
           if (widthEmu > 0) {
-            border = { width: widthEmu / 12700 } as any;
+            border = { width: widthEmu / 12700, _fromParsed: true } as any;
             // Parse additional a:ln attributes
             if (lnObj['@_cap']) border.cap = String(lnObj['@_cap']);
             if (lnObj['@_cmpd']) border.compound = String(lnObj['@_cmpd']);
@@ -5550,7 +5552,15 @@ export class DocumentParser {
               if (lnObj['a:tailEnd']['@_len'])
                 border.tailEnd.length = String(lnObj['a:tailEnd']['@_len']);
             }
+          } else {
+            // Zero-width or absent-width a:ln: preserve as raw XML (BUG 8 fix)
+            zeroWidthLnXml = this.objectToXml({ 'a:ln': lnObj });
           }
+        }
+
+        // Detect spPr-level a:noFill (preserve independently from border)
+        if (spPrObj['a:noFill']) {
+          hasSpPrNoFill = true;
         }
 
         // Parse rotation and flip from a:xfrm
@@ -5676,6 +5686,16 @@ export class DocumentParser {
         isLinked,
         svgRelationshipId,
       });
+
+      // Preserve zero-width a:ln as raw passthrough (BUG 8 fix)
+      if (zeroWidthLnXml) {
+        image._setRawPassthrough('zero-width-ln', zeroWidthLnXml);
+      }
+
+      // Preserve spPr-level a:noFill independently from border (Bug C fix)
+      if (hasSpPrNoFill) {
+        image._setRawPassthrough('spPr-noFill', '<a:noFill/>');
+      }
 
       // --- Group B: Collect raw passthrough for unmodeled XML subtrees ---
       // Blip effects (children of a:blip that aren't modeled)

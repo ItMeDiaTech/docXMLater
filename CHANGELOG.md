@@ -5,6 +5,26 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.3.6] - 2026-03-23
+
+### Fixed
+
+- **Image border round-trip: spurious black borders removed**: Parsed image borders without an explicit fill no longer gain a default black `solidFill schemeClr tx1` on save. The generator now distinguishes parser-created borders (preserve fill as-is) from programmatic `setBorder()` calls (apply default black fill for backward compatibility).
+- **Image border round-trip: zero-width `a:ln` preserved**: Zero-width or absent-width `<a:ln>` elements (including Word's explicit "no border" declaration `<a:ln><a:noFill/></a:ln>`) are now preserved via raw XML passthrough instead of being silently dropped.
+- **Image border round-trip: spPr-level `a:noFill` preserved**: Shape property `<a:noFill/>` is now preserved independently from border presence, preventing loss when an image has no border but had an explicit no-fill declaration.
+- **Performance benchmark thresholds relaxed**: Timing-sensitive performance benchmarks no longer flake under load.
+
+### Added
+
+- **`ensureTopLinksAbove1x1Tables()`**: New Document method that automatically inserts "Top of the Document" hyperlinks above 1x1 tables that are missing them (skips the first 1x1 table). Idempotent, with configurable display text and formatting. Ensures `_top` bookmark exists at document start.
+
+### Statistics
+
+- 148 test suites, 3,171 tests passing
+- 120 source files
+
+---
+
 ## [10.3.5] - 2026-03-22
 
 ### Fixed

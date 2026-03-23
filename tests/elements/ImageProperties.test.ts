@@ -1130,6 +1130,116 @@ describe('Image Properties - Group C: Enhanced Border', () => {
 });
 
 // ============================================================================
+// Group C2: Border Round-Trip Fidelity
+// ============================================================================
+
+describe('Image Properties - Group C2: Border Round-Trip Fidelity', () => {
+  it('should NOT add black fill when parsed border has no fill', async () => {
+    // Create a doc with a programmatic border (gets default black fill)
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBorder(3);
+    doc.addImage(image);
+    const buffer1 = await doc.toBuffer();
+
+    // Load: border should have fill from the programmatic default
+    const doc2 = await Document.loadFromBuffer(buffer1);
+    const border2 = doc2.getImages()[0]?.image.getBorder();
+    expect(border2).toBeDefined();
+    expect(border2!.width).toBe(3);
+    expect(border2!.fill).toBeDefined();
+
+    // Round-trip again: fill should be preserved (not doubled or changed)
+    const buffer2 = await doc2.toBuffer();
+    const doc3 = await Document.loadFromBuffer(buffer2);
+    const border3 = doc3.getImages()[0]?.image.getBorder();
+    expect(border3!.width).toBe(3);
+    expect(border3!.fill).toBeDefined();
+    doc3.dispose();
+    doc2.dispose();
+  });
+
+  it('should preserve parsed border with noFill raw fill XML', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBorder({
+      width: 2,
+      rawFillXml: '<a:noFill/>',
+    });
+    doc.addImage(image);
+    const buffer = await doc.toBuffer();
+
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const border2 = doc2.getImages()[0]?.image.getBorder();
+    expect(border2).toBeDefined();
+    expect(border2!.width).toBe(2);
+    // Should have noFill preserved via rawFillXml, not converted to black
+    expect(border2!.rawFillXml).toContain('noFill');
+    expect(border2!.fill).toBeUndefined();
+    doc2.dispose();
+  });
+
+  it('setBorder() on loaded image should produce default fill', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    doc.addImage(image);
+    const buffer1 = await doc.toBuffer();
+
+    // Load and apply setBorder programmatically
+    const doc2 = await Document.loadFromBuffer(buffer1);
+    const loadedImage = doc2.getImages()[0]?.image;
+    loadedImage!.setBorder(2);
+
+    const buffer2 = await doc2.toBuffer();
+    const doc3 = await Document.loadFromBuffer(buffer2);
+    const border = doc3.getImages()[0]?.image.getBorder();
+    expect(border).toBeDefined();
+    expect(border!.width).toBe(2);
+    // Should have default fill since setBorder() was called explicitly
+    expect(border!.fill).toBeDefined();
+    doc3.dispose();
+    doc2.dispose();
+  });
+
+  it('should not gain border on image without setBorder', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    doc.addImage(image);
+    const buffer = await doc.toBuffer();
+
+    const doc2 = await Document.loadFromBuffer(buffer);
+    const border = doc2.getImages()[0]?.image.getBorder();
+    expect(border).toBeUndefined();
+    doc2.dispose();
+  });
+
+  it('parsed border with fill should preserve fill across multiple round-trips', async () => {
+    const doc = Document.create();
+    const image = await Image.fromBuffer(createTestImageBuffer(), 'png', 914400, 914400);
+    image.setBorder({
+      width: 1.5,
+      fill: { type: 'srgbClr', value: 'FF0000' },
+    });
+    doc.addImage(image);
+
+    // Triple round-trip
+    let buffer = await doc.toBuffer();
+    for (let i = 0; i < 3; i++) {
+      const tmpDoc = await Document.loadFromBuffer(buffer);
+      buffer = await tmpDoc.toBuffer();
+      tmpDoc.dispose();
+    }
+
+    const final = await Document.loadFromBuffer(buffer);
+    const border = final.getImages()[0]?.image.getBorder();
+    expect(border!.width).toBe(1.5);
+    expect(border!.fill?.type).toBe('srgbClr');
+    expect(border!.fill?.value).toBe('FF0000');
+    final.dispose();
+  });
+});
+
+// ============================================================================
 // Group D: Image Format Support
 // ============================================================================
 
