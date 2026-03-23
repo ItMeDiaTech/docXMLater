@@ -10109,7 +10109,8 @@ export class Document {
 
   /**
    * Checks whether a paragraph contains a hyperlink with `_top` anchor.
-   * Handles both inline Hyperlink elements and ComplexField HYPERLINK _top.
+   * Handles inline Hyperlink elements, ComplexField HYPERLINK _top,
+   * and PreservedElement raw XML passthrough (loaded docs).
    * @internal
    */
   private _paragraphHasTopLink(paragraph: Paragraph): boolean {
@@ -10122,6 +10123,10 @@ export class Document {
         if (parsed?.anchor === '_top') {
           return true;
         }
+      }
+      // Loaded docs may have hyperlinks as PreservedElement (raw XML passthrough)
+      if (item instanceof PreservedElement && item.getRawXml().includes('w:anchor="_top"')) {
+        return true;
       }
     }
     return false;

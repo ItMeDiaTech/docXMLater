@@ -86,7 +86,7 @@ describe('Performance Benchmarks', () => {
    * Benchmark: Load and save existing document
    * Expected: < 3 seconds
    */
-  it('should load and re-save document in < 1 second', async () => {
+  it('should load and re-save document in < 3 seconds', async () => {
     // Create a test document first
     const originalPath = join(tempDir, `benchmark-load-${Date.now()}.docx`);
     const savedPath = join(tempDir, `benchmark-resave-${Date.now()}.docx`);

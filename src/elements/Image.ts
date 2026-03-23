@@ -1492,6 +1492,10 @@ export class Image {
       delete this.border._fromParsed;
     }
 
+    // Clear passthrough slots that conflict with explicit border
+    this._rawPassthrough.delete('zero-width-ln');
+    this._rawPassthrough.delete('spPr-noFill');
+
     // Calculate space needed for border (half-width on each side)
     // Border is drawn centered on the edge
     const borderEmu = this.border.width * UNITS.EMUS_PER_POINT;
@@ -1515,6 +1519,7 @@ export class Image {
    */
   removeBorder(): this {
     this.border = undefined;
+    this._rawPassthrough.delete('zero-width-ln');
     return this;
   }
 
