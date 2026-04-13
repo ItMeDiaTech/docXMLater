@@ -6835,6 +6835,15 @@ export class Document {
    * });
    * ```
    */
+  private static stripThemeFontsIfExplicitFont(runConfig: any): void {
+    if (runConfig?.font) {
+      delete runConfig.fontAsciiTheme;
+      delete runConfig.fontHAnsiTheme;
+      delete runConfig.fontEastAsiaTheme;
+      delete runConfig.fontCsTheme;
+    }
+  }
+
   public applyStyles(options?: ApplyStylesOptions): {
     heading1: boolean;
     heading2: boolean;
@@ -6914,6 +6923,14 @@ export class Document {
         ...options?.listParagraph?.paragraph,
       },
     };
+
+    // Strip theme font attributes when an explicit font is provided,
+    // because Word prioritizes theme fonts over explicit font names.
+    Document.stripThemeFontsIfExplicitFont(h1Config.run);
+    Document.stripThemeFontsIfExplicitFont(h2Config.run);
+    Document.stripThemeFontsIfExplicitFont(h3Config.run);
+    Document.stripThemeFontsIfExplicitFont(normalConfig.run);
+    Document.stripThemeFontsIfExplicitFont(listParaConfig.run);
 
     // Extract preserve blank lines option (defaults to true)
     const preserveBlankLines = options?.preserveBlankLinesAfterHeading2Tables ?? true;

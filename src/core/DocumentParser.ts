@@ -1344,9 +1344,61 @@ export class DocumentParser {
             hyperlinkObj['w:moveFrom'] ||
             hyperlinkObj['w:moveTo'];
           if (hasRevisionChildren) {
-            const rawXml = extractElementXmlAtPosition(child.pos, 'w:hyperlink');
-            if (rawXml) {
-              paragraph.addContent(new PreservedElement(rawXml, 'w:hyperlink', 'inline'));
+            // Flatten revisions to make hyperlink editable (setUrl/setText).
+            // Trades revision fidelity inside the hyperlink for editability.
+            const flattenedObj = { ...hyperlinkObj };
+            const allRuns: any[] = [];
+
+            // Keep existing direct runs
+            if (flattenedObj['w:r']) {
+              const directRuns = Array.isArray(flattenedObj['w:r'])
+                ? flattenedObj['w:r']
+                : [flattenedObj['w:r']];
+              allRuns.push(...directRuns);
+            }
+
+            // Unwrap w:ins runs (inserted content — keep)
+            if (flattenedObj['w:ins']) {
+              const insArr = Array.isArray(flattenedObj['w:ins'])
+                ? flattenedObj['w:ins']
+                : [flattenedObj['w:ins']];
+              for (const ins of insArr) {
+                if (ins['w:r']) {
+                  const insRuns = Array.isArray(ins['w:r']) ? ins['w:r'] : [ins['w:r']];
+                  allRuns.push(...insRuns);
+                }
+              }
+            }
+
+            // Unwrap w:moveTo runs (move destination — keep)
+            if (flattenedObj['w:moveTo']) {
+              const moveToArr = Array.isArray(flattenedObj['w:moveTo'])
+                ? flattenedObj['w:moveTo']
+                : [flattenedObj['w:moveTo']];
+              for (const mt of moveToArr) {
+                if (mt['w:r']) {
+                  const mtRuns = Array.isArray(mt['w:r']) ? mt['w:r'] : [mt['w:r']];
+                  allRuns.push(...mtRuns);
+                }
+              }
+            }
+
+            // Drop w:del and w:moveFrom (deleted/moved-away content)
+            flattenedObj['w:r'] = allRuns.length > 0 ? allRuns : undefined;
+            delete flattenedObj['w:del'];
+            delete flattenedObj['w:ins'];
+            delete flattenedObj['w:moveFrom'];
+            delete flattenedObj['w:moveTo'];
+
+            const result = this.parseHyperlinkFromObject(flattenedObj, relationshipManager);
+            if (result.hyperlink) {
+              paragraph.addHyperlink(result.hyperlink);
+            }
+            for (const bookmark of result.bookmarkStarts) {
+              paragraph.addBookmarkStart(bookmark);
+            }
+            for (const bookmark of result.bookmarkEnds) {
+              paragraph.addBookmarkEnd(bookmark);
             }
           } else {
             const result = this.parseHyperlinkFromObject(hyperlinkObj, relationshipManager);

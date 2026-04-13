@@ -1,13 +1,12 @@
 /**
- * Tests for tracked changes inside hyperlinks being preserved during round-trip.
+ * Tests for tracked changes inside hyperlinks being flattened during parsing.
  *
- * Issue: w:del/w:ins inside w:hyperlink was lost during parsing because
- * parseHyperlinkFromObject() only processes direct w:r children. On save,
- * the revision markup disappeared, causing deleted text to appear as regular
- * visible text.
- *
- * Fix: Detect revision children inside hyperlink objects during parsing and
- * preserve the entire hyperlink as a PreservedElement (raw XML passthrough).
+ * Revision children (w:ins, w:del, w:moveFrom, w:moveTo) inside w:hyperlink
+ * are flattened so the hyperlink is parsed as a normal editable Hyperlink object:
+ * - w:ins runs are unwrapped (kept as direct runs)
+ * - w:del runs are dropped (deleted content discarded)
+ * - w:moveFrom runs are dropped (moved-away content)
+ * - w:moveTo runs are unwrapped (move destination kept)
  */
 
 import { Document } from '../../src/core/Document';
@@ -64,7 +63,7 @@ async function createDocxWithHyperlinks(
 
 describe('Hyperlink Revision Preservation', () => {
   describe('w:del and w:ins inside w:hyperlink', () => {
-    it('should preserve tracked changes inside hyperlinks during round-trip', async () => {
+    it('should flatten tracked changes inside hyperlinks and parse as Hyperlink', async () => {
       const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -90,32 +89,22 @@ describe('Hyperlink Revision Preservation', () => {
         revisionHandling: 'preserve',
       });
 
-      // The hyperlink should be preserved as a PreservedElement (not parsed as Hyperlink)
+      // The hyperlink should be parsed as a Hyperlink (not PreservedElement)
       const paras = doc.getParagraphs();
       expect(paras.length).toBeGreaterThanOrEqual(1);
       const content = paras[0]!.getContent();
+      const hyperlinks = content.filter((item) => item instanceof Hyperlink);
       const preserved = content.filter((item) => item instanceof PreservedElement);
-      expect(preserved.length).toBe(1);
-      expect(preserved[0]!.getElementType()).toBe('w:hyperlink');
+      expect(hyperlinks.length).toBe(1);
+      expect(preserved.length).toBe(0);
 
-      // Round-trip: save and verify output XML
-      const outputBuffer = await doc.toBuffer();
+      // Should contain the inserted text (w:ins unwrapped), deleted text dropped
+      expect(hyperlinks[0]!.getText()).toBe('new link text');
+
       doc.dispose();
-
-      const outputZip = new ZipHandler();
-      await outputZip.loadFromBuffer(outputBuffer);
-      const outputXml = outputZip.getFileAsString('word/document.xml') || '';
-
-      // Must contain the revision elements inside the hyperlink
-      expect(outputXml).toContain('w:del');
-      expect(outputXml).toContain('w:ins');
-      expect(outputXml).toContain('w:delText');
-      expect(outputXml).toContain('old link text');
-      expect(outputXml).toContain('new link text');
-      expect(outputXml).toContain('w:hyperlink');
     });
 
-    it('should preserve w:moveFrom and w:moveTo inside hyperlinks', async () => {
+    it('should handle w:moveFrom inside hyperlinks by dropping moved-away content', async () => {
       const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -139,18 +128,12 @@ describe('Hyperlink Revision Preservation', () => {
       });
 
       const content = doc.getParagraphs()[0]!.getContent();
+      // moveFrom content is dropped, so the hyperlink has no runs.
+      // parseHyperlinkFromObject may not produce a Hyperlink when there are no runs.
       const preserved = content.filter((item) => item instanceof PreservedElement);
-      expect(preserved.length).toBe(1);
-      expect(preserved[0]!.getRawXml()).toContain('w:moveFrom');
+      expect(preserved.length).toBe(0);
 
-      const outputBuffer = await doc.toBuffer();
       doc.dispose();
-
-      const outputZip = new ZipHandler();
-      await outputZip.loadFromBuffer(outputBuffer);
-      const outputXml = outputZip.getFileAsString('word/document.xml') || '';
-      expect(outputXml).toContain('w:moveFrom');
-      expect(outputXml).toContain('moved text');
     });
   });
 
@@ -223,34 +206,23 @@ describe('Hyperlink Revision Preservation', () => {
       const hyperlinks = content.filter((item) => item instanceof Hyperlink);
       const preserved = content.filter((item) => item instanceof PreservedElement);
 
-      // First hyperlink (normal) should be a Hyperlink object
-      expect(hyperlinks.length).toBe(1);
-      // Second hyperlink (with revisions) should be a PreservedElement
-      expect(preserved.length).toBe(1);
-      expect(preserved[0]!.getElementType()).toBe('w:hyperlink');
+      // Both hyperlinks should be parsed as Hyperlink objects
+      expect(hyperlinks.length).toBe(2);
+      expect(preserved.length).toBe(0);
 
-      // Round-trip
-      const outputBuffer = await doc.toBuffer();
+      // Second hyperlink should have the inserted text, not the deleted text
+      expect(hyperlinks[1]!.getText()).toBe('new');
+
       doc.dispose();
-
-      const outputZip = new ZipHandler();
-      await outputZip.loadFromBuffer(outputBuffer);
-      const outputXml = outputZip.getFileAsString('word/document.xml') || '';
-
-      // Both hyperlinks should be present
-      expect(outputXml).toContain('normal link');
-      expect(outputXml).toContain('w:del');
-      expect(outputXml).toContain('w:ins');
-      expect(outputXml).toContain('w:delText');
     });
 
-    it('should preserve hyperlink attributes (r:id) in the raw XML', async () => {
+    it('should preserve hyperlink URL after flattening revisions', async () => {
       const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <w:body>
     <w:p>
-      <w:hyperlink r:id="rId5" w:tooltip="Example tooltip">
+      <w:hyperlink r:id="rId5">
         <w:ins w:id="40" w:author="TestUser" w:date="2024-01-01T00:00:00Z">
           <w:r><w:t>inserted text</w:t></w:r>
         </w:ins>
@@ -268,15 +240,12 @@ describe('Hyperlink Revision Preservation', () => {
       });
 
       const content = doc.getParagraphs()[0]!.getContent();
-      const preserved = content.filter(
-        (item) => item instanceof PreservedElement
-      ) as PreservedElement[];
-      expect(preserved.length).toBe(1);
+      const hyperlinks = content.filter((item) => item instanceof Hyperlink);
+      expect(hyperlinks.length).toBe(1);
 
-      // Raw XML should contain the relationship ID and tooltip
-      const rawXml = preserved[0]!.getRawXml();
-      expect(rawXml).toContain('r:id="rId5"');
-      expect(rawXml).toContain('w:tooltip="Example tooltip"');
+      // Should have the correct URL and text
+      expect(hyperlinks[0]!.getUrl()).toBe('https://example.com');
+      expect(hyperlinks[0]!.getText()).toBe('inserted text');
 
       doc.dispose();
     });
