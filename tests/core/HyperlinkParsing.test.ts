@@ -595,11 +595,9 @@ describe('Hyperlink Parsing', () => {
   });
 
   describe('External URL + Anchor Fragment Combination', () => {
-    it('should combine external URL with anchor fragment during parsing', async () => {
-      // This tests the fix for Issue.docx where theSource URLs are split:
-      // - Base URL in relationships: https://thesource.cvshealth.com/nuxeo/thesource/
-      // - Fragment in w:anchor: !/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c
-      // Combined: https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c
+    it('should preserve both external URL and anchor per ECMA-376 §17.16.22', async () => {
+      // Per ECMA-376, w:hyperlink can have BOTH r:id (external URL) and w:anchor simultaneously
+      // This preserves the original XML structure instead of combining them
       const mockDocument = await createMockDocumentWithUrlAndAnchor({
         relationshipId: 'rId5',
         url: 'https://thesource.cvshealth.com/nuxeo/thesource/',
@@ -611,21 +609,17 @@ describe('Hyperlink Parsing', () => {
       const paragraphs = doc.getParagraphs();
       const hyperlink = paragraphs[0]!.getContent()[0] as Hyperlink;
 
-      // URL should be combined with anchor
-      expect(hyperlink.getUrl()).toBe(
-        'https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c'
-      );
-      // Anchor should be undefined since it's now part of URL
-      expect(hyperlink.getAnchor()).toBeUndefined();
-      // Should still be external
+      // URL preserved as-is from relationship
+      expect(hyperlink.getUrl()).toBe('https://thesource.cvshealth.com/nuxeo/thesource/');
+      // Anchor preserved separately per spec
+      expect(hyperlink.getAnchor()).toBe('!/view?docid=6bce8cc8-2318-4271-85a3-07198190a18c');
+      // Should still be external (has URL)
       expect(hyperlink.isExternal()).toBe(true);
-      expect(hyperlink.isInternal()).toBe(false);
       // Text should be preserved
       expect(hyperlink.getText()).toBe('View Document');
     });
 
-    it('should allow docid pattern to be extracted from combined URL', async () => {
-      // This verifies Template_UI regex will work after the fix
+    it('should allow docid pattern to be extracted from anchor', async () => {
       const mockDocument = await createMockDocumentWithUrlAndAnchor({
         relationshipId: 'rId5',
         url: 'https://thesource.cvshealth.com/nuxeo/thesource/',
@@ -636,10 +630,10 @@ describe('Hyperlink Parsing', () => {
       const doc = await Document.loadFromBuffer(mockDocument);
       const hyperlink = doc.getParagraphs()[0]!.getContent()[0] as Hyperlink;
 
-      const url = hyperlink.getUrl()!;
-      // Template_UI's regex pattern
+      // docid can be extracted from anchor or by combining url + anchor
+      const combined = (hyperlink.getUrl() || '') + '#' + (hyperlink.getAnchor() || '');
       const docIdPattern = /docid=([a-zA-Z0-9-]+)(?:[^a-zA-Z0-9-]|$)/i;
-      const match = url.match(docIdPattern);
+      const match = combined.match(docIdPattern);
 
       expect(match).not.toBeNull();
       expect(match![1]).toBe('abc-123-def');
@@ -692,16 +686,16 @@ describe('Hyperlink Parsing', () => {
       const doc = await Document.loadFromBuffer(buffer);
       const content = doc.getParagraphs()[0]!.getContent();
 
-      // External URL + anchor (combined)
+      // External URL + anchor (both preserved per ECMA-376)
       const link1 = content[0] as Hyperlink;
-      expect(link1.getUrl()).toBe('https://example.com/base/#!/view?docid=doc-001');
-      expect(link1.getAnchor()).toBeUndefined();
+      expect(link1.getUrl()).toBe('https://example.com/base/');
+      expect(link1.getAnchor()).toBe('!/view?docid=doc-001');
       expect(link1.getText()).toBe('Doc 1');
 
-      // Another external URL + anchor (combined)
+      // Another external URL + anchor (both preserved)
       const link2 = content[1] as Hyperlink;
-      expect(link2.getUrl()).toBe('https://other.com/path/#!/view?docid=doc-002');
-      expect(link2.getAnchor()).toBeUndefined();
+      expect(link2.getUrl()).toBe('https://other.com/path/');
+      expect(link2.getAnchor()).toBe('!/view?docid=doc-002');
       expect(link2.getText()).toBe('Doc 2');
 
       // Pure internal link (anchor only, no URL) - should remain unchanged
@@ -719,7 +713,7 @@ describe('Hyperlink Parsing', () => {
       expect(link4.getText()).toBe('External Only');
     });
 
-    it('should preserve combined URL through round-trip save/load', async () => {
+    it('should preserve both URL and anchor through round-trip save/load', async () => {
       const mockDocument = await createMockDocumentWithUrlAndAnchor({
         relationshipId: 'rId5',
         url: 'https://example.com/',
@@ -730,7 +724,8 @@ describe('Hyperlink Parsing', () => {
       // Load
       const doc1 = await Document.loadFromBuffer(mockDocument);
       const link1 = doc1.getParagraphs()[0]!.getContent()[0] as Hyperlink;
-      expect(link1.getUrl()).toBe('https://example.com/#!/section?id=test-123');
+      expect(link1.getUrl()).toBe('https://example.com/');
+      expect(link1.getAnchor()).toBe('!/section?id=test-123');
 
       // Save
       const buffer = await doc1.toBuffer();
@@ -739,9 +734,9 @@ describe('Hyperlink Parsing', () => {
       const doc2 = await Document.loadFromBuffer(buffer);
       const link2 = doc2.getParagraphs()[0]!.getContent()[0] as Hyperlink;
 
-      // Should still have combined URL
-      expect(link2.getUrl()).toBe('https://example.com/#!/section?id=test-123');
-      expect(link2.getAnchor()).toBeUndefined();
+      // Both URL and anchor preserved through round-trip
+      expect(link2.getUrl()).toBe('https://example.com/');
+      expect(link2.getAnchor()).toBe('!/section?id=test-123');
       expect(link2.getText()).toBe('Test Link');
     });
 
@@ -1229,10 +1224,9 @@ describe('Hyperlinks in Tables (processHyperlinks fix)', () => {
 
       const hyperlink = content[0] as Hyperlink;
       expect(hyperlink.getText()).toBe('View Document in Table');
-      // The URL should be the combined URL (base + anchor)
-      expect(hyperlink.getUrl()).toBe(
-        'https://thesource.cvshealth.com/nuxeo/thesource/#!/view?docid=test-doc-123'
-      );
+      // Both URL and anchor preserved per ECMA-376
+      expect(hyperlink.getUrl()).toBe('https://thesource.cvshealth.com/nuxeo/thesource/');
+      expect(hyperlink.getAnchor()).toBe('!/view?docid=test-doc-123');
       expect(hyperlink.isExternal()).toBe(true);
     });
 
@@ -1380,10 +1374,12 @@ describe('Hyperlinks in Tables (processHyperlinks fix)', () => {
       const link4 = hyperlinks.find((h) => h.hyperlink.getText() === 'Internal Link');
 
       expect(link1).toBeDefined();
-      expect(link1!.hyperlink.getUrl()).toBe('https://example.com/base1/#!/view?docid=doc-001');
+      expect(link1!.hyperlink.getUrl()).toBe('https://example.com/base1/');
+      expect(link1!.hyperlink.getAnchor()).toBe('!/view?docid=doc-001');
 
       expect(link2).toBeDefined();
-      expect(link2!.hyperlink.getUrl()).toBe('https://example.com/base2/#!/view?docid=doc-002');
+      expect(link2!.hyperlink.getUrl()).toBe('https://example.com/base2/');
+      expect(link2!.hyperlink.getAnchor()).toBe('!/view?docid=doc-002');
 
       expect(link3).toBeDefined();
       expect(link3!.hyperlink.getUrl()).toBe('https://example.com/simple');

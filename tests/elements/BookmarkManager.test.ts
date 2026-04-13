@@ -186,4 +186,34 @@ describe('BookmarkManager', () => {
       expect(stats.names).toContain('second');
     });
   });
+
+  describe('Table bookmark column range (ECMA-376 §17.16.5)', () => {
+    it('should store and serialize colFirst/colLast attributes', () => {
+      const bookmark = new Bookmark({ name: 'TableRange', id: 10, colFirst: 0, colLast: 2 });
+      expect(bookmark.getColFirst()).toBe(0);
+      expect(bookmark.getColLast()).toBe(2);
+
+      const xml = bookmark.toStartXML();
+      expect(xml.attributes?.['w:colFirst']).toBe('0');
+      expect(xml.attributes?.['w:colLast']).toBe('2');
+    });
+
+    it('should not emit colFirst/colLast when not set', () => {
+      const bookmark = new Bookmark({ name: 'Simple', id: 11 });
+      const xml = bookmark.toStartXML();
+      expect(xml.attributes?.['w:colFirst']).toBeUndefined();
+      expect(xml.attributes?.['w:colLast']).toBeUndefined();
+    });
+
+    it('should set column range via setColumnRange()', () => {
+      const bookmark = new Bookmark({ name: 'Range', id: 12 });
+      bookmark.setColumnRange(1, 3);
+      expect(bookmark.getColFirst()).toBe(1);
+      expect(bookmark.getColLast()).toBe(3);
+
+      const xml = bookmark.toStartXML();
+      expect(xml.attributes?.['w:colFirst']).toBe('1');
+      expect(xml.attributes?.['w:colLast']).toBe('3');
+    });
+  });
 });

@@ -193,6 +193,42 @@ export class StylesManager {
   }
 
   /**
+   * Clones an existing style with a new ID and optional name
+   *
+   * Deep-copies the source style (including all run, paragraph, and table
+   * formatting) and registers the clone with the new ID. If `newName` is
+   * not provided, the clone's name is set to the new ID.
+   *
+   * @param sourceId - ID of the style to clone
+   * @param newId - ID for the cloned style (must be unique)
+   * @param newName - Display name for the clone (defaults to newId)
+   * @returns The cloned Style, or undefined if source not found
+   *
+   * @example
+   * ```typescript
+   * // Create a variant of Heading1
+   * const variant = stylesManager.cloneStyle('Heading1', 'Heading1Blue', 'Blue Heading 1');
+   * variant?.setRunFormatting({ ...variant.getRunFormatting(), color: '0000FF' });
+   *
+   * // Clone a custom style for a different section
+   * stylesManager.cloneStyle('CustomNote', 'CustomNoteAlt');
+   * ```
+   */
+  cloneStyle(sourceId: string, newId: string, newName?: string): Style | undefined {
+    const source = this.getStyle(sourceId);
+    if (!source) return undefined;
+
+    const props = source.getProperties();
+    props.styleId = newId;
+    props.name = newName ?? newId;
+    props.isDefault = false; // Clones should never be default
+
+    const cloned = new Style(props);
+    this.addStyle(cloned);
+    return cloned;
+  }
+
+  /**
    * Checks if a style exists or can be loaded
    * @param styleId - Style ID to check
    * @returns True if the style exists or is a built-in style

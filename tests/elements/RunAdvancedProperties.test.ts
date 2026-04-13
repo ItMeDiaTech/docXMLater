@@ -118,6 +118,23 @@ describe('Run Advanced Properties - Round Trip Tests', () => {
 
       expect(loadedRun?.getFormatting().snapToGrid).toBe(true);
     });
+
+    it('should round-trip snapToGrid=false (explicit OFF) without reverting to default', async () => {
+      // Per ECMA-376 §17.3.2.34, the default when absent is true (snap to grid ON).
+      // An explicit val="0" must survive round-trip to preserve the override.
+      const doc = Document.create();
+      const para = new Paragraph();
+      para.addText('No Grid Text', { snapToGrid: false });
+      doc.addParagraph(para);
+
+      const tempFile = path.join(TEMP_DIR, 'snaptogrid-false-test.docx');
+      await doc.save(tempFile);
+
+      const loadedDoc = await Document.load(tempFile);
+      const loadedRun = loadedDoc.getParagraphs()[0]?.getRuns()[0];
+
+      expect(loadedRun?.getFormatting().snapToGrid).toBe(false);
+    });
   });
 
   describe('SpecVanish (Special Hidden)', () => {
@@ -262,6 +279,40 @@ describe('Run Advanced Properties - Round Trip Tests', () => {
       expect(run.getFormatting().effect).toBe('shimmer');
       expect(run.getFormatting().fitText).toBe(1440);
       expect(run.getFormatting().eastAsianLayout?.vert).toBe(true);
+    });
+  });
+
+  describe('Boolean property w:val="0" handling (ECMA-376 CT_OnOff)', () => {
+    it('should not set boolean properties when w:val="0" (explicit false)', async () => {
+      // Create a document, then inject runs with w:val="0" booleans
+      const doc = Document.create();
+      const para = new Paragraph();
+      const run = new Run('Test');
+      run.setNoProof(true);
+      run.setVanish(true);
+      para.addRun(run);
+      doc.addParagraph(para);
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Modify XML to change val="1" to val="0" (explicit false)
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      docXml = docXml.replace('<w:noProof w:val="1"/>', '<w:noProof w:val="0"/>');
+      docXml = docXml.replace('<w:vanish w:val="1"/>', '<w:vanish w:val="0"/>');
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const loadedRun = loaded.getParagraphs()[0]?.getRuns()[0];
+      const fmt = loadedRun?.getFormatting();
+
+      // w:val="0" means these should NOT be set (explicit false = property off)
+      expect(fmt?.noProof).toBeFalsy();
+      expect(fmt?.vanish).toBeFalsy();
+
+      loaded.dispose();
     });
   });
 });

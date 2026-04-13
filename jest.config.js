@@ -13,6 +13,8 @@ module.exports = {
         target: 'ES2022',
         lib: ['ES2022'],
         types: ['node', 'jest'],
+        noUnusedLocals: false,
+        noUnusedParameters: false,
       },
     }],
   },
@@ -24,6 +26,14 @@ module.exports = {
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
+  coverageThreshold: {
+    global: {
+      statements: 65,
+      branches: 54,
+      functions: 58,
+      lines: 66,
+    },
+  },
   moduleFileExtensions: ['ts', 'js', 'json'],
   testTimeout: 30000,
   verbose: true,

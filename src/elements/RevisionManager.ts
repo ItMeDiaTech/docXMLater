@@ -67,8 +67,6 @@ export class RevisionManager {
   private revisionsByTypeCache = new Map<RevisionType, Revision[]>();
   private revisionsByAuthorCache = new Map<string, Revision[]>();
   private revisionsByCategoryCache = new Map<RevisionCategory, Revision[]>();
-  private cacheValid = true;
-
   /**
    * Invalidates all caches. Called when revisions are added/removed.
    * @private
@@ -77,7 +75,7 @@ export class RevisionManager {
     this.revisionsByTypeCache.clear();
     this.revisionsByAuthorCache.clear();
     this.revisionsByCategoryCache.clear();
-    this.cacheValid = false;
+    // Cache cleared
   }
 
   /**

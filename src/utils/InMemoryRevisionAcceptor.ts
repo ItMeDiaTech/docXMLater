@@ -18,13 +18,9 @@ import type { Document } from '../core/Document';
 import { Paragraph } from '../elements/Paragraph';
 import type { ParagraphContent } from '../elements/Paragraph';
 import { Revision, RevisionType } from '../elements/Revision';
-import type { Run } from '../elements/Run';
-import type { Hyperlink } from '../elements/Hyperlink';
 import { isRunContent, isHyperlinkContent, isImageRunContent } from '../elements/RevisionContent';
-import type { ImageRun } from '../elements/ImageRun';
 import { ComplexField } from '../elements/Field';
 import { Table } from '../elements/Table';
-import { Section } from '../elements/Section';
 import { getGlobalLogger, createScopedLogger, ILogger } from './logger';
 
 /**
@@ -67,11 +63,6 @@ export interface AcceptRevisionsResult {
   /** Number of empty tables removed during cleanup */
   emptyTablesRemoved: number;
 }
-
-/**
- * Revision types that represent content changes (contain actual text/runs)
- */
-const CONTENT_REVISION_TYPES: RevisionType[] = ['insert', 'delete', 'moveFrom', 'moveTo'];
 
 /**
  * Revision types that represent property/formatting changes

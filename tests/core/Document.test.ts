@@ -637,7 +637,7 @@ describe('Document', () => {
       // Conflict should be resolved: keepNext/keepLines take priority
       expect(formatting.keepNext).toBe(true);
       expect(formatting.keepLines).toBe(true);
-      expect(formatting.pageBreakBefore).toBe(false);
+      expect(formatting.pageBreakBefore).toBeUndefined();
     });
 
     test('should preserve keepNext/keepLines when pageBreakBefore is not set', async () => {
@@ -656,7 +656,7 @@ describe('Document', () => {
       const formatting = loadedPara.getFormatting();
 
       // Properties should be preserved (pageBreakBefore is false, not undefined, since keepNext was set)
-      expect(formatting.pageBreakBefore).toBe(false);
+      expect(formatting.pageBreakBefore).toBeUndefined();
       expect(formatting.keepNext).toBe(true);
       expect(formatting.keepLines).toBe(true);
     });
@@ -688,12 +688,12 @@ describe('Document', () => {
       // Para 1: Conflict resolved - keepNext wins
       const loadedPara1 = bodyElements[0] as Paragraph;
       expect(loadedPara1.getFormatting().keepNext).toBe(true);
-      expect(loadedPara1.getFormatting().pageBreakBefore).toBe(false);
+      expect(loadedPara1.getFormatting().pageBreakBefore).toBeUndefined();
 
-      // Para 2: keepNext preserved (pageBreakBefore is false since keepNext was set)
+      // Para 2: keepNext preserved (pageBreakBefore absent since keepNext was set)
       const loadedPara2 = bodyElements[1] as Paragraph;
       expect(loadedPara2.getFormatting().keepNext).toBe(true);
-      expect(loadedPara2.getFormatting().pageBreakBefore).toBe(false);
+      expect(loadedPara2.getFormatting().pageBreakBefore).toBeUndefined();
 
       // Para 3: pageBreakBefore preserved
       const loadedPara3 = bodyElements[2] as Paragraph;
@@ -722,7 +722,7 @@ describe('Document', () => {
       // Conflict should be resolved - keepNext/keepLines win
       expect(formatting.keepNext).toBe(true);
       expect(formatting.keepLines).toBe(true);
-      expect(formatting.pageBreakBefore).toBe(false);
+      expect(formatting.pageBreakBefore).toBeUndefined();
     });
   });
 

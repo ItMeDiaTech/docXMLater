@@ -223,19 +223,33 @@ export type PageVerticalAlignment = 'top' | 'center' | 'bottom' | 'both';
 export type CellVerticalAlignment = 'top' | 'center' | 'bottom';
 
 /**
- * Paragraph text alignment
+ * Paragraph text alignment per ECMA-376 §17.18.44 (ST_Jc)
  *
  * From: Paragraph.ts (ParagraphAlignment)
- * Note: 'both' is an alias for 'justify' in some contexts
+ * Note: 'both' is the OOXML name for justified text; 'justify' is accepted as an alias.
+ * 'start'/'end' are bidi-aware alternatives to 'left'/'right'.
  */
-export type ParagraphAlignment = 'left' | 'center' | 'right' | 'justify' | 'both';
+export type ParagraphAlignment =
+  | 'left'
+  | 'center'
+  | 'right'
+  | 'justify'
+  | 'both'
+  | 'start'
+  | 'end'
+  | 'distribute'
+  | 'mediumKashida'
+  | 'highKashida'
+  | 'lowKashida'
+  | 'thaiDistribute';
 
 /**
- * Table alignment (horizontal positioning)
+ * Table alignment (horizontal positioning) per ECMA-376 §17.18.45 (ST_JcTable)
  *
  * From: Table.ts (TableAlignment)
+ * 'start'/'end' are bidi-aware alternatives to 'left'/'right'.
  */
-export type TableAlignment = 'left' | 'center' | 'right';
+export type TableAlignment = 'left' | 'center' | 'right' | 'start' | 'end';
 
 /**
  * Row justification/alignment options
@@ -466,7 +480,20 @@ export function isVerticalAlignment(value: string): value is VerticalAlignment {
  * Check if a value is a valid ParagraphAlignment
  */
 export function isParagraphAlignment(value: string): value is ParagraphAlignment {
-  return ['left', 'center', 'right', 'justify', 'both'].includes(value);
+  return [
+    'left',
+    'center',
+    'right',
+    'justify',
+    'both',
+    'start',
+    'end',
+    'distribute',
+    'mediumKashida',
+    'highKashida',
+    'lowKashida',
+    'thaiDistribute',
+  ].includes(value);
 }
 
 /**

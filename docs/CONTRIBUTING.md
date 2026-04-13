@@ -6,8 +6,8 @@ Thank you for your interest in contributing to DocXML! This document provides gu
 
 ### Prerequisites
 
-- Node.js 14 or higher
-- TypeScript 5.0 or higher
+- Node.js 18 or higher (CI tests on Node 18, 20, 22)
+- TypeScript 5.7 or higher
 - Git
 
 ### Setup Development Environment
@@ -86,6 +86,34 @@ npm run test:watch
 # Run tests with coverage
 npm run test:coverage
 ```
+
+### Debugging
+
+Enable verbose logging with environment variables:
+
+```bash
+# Enable debug-level logging
+DOCXMLATER_LOG_LEVEL=debug npm test
+
+# Skip OOXML schema validation for faster test runs during development
+SKIP_OOXML_VALIDATION=true npm test
+```
+
+**VS Code debugging:** A `.vscode/launch.json` is included (gitignored) with four configurations:
+
+- **Debug Current Test File** — open a test file, hit F5 to debug it with breakpoints
+- **Debug All Tests** — run the full suite under the debugger
+- **Debug Test by Name** — prompts for a test name pattern (regex)
+- **Debug Example File** — run any TypeScript example file under ts-node
+
+All test configs skip OOXML validation and coverage for faster debugging.
+
+### Troubleshooting
+
+- **Build fails after pulling changes:** Run `npm run clean && npm run build` to clear stale artifacts.
+- **Tests fail with ZIP errors:** Ensure you're on Node 18+. Earlier versions have incompatible Buffer behavior.
+- **yalc publish not working:** Run `npx yalc publish --push` from the project root after building.
+- **TypeScript errors after dependency update:** Delete `node_modules` and `package-lock.json`, then `npm install`.
 
 ## Commit Guidelines
 
@@ -214,28 +242,23 @@ createParagraph(text?: string, formatting?: ParagraphFormatting): Paragraph
 
 ```text
 src/
-├── core/          # Document, ZipHandler classes
-├── elements/      # Paragraph, Run, Table elements
-├── formatting/    # Style, NumberingManager
-├── xml/           # XML generation utilities
-├── zip/           # ZIP archive handling
-└── utils/         # Validation and helper utilities
+├── constants/     # Limits, legacy compat flags
+├── core/          # Document, Parser, Generator, Validator
+├── elements/      # Paragraph, Run, Table, Image, Section, etc.
+├── formatting/    # StylesManager, NumberingManager
+├── managers/      # DrawingManager, ImageManager
+├── tracking/      # TrackingContext, revision helpers
+├── types/         # TypeScript type definitions
+├── utils/         # Units, validation, logging, diagnostics
+├── validation/    # RevisionValidator, RevisionAutoFixer
+├── xml/           # XMLBuilder, XMLParser
+├── zip/           # ZipHandler, ZipReader, ZipWriter
+└── index.ts       # Public API entry point
 
-tests/
-├── core/          # Core functionality tests
-├── elements/      # Element tests
-├── formatting/    # Formatting tests
-└── utils/         # Utility tests
-
-examples/
-├── 01-basic/      # Basic usage examples
-├── 02-text/       # Text formatting examples
-└── ...            # Additional example categories
-
-docs/
-├── api/           # API reference documentation
-├── guides/        # User guides and tutorials
-└── architecture/  # Architecture documentation
+tests/             # 148 test suites organized by feature
+examples/          # 17 example categories (01-basic through advanced)
+agent_docs/        # Architecture, testing guide, anti-patterns
+docs/              # Contributing guide, API reference
 ```
 
 ## Reporting Issues

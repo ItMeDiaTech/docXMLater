@@ -7,6 +7,7 @@
 
 import { XMLElement } from '../xml/XMLBuilder';
 import { Paragraph } from './Paragraph';
+import { RunFormatting } from './Run';
 import { Table } from './Table';
 
 /**
@@ -101,6 +102,28 @@ export class Footer {
     if (text) {
       para.addText(text);
     }
+    this.elements.push(para);
+    return para;
+  }
+
+  /**
+   * Adds formatted text to the footer as a new paragraph
+   *
+   * Convenience method that creates a paragraph with a single formatted run.
+   *
+   * @param text - Text content
+   * @param formatting - Optional run formatting (bold, font, size, etc.)
+   * @returns The created Paragraph for further customization
+   *
+   * @example
+   * ```typescript
+   * footer.addText('Page ', { size: 8 });
+   * footer.addText('Confidential', { italic: true, color: '888888' });
+   * ```
+   */
+  addText(text: string, formatting?: RunFormatting): Paragraph {
+    const para = new Paragraph();
+    para.addText(text, formatting);
     this.elements.push(para);
     return para;
   }

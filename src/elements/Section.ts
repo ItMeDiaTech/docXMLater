@@ -96,6 +96,8 @@ export interface PageSize {
   height: number;
   /** Orientation */
   orientation?: PageOrientation;
+  /** Paper size code per ECMA-376 ST_PaperSize (1=Letter, 9=A4, 5=Legal, etc.) */
+  code?: number;
 }
 
 /**
@@ -132,6 +134,8 @@ export interface Columns {
   separator?: boolean;
   /** Individual column widths (for unequal columns) in twips */
   columnWidths?: number[];
+  /** Individual column spacings (space after each column) in twips — per ECMA-376 CT_Column */
+  columnSpaces?: number[];
 }
 
 /**
@@ -557,6 +561,16 @@ export class Section {
   getColumnWidths(): number[] | undefined {
     return this.properties.columns?.columnWidths
       ? [...this.properties.columns.columnWidths]
+      : undefined;
+  }
+
+  /**
+   * Gets per-column spacing (space after each column) in twips
+   * @returns Array of column spacings, or undefined if not set
+   */
+  getColumnSpaces(): number[] | undefined {
+    return this.properties.columns?.columnSpaces
+      ? [...this.properties.columns.columnSpaces]
       : undefined;
   }
 
@@ -1107,6 +1121,9 @@ export class Section {
       if (this.properties.pageSize.orientation === 'landscape') {
         attrs['w:orient'] = 'landscape';
       }
+      if (this.properties.pageSize.code !== undefined) {
+        attrs['w:code'] = this.properties.pageSize.code.toString();
+      }
       children.push(XMLBuilder.wSelf('pgSz', attrs));
     }
 
@@ -1229,8 +1246,17 @@ export class Section {
 
       const colChildren: XMLElement[] = [];
       if (this.properties.columns.columnWidths) {
-        for (const width of this.properties.columns.columnWidths) {
-          colChildren.push(XMLBuilder.wSelf('col', { 'w:w': width.toString() }));
+        const widths = this.properties.columns.columnWidths;
+        const spaces = this.properties.columns.columnSpaces;
+        for (let i = 0; i < widths.length; i++) {
+          const colAttrs: Record<string, string | number> = {
+            'w:w': widths[i]!.toString(),
+          };
+          const spaceVal = spaces?.[i];
+          if (spaceVal !== undefined) {
+            colAttrs['w:space'] = spaceVal.toString();
+          }
+          colChildren.push(XMLBuilder.wSelf('col', colAttrs));
         }
       }
 
@@ -1324,8 +1350,50 @@ export class Section {
       const prevChildren: XMLElement[] = [];
       const prev = this.sectPrChange.previousProperties;
       if (prev) {
-        // Ordered per CT_SectPrBase:
-        // type → pgSz → pgMar → lnNumType → pgNumType → cols → formProt → vAlign → titlePg → textDirection
+        // Ordered per CT_SectPrBase (ECMA-376 §17.6.18):
+        // footnotePr → endnotePr → type → pgSz → pgMar → paperSrc → pgBorders →
+        // lnNumType → pgNumType → cols → formProt → vAlign → noEndnote → titlePg →
+        // textDirection → bidi → rtlGutter → docGrid
+        if (prev.footnotePr) {
+          const fnChildren: XMLElement[] = [];
+          if (prev.footnotePr.position) {
+            fnChildren.push(XMLBuilder.wSelf('pos', { 'w:val': prev.footnotePr.position }));
+          }
+          if (prev.footnotePr.numberFormat) {
+            fnChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': prev.footnotePr.numberFormat }));
+          }
+          if (prev.footnotePr.startNumber !== undefined) {
+            fnChildren.push(
+              XMLBuilder.wSelf('numStart', { 'w:val': prev.footnotePr.startNumber.toString() })
+            );
+          }
+          if (prev.footnotePr.restart) {
+            fnChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': prev.footnotePr.restart }));
+          }
+          if (fnChildren.length > 0) {
+            prevChildren.push(XMLBuilder.w('footnotePr', undefined, fnChildren));
+          }
+        }
+        if (prev.endnotePr) {
+          const enChildren: XMLElement[] = [];
+          if (prev.endnotePr.position) {
+            enChildren.push(XMLBuilder.wSelf('pos', { 'w:val': prev.endnotePr.position }));
+          }
+          if (prev.endnotePr.numberFormat) {
+            enChildren.push(XMLBuilder.wSelf('numFmt', { 'w:val': prev.endnotePr.numberFormat }));
+          }
+          if (prev.endnotePr.startNumber !== undefined) {
+            enChildren.push(
+              XMLBuilder.wSelf('numStart', { 'w:val': prev.endnotePr.startNumber.toString() })
+            );
+          }
+          if (prev.endnotePr.restart) {
+            enChildren.push(XMLBuilder.wSelf('numRestart', { 'w:val': prev.endnotePr.restart }));
+          }
+          if (enChildren.length > 0) {
+            prevChildren.push(XMLBuilder.w('endnotePr', undefined, enChildren));
+          }
+        }
         if (prev.type) {
           prevChildren.push(XMLBuilder.wSelf('type', { 'w:val': prev.type }));
         }
@@ -1336,6 +1404,9 @@ export class Section {
           };
           if (prev.pageSize.orientation === 'landscape') {
             pgSzAttrs['w:orient'] = 'landscape';
+          }
+          if (prev.pageSize.code !== undefined) {
+            pgSzAttrs['w:code'] = prev.pageSize.code.toString();
           }
           prevChildren.push(XMLBuilder.wSelf('pgSz', pgSzAttrs));
         }
@@ -1351,7 +1422,49 @@ export class Section {
             pgMarAttrs['w:header'] = prev.margins.header.toString();
           if (prev.margins.footer !== undefined)
             pgMarAttrs['w:footer'] = prev.margins.footer.toString();
+          if (prev.margins.gutter !== undefined)
+            pgMarAttrs['w:gutter'] = prev.margins.gutter.toString();
           prevChildren.push(XMLBuilder.wSelf('pgMar', pgMarAttrs));
+        }
+        if (prev.paperSource) {
+          const psAttrs: Record<string, string> = {};
+          if (prev.paperSource.first !== undefined) {
+            psAttrs['w:first'] = prev.paperSource.first.toString();
+          }
+          if (prev.paperSource.other !== undefined) {
+            psAttrs['w:other'] = prev.paperSource.other.toString();
+          }
+          if (Object.keys(psAttrs).length > 0) {
+            prevChildren.push(XMLBuilder.wSelf('paperSrc', psAttrs));
+          }
+        }
+        if (prev.pageBorders) {
+          const pgb = prev.pageBorders;
+          const pgbAttrs: Record<string, string> = {};
+          if (pgb.offsetFrom) pgbAttrs['w:offsetFrom'] = pgb.offsetFrom;
+          if (pgb.display) pgbAttrs['w:display'] = pgb.display;
+          if (pgb.zOrder) pgbAttrs['w:zOrder'] = pgb.zOrder;
+          const borderChildren: XMLElement[] = [];
+          const buildPrevBorder = (side: string, def: PageBorderDef) => {
+            const bAttrs: Record<string, string | number> = {};
+            if (def.style) bAttrs['w:val'] = def.style;
+            if (def.size !== undefined) bAttrs['w:sz'] = Math.max(2, Math.min(96, def.size));
+            if (def.color) bAttrs['w:color'] = def.color;
+            if (def.space !== undefined)
+              bAttrs['w:space'] = Math.max(0, Math.min(31680, def.space));
+            if (def.shadow) bAttrs['w:shadow'] = '1';
+            if (def.frame) bAttrs['w:frame'] = '1';
+            if (def.themeColor) bAttrs['w:themeColor'] = def.themeColor;
+            if (def.artId !== undefined) bAttrs['w:id'] = def.artId;
+            borderChildren.push(XMLBuilder.wSelf(side, bAttrs));
+          };
+          if (pgb.top) buildPrevBorder('top', pgb.top);
+          if (pgb.left) buildPrevBorder('left', pgb.left);
+          if (pgb.bottom) buildPrevBorder('bottom', pgb.bottom);
+          if (pgb.right) buildPrevBorder('right', pgb.right);
+          if (borderChildren.length > 0) {
+            prevChildren.push(XMLBuilder.w('pgBorders', pgbAttrs, borderChildren));
+          }
         }
         if (prev.lineNumbering) {
           const lnAttrs: Record<string, string> = {};
@@ -1380,13 +1493,41 @@ export class Section {
             'w:num': prev.columns.count?.toString() || '1',
           };
           if (prev.columns.space !== undefined) colAttrs['w:space'] = prev.columns.space.toString();
-          prevChildren.push(XMLBuilder.wSelf('cols', colAttrs));
+          if (prev.columns.equalWidth !== undefined) {
+            colAttrs['w:equalWidth'] = prev.columns.equalWidth ? '1' : '0';
+          }
+          if (prev.columns.separator !== undefined) {
+            colAttrs['w:sep'] = prev.columns.separator ? '1' : '0';
+          }
+          const colChildren: XMLElement[] = [];
+          if (prev.columns.columnWidths) {
+            const widths = prev.columns.columnWidths;
+            const spaces = prev.columns.columnSpaces;
+            for (let i = 0; i < widths.length; i++) {
+              const cAttrs: Record<string, string | number> = {
+                'w:w': widths[i]!.toString(),
+              };
+              const spaceVal = spaces?.[i];
+              if (spaceVal !== undefined) {
+                cAttrs['w:space'] = spaceVal.toString();
+              }
+              colChildren.push(XMLBuilder.wSelf('col', cAttrs));
+            }
+          }
+          prevChildren.push(
+            colChildren.length > 0
+              ? XMLBuilder.w('cols', colAttrs, colChildren)
+              : XMLBuilder.wSelf('cols', colAttrs)
+          );
         }
         if (prev.formProt) {
           prevChildren.push(XMLBuilder.wSelf('formProt'));
         }
         if (prev.verticalAlignment) {
           prevChildren.push(XMLBuilder.wSelf('vAlign', { 'w:val': prev.verticalAlignment }));
+        }
+        if (prev.noEndnote) {
+          prevChildren.push(XMLBuilder.wSelf('noEndnote'));
         }
         if (prev.titlePage) {
           prevChildren.push(XMLBuilder.wSelf('titlePg'));
@@ -1407,6 +1548,12 @@ export class Section {
               'w:val': tdMap[prev.textDirection] || prev.textDirection,
             })
           );
+        }
+        if (prev.bidi) {
+          prevChildren.push(XMLBuilder.wSelf('bidi'));
+        }
+        if (prev.rtlGutter) {
+          prevChildren.push(XMLBuilder.wSelf('rtlGutter'));
         }
         if (prev.docGrid) {
           const dgAttrs: Record<string, string> = {};
@@ -1448,6 +1595,9 @@ export class Section {
         ...this.properties.columns,
         columnWidths: this.properties.columns.columnWidths
           ? [...this.properties.columns.columnWidths]
+          : undefined,
+        columnSpaces: this.properties.columns.columnSpaces
+          ? [...this.properties.columns.columnSpaces]
           : undefined,
       };
     }
@@ -1521,11 +1671,67 @@ export class Section {
   }
 
   /**
-   * Creates a landscape section
-   * @param pageSize Page size (default: Letter)
+   * Creates a legal-sized section (8.5" x 14")
    */
-  static createLandscape(pageSize: 'letter' | 'a4' = 'letter'): Section {
-    const size = pageSize === 'a4' ? PAGE_SIZES.A4 : PAGE_SIZES.LETTER;
+  static createLegal(): Section {
+    return new Section({
+      pageSize: {
+        width: PAGE_SIZES.LEGAL.width,
+        height: PAGE_SIZES.LEGAL.height,
+        orientation: 'portrait',
+      },
+    });
+  }
+
+  /**
+   * Creates a tabloid-sized section (11" x 17")
+   */
+  static createTabloid(): Section {
+    return new Section({
+      pageSize: {
+        width: PAGE_SIZES.TABLOID.width,
+        height: PAGE_SIZES.TABLOID.height,
+        orientation: 'portrait',
+      },
+    });
+  }
+
+  /**
+   * Creates an A3-sized section (29.7cm x 42cm)
+   */
+  static createA3(): Section {
+    return new Section({
+      pageSize: {
+        width: PAGE_SIZES.A3.width,
+        height: PAGE_SIZES.A3.height,
+        orientation: 'portrait',
+      },
+    });
+  }
+
+  /**
+   * Creates a landscape section
+   *
+   * @param pageSize - Page size name (default: 'letter')
+   * @returns Section with swapped width/height and landscape orientation
+   *
+   * @example
+   * ```typescript
+   * const landscape = Section.createLandscape('a4');
+   * const legalLandscape = Section.createLandscape('legal');
+   * ```
+   */
+  static createLandscape(
+    pageSize: 'letter' | 'a4' | 'legal' | 'tabloid' | 'a3' = 'letter'
+  ): Section {
+    const sizeMap: Record<string, { width: number; height: number }> = {
+      letter: PAGE_SIZES.LETTER,
+      a4: PAGE_SIZES.A4,
+      legal: PAGE_SIZES.LEGAL,
+      tabloid: PAGE_SIZES.TABLOID,
+      a3: PAGE_SIZES.A3,
+    };
+    const size = sizeMap[pageSize] ?? PAGE_SIZES.LETTER;
     return new Section({
       pageSize: {
         width: size.height, // Swap for landscape

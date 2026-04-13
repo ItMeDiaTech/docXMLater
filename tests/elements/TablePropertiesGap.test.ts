@@ -108,6 +108,39 @@ describe('Table Properties Gap Tests', () => {
     });
   });
 
+  describe('Bidi-aware cell margins (w:start/w:end)', () => {
+    test('should parse w:start/w:end in tblCellMar as left/right', async () => {
+      // Create a base document with table margins
+      const doc = Document.create();
+      const table = new Table(1, 1);
+      table.setCellMargins({ top: 50, bottom: 50, left: 108, right: 108 });
+      table.getRow(0)!.getCell(0)!.createParagraph('Bidi');
+      doc.addTable(table);
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Modify the DOCX XML to replace w:left/w:right with w:start/w:end
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      // Replace within tblCellMar: w:left → w:start, w:right → w:end
+      docXml = docXml.replace(/(<w:tblCellMar>[\s\S]*?)<w:left\s/, '$1<w:start ');
+      docXml = docXml.replace(/(<w:tblCellMar>[\s\S]*?)<w:right\s/, '$1<w:end ');
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      // Parse and verify margins are still read correctly
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const margins = loaded.getTables()[0]!.getCellMargins();
+      expect(margins).toBeDefined();
+      expect(margins!.top).toBe(50);
+      expect(margins!.bottom).toBe(50);
+      expect(margins!.left).toBe(108);
+      expect(margins!.right).toBe(108);
+      loaded.dispose();
+    });
+  });
+
   describe('Table Look (w:tblLook)', () => {
     test('should round-trip tblLook value', async () => {
       const doc = Document.create();
@@ -294,6 +327,67 @@ describe('Table Properties Gap Tests', () => {
 
       doc.dispose();
       loaded.dispose();
+    });
+  });
+
+  describe('Table Indent Type (w:tblInd w:type) — ECMA-376 ST_TblWidth', () => {
+    test('should default indent type to dxa', async () => {
+      const doc = Document.create();
+      const table = new Table(1, 1);
+      table.setIndent(720);
+      table.getRow(0)!.getCell(0)!.createParagraph('Indented');
+      doc.addTable(table);
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const fmt = loaded.getTables()[0]!.getFormatting();
+
+      expect(fmt.indent).toBe(720);
+      expect(fmt.indentType).toBe('dxa');
+
+      doc.dispose();
+      loaded.dispose();
+    });
+
+    test('should round-trip indent type=auto through XML injection', async () => {
+      const doc = Document.create();
+      const table = new Table(1, 1);
+      table.setIndent(0);
+      table.getRow(0)!.getCell(0)!.createParagraph('Auto indent');
+      doc.addTable(table);
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Replace w:type="dxa" with w:type="auto" on tblInd
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      docXml = docXml.replace(/(<w:tblInd[^>]*w:type=")dxa(")/, '$1auto$2');
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const fmt = loaded.getTables()[0]!.getFormatting();
+      expect(fmt.indentType).toBe('auto');
+
+      // Save and verify it's preserved
+      const buffer2 = await loaded.toBuffer();
+      const loaded2 = await Document.loadFromBuffer(buffer2);
+      expect(loaded2.getTables()[0]!.getFormatting().indentType).toBe('auto');
+
+      loaded.dispose();
+      loaded2.dispose();
+    });
+
+    test('should preserve nil indent type', () => {
+      const table = new Table(1, 1);
+      table.setIndent(0);
+      table.setIndentType('nil');
+
+      expect(table.getIndentType()).toBe('nil');
+
+      const xml = require('../../src/xml/XMLBuilder').XMLBuilder.elementToString(table.toXML());
+      expect(xml).toContain('w:type="nil"');
     });
   });
 });

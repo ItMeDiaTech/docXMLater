@@ -69,9 +69,6 @@ function buildPngChunk(type: string, data: Buffer): Buffer {
 // PNG Re-compression
 // =============================================================================
 
-/** Chunks that must be preserved for correct PNG rendering */
-const ESSENTIAL_CHUNK_TYPES = new Set(['IHDR', 'PLTE', 'tRNS', 'IDAT', 'IEND']);
-
 /**
  * Re-compresses a PNG buffer at zlib level 9 and strips non-essential metadata chunks.
  * Returns the optimized buffer, or null if the PNG is invalid/cannot be optimized.

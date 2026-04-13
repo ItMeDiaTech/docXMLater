@@ -34,6 +34,9 @@ export interface AbstractNumberingProperties {
 
   /** Template code (ECMA-376 §17.9.30) - 8-char hex string identifying the template */
   tmpl?: string;
+
+  /** Namespace-scoped unique ID (ECMA-376 §17.9.17) - 8-char hex string */
+  nsid?: string;
 }
 
 /**
@@ -50,6 +53,7 @@ export class AbstractNumbering {
   private numStyleLink?: string;
   private styleLink?: string;
   private tmpl?: string;
+  private nsid?: string;
 
   /**
    * Creates a new abstract numbering definition
@@ -64,6 +68,7 @@ export class AbstractNumbering {
       this.name = name;
       this.levels = new Map();
       this.multiLevelType = 1; // default multilevel
+      this.nsid = AbstractNumbering.generateNsid();
     } else {
       // Object constructor: new AbstractNumbering({ abstractNumId, ... })
       const properties = idOrProps;
@@ -74,6 +79,7 @@ export class AbstractNumbering {
       this.numStyleLink = properties.numStyleLink;
       this.styleLink = properties.styleLink;
       this.tmpl = properties.tmpl;
+      this.nsid = properties.nsid ?? AbstractNumbering.generateNsid();
 
       if (properties.levels) {
         properties.levels.forEach((level) => {
@@ -110,6 +116,31 @@ export class AbstractNumbering {
    */
   getId(): number {
     return this.abstractNumId;
+  }
+
+  /**
+   * Gets the namespace-scoped unique ID (ECMA-376 §17.9.17)
+   */
+  getNsid(): string | undefined {
+    return this.nsid;
+  }
+
+  /**
+   * Sets the namespace-scoped unique ID
+   */
+  setNsid(nsid: string): void {
+    this.nsid = nsid;
+  }
+
+  /**
+   * Generates a random 8-character uppercase hex nsid value
+   */
+  private static generateNsid(): string {
+    const hex = Math.floor(Math.random() * 0xffffffff)
+      .toString(16)
+      .toUpperCase()
+      .padStart(8, '0');
+    return hex;
   }
 
   /**
@@ -281,7 +312,12 @@ export class AbstractNumbering {
 
     // CT_AbstractNum order per ECMA-376: nsid → multiLevelType → tmpl → name → styleLink → numStyleLink → lvl*
 
-    // Add multiLevelType
+    // 1. nsid (ECMA-376 §17.9.17) — namespace-scoped unique identifier
+    if (this.nsid) {
+      children.push(XMLBuilder.wSelf('nsid', { 'w:val': this.nsid }));
+    }
+
+    // 2. multiLevelType
     let multiLevelTypeValue: string;
     if (this.multiLevelType === 1) {
       multiLevelTypeValue = 'multilevel';
@@ -549,6 +585,10 @@ export class AbstractNumbering {
     const tmplMatch = /<w:tmpl[^>]*w:val="([^"]+)"/.exec(xml);
     const tmpl = tmplMatch?.[1] || undefined;
 
+    // Extract nsid (optional, ECMA-376 §17.9.17) — 8-char hex namespace ID
+    const nsidMatch = /<w:nsid[^>]*w:val="([^"]+)"/.exec(xml);
+    const nsid = nsidMatch?.[1] || undefined;
+
     // Create abstract numbering
     const abstractNum = new AbstractNumbering({
       abstractNumId,
@@ -557,6 +597,7 @@ export class AbstractNumbering {
       numStyleLink,
       styleLink,
       tmpl,
+      nsid,
     });
 
     // Extract and parse all levels

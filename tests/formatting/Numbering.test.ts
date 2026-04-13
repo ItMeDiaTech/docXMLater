@@ -1374,4 +1374,54 @@ describe('Numbering Parsing Fixes', () => {
       expect(lvlJcIdx).toBeGreaterThan(lvlTextIdx);
     });
   });
+
+  describe('AbstractNumbering nsid (ECMA-376 §17.9.17)', () => {
+    it('should auto-generate nsid for new abstract numbering definitions', () => {
+      const abstractNum = new AbstractNumbering(1);
+      expect(abstractNum.getNsid()).toBeDefined();
+      expect(abstractNum.getNsid()!.length).toBe(8);
+      expect(/^[0-9A-F]{8}$/.test(abstractNum.getNsid()!)).toBe(true);
+    });
+
+    it('should serialize nsid as first child of w:abstractNum', () => {
+      const abstractNum = new AbstractNumbering({ abstractNumId: 1, nsid: '3A2B1C0D' });
+      const xml = abstractNum.toXML();
+      const children = (xml.children || []).filter((c) => typeof c !== 'string');
+      // nsid must be first child per CT_AbstractNum
+      expect(children[0]).toBeDefined();
+      expect((children[0] as any).name).toBe('w:nsid');
+      expect((children[0] as any).attributes?.['w:val']).toBe('3A2B1C0D');
+      // multiLevelType must be second
+      expect((children[1] as any).name).toBe('w:multiLevelType');
+    });
+
+    it('should parse nsid from XML and preserve on round-trip', () => {
+      const xml = `
+        <w:abstractNum w:abstractNumId="5">
+          <w:nsid w:val="1A2B3C4D"/>
+          <w:multiLevelType w:val="hybridMultilevel"/>
+          <w:lvl w:ilvl="0">
+            <w:numFmt w:val="decimal"/>
+            <w:lvlText w:val="%1."/>
+          </w:lvl>
+        </w:abstractNum>
+      `;
+      const abstractNum = AbstractNumbering.fromXML(xml);
+      expect(abstractNum.getNsid()).toBe('1A2B3C4D');
+
+      // Verify it serializes back
+      const generatedXml = abstractNum.toXML();
+      const children = (generatedXml.children || []).filter((c) => typeof c !== 'string');
+      const nsidChild = children.find((c) => (c as any).name === 'w:nsid');
+      expect(nsidChild).toBeDefined();
+      expect((nsidChild as any).attributes?.['w:val']).toBe('1A2B3C4D');
+    });
+
+    it('should generate unique nsid values for different abstract numberings', () => {
+      const a1 = new AbstractNumbering(1);
+      const a2 = new AbstractNumbering(2);
+      // Very unlikely to collide (1 in 4 billion)
+      expect(a1.getNsid()).not.toBe(a2.getNsid());
+    });
+  });
 });

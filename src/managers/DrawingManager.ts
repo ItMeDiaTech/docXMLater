@@ -256,14 +256,16 @@ export class DrawingManager {
    * @param drawing Drawing to check
    * @returns True if PreservedDrawing
    */
-  private isPreservedDrawing(drawing: any): drawing is PreservedDrawing {
+  private isPreservedDrawing(drawing: unknown): drawing is PreservedDrawing {
     return (
-      drawing &&
+      !!drawing &&
       typeof drawing === 'object' &&
       'type' in drawing &&
       'xml' in drawing &&
       'relationshipIds' in drawing &&
-      (drawing.type === 'smartart' || drawing.type === 'chart' || drawing.type === 'wordart')
+      ((drawing as PreservedDrawing).type === 'smartart' ||
+        (drawing as PreservedDrawing).type === 'chart' ||
+        (drawing as PreservedDrawing).type === 'wordart')
     );
   }
 

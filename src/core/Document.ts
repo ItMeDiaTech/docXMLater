@@ -3,13 +3,10 @@
  * Provides a simple interface for creating DOCX files without managing ZIP and XML manually
  */
 
-import { AlternateContent } from '../elements/AlternateContent';
 import { Bookmark } from '../elements/Bookmark';
 import { BookmarkManager } from '../elements/BookmarkManager';
 import { Comment } from '../elements/Comment';
-import { CustomXmlBlock } from '../elements/CustomXml';
 import { PreservedElement } from '../elements/PreservedElement';
-import { MathParagraph } from '../elements/MathElement';
 import { CommentManager } from '../elements/CommentManager';
 import { Endnote } from '../elements/Endnote';
 import { EndnoteManager } from '../elements/EndnoteManager';
@@ -77,7 +74,7 @@ function getLogger(): ILogger {
 // cleanupRevisionMetadata - cleanup metadata files after in-memory acceptance
 import { acceptAllRevisions, cleanupRevisionMetadata } from '../utils/acceptRevisions';
 // In-memory revision acceptance - used AFTER parsing, allows subsequent modifications
-import { acceptRevisionsInMemory, AcceptRevisionsResult } from '../utils/InMemoryRevisionAcceptor';
+import { acceptRevisionsInMemory } from '../utils/InMemoryRevisionAcceptor';
 import { stripTrackedChanges } from '../utils/stripTrackedChanges';
 import { diffText, diffHasUnchangedParts } from '../utils/textDiff';
 import { XMLBuilder } from '../xml/XMLBuilder';
@@ -333,9 +330,6 @@ export class Document {
   // TOC auto-population setting
   private autoPopulateTOCs = false;
 
-  // TOC field instruction sync setting (default: OFF to preserve original instructions)
-  private autoSyncTOCStyles = false;
-
   // Flag to skip document.xml regeneration after stripping tracked changes
   // When true, save() and toBuffer() will preserve the manually cleaned XML
   private skipDocumentXmlRegeneration = false;
@@ -556,6 +550,211 @@ export class Document {
     const doc = new Document(undefined, options);
     doc.initializeRequiredFiles();
     return doc;
+  }
+
+  /**
+   * Creates a Document from Markdown text
+   *
+   * Parses common Markdown syntax and builds a DOCX document. Supports:
+   * - Headings (`#` through `######`)
+   * - Bold (`**text**`), italic (`*text*`), bold+italic (`***text***`)
+   * - Strikethrough (`~~text~~`)
+   * - Inline code (`` `code` ``) rendered in Courier New
+   * - Links (`[text](url)`)
+   * - Bullet lists (`- ` or `* `)
+   * - Numbered lists (`1. `)
+   * - Tables (`| col | col |` with `| --- |` separator)
+   * - Horizontal rules (`---`, `***`, `___`)
+   * - Blank lines as paragraph separators
+   *
+   * @param markdown - Markdown text to convert
+   * @param options - Optional document options
+   * @returns New Document populated with the parsed content
+   *
+   * @example
+   * ```typescript
+   * const doc = Document.fromMarkdown(`
+   * # Report Title
+   *
+   * This is the **introduction** with *emphasis*.
+   *
+   * ## Data
+   *
+   * | Name | Value |
+   * | --- | --- |
+   * | Alpha | 100 |
+   *
+   * - First item
+   * - Second item
+   * `);
+   * await doc.save('output.docx');
+   * ```
+   */
+  static fromMarkdown(markdown: string, options?: DocumentOptions): Document {
+    const doc = Document.create(options);
+    const lines = markdown.split('\n');
+
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i]!;
+
+      // Skip blank lines
+      if (line.trim() === '') {
+        i++;
+        continue;
+      }
+
+      // Horizontal rule: ---, ***, ___ (3+ of same char, optional spaces)
+      if (/^\s{0,3}([-]{3,}|[*]{3,}|[_]{3,})\s*$/.test(line)) {
+        doc.addHorizontalRule();
+        i++;
+        continue;
+      }
+
+      // Heading
+      const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line);
+      if (headingMatch) {
+        const level = headingMatch[1]!.length as 1 | 2 | 3 | 4 | 5 | 6;
+        const text = headingMatch[2]!;
+        const para = doc.addHeading('', level);
+        Document.applyInlineMarkdown(para, text);
+        i++;
+        continue;
+      }
+
+      // Table (starts with |)
+      if (line.trimStart().startsWith('|')) {
+        const tableLines: string[] = [];
+        while (i < lines.length && lines[i]!.trimStart().startsWith('|')) {
+          tableLines.push(lines[i]!);
+          i++;
+        }
+        const table = Document.parseMarkdownTable(tableLines);
+        if (table) {
+          doc.addTable(table);
+        }
+        continue;
+      }
+
+      // Bullet list item
+      const bulletMatch = /^(\s*)[-*+]\s+(.+)$/.exec(line);
+      if (bulletMatch) {
+        const text = bulletMatch[2]!;
+        const para = doc.createParagraph();
+        Document.applyInlineMarkdown(para, text);
+        para.setStyle('ListBullet');
+        i++;
+        continue;
+      }
+
+      // Numbered list item
+      const numberMatch = /^(\s*)\d+[.)]\s+(.+)$/.exec(line);
+      if (numberMatch) {
+        const text = numberMatch[2]!;
+        const para = doc.createParagraph();
+        Document.applyInlineMarkdown(para, text);
+        para.setStyle('ListNumber');
+        i++;
+        continue;
+      }
+
+      // Regular paragraph (may span multiple non-blank lines)
+      const paraLines: string[] = [line];
+      i++;
+      while (
+        i < lines.length &&
+        lines[i]!.trim() !== '' &&
+        !lines[i]!.trim().startsWith('#') &&
+        !lines[i]!.trim().startsWith('|') &&
+        !/^\s{0,3}([-]{3,}|[*]{3,}|[_]{3,})\s*$/.test(lines[i]!) &&
+        !/^(\s*)[-*+]\s+/.test(lines[i]!) &&
+        !/^(\s*)\d+[.)]\s+/.test(lines[i]!)
+      ) {
+        paraLines.push(lines[i]!);
+        i++;
+      }
+
+      const para = doc.createParagraph();
+      Document.applyInlineMarkdown(para, paraLines.join(' '));
+    }
+
+    return doc;
+  }
+
+  /**
+   * Parses inline Markdown formatting and adds runs to a paragraph.
+   * Handles bold, italic, strikethrough, inline code, and links.
+   * @internal
+   */
+  private static applyInlineMarkdown(para: Paragraph, text: string): void {
+    // Regex to match inline elements in priority order
+    const inlinePattern =
+      /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
+
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = inlinePattern.exec(text)) !== null) {
+      // Add plain text before this match
+      if (match.index > lastIndex) {
+        para.addText(text.slice(lastIndex, match.index));
+      }
+
+      if (match[2] !== undefined) {
+        // ***bold+italic***
+        para.addText(match[2], { bold: true, italic: true });
+      } else if (match[3] !== undefined) {
+        // **bold**
+        para.addText(match[3], { bold: true });
+      } else if (match[4] !== undefined) {
+        // *italic*
+        para.addText(match[4], { italic: true });
+      } else if (match[5] !== undefined) {
+        // ~~strikethrough~~
+        para.addText(match[5], { strike: true });
+      } else if (match[6] !== undefined) {
+        // `inline code`
+        para.addText(match[6], { font: 'Courier New' });
+      } else if (match[7] !== undefined && match[8] !== undefined) {
+        // [text](url)
+        para.addHyperlink(new Hyperlink({ url: match[8], text: match[7] }));
+      }
+
+      lastIndex = match.index + match[0]!.length;
+    }
+
+    // Add remaining plain text
+    if (lastIndex < text.length) {
+      para.addText(text.slice(lastIndex));
+    }
+  }
+
+  /**
+   * Parses Markdown table lines into a Table.
+   * @internal
+   */
+  private static parseMarkdownTable(lines: string[]): Table | null {
+    if (lines.length < 2) return null;
+
+    const parseRow = (line: string): string[] =>
+      line
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((cell) => cell.trim());
+
+    const rows: string[][] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const cells = parseRow(lines[i]!);
+
+      // Skip separator row (| --- | --- |)
+      if (cells.every((c) => /^:?-+:?$/.test(c))) continue;
+
+      rows.push(cells);
+    }
+
+    if (rows.length === 0) return null;
+    return Table.fromArray(rows);
   }
 
   /**
@@ -1462,6 +1661,83 @@ export class Document {
   }
 
   /**
+   * Creates a heading paragraph and appends it to the document
+   *
+   * Convenience method that creates a paragraph with the given text and
+   * applies a heading style (Heading1–Heading9). Equivalent to:
+   * ```typescript
+   * doc.createParagraph(text).setStyle(`Heading${level}`);
+   * ```
+   *
+   * @param text - Heading text content
+   * @param level - Heading level 1–9 (default: 1)
+   * @returns The created Paragraph for further customization
+   *
+   * @example
+   * ```typescript
+   * doc.addHeading('Introduction', 1);
+   * doc.addHeading('Background', 2);
+   * doc.addHeading('Methods', 2);
+   * doc.addHeading('Data Collection', 3);
+   * ```
+   */
+  addHeading(text: string, level: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 = 1): Paragraph {
+    return this.createParagraph(text).setStyle(`Heading${level}`);
+  }
+
+  /**
+   * Inserts a page break into the document
+   *
+   * Creates a paragraph containing a page break element and appends it
+   * to the document body. This is the standard way to force a new page
+   * in OOXML (a paragraph with `w:br w:type="page"`).
+   *
+   * @returns The created Paragraph (allows further content after the break)
+   *
+   * @example
+   * ```typescript
+   * doc.addHeading('Chapter 1', 1);
+   * doc.createParagraph('Chapter 1 content...');
+   * doc.addPageBreak();
+   * doc.addHeading('Chapter 2', 1);
+   * ```
+   */
+  addPageBreak(): Paragraph {
+    const para = this.createParagraph();
+    const run = new Run('');
+    run.addBreak('page');
+    para.addRun(run);
+    return para;
+  }
+
+  /**
+   * Inserts a horizontal rule into the document
+   *
+   * Creates an empty paragraph with a bottom border that renders as a
+   * horizontal line. Uses a thin single-line border, which is the standard
+   * OOXML approach for horizontal rules (no dedicated HR element exists).
+   *
+   * @param color - Border color in hex without # (default: 'auto')
+   * @param size - Border thickness in eighths of a point (default: 4, ~0.5pt)
+   * @returns The created Paragraph
+   *
+   * @example
+   * ```typescript
+   * doc.createParagraph('Above the line');
+   * doc.addHorizontalRule();
+   * doc.createParagraph('Below the line');
+   *
+   * // Custom color and thickness
+   * doc.addHorizontalRule('FF0000', 12);
+   * ```
+   */
+  addHorizontalRule(color = 'auto', size = 4): Paragraph {
+    const para = this.createParagraph();
+    para.setBorder({ bottom: { style: 'single', size, color, space: 1 } });
+    return para;
+  }
+
+  /**
    * Adds an existing table to the document body
    *
    * Appends a Table instance to the end of the document's body elements.
@@ -1540,6 +1816,32 @@ export class Document {
    */
   createTable(rows: number, columns: number): Table {
     const table = new Table(rows, columns);
+    table._setStylesManager(this.stylesManager);
+    this.bodyElements.push(table);
+    return table;
+  }
+
+  /**
+   * Creates a table from CSV data and appends it to the document
+   *
+   * Parses the CSV string into a table using `Table.fromCSV()` and adds
+   * it to the document body. Handles quoted fields, commas in values,
+   * and other RFC 4180 features.
+   *
+   * @param csv - CSV string to parse
+   * @param delimiter - Field delimiter (default: ',')
+   * @returns The created Table
+   *
+   * @example
+   * ```typescript
+   * doc.createTableFromCSV('Name,Age\nAlice,30\nBob,25');
+   *
+   * // From a TSV string
+   * doc.createTableFromCSV(tsvData, '\t');
+   * ```
+   */
+  createTableFromCSV(csv: string, delimiter = ','): Table {
+    const table = Table.fromCSV(csv, delimiter);
     table._setStylesManager(this.stylesManager);
     this.bodyElements.push(table);
     return table;
@@ -2194,6 +2496,19 @@ export class Document {
     this.updateContentTypesWithImagesHeadersFootersAndComments();
   }
 
+  /**
+   * Saves the document to a file. Uses atomic write (temp file + rename) for crash safety.
+   * Always call dispose() after saving when done with the document.
+   *
+   * @param filePath - Output file path
+   * @throws {FileOperationError} If the file cannot be written
+   *
+   * @example
+   * ```typescript
+   * await doc.save('output.docx');
+   * doc.dispose();
+   * ```
+   */
   async save(filePath: string): Promise<void> {
     const logger = getLogger();
     logger.info('Saving document', { path: filePath, paragraphs: this.getParagraphCount() });
@@ -2236,7 +2551,7 @@ export class Document {
         const { promises: fs } = await import('fs');
         await fs.unlink(tempPath);
       } catch (cleanupErr) {
-        logger.debug('Failed to clean up temp file', { tempPath, error: String(cleanupErr) });
+        logger.warn('Failed to clean up temp file', { tempPath, error: String(cleanupErr) });
       }
       throw error; // Re-throw original error
     } finally {
@@ -2318,6 +2633,123 @@ export class Document {
         this.imageManager.releaseAllImageData();
       }
     }
+  }
+
+  /**
+   * Generates the document as a base64-encoded string
+   *
+   * Produces the same DOCX content as `toBuffer()` but encoded as base64.
+   * Useful for embedding in JSON API responses, storing in databases as text,
+   * passing through systems that don't support binary data, or constructing
+   * data URIs (see `toDataUri()`).
+   *
+   * @returns Promise resolving to a base64-encoded string of the DOCX file
+   *
+   * @example
+   * ```typescript
+   * // JSON API response
+   * const base64 = await doc.toBase64();
+   * res.json({ filename: 'report.docx', content: base64 });
+   *
+   * // Store in text-based database field
+   * await db.insert({ docBase64: await doc.toBase64() });
+   * ```
+   */
+  async toBase64(): Promise<string> {
+    const buffer = await this.toBuffer();
+    return buffer.toString('base64');
+  }
+
+  /**
+   * Generates the document as a data URI string
+   *
+   * Returns a complete `data:` URI with the DOCX MIME type and base64-encoded
+   * content. Can be used directly as an `href` for download links, embedded
+   * in HTML, or passed to APIs expecting data URIs.
+   *
+   * @returns Promise resolving to a data URI string
+   *
+   * @example
+   * ```typescript
+   * // HTML download link
+   * const uri = await doc.toDataUri();
+   * const html = `<a href="${uri}" download="report.docx">Download</a>`;
+   *
+   * // Embed in email HTML
+   * const dataUri = await doc.toDataUri();
+   * ```
+   */
+  async toDataUri(): Promise<string> {
+    const base64 = await this.toBase64();
+    return `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${base64}`;
+  }
+
+  /**
+   * Loads a document from a base64-encoded string
+   *
+   * The inverse of `toBase64()`. Creates a Document from a base64 string,
+   * useful for receiving documents from JSON APIs or text-based storage.
+   *
+   * @param base64 - Base64-encoded DOCX content
+   * @param options - Optional document configuration
+   * @returns Promise resolving to a Document instance
+   *
+   * @example
+   * ```typescript
+   * // Receive from API
+   * const doc = await Document.loadFromBase64(apiResponse.content);
+   * console.log(doc.toPlainText());
+   * ```
+   */
+  static async loadFromBase64(base64: string, options?: DocumentOptions): Promise<Document> {
+    const buffer = Buffer.from(base64, 'base64');
+    return Document.loadFromBuffer(buffer, options);
+  }
+
+  /**
+   * Creates an independent deep copy of this document
+   *
+   * Serializes the document to a buffer and reloads it, producing a
+   * completely independent clone with its own body elements, styles,
+   * numbering, images, and ZIP state. Changes to the clone do not
+   * affect the original and vice versa.
+   *
+   * Essential for template-based batch generation: load a template
+   * once, clone it N times, and fill each with different data.
+   *
+   * @returns Promise resolving to a new Document with identical content
+   *
+   * @example
+   * ```typescript
+   * // Template-based batch generation
+   * const template = await Document.load('template.docx');
+   *
+   * for (const record of data) {
+   *   const doc = await template.clone();
+   *   doc.fillTemplate(record);
+   *   await doc.save(`output-${record.id}.docx`);
+   *   doc.dispose();
+   * }
+   *
+   * template.dispose();
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Fork a document for parallel modifications
+   * const original = Document.create();
+   * original.addHeading('Shared Title', 1);
+   *
+   * const version1 = await original.clone();
+   * version1.createParagraph('Version 1 content');
+   *
+   * const version2 = await original.clone();
+   * version2.createParagraph('Version 2 content');
+   * ```
+   */
+  async clone(): Promise<Document> {
+    const buffer = await this.toBuffer();
+    return Document.loadFromBuffer(buffer);
   }
 
   /**
@@ -2940,10 +3372,12 @@ export class Document {
     return divCount;
   }
 
+  /** Gets the optimizeForBrowser web setting. */
   getOptimizeForBrowser(): boolean {
     return this._webSettings.optimizeForBrowser;
   }
 
+  /** Sets the optimizeForBrowser web setting. */
   setOptimizeForBrowser(value: boolean): this {
     this._webSettings.optimizeForBrowser = value;
     this._webSettingsModified = true;
@@ -2952,10 +3386,12 @@ export class Document {
     return this;
   }
 
+  /** Gets the allowPNG web setting. */
   getAllowPNG(): boolean {
     return this._webSettings.allowPNG;
   }
 
+  /** Sets the allowPNG web setting. */
   setAllowPNG(value: boolean): this {
     this._webSettings.allowPNG = value;
     this._webSettingsModified = true;
@@ -4475,7 +4911,7 @@ export class Document {
       left: options?.cellMargins?.left ?? 115, // 0.08 inches
       right: options?.cellMargins?.right ?? 115, // 0.08 inches
     };
-    const skipSingleCellTables = options?.skipSingleCellTables !== false && !singleCellShading;
+    // Note: skipSingleCellTables option is accepted but not yet implemented
 
     // Statistics
     let tablesProcessed = 0;
@@ -5069,7 +5505,7 @@ export class Document {
   validateNumberingReferences(): number {
     let fixed = 0;
     const existingNumIds = new Set<number>(
-      this.numberingManager.getAllInstances().map((i: any) => i.getNumId())
+      this.numberingManager.getAllInstances().map((i) => i.getNumId())
     );
 
     for (const para of this.getAllParagraphs()) {
@@ -5261,6 +5697,24 @@ export class Document {
 
     let docPrId = 1;
 
+    // Collect existing paraIds to avoid collisions when generating new ones
+    const existingParaIds = new Set<string>();
+    const paragraphsNeedingIds: Paragraph[] = [];
+
+    const generateUniqueParaId = (): string => {
+      let id: string;
+      do {
+        // Generate 8-char uppercase hex string matching Word's w14:paraId format
+        // Per ECMA-376, ST_LongHexNumber MaxExclusive is 80000000 (must be < 0x80000000)
+        id = Math.floor(Math.random() * 0x7fffffff + 1)
+          .toString(16)
+          .toUpperCase()
+          .padStart(8, '0');
+      } while (existingParaIds.has(id));
+      existingParaIds.add(id);
+      return id;
+    };
+
     const processParagraph = (para: Paragraph) => {
       // Assign unique IDs to unregistered revisions
       for (const rev of para.getRevisions()) {
@@ -5281,6 +5735,13 @@ export class Document {
           item.getImageElement().setDocPrId(docPrId++);
         }
       }
+
+      // Track existing paraIds and paragraphs that need new ones
+      if (para.formatting.paraId) {
+        existingParaIds.add(para.formatting.paraId);
+      } else {
+        paragraphsNeedingIds.push(para);
+      }
     };
 
     for (const element of this.bodyElements) {
@@ -5294,6 +5755,14 @@ export class Document {
             }
           }
         }
+      }
+    }
+
+    // Generate w14:paraId and w14:textId for paragraphs that lack them (Word 2010+ requirement)
+    for (const para of paragraphsNeedingIds) {
+      para.formatting.paraId = generateUniqueParaId();
+      if (!para.formatting.textId) {
+        para.formatting.textId = generateUniqueParaId();
       }
     }
   }
@@ -5739,6 +6208,103 @@ export class Document {
    */
   createMultiLevelList(): number {
     return this.numberingManager.createMultiLevelList();
+  }
+
+  /**
+   * Creates a bullet list from an array of text items and appends it to the document
+   *
+   * Handles all numbering plumbing internally: creates a bullet list definition,
+   * creates paragraphs, and applies numbering to each one. Supports nested items
+   * via `{ text, level }` objects.
+   *
+   * @param items - Array of strings or `{ text, level }` objects. Strings default to level 0.
+   * @param formatting - Optional run formatting applied to all items
+   * @returns Array of created Paragraphs
+   *
+   * @example
+   * ```typescript
+   * // Simple flat list
+   * doc.addBulletListFromArray(['First item', 'Second item', 'Third item']);
+   *
+   * // Nested list
+   * doc.addBulletListFromArray([
+   *   'Top level',
+   *   { text: 'Nested item', level: 1 },
+   *   { text: 'Deeper item', level: 2 },
+   *   'Back to top',
+   * ]);
+   *
+   * // With formatting
+   * doc.addBulletListFromArray(['Bold item'], { bold: true });
+   * ```
+   */
+  addBulletListFromArray(
+    items: (string | { text: string; level?: number })[],
+    formatting?: RunFormatting
+  ): Paragraph[] {
+    if (items.length === 0) return [];
+
+    const numId = this.createBulletList();
+    return this.addListItems(numId, items, formatting);
+  }
+
+  /**
+   * Creates a numbered list from an array of text items and appends it to the document
+   *
+   * Handles all numbering plumbing internally: creates a numbered list definition,
+   * creates paragraphs, and applies numbering to each one. Supports nested items
+   * via `{ text, level }` objects.
+   *
+   * @param items - Array of strings or `{ text, level }` objects. Strings default to level 0.
+   * @param formatting - Optional run formatting applied to all items
+   * @returns Array of created Paragraphs
+   *
+   * @example
+   * ```typescript
+   * // Simple numbered list
+   * doc.addNumberedListFromArray(['First', 'Second', 'Third']);
+   *
+   * // Nested numbered list
+   * doc.addNumberedListFromArray([
+   *   'Chapter 1',
+   *   { text: 'Section 1.1', level: 1 },
+   *   { text: 'Section 1.2', level: 1 },
+   *   'Chapter 2',
+   * ]);
+   * ```
+   */
+  addNumberedListFromArray(
+    items: (string | { text: string; level?: number })[],
+    formatting?: RunFormatting
+  ): Paragraph[] {
+    if (items.length === 0) return [];
+
+    const numId = this.createNumberedList();
+    return this.addListItems(numId, items, formatting);
+  }
+
+  /**
+   * Internal helper that creates list paragraphs from items.
+   * @internal
+   */
+  private addListItems(
+    numId: number,
+    items: (string | { text: string; level?: number })[],
+    formatting?: RunFormatting
+  ): Paragraph[] {
+    const paragraphs: Paragraph[] = [];
+
+    for (const item of items) {
+      const text = typeof item === 'string' ? item : item.text;
+      const level = typeof item === 'string' ? 0 : (item.level ?? 0);
+
+      const para = this.createParagraph();
+      para.addText(text, formatting);
+      para.setNumbering(numId, level);
+      paragraphs.push(para);
+    }
+
+    return paragraphs;
   }
 
   /**
@@ -7334,7 +7900,7 @@ export class Document {
     const fillPattern = new RegExp(`(w:fill=["'])${normalizedOld}(["'])`, 'gi');
 
     // Replace all occurrences
-    stylesXml = stylesXml.replace(fillPattern, (match, prefix, suffix) => {
+    stylesXml = stylesXml.replace(fillPattern, (_match, prefix, suffix) => {
       updateCount++;
       return `${prefix}${normalizedNew}${suffix}`;
     });
@@ -7343,7 +7909,7 @@ export class Document {
     // Matches: w:color="A5A5A5" within shd elements
     const colorPattern = new RegExp(`(<w:shd[^>]*w:color=["'])${normalizedOld}(["'])`, 'gi');
 
-    stylesXml = stylesXml.replace(colorPattern, (match, prefix, suffix) => {
+    stylesXml = stylesXml.replace(colorPattern, (_match, prefix, suffix) => {
       updateCount++;
       return `${prefix}${normalizedNew}${suffix}`;
     });
@@ -7413,27 +7979,6 @@ export class Document {
    * Helper method to process consecutive blank paragraphs
    * @private
    */
-  private processConsecutiveBlanks(
-    blanks: Paragraph[],
-    keepOne: boolean,
-    toRemove: Paragraph[]
-  ): void {
-    if (blanks.length === 0) return;
-
-    if (keepOne && blanks.length > 1) {
-      // Keep the first one, remove the rest
-      for (let i = 1; i < blanks.length; i++) {
-        const blank = blanks[i];
-        if (blank) {
-          toRemove.push(blank);
-        }
-      }
-    } else if (!keepOne) {
-      // Remove all
-      toRemove.push(...blanks);
-    }
-    // If keepOne is true and there's only 1 blank, don't remove it
-  }
 
   /**
    * Standardizes all bullet list symbols formatting (font, size, bold, color)
@@ -8031,7 +8576,7 @@ export class Document {
   private parseTOCFieldInstruction(instrText: string): number[] {
     const levels = new Set<number>();
     let hasOutlineSwitch = false;
-    let hasTableSwitch = false;
+    // hasTableSwitch tracked via \t switch parsing below
 
     // Normalize whitespace and quotes: trim input and replace &quot; with " for consistent parsing
     const normalizedText = instrText.trim().replace(/&quot;/g, '"');
@@ -8065,7 +8610,7 @@ export class Document {
     const tMatches = [...normalizedText.matchAll(tSwitchRegex)];
 
     for (const match of tMatches) {
-      hasTableSwitch = true;
+      // \t switch found — heading levels extracted from table style mappings
       const content = (match[1] || '').trim();
       if (!content) continue;
 
@@ -8450,6 +8995,7 @@ export class Document {
       }
 
       // Helper function to extract heading info from a parsed paragraph object
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const extractHeading = (para: any): void => {
         const pPr = para['w:pPr'];
         if (!pPr?.['w:pStyle']) {
@@ -8579,52 +9125,6 @@ export class Document {
           ? { message: error.message, stack: error.stack }
           : { error: String(error) }
       );
-    }
-
-    return headings;
-  }
-
-  /**
-   * Legacy method - searches only bodyElements (doesn't search inside tables)
-   * Kept for compatibility but not recommended
-   * @deprecated Use findHeadingsForTOCFromXML instead
-   */
-  private findHeadingsForTOC(
-    levels: number[]
-  ): { level: number; text: string; bookmark: string }[] {
-    const headings: { level: number; text: string; bookmark: string }[] = [];
-    const levelSet = new Set(levels);
-
-    // Iterate through body elements
-    for (const element of this.bodyElements) {
-      if (element instanceof Paragraph) {
-        const para = element;
-        const formatting = para.getFormatting();
-
-        // Check if paragraph has a heading style (handle both "Heading1" and "Heading 1")
-        if (formatting.style) {
-          const styleMatch = /Heading\s*(\d+)/i.exec(formatting.style);
-          if (styleMatch?.[1]) {
-            const headingLevel = parseInt(styleMatch[1], 10);
-
-            // Check if this level should be included in TOC
-            if (levelSet.has(headingLevel)) {
-              const text = para.getText().trim();
-
-              if (text) {
-                // Create or get bookmark for this heading
-                const bookmark = this.bookmarkManager.createHeadingBookmark(text);
-
-                headings.push({
-                  level: headingLevel,
-                  text: text,
-                  bookmark: bookmark.getName(),
-                });
-              }
-            }
-          }
-        }
-      }
     }
 
     return headings;
@@ -10817,6 +11317,7 @@ export class Document {
    * @param element - Element to bind
    * @internal
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private bindTrackingToElement(element: any): void {
     // Set tracking context on element if it supports it
     if (element && typeof element._setTrackingContext === 'function') {
@@ -11056,6 +11557,7 @@ export class Document {
     this._settingsModified = true;
   }
 
+  /** Gets whether even/odd page headers and footers are enabled (w:evenAndOddHeaders). */
   getEvenAndOddHeaders(): boolean {
     return this._evenAndOddHeaders ?? false;
   }
@@ -11147,6 +11649,72 @@ export class Document {
     this._defaultTabStop = twips;
     this._settingsModified = true;
     this._modifiedBooleanSettings.add('defaultTabStop');
+  }
+
+  /**
+   * Sets the default document font by updating the Normal style
+   *
+   * All unstyled text inherits from the Normal style, so this effectively
+   * sets the font for the entire document. Optionally sets the font size too.
+   *
+   * @param fontName - Font family name (e.g., 'Calibri', 'Times New Roman', 'Arial')
+   * @param sizeInPoints - Optional font size in points (e.g., 11, 12, 14)
+   * @returns This document for chaining
+   *
+   * @example
+   * ```typescript
+   * const doc = Document.create();
+   * doc.setDefaultFont('Times New Roman', 12);
+   * doc.createParagraph('This text will be in Times New Roman 12pt');
+   * ```
+   */
+  setDefaultFont(fontName: string, sizeInPoints?: number): this {
+    let normalStyle = this.stylesManager.getStyle('Normal');
+    if (!normalStyle) {
+      normalStyle = new Style({
+        styleId: 'Normal',
+        name: 'Normal',
+        type: 'paragraph',
+        isDefault: true,
+      });
+      this.stylesManager.addStyle(normalStyle);
+    }
+
+    const existing = normalStyle.getRunFormatting() ?? {};
+    const updated: RunFormatting = { ...existing, font: fontName };
+    if (sizeInPoints !== undefined) {
+      updated.size = sizeInPoints;
+    }
+    normalStyle.setRunFormatting(updated);
+    return this;
+  }
+
+  /**
+   * Sets the default document font size by updating the Normal style
+   *
+   * @param sizeInPoints - Font size in points (e.g., 10, 11, 12, 14)
+   * @returns This document for chaining
+   *
+   * @example
+   * ```typescript
+   * doc.setDefaultFontSize(14);
+   * ```
+   */
+  setDefaultFontSize(sizeInPoints: number): this {
+    let normalStyle = this.stylesManager.getStyle('Normal');
+    if (!normalStyle) {
+      normalStyle = new Style({
+        styleId: 'Normal',
+        name: 'Normal',
+        type: 'paragraph',
+        isDefault: true,
+      });
+      this.stylesManager.addStyle(normalStyle);
+    }
+
+    const existing = normalStyle.getRunFormatting() ?? {};
+    normalStyle.setRunFormatting({ ...existing, size: sizeInPoints });
+    return this;
   }
 
   /**
@@ -11632,19 +12200,31 @@ export class Document {
     return this.commentManager.getAllComments();
   }
 
+  /** Returns the footnote manager for advanced footnote operations. */
   getFootnoteManager(): FootnoteManager {
     return this.footnoteManager;
   }
 
+  /** Returns the endnote manager for advanced endnote operations. */
   getEndnoteManager(): EndnoteManager {
     return this.endnoteManager;
   }
 
+  /**
+   * Creates a new footnote with the given text and adds a reference in the document.
+   * @param text - The footnote text content
+   * @returns The created Footnote object
+   */
   createFootnote(text: string): Footnote {
     this._footnotesModified = true;
     return this.footnoteManager.createFootnote(text);
   }
 
+  /**
+   * Creates a new endnote with the given text and adds a reference in the document.
+   * @param text - The endnote text content
+   * @returns The created Endnote object
+   */
   createEndnote(text: string): Endnote {
     this._endnotesModified = true;
     return this.endnoteManager.createEndnote(text);
@@ -12416,6 +12996,34 @@ export class Document {
     }
 
     return count;
+  }
+
+  /**
+   * Removes all body content from the document
+   *
+   * Clears all paragraphs, tables, and other body elements while
+   * preserving the document shell (styles, numbering, settings,
+   * properties, headers, footers). The document remains valid and
+   * new content can be added after clearing.
+   *
+   * @returns This document for chaining
+   *
+   * @example
+   * ```typescript
+   * // Clear and rebuild content
+   * doc.clear();
+   * doc.addHeading('Fresh Start', 1);
+   * doc.createParagraph('New content here.');
+   *
+   * // Use as a template reset
+   * const template = await Document.load('template.docx');
+   * template.clear();
+   * // Styles and settings preserved, content gone
+   * ```
+   */
+  clear(): this {
+    this.bodyElements = [];
+    return this;
   }
 
   /**
@@ -13895,6 +14503,153 @@ export class Document {
   }
 
   /**
+   * Fills template placeholders with values using cross-run replacement
+   *
+   * Replaces `{{key}}` placeholders throughout the document (paragraphs
+   * and table cells) with the corresponding values from the data object.
+   * Uses cross-run matching, so placeholders that Word has fragmented across
+   * multiple runs (e.g., `{{` in one run, `name` in another, `}}` in a third)
+   * are found and replaced correctly.
+   *
+   * The replacement text inherits the formatting of the first run in the
+   * matched placeholder. Delimiter style can be customized.
+   *
+   * @param data - Key-value pairs where keys match placeholder names
+   * @param options - Template options
+   * @param options.delimiters - Custom open/close delimiters (default: `['{{', '}}']`)
+   * @returns Total number of replacements made
+   *
+   * @example
+   * ```typescript
+   * // Document contains: "Dear {{name}}, your order {{orderId}} is ready."
+   * const count = doc.fillTemplate({
+   *   name: 'Alice',
+   *   orderId: 'ORD-12345',
+   * });
+   * // Result: "Dear Alice, your order ORD-12345 is ready."
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Custom delimiters
+   * doc.fillTemplate(
+   *   { title: 'Report', date: '2024-01-15' },
+   *   { delimiters: ['<<', '>>'] }
+   * );
+   * ```
+   */
+  fillTemplate(data: Record<string, string>, options?: { delimiters?: [string, string] }): number {
+    const [open, close] = options?.delimiters ?? ['{{', '}}'];
+    let totalCount = 0;
+
+    const allParagraphs = this.getAllParagraphs();
+    for (const [key, value] of Object.entries(data)) {
+      const placeholder = `${open}${key}${close}`;
+      for (const para of allParagraphs) {
+        totalCount += para.replaceTextCrossRun(placeholder, value);
+      }
+    }
+
+    return totalCount;
+  }
+
+  /**
+   * Finds all occurrences of text and applies highlight color
+   *
+   * Searches across run boundaries (handles Word-fragmented text) and
+   * applies character highlight formatting to every match. Uses
+   * `findTextCrossRun` + `applyFormattingToRange` internally.
+   *
+   * @param text - Text to search for
+   * @param color - Highlight color (default: 'yellow')
+   * @param options - Search options
+   * @param options.caseSensitive - Match case exactly (default: false)
+   * @returns Number of matches highlighted
+   *
+   * @example
+   * ```typescript
+   * // Highlight all occurrences of "important" in yellow
+   * doc.findAndHighlight('important');
+   *
+   * // Red highlight, case-sensitive
+   * doc.findAndHighlight('ERROR', 'red', { caseSensitive: true });
+   * ```
+   */
+  findAndHighlight(
+    text: string,
+    color:
+      | 'yellow'
+      | 'green'
+      | 'cyan'
+      | 'magenta'
+      | 'blue'
+      | 'red'
+      | 'darkBlue'
+      | 'darkCyan'
+      | 'darkGreen'
+      | 'darkMagenta'
+      | 'darkRed'
+      | 'darkYellow'
+      | 'darkGray'
+      | 'lightGray'
+      | 'black' = 'yellow',
+    options?: { caseSensitive?: boolean }
+  ): number {
+    return this.findAndFormat(text, { highlight: color }, options);
+  }
+
+  /**
+   * Finds all occurrences of text and applies formatting
+   *
+   * Searches across run boundaries (handles Word-fragmented text) and
+   * applies the specified run formatting to every match. This is the
+   * general-purpose version of `findAndHighlight()`.
+   *
+   * @param text - Text to search for
+   * @param formatting - RunFormatting to apply to matches
+   * @param options - Search options
+   * @param options.caseSensitive - Match case exactly (default: false)
+   * @returns Number of matches formatted
+   *
+   * @example
+   * ```typescript
+   * // Bold all occurrences of "warning"
+   * doc.findAndFormat('warning', { bold: true, color: 'FF0000' });
+   *
+   * // Strikethrough deprecated terms
+   * doc.findAndFormat('deprecated', { strike: true, color: '888888' });
+   *
+   * // Apply multiple styles to a term
+   * doc.findAndFormat('critical', {
+   *   bold: true,
+   *   highlight: 'red',
+   *   underline: 'single',
+   * });
+   * ```
+   */
+  findAndFormat(
+    text: string,
+    formatting: Partial<RunFormatting>,
+    options?: { caseSensitive?: boolean }
+  ): number {
+    let totalMatches = 0;
+
+    for (const para of this.getAllParagraphs()) {
+      const matches = para.findTextCrossRun(text, options);
+
+      // Apply formatting in reverse order to preserve offsets
+      for (let i = matches.length - 1; i >= 0; i--) {
+        const match = matches[i]!;
+        para.applyFormattingToRange(match.offset, match.offset + match.text.length, formatting);
+      }
+
+      totalMatches += matches.length;
+    }
+
+    return totalMatches;
+  }
+
+  /**
    * Gets the total word count in the document
    *
    * Counts all words in paragraphs including those inside tables.
@@ -14013,6 +14768,800 @@ export class Document {
     }
 
     return totalChars;
+  }
+
+  /**
+   * Returns comprehensive document statistics in a single call
+   *
+   * Aggregates word count, character counts, element counts, and structural
+   * metrics. More efficient than calling individual methods since shared
+   * data (like the paragraph list) is computed once.
+   *
+   * @returns Object with all document metrics
+   *
+   * @example
+   * ```typescript
+   * const stats = doc.getStatistics();
+   * console.log(`Words: ${stats.words}, Pages (est): ${stats.paragraphs}`);
+   * console.log(`Tables: ${stats.tables}, Images: ${stats.images}`);
+   * ```
+   */
+  getStatistics(): {
+    words: number;
+    characters: number;
+    charactersNoSpaces: number;
+    paragraphs: number;
+    tables: number;
+    images: number;
+    headings: number;
+    lists: number;
+    hyperlinks: number;
+    bookmarks: number;
+    footnotes: number;
+    endnotes: number;
+    comments: number;
+    sections: number;
+  } {
+    const allParagraphs = this.getAllParagraphs();
+    const tables = this.getTables();
+
+    let words = 0;
+    let characters = 0;
+    let charactersNoSpaces = 0;
+    let headings = 0;
+    let lists = 0;
+    const counted = new Set<Paragraph>();
+
+    for (const para of allParagraphs) {
+      if (counted.has(para)) continue;
+      counted.add(para);
+
+      const text = para.getText();
+      characters += text.length;
+      charactersNoSpaces += text.replace(/\s/g, '').length;
+
+      const trimmed = text.trim();
+      if (trimmed) {
+        words += trimmed.split(/\s+/).filter((w) => w.length > 0).length;
+      }
+
+      if (para.detectHeadingLevel() !== null) headings++;
+      if (para.hasNumbering()) lists++;
+    }
+
+    // Count table cell text too (for tables not traversed via getAllParagraphs)
+    for (const table of tables) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const para of cell.getParagraphs()) {
+            if (counted.has(para)) continue;
+            counted.add(para);
+            const text = para.getText();
+            characters += text.length;
+            charactersNoSpaces += text.replace(/\s/g, '').length;
+            const trimmed = text.trim();
+            if (trimmed) {
+              words += trimmed.split(/\s+/).filter((w) => w.length > 0).length;
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      words,
+      characters,
+      charactersNoSpaces,
+      paragraphs: allParagraphs.length,
+      tables: tables.length,
+      images: this.imageManager.getAllImages().length,
+      headings,
+      lists,
+      hyperlinks: this.getHyperlinks().length,
+      bookmarks: this.bookmarkManager.getAllBookmarks().length,
+      footnotes: this.footnoteManager.getAllFootnotes().length,
+      endnotes: this.endnoteManager.getAllEndnotes().length,
+      comments: this.commentManager.getAllComments().length,
+      sections: 1, // Base section; multi-section docs add via paragraph section properties
+    };
+  }
+
+  /**
+   * Iterates over top-level paragraphs in the document body (not inside tables)
+   *
+   * Calls the callback for each Paragraph that is a direct child of the body.
+   * Paragraphs inside table cells are NOT included — use `getAllParagraphs()`
+   * or `walkElements()` for those. Supports early termination by returning `false`.
+   *
+   * @param callback - Function called for each paragraph. Return `false` to stop.
+   * @returns Number of paragraphs visited
+   *
+   * @example
+   * ```typescript
+   * // Bold all top-level paragraphs
+   * doc.forEachParagraph((para) => {
+   *   para.getRuns().forEach(r => r.setBold(true));
+   * });
+   *
+   * // Find first paragraph matching criteria
+   * let found: Paragraph | undefined;
+   * doc.forEachParagraph((para) => {
+   *   if (para.getText().includes('Summary')) {
+   *     found = para;
+   *     return false;
+   *   }
+   * });
+   * ```
+   */
+  forEachParagraph(callback: (paragraph: Paragraph, index: number) => void | false): number {
+    let count = 0;
+    let paraIndex = 0;
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        const result = callback(element, paraIndex);
+        count++;
+        paraIndex++;
+        if (result === false) break;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Iterates over top-level tables in the document body
+   *
+   * Calls the callback for each Table that is a direct child of the body.
+   * Supports early termination by returning `false`.
+   *
+   * @param callback - Function called for each table. Return `false` to stop.
+   * @returns Number of tables visited
+   *
+   * @example
+   * ```typescript
+   * // Remove empty rows from all tables
+   * doc.forEachTable((table) => {
+   *   table.removeEmptyRows();
+   * });
+   *
+   * // Find first table with more than 5 rows
+   * let bigTable: Table | undefined;
+   * doc.forEachTable((table) => {
+   *   if (table.getRowCount() > 5) {
+   *     bigTable = table;
+   *     return false;
+   *   }
+   * });
+   * ```
+   */
+  forEachTable(callback: (table: Table, index: number) => void | false): number {
+    let count = 0;
+    let tableIndex = 0;
+    for (const element of this.bodyElements) {
+      if (element instanceof Table) {
+        const result = callback(element, tableIndex);
+        count++;
+        tableIndex++;
+        if (result === false) break;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Extracts all text content from the document as a plain string.
+   * Concatenates text from all paragraphs (including those in tables),
+   * separated by newlines.
+   *
+   * @param separator - String to insert between paragraphs (default: '\n')
+   * @returns Plain text content of the entire document
+   *
+   * @example
+   * ```typescript
+   * const text = doc.toPlainText();
+   * console.log(text);
+   *
+   * // With custom separator
+   * const singleLine = doc.toPlainText(' ');
+   * ```
+   */
+  toPlainText(separator = '\n'): string {
+    const paragraphs = this.getAllParagraphs();
+    return paragraphs.map((p) => p.getText()).join(separator);
+  }
+
+  /**
+   * Converts the document to Markdown format
+   *
+   * Iterates body elements in order and converts them to Markdown syntax:
+   * - Headings → `#` / `##` / `###` etc.
+   * - Bold/italic runs → `**bold**` / `*italic*`
+   * - Hyperlinks → `[text](url)`
+   * - Tables → pipe-delimited Markdown tables with alignment row
+   * - Numbered/bulleted lists → `1.` / `-` prefixes
+   * - Regular paragraphs → plain text with blank lines between
+   *
+   * Useful for AI/LLM pipelines, content migration, documentation
+   * generation, and plain-text extraction with structure preserved.
+   *
+   * @returns Markdown string representation of the document
+   *
+   * @example
+   * ```typescript
+   * const md = doc.toMarkdown();
+   * console.log(md);
+   * // # Document Title
+   * //
+   * // Opening paragraph text.
+   * //
+   * // ## Section 1
+   * //
+   * // | Name | Age |
+   * // | --- | --- |
+   * // | Alice | 30 |
+   * ```
+   */
+  toMarkdown(): string {
+    const lines: string[] = [];
+
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        const mdLine = this.paragraphToMarkdown(element);
+        if (mdLine !== null) {
+          lines.push(mdLine);
+          lines.push('');
+        }
+      } else if (element instanceof Table) {
+        lines.push(...this.tableToMarkdown(element));
+        lines.push('');
+      }
+      // Other element types (SDT, AlternateContent, etc.) are skipped
+    }
+
+    // Remove trailing blank line
+    while (lines.length > 0 && lines[lines.length - 1] === '') {
+      lines.pop();
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Converts a paragraph to a Markdown line.
+   * @internal
+   */
+  private paragraphToMarkdown(para: Paragraph): string | null {
+    const text = this.paragraphContentToMarkdown(para);
+    if (!text && !para.hasNumbering()) return null;
+
+    // Headings
+    const headingLevel = para.detectHeadingLevel();
+    if (headingLevel !== null && headingLevel >= 1 && headingLevel <= 6) {
+      return '#'.repeat(headingLevel) + ' ' + text;
+    }
+
+    // Numbered/bulleted lists
+    if (para.hasNumbering()) {
+      const style = para.getStyle();
+      const isBullet =
+        style?.toLowerCase().includes('bullet') || style?.toLowerCase().includes('list bullet');
+      return isBullet ? `- ${text}` : `1. ${text}`;
+    }
+
+    return text;
+  }
+
+  /**
+   * Converts paragraph inline content to Markdown with formatting.
+   * @internal
+   */
+  private paragraphContentToMarkdown(para: Paragraph): string {
+    const parts: string[] = [];
+
+    for (const item of para.getContent()) {
+      if (item instanceof Run) {
+        const runText = item.getText();
+        if (!runText) continue;
+
+        const fmt = item.getFormatting();
+        let md = runText;
+
+        // Apply inline formatting (bold + italic combined)
+        if (fmt.bold && fmt.italic) {
+          md = `***${md}***`;
+        } else if (fmt.bold) {
+          md = `**${md}**`;
+        } else if (fmt.italic) {
+          md = `*${md}*`;
+        }
+
+        if (fmt.strike) {
+          md = `~~${md}~~`;
+        }
+
+        // Inline code (monospace font detection)
+        if (
+          fmt.font &&
+          /^(courier|consolas|monaco|menlo|source code|fira code|jetbrains mono)/i.test(fmt.font)
+        ) {
+          md = `\`${runText}\``;
+        }
+
+        parts.push(md);
+      } else if (item instanceof Hyperlink) {
+        const url = item.getUrl() || '';
+        const linkText = item.getText() || url;
+        parts.push(`[${linkText}](${url})`);
+      }
+      // Revisions, fields, shapes, etc. — extract text if possible
+    }
+
+    return parts.join('');
+  }
+
+  /**
+   * Converts a table to Markdown table lines.
+   * @internal
+   */
+  private tableToMarkdown(table: Table): string[] {
+    const data = table.toArray();
+    if (data.length === 0) return [];
+
+    const colCount = Math.max(...data.map((row) => row.length));
+    if (colCount === 0) return [];
+
+    // Normalize all rows to same column count
+    const normalized = data.map((row) => {
+      const padded = [...row];
+      while (padded.length < colCount) padded.push('');
+      // Escape pipes and normalize whitespace in cell text
+      return padded.map((cell) => cell.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim());
+    });
+
+    const lines: string[] = [];
+
+    // Header row
+    lines.push('| ' + normalized[0]!.join(' | ') + ' |');
+
+    // Separator row
+    lines.push('| ' + normalized[0]!.map(() => '---').join(' | ') + ' |');
+
+    // Data rows
+    for (let i = 1; i < normalized.length; i++) {
+      lines.push('| ' + normalized[i]!.join(' | ') + ' |');
+    }
+
+    return lines;
+  }
+
+  /**
+   * Converts the document to an HTML string
+   *
+   * Iterates body elements and renders them as semantic HTML:
+   * - Headings → `<h1>` through `<h6>`
+   * - Bold → `<strong>`, italic → `<em>`, strikethrough → `<s>`
+   * - Inline code (monospace fonts) → `<code>`
+   * - Hyperlinks → `<a href="...">`
+   * - Tables → `<table>` with `<thead>` / `<tbody>`
+   * - Bullet lists → `<ul><li>`, numbered lists → `<ol><li>`
+   * - Regular paragraphs → `<p>`
+   *
+   * Useful for web display, email bodies, CMS import, and rich-text previews.
+   *
+   * @param options - Output options
+   * @param options.wrapInDocument - Wrap in `<!DOCTYPE html>` with head/body (default: false)
+   * @param options.title - Document title for the `<title>` tag (only when wrapInDocument is true)
+   * @returns HTML string
+   *
+   * @example
+   * ```typescript
+   * // Fragment for embedding
+   * const html = doc.toHTML();
+   *
+   * // Full HTML document
+   * const page = doc.toHTML({ wrapInDocument: true, title: 'My Report' });
+   * ```
+   */
+  toHTML(options?: { wrapInDocument?: boolean; title?: string }): string {
+    const parts: string[] = [];
+    let inList: 'ul' | 'ol' | null = null;
+
+    const closeList = () => {
+      if (inList) {
+        parts.push(`</${inList}>`);
+        inList = null;
+      }
+    };
+
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        const headingLevel = element.detectHeadingLevel();
+        const style = element.getStyle();
+        const isBullet = style?.toLowerCase().includes('bullet') || style === 'ListBullet';
+        const isNumber =
+          style?.toLowerCase().includes('listnumber') ||
+          style?.toLowerCase().includes('list number') ||
+          style === 'ListNumber';
+
+        if (isBullet || isNumber) {
+          const listType = isBullet ? 'ul' : 'ol';
+          if (inList !== listType) {
+            closeList();
+            inList = listType;
+            parts.push(`<${listType}>`);
+          }
+          parts.push(`<li>${this.paragraphContentToHTML(element)}</li>`);
+          continue;
+        }
+
+        closeList();
+
+        if (headingLevel !== null && headingLevel >= 1 && headingLevel <= 6) {
+          parts.push(
+            `<h${headingLevel}>${this.paragraphContentToHTML(element)}</h${headingLevel}>`
+          );
+        } else {
+          const content = this.paragraphContentToHTML(element);
+          if (content) {
+            parts.push(`<p>${content}</p>`);
+          }
+        }
+      } else if (element instanceof Table) {
+        closeList();
+        parts.push(this.tableToHTML(element));
+      }
+    }
+
+    closeList();
+
+    const body = parts.join('\n');
+
+    if (options?.wrapInDocument) {
+      const title = options.title ? this.escapeHTML(options.title) : 'Document';
+      return [
+        '<!DOCTYPE html>',
+        '<html>',
+        '<head>',
+        `<meta charset="utf-8">`,
+        `<title>${title}</title>`,
+        '</head>',
+        '<body>',
+        body,
+        '</body>',
+        '</html>',
+      ].join('\n');
+    }
+
+    return body;
+  }
+
+  /**
+   * Converts paragraph inline content to HTML.
+   * @internal
+   */
+  private paragraphContentToHTML(para: Paragraph): string {
+    const parts: string[] = [];
+
+    for (const item of para.getContent()) {
+      if (item instanceof Run) {
+        const text = item.getText();
+        if (!text) continue;
+
+        const escaped = this.escapeHTML(text);
+        const fmt = item.getFormatting();
+
+        // Detect monospace font
+        const isMono =
+          fmt.font &&
+          /^(courier|consolas|monaco|menlo|source code|fira code|jetbrains mono)/i.test(fmt.font);
+
+        if (isMono) {
+          parts.push(`<code>${escaped}</code>`);
+          continue;
+        }
+
+        let html = escaped;
+        if (fmt.bold) html = `<strong>${html}</strong>`;
+        if (fmt.italic) html = `<em>${html}</em>`;
+        if (fmt.strike) html = `<s>${html}</s>`;
+        if (fmt.underline && fmt.underline !== 'none') {
+          html = `<u>${html}</u>`;
+        }
+
+        parts.push(html);
+      } else if (item instanceof Hyperlink) {
+        const url = this.escapeHTML(item.getUrl() || '');
+        const linkText = this.escapeHTML(item.getText() || url);
+        parts.push(`<a href="${url}">${linkText}</a>`);
+      }
+    }
+
+    return parts.join('');
+  }
+
+  /**
+   * Converts a table to an HTML table string.
+   * @internal
+   */
+  private tableToHTML(table: Table): string {
+    const rows = table.getRows();
+    if (rows.length === 0) return '';
+
+    const lines: string[] = ['<table>'];
+
+    // First row as thead
+    const headerCells = rows[0]!.getCells();
+    lines.push('<thead>');
+    lines.push('<tr>');
+    for (const cell of headerCells) {
+      lines.push(`<th>${this.escapeHTML(cell.getText())}</th>`);
+    }
+    lines.push('</tr>');
+    lines.push('</thead>');
+
+    // Remaining rows as tbody
+    if (rows.length > 1) {
+      lines.push('<tbody>');
+      for (let r = 1; r < rows.length; r++) {
+        lines.push('<tr>');
+        for (const cell of rows[r]!.getCells()) {
+          lines.push(`<td>${this.escapeHTML(cell.getText())}</td>`);
+        }
+        lines.push('</tr>');
+      }
+      lines.push('</tbody>');
+    }
+
+    lines.push('</table>');
+    return lines.join('\n');
+  }
+
+  /**
+   * Escapes HTML special characters.
+   * @internal
+   */
+  private escapeHTML(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /**
+   * Returns a JSON-serializable representation of the document structure.
+   * Useful for debugging, inspection, and logging.
+   *
+   * @returns Object with document properties, statistics, and content summary
+   *
+   * @example
+   * ```typescript
+   * const json = doc.toJSON();
+   * console.log(JSON.stringify(json, null, 2));
+   * ```
+   */
+  toJSON(): {
+    properties: DocumentProperties;
+    stats: {
+      paragraphs: number;
+      tables: number;
+      images: number;
+      headings: number;
+      sections: number;
+    };
+    headings: { level: number; text: string }[];
+    body: { type: string; text?: string; style?: string }[];
+  } {
+    const paragraphs = this.getAllParagraphs();
+    const tables = this.getTables();
+    const headings = this.getHeadingHierarchy();
+
+    return {
+      properties: this.getProperties(),
+      stats: {
+        paragraphs: paragraphs.length,
+        tables: tables.length,
+        images: this.imageManager.getImageCount(),
+        headings: headings.length,
+        sections: this.bodyElements.filter((el) => el instanceof Section).length || 1,
+      },
+      headings: headings.map((h) => ({ level: h.level, text: h.text })),
+      body: this.bodyElements.map((el) => {
+        if (el instanceof Paragraph) {
+          return {
+            type: 'paragraph',
+            text: el.getText(),
+            style: el.getStyle(),
+          };
+        }
+        if (el instanceof Table) {
+          return {
+            type: 'table',
+            text: `${el.getRows().length} rows x ${el.getRows()[0]?.getCells().length ?? 0} cols`,
+          };
+        }
+        return { type: el.constructor.name };
+      }),
+    };
+  }
+
+  /**
+   * Finds all images in the document that have no alt text or only the default alt text.
+   * Useful for accessibility auditing.
+   *
+   * @returns Array of Image elements missing meaningful alt text
+   *
+   * @example
+   * ```typescript
+   * const missing = doc.findImagesWithoutAltText();
+   * console.log(`${missing.length} images need alt text`);
+   * for (const img of missing) {
+   *   img.setAltText('Description of the image');
+   * }
+   * ```
+   */
+  findImagesWithoutAltText(): Image[] {
+    const results: Image[] = [];
+    for (const para of this.getAllParagraphs()) {
+      for (const item of para.getContent()) {
+        if (item instanceof ImageRun) {
+          const image = item.getImageElement();
+          const altText = image.getAltText();
+          if (!altText || altText === 'Image') {
+            results.push(image);
+          }
+        }
+        if (item instanceof Revision) {
+          for (const revContent of item.getContent()) {
+            if (revContent instanceof ImageRun) {
+              const image = revContent.getImageElement();
+              const altText = image.getAltText();
+              if (!altText || altText === 'Image') {
+                results.push(image);
+              }
+            }
+          }
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Returns the heading hierarchy of the document as a flat list.
+   * Each entry includes the heading level, text content, and the paragraph object.
+   * Useful for accessibility auditing (detecting skipped levels) and TOC generation.
+   *
+   * @returns Array of heading entries sorted by document order
+   *
+   * @example
+   * ```typescript
+   * const headings = doc.getHeadingHierarchy();
+   * for (const h of headings) {
+   *   console.log(`${'  '.repeat(h.level - 1)}H${h.level}: ${h.text}`);
+   * }
+   *
+   * // Check for skipped levels (accessibility issue)
+   * for (let i = 1; i < headings.length; i++) {
+   *   if (headings[i].level - headings[i - 1].level > 1) {
+   *     console.warn(`Skipped heading level: H${headings[i - 1].level} -> H${headings[i].level}`);
+   *   }
+   * }
+   * ```
+   */
+  getHeadingHierarchy(): { level: number; text: string; paragraph: Paragraph }[] {
+    const results: { level: number; text: string; paragraph: Paragraph }[] = [];
+    for (const para of this.getAllParagraphs()) {
+      const level = para.detectHeadingLevel();
+      if (level !== null) {
+        results.push({
+          level,
+          text: para.getText(),
+          paragraph: para,
+        });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Groups body elements into sections delimited by headings
+   *
+   * Walks the body elements in order and splits them at each heading paragraph
+   * at or above the specified level. Each section contains the heading paragraph
+   * and all subsequent body elements until the next heading at that level or higher.
+   *
+   * Content before the first matching heading is returned as a section with
+   * `heading: undefined` and `level: 0`.
+   *
+   * @param maxLevel - Maximum heading level to split on (default: 1, meaning only H1
+   *   starts a new section). Set to 2 to also split on H2, 3 for H1-H3, etc.
+   * @returns Array of sections, each with heading info and content elements
+   *
+   * @example
+   * ```typescript
+   * // Split document by H1 headings (chapters)
+   * const chapters = doc.extractByHeading(1);
+   * for (const chapter of chapters) {
+   *   console.log(`Chapter: ${chapter.heading?.getText() ?? '(preamble)'}`);
+   *   console.log(`  ${chapter.content.length} elements`);
+   * }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Split by H1 and H2 (chapters and sections)
+   * const sections = doc.extractByHeading(2);
+   *
+   * // Extract a specific section's content as markdown
+   * const target = sections.find(s => s.heading?.getText() === 'Methods');
+   * ```
+   */
+  extractByHeading(maxLevel = 1): {
+    heading: Paragraph | undefined;
+    level: number;
+    content: BodyElement[];
+  }[] {
+    const sections: { heading: Paragraph | undefined; level: number; content: BodyElement[] }[] =
+      [];
+    let current: { heading: Paragraph | undefined; level: number; content: BodyElement[] } = {
+      heading: undefined,
+      level: 0,
+      content: [],
+    };
+
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        const headingLevel = element.detectHeadingLevel();
+
+        if (headingLevel !== null && headingLevel <= maxLevel) {
+          // Save current section if it has any content or a heading
+          if (current.heading || current.content.length > 0) {
+            sections.push(current);
+          }
+          // Start a new section
+          current = { heading: element, level: headingLevel, content: [] };
+          continue;
+        }
+      }
+
+      current.content.push(element);
+    }
+
+    // Push the last section
+    if (current.heading || current.content.length > 0) {
+      sections.push(current);
+    }
+
+    return sections;
+  }
+
+  /**
+   * Returns all body elements between two reference elements (exclusive)
+   *
+   * Finds both elements in the body and returns everything between them.
+   * The start and end elements themselves are NOT included in the result.
+   * Returns an empty array if either element is not found or if start
+   * appears after end.
+   *
+   * @param startElement - Element after which to begin collecting
+   * @param endElement - Element before which to stop collecting
+   * @returns Array of body elements between the two references
+   *
+   * @example
+   * ```typescript
+   * const headings = doc.getParagraphs().filter(p => p.detectHeadingLevel() === 1);
+   * const chapter1Content = doc.getElementsBetween(headings[0], headings[1]);
+   * ```
+   */
+  getElementsBetween(startElement: BodyElement, endElement: BodyElement): BodyElement[] {
+    const startIndex = this.bodyElements.indexOf(startElement);
+    const endIndex = this.bodyElements.indexOf(endElement);
+
+    if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
+      return [];
+    }
+
+    return this.bodyElements.slice(startIndex + 1, endIndex);
   }
 
   /**
@@ -14457,6 +16006,122 @@ export class Document {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Removes a body element by reference
+   *
+   * Finds the element in the body and removes it. More convenient than
+   * the index-based `removeBodyElementAt()` when you already have a
+   * reference to the element.
+   *
+   * @param element - The element to remove
+   * @returns True if removed, false if not found
+   *
+   * @example
+   * ```typescript
+   * // Remove a specific paragraph
+   * const para = doc.getParagraphs().find(p => p.getText() === 'Delete me');
+   * if (para) doc.removeElement(para);
+   *
+   * // Remove all tables
+   * for (const table of doc.getTables()) {
+   *   doc.removeElement(table);
+   * }
+   * ```
+   */
+  removeElement(element: BodyElement): boolean {
+    const index = this.bodyElements.indexOf(element);
+    if (index === -1) return false;
+    this.bodyElements.splice(index, 1);
+    return true;
+  }
+
+  /**
+   * Inserts a body element after a reference element
+   *
+   * Finds the reference element in the body and inserts the new element
+   * immediately after it. Returns false if the reference is not found.
+   *
+   * @param reference - The existing element to insert after
+   * @param element - The element to insert
+   * @returns True if inserted, false if reference not found
+   *
+   * @example
+   * ```typescript
+   * // Find a heading and insert a table after it
+   * const heading = doc.getParagraphs().find(p => p.getText() === 'Data');
+   * if (heading) {
+   *   doc.insertAfter(heading, table);
+   * }
+   *
+   * // Split a paragraph and insert content between halves
+   * const tail = para.splitAt(offset);
+   * doc.insertAfter(para, newTable);
+   * doc.insertAfter(newTable, tail);
+   * ```
+   */
+  insertAfter(reference: BodyElement, element: BodyElement): boolean {
+    const index = this.bodyElements.indexOf(reference);
+    if (index === -1) return false;
+    this.bodyElements.splice(index + 1, 0, element);
+    return true;
+  }
+
+  /**
+   * Inserts a body element before a reference element
+   *
+   * Finds the reference element in the body and inserts the new element
+   * immediately before it. Returns false if the reference is not found.
+   *
+   * @param reference - The existing element to insert before
+   * @param element - The element to insert
+   * @returns True if inserted, false if reference not found
+   *
+   * @example
+   * ```typescript
+   * // Insert a heading before a table
+   * const table = doc.getTables()[0];
+   * if (table) {
+   *   const heading = new Paragraph().addText('Table 1').setStyle('Heading2');
+   *   doc.insertBefore(table, heading);
+   * }
+   * ```
+   */
+  insertBefore(reference: BodyElement, element: BodyElement): boolean {
+    const index = this.bodyElements.indexOf(reference);
+    if (index === -1) return false;
+    this.bodyElements.splice(index, 0, element);
+    return true;
+  }
+
+  /**
+   * Replaces a body element with another
+   *
+   * Finds the old element in the body and replaces it in-place with the
+   * new element. The new element occupies the same position. Returns false
+   * if the old element is not found.
+   *
+   * @param oldElement - The element to replace
+   * @param newElement - The replacement element
+   * @returns True if replaced, false if old element not found
+   *
+   * @example
+   * ```typescript
+   * // Replace a placeholder paragraph with a table
+   * const placeholder = doc.getParagraphs().find(
+   *   p => p.getText() === '{{INSERT_TABLE_HERE}}'
+   * );
+   * if (placeholder) {
+   *   doc.replaceElement(placeholder, dataTable);
+   * }
+   * ```
+   */
+  replaceElement(oldElement: BodyElement, newElement: BodyElement): boolean {
+    const index = this.bodyElements.indexOf(oldElement);
+    if (index === -1) return false;
+    this.bodyElements[index] = newElement;
+    return true;
   }
 
   /**

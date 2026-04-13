@@ -8,6 +8,7 @@
 import { Relationship, RelationshipType } from './Relationship';
 import { XMLParser } from '../xml/XMLParser';
 import { sanitizeHyperlinkUrl } from '../utils/validation';
+import { InvalidDocxError, CorruptedArchiveError } from '../zip/errors';
 
 /**
  * Manages relationships for a document or document part
@@ -221,7 +222,7 @@ export class RelationshipManager {
 
     // Verify this is a hyperlink relationship
     if (relationship.getType() !== RelationshipType.HYPERLINK) {
-      throw new Error(
+      throw new InvalidDocxError(
         `Relationship ${relationshipId} is not a hyperlink relationship. ` +
           `Type is ${relationship.getType()}, expected ${RelationshipType.HYPERLINK}`
       );
@@ -384,7 +385,7 @@ export class RelationshipManager {
 
     // Prevent ReDoS: validate input size (typical .rels files are < 10KB, max 10MB)
     if (xml.length > 10000000) {
-      throw new Error(
+      throw new CorruptedArchiveError(
         'Relationships XML file too large (>10MB). Possible malicious input or corrupted file.'
       );
     }
@@ -394,7 +395,9 @@ export class RelationshipManager {
 
     // Prevent infinite loops: check relationship count
     if (relationshipElements.length > 1000) {
-      throw new Error('Too many relationships in XML file (>1000). Possible malicious input.');
+      throw new CorruptedArchiveError(
+        'Too many relationships in XML file (>1000). Possible malicious input.'
+      );
     }
 
     // Process each relationship element

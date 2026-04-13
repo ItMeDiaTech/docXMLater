@@ -437,7 +437,7 @@ export class CleanupHelper {
     };
 
     // Helper to process paragraph content
-    const processParagraph = (paragraph: any): void => {
+    const processParagraph = (paragraph: Paragraph): void => {
       for (const item of paragraph.getContent()) {
         // Process all Hyperlink instances (both internal AND external)
         if (item instanceof Hyperlink) {

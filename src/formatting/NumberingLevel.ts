@@ -444,7 +444,8 @@ export class NumberingLevel {
    * Generates the WordprocessingML XML for this level
    */
   toXML(): XMLElement {
-    // ECMA-376 CT_Lvl element order: start, numFmt, lvlRestart, pStyle, isLgl, suff, lvlText, lvlJc, pPr, rPr
+    // ECMA-376 CT_Lvl element order (§17.9.6):
+    // start, numFmt, lvlRestart, pStyle, isLgl, suff, lvlText, lvlPicBulletId, legacy, lvlJc, pPr, rPr
     const children: XMLElement[] = [];
 
     // 1. Start value
@@ -514,19 +515,22 @@ export class NumberingLevel {
       rPrChildren.push(XMLBuilder.wSelf('iCs'));
     }
 
-    // Underline
-    if (this.properties.underline) {
-      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': this.properties.underline }));
-    }
+    // CT_RPr element order per ECMA-376 §17.3.2.28:
+    // ... b, bCs, i, iCs, ... color (#19), ... sz (#24), szCs (#25), ... u (#27)
 
-    // Color
+    // Color (#19)
     if (this.properties.color) {
       rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': this.properties.color }));
     }
 
-    // Font size
+    // Font size (#24, #25)
     rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': this.properties.fontSize.toString() }));
     rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': this.properties.fontSize.toString() }));
+
+    // Underline (#27)
+    if (this.properties.underline) {
+      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': this.properties.underline }));
+    }
 
     const rPr = XMLBuilder.w('rPr', undefined, rPrChildren);
     children.push(rPr);

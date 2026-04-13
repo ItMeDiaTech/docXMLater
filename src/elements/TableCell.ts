@@ -2,19 +2,16 @@
  * TableCell - Represents a cell in a table
  */
 
+import { deepClone } from '../utils/deepClone';
 import { formatDateForXml } from '../utils/dateFormatting';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { Paragraph, TextDirection } from './Paragraph';
 import { Revision } from './Revision';
 import {
   BorderStyle as CommonBorderStyle,
-  BorderDefinition,
-  FourSidedBorders,
   CellVerticalAlignment as CommonCellVerticalAlignment,
   ShadingConfig,
-  ShadingPattern,
   buildShadingAttributes,
-  WidthType,
 } from './CommonTypes';
 
 // ============================================================================
@@ -444,6 +441,36 @@ export class TableCell {
       this.trackingContext.trackTableChange(this, 'shading', prev, shading);
     }
     return this;
+  }
+
+  /**
+   * Sets the cell background color
+   *
+   * Convenience method that wraps `setShading()` with a clear pattern.
+   * Equivalent to `setShading({ fill: color, pattern: 'clear' })`.
+   *
+   * @param color - Hex color without # (e.g., 'FF0000' for red, 'FFFFFF' for white)
+   * @returns This cell for chaining
+   *
+   * @example
+   * ```typescript
+   * cell.setBackgroundColor('FFFF00');  // Yellow background
+   * cell.setBackgroundColor('F2F2F2');  // Light gray
+   * ```
+   */
+  setBackgroundColor(color: string): this {
+    return this.setShading({ fill: color, pattern: 'clear' });
+  }
+
+  /**
+   * Gets the cell background color
+   *
+   * Returns the fill color from the cell's shading, or undefined if not set.
+   *
+   * @returns Hex color string or undefined
+   */
+  getBackgroundColor(): string | undefined {
+    return this.formatting.shading?.fill;
   }
 
   /**
@@ -1263,6 +1290,46 @@ export class TableCell {
   }
 
   /**
+   * Creates a deep clone of this cell
+   *
+   * Copies all formatting, paragraphs, raw nested content, and property change
+   * tracking. The clone is independent of the original — changes to one do not
+   * affect the other. Parent row reference is NOT copied (set by addCell/insertCellAt).
+   *
+   * @returns New TableCell instance with the same content and formatting
+   *
+   * @example
+   * ```typescript
+   * const cell = new TableCell({ width: 2400, widthType: 'dxa' });
+   * cell.createParagraph('Hello');
+   * const copy = cell.clone();
+   * copy.createParagraph('World');
+   * // Original cell still has only "Hello"
+   * ```
+   */
+  clone(): TableCell {
+    const clonedCell = new TableCell(deepClone(this.formatting));
+
+    for (const para of this.paragraphs) {
+      clonedCell.addParagraph(para.clone());
+    }
+
+    for (const item of this.rawNestedContent) {
+      clonedCell.addRawNestedContent(item.position, item.xml, item.type);
+    }
+
+    if (this.tcPrChange) {
+      clonedCell.setTcPrChange(deepClone(this.tcPrChange));
+    }
+
+    if (this.cellRevision) {
+      clonedCell.setCellRevision(this.cellRevision);
+    }
+
+    return clonedCell;
+  }
+
+  /**
    * Converts the cell to WordprocessingML XML element
    * @returns XMLElement representing the cell
    */
@@ -1314,7 +1381,8 @@ export class TableCell {
       const borderElements: XMLElement[] = [];
       const borders = this.formatting.borders;
 
-      // Ordered per ECMA-376 CT_TcBorders: top, left, bottom, right, insideH, insideV, tl2br, tr2bl
+      // Ordered per ECMA-376 CT_TcBorders (§17.4.67): top, left, bottom, right, tl2br, tr2bl
+      // Note: insideH/insideV are only in CT_TblBorders (table-level), not CT_TcBorders (cell-level)
       if (borders.top) {
         borderElements.push(XMLBuilder.createBorder('top', borders.top));
       }
@@ -1466,8 +1534,12 @@ export class TableCell {
       const prevTcPrChildren: XMLElement[] = [];
       const prev = this.tcPrChange.previousProperties;
       if (prev) {
-        // Ordered per CT_TcPr: tcW → gridSpan → hMerge → vMerge → tcBorders → shd →
-        // noWrap → tcMar → textDirection → tcFitText → vAlign → hideMark → cnfStyle
+        // Ordered per CT_TcPr (ECMA-376 §17.4.70):
+        // cnfStyle → tcW → gridSpan → hMerge → vMerge → tcBorders → shd →
+        // noWrap → tcMar → textDirection → tcFitText → vAlign → hideMark
+        if (prev.cnfStyle) {
+          prevTcPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': prev.cnfStyle }));
+        }
         if (prev.width !== undefined) {
           prevTcPrChildren.push(
             XMLBuilder.wSelf('tcW', {
@@ -1491,6 +1563,7 @@ export class TableCell {
         }
         if (prev.borders) {
           const borderElements: XMLElement[] = [];
+          // Ordered per CT_TcBorders (§17.4.67): top, left, bottom, right, tl2br, tr2bl
           if (prev.borders.top)
             borderElements.push(XMLBuilder.createBorder('top', prev.borders.top));
           if (prev.borders.left)
@@ -1499,6 +1572,10 @@ export class TableCell {
             borderElements.push(XMLBuilder.createBorder('bottom', prev.borders.bottom));
           if (prev.borders.right)
             borderElements.push(XMLBuilder.createBorder('right', prev.borders.right));
+          if (prev.borders.tl2br)
+            borderElements.push(XMLBuilder.createBorder('tl2br', prev.borders.tl2br));
+          if (prev.borders.tr2bl)
+            borderElements.push(XMLBuilder.createBorder('tr2bl', prev.borders.tr2bl));
           if (borderElements.length > 0) {
             prevTcPrChildren.push(XMLBuilder.w('tcBorders', undefined, borderElements));
           }
@@ -1549,9 +1626,6 @@ export class TableCell {
         }
         if (prev.hideMark) {
           prevTcPrChildren.push(XMLBuilder.wSelf('hideMark'));
-        }
-        if (prev.cnfStyle) {
-          prevTcPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': prev.cnfStyle }));
         }
       }
       const prevTcPr =

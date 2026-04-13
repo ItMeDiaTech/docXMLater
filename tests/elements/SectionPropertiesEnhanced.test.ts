@@ -222,6 +222,67 @@ describe('Section Properties - Phase 4.5 Enhancements', () => {
     });
   });
 
+  describe('Per-Column Spacing (CT_Column w:space)', () => {
+    it('should round-trip per-column spacing on individual columns', async () => {
+      const doc = Document.create();
+      const section = Section.create();
+      // Set unequal columns with per-column spacing
+      if (!section.getProperties().columns) {
+        section.setColumns(3, 360);
+      }
+      section.setColumnWidths([2880, 4320, 5760]);
+      section.getProperties().columns!.columnSpaces = [360, 720, 0];
+
+      doc.setSection(section);
+
+      const buffer = await doc.toBuffer();
+      await fs.writeFile(join(OUTPUT_DIR, 'test-section-col-per-column-spaces.docx'), buffer);
+
+      const doc2 = await Document.loadFromBuffer(buffer);
+      const loadedSection = doc2.getSection();
+
+      expect(loadedSection).toBeDefined();
+      expect(loadedSection!.getProperties().columns?.columnWidths).toEqual([2880, 4320, 5760]);
+      expect(loadedSection!.getProperties().columns?.columnSpaces).toEqual([360, 720, 0]);
+      doc.dispose();
+      doc2.dispose();
+    });
+
+    it('should parse per-column spacing from raw XML', async () => {
+      // Inject raw XML with per-column spacing directly
+      const doc = Document.create();
+      const section = Section.create();
+      section.setColumns(2, 480);
+      section.setColumnWidths([4000, 5000]);
+      section.getProperties().columns!.columnSpaces = [240, 0];
+      section.getProperties().columns!.equalWidth = false;
+
+      doc.setSection(section);
+      const buffer = await doc.toBuffer();
+
+      const doc2 = await Document.loadFromBuffer(buffer);
+      const cols = doc2.getSection()?.getProperties().columns;
+      expect(cols?.columnWidths).toEqual([4000, 5000]);
+      expect(cols?.columnSpaces).toEqual([240, 0]);
+      doc.dispose();
+      doc2.dispose();
+    });
+
+    it('should deep clone columnSpaces array', () => {
+      const section = Section.create();
+      section.setColumnWidths([3000, 4000]);
+      section.getProperties().columns!.columnSpaces = [360, 0];
+
+      const cloned = section.clone();
+
+      // Modify original
+      section.getProperties().columns!.columnSpaces = [720, 480];
+
+      // Clone should be unaffected
+      expect(cloned.getProperties().columns?.columnSpaces).toEqual([360, 0]);
+    });
+  });
+
   describe('Text Direction', () => {
     it('should set and serialize text direction = ltr', async () => {
       const doc = Document.create();
@@ -446,6 +507,56 @@ describe('Section Properties - Phase 4.5 Enhancements', () => {
       expect(props.columns?.separator).toBe(true);
       expect(props.columns?.equalWidth).toBe(true);
       expect(props.columns?.columnWidths).toBeUndefined();
+    });
+  });
+
+  describe('Page Size Code (w:pgSz w:code) — ECMA-376 ST_PaperSize', () => {
+    it('should round-trip page size code', async () => {
+      const doc = Document.create();
+      const section = Section.create();
+      section.setPageSize(12240, 15840);
+      section.getProperties().pageSize!.code = 1; // Letter
+      doc.setSection(section);
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const props = loaded.getSection()?.getProperties();
+
+      expect(props?.pageSize?.code).toBe(1);
+      doc.dispose();
+      loaded.dispose();
+    });
+
+    it('should parse page size code from injected XML', async () => {
+      const doc = Document.create();
+      doc.createParagraph('Test');
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      // Add w:code="9" (A4) to pgSz
+      docXml = docXml.replace(/<w:pgSz\s/, '<w:pgSz w:code="9" ');
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const props = loaded.getSection()?.getProperties();
+      expect(props?.pageSize?.code).toBe(9);
+      loaded.dispose();
+    });
+
+    it('should not emit w:code when not set', async () => {
+      const doc = Document.create();
+      doc.createParagraph('No code');
+      const buffer = await doc.toBuffer();
+
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      const docXml = await zip.file('word/document.xml')!.async('string');
+      expect(docXml).not.toContain('w:code=');
+      doc.dispose();
     });
   });
 });

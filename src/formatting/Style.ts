@@ -5,11 +5,10 @@
 
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { ParagraphFormatting } from '../elements/Paragraph';
-import { RunFormatting } from '../elements/Run';
-import { ShadingConfig, ShadingPattern, buildShadingAttributes } from '../elements/CommonTypes';
+import { Run, RunFormatting } from '../elements/Run';
+import { ShadingConfig, buildShadingAttributes } from '../elements/CommonTypes';
 import { Heading2TableOptions } from '../types/styleConfig';
 import { deepClone } from '../utils/deepClone';
-import { pointsToHalfPoints } from '../utils/units';
 
 /**
  * Style type
@@ -85,6 +84,8 @@ export interface CellMargins {
 export interface TableStyleFormatting {
   /** Table indentation from left margin in twips */
   indent?: number;
+  /** Indent width type per ECMA-376 ST_TblWidth */
+  indentType?: string;
   /** Default cell spacing in twips */
   cellSpacing?: number;
   /** Table borders */
@@ -828,11 +829,28 @@ export class Style {
           );
         }
         if (numPrChildren.length > 0) {
-          // Insert numPr at the beginning of pPr children (per ECMA-376 element order)
-          if (pPr.children) {
-            pPr.children.unshift(XMLBuilder.w('numPr', undefined, numPrChildren));
+          // Per CT_PPrBase, numPr is at position #7: after keepNext, keepLines, pageBreakBefore,
+          // framePr, widowControl — insert after the last of these that's present.
+          const numPrEl = XMLBuilder.w('numPr', undefined, numPrChildren);
+          if (pPr.children && pPr.children.length > 0) {
+            // Find insertion point: after keepNext/keepLines/pageBreakBefore (positions #2-#4)
+            // These are the only elements generateParagraphProperties() emits before numPr
+            let insertIdx = 0;
+            for (let i = 0; i < pPr.children.length; i++) {
+              const child = pPr.children[i];
+              if (child && typeof child !== 'string') {
+                if (
+                  child.name === 'w:keepNext' ||
+                  child.name === 'w:keepLines' ||
+                  child.name === 'w:pageBreakBefore'
+                ) {
+                  insertIdx = i + 1;
+                }
+              }
+            }
+            pPr.children.splice(insertIdx, 0, numPrEl);
           } else {
-            pPr.children = [XMLBuilder.w('numPr', undefined, numPrChildren)];
+            pPr.children = [numPrEl];
           }
         }
       }
@@ -959,63 +977,13 @@ export class Style {
   }
 
   /**
-   * Generates run properties XML
+   * Generates run properties XML.
+   * Delegates to Run.generateRunPropertiesXML() for full ECMA-376 CT_RPr coverage
+   * with correct element ordering (38+ properties).
    */
   private generateRunProperties(formatting: RunFormatting): XMLElement {
-    const rPrChildren: XMLElement[] = [];
-
-    // Add formatting elements — ordered per ECMA-376 CT_RPr
-    if (formatting.font) {
-      rPrChildren.push(
-        XMLBuilder.wSelf('rFonts', {
-          'w:ascii': formatting.font,
-          'w:hAnsi': formatting.font,
-          'w:cs': formatting.font,
-        })
-      );
-    }
-    if (formatting.bold) {
-      rPrChildren.push(XMLBuilder.wSelf('b'));
-    }
-    if (formatting.italic) {
-      rPrChildren.push(XMLBuilder.wSelf('i'));
-    }
-    if (formatting.allCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('caps'));
-    }
-    if (formatting.smallCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('smallCaps'));
-    }
-    if (formatting.strike) {
-      rPrChildren.push(XMLBuilder.wSelf('strike'));
-    }
-    if (formatting.dstrike) {
-      rPrChildren.push(XMLBuilder.wSelf('dstrike'));
-    }
-    if (formatting.color) {
-      rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': formatting.color }));
-    }
-    if (formatting.size !== undefined) {
-      const halfPoints = pointsToHalfPoints(formatting.size);
-      rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': halfPoints }));
-      rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': halfPoints }));
-    }
-    if (formatting.highlight) {
-      rPrChildren.push(XMLBuilder.wSelf('highlight', { 'w:val': formatting.highlight }));
-    }
-    if (formatting.underline) {
-      const underlineValue =
-        typeof formatting.underline === 'string' ? formatting.underline : 'single';
-      rPrChildren.push(XMLBuilder.wSelf('u', { 'w:val': underlineValue }));
-    }
-    if (formatting.subscript) {
-      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
-    }
-    if (formatting.superscript) {
-      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'superscript' }));
-    }
-
-    return XMLBuilder.w('rPr', undefined, rPrChildren);
+    const rPr = Run.generateRunPropertiesXML(formatting);
+    return rPr || XMLBuilder.w('rPr', undefined, []);
   }
 
   /**
@@ -1073,7 +1041,7 @@ export class Style {
       tblPrChildren.push(
         XMLBuilder.wSelf('tblInd', {
           'w:w': formatting.indent,
-          'w:type': 'dxa',
+          'w:type': formatting.indentType || 'dxa',
         })
       );
     }
@@ -1254,19 +1222,19 @@ export class Style {
       }
     }
 
+    // Add row properties if specified (trPr before tcPr per CT_Style §17.7.6)
+    if (conditional.rowFormatting) {
+      const trPr = this.generateTableRowProperties(conditional.rowFormatting);
+      if (trPr.children && trPr.children.length > 0) {
+        tblStylePrChildren.push(trPr);
+      }
+    }
+
     // Add cell properties if specified
     if (conditional.cellFormatting) {
       const tcPr = this.generateTableCellProperties(conditional.cellFormatting);
       if (tcPr.children && tcPr.children.length > 0) {
         tblStylePrChildren.push(tcPr);
-      }
-    }
-
-    // Add row properties if specified
-    if (conditional.rowFormatting) {
-      const trPr = this.generateTableRowProperties(conditional.rowFormatting);
-      if (trPr.children && trPr.children.length > 0) {
-        tblStylePrChildren.push(trPr);
       }
     }
 

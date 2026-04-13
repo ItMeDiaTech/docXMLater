@@ -612,6 +612,107 @@ describe('Tracked Changes Round-Trip', () => {
     });
   });
 
+  describe('pPrChange CJK, framePr, suppressOverlap completeness', () => {
+    it('should serialize framePr in pPrChange previousProperties', () => {
+      const para = new Paragraph();
+      para.addText('test');
+      para.setParagraphPropertiesChange({
+        id: '20',
+        author: 'TestAuthor',
+        date: '2024-01-01T00:00:00Z',
+        previousProperties: {
+          framePr: { w: 4320, h: 2160, wrap: 'around', hAnchor: 'page' },
+        },
+      });
+
+      const xml = XMLBuilder.elementToString(para.toXML());
+      const changeStart = xml.indexOf('<w:pPrChange');
+      const changeXml = xml.substring(changeStart);
+
+      expect(changeXml).toContain('<w:framePr');
+      expect(changeXml).toContain('w:w="4320"');
+      expect(changeXml).toContain('w:wrap="around"');
+    });
+
+    it('should serialize CJK properties in pPrChange previousProperties', () => {
+      const para = new Paragraph();
+      para.addText('test');
+      para.setParagraphPropertiesChange({
+        id: '21',
+        author: 'TestAuthor',
+        date: '2024-01-01T00:00:00Z',
+        previousProperties: {
+          kinsoku: true,
+          wordWrap: false,
+          overflowPunct: true,
+          topLinePunct: false,
+          autoSpaceDE: true,
+          autoSpaceDN: false,
+        },
+      });
+
+      const xml = XMLBuilder.elementToString(para.toXML());
+      const changeStart = xml.indexOf('<w:pPrChange');
+      const changeXml = xml.substring(changeStart);
+
+      expect(changeXml).toContain('<w:kinsoku');
+      expect(changeXml).toContain('<w:wordWrap');
+      expect(changeXml).toContain('<w:overflowPunct');
+      expect(changeXml).toContain('<w:topLinePunct');
+      expect(changeXml).toContain('<w:autoSpaceDE');
+      expect(changeXml).toContain('<w:autoSpaceDN');
+    });
+
+    it('should serialize suppressOverlap in pPrChange previousProperties', () => {
+      const para = new Paragraph();
+      para.addText('test');
+      para.setParagraphPropertiesChange({
+        id: '22',
+        author: 'TestAuthor',
+        date: '2024-01-01T00:00:00Z',
+        previousProperties: {
+          suppressOverlap: true,
+        },
+      });
+
+      const xml = XMLBuilder.elementToString(para.toXML());
+      const changeStart = xml.indexOf('<w:pPrChange');
+      const changeXml = xml.substring(changeStart);
+
+      expect(changeXml).toContain('<w:suppressOverlap');
+    });
+
+    it('should place CJK properties between suppressAutoHyphens and bidi in pPrChange', () => {
+      const para = new Paragraph();
+      para.addText('test');
+      para.setParagraphPropertiesChange({
+        id: '23',
+        author: 'TestAuthor',
+        date: '2024-01-01T00:00:00Z',
+        previousProperties: {
+          suppressAutoHyphens: true,
+          kinsoku: true,
+          autoSpaceDN: true,
+          bidi: true,
+        },
+      });
+
+      const xml = XMLBuilder.elementToString(para.toXML());
+      const changeStart = xml.indexOf('<w:pPrChange');
+      const changeXml = xml.substring(changeStart);
+
+      const suppressPos = changeXml.indexOf('<w:suppressAutoHyphens');
+      const kinsokuPos = changeXml.indexOf('<w:kinsoku');
+      const autoSpaceDNPos = changeXml.indexOf('<w:autoSpaceDN');
+      const bidiPos = changeXml.indexOf('<w:bidi');
+
+      expect(suppressPos).toBeGreaterThan(-1);
+      expect(kinsokuPos).toBeGreaterThan(suppressPos);
+      expect(autoSpaceDNPos).toBeGreaterThan(kinsokuPos);
+      expect(bidiPos).toBeGreaterThan(autoSpaceDNPos);
+    });
+  });
+
   describe('people.xml author coverage', () => {
     it('should include rPrChange authors in people.xml', async () => {
       const doc = Document.create();

@@ -8,6 +8,10 @@ export function normalizeXml(xml: string): string {
   normalized = normalized.replace(/\s+w:rsid\w*="[^"]*"/g, '');
   normalized = normalized.replace(/\s+rsid\w*="[^"]*"/g, '');
 
+  // Strip w14:paraId and w14:textId (randomly generated per save)
+  normalized = normalized.replace(/\s+w14:paraId="[^"]*"/g, '');
+  normalized = normalized.replace(/\s+w14:textId="[^"]*"/g, '');
+
   // Strip date/time values in dc:created and dc:modified (dcterms)
   normalized = normalized.replace(
     /(<dcterms:(created|modified)[^>]*>)[^<]*(<\/dcterms:(created|modified)>)/g,

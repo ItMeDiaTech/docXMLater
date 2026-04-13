@@ -13,7 +13,6 @@
 
 import type { Document } from '../core/Document';
 import { Revision, RevisionType } from '../elements/Revision';
-import { RevisionManager } from '../elements/RevisionManager';
 import { ChangeCategory, ChangeLocation } from './ChangelogGenerator';
 
 /**
@@ -382,7 +381,7 @@ export class RevisionAwareProcessor {
    * @param runIndex - Optional run index
    * @returns Conflicting revision or null
    */
-  static checkConflict(doc: Document, paragraphIndex: number, runIndex?: number): Revision | null {
+  static checkConflict(doc: Document, paragraphIndex: number, _runIndex?: number): Revision | null {
     const revisionManager = doc.getRevisionManager();
     if (!revisionManager) {
       return null;
@@ -407,7 +406,7 @@ export class RevisionAwareProcessor {
   static getAffectedRevisions(
     doc: Document,
     paragraphIndex: number,
-    runIndex?: number
+    _runIndex?: number
   ): Revision[] {
     const revisionManager = doc.getRevisionManager();
     if (!revisionManager) {

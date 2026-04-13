@@ -17,6 +17,10 @@ export interface BookmarkProperties {
   name: string;
   /** Skip name normalization (used when loading from existing documents) */
   skipNormalization?: boolean;
+  /** First column in table bookmark range (ECMA-376 §17.16.5) */
+  colFirst?: number;
+  /** Last column in table bookmark range (ECMA-376 §17.16.5) */
+  colLast?: number;
 }
 
 /**
@@ -25,6 +29,8 @@ export interface BookmarkProperties {
 export class Bookmark {
   private id: number;
   private name: string;
+  private colFirst?: number;
+  private colLast?: number;
 
   /**
    * Creates a new Bookmark
@@ -37,6 +43,8 @@ export class Bookmark {
     this.name = properties.skipNormalization
       ? properties.name
       : this.normalizeName(properties.name);
+    this.colFirst = properties.colFirst;
+    this.colLast = properties.colLast;
   }
 
   /**
@@ -137,16 +145,43 @@ export class Bookmark {
   }
 
   /**
+   * Gets the first column in a table bookmark range
+   */
+  getColFirst(): number | undefined {
+    return this.colFirst;
+  }
+
+  /**
+   * Gets the last column in a table bookmark range
+   */
+  getColLast(): number | undefined {
+    return this.colLast;
+  }
+
+  /**
+   * Sets the column range for a table bookmark (ECMA-376 §17.16.5)
+   */
+  setColumnRange(colFirst: number, colLast: number): this {
+    this.colFirst = colFirst;
+    this.colLast = colLast;
+    return this;
+  }
+
+  /**
    * Generates XML for the bookmark start marker
    * @returns XMLElement for bookmarkStart
    */
   toStartXML(): XMLElement {
+    const attrs: Record<string, string | number> = {
+      'w:id': this.id.toString(),
+      'w:name': this.name,
+    };
+    // Table bookmark column range per ECMA-376 §17.16.5
+    if (this.colFirst !== undefined) attrs['w:colFirst'] = this.colFirst.toString();
+    if (this.colLast !== undefined) attrs['w:colLast'] = this.colLast.toString();
     return {
       name: 'w:bookmarkStart',
-      attributes: {
-        'w:id': this.id.toString(),
-        'w:name': this.name,
-      },
+      attributes: attrs,
       selfClosing: true,
     };
   }

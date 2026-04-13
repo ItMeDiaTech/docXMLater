@@ -866,27 +866,8 @@ export class Revision {
     };
   }
 
-  private createDeletedHyperlinkXml(hyperlink: import('./Hyperlink').Hyperlink): XMLElement {
-    // Get the hyperlink's normal XML
-    const hyperlinkXml = hyperlink.toXML();
-
-    // Transform nested runs: w:t -> w:delText (or w:delInstrText for field instructions)
-    if (hyperlinkXml.children) {
-      hyperlinkXml.children = hyperlinkXml.children.map((child) => {
-        if (typeof child === 'object' && child.name === 'w:r') {
-          // Transform the run's text elements
-          return this.convertRunXmlToDeleted(child);
-        }
-        return child;
-      });
-    }
-
-    return hyperlinkXml;
-  }
-
   /**
    * Converts a run XMLElement to use deleted text elements
-   * Helper for createDeletedHyperlinkXml
    */
   private convertRunXmlToDeleted(runXml: XMLElement): XMLElement {
     const deletedTextElement = this.isFieldInstruction ? 'w:delInstrText' : 'w:delText';

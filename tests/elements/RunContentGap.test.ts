@@ -103,6 +103,53 @@ describe('Run Content Gap Tests', () => {
       doc.dispose();
       loaded.dispose();
     });
+
+    test('should round-trip textWrapping break with w:clear attribute', async () => {
+      const doc = Document.create();
+      const para = new Paragraph();
+      const run = new Run('Before float');
+      run.addBreak('textWrapping', 'all');
+      para.addRun(run);
+      doc.addParagraph(para);
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const content = loaded.getParagraphs()[0]?.getRuns()[0]?.getContent();
+      const breakContent = content?.find((c) => c.type === 'break');
+
+      expect(breakContent).toBeDefined();
+      expect(breakContent?.breakType).toBe('textWrapping');
+      expect(breakContent?.breakClear).toBe('all');
+
+      doc.dispose();
+      loaded.dispose();
+    });
+
+    test('should parse w:clear from injected XML', async () => {
+      const doc = Document.create();
+      const para = new Paragraph();
+      const run = new Run('test');
+      run.addBreak('textWrapping');
+      para.addRun(run);
+      doc.addParagraph(para);
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      // Add w:clear="left" to the textWrapping break
+      docXml = docXml.replace('w:type="textWrapping"', 'w:type="textWrapping" w:clear="left"');
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const content = loaded.getParagraphs()[0]?.getRuns()[0]?.getContent();
+      const breakContent = content?.find((c) => c.type === 'break');
+
+      expect(breakContent?.breakClear).toBe('left');
+      loaded.dispose();
+    });
   });
 
   describe('addCarriageReturn()', () => {

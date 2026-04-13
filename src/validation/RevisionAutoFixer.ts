@@ -9,6 +9,7 @@
 
 import type { Document } from '../core/Document';
 import type { Revision } from '../elements/Revision';
+import type { RevisionManager } from '../elements/RevisionManager';
 import {
   REVISION_RULES,
   AutoFixOptions,
@@ -387,7 +388,7 @@ export class RevisionAutoFixer {
    * @returns Array of fix actions
    */
   static fixEmptyRevisions(
-    revisionManager: any,
+    revisionManager: RevisionManager,
     revisions: Revision[],
     dryRun?: boolean
   ): FixAction[] {

@@ -25,7 +25,7 @@ import { DOCX_PATHS } from '../../src/zip/types';
 /**
  * Helper: create a bullet abstractNum with standard levels
  */
-function createBulletAbstractNum(id: number, name?: string): AbstractNumbering {
+function createBulletAbstractNum(id: number, _name?: string): AbstractNumbering {
   return AbstractNumbering.createBulletList(id);
 }
 

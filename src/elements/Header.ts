@@ -7,6 +7,7 @@
 
 import { XMLElement } from '../xml/XMLBuilder';
 import { Paragraph } from './Paragraph';
+import { RunFormatting } from './Run';
 import { Table } from './Table';
 
 /**
@@ -101,6 +102,30 @@ export class Header {
     if (text) {
       para.addText(text);
     }
+    this.elements.push(para);
+    return para;
+  }
+
+  /**
+   * Adds formatted text to the header as a new paragraph
+   *
+   * Convenience method that creates a paragraph with a single formatted run.
+   * For headers with multiple runs or complex content, use `createParagraph()`
+   * and build content manually.
+   *
+   * @param text - Text content
+   * @param formatting - Optional run formatting (bold, font, size, etc.)
+   * @returns The created Paragraph for further customization
+   *
+   * @example
+   * ```typescript
+   * header.addText('Company Name', { bold: true, font: 'Arial', size: 10 });
+   * header.addText('Confidential', { italic: true, color: 'FF0000' });
+   * ```
+   */
+  addText(text: string, formatting?: RunFormatting): Paragraph {
+    const para = new Paragraph();
+    para.addText(text, formatting);
     this.elements.push(para);
     return para;
   }

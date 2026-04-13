@@ -281,7 +281,7 @@ class RevisionAcceptor {
 
     result = result.replace(insRegex, (insMatch) => {
       // For each image reference inside this insertion, generate a unique new ID
-      return insMatch.replace(/r:embed="(rId\d+)"/g, (embedMatch, oldId) => {
+      return insMatch.replace(/r:embed="(rId\d+)"/g, (_embedMatch, oldId) => {
         // Generate new unique ID for THIS occurrence
         const newId = this.getNextRelationshipId(existingIds);
         existingIds.add(newId);

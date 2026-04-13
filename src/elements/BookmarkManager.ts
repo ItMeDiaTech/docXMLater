@@ -8,6 +8,7 @@
  */
 
 import { Bookmark } from './Bookmark';
+import { InvalidDocxError } from '../zip/errors';
 
 /**
  * Type for the centralized ID provider callback.
@@ -55,7 +56,7 @@ export class BookmarkManager {
 
     // Check for duplicate names
     if (this.bookmarks.has(name)) {
-      throw new Error(
+      throw new InvalidDocxError(
         `Bookmark with name "${name}" already exists. Bookmark names must be unique within a document.`
       );
     }
@@ -83,7 +84,7 @@ export class BookmarkManager {
 
     // Check for duplicate names
     if (this.bookmarks.has(name)) {
-      throw new Error(
+      throw new InvalidDocxError(
         `Bookmark with name "${name}" already exists. Bookmark names must be unique within a document.`
       );
     }
@@ -194,7 +195,7 @@ export class BookmarkManager {
       counter++;
     }
 
-    throw new Error(`Could not generate unique bookmark name from base "${baseName}"`);
+    throw new InvalidDocxError(`Could not generate unique bookmark name from base "${baseName}"`);
   }
 
   /**

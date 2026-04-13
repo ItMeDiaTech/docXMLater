@@ -35,7 +35,7 @@ export {
   isShape,
   isTextBox,
 } from './elements/Paragraph';
-export { Run, RunFormatting, ThemeColorValue } from './elements/Run';
+export { Run, RunFormatting, ThemeColorValue, LanguageConfig } from './elements/Run';
 export {
   Section,
   PageOrientation,

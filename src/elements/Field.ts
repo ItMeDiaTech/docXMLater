@@ -447,7 +447,7 @@ export class Field {
    */
   static createHyperlink(
     url: string,
-    displayText: string = url,
+    _displayText: string = url,
     tooltip?: string,
     formatting?: RunFormatting
   ): Field {

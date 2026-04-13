@@ -268,6 +268,54 @@ describe('Paragraph Properties Gap Tests', () => {
     });
   });
 
+  describe('Frame Properties - ST_Wrap completeness (ECMA-376 §17.18.104)', () => {
+    test('should round-trip wrap="auto"', async () => {
+      const doc = Document.create();
+      const para = doc.createParagraph('Auto wrap');
+      para.setFrameProperties({ w: 4320, h: 2160, wrap: 'auto' });
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const fp = loaded.getParagraphs()[0]?.getFormatting().framePr;
+
+      expect(fp?.wrap).toBe('auto');
+      doc.dispose();
+      loaded.dispose();
+    });
+
+    test('should round-trip wrap="through"', async () => {
+      const doc = Document.create();
+      const para = doc.createParagraph('Through wrap');
+      para.setFrameProperties({ w: 4320, h: 2160, wrap: 'through' });
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const fp = loaded.getParagraphs()[0]?.getFormatting().framePr;
+
+      expect(fp?.wrap).toBe('through');
+      doc.dispose();
+      loaded.dispose();
+    });
+
+    test('should round-trip all six ST_Wrap values', async () => {
+      const wrapValues = ['around', 'auto', 'none', 'notBeside', 'through', 'tight'] as const;
+
+      for (const wrapVal of wrapValues) {
+        const doc = Document.create();
+        const para = doc.createParagraph(`Wrap ${wrapVal}`);
+        para.setFrameProperties({ w: 4320, h: 2160, wrap: wrapVal });
+
+        const buffer = await doc.toBuffer();
+        const loaded = await Document.loadFromBuffer(buffer);
+        const fp = loaded.getParagraphs()[0]?.getFormatting().framePr;
+
+        expect(fp?.wrap).toBe(wrapVal);
+        doc.dispose();
+        loaded.dispose();
+      }
+    });
+  });
+
   describe('Paragraph Mark Formatting (w:rPr in pPr)', () => {
     test('should round-trip paragraph mark formatting', async () => {
       const doc = Document.create();
@@ -313,6 +361,151 @@ describe('Paragraph Properties Gap Tests', () => {
       expect(fmt?.mirrorIndents).toBe(true);
 
       doc.dispose();
+      loaded.dispose();
+    });
+  });
+
+  describe('Bidi-aware indentation (w:start/w:end) — ECMA-376 §17.3.1.15', () => {
+    test('should parse w:start/w:end as left/right indentation', async () => {
+      // Create a base document with indentation
+      const doc = Document.create();
+      const para = doc.createParagraph('RTL indented');
+      para.setLeftIndent(720);
+      para.setRightIndent(360);
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Modify the DOCX XML to replace w:left/w:right with w:start/w:end
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      docXml = docXml.replace(/(<w:ind[^>]*)\bw:left="/g, '$1w:start="');
+      docXml = docXml.replace(/(<w:ind[^>]*)\bw:right="/g, '$1w:end="');
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      // Parse and verify indentation is read correctly
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const fmt = loaded.getParagraphs()[0]?.getFormatting();
+      expect(fmt?.indentation?.left).toBe(720);
+      expect(fmt?.indentation?.right).toBe(360);
+      loaded.dispose();
+    });
+
+    test('should prefer w:start over w:left when both present', async () => {
+      const doc = Document.create();
+      const para = doc.createParagraph('Both attrs');
+      para.setLeftIndent(500);
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Add w:start alongside existing w:left (w:start should win)
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      docXml = docXml.replace(/(<w:ind\s)/, '$1w:start="900" ');
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const fmt = loaded.getParagraphs()[0]?.getFormatting();
+      expect(fmt?.indentation?.left).toBe(900);
+      loaded.dispose();
+    });
+  });
+
+  describe('Spacing autospacing/lines (ECMA-376 §17.3.1.33)', () => {
+    test('should round-trip beforeAutospacing and afterAutospacing', async () => {
+      const doc = Document.create();
+      const para = doc.createParagraph('Autospaced paragraph');
+      para.setSpaceBefore(100);
+      para.setSpaceAfter(100);
+      // Set extended attributes directly on internal formatting
+      para.formatting.spacing!.beforeAutospacing = true;
+      para.formatting.spacing!.afterAutospacing = true;
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const spc = loaded.getParagraphs()[0]?.formatting.spacing;
+
+      expect(spc?.beforeAutospacing).toBe(true);
+      expect(spc?.afterAutospacing).toBe(true);
+      expect(spc?.before).toBe(100);
+      expect(spc?.after).toBe(100);
+      doc.dispose();
+      loaded.dispose();
+    });
+
+    test('should round-trip beforeLines and afterLines', async () => {
+      const doc = Document.create();
+      const para = doc.createParagraph('Line-spaced paragraph');
+      para.setSpaceBefore(0);
+      para.formatting.spacing!.beforeLines = 100;
+      para.formatting.spacing!.afterLines = 50;
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const spc = loaded.getParagraphs()[0]?.formatting.spacing;
+
+      expect(spc?.beforeLines).toBe(100);
+      expect(spc?.afterLines).toBe(50);
+      doc.dispose();
+      loaded.dispose();
+    });
+
+    test('should parse autospacing from injected XML', async () => {
+      const doc = Document.create();
+      const para = doc.createParagraph('Test');
+      para.setSpaceBefore(100);
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Inject beforeAutospacing and afterAutospacing into spacing element
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      docXml = docXml.replace(
+        /<w:spacing\s/,
+        '<w:spacing w:beforeAutospacing="1" w:afterAutospacing="1" '
+      );
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const spc = loaded.getParagraphs()[0]?.formatting.spacing;
+
+      expect(spc?.beforeAutospacing).toBe(true);
+      expect(spc?.afterAutospacing).toBe(true);
+      loaded.dispose();
+    });
+
+    test('should parse autospacing when no before/after/line attributes exist', async () => {
+      // Edge case: w:spacing has ONLY autospacing attrs, no before/after/line
+      const doc = Document.create();
+      const para = doc.createParagraph('Test');
+      // Set a dummy property to ensure w:pPr is emitted
+      para.setAlignment('left');
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Replace existing spacing or inject one with only autospacing
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      // Insert autospacing-only spacing element before </w:pPr>
+      docXml = docXml.replace(
+        '</w:pPr>',
+        '<w:spacing w:beforeAutospacing="1" w:afterAutospacing="1"/></w:pPr>'
+      );
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const spc = loaded.getParagraphs()[0]?.formatting.spacing;
+
+      expect(spc).toBeDefined();
+      expect(spc?.beforeAutospacing).toBe(true);
+      expect(spc?.afterAutospacing).toBe(true);
       loaded.dispose();
     });
   });

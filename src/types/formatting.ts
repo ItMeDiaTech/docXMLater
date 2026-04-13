@@ -56,12 +56,12 @@ export type { ShadingConfig as ParagraphShading } from '../elements/CommonTypes'
 /**
  * Tab stop alignment
  */
-export type TabAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear';
+export type TabAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
 
 /**
  * Tab leader character
  */
-export type TabLeader = 'none' | 'dot' | 'dash' | 'underscore' | 'heavy' | 'middleDot';
+export type TabLeader = 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 
 /**
  * Tab stop configuration

@@ -6,7 +6,6 @@
  */
 
 import { XMLElement, XMLBuilder } from '../xml/XMLBuilder';
-import { formatDateForXml } from '../utils/dateFormatting';
 
 /**
  * Table grid column definition
@@ -87,28 +86,15 @@ export class TableGridChange {
   }
 
   /**
-   * Formats a date to ISO 8601 format for XML
-   * Uses formatDateForXml() to strip milliseconds which Word does not accept.
-   */
-  private formatDate(date: Date): string {
-    return formatDateForXml(date);
-  }
-
-  /**
    * Generates XML for this table grid change
    * @returns XMLElement representing the table grid change
    */
   toXML(): XMLElement {
+    // Per ECMA-376 §17.13.5.35, tblGridChange uses CT_Markup (only w:id)
+    // NOT CT_TrackChange — w:author and w:date are not valid attributes
     const attributes: Record<string, string> = {
       'w:id': this.id.toString(),
     };
-
-    if (this.author) {
-      attributes['w:author'] = this.author;
-    }
-    if (this.date) {
-      attributes['w:date'] = this.formatDate(this.date);
-    }
 
     // Build previous grid
     const gridChildren: XMLElement[] = [];

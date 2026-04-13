@@ -5,6 +5,7 @@
 
 import { deepClone } from '../utils/deepClone';
 import { formatDateForXml } from '../utils/dateFormatting';
+import { isEqualFormatting } from '../utils/formatting';
 import { logSerialization, logTextDirection } from '../utils/diagnostics';
 import { defaultLogger } from '../utils/logger';
 import { normalizeColor, validateRunText } from '../utils/validation';
@@ -17,7 +18,6 @@ import {
   ShadingConfig,
   buildShadingAttributes,
   ExtendedBorderStyle,
-  BorderDefinition,
 } from './CommonTypes';
 import type { RunPropertyChange } from './PropertyChangeTypes';
 // Type-only import to avoid circular dependency (Revision imports Run)
@@ -71,6 +71,8 @@ export interface RunContent {
   value?: string;
   /** Break type (only for 'break' type) */
   breakType?: BreakType;
+  /** Break clear type (only for 'break' with type='textWrapping') per ECMA-376 §17.3.3.1 */
+  breakClear?: 'none' | 'left' | 'right' | 'all';
   /** Field character subtype (only for 'fieldChar' type) */
   fieldCharType?: 'begin' | 'separate' | 'end';
   /** Whether the field char is marked dirty */
@@ -134,6 +136,18 @@ export type ShadingPattern = CommonShadingPattern;
  * @see ShadingConfig in CommonTypes.ts for the canonical definition
  */
 export type CharacterShading = ShadingConfig;
+
+/**
+ * Language configuration per ECMA-376 CT_Language (§17.3.2.20)
+ */
+export interface LanguageConfig {
+  /** Language for Latin text (e.g., 'en-US') */
+  val?: string;
+  /** Language for East Asian text (e.g., 'ja-JP', 'zh-CN') */
+  eastAsia?: string;
+  /** Language for complex script / bidirectional text (e.g., 'ar-SA', 'he-IL') */
+  bidi?: string;
+}
 
 /**
  * East Asian typography layout options
@@ -269,8 +283,8 @@ export interface RunFormatting {
   position?: number;
   /** Kerning threshold in half-points (font size at which kerning starts) */
   kerning?: number;
-  /** Language code (e.g., 'en-US', 'fr-FR', 'es-ES') */
-  language?: string;
+  /** Language code (e.g., 'en-US', 'fr-FR', 'es-ES') or CT_Language object */
+  language?: string | LanguageConfig;
   /** Underline text. Use "none" to explicitly override style underline. */
   underline?: boolean | 'single' | 'double' | 'thick' | 'dotted' | 'dash' | 'none';
   /** Underline color in hex format (without #) per ECMA-376 Part 1 §17.3.2.40 */
@@ -289,6 +303,8 @@ export interface RunFormatting {
   subscript?: boolean;
   /** Superscript */
   superscript?: boolean;
+  /** Explicit baseline vertical alignment (w:vertAlign w:val="baseline" per §17.18.96) */
+  vertAlignBaseline?: boolean;
   /** Font name */
   font?: string;
   /** Font size in points (half-points for Word) */
@@ -312,7 +328,7 @@ export interface RunFormatting {
    * Applied to themeColor to create darker variations
    */
   themeShade?: number;
-  /** Highlight color */
+  /** Highlight color per ECMA-376 ST_HighlightColor ('none' explicitly removes highlight) */
   highlight?:
     | 'yellow'
     | 'green'
@@ -329,7 +345,8 @@ export interface RunFormatting {
     | 'darkGray'
     | 'lightGray'
     | 'black'
-    | 'white';
+    | 'white'
+    | 'none';
   /** Small caps */
   smallCaps?: boolean;
   /** All caps */
@@ -580,6 +597,82 @@ export class Run {
         }
       })
       .join('');
+  }
+
+  /**
+   * Gets only the literal text content, excluding special characters
+   *
+   * Unlike `getText()` which maps tabs to `\t` and breaks to `\n`,
+   * this method returns only the actual text content from `w:t` elements,
+   * ignoring tabs, breaks, carriage returns, hyphens, and field chars.
+   * Useful for word counting, search indexing, and plain-text extraction.
+   *
+   * @returns Text content only, with no special character representations
+   *
+   * @example
+   * ```typescript
+   * const run = new Run('');
+   * run.appendText('Hello');
+   * run.addTab();
+   * run.appendText('World');
+   *
+   * run.getText();      // "Hello\tWorld"
+   * run.getPlainText(); // "HelloWorld"
+   * ```
+   */
+  getPlainText(): string {
+    return this.content
+      .filter((c) => c.type === 'text')
+      .map((c) => c.value || '')
+      .join('');
+  }
+
+  /**
+   * Checks whether this run is equal to another (same text and formatting)
+   *
+   * Compares both the text content (via `getText()`) and the formatting
+   * properties (deep equality). Useful for deduplication, testing, and
+   * determining whether two runs can be merged.
+   *
+   * @param other - Run to compare against
+   * @returns True if both text and formatting are identical
+   *
+   * @example
+   * ```typescript
+   * const a = new Run('Hello', { bold: true });
+   * const b = new Run('Hello', { bold: true });
+   * const c = new Run('Hello', { italic: true });
+   *
+   * a.equals(b); // true
+   * a.equals(c); // false
+   * ```
+   */
+  equals(other: Run): boolean {
+    if (this.getText() !== other.getText()) return false;
+    return isEqualFormatting(
+      this.getFormatting() as unknown as Record<string, unknown>,
+      other.getFormatting() as unknown as Record<string, unknown>
+    );
+  }
+
+  /**
+   * Checks whether this run has the same formatting as another (ignoring text)
+   *
+   * @param other - Run to compare formatting against
+   * @returns True if formatting is identical
+   *
+   * @example
+   * ```typescript
+   * const a = new Run('Hello', { bold: true });
+   * const b = new Run('World', { bold: true });
+   * a.hasSameFormatting(b); // true (different text, same formatting)
+   * ```
+   */
+  hasSameFormatting(other: Run): boolean {
+    return isEqualFormatting(
+      this.getFormatting() as unknown as Record<string, unknown>,
+      other.getFormatting() as unknown as Record<string, unknown>
+    );
   }
 
   /**
@@ -1319,11 +1412,11 @@ export class Run {
   }
 
   /**
-   * Sets language
-   * Per ECMA-376 Part 1 §17.3.2.20
-   * @param language - Language code (e.g., 'en-US', 'fr-FR', 'es-ES')
+   * Sets language per ECMA-376 Part 1 §17.3.2.20 (CT_Language)
+   * @param language - Language code string (sets w:val) or LanguageConfig object
+   *   with val (Latin), eastAsia (CJK), bidi (RTL/complex script) attributes
    */
-  setLanguage(language: string): this {
+  setLanguage(language: string | LanguageConfig): this {
     const previousValue = this.formatting.language;
     this.formatting.language = language;
     if (this.trackingContext?.isEnabled() && previousValue !== language) {
@@ -2150,6 +2243,9 @@ export class Run {
             if (contentElement.breakType) {
               attrs['w:type'] = contentElement.breakType;
             }
+            if (contentElement.breakClear) {
+              attrs['w:clear'] = contentElement.breakClear;
+            }
             runChildren.push(
               XMLBuilder.wSelf('br', Object.keys(attrs).length > 0 ? attrs : undefined)
             );
@@ -2530,8 +2626,8 @@ export class Run {
    * run.addBreak('column');  // Column break
    * ```
    */
-  addBreak(breakType?: BreakType): this {
-    this.content.push({ type: 'break', breakType });
+  addBreak(breakType?: BreakType, breakClear?: 'none' | 'left' | 'right' | 'all'): this {
+    this.content.push({ type: 'break', breakType, breakClear });
     return this;
   }
 
@@ -2642,43 +2738,50 @@ export class Run {
     }
 
     // 3. w:b — Bold
-    if (formatting.bold) {
-      rPrChildren.push(XMLBuilder.wSelf('b', { 'w:val': '1' }));
+    // Emit val="0" when explicitly false to override style-inherited bold
+    if (formatting.bold !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('b', { 'w:val': formatting.bold ? '1' : '0' }));
     }
 
     // 4. w:bCs — Bold complex script
-    if (formatting.complexScriptBold) {
-      rPrChildren.push(XMLBuilder.wSelf('bCs', { 'w:val': '1' }));
+    if (formatting.complexScriptBold !== undefined) {
+      rPrChildren.push(
+        XMLBuilder.wSelf('bCs', { 'w:val': formatting.complexScriptBold ? '1' : '0' })
+      );
     }
 
     // 5. w:i — Italic
-    if (formatting.italic) {
-      rPrChildren.push(XMLBuilder.wSelf('i', { 'w:val': '1' }));
+    if (formatting.italic !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('i', { 'w:val': formatting.italic ? '1' : '0' }));
     }
 
     // 6. w:iCs — Italic complex script
-    if (formatting.complexScriptItalic) {
-      rPrChildren.push(XMLBuilder.wSelf('iCs', { 'w:val': '1' }));
+    if (formatting.complexScriptItalic !== undefined) {
+      rPrChildren.push(
+        XMLBuilder.wSelf('iCs', { 'w:val': formatting.complexScriptItalic ? '1' : '0' })
+      );
     }
 
-    // 7. w:caps — All caps
-    if (formatting.allCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('caps', { 'w:val': '1' }));
+    // 7. w:caps — All caps (emit val="0" when explicitly false to override style)
+    if (formatting.allCaps !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('caps', { 'w:val': formatting.allCaps ? '1' : '0' }));
     }
 
     // 8. w:smallCaps — Small caps
-    if (formatting.smallCaps) {
-      rPrChildren.push(XMLBuilder.wSelf('smallCaps', { 'w:val': '1' }));
+    if (formatting.smallCaps !== undefined) {
+      rPrChildren.push(
+        XMLBuilder.wSelf('smallCaps', { 'w:val': formatting.smallCaps ? '1' : '0' })
+      );
     }
 
     // 9. w:strike — Single strikethrough
-    if (formatting.strike) {
-      rPrChildren.push(XMLBuilder.wSelf('strike', { 'w:val': '1' }));
+    if (formatting.strike !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('strike', { 'w:val': formatting.strike ? '1' : '0' }));
     }
 
     // 10. w:dstrike — Double strikethrough
-    if (formatting.dstrike) {
-      rPrChildren.push(XMLBuilder.wSelf('dstrike', { 'w:val': '1' }));
+    if (formatting.dstrike !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('dstrike', { 'w:val': formatting.dstrike ? '1' : '0' }));
     }
 
     // 11. w:outline — Outline text effect
@@ -2707,8 +2810,12 @@ export class Run {
     }
 
     // 16. w:snapToGrid — Snap to grid
-    if (formatting.snapToGrid) {
-      rPrChildren.push(XMLBuilder.wSelf('snapToGrid', { 'w:val': '1' }));
+    // Per ECMA-376 §17.3.2.34, the default when absent is true (snap to grid ON).
+    // Must emit w:val="0" when explicitly false to preserve the override on round-trip.
+    if (formatting.snapToGrid !== undefined) {
+      rPrChildren.push(
+        XMLBuilder.wSelf('snapToGrid', { 'w:val': formatting.snapToGrid ? '1' : '0' })
+      );
     }
 
     // 17. w:vanish — Hidden text
@@ -2839,12 +2946,13 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('fitText', { 'w:val': formatting.fitText }));
     }
 
-    // 32. w:vertAlign — Subscript/superscript
+    // 32. w:vertAlign — Subscript/superscript/baseline per ECMA-376 §17.18.96
     if (formatting.subscript) {
       rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'subscript' }));
-    }
-    if (formatting.superscript) {
+    } else if (formatting.superscript) {
       rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'superscript' }));
+    } else if (formatting.vertAlignBaseline) {
+      rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'baseline' }));
     }
 
     // 33. w:rtl — Right-to-left text
@@ -2862,9 +2970,19 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('em', { 'w:val': formatting.emphasis }));
     }
 
-    // 36. w:lang — Language
+    // 36. w:lang — Language (CT_Language: w:val, w:eastAsia, w:bidi)
     if (formatting.language) {
-      rPrChildren.push(XMLBuilder.wSelf('lang', { 'w:val': formatting.language }));
+      const langAttrs: Record<string, string> = {};
+      if (typeof formatting.language === 'string') {
+        langAttrs['w:val'] = formatting.language;
+      } else {
+        if (formatting.language.val) langAttrs['w:val'] = formatting.language.val;
+        if (formatting.language.eastAsia) langAttrs['w:eastAsia'] = formatting.language.eastAsia;
+        if (formatting.language.bidi) langAttrs['w:bidi'] = formatting.language.bidi;
+      }
+      if (Object.keys(langAttrs).length > 0) {
+        rPrChildren.push(XMLBuilder.wSelf('lang', langAttrs));
+      }
     }
 
     // 37. w:eastAsianLayout — East Asian layout
@@ -2984,6 +3102,118 @@ export class Run {
     const newText = currentText.slice(0, start) + text + currentText.slice(end);
     this.setText(newText);
     return this;
+  }
+
+  /**
+   * Splits this run at a character offset, returning the removed tail as a new run
+   *
+   * The current run keeps content before the offset; the returned run gets content
+   * from the offset onward. Both runs share the same formatting (deep-cloned).
+   * Content-aware: correctly handles splits within text elements and preserves
+   * special elements (tabs, breaks, soft hyphens) at their correct positions.
+   *
+   * Character offsets follow the same mapping as `getText()`:
+   * text characters count by length, tabs/breaks/CR each count as 1.
+   *
+   * @param offset - Character position to split at (0-based). Content from this
+   *   position onward moves to the new run.
+   * @returns A new Run containing content from `offset` onward, with cloned formatting.
+   *   Returns a new empty Run if offset >= text length. Returns a clone of the full
+   *   run (and empties this one) if offset <= 0.
+   *
+   * @example
+   * ```typescript
+   * const run = new Run('Hello World', { bold: true });
+   * const tail = run.splitAt(5);
+   * run.getText();   // "Hello"
+   * tail.getText();  // " World"
+   * tail.getFormatting().bold; // true (formatting preserved)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Split within content containing tabs
+   * const run = new Run('');
+   * run.appendText('Name');
+   * run.addTab();
+   * run.appendText('Value');
+   * const tail = run.splitAt(5); // Split after "Name\t"
+   * run.getText();   // "Name\t"
+   * tail.getText();  // "Value"
+   * ```
+   */
+  splitAt(offset: number): Run {
+    const totalLength = this.getText().length;
+
+    // Edge case: split at or past end — return empty run
+    if (offset >= totalLength) {
+      return Run.createFromContent([], deepClone(this.formatting));
+    }
+
+    // Edge case: split at or before start — move everything to new run
+    if (offset <= 0) {
+      const allContent = this.content;
+      this.content = [];
+      return Run.createFromContent(allContent, deepClone(this.formatting));
+    }
+
+    const beforeContent: RunContent[] = [];
+    const afterContent: RunContent[] = [];
+    let charPos = 0;
+    let splitDone = false;
+
+    for (const item of this.content) {
+      if (splitDone) {
+        afterContent.push(deepClone(item));
+        continue;
+      }
+
+      const itemLength = this.getContentItemLength(item);
+
+      if (charPos + itemLength <= offset) {
+        // Entire item goes to "before"
+        beforeContent.push(deepClone(item));
+        charPos += itemLength;
+      } else if (charPos >= offset) {
+        // Entire item goes to "after"
+        afterContent.push(deepClone(item));
+        splitDone = true;
+      } else {
+        // Split is within this item — only text elements can be split mid-item
+        if (item.type === 'text' && item.value) {
+          const splitIndex = offset - charPos;
+          beforeContent.push({ type: 'text', value: item.value.slice(0, splitIndex) });
+          afterContent.push({ type: 'text', value: item.value.slice(splitIndex) });
+        } else {
+          // Non-text item at boundary goes to "after"
+          afterContent.push(deepClone(item));
+        }
+        splitDone = true;
+      }
+    }
+
+    this.content = beforeContent;
+    return Run.createFromContent(afterContent, deepClone(this.formatting));
+  }
+
+  /**
+   * Gets the character length contribution of a single content item.
+   * Matches the mapping used by getText().
+   * @internal
+   */
+  private getContentItemLength(item: RunContent): number {
+    switch (item.type) {
+      case 'text':
+        return (item.value || '').length;
+      case 'tab':
+      case 'break':
+      case 'carriageReturn':
+      case 'softHyphen':
+      case 'noBreakHyphen':
+        return 1;
+      default:
+        return 0;
+    }
   }
 
   /**

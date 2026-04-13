@@ -31,12 +31,13 @@ import {
   RunContent,
   RunFormatting,
 } from '../elements/Run';
-import { PageNumberFormat, Section, SectionProperties, SectionType } from '../elements/Section';
+import { Section, SectionProperties, SectionType } from '../elements/Section';
 import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
 import { Table, TableBorder } from '../elements/Table';
 import { TableCell } from '../elements/TableCell';
 import { TableOfContents } from '../elements/TableOfContents';
 import { TableOfContentsElement } from '../elements/TableOfContentsElement';
+import { TableGridChange } from '../elements/TableGridChange';
 import { TableRow } from '../elements/TableRow';
 import { AbstractNumbering } from '../formatting/AbstractNumbering';
 import { NumberingInstance } from '../formatting/NumberingInstance';
@@ -904,10 +905,14 @@ export class DocumentParser {
         }
       }
 
-      // Parse w14:paraId if present
+      // Parse w14:paraId and w14:textId if present
       const paraId = pElement['w14:paraId'];
       if (paraId) {
         paragraph.formatting.paraId = paraId as string;
+      }
+      const textId = pElement['w14:textId'];
+      if (textId) {
+        paragraph.formatting.textId = textId as string;
       }
 
       // CRITICAL FIX: Preserve document order of paragraph children (runs, hyperlinks, fields)
@@ -1861,10 +1866,15 @@ export class DocumentParser {
 
       // Create bookmark with skipNormalization to preserve original name exactly
       // (Word allows special characters like = and . in bookmark names)
+      // Parse optional column range for table bookmarks (ECMA-376 §17.16.5)
+      const colFirstAttr = XMLParser.extractAttribute(bookmarkXml, 'w:colFirst');
+      const colLastAttr = XMLParser.extractAttribute(bookmarkXml, 'w:colLast');
       const bookmark = new Bookmark({
         name: nameAttr,
         id: id,
         skipNormalization: true,
+        colFirst: colFirstAttr ? parseInt(colFirstAttr, 10) : undefined,
+        colLast: colLastAttr ? parseInt(colLastAttr, 10) : undefined,
       });
 
       // Register with BookmarkManager to enable hasBookmark() checks
@@ -1934,10 +1944,14 @@ export class DocumentParser {
     try {
       const paragraph = new Paragraph();
 
-      // Parse w14:paraId attribute from paragraph element (Word 2010+ requirement)
+      // Parse w14:paraId and w14:textId attributes from paragraph element (Word 2010+)
       const paraId = paraObj['w14:paraId'];
       if (paraId) {
         paragraph.formatting.paraId = paraId;
+      }
+      const textId = paraObj['w14:textId'];
+      if (textId) {
+        paragraph.formatting.textId = textId;
       }
 
       // Parse paragraph properties
@@ -2155,9 +2169,11 @@ export class DocumentParser {
     if (pPrObj['w:ind']) {
       const ind = pPrObj['w:ind'];
       // Use isExplicitlySet and safeParseInt for robust zero-value handling
-      if (isExplicitlySet(ind['@_w:left'])) paragraph.setLeftIndent(safeParseInt(ind['@_w:left']));
-      if (isExplicitlySet(ind['@_w:right']))
-        paragraph.setRightIndent(safeParseInt(ind['@_w:right']));
+      // Per ECMA-376 §17.3.1.15: w:start/w:end are bidi-aware alternatives to w:left/w:right
+      const leftVal = ind['@_w:start'] ?? ind['@_w:left'];
+      const rightVal = ind['@_w:end'] ?? ind['@_w:right'];
+      if (isExplicitlySet(leftVal)) paragraph.setLeftIndent(safeParseInt(leftVal));
+      if (isExplicitlySet(rightVal)) paragraph.setRightIndent(safeParseInt(rightVal));
       if (isExplicitlySet(ind['@_w:firstLine']))
         paragraph.setFirstLineIndent(safeParseInt(ind['@_w:firstLine']));
       // Parse hanging indent per ECMA-376 Part 1 §17.3.1.17
@@ -2165,7 +2181,7 @@ export class DocumentParser {
         paragraph.setHangingIndent(safeParseInt(ind['@_w:hanging']));
     }
 
-    // Spacing
+    // Spacing (ECMA-376 §17.3.1.33 — 8 attributes)
     if (pPrObj['w:spacing']) {
       const spacing = pPrObj['w:spacing'];
       // Use isExplicitlySet to properly handle 0 values (0 spacing is valid)
@@ -2176,18 +2192,39 @@ export class DocumentParser {
       if (isExplicitlySet(spacing['@_w:line'])) {
         paragraph.setLineSpacing(safeParseInt(spacing['@_w:line']), spacing['@_w:lineRule']);
       }
+      // Parse extended spacing attributes — write directly to paragraph.formatting
+      // (getFormatting() returns a shallow copy, so we must access the internal object)
+      if (!paragraph.formatting.spacing) paragraph.formatting.spacing = {};
+      if (isExplicitlySet(spacing['@_w:beforeLines']))
+        paragraph.formatting.spacing.beforeLines = safeParseInt(spacing['@_w:beforeLines']);
+      if (isExplicitlySet(spacing['@_w:afterLines']))
+        paragraph.formatting.spacing.afterLines = safeParseInt(spacing['@_w:afterLines']);
+      const beforeAuto = spacing['@_w:beforeAutospacing'];
+      if (beforeAuto !== undefined)
+        paragraph.formatting.spacing.beforeAutospacing =
+          String(beforeAuto) === '1' || String(beforeAuto) === 'true';
+      const afterAuto = spacing['@_w:afterAutospacing'];
+      if (afterAuto !== undefined)
+        paragraph.formatting.spacing.afterAutospacing =
+          String(afterAuto) === '1' || String(afterAuto) === 'true';
     }
 
-    // Keep properties - parse pageBreakBefore FIRST, then apply keep properties
-    // This triggers automatic conflict resolution per ECMA-376 v0.28.2
-    if (pPrObj['w:pageBreakBefore']) paragraph.formatting.pageBreakBefore = true;
-
-    // Keep properties - these will automatically clear pageBreakBefore if both are set
-    if (pPrObj['w:keepNext']) paragraph.setKeepNext(true);
-    if (pPrObj['w:keepLines']) paragraph.setKeepLines(true);
+    // Keep properties — preserve explicit val="0" to override style inheritance
+    // Parse pageBreakBefore FIRST, then keep properties (triggers automatic conflict resolution)
+    if (pPrObj['w:pageBreakBefore'] !== undefined) {
+      paragraph.formatting.pageBreakBefore = parseOoxmlBoolean(pPrObj['w:pageBreakBefore']);
+    }
+    if (pPrObj['w:keepNext'] !== undefined) {
+      paragraph.setKeepNext(parseOoxmlBoolean(pPrObj['w:keepNext']));
+    }
+    if (pPrObj['w:keepLines'] !== undefined) {
+      paragraph.setKeepLines(parseOoxmlBoolean(pPrObj['w:keepLines']));
+    }
 
     // Contextual spacing
-    if (pPrObj['w:contextualSpacing']) paragraph.setContextualSpacing(true);
+    if (pPrObj['w:contextualSpacing'] !== undefined) {
+      paragraph.setContextualSpacing(parseOoxmlBoolean(pPrObj['w:contextualSpacing']));
+    }
 
     // Numbering
     // Note: When track changes are present (w:pPrChange), XMLParser merges the
@@ -2304,8 +2341,8 @@ export class DocumentParser {
     }
 
     // Suppress line numbers per ECMA-376 Part 1 §17.3.1.34
-    if (pPrObj['w:suppressLineNumbers']) {
-      paragraph.setSuppressLineNumbers(true);
+    if (pPrObj['w:suppressLineNumbers'] !== undefined) {
+      paragraph.setSuppressLineNumbers(parseOoxmlBoolean(pPrObj['w:suppressLineNumbers']));
     }
 
     // Bidirectional layout per ECMA-376 Part 1 §17.3.1.6
@@ -2330,8 +2367,8 @@ export class DocumentParser {
     }
 
     // Mirror indents per ECMA-376 Part 1 §17.3.1.18
-    if (pPrObj['w:mirrorIndents']) {
-      paragraph.setMirrorIndents(true);
+    if (pPrObj['w:mirrorIndents'] !== undefined) {
+      paragraph.setMirrorIndents(parseOoxmlBoolean(pPrObj['w:mirrorIndents']));
     }
 
     // Auto-adjust right indent per ECMA-376 Part 1 §17.3.1.1
@@ -2384,8 +2421,8 @@ export class DocumentParser {
     }
 
     // Suppress automatic hyphenation per ECMA-376 Part 1 §17.3.1.33
-    if (pPrObj['w:suppressAutoHyphens']) {
-      paragraph.setSuppressAutoHyphens(true);
+    if (pPrObj['w:suppressAutoHyphens'] !== undefined) {
+      paragraph.setSuppressAutoHyphens(parseOoxmlBoolean(pPrObj['w:suppressAutoHyphens']));
     }
 
     // CJK paragraph properties per ECMA-376 Part 1
@@ -2409,8 +2446,8 @@ export class DocumentParser {
     }
 
     // Suppress text frame overlap per ECMA-376 Part 1 §17.3.1.34
-    if (pPrObj['w:suppressOverlap']) {
-      paragraph.setSuppressOverlap(true);
+    if (pPrObj['w:suppressOverlap'] !== undefined) {
+      paragraph.setSuppressOverlap(parseOoxmlBoolean(pPrObj['w:suppressOverlap']));
     }
 
     // Textbox tight wrap per ECMA-376 Part 1 §17.3.1.37
@@ -2477,13 +2514,14 @@ export class DocumentParser {
         }
 
         // Parse previous indentation
+        // Per ECMA-376 §17.3.1.15: w:start/w:end are bidi-aware alternatives to w:left/w:right
         if (prevPPr['w:ind']) {
           const ind = prevPPr['w:ind'];
           previousProperties.indentation = {};
-          if (ind['@_w:left'] !== undefined)
-            previousProperties.indentation.left = parseInt(ind['@_w:left'], 10);
-          if (ind['@_w:right'] !== undefined)
-            previousProperties.indentation.right = parseInt(ind['@_w:right'], 10);
+          const leftVal = ind['@_w:start'] ?? ind['@_w:left'];
+          const rightVal = ind['@_w:end'] ?? ind['@_w:right'];
+          if (leftVal !== undefined) previousProperties.indentation.left = parseInt(leftVal, 10);
+          if (rightVal !== undefined) previousProperties.indentation.right = parseInt(rightVal, 10);
           if (ind['@_w:firstLine'] !== undefined)
             previousProperties.indentation.firstLine = parseInt(ind['@_w:firstLine'], 10);
           if (ind['@_w:hanging'] !== undefined)
@@ -2495,7 +2533,7 @@ export class DocumentParser {
           previousProperties.alignment = String(prevPPr['w:jc']['@_w:val']);
         }
 
-        // Parse previous spacing
+        // Parse previous spacing (all 8 CT_Spacing attributes per ECMA-376 §17.3.1.33)
         if (prevPPr['w:spacing']) {
           const spacing = prevPPr['w:spacing'];
           previousProperties.spacing = {};
@@ -2507,6 +2545,18 @@ export class DocumentParser {
             previousProperties.spacing.line = parseInt(spacing['@_w:line'], 10);
           if (spacing['@_w:lineRule'])
             previousProperties.spacing.lineRule = String(spacing['@_w:lineRule']);
+          if (spacing['@_w:beforeLines'] !== undefined)
+            previousProperties.spacing.beforeLines = parseInt(spacing['@_w:beforeLines'], 10);
+          if (spacing['@_w:afterLines'] !== undefined)
+            previousProperties.spacing.afterLines = parseInt(spacing['@_w:afterLines'], 10);
+          const beforeAuto = spacing['@_w:beforeAutospacing'];
+          if (beforeAuto !== undefined)
+            previousProperties.spacing.beforeAutospacing =
+              String(beforeAuto) === '1' || String(beforeAuto) === 'true';
+          const afterAuto = spacing['@_w:afterAutospacing'];
+          if (afterAuto !== undefined)
+            previousProperties.spacing.afterAutospacing =
+              String(afterAuto) === '1' || String(afterAuto) === 'true';
         }
 
         // Parse previous keepNext/keepLines/pageBreakBefore
@@ -4001,7 +4051,13 @@ export class DocumentParser {
               const brElements = toArray(runObj['w:br']);
               const brElement = brElements[elementIndex] || brElements[0];
               const breakType = brElement?.['@_w:type'] as BreakType | undefined;
-              content.push({ type: 'break', breakType });
+              const breakClear = brElement?.['@_w:clear'] as
+                | 'none'
+                | 'left'
+                | 'right'
+                | 'all'
+                | undefined;
+              content.push({ type: 'break', breakType, breakClear });
               break;
             }
 
@@ -4210,7 +4266,13 @@ export class DocumentParser {
         if (runObj['w:br'] !== undefined) {
           const brElement = runObj['w:br'];
           const breakType = brElement?.['@_w:type'] as BreakType | undefined;
-          content.push({ type: 'break', breakType });
+          const breakClear = brElement?.['@_w:clear'] as
+            | 'none'
+            | 'left'
+            | 'right'
+            | 'all'
+            | undefined;
+          content.push({ type: 'break', breakType, breakClear });
         }
 
         if (runObj['w:cr'] !== undefined) {
@@ -4453,22 +4515,11 @@ export class DocumentParser {
         }
       }
 
-      // Handle external hyperlinks with anchor fragments
-      // Microsoft Word can store URLs with the base in relationships and fragment in w:anchor
-      // Example: rels has "https://example.com/", anchor has "!/view?docid=abc-123"
-      // Combined: "https://example.com/#!/view?docid=abc-123"
-      // This is common for single-page applications with hash-based routing (theSource, etc.)
-      let finalAnchor = anchor;
-      let finalRelationshipId = relationshipId;
-      if (url && anchor) {
-        // Combine URL and anchor for external hyperlinks with fragments
-        url = url + '#' + anchor;
-        finalAnchor = undefined; // Clear anchor since it's now part of URL
-        // Clear relationshipId since the relationship points to the old base URL
-        // On save, a new relationship will be created with the combined URL
-        finalRelationshipId = undefined;
-        defaultLogger.debug(`[DocumentParser] Combined external URL with anchor fragment: ${url}`);
-      }
+      // Per ECMA-376 §17.16.22, a hyperlink can have BOTH r:id (external URL) and w:anchor
+      // (bookmark) simultaneously — e.g., linking to a bookmark in an external document.
+      // Preserve both attributes as-is; the serializer supports writing both.
+      const finalAnchor = anchor;
+      const finalRelationshipId = relationshipId;
 
       // Skip hyperlinks that have no destination (neither URL nor anchor nor relationship ID)
       // This can happen with malformed HYPERLINK field codes or corrupted documents
@@ -4780,29 +4831,19 @@ export class DocumentParser {
       if (val) run.setEmphasis(val);
     }
 
-    // Parse outline text effect (w:outline) per ECMA-376 Part 1 §17.3.2.23
-    if (rPrObj['w:outline']) run.setOutline(true);
-
-    // Parse shadow text effect (w:shadow) per ECMA-376 Part 1 §17.3.2.32
-    if (rPrObj['w:shadow']) run.setShadow(true);
-
-    // Parse emboss text effect (w:emboss) per ECMA-376 Part 1 §17.3.2.13
-    if (rPrObj['w:emboss']) run.setEmboss(true);
-
-    // Parse imprint text effect (w:imprint) per ECMA-376 Part 1 §17.3.2.18
-    if (rPrObj['w:imprint']) run.setImprint(true);
-
-    // Parse no proofing (w:noProof) per ECMA-376 Part 1 §17.3.2.21
-    if (rPrObj['w:noProof']) run.setNoProof(true);
-
-    // Parse snap to grid (w:snapToGrid) per ECMA-376 Part 1 §17.3.2.35
-    if (rPrObj['w:snapToGrid']) run.setSnapToGrid(true);
-
-    // Parse vanish/hidden (w:vanish) per ECMA-376 Part 1 §17.3.2.42
-    if (rPrObj['w:vanish']) run.setVanish(true);
-
-    // Parse special vanish (w:specVanish) per ECMA-376 Part 1 §17.3.2.36
-    if (rPrObj['w:specVanish']) run.setSpecVanish(true);
+    // Parse boolean text effects — use parseOoxmlBoolean to correctly handle w:val="0"/"false"
+    // Per ECMA-376, <w:xxx/> or <w:xxx w:val="1"/> = true; <w:xxx w:val="0"/> = false (explicit off)
+    if (parseOoxmlBoolean(rPrObj['w:outline'])) run.setOutline(true);
+    if (parseOoxmlBoolean(rPrObj['w:shadow'])) run.setShadow(true);
+    if (parseOoxmlBoolean(rPrObj['w:emboss'])) run.setEmboss(true);
+    if (parseOoxmlBoolean(rPrObj['w:imprint'])) run.setImprint(true);
+    if (parseOoxmlBoolean(rPrObj['w:noProof'])) run.setNoProof(true);
+    // snapToGrid: default when absent is true (§17.3.2.34), so explicit val="0" must be preserved
+    if (rPrObj['w:snapToGrid'] !== undefined) {
+      run.setSnapToGrid(parseOoxmlBoolean(rPrObj['w:snapToGrid']));
+    }
+    if (parseOoxmlBoolean(rPrObj['w:vanish'])) run.setVanish(true);
+    if (parseOoxmlBoolean(rPrObj['w:specVanish'])) run.setSpecVanish(true);
 
     // Boolean properties - use parseOoxmlBoolean helper
     // Per ECMA-376: <w:b/> or <w:b w:val="1"/> or <w:b w:val="true"/> means true
@@ -4811,16 +4852,20 @@ export class DocumentParser {
     // Parse RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
     if (parseOoxmlBoolean(rPrObj['w:rtl'])) run.setRTL(true);
 
-    if (parseOoxmlBoolean(rPrObj['w:b'])) run.setBold(true);
-    if (parseOoxmlBoolean(rPrObj['w:bCs'])) run.setComplexScriptBold(true);
-    if (parseOoxmlBoolean(rPrObj['w:i'])) run.setItalic(true);
-    if (parseOoxmlBoolean(rPrObj['w:iCs'])) run.setComplexScriptItalic(true);
-    if (parseOoxmlBoolean(rPrObj['w:strike'])) run.setStrike(true);
-    if (parseOoxmlBoolean(rPrObj['w:dstrike'])) {
-      (run as any).formatting.dstrike = true;
+    // b, bCs, i, iCs: preserve explicit val="0" to override style-inherited formatting
+    if (rPrObj['w:b'] !== undefined) run.setBold(parseOoxmlBoolean(rPrObj['w:b']));
+    if (rPrObj['w:bCs'] !== undefined) run.setComplexScriptBold(parseOoxmlBoolean(rPrObj['w:bCs']));
+    if (rPrObj['w:i'] !== undefined) run.setItalic(parseOoxmlBoolean(rPrObj['w:i']));
+    if (rPrObj['w:iCs'] !== undefined)
+      run.setComplexScriptItalic(parseOoxmlBoolean(rPrObj['w:iCs']));
+    // strike, dstrike, smallCaps, caps: preserve explicit val="0" to override style-inherited formatting
+    if (rPrObj['w:strike'] !== undefined) run.setStrike(parseOoxmlBoolean(rPrObj['w:strike']));
+    if (rPrObj['w:dstrike'] !== undefined) {
+      (run as any).formatting.dstrike = parseOoxmlBoolean(rPrObj['w:dstrike']);
     }
-    if (parseOoxmlBoolean(rPrObj['w:smallCaps'])) run.setSmallCaps(true);
-    if (parseOoxmlBoolean(rPrObj['w:caps'])) run.setAllCaps(true);
+    if (rPrObj['w:smallCaps'] !== undefined)
+      run.setSmallCaps(parseOoxmlBoolean(rPrObj['w:smallCaps']));
+    if (rPrObj['w:caps'] !== undefined) run.setAllCaps(parseOoxmlBoolean(rPrObj['w:caps']));
 
     // Parse complex script flag (w:cs) per ECMA-376 Part 1 §17.3.2.7
     if (parseOoxmlBoolean(rPrObj['w:cs'])) run.setComplexScript(true);
@@ -4870,10 +4915,21 @@ export class DocumentParser {
       if (val) run.setKerning(parseInt(val, 10));
     }
 
-    // Parse language (w:lang) per ECMA-376 Part 1 §17.3.2.20
+    // Parse language (w:lang) per ECMA-376 Part 1 §17.3.2.20 (CT_Language)
     if (rPrObj['w:lang']) {
-      const val = rPrObj['w:lang']['@_w:val'];
-      if (val) run.setLanguage(val);
+      const langObj = rPrObj['w:lang'];
+      const val = langObj['@_w:val'];
+      const eastAsia = langObj['@_w:eastAsia'];
+      const bidi = langObj['@_w:bidi'];
+      if (eastAsia || bidi) {
+        run.setLanguage({
+          val: val ? String(val) : undefined,
+          eastAsia: eastAsia ? String(eastAsia) : undefined,
+          bidi: bidi ? String(bidi) : undefined,
+        });
+      } else if (val) {
+        run.setLanguage(String(val));
+      }
     }
 
     // Parse East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
@@ -4907,7 +4963,8 @@ export class DocumentParser {
     if (rPrObj['w:vertAlign']) {
       const val = rPrObj['w:vertAlign']['@_w:val'];
       if (val === 'subscript') run.setSubscript(true);
-      if (val === 'superscript') run.setSuperscript(true);
+      else if (val === 'superscript') run.setSuperscript(true);
+      else if (val === 'baseline') (run as any).formatting.vertAlignBaseline = true;
     }
 
     if (rPrObj['w:rFonts']) {
@@ -4946,10 +5003,15 @@ export class DocumentParser {
     if (rPrObj['w:color']) {
       const colorObj = rPrObj['w:color'];
       const colorVal = colorObj['@_w:val'];
-      // Skip special OOXML values like "auto" (automatic/inherit from style)
-      // "auto" is a valid OOXML color that means inherit - not a hex color
-      if (colorVal && colorVal !== 'auto') {
-        run.setColor(colorVal);
+      // Per ECMA-376 §17.18.6, w:val can be a hex color OR the special value "auto"
+      // "auto" means use the automatic/window text color — must be preserved for round-trip
+      if (colorVal) {
+        if (colorVal === 'auto') {
+          // Bypass normalizeColor() which rejects non-hex values
+          (run as any).formatting.color = 'auto';
+        } else {
+          run.setColor(colorVal);
+        }
       }
       // Parse theme color attributes per ECMA-376 Part 1 Section 17.3.2.6
       if (colorObj['@_w:themeColor']) {
@@ -5046,7 +5108,7 @@ export class DocumentParser {
         if (prevRPr['w:color']) {
           const colorObj = prevRPr['w:color'];
           const colorVal = colorObj['@_w:val'];
-          if (colorVal && colorVal !== 'auto') {
+          if (colorVal) {
             prevProps.color = colorVal;
           }
           // Parse theme color attributes
@@ -5066,11 +5128,12 @@ export class DocumentParser {
           prevProps.highlight = prevRPr['w:highlight']['@_w:val'];
         }
 
-        // Parse previous subscript/superscript
+        // Parse previous subscript/superscript/baseline per ECMA-376 §17.18.96
         if (prevRPr['w:vertAlign']) {
           const val = prevRPr['w:vertAlign']['@_w:val'];
           if (val === 'subscript') prevProps.subscript = true;
-          if (val === 'superscript') prevProps.superscript = true;
+          else if (val === 'superscript') prevProps.superscript = true;
+          else if (val === 'baseline') prevProps.vertAlignBaseline = true;
         }
 
         // Parse previous smallCaps/allCaps
@@ -5173,10 +5236,19 @@ export class DocumentParser {
           }
         }
 
-        // Parse language (w:lang @w:val)
+        // Parse language (w:lang) per ECMA-376 CT_Language (w:val, w:eastAsia, w:bidi)
         if (prevRPr['w:lang']) {
-          const langVal = prevRPr['w:lang']['@_w:val'];
-          if (langVal) {
+          const langObj = prevRPr['w:lang'];
+          const langVal = langObj['@_w:val'];
+          const langEastAsia = langObj['@_w:eastAsia'];
+          const langBidi = langObj['@_w:bidi'];
+          if (langEastAsia || langBidi) {
+            prevProps.language = {
+              val: langVal ? String(langVal) : undefined,
+              eastAsia: langEastAsia ? String(langEastAsia) : undefined,
+              bidi: langBidi ? String(langBidi) : undefined,
+            };
+          } else if (langVal) {
             prevProps.language = String(langVal);
           }
         }
@@ -6052,6 +6124,25 @@ export class DocumentParser {
         }
       }
 
+      // Parse table grid change (w:tblGridChange) per ECMA-376 §17.13.5.35
+      if (tableObj['w:tblGrid']?.['w:tblGridChange']) {
+        const changeObj = tableObj['w:tblGrid']['w:tblGridChange'];
+        const prevGridCols = changeObj['w:tblGrid']?.['w:gridCol'];
+        if (prevGridCols) {
+          const prevArray = Array.isArray(prevGridCols) ? prevGridCols : [prevGridCols];
+          const prevWidths = prevArray.map((col: any) => ({
+            width: isExplicitlySet(col['@_w:w']) ? safeParseInt(col['@_w:w'], 2880) : 2880,
+          }));
+          const gridChange = TableGridChange.create(
+            safeParseInt(changeObj['@_w:id'], 0),
+            prevWidths,
+            changeObj['@_w:author'] || undefined,
+            changeObj['@_w:date'] ? new Date(changeObj['@_w:date']) : undefined
+          );
+          table.setTblGridChange(gridChange);
+        }
+      }
+
       // Parse table rows (w:tr)
       const rows = tableObj['w:tr'];
       const rowChildren = Array.isArray(rows) ? rows : rows ? [rows] : [];
@@ -6158,7 +6249,7 @@ export class DocumentParser {
         table.setTblLook(look['@_w:val']);
       } else {
         // Individual attribute format - construct hex value
-        // Per ECMA-376: bit 0=firstRow, 1=lastRow, 2=firstCol, 3=lastCol, 4=noHBand, 5=noVBand
+        // Per ECMA-376 §17.4.57: bit5=firstRow, bit6=lastRow, bit7=firstCol, bit8=lastCol, bit9=noHBand, bit10=noVBand
         let value = 0;
         if (look['@_w:firstRow'] === '1') value |= 0x0020;
         if (look['@_w:lastRow'] === '1') value |= 0x0040;
@@ -6249,9 +6340,14 @@ export class DocumentParser {
     if (tblPrObj['w:tblInd']) {
       const indentVal = safeParseInt(tblPrObj['w:tblInd']['@_w:w'], 0);
       table.setIndent(indentVal);
+      const indentType = tblPrObj['w:tblInd']['@_w:type'];
+      if (indentType) {
+        table.setIndentType(indentType as import('../elements/Table').TableWidthType);
+      }
     }
 
     // Parse table cell margins (w:tblCellMar) per ECMA-376 Part 1 §17.4.42
+    // Supports both legacy w:left/w:right and bidi-aware w:start/w:end (w:start takes precedence)
     if (tblPrObj['w:tblCellMar']) {
       const cellMar = tblPrObj['w:tblCellMar'];
       const margins: { top?: number; bottom?: number; left?: number; right?: number } = {};
@@ -6264,12 +6360,14 @@ export class DocumentParser {
         const w = cellMar['w:bottom']['@_w:w'];
         if (w !== undefined) margins.bottom = parseInt(w, 10);
       }
-      if (cellMar['w:left']) {
-        const w = cellMar['w:left']['@_w:w'];
+      const leftSource = cellMar['w:start'] || cellMar['w:left'];
+      if (leftSource) {
+        const w = leftSource['@_w:w'];
         if (w !== undefined) margins.left = parseInt(w, 10);
       }
-      if (cellMar['w:right']) {
-        const w = cellMar['w:right']['@_w:w'];
+      const rightSource = cellMar['w:end'] || cellMar['w:right'];
+      if (rightSource) {
+        const w = rightSource['@_w:w'];
         if (w !== undefined) margins.right = parseInt(w, 10);
       }
 
@@ -6413,11 +6511,21 @@ export class DocumentParser {
     if (!trPrObj) return;
 
     // Parse row height (w:trHeight) per ECMA-376 Part 1 §17.4.81
+    // Per §17.18.33 (ST_HeightRule), when w:hRule is absent the default is "auto"
     if (trPrObj['w:trHeight']) {
       const heightVal = parseInt(trPrObj['w:trHeight']['@_w:val'] || '0', 10);
-      const heightRule = trPrObj['w:trHeight']['@_w:hRule'] || 'atLeast';
+      const heightRule = trPrObj['w:trHeight']['@_w:hRule'];
       if (heightVal > 0) {
-        row.setHeight(heightVal, heightRule);
+        // Set height without defaulting hRule — setHeight defaults to 'atLeast'
+        // so we set height first, then override the rule only if explicitly present
+        row.setHeight(heightVal);
+        if (heightRule) {
+          row.setHeightRule(heightRule);
+        } else {
+          // When w:hRule is absent, clear the defaulted rule so the generator omits it,
+          // preserving round-trip fidelity (absent = "auto" per ECMA-376 §17.18.33)
+          row.setHeightRule(undefined);
+        }
       }
     }
 
@@ -6657,6 +6765,7 @@ export class DocumentParser {
         }
 
         // Parse cell margins (w:tcMar) per ECMA-376 Part 1 §17.4.43
+        // Supports both legacy w:left/w:right and bidi-aware w:start/w:end (w:start takes precedence)
         if (tcPr['w:tcMar']) {
           const tcMar = tcPr['w:tcMar'];
           const margins: any = {};
@@ -6667,11 +6776,13 @@ export class DocumentParser {
           if (tcMar['w:bottom']) {
             margins.bottom = parseInt(tcMar['w:bottom']['@_w:w'] || '0', 10);
           }
-          if (tcMar['w:left']) {
-            margins.left = parseInt(tcMar['w:left']['@_w:w'] || '0', 10);
+          const leftSrc = tcMar['w:start'] || tcMar['w:left'];
+          if (leftSrc) {
+            margins.left = parseInt(leftSrc['@_w:w'] || '0', 10);
           }
-          if (tcMar['w:right']) {
-            margins.right = parseInt(tcMar['w:right']['@_w:w'] || '0', 10);
+          const rightSrc = tcMar['w:end'] || tcMar['w:right'];
+          if (rightSrc) {
+            margins.right = parseInt(rightSrc['@_w:w'] || '0', 10);
           }
 
           if (Object.keys(margins).length > 0) {
@@ -7599,7 +7710,7 @@ export class DocumentParser {
    */
   private parseTOCFromSDTContent(
     content: any[],
-    properties: any,
+    _properties: any,
     sdtContent: any
   ): TableOfContents | null {
     try {
@@ -8154,12 +8265,14 @@ export class DocumentParser {
           const width = XMLParser.extractAttribute(pgSz, 'w:w');
           const height = XMLParser.extractAttribute(pgSz, 'w:h');
           const orient = XMLParser.extractAttribute(pgSz, 'w:orient');
+          const code = XMLParser.extractAttribute(pgSz, 'w:code');
 
           if (width && height) {
             sectionProps.pageSize = {
               width: parseInt(width, 10),
               height: parseInt(height, 10),
               orientation: orient === 'landscape' ? 'landscape' : 'portrait',
+              code: code ? parseInt(code, 10) : undefined,
             };
           }
         }
@@ -8252,13 +8365,22 @@ export class DocumentParser {
           const equalWidth = XMLParser.extractAttribute(cols, 'w:equalWidth');
           const sep = XMLParser.extractAttribute(cols, 'w:sep');
 
-          // Extract individual column widths
+          // Extract individual column widths and per-column spacing (CT_Column: w:w, w:space)
           const colElements = XMLParser.extractElements(cols, 'w:col');
           const columnWidths: number[] = [];
+          const columnSpaces: number[] = [];
+          let hasColumnSpaces = false;
           for (const col of colElements) {
             const width = XMLParser.extractAttribute(col, 'w:w');
             if (width) {
               columnWidths.push(parseInt(width.toString(), 10));
+            }
+            const colSpace = XMLParser.extractAttribute(col, 'w:space');
+            if (colSpace) {
+              columnSpaces.push(parseInt(colSpace.toString(), 10));
+              hasColumnSpaces = true;
+            } else {
+              columnSpaces.push(0);
             }
           }
 
@@ -8272,6 +8394,7 @@ export class DocumentParser {
               equalWidth: equalWidth ? toBool(equalWidth) : undefined,
               separator: sep ? toBool(sep) : undefined,
               columnWidths: columnWidths.length > 0 ? columnWidths : undefined,
+              columnSpaces: hasColumnSpaces ? columnSpaces : undefined,
             };
           }
         }
@@ -8732,13 +8855,18 @@ export class DocumentParser {
       }
     }
 
-    // Parse spacing (w:spacing)
+    // Parse spacing (w:spacing) — all 8 CT_Spacing attributes per ECMA-376 §17.3.1.33
     const spacingElement = XMLParser.extractSelfClosingTag(pPrXml, 'w:spacing');
     if (spacingElement) {
-      const before = XMLParser.extractAttribute(`<w:spacing${spacingElement}`, 'w:before');
-      const after = XMLParser.extractAttribute(`<w:spacing${spacingElement}`, 'w:after');
-      const line = XMLParser.extractAttribute(`<w:spacing${spacingElement}`, 'w:line');
-      const lineRule = XMLParser.extractAttribute(`<w:spacing${spacingElement}`, 'w:lineRule');
+      const spacingTag = `<w:spacing${spacingElement}`;
+      const before = XMLParser.extractAttribute(spacingTag, 'w:before');
+      const after = XMLParser.extractAttribute(spacingTag, 'w:after');
+      const line = XMLParser.extractAttribute(spacingTag, 'w:line');
+      const lineRule = XMLParser.extractAttribute(spacingTag, 'w:lineRule');
+      const beforeLines = XMLParser.extractAttribute(spacingTag, 'w:beforeLines');
+      const afterLines = XMLParser.extractAttribute(spacingTag, 'w:afterLines');
+      const beforeAutosp = XMLParser.extractAttribute(spacingTag, 'w:beforeAutospacing');
+      const afterAutosp = XMLParser.extractAttribute(spacingTag, 'w:afterAutospacing');
 
       // Validate lineRule
       let validatedLineRule: 'auto' | 'exact' | 'atLeast' | undefined;
@@ -8755,20 +8883,33 @@ export class DocumentParser {
         // If lineRule exists without line, use default 240 twips
         line: line ? parseInt(line, 10) : validatedLineRule ? 240 : undefined,
         lineRule: validatedLineRule,
+        beforeLines: beforeLines ? parseInt(beforeLines, 10) : undefined,
+        afterLines: afterLines ? parseInt(afterLines, 10) : undefined,
+        beforeAutospacing: beforeAutosp
+          ? beforeAutosp === '1' || beforeAutosp === 'true'
+          : undefined,
+        afterAutospacing: afterAutosp ? afterAutosp === '1' || afterAutosp === 'true' : undefined,
       };
     }
 
     // Parse indentation (w:ind)
+    // Per ECMA-376 §17.3.1.15: w:start/w:end are bidi-aware alternatives to w:left/w:right
     const indElement = XMLParser.extractSelfClosingTag(pPrXml, 'w:ind');
     if (indElement) {
-      const left = XMLParser.extractAttribute(`<w:ind${indElement}`, 'w:left');
-      const right = XMLParser.extractAttribute(`<w:ind${indElement}`, 'w:right');
-      const firstLine = XMLParser.extractAttribute(`<w:ind${indElement}`, 'w:firstLine');
-      const hanging = XMLParser.extractAttribute(`<w:ind${indElement}`, 'w:hanging');
+      const indTag = `<w:ind${indElement}`;
+      const start = XMLParser.extractAttribute(indTag, 'w:start');
+      const left = XMLParser.extractAttribute(indTag, 'w:left');
+      const end = XMLParser.extractAttribute(indTag, 'w:end');
+      const right = XMLParser.extractAttribute(indTag, 'w:right');
+      const firstLine = XMLParser.extractAttribute(indTag, 'w:firstLine');
+      const hanging = XMLParser.extractAttribute(indTag, 'w:hanging');
+
+      const leftVal = start || left;
+      const rightVal = end || right;
 
       formatting.indentation = {
-        left: left ? parseInt(left, 10) : undefined,
-        right: right ? parseInt(right, 10) : undefined,
+        left: leftVal ? parseInt(leftVal, 10) : undefined,
+        right: rightVal ? parseInt(rightVal, 10) : undefined,
         firstLine: firstLine ? parseInt(firstLine, 10) : undefined,
         hanging: hanging ? parseInt(hanging, 10) : undefined,
       };
@@ -8802,6 +8943,54 @@ export class DocumentParser {
           formatting.outlineLevel = level;
         }
       }
+    }
+
+    // Parse paragraph borders (w:pBdr) per ECMA-376 Part 1 §17.3.1.24
+    const pBdrXml = XMLParser.extractBetweenTags(pPrXml, '<w:pBdr>', '</w:pBdr>');
+    if (pBdrXml) {
+      const borders: any = {};
+      const borderTypes = ['top', 'left', 'bottom', 'right', 'between', 'bar'];
+      for (const type of borderTypes) {
+        if (pBdrXml.includes(`<w:${type}`)) {
+          const tag = XMLParser.extractSelfClosingTag(pBdrXml, `w:${type}`);
+          if (tag) {
+            const bTag = `<w:${type}${tag}`;
+            const style = XMLParser.extractAttribute(bTag, 'w:val');
+            const size = XMLParser.extractAttribute(bTag, 'w:sz');
+            const space = XMLParser.extractAttribute(bTag, 'w:space');
+            const color = XMLParser.extractAttribute(bTag, 'w:color');
+            const border: any = {};
+            if (style) border.style = style;
+            if (size) border.size = parseInt(size, 10);
+            if (space) border.space = parseInt(space, 10);
+            if (color) border.color = color;
+            if (Object.keys(border).length > 0) borders[type] = border;
+          }
+        }
+      }
+      if (Object.keys(borders).length > 0) formatting.borders = borders;
+    }
+
+    // Parse tab stops (w:tabs) per ECMA-376 Part 1 §17.3.1.38
+    const tabsXml = XMLParser.extractBetweenTags(pPrXml, '<w:tabs>', '</w:tabs>');
+    if (tabsXml) {
+      const tabs: any[] = [];
+      // Extract all w:tab elements
+      const tabRegex = /<w:tab\s[^>]*\/>/g;
+      let tabMatch;
+      while ((tabMatch = tabRegex.exec(tabsXml)) !== null) {
+        const tabTag = tabMatch[0];
+        const pos = XMLParser.extractAttribute(tabTag, 'w:pos');
+        const val = XMLParser.extractAttribute(tabTag, 'w:val');
+        const leader = XMLParser.extractAttribute(tabTag, 'w:leader');
+        if (pos) {
+          const tab: any = { position: parseInt(pos, 10) };
+          if (val) tab.val = val;
+          if (leader) tab.leader = leader;
+          tabs.push(tab);
+        }
+      }
+      if (tabs.length > 0) formatting.tabs = tabs;
     }
 
     // Parse shading (w:shd) per ECMA-376 Part 1 §17.3.1.32
@@ -8838,10 +9027,11 @@ export class DocumentParser {
       formatting.allCaps = true;
     }
 
-    // Parse underline - use extractSelfClosingTag for accuracy
+    // Parse underline — all attributes per ECMA-376 §17.3.2.40
     const uElement = XMLParser.extractSelfClosingTag(rPrXml, 'w:u');
     if (uElement) {
-      const uVal = XMLParser.extractAttribute(`<w:u${uElement}`, 'w:val');
+      const uTag = `<w:u${uElement}`;
+      const uVal = XMLParser.extractAttribute(uTag, 'w:val');
       if (
         uVal === 'single' ||
         uVal === 'double' ||
@@ -8854,9 +9044,19 @@ export class DocumentParser {
       } else {
         formatting.underline = true;
       }
+      const uColor = XMLParser.extractAttribute(uTag, 'w:color');
+      if (uColor) formatting.underlineColor = uColor;
+      const uThemeColor = XMLParser.extractAttribute(uTag, 'w:themeColor');
+      if (uThemeColor) {
+        formatting.underlineThemeColor = uThemeColor as import('../elements/Run').ThemeColorValue;
+      }
+      const uThemeTint = XMLParser.extractAttribute(uTag, 'w:themeTint');
+      if (uThemeTint) formatting.underlineThemeTint = parseInt(uThemeTint, 16);
+      const uThemeShade = XMLParser.extractAttribute(uTag, 'w:themeShade');
+      if (uThemeShade) formatting.underlineThemeShade = parseInt(uThemeShade, 16);
     }
 
-    // Parse subscript/superscript - use extractSelfClosingTag
+    // Parse subscript/superscript/baseline per ECMA-376 §17.18.96 (ST_VerticalAlignRun)
     const vertAlignElement = XMLParser.extractSelfClosingTag(rPrXml, 'w:vertAlign');
     if (vertAlignElement) {
       const val = XMLParser.extractAttribute(`<w:vertAlign${vertAlignElement}`, 'w:val');
@@ -8864,16 +9064,33 @@ export class DocumentParser {
         formatting.subscript = true;
       } else if (val === 'superscript') {
         formatting.superscript = true;
+      } else if (val === 'baseline') {
+        formatting.vertAlignBaseline = true;
       }
     }
 
-    // Parse font (w:rFonts) - use extractSelfClosingTag
+    // Parse font (w:rFonts) — all attributes per ECMA-376 §17.3.2.26
     const rFontsElement = XMLParser.extractSelfClosingTag(rPrXml, 'w:rFonts');
     if (rFontsElement) {
-      const ascii = XMLParser.extractAttribute(`<w:rFonts${rFontsElement}`, 'w:ascii');
-      if (ascii) {
-        formatting.font = ascii;
-      }
+      const rFontsTag = `<w:rFonts${rFontsElement}`;
+      const ascii = XMLParser.extractAttribute(rFontsTag, 'w:ascii');
+      if (ascii) formatting.font = ascii;
+      const hAnsi = XMLParser.extractAttribute(rFontsTag, 'w:hAnsi');
+      if (hAnsi) formatting.fontHAnsi = hAnsi;
+      const eastAsia = XMLParser.extractAttribute(rFontsTag, 'w:eastAsia');
+      if (eastAsia) formatting.fontEastAsia = eastAsia;
+      const cs = XMLParser.extractAttribute(rFontsTag, 'w:cs');
+      if (cs) formatting.fontCs = cs;
+      const hint = XMLParser.extractAttribute(rFontsTag, 'w:hint');
+      if (hint) formatting.fontHint = hint;
+      const asciiTheme = XMLParser.extractAttribute(rFontsTag, 'w:asciiTheme');
+      if (asciiTheme) formatting.fontAsciiTheme = asciiTheme;
+      const hAnsiTheme = XMLParser.extractAttribute(rFontsTag, 'w:hAnsiTheme');
+      if (hAnsiTheme) formatting.fontHAnsiTheme = hAnsiTheme;
+      const eastAsiaTheme = XMLParser.extractAttribute(rFontsTag, 'w:eastAsiaTheme');
+      if (eastAsiaTheme) formatting.fontEastAsiaTheme = eastAsiaTheme;
+      const cstheme = XMLParser.extractAttribute(rFontsTag, 'w:cstheme');
+      if (cstheme) formatting.fontCsTheme = cstheme;
     }
 
     // Parse size (w:sz) - size is in half-points
@@ -8886,13 +9103,37 @@ export class DocumentParser {
       }
     }
 
-    // Parse color (w:color)
-    // Use extractSelfClosingTag to avoid matching other tags
+    // Parse complex script size (w:szCs) per ECMA-376 §17.3.2.40
+    const szCsElement = XMLParser.extractSelfClosingTag(rPrXml, 'w:szCs');
+    if (szCsElement) {
+      const val = XMLParser.extractAttribute(`<w:szCs${szCsElement}`, 'w:val');
+      if (val) {
+        const szCsVal = halfPointsToPoints(parseInt(val, 10));
+        if (formatting.size === undefined || szCsVal !== formatting.size) {
+          formatting.sizeCs = szCsVal;
+        }
+      }
+    }
+
+    // Parse color (w:color) — all attributes per ECMA-376 §17.3.2.6
     const colorElement = XMLParser.extractSelfClosingTag(rPrXml, 'w:color');
     if (colorElement) {
-      const val = XMLParser.extractAttribute(`<w:color${colorElement}`, 'w:val');
+      const colorTag = `<w:color${colorElement}`;
+      const val = XMLParser.extractAttribute(colorTag, 'w:val');
       if (val && val !== 'auto') {
         formatting.color = val;
+      }
+      const themeColor = XMLParser.extractAttribute(colorTag, 'w:themeColor');
+      if (themeColor) {
+        formatting.themeColor = themeColor as import('../elements/Run').ThemeColorValue;
+      }
+      const themeTint = XMLParser.extractAttribute(colorTag, 'w:themeTint');
+      if (themeTint) {
+        formatting.themeTint = parseInt(themeTint, 16);
+      }
+      const themeShade = XMLParser.extractAttribute(colorTag, 'w:themeShade');
+      if (themeShade) {
+        formatting.themeShade = parseInt(themeShade, 16);
       }
     }
 
@@ -8918,6 +9159,7 @@ export class DocumentParser {
           'lightGray',
           'black',
           'white',
+          'none',
         ];
         if (validHighlights.includes(val)) {
           formatting.highlight = val as
@@ -8936,7 +9178,8 @@ export class DocumentParser {
             | 'darkGray'
             | 'lightGray'
             | 'black'
-            | 'white';
+            | 'white'
+            | 'none';
         }
       }
     }
@@ -9014,13 +9257,18 @@ export class DocumentParser {
   ): import('../formatting/Style').TableStyleFormatting {
     const formatting: import('../formatting/Style').TableStyleFormatting = {};
 
-    // Parse indent
+    // Parse indent (w:tblInd) — preserve w:type per ECMA-376 ST_TblWidth
     if (tblPrXml.includes('<w:tblInd')) {
       const tag = XMLParser.extractSelfClosingTag(tblPrXml, 'w:tblInd');
       if (tag) {
-        const w = XMLParser.extractAttribute(`<w:tblInd${tag}`, 'w:w');
+        const tblIndTag = `<w:tblInd${tag}`;
+        const w = XMLParser.extractAttribute(tblIndTag, 'w:w');
         if (w) {
           formatting.indent = parseInt(w, 10);
+        }
+        const type = XMLParser.extractAttribute(tblIndTag, 'w:type');
+        if (type) {
+          formatting.indentType = type as import('../elements/Table').TableWidthType;
         }
       }
     }
@@ -9331,16 +9579,40 @@ export class DocumentParser {
   ): import('../formatting/Style').CellMargins | undefined {
     const margins: import('../formatting/Style').CellMargins = {};
 
-    const marginTypes = ['top', 'bottom', 'left', 'right'];
-    for (const type of marginTypes) {
+    // Parse top and bottom directly
+    for (const type of ['top', 'bottom'] as const) {
       if (marginXml.includes(`<w:${type}`)) {
         const tag = XMLParser.extractSelfClosingTag(marginXml, `w:${type}`);
         if (tag) {
           const w = XMLParser.extractAttribute(`<w:${type}${tag}`, 'w:w');
           if (w) {
-            margins[type as keyof import('../formatting/Style').CellMargins] = parseInt(w, 10);
+            margins[type] = parseInt(w, 10);
           }
         }
+      }
+    }
+
+    // Parse left/right with bidi-aware w:start/w:end fallback (ECMA-376 §17.4.42/§17.4.43)
+    // w:start takes precedence over w:left; w:end takes precedence over w:right
+    const leftTag = marginXml.includes('<w:start')
+      ? XMLParser.extractSelfClosingTag(marginXml, 'w:start')
+      : XMLParser.extractSelfClosingTag(marginXml, 'w:left');
+    if (leftTag) {
+      const tagName = marginXml.includes('<w:start') ? 'w:start' : 'w:left';
+      const w = XMLParser.extractAttribute(`<${tagName}${leftTag}`, 'w:w');
+      if (w) {
+        margins.left = parseInt(w, 10);
+      }
+    }
+
+    const rightTag = marginXml.includes('<w:end')
+      ? XMLParser.extractSelfClosingTag(marginXml, 'w:end')
+      : XMLParser.extractSelfClosingTag(marginXml, 'w:right');
+    if (rightTag) {
+      const tagName = marginXml.includes('<w:end') ? 'w:end' : 'w:right';
+      const w = XMLParser.extractAttribute(`<${tagName}${rightTag}`, 'w:w');
+      if (w) {
+        margins.right = parseInt(w, 10);
       }
     }
 
@@ -9854,6 +10126,40 @@ export class DocumentParser {
     if (propsObj['w:tblStyle']) {
       result.style = propsObj['w:tblStyle']['@_w:val'] || '';
     }
+    // tblpPr (floating table position)
+    if (propsObj['w:tblpPr']) {
+      const tblpPr = propsObj['w:tblpPr'];
+      const pos: any = {};
+      if (tblpPr['@_w:tblpX']) pos.x = parseInt(tblpPr['@_w:tblpX'], 10);
+      if (tblpPr['@_w:tblpY']) pos.y = parseInt(tblpPr['@_w:tblpY'], 10);
+      if (tblpPr['@_w:horzAnchor']) pos.horizontalAnchor = tblpPr['@_w:horzAnchor'];
+      if (tblpPr['@_w:vertAnchor']) pos.verticalAnchor = tblpPr['@_w:vertAnchor'];
+      if (tblpPr['@_w:leftFromText']) pos.leftFromText = parseInt(tblpPr['@_w:leftFromText'], 10);
+      if (tblpPr['@_w:rightFromText'])
+        pos.rightFromText = parseInt(tblpPr['@_w:rightFromText'], 10);
+      if (tblpPr['@_w:topFromText']) pos.topFromText = parseInt(tblpPr['@_w:topFromText'], 10);
+      if (tblpPr['@_w:bottomFromText'])
+        pos.bottomFromText = parseInt(tblpPr['@_w:bottomFromText'], 10);
+      if (Object.keys(pos).length > 0) result.position = pos;
+    }
+    if (propsObj['w:tblOverlap']) {
+      result.overlap = propsObj['w:tblOverlap']['@_w:val'];
+    }
+    if (propsObj['w:bidiVisual']) {
+      result.bidiVisual = true;
+    }
+    if (propsObj['w:tblStyleRowBandSize']) {
+      result.tblStyleRowBandSize = parseInt(
+        propsObj['w:tblStyleRowBandSize']['@_w:val'] || '1',
+        10
+      );
+    }
+    if (propsObj['w:tblStyleColBandSize']) {
+      result.tblStyleColBandSize = parseInt(
+        propsObj['w:tblStyleColBandSize']['@_w:val'] || '1',
+        10
+      );
+    }
     if (propsObj['w:tblW']) {
       result.width = parseInt(propsObj['w:tblW']['@_w:w'] || '0', 10);
       result.widthType = propsObj['w:tblW']['@_w:type'] || 'dxa';
@@ -9863,9 +10169,24 @@ export class DocumentParser {
     }
     if (propsObj['w:tblInd']) {
       result.indent = parseInt(propsObj['w:tblInd']['@_w:w'] || '0', 10);
+      const indType = propsObj['w:tblInd']['@_w:type'];
+      if (indType) result.indentType = indType;
     }
     if (propsObj['w:tblCellSpacing']) {
       result.cellSpacing = parseInt(propsObj['w:tblCellSpacing']['@_w:w'] || '0', 10);
+      const csType = propsObj['w:tblCellSpacing']['@_w:type'];
+      if (csType) result.cellSpacingType = csType;
+    }
+    if (propsObj['w:tblCellMar']) {
+      const cellMar = propsObj['w:tblCellMar'];
+      const margins: any = {};
+      if (cellMar['w:top']) margins.top = parseInt(cellMar['w:top']['@_w:w'] || '0', 10);
+      if (cellMar['w:bottom']) margins.bottom = parseInt(cellMar['w:bottom']['@_w:w'] || '0', 10);
+      const leftSrc = cellMar['w:start'] || cellMar['w:left'];
+      if (leftSrc) margins.left = parseInt(leftSrc['@_w:w'] || '0', 10);
+      const rightSrc = cellMar['w:end'] || cellMar['w:right'];
+      if (rightSrc) margins.right = parseInt(rightSrc['@_w:w'] || '0', 10);
+      if (Object.keys(margins).length > 0) result.cellMargins = margins;
     }
     if (propsObj['w:tblBorders']) {
       const borders: any = {};
@@ -9877,8 +10198,40 @@ export class DocumentParser {
       }
       if (Object.keys(borders).length > 0) result.borders = borders;
     }
+    if (propsObj['w:tblLook']) {
+      const look = propsObj['w:tblLook'];
+      result.tblLook = look['@_w:val'] || '0000';
+    }
+    if (propsObj['w:tblCaption']) {
+      result.caption = propsObj['w:tblCaption']['@_w:val'];
+    }
+    if (propsObj['w:tblDescription']) {
+      result.description = propsObj['w:tblDescription']['@_w:val'];
+    }
 
-    // Row-level properties (w:trPr context)
+    // Row-level properties (w:trPr context) — all CT_TrPr elements
+    if (propsObj['w:cnfStyle']) {
+      result.cnfStyle = propsObj['w:cnfStyle']['@_w:val'];
+    }
+    if (propsObj['w:divId']) {
+      result.divId = propsObj['w:divId']['@_w:val'];
+    }
+    if (propsObj['w:gridBefore']) {
+      result.gridBefore = parseInt(propsObj['w:gridBefore']['@_w:val'] || '0', 10);
+    }
+    if (propsObj['w:gridAfter']) {
+      result.gridAfter = parseInt(propsObj['w:gridAfter']['@_w:val'] || '0', 10);
+    }
+    if (propsObj['w:wBefore']) {
+      result.wBefore = parseInt(propsObj['w:wBefore']['@_w:w'] || '0', 10);
+      const wbType = propsObj['w:wBefore']['@_w:type'];
+      if (wbType) result.wBeforeType = wbType;
+    }
+    if (propsObj['w:wAfter']) {
+      result.wAfter = parseInt(propsObj['w:wAfter']['@_w:w'] || '0', 10);
+      const waType = propsObj['w:wAfter']['@_w:type'];
+      if (waType) result.wAfterType = waType;
+    }
     if (propsObj['w:trHeight']) {
       result.height = parseInt(propsObj['w:trHeight']['@_w:val'] || '0', 10);
       const rule = propsObj['w:trHeight']['@_w:hRule'];
@@ -9894,13 +10247,19 @@ export class DocumentParser {
       result.hidden = true;
     }
 
-    // Cell-level properties (w:tcPr context)
+    // Cell-level properties (w:tcPr context) — all CT_TcPr elements
     if (propsObj['w:tcW']) {
       result.width = parseInt(propsObj['w:tcW']['@_w:w'] || '0', 10);
       result.widthType = propsObj['w:tcW']['@_w:type'] || 'dxa';
     }
-    if (propsObj['w:vAlign']) {
-      result.verticalAlignment = propsObj['w:vAlign']['@_w:val'];
+    if (propsObj['w:gridSpan']) {
+      result.columnSpan = parseInt(propsObj['w:gridSpan']['@_w:val'] || '1', 10);
+    }
+    if (propsObj['w:hMerge']) {
+      result.hMerge = propsObj['w:hMerge']['@_w:val'] || 'continue';
+    }
+    if (propsObj['w:vMerge']) {
+      result.vMerge = propsObj['w:vMerge']['@_w:val'] || 'continue';
     }
     if (propsObj['w:tcBorders']) {
       const borders: any = {};
@@ -9911,6 +10270,35 @@ export class DocumentParser {
         }
       }
       if (Object.keys(borders).length > 0) result.borders = borders;
+    }
+    if (propsObj['w:noWrap']) {
+      result.noWrap = true;
+    }
+    if (propsObj['w:tcMar']) {
+      const tcMar = propsObj['w:tcMar'];
+      const margins: any = {};
+      if (tcMar['w:top']) margins.top = parseInt(tcMar['w:top']['@_w:w'] || '0', 10);
+      if (tcMar['w:bottom']) margins.bottom = parseInt(tcMar['w:bottom']['@_w:w'] || '0', 10);
+      const leftSrc = tcMar['w:start'] || tcMar['w:left'];
+      if (leftSrc) margins.left = parseInt(leftSrc['@_w:w'] || '0', 10);
+      const rightSrc = tcMar['w:end'] || tcMar['w:right'];
+      if (rightSrc) margins.right = parseInt(rightSrc['@_w:w'] || '0', 10);
+      if (Object.keys(margins).length > 0) result.margins = margins;
+    }
+    if (propsObj['w:textDirection']) {
+      result.textDirection = propsObj['w:textDirection']['@_w:val'];
+    }
+    if (propsObj['w:tcFitText']) {
+      result.fitText = true;
+    }
+    if (propsObj['w:vAlign']) {
+      result.verticalAlignment = propsObj['w:vAlign']['@_w:val'];
+    }
+    if (propsObj['w:hideMark']) {
+      result.hideMark = true;
+    }
+    if (propsObj['w:cnfStyle']) {
+      result.cnfStyle = propsObj['w:cnfStyle']['@_w:val'];
     }
 
     // Shared properties (appear in multiple contexts)
@@ -9944,11 +10332,13 @@ export class DocumentParser {
       const width = XMLParser.extractAttribute(pgSz, 'w:w');
       const height = XMLParser.extractAttribute(pgSz, 'w:h');
       const orient = XMLParser.extractAttribute(pgSz, 'w:orient');
+      const code = XMLParser.extractAttribute(pgSz, 'w:code');
       if (width || height) {
         result.pageSize = {
           width: width ? parseInt(width, 10) : undefined,
           height: height ? parseInt(height, 10) : undefined,
           orientation: orient === 'landscape' ? 'landscape' : 'portrait',
+          code: code ? parseInt(code, 10) : undefined,
         };
       }
     }
@@ -9980,6 +10370,34 @@ export class DocumentParser {
       if (val) result.type = val;
     }
 
+    // Line numbering
+    const lnNumElements = XMLParser.extractElements(sectPrXml, 'w:lnNumType');
+    if (lnNumElements.length > 0 && lnNumElements[0]) {
+      const ln = lnNumElements[0];
+      const lnObj: any = {};
+      const countBy = XMLParser.extractAttribute(ln, 'w:countBy');
+      if (countBy) lnObj.countBy = parseInt(countBy, 10);
+      const start = XMLParser.extractAttribute(ln, 'w:start');
+      if (start) lnObj.start = parseInt(start, 10);
+      const restart = XMLParser.extractAttribute(ln, 'w:restart');
+      if (restart) lnObj.restart = restart;
+      const distance = XMLParser.extractAttribute(ln, 'w:distance');
+      if (distance) lnObj.distance = parseInt(distance, 10);
+      if (Object.keys(lnObj).length > 0) result.lineNumbering = lnObj;
+    }
+
+    // Page numbering
+    const pgNumElements = XMLParser.extractElements(sectPrXml, 'w:pgNumType');
+    if (pgNumElements.length > 0 && pgNumElements[0]) {
+      const pn = pgNumElements[0];
+      const pnObj: any = {};
+      const pnStart = XMLParser.extractAttribute(pn, 'w:start');
+      if (pnStart) pnObj.start = parseInt(pnStart, 10);
+      const fmt = XMLParser.extractAttribute(pn, 'w:fmt');
+      if (fmt) pnObj.format = fmt;
+      if (Object.keys(pnObj).length > 0) result.pageNumbering = pnObj;
+    }
+
     // Columns
     const colsElements = XMLParser.extractElements(sectPrXml, 'w:cols');
     if (colsElements.length > 0 && colsElements[0]) {
@@ -9992,6 +10410,49 @@ export class DocumentParser {
           space: space ? parseInt(space, 10) : undefined,
         };
       }
+    }
+
+    // Form protection
+    if (sectPrXml.includes('<w:formProt')) result.formProt = true;
+
+    // Vertical alignment
+    const vAlignElements = XMLParser.extractElements(sectPrXml, 'w:vAlign');
+    if (vAlignElements.length > 0 && vAlignElements[0]) {
+      const val = XMLParser.extractAttribute(vAlignElements[0], 'w:val');
+      if (val) result.verticalAlignment = val;
+    }
+
+    // Suppress endnotes
+    if (sectPrXml.includes('<w:noEndnote')) result.noEndnote = true;
+
+    // Title page
+    if (sectPrXml.includes('<w:titlePg')) result.titlePage = true;
+
+    // Text direction
+    const textDirElements = XMLParser.extractElements(sectPrXml, 'w:textDirection');
+    if (textDirElements.length > 0 && textDirElements[0]) {
+      const val = XMLParser.extractAttribute(textDirElements[0], 'w:val');
+      if (val) result.textDirection = val;
+    }
+
+    // Bidi section
+    if (sectPrXml.includes('<w:bidi')) result.bidi = true;
+
+    // RTL gutter
+    if (sectPrXml.includes('<w:rtlGutter')) result.rtlGutter = true;
+
+    // Document grid
+    const docGridElements = XMLParser.extractElements(sectPrXml, 'w:docGrid');
+    if (docGridElements.length > 0 && docGridElements[0]) {
+      const dg = docGridElements[0];
+      const dgObj: any = {};
+      const dgType = XMLParser.extractAttribute(dg, 'w:type');
+      if (dgType) dgObj.type = dgType;
+      const linePitch = XMLParser.extractAttribute(dg, 'w:linePitch');
+      if (linePitch) dgObj.linePitch = parseInt(linePitch, 10);
+      const charSpace = XMLParser.extractAttribute(dg, 'w:charSpace');
+      if (charSpace) dgObj.charSpace = parseInt(charSpace, 10);
+      if (Object.keys(dgObj).length > 0) result.docGrid = dgObj;
     }
 
     return result;

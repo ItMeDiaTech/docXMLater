@@ -323,4 +323,36 @@ describe('Bookmark Parsing', () => {
       expect(loadedDoc.getBookmarkManager().hasBookmark('NonExistent')).toBe(false);
     });
   });
+
+  describe('Table bookmark column range (ECMA-376 §17.16.5)', () => {
+    it('should parse colFirst/colLast from bookmarkStart', async () => {
+      // Create a document, then inject a bookmark with column range attributes
+      const doc = Document.create();
+      doc.createParagraph('Table bookmark test');
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Inject a bookmarkStart with colFirst/colLast inside the paragraph
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      docXml = docXml.replace(
+        '</w:p>',
+        '<w:bookmarkStart w:id="99" w:name="TableColRange" w:colFirst="0" w:colLast="1"/><w:bookmarkEnd w:id="99"/></w:p>'
+      );
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const bm = loaded.getBookmarkManager();
+
+      expect(bm.hasBookmark('TableColRange')).toBe(true);
+      const bookmark = bm.getBookmark('TableColRange');
+      expect(bookmark).toBeDefined();
+      expect(bookmark?.getColFirst()).toBe(0);
+      expect(bookmark?.getColLast()).toBe(1);
+
+      loaded.dispose();
+    });
+  });
 });

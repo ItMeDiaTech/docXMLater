@@ -2,14 +2,14 @@
  * TableRow - Represents a row in a table
  */
 
+import { deepClone } from '../utils/deepClone';
 import { TableCell } from './TableCell';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { TableBorder, TableBorders } from './Table';
+import { TableBorders } from './Table';
 import {
   BasicShadingPattern,
   RowJustification as CommonRowJustification,
   ShadingConfig,
-  buildShadingAttributes,
 } from './CommonTypes';
 import { defaultLogger } from '../utils/logger';
 
@@ -314,6 +314,22 @@ export class TableRow {
       if (prevRule !== rule) {
         this.trackingContext.trackTableChange(this, 'heightRule', prevRule, rule);
       }
+    }
+    return this;
+  }
+
+  /**
+   * Sets the height rule independently of the height value.
+   * Per ECMA-376 §17.18.33, valid values are "auto", "atLeast", "exact".
+   * When undefined, the w:hRule attribute is omitted (defaults to "auto" per spec).
+   * @param rule - Height rule, or undefined to omit (use spec default "auto")
+   * @returns This row for chaining
+   */
+  setHeightRule(rule: RowFormatting['heightRule']): this {
+    const prevRule = this.formatting.heightRule;
+    this.formatting.heightRule = rule;
+    if (this.trackingContext?.isEnabled() && prevRule !== rule) {
+      this.trackingContext.trackTableChange(this, 'heightRule', prevRule, rule);
     }
     return this;
   }
@@ -859,10 +875,14 @@ export class TableRow {
       const prevTrPrChildren: XMLElement[] = [];
       const prev = this.trPrChange.previousProperties;
       if (prev) {
-        // Ordered per CT_TrPr: cnfStyle → gridBefore → gridAfter → wBefore → wAfter →
+        // Ordered per CT_TrPr (ECMA-376 §17.4.79):
+        // cnfStyle → divId → gridBefore → gridAfter → wBefore → wAfter →
         // cantSplit → trHeight → tblHeader → tblCellSpacing → jc → hidden
         if (prev.cnfStyle) {
           prevTrPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': prev.cnfStyle }));
+        }
+        if (prev.divId !== undefined) {
+          prevTrPrChildren.push(XMLBuilder.wSelf('divId', { 'w:val': prev.divId }));
         }
         if (prev.gridBefore !== undefined) {
           prevTrPrChildren.push(XMLBuilder.wSelf('gridBefore', { 'w:val': prev.gridBefore }));
@@ -920,14 +940,10 @@ export class TableRow {
     }
 
     // Build row element
+    // Per ECMA-376 §17.4.78 (CT_Row): tblPrEx → trPr → tc*
     const rowChildren: XMLElement[] = [];
 
-    // Add row properties if there are any
-    if (trPrChildren.length > 0) {
-      rowChildren.push(XMLBuilder.w('trPr', undefined, trPrChildren));
-    }
-
-    // Add table property exceptions (tblPrEx) if present
+    // Add table property exceptions (tblPrEx) - must come BEFORE trPr per CT_Row
     if (this.formatting.tablePropertyExceptions) {
       const tblPrExChildren = this.buildTablePropertyExceptionsXML(
         this.formatting.tablePropertyExceptions
@@ -935,6 +951,11 @@ export class TableRow {
       if (tblPrExChildren.length > 0) {
         rowChildren.push(XMLBuilder.w('tblPrEx', undefined, tblPrExChildren));
       }
+    }
+
+    // Add row properties if there are any
+    if (trPrChildren.length > 0) {
+      rowChildren.push(XMLBuilder.w('trPr', undefined, trPrChildren));
     }
 
     // Add all cells - each cell is independent
@@ -946,6 +967,70 @@ export class TableRow {
     }
 
     return XMLBuilder.w('tr', undefined, rowChildren);
+  }
+
+  /**
+   * Gets the text content of all cells as a string array
+   *
+   * @returns Array of cell text values
+   *
+   * @example
+   * ```typescript
+   * const values = row.toArray(); // ['Alice', '30', 'NYC']
+   * ```
+   */
+  toArray(): string[] {
+    return this.cells.map((cell) => cell.getText());
+  }
+
+  /**
+   * Gets the concatenated text of all cells, separated by a delimiter
+   *
+   * @param separator - Separator between cell texts (default: tab)
+   * @returns Concatenated cell text
+   *
+   * @example
+   * ```typescript
+   * console.log(row.getText());       // "Alice\t30\tNYC"
+   * console.log(row.getText(', '));   // "Alice, 30, NYC"
+   * ```
+   */
+  getText(separator = '\t'): string {
+    return this.cells.map((cell) => cell.getText()).join(separator);
+  }
+
+  /**
+   * Creates a deep clone of this row
+   *
+   * Copies all cells (via TableCell.clone()), formatting, and property change
+   * tracking. The clone is independent of the original. Parent table reference
+   * is NOT copied (set by Table.addRow/insertRow).
+   *
+   * @returns New TableRow instance with the same structure and content
+   *
+   * @example
+   * ```typescript
+   * const row = new TableRow(3);
+   * row.getCell(0)?.createParagraph('Cell A');
+   * row.setHeader(true);
+   *
+   * const copy = row.clone();
+   * copy.getCell(0)?.createParagraph('Modified');
+   * // Original row unchanged
+   * ```
+   */
+  clone(): TableRow {
+    const clonedRow = new TableRow(0, deepClone(this.formatting));
+
+    for (const cell of this.cells) {
+      clonedRow.addCell(cell.clone());
+    }
+
+    if (this.trPrChange) {
+      clonedRow.setTrPrChange(deepClone(this.trPrChange));
+    }
+
+    return clonedRow;
   }
 
   /**

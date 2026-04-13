@@ -18,7 +18,6 @@ import type { Table } from '../elements/Table';
 import type { TableCell } from '../elements/TableCell';
 import type { StylesManager } from '../formatting/StylesManager';
 import { getActiveConditionalsInPriorityOrder } from './cnfStyleDecoder';
-import type { ConditionalFormattingType } from '../formatting/Style';
 
 /**
  * Resolves the effective shading for a table cell through the style hierarchy.

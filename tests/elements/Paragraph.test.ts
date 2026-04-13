@@ -723,7 +723,7 @@ describe('Paragraph', () => {
 
         const formatting = para.getFormatting();
         expect(formatting.keepNext).toBe(true);
-        expect(formatting.pageBreakBefore).toBe(false);
+        expect(formatting.pageBreakBefore).toBeUndefined();
       });
 
       test('should clear pageBreakBefore when keepLines is set', () => {
@@ -735,7 +735,7 @@ describe('Paragraph', () => {
 
         const formatting = para.getFormatting();
         expect(formatting.keepLines).toBe(true);
-        expect(formatting.pageBreakBefore).toBe(false);
+        expect(formatting.pageBreakBefore).toBeUndefined();
       });
 
       test('should not affect pageBreakBefore when keepNext is set to false', () => {
@@ -759,7 +759,7 @@ describe('Paragraph', () => {
         const formatting = para.getFormatting();
         expect(formatting.keepNext).toBe(true);
         expect(formatting.keepLines).toBe(true);
-        expect(formatting.pageBreakBefore).toBe(false);
+        expect(formatting.pageBreakBefore).toBeUndefined();
       });
 
       test('should work when keepNext/keepLines are set first', () => {
@@ -775,7 +775,7 @@ describe('Paragraph', () => {
         para.setKeepNext(true);
         const formatting2 = para.getFormatting();
         expect(formatting2.keepNext).toBe(true);
-        expect(formatting2.pageBreakBefore).toBe(false);
+        expect(formatting2.pageBreakBefore).toBeUndefined();
       });
 
       test('should produce correct XML without conflicting properties', () => {
@@ -791,11 +791,11 @@ describe('Paragraph', () => {
         const xml = builder.build();
 
         // Should have keepNext and keepLines
-        expect(xml).toContain('<w:keepNext/>');
-        expect(xml).toContain('<w:keepLines/>');
+        expect(xml).toContain('<w:keepNext ');
+        expect(xml).toContain('<w:keepLines ');
 
         // Should NOT have pageBreakBefore
-        expect(xml).not.toContain('<w:pageBreakBefore/>');
+        expect(xml).not.toContain('<w:pageBreakBefore');
       });
 
       test('should handle conflicts in constructor formatting', () => {
@@ -810,7 +810,7 @@ describe('Paragraph', () => {
 
         const formatting = para.getFormatting();
         expect(formatting.keepNext).toBe(true);
-        expect(formatting.pageBreakBefore).toBe(false);
+        expect(formatting.pageBreakBefore).toBeUndefined();
       });
     });
 

@@ -185,7 +185,8 @@ export function pointsToCm(points: number): number {
  * @returns Value in half-points
  */
 export function pointsToHalfPoints(points: number): number {
-  return points * UNITS.HALF_POINTS_PER_POINT;
+  // Round to nearest integer — w:sz/w:szCs require ST_HpsMeasure (unsigned integer)
+  return Math.round(points * UNITS.HALF_POINTS_PER_POINT);
 }
 
 /**

@@ -198,7 +198,7 @@ export class ChangelogGenerator {
   static fromRevisions(
     revisions: Revision[],
     options?: ChangelogOptions,
-    doc?: Document
+    _doc?: Document
   ): ChangeEntry[] {
     const logger = getLogger();
     const opts = {
@@ -619,7 +619,6 @@ export class ChangelogGenerator {
    */
   static describeRevision(revision: Revision, maxLength = 50): string {
     const type = revision.getType();
-    const author = revision.getAuthor();
     const runs = revision.getRuns();
     const text = runs.map((r) => r.getText()).join('');
     const excerpt =
@@ -676,7 +675,7 @@ export class ChangelogGenerator {
   /**
    * Generate description for a hyperlink change revision.
    */
-  private static describeHyperlinkChange(revision: Revision, maxLength: number): string {
+  private static describeHyperlinkChange(revision: Revision, _maxLength: number): string {
     const prevProps = revision.getPreviousProperties() || {};
     const newProps = revision.getNewProperties() || {};
     const changes: string[] = [];
@@ -883,7 +882,7 @@ export class ChangelogGenerator {
         // Truncate if too long
         return json.length > 100 ? json.substring(0, 97) + '...' : json;
       } catch (e) {
-        getLogger().debug('Failed to stringify value', { error: String(e) });
+        getLogger().warn('Failed to stringify value for changelog', { error: String(e) });
         return '[complex value]';
       }
     }
@@ -1203,7 +1202,7 @@ export class ChangelogGenerator {
    * fs.writeFileSync('changelog.html', html);
    * ```
    */
-  static toHTML(entries: ChangeEntry[], options?: ChangelogOptions): string {
+  static toHTML(entries: ChangeEntry[], _options?: ChangelogOptions): string {
     const summary = this.getSummary(entries);
 
     // Group entries by category

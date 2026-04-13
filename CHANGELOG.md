@@ -5,6 +5,46 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.4.0] - 2026-04-13
+
+### Added
+
+- **Document convenience methods**: `addHeading(text, level)`, `addPageBreak()`, `addHorizontalRule(color?, size?)` for common document construction patterns
+- **Document serialization**: `toMarkdown()`, `fromMarkdown()`, `toHTML(options?)`, `toBase64()`, `toDataUri()`, `loadFromBase64()` for multi-format document conversion
+- **Document template engine**: `fillTemplate(data, options?)` with cross-run placeholder replacement, custom delimiters, and table cell support
+- **Document search and formatting**: `findAndHighlight(text, color?)` and `findAndFormat(text, formatting)` for annotation workflows
+- **Document content operations**: `insertAfter()`, `insertBefore()`, `replaceElement()`, `removeElement()` for reference-based body manipulation
+- **Document statistics**: `getStatistics()` returning comprehensive metrics (words, characters, paragraphs, tables, images, headings, lists, hyperlinks, bookmarks, footnotes, endnotes, comments)
+- **Document iteration**: `forEachParagraph(callback)`, `forEachTable(callback)` with typed iteration and early termination
+- **Document sectioning**: `extractByHeading(maxLevel?)` groups body elements by heading level, `getElementsBetween(start, end)` for range extraction
+- **Document setup**: `setDefaultFont(name, size?)`, `setDefaultFontSize(size)`, `clear()` for body content reset
+- **Document cloning**: `clone()` creates independent deep copies for template-based batch generation
+- **Document list builders**: `addBulletListFromArray(items)`, `addNumberedListFromArray(items)` with nested level support and formatting
+- **Document CSV import**: `createTableFromCSV(csv, delimiter?)` for direct CSV-to-table creation
+- **Paragraph text manipulation**: `applyFormattingToRange(start, end, formatting)`, `deleteRange(start, end)`, `truncate(maxLength, suffix?)`, `wrap(prefix, suffix, formatting?)`
+- **Paragraph content operations**: `splitAt(offset)`, `consolidateRuns()`, `replaceAll(find, replace)`, `replaceTextCrossRun(find, replace)`, `findTextCrossRun(find)`
+- **Paragraph queries**: `getRunAtOffset(offset)`, `getFormattingAtOffset(offset)`, `contains(text, caseSensitive?)`
+- **Paragraph serialization**: `toJSON()`, `fromJSON()` for portable round-trip serialization
+- **Paragraph breaks**: `addLineBreak()`, `addColumnBreak()` convenience methods
+- **Run operations**: `splitAt(offset)`, `getPlainText()`, `equals(other)`, `hasSameFormatting(other)` for text manipulation and comparison
+- **Table data conversion**: `fromArray()`, `toArray()`, `fromCSV()`, `toCSV(delimiter?)`, `toPlainText(colSep?, rowSep?)` for multi-format I/O
+- **Table manipulation**: `transpose()`, `mapColumn(colIndex, transform)`, `addRowFromArray(cells)`, `addSummaryRow(options?)`, `setCell(row, col, text)`
+- **Table queries**: `getColumnCells(colIndex)`, `getColumnTexts(colIndex)`, `forEachCell(callback)`, `findCell(predicate)`, `filterRows(predicate)`
+- **Table cleanup**: `removeEmptyRows()`, `removeEmptyColumns()`
+- **Table cloning**: `duplicateRow(rowIndex, count?)`
+- **TableCell convenience**: `clone()`, `setBackgroundColor(hex)`, `getBackgroundColor()`
+- **TableRow operations**: `clone()`, `getText(separator?)`, `toArray()`
+- **Style management**: `StylesManager.cloneStyle(sourceId, newId, newName?)` for style duplication
+- **Section presets**: `createLegal()`, `createTabloid()`, `createA3()`, extended `createLandscape()` with all paper sizes
+- **Header/Footer convenience**: `addText(text, formatting?)` for quick styled text addition
+
+### Statistics
+
+- 195 test suites, 4,134 tests passing
+- 103 source files
+
+---
+
 ## [10.3.6] - 2026-03-23
 
 ### Fixed

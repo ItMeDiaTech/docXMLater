@@ -235,17 +235,6 @@ export class DocumentContent {
       for (const element of elements) {
         if (element instanceof Table) {
           tables.push(element);
-          // Check for nested tables in cells
-          for (let row = 0; row < element.getRowCount(); row++) {
-            for (let col = 0; col < element.getColumnCount(); col++) {
-              const cell = element.getCell(row, col);
-              if (cell) {
-                // Tables can be nested in cell content
-                const cellContent = cell.getParagraphs();
-                // Note: Cells typically contain paragraphs, not tables directly
-              }
-            }
-          }
         } else if (element instanceof StructuredDocumentTag) {
           collectTables(element.getContent() as BodyElement[]);
         }

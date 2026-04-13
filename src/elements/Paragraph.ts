@@ -6,6 +6,7 @@
 import { deepClone } from '../utils/deepClone';
 import { formatDateForXml } from '../utils/dateFormatting';
 import { logParagraphContent, logTextDirection } from '../utils/diagnostics';
+import { isEqualFormatting } from '../utils/formatting';
 import { defaultLogger } from '../utils/logger';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { Bookmark } from './Bookmark';
@@ -14,14 +15,11 @@ import {
   // Import common types
   ParagraphAlignment as CommonParagraphAlignment,
   BorderStyle as CommonBorderStyle,
-  ShadingPattern as CommonShadingPattern,
   BasicShadingPattern,
   TabAlignment as CommonTabAlignment,
   TabLeader as CommonTabLeader,
   TextDirection as CommonTextDirection,
   TextVerticalAlignment,
-  BorderDefinition as CommonBorderDefinition,
-  TabStop as CommonTabStop,
   ShadingConfig,
   buildShadingAttributes,
 } from './CommonTypes';
@@ -138,8 +136,8 @@ export interface FrameProperties {
   hSpace?: number;
   /** Vertical padding in twips */
   vSpace?: number;
-  /** Text wrapping around frame */
-  wrap?: 'around' | 'notBeside' | 'none' | 'tight';
+  /** Text wrapping around frame per ECMA-376 ST_Wrap (§17.18.104) */
+  wrap?: 'around' | 'auto' | 'none' | 'notBeside' | 'through' | 'tight';
   /** Drop cap style */
   dropCap?: 'none' | 'drop' | 'margin';
   /** Drop cap height in lines */
@@ -187,12 +185,20 @@ export interface ParagraphFormatting {
     firstLine?: number;
     hanging?: number;
   };
-  /** Spacing in twips */
+  /** Spacing per ECMA-376 §17.3.1.33 (CT_Spacing) */
   spacing?: {
     before?: number;
     after?: number;
     line?: number;
     lineRule?: 'auto' | 'exact' | 'atLeast';
+    /** Spacing before in hundredths of a line */
+    beforeLines?: number;
+    /** Spacing after in hundredths of a line */
+    afterLines?: number;
+    /** Auto-calculate before spacing (overrides w:before when true) */
+    beforeAutospacing?: boolean;
+    /** Auto-calculate after spacing (overrides w:after when true) */
+    afterAutospacing?: boolean;
   };
   /** Keep with next paragraph */
   keepNext?: boolean;
@@ -211,6 +217,8 @@ export interface ParagraphFormatting {
   contextualSpacing?: boolean;
   /** Paragraph ID (Word 2010+) - required by modern Word for change tracking */
   paraId?: string;
+  /** Text ID (Word 2010+) - tracks text modifications for merge conflict resolution */
+  textId?: string;
   /** Paragraph borders (top, bottom, left, right, between, bar) */
   borders?: {
     top?: BorderDefinition;
@@ -682,13 +690,27 @@ export class Paragraph {
    */
   /**
    * Adds a hyperlink to the paragraph
-   * @param url - Optional URL for the hyperlink
-   * @returns Hyperlink object for fluent chaining
+   * NOTE: This method has overloaded return types:
+   * - `addHyperlink(url: string)` returns the `Hyperlink` object (for configuring the link)
+   * - `addHyperlink(hyperlink: Hyperlink)` returns `this` (for paragraph chaining)
+   *
+   * @example
+   * ```typescript
+   * // Pattern 1: Create and configure a new hyperlink
+   * const link = para.addHyperlink('https://example.com');
+   * link.setText('Visit Example');
+   *
+   * // Pattern 2: Add pre-built hyperlink (returns paragraph for chaining)
+   * para.addHyperlink(new Hyperlink({ url: 'https://example.com', text: 'Link' }))
+   *     .addText(' more text after the link');
+   * ```
+   *
+   * @param url - URL string to create a new hyperlink
+   * @returns Hyperlink object for configuring the link
    */
   addHyperlink(url?: string): Hyperlink;
   /**
-   * Adds an existing hyperlink to the paragraph
-   * @param hyperlink - Existing Hyperlink object
+   * @param hyperlink - Existing Hyperlink object to add
    * @returns This paragraph for chaining
    */
   addHyperlink(hyperlink: Hyperlink): this;
@@ -1026,6 +1048,44 @@ export class Paragraph {
     } else {
       this.content.push(run);
     }
+    return this;
+  }
+
+  /**
+   * Adds a line break to the paragraph
+   *
+   * Creates a Run containing a line break element (`w:br`). This produces
+   * a soft return (line break within the same paragraph), unlike creating
+   * a new paragraph which produces a hard return.
+   *
+   * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * para.addText('Line one');
+   * para.addLineBreak();
+   * para.addText('Line two (same paragraph)');
+   * ```
+   */
+  addLineBreak(): this {
+    const run = new Run('');
+    run.addBreak();
+    this.content.push(run);
+    return this;
+  }
+
+  /**
+   * Adds a column break to the paragraph
+   *
+   * Inserts a column break element (`w:br w:type="column"`). In multi-column
+   * layouts, forces subsequent content to the next column.
+   *
+   * @returns This paragraph for chaining
+   */
+  addColumnBreak(): this {
+    const run = new Run('');
+    run.addBreak('column');
+    this.content.push(run);
     return this;
   }
 
@@ -1773,6 +1833,29 @@ export class Paragraph {
   }
 
   /**
+   * Checks whether the paragraph text contains a substring
+   *
+   * Case-insensitive by default. A simpler alternative to `findText()`
+   * when you just need a boolean check.
+   *
+   * @param text - Substring to search for
+   * @param caseSensitive - Match case exactly (default: false)
+   * @returns True if the paragraph contains the text
+   *
+   * @example
+   * ```typescript
+   * if (para.contains('TODO')) {
+   *   console.log('Found a TODO item');
+   * }
+   * ```
+   */
+  contains(text: string, caseSensitive = false): boolean {
+    const paraText = caseSensitive ? this.getText() : this.getText().toLowerCase();
+    const search = caseSensitive ? text : text.toLowerCase();
+    return paraText.includes(search);
+  }
+
+  /**
    * Gets the paragraph style ID
    *
    * Returns the style identifier if a style is applied to this paragraph.
@@ -2222,7 +2305,7 @@ export class Paragraph {
 
     // Resolve property conflicts: keepNext contradicts pageBreakBefore
     if (keepNext) {
-      this.formatting.pageBreakBefore = false;
+      this.formatting.pageBreakBefore = undefined;
     }
 
     if (this.trackingContext?.isEnabled() && previousValue !== keepNext) {
@@ -2250,7 +2333,7 @@ export class Paragraph {
 
     // Resolve property conflicts: keepLines contradicts pageBreakBefore
     if (keepLines) {
-      this.formatting.pageBreakBefore = false;
+      this.formatting.pageBreakBefore = undefined;
     }
 
     if (this.trackingContext?.isEnabled() && previousValue !== keepLines) {
@@ -2983,14 +3066,18 @@ export class Paragraph {
       pPrChildren.push(XMLBuilder.wSelf('pStyle', { 'w:val': this.formatting.style }));
     }
 
-    // 2. Keep with next paragraph
-    if (this.formatting.keepNext) {
-      pPrChildren.push(XMLBuilder.wSelf('keepNext'));
+    // 2. Keep with next paragraph (CT_OnOff — emit val="0" to override style inheritance)
+    if (this.formatting.keepNext !== undefined) {
+      pPrChildren.push(
+        XMLBuilder.wSelf('keepNext', { 'w:val': this.formatting.keepNext ? '1' : '0' })
+      );
     }
 
     // 3. Keep lines together
-    if (this.formatting.keepLines) {
-      pPrChildren.push(XMLBuilder.wSelf('keepLines'));
+    if (this.formatting.keepLines !== undefined) {
+      pPrChildren.push(
+        XMLBuilder.wSelf('keepLines', { 'w:val': this.formatting.keepLines ? '1' : '0' })
+      );
     }
 
     // CT_PPrBase element order per ECMA-376:
@@ -3002,8 +3089,12 @@ export class Paragraph {
     // outlineLvl → divId → cnfStyle
 
     // 4. Page break before
-    if (this.formatting.pageBreakBefore) {
-      pPrChildren.push(XMLBuilder.wSelf('pageBreakBefore'));
+    if (this.formatting.pageBreakBefore !== undefined) {
+      pPrChildren.push(
+        XMLBuilder.wSelf('pageBreakBefore', {
+          'w:val': this.formatting.pageBreakBefore ? '1' : '0',
+        })
+      );
     }
 
     // 5. Text frame properties (framePr)
@@ -3050,11 +3141,22 @@ export class Paragraph {
         }),
       ]);
       pPrChildren.push(numPr);
+    } else if (this.formatting.numberingSuppressed) {
+      // Per ECMA-376 §17.3.1.19, numId=0 explicitly removes numbering inherited from style
+      const numPr = XMLBuilder.w('numPr', undefined, [
+        XMLBuilder.wSelf('ilvl', { 'w:val': '0' }),
+        XMLBuilder.wSelf('numId', { 'w:val': '0' }),
+      ]);
+      pPrChildren.push(numPr);
     }
 
     // 8. Suppress line numbers
-    if (this.formatting.suppressLineNumbers) {
-      pPrChildren.push(XMLBuilder.wSelf('suppressLineNumbers'));
+    if (this.formatting.suppressLineNumbers !== undefined) {
+      pPrChildren.push(
+        XMLBuilder.wSelf('suppressLineNumbers', {
+          'w:val': this.formatting.suppressLineNumbers ? '1' : '0',
+        })
+      );
     }
 
     // 9. Paragraph borders
@@ -3126,8 +3228,12 @@ export class Paragraph {
     }
 
     // 12. Suppress automatic hyphenation
-    if (this.formatting.suppressAutoHyphens) {
-      pPrChildren.push(XMLBuilder.wSelf('suppressAutoHyphens'));
+    if (this.formatting.suppressAutoHyphens !== undefined) {
+      pPrChildren.push(
+        XMLBuilder.wSelf('suppressAutoHyphens', {
+          'w:val': this.formatting.suppressAutoHyphens ? '1' : '0',
+        })
+      );
     }
 
     // 13. CJK paragraph properties
@@ -3176,12 +3282,18 @@ export class Paragraph {
       );
     }
 
-    // 16. Spacing (before/after/line)
+    // 16. Spacing (before/after/line + autospacing/lines per ECMA-376 §17.3.1.33)
     if (this.formatting.spacing) {
       const spc = this.formatting.spacing;
       const attributes: Record<string, number | string> = {};
       if (spc.before !== undefined) attributes['w:before'] = spc.before;
+      if (spc.beforeLines !== undefined) attributes['w:beforeLines'] = spc.beforeLines;
+      if (spc.beforeAutospacing !== undefined)
+        attributes['w:beforeAutospacing'] = spc.beforeAutospacing ? '1' : '0';
       if (spc.after !== undefined) attributes['w:after'] = spc.after;
+      if (spc.afterLines !== undefined) attributes['w:afterLines'] = spc.afterLines;
+      if (spc.afterAutospacing !== undefined)
+        attributes['w:afterAutospacing'] = spc.afterAutospacing ? '1' : '0';
       if (spc.line !== undefined) attributes['w:line'] = spc.line;
       if (spc.lineRule) attributes['w:lineRule'] = spc.lineRule;
       if (Object.keys(attributes).length > 0) {
@@ -3190,31 +3302,45 @@ export class Paragraph {
     }
 
     // 17. Indentation (left/right/firstLine/hanging)
+    // Per ECMA-376 §17.3.1.12, firstLine and hanging are mutually exclusive — hanging takes precedence
     if (this.formatting.indentation) {
       const ind = this.formatting.indentation;
       const attributes: Record<string, number> = {};
       if (ind.left !== undefined) attributes['w:left'] = ind.left;
       if (ind.right !== undefined) attributes['w:right'] = ind.right;
-      if (ind.firstLine !== undefined) attributes['w:firstLine'] = ind.firstLine;
-      if (ind.hanging !== undefined) attributes['w:hanging'] = ind.hanging;
+      if (ind.hanging !== undefined) {
+        attributes['w:hanging'] = ind.hanging;
+      } else if (ind.firstLine !== undefined) {
+        attributes['w:firstLine'] = ind.firstLine;
+      }
       if (Object.keys(attributes).length > 0) {
         pPrChildren.push(XMLBuilder.wSelf('ind', attributes));
       }
     }
 
     // 18. Contextual spacing
-    if (this.formatting.contextualSpacing) {
-      pPrChildren.push(XMLBuilder.wSelf('contextualSpacing', { 'w:val': '1' }));
+    if (this.formatting.contextualSpacing !== undefined) {
+      pPrChildren.push(
+        XMLBuilder.wSelf('contextualSpacing', {
+          'w:val': this.formatting.contextualSpacing ? '1' : '0',
+        })
+      );
     }
 
     // 19. Mirror indents
-    if (this.formatting.mirrorIndents) {
-      pPrChildren.push(XMLBuilder.wSelf('mirrorIndents'));
+    if (this.formatting.mirrorIndents !== undefined) {
+      pPrChildren.push(
+        XMLBuilder.wSelf('mirrorIndents', { 'w:val': this.formatting.mirrorIndents ? '1' : '0' })
+      );
     }
 
     // 20. Suppress text frame overlap
-    if (this.formatting.suppressOverlap) {
-      pPrChildren.push(XMLBuilder.wSelf('suppressOverlap'));
+    if (this.formatting.suppressOverlap !== undefined) {
+      pPrChildren.push(
+        XMLBuilder.wSelf('suppressOverlap', {
+          'w:val': this.formatting.suppressOverlap ? '1' : '0',
+        })
+      );
     }
 
     // 21. Justification/Alignment
@@ -3361,9 +3487,11 @@ export class Paragraph {
 
       // Build child w:pPr element with previous properties
       // Per CT_PPrBase schema order: pStyle, keepNext, keepLines, pageBreakBefore,
-      // widowControl, numPr, suppressLineNumbers, pBdr, shd, tabs,
-      // suppressAutoHyphens, bidi, adjustRightInd, spacing, ind,
-      // contextualSpacing, mirrorIndents, jc, textDirection, textAlignment, outlineLvl
+      // framePr, widowControl, numPr, suppressLineNumbers, pBdr, shd, tabs,
+      // suppressAutoHyphens, kinsoku, wordWrap, overflowPunct, topLinePunct,
+      // autoSpaceDE, autoSpaceDN, bidi, adjustRightInd, spacing, ind,
+      // contextualSpacing, mirrorIndents, suppressOverlap, jc, textDirection,
+      // textAlignment, outlineLvl
       const prevPPrChildren: XMLElement[] = [];
       if (change.previousProperties) {
         const prev = change.previousProperties;
@@ -3397,7 +3525,31 @@ export class Paragraph {
           );
         }
 
-        // 5. widowControl
+        // 5. framePr (text frame properties)
+        if (prev.framePr) {
+          const fAttrs: Record<string, string> = {};
+          const f = prev.framePr;
+          if (f.w !== undefined) fAttrs['w:w'] = f.w.toString();
+          if (f.h !== undefined) fAttrs['w:h'] = f.h.toString();
+          if (f.hRule) fAttrs['w:hRule'] = f.hRule;
+          if (f.x !== undefined) fAttrs['w:x'] = f.x.toString();
+          if (f.y !== undefined) fAttrs['w:y'] = f.y.toString();
+          if (f.xAlign) fAttrs['w:xAlign'] = f.xAlign;
+          if (f.yAlign) fAttrs['w:yAlign'] = f.yAlign;
+          if (f.hAnchor) fAttrs['w:hAnchor'] = f.hAnchor;
+          if (f.vAnchor) fAttrs['w:vAnchor'] = f.vAnchor;
+          if (f.hSpace !== undefined) fAttrs['w:hSpace'] = f.hSpace.toString();
+          if (f.vSpace !== undefined) fAttrs['w:vSpace'] = f.vSpace.toString();
+          if (f.wrap) fAttrs['w:wrap'] = f.wrap;
+          if (f.dropCap) fAttrs['w:dropCap'] = f.dropCap;
+          if (f.lines !== undefined) fAttrs['w:lines'] = f.lines.toString();
+          if (f.anchorLock !== undefined) fAttrs['w:anchorLock'] = f.anchorLock ? '1' : '0';
+          if (Object.keys(fAttrs).length > 0) {
+            prevPPrChildren.push(XMLBuilder.wSelf('framePr', fAttrs));
+          }
+        }
+
+        // 6. widowControl
         if (prev.widowControl !== undefined) {
           prevPPrChildren.push(
             XMLBuilder.wSelf('widowControl', {
@@ -3422,6 +3574,13 @@ export class Paragraph {
           if (numPrChildren.length > 0) {
             prevPPrChildren.push(XMLBuilder.w('numPr', undefined, numPrChildren));
           }
+        } else if (prev.numberingSuppressed) {
+          prevPPrChildren.push(
+            XMLBuilder.w('numPr', undefined, [
+              XMLBuilder.wSelf('ilvl', { 'w:val': '0' }),
+              XMLBuilder.wSelf('numId', { 'w:val': '0' }),
+            ])
+          );
         }
 
         // 7. suppressLineNumbers
@@ -3481,7 +3640,37 @@ export class Paragraph {
           }
         }
 
-        // 12. bidi
+        // 12. CJK paragraph properties
+        if (prev.kinsoku !== undefined) {
+          prevPPrChildren.push(XMLBuilder.wSelf('kinsoku', { 'w:val': prev.kinsoku ? '1' : '0' }));
+        }
+        if (prev.wordWrap !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf('wordWrap', { 'w:val': prev.wordWrap ? '1' : '0' })
+          );
+        }
+        if (prev.overflowPunct !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf('overflowPunct', { 'w:val': prev.overflowPunct ? '1' : '0' })
+          );
+        }
+        if (prev.topLinePunct !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf('topLinePunct', { 'w:val': prev.topLinePunct ? '1' : '0' })
+          );
+        }
+        if (prev.autoSpaceDE !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf('autoSpaceDE', { 'w:val': prev.autoSpaceDE ? '1' : '0' })
+          );
+        }
+        if (prev.autoSpaceDN !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf('autoSpaceDN', { 'w:val': prev.autoSpaceDN ? '1' : '0' })
+          );
+        }
+
+        // 13. bidi
         if (prev.bidi !== undefined) {
           prevPPrChildren.push(XMLBuilder.wSelf('bidi', { 'w:val': prev.bidi ? '1' : '0' }));
         }
@@ -3495,13 +3684,21 @@ export class Paragraph {
           );
         }
 
-        // 14. spacing
+        // 14. spacing (all 8 CT_Spacing attributes)
         if (prev.spacing) {
           const spacingAttrs: Record<string, string> = {};
           if (prev.spacing.before !== undefined)
             spacingAttrs['w:before'] = prev.spacing.before.toString();
+          if (prev.spacing.beforeLines !== undefined)
+            spacingAttrs['w:beforeLines'] = prev.spacing.beforeLines.toString();
+          if (prev.spacing.beforeAutospacing !== undefined)
+            spacingAttrs['w:beforeAutospacing'] = prev.spacing.beforeAutospacing ? '1' : '0';
           if (prev.spacing.after !== undefined)
             spacingAttrs['w:after'] = prev.spacing.after.toString();
+          if (prev.spacing.afterLines !== undefined)
+            spacingAttrs['w:afterLines'] = prev.spacing.afterLines.toString();
+          if (prev.spacing.afterAutospacing !== undefined)
+            spacingAttrs['w:afterAutospacing'] = prev.spacing.afterAutospacing ? '1' : '0';
           if (prev.spacing.line !== undefined)
             spacingAttrs['w:line'] = prev.spacing.line.toString();
           if (prev.spacing.lineRule) spacingAttrs['w:lineRule'] = prev.spacing.lineRule;
@@ -3542,7 +3739,16 @@ export class Paragraph {
           );
         }
 
-        // 18. jc (alignment)
+        // 18. suppressOverlap
+        if (prev.suppressOverlap !== undefined) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf('suppressOverlap', {
+              'w:val': prev.suppressOverlap ? '1' : '0',
+            })
+          );
+        }
+
+        // 19. jc (alignment)
         if (prev.alignment) {
           // Map 'justify' to 'both' per ECMA-376 ST_Jc enumeration
           const alignmentValue = prev.alignment === 'justify' ? 'both' : prev.alignment;
@@ -3559,11 +3765,28 @@ export class Paragraph {
           prevPPrChildren.push(XMLBuilder.wSelf('textAlignment', { 'w:val': prev.textAlignment }));
         }
 
-        // 21. outlineLvl
+        // 21. textboxTightWrap
+        if (prev.textboxTightWrap) {
+          prevPPrChildren.push(
+            XMLBuilder.wSelf('textboxTightWrap', { 'w:val': prev.textboxTightWrap })
+          );
+        }
+
+        // 22. outlineLvl
         if (prev.outlineLevel !== undefined) {
           prevPPrChildren.push(
             XMLBuilder.wSelf('outlineLvl', { 'w:val': prev.outlineLevel.toString() })
           );
+        }
+
+        // 23. divId
+        if (prev.divId !== undefined) {
+          prevPPrChildren.push(XMLBuilder.wSelf('divId', { 'w:val': prev.divId.toString() }));
+        }
+
+        // 24. cnfStyle
+        if (prev.cnfStyle) {
+          prevPPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': prev.cnfStyle }));
         }
       }
 
@@ -3682,10 +3905,13 @@ export class Paragraph {
       paragraphChildren.push(bookmark.toEndXML());
     }
 
-    // Add paragraph-level attributes (Word 2010+ requires w14:paraId)
+    // Add paragraph-level attributes (Word 2010+ w14:paraId and w14:textId)
     const paragraphAttributes: Record<string, string> = {};
     if (this.formatting.paraId) {
       paragraphAttributes['w14:paraId'] = this.formatting.paraId;
+    }
+    if (this.formatting.textId) {
+      paragraphAttributes['w14:textId'] = this.formatting.textId;
     }
 
     return XMLBuilder.w(
@@ -3787,6 +4013,233 @@ export class Paragraph {
     clonedParagraph.commentsEnd = [...this.commentsEnd];
 
     return clonedParagraph;
+  }
+
+  /**
+   * Serializes the paragraph to a portable JSON object
+   *
+   * Returns a plain object representing the paragraph's text content, inline
+   * formatting, style, and paragraph-level formatting. Only Run content is
+   * serialized — hyperlinks, revisions, and other non-Run elements are
+   * represented by their text only.
+   *
+   * The output is designed for data pipelines, API responses, storage,
+   * and debugging. Use `Paragraph.fromJSON()` to reconstruct.
+   *
+   * @returns JSON-serializable paragraph representation
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph().addText('Hello ', { bold: true }).addText('World');
+   * para.setStyle('Heading1').setAlignment('center');
+   *
+   * const json = para.toJSON();
+   * // {
+   * //   text: 'Hello World',
+   * //   style: 'Heading1',
+   * //   alignment: 'center',
+   * //   runs: [
+   * //     { text: 'Hello ', formatting: { bold: true } },
+   * //     { text: 'World', formatting: {} }
+   * //   ]
+   * // }
+   * ```
+   */
+  toJSON(): {
+    text: string;
+    style?: string;
+    alignment?: string;
+    runs: { text: string; formatting: RunFormatting }[];
+    numbering?: { numId: number; level: number };
+    indentation?: { left?: number; right?: number; firstLine?: number; hanging?: number };
+    spacing?: { before?: number; after?: number; line?: number; lineRule?: string };
+  } {
+    const runs = this.getRuns().map((run) => ({
+      text: run.getText(),
+      formatting: run.getFormatting(),
+    }));
+
+    const result: ReturnType<Paragraph['toJSON']> = {
+      text: this.getText(),
+      runs,
+    };
+
+    if (this.formatting.style) result.style = this.formatting.style;
+    if (this.formatting.alignment) result.alignment = this.formatting.alignment;
+    if (this.formatting.numbering) result.numbering = { ...this.formatting.numbering };
+    if (this.formatting.indentation) result.indentation = { ...this.formatting.indentation };
+    if (this.formatting.spacing) {
+      result.spacing = {
+        before: this.formatting.spacing.before,
+        after: this.formatting.spacing.after,
+        line: this.formatting.spacing.line,
+        lineRule: this.formatting.spacing.lineRule,
+      };
+    }
+
+    return result;
+  }
+
+  /**
+   * Creates a Paragraph from a JSON object (as produced by `toJSON()`)
+   *
+   * Reconstructs a paragraph with runs, formatting, style, and layout
+   * from a serialized representation. This enables round-trip serialization.
+   *
+   * @param data - JSON object matching the `toJSON()` output shape
+   * @returns New Paragraph instance
+   *
+   * @example
+   * ```typescript
+   * const json = { text: 'Hello', style: 'Heading1', runs: [{ text: 'Hello', formatting: { bold: true } }] };
+   * const para = Paragraph.fromJSON(json);
+   * para.getText(); // 'Hello'
+   * para.getStyle(); // 'Heading1'
+   * ```
+   */
+  static fromJSON(data: {
+    text?: string;
+    style?: string;
+    alignment?: string;
+    runs?: { text: string; formatting?: RunFormatting }[];
+    numbering?: { numId: number; level: number };
+    indentation?: { left?: number; right?: number; firstLine?: number; hanging?: number };
+    spacing?: { before?: number; after?: number; line?: number; lineRule?: string };
+  }): Paragraph {
+    const para = new Paragraph();
+
+    if (data.runs && data.runs.length > 0) {
+      for (const runData of data.runs) {
+        para.addText(runData.text, runData.formatting);
+      }
+    } else if (data.text) {
+      para.addText(data.text);
+    }
+
+    if (data.style) para.setStyle(data.style);
+    if (data.alignment) para.setAlignment(data.alignment as ParagraphAlignment);
+    if (data.numbering) para.setNumbering(data.numbering.numId, data.numbering.level);
+    if (data.indentation) {
+      if (data.indentation.left !== undefined) para.setLeftIndent(data.indentation.left);
+      if (data.indentation.right !== undefined) para.setRightIndent(data.indentation.right);
+      if (data.indentation.firstLine !== undefined)
+        para.setFirstLineIndent(data.indentation.firstLine);
+      if (data.indentation.hanging !== undefined) para.setHangingIndent(data.indentation.hanging);
+    }
+    if (data.spacing) {
+      if (data.spacing.before !== undefined) para.setSpaceBefore(data.spacing.before);
+      if (data.spacing.after !== undefined) para.setSpaceAfter(data.spacing.after);
+      if (data.spacing.line !== undefined) {
+        para.setLineSpacing(
+          data.spacing.line,
+          (data.spacing.lineRule as 'auto' | 'exact' | 'atLeast') ?? 'auto'
+        );
+      }
+    }
+
+    return para;
+  }
+
+  /**
+   * Splits this paragraph at a character offset, returning the tail as a new paragraph
+   *
+   * Content from the offset onward is moved to a new Paragraph. The new paragraph
+   * inherits this paragraph's style and formatting (deep-cloned). If the split point
+   * falls within a Run, that run is split using `Run.splitAt()`.
+   *
+   * Only Run elements contribute to the character offset count. Non-Run content
+   * (hyperlinks, revisions, fields) that appears after all affected runs is moved
+   * to the new paragraph as-is.
+   *
+   * @param offset - Character position to split at (0-based). Content from this
+   *   position onward moves to the new paragraph.
+   * @returns A new Paragraph containing content from `offset` onward
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph().addText('Hello World');
+   * const tail = para.splitAt(5);
+   * para.getText();   // "Hello"
+   * tail.getText();   // " World"
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Insert a table between two halves of a paragraph
+   * const tail = para.splitAt(offset);
+   * const paraIndex = doc.getParagraphIndex(para);
+   * doc.insertTableAt(paraIndex + 1, table);
+   * doc.insertParagraphAt(paraIndex + 2, tail);
+   * ```
+   */
+  splitAt(offset: number): Paragraph {
+    // Create new paragraph with cloned formatting and style
+    const tailPara = new Paragraph(deepClone(this.formatting));
+
+    // Edge case: split at or past end — return empty paragraph
+    const totalLength = this.getText().length;
+    if (offset >= totalLength) {
+      return tailPara;
+    }
+
+    // Edge case: split at or before start — move everything
+    if (offset <= 0) {
+      tailPara.content = this.content;
+      this.content = [];
+      return tailPara;
+    }
+
+    // Walk content to find the split point
+    let charPos = 0;
+    let splitContentIndex = -1;
+
+    for (let i = 0; i < this.content.length; i++) {
+      const item = this.content[i]!;
+
+      if (item instanceof Run) {
+        const runLen = item.getText().length;
+        const runEnd = charPos + runLen;
+
+        if (runEnd <= offset) {
+          // Entire run stays in this paragraph
+          charPos = runEnd;
+          continue;
+        }
+
+        if (charPos >= offset) {
+          // Entire run goes to tail paragraph
+          splitContentIndex = i;
+          break;
+        }
+
+        // Split falls within this run
+        const localOffset = offset - charPos;
+        const tailRun = item.splitAt(localOffset);
+
+        // Insert the tail run and mark everything after it for the new paragraph
+        this.content.splice(i + 1, 0, tailRun);
+        splitContentIndex = i + 1;
+        break;
+      } else {
+        // Non-Run content: if we haven't reached the offset yet, keep it here
+        // Once we've passed the offset, it moves to tail
+        if (charPos >= offset) {
+          splitContentIndex = i;
+          break;
+        }
+      }
+    }
+
+    // If no split point found (shouldn't happen given offset < totalLength),
+    // but guard against it
+    if (splitContentIndex === -1) {
+      return tailPara;
+    }
+
+    // Move content from splitContentIndex onward to the tail paragraph
+    tailPara.content = this.content.splice(splitContentIndex);
+
+    return tailPara;
   }
 
   /**
@@ -4064,6 +4517,581 @@ export class Paragraph {
     }
 
     return replacementCount;
+  }
+
+  /**
+   * Replaces all occurrences of a string, searching across run boundaries
+   *
+   * A simplified alias for `replaceTextCrossRun()` with no options — just
+   * find and replace. Case-insensitive. Handles Word-fragmented text.
+   *
+   * @param find - Text to search for
+   * @param replace - Replacement text
+   * @returns Number of replacements made
+   *
+   * @example
+   * ```typescript
+   * para.replaceAll('old', 'new');
+   * para.replaceAll('{{name}}', 'Alice');
+   * ```
+   */
+  replaceAll(find: string, replace: string): number {
+    return this.replaceTextCrossRun(find, replace);
+  }
+
+  /**
+   * Searches for text across run boundaries, returning match positions
+   *
+   * Concatenates text from all runs and searches the combined string,
+   * finding matches that may span multiple runs (e.g., `{{name}}` split
+   * across runs as `{{` + `name` + `}}`). This is the read-only
+   * counterpart to `replaceTextCrossRun()`.
+   *
+   * @param find - Text to search for (plain string)
+   * @param options - Search options
+   * @param options.caseSensitive - Match case exactly (default: false)
+   * @returns Array of match objects with offset and matched text
+   *
+   * @example
+   * ```typescript
+   * // Find all placeholders, even if fragmented across runs
+   * const matches = para.findTextCrossRun('{{name}}');
+   * console.log(`Found ${matches.length} matches`);
+   * for (const m of matches) {
+   *   console.log(`  at offset ${m.offset}: "${m.text}"`);
+   * }
+   * ```
+   */
+  findTextCrossRun(
+    find: string,
+    options?: { caseSensitive?: boolean }
+  ): { offset: number; text: string }[] {
+    const caseSensitive = options?.caseSensitive ?? false;
+
+    // Build full text from runs only
+    let fullText = '';
+    for (const item of this.content) {
+      if (item instanceof Run) {
+        fullText += item.getText();
+      }
+    }
+
+    if (fullText.length === 0) return [];
+
+    const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
+    const results: { offset: number; text: string }[] = [];
+    let m: RegExpExecArray | null;
+
+    while ((m = regex.exec(fullText)) !== null) {
+      results.push({ offset: m.index, text: m[0]! });
+    }
+
+    return results;
+  }
+
+  /**
+   * Finds and replaces text that may span across multiple runs
+   *
+   * Unlike `replaceText()` which searches each run independently, this method
+   * concatenates text across all runs and searches the combined string. This
+   * handles the common case where Word splits text like `{{name}}` across
+   * multiple runs (e.g., `{{` in one run, `name` in another, `}}` in a third).
+   *
+   * The replacement text inherits formatting from the first run of the match.
+   * Runs that are fully consumed by the match are removed; partially consumed
+   * runs are trimmed.
+   *
+   * @param find - Text to search for (plain string, case-insensitive by default)
+   * @param replace - Replacement text
+   * @param options - Search options
+   * @param options.caseSensitive - Match case exactly (default: false)
+   * @returns Number of replacements made
+   *
+   * @example
+   * ```typescript
+   * // Handle Word-fragmented placeholders
+   * // Paragraph has runs: ["{{", "name", "}}"]
+   * para.replaceTextCrossRun('{{name}}', 'Alice');
+   * // Now has single run: "Alice"
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Works with normal (non-fragmented) text too
+   * para.replaceTextCrossRun('old text', 'new text');
+   * ```
+   */
+  replaceTextCrossRun(
+    find: string,
+    replace: string,
+    options?: { caseSensitive?: boolean }
+  ): number {
+    const caseSensitive = options?.caseSensitive ?? false;
+
+    // Build run map: [{run, contentIndex, startOffset, endOffset}]
+    const runMap: { run: Run; contentIndex: number; start: number; end: number }[] = [];
+    let charPos = 0;
+    for (let i = 0; i < this.content.length; i++) {
+      const item = this.content[i]!;
+      if (item instanceof Run) {
+        const len = item.getText().length;
+        if (len > 0) {
+          runMap.push({ run: item, contentIndex: i, start: charPos, end: charPos + len });
+        }
+        charPos += len;
+      }
+    }
+
+    if (runMap.length === 0) return 0;
+
+    // Get full concatenated text
+    const fullText = runMap.map((r) => r.run.getText()).join('');
+
+    // Find all match positions
+    const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
+    const matches: { start: number; end: number }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(fullText)) !== null) {
+      matches.push({ start: m.index, end: m.index + m[0]!.length });
+    }
+
+    if (matches.length === 0) return 0;
+
+    // Process matches in reverse order to preserve earlier offsets
+    for (let mi = matches.length - 1; mi >= 0; mi--) {
+      const match = matches[mi]!;
+
+      // Find all runs that overlap this match
+      const affectedRuns = runMap.filter((r) => r.end > match.start && r.start < match.end);
+
+      if (affectedRuns.length === 0) continue;
+
+      const firstAffected = affectedRuns[0]!;
+      const lastAffected = affectedRuns[affectedRuns.length - 1]!;
+
+      // Calculate what to keep from the first and last runs
+      const keepBefore =
+        match.start > firstAffected.start
+          ? firstAffected.run.getText().slice(0, match.start - firstAffected.start)
+          : '';
+      const keepAfter =
+        match.end < lastAffected.end
+          ? lastAffected.run.getText().slice(match.end - lastAffected.start)
+          : '';
+
+      // Set the first affected run to: kept-before + replacement + kept-after
+      firstAffected.run.setText(keepBefore + replace + keepAfter);
+
+      // Remove any middle/last runs that were fully or partially consumed
+      // (iterate in reverse to preserve indices)
+      for (let r = affectedRuns.length - 1; r >= 1; r--) {
+        const runEntry = affectedRuns[r]!;
+        const idx = this.content.indexOf(runEntry.run);
+        if (idx !== -1) {
+          this.content.splice(idx, 1);
+        }
+      }
+    }
+
+    return matches.length;
+  }
+
+  /**
+   * Deletes a character range from the paragraph
+   *
+   * Removes text in the [start, end) range. Runs fully within the range
+   * are removed entirely; boundary runs are trimmed. Non-Run content is
+   * not affected.
+   *
+   * @param start - Start character offset (0-based, inclusive)
+   * @param end - End character offset (0-based, exclusive)
+   * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph().addText('Hello Beautiful World');
+   * para.deleteRange(5, 15);
+   * para.getText(); // "Hello World"
+   * ```
+   */
+  deleteRange(start: number, end: number): this {
+    if (start >= end) return this;
+
+    // Build run map
+    const runMap: { index: number; start: number; end: number }[] = [];
+    let charPos = 0;
+    for (let i = 0; i < this.content.length; i++) {
+      const item = this.content[i]!;
+      if (item instanceof Run) {
+        const len = item.getText().length;
+        if (len > 0) {
+          runMap.push({ index: i, start: charPos, end: charPos + len });
+        }
+        charPos += len;
+      }
+    }
+
+    // Process in reverse to preserve indices
+    for (let m = runMap.length - 1; m >= 0; m--) {
+      const entry = runMap[m]!;
+      const run = this.content[entry.index] as Run;
+
+      // Skip runs entirely outside the range
+      if (entry.end <= start || entry.start >= end) continue;
+
+      const runStart = entry.start;
+      const runEnd = entry.end;
+
+      // How much of this run is in the delete range?
+      const delStart = Math.max(0, start - runStart);
+      const delEnd = Math.min(runEnd - runStart, end - runStart);
+      const runLen = runEnd - runStart;
+
+      if (delStart === 0 && delEnd === runLen) {
+        // Entire run is deleted
+        this.content.splice(entry.index, 1);
+      } else {
+        // Partial deletion — keep the parts outside the range
+        const textBefore = run.getText().slice(0, delStart);
+        const textAfter = run.getText().slice(delEnd);
+        run.setText(textBefore + textAfter);
+      }
+    }
+
+    return this;
+  }
+
+  /**
+   * Truncates paragraph text to a maximum length
+   *
+   * If the paragraph text exceeds `maxLength`, content beyond that point
+   * is removed and an optional suffix (default `'...'`) is appended.
+   * The suffix counts toward the total length, so the final text is at
+   * most `maxLength` characters.
+   *
+   * @param maxLength - Maximum total character length (including suffix)
+   * @param suffix - Text to append when truncated (default: '...')
+   * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph().addText('The quick brown fox jumps over the lazy dog');
+   * para.truncate(20);
+   * para.getText(); // "The quick brown f..."
+   *
+   * para.truncate(10, ' [more]');
+   * // getText() => "The [more]"
+   * ```
+   */
+  truncate(maxLength: number, suffix = '...'): this {
+    const text = this.getText();
+    if (text.length <= maxLength) return this;
+
+    const cutoff = Math.max(0, maxLength - suffix.length);
+    this.deleteRange(cutoff, text.length);
+
+    // Append suffix as a new run (inherits no formatting — plain text indicator)
+    if (suffix) {
+      this.addText(suffix);
+    }
+
+    return this;
+  }
+
+  /**
+   * Wraps existing paragraph content with prefix and/or suffix text
+   *
+   * Inserts a Run with the prefix text before existing content and
+   * a Run with the suffix text after it. Both inherit no formatting
+   * by default, but optional formatting can be provided.
+   *
+   * @param prefix - Text to prepend (empty string to skip)
+   * @param suffix - Text to append (empty string to skip)
+   * @param formatting - Optional formatting for both prefix and suffix runs
+   * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph().addText('important');
+   * para.wrap('[', ']');
+   * para.getText(); // "[important]"
+   *
+   * // With formatting
+   * para.wrap('NOTE: ', '', { bold: true });
+   * ```
+   */
+  wrap(prefix: string, suffix: string, formatting?: RunFormatting): this {
+    if (prefix) {
+      const prefixRun = new Run(prefix, formatting);
+      this.content.unshift(prefixRun);
+    }
+    if (suffix) {
+      const suffixRun = new Run(suffix, formatting);
+      this.content.push(suffixRun);
+    }
+    return this;
+  }
+
+  /**
+   * Returns the Run that contains the character at the given offset
+   *
+   * Walks through Run elements in the paragraph, counting characters,
+   * and returns the Run that contains the specified offset along with
+   * the local offset within that run. Non-Run content is skipped.
+   *
+   * @param offset - Character position (0-based)
+   * @returns Object with the Run and the local offset within it, or
+   *   undefined if the offset is out of range or hits non-Run content
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * para.addRun(new Run('Hello ', { bold: true }));
+   * para.addRun(new Run('World'));
+   *
+   * const result = para.getRunAtOffset(8);
+   * // result.run.getText() === 'World'
+   * // result.localOffset === 2 (the 'r' in 'World')
+   * ```
+   */
+  getRunAtOffset(offset: number): { run: Run; localOffset: number } | undefined {
+    if (offset < 0) return undefined;
+
+    let charPos = 0;
+    for (const item of this.content) {
+      if (!(item instanceof Run)) continue;
+
+      const len = item.getText().length;
+      if (charPos + len > offset) {
+        return { run: item, localOffset: offset - charPos };
+      }
+      charPos += len;
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Returns the RunFormatting active at a given character position
+   *
+   * Finds the Run containing the character at `offset` and returns its
+   * formatting. Useful for format inspection, format painting, and building
+   * rich text cursors.
+   *
+   * @param offset - Character position (0-based)
+   * @returns RunFormatting at that position, or undefined if out of range
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * para.addRun(new Run('Bold text', { bold: true, color: 'FF0000' }));
+   * para.addRun(new Run(' plain text'));
+   *
+   * const fmt = para.getFormattingAtOffset(3);
+   * // fmt.bold === true
+   * // fmt.color === 'FF0000'
+   *
+   * const fmt2 = para.getFormattingAtOffset(12);
+   * // fmt2.bold === undefined
+   * ```
+   */
+  getFormattingAtOffset(offset: number): RunFormatting | undefined {
+    const result = this.getRunAtOffset(offset);
+    return result ? result.run.getFormatting() : undefined;
+  }
+
+  /**
+   * Applies formatting to a character range across runs
+   *
+   * Splits runs at the range boundaries as needed, then applies the given
+   * formatting properties to every run that falls within [start, end).
+   * Only modifies Run elements — hyperlinks, revisions, fields, and other
+   * non-Run content are skipped (their characters still count toward offsets).
+   *
+   * Each property in the formatting object is applied via the corresponding
+   * setter method (e.g. `bold` → `setBold()`, `color` → `setColor()`).
+   *
+   * @param start - Start character offset (0-based, inclusive)
+   * @param end - End character offset (0-based, exclusive)
+   * @param formatting - Partial RunFormatting to apply to the range
+   * @returns This paragraph for chaining
+   *
+   * @example
+   * ```typescript
+   * // Bold "World" in "Hello World"
+   * const para = new Paragraph().addText('Hello World');
+   * para.applyFormattingToRange(6, 11, { bold: true });
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Highlight a middle section
+   * const para = new Paragraph().addText('The quick brown fox');
+   * para.applyFormattingToRange(4, 9, {
+   *   bold: true,
+   *   color: 'FF0000',
+   *   highlight: 'yellow',
+   * });
+   * // Results in 3 runs: "The " | "quick" (bold red highlighted) | " brown fox"
+   * ```
+   */
+  applyFormattingToRange(start: number, end: number, formatting: Partial<RunFormatting>): this {
+    if (start >= end) return this;
+
+    // Build a map of content indices to their character offset ranges,
+    // then work backwards to avoid index shifting during splicing.
+    const contentMap: { index: number; start: number; end: number }[] = [];
+    let charPos = 0;
+    for (let i = 0; i < this.content.length; i++) {
+      const item = this.content[i]!;
+      let len = 0;
+      if (item instanceof Run) {
+        len = item.getText().length;
+      }
+      // Non-Run items don't contribute characters for our purposes
+      // (they're skipped but still occupy content array slots)
+      if (len > 0) {
+        contentMap.push({ index: i, start: charPos, end: charPos + len });
+      }
+      charPos += len;
+    }
+
+    // Process runs in reverse order so splice indices stay valid
+    for (let m = contentMap.length - 1; m >= 0; m--) {
+      const entry = contentMap[m]!;
+      const run = this.content[entry.index] as Run;
+
+      // Skip runs entirely outside the range
+      if (entry.end <= start || entry.start >= end) continue;
+
+      const runStart = entry.start;
+      const runEnd = entry.end;
+
+      // Determine split points relative to this run
+      const splitStart = Math.max(0, start - runStart);
+      const splitEnd = Math.min(runEnd - runStart, end - runStart);
+      const runLen = runEnd - runStart;
+
+      if (splitStart === 0 && splitEnd === runLen) {
+        // Entire run is within range — just apply formatting
+        this.applyFormattingToRun(run, formatting);
+      } else if (splitStart === 0) {
+        // Range covers beginning of run — split off the tail
+        const tail = run.splitAt(splitEnd);
+        this.applyFormattingToRun(run, formatting);
+        this.content.splice(entry.index + 1, 0, tail);
+      } else if (splitEnd === runLen) {
+        // Range covers end of run — split off the head
+        const tail = run.splitAt(splitStart);
+        this.applyFormattingToRun(tail, formatting);
+        this.content.splice(entry.index + 1, 0, tail);
+      } else {
+        // Range is in the middle — three-way split
+        const mid = run.splitAt(splitStart);
+        const tail = mid.splitAt(splitEnd - splitStart);
+        this.applyFormattingToRun(mid, formatting);
+        this.content.splice(entry.index + 1, 0, mid, tail);
+      }
+    }
+
+    return this;
+  }
+
+  /**
+   * Applies partial RunFormatting to a run via setter methods.
+   * @internal
+   */
+  private applyFormattingToRun(run: Run, formatting: Partial<RunFormatting>): void {
+    if (formatting.bold !== undefined) run.setBold(formatting.bold);
+    if (formatting.italic !== undefined) run.setItalic(formatting.italic);
+    if (formatting.underline !== undefined) run.setUnderline(formatting.underline);
+    if (formatting.strike !== undefined) run.setStrike(formatting.strike);
+    if (formatting.subscript !== undefined) run.setSubscript(formatting.subscript);
+    if (formatting.superscript !== undefined) run.setSuperscript(formatting.superscript);
+    if (formatting.smallCaps !== undefined) run.setSmallCaps(formatting.smallCaps);
+    if (formatting.allCaps !== undefined) run.setAllCaps(formatting.allCaps);
+    if (formatting.font !== undefined) run.setFont(formatting.font);
+    if (formatting.size !== undefined) run.setSize(formatting.size);
+    if (formatting.color !== undefined) run.setColor(formatting.color);
+    if (formatting.highlight !== undefined) run.setHighlight(formatting.highlight);
+    if (formatting.characterSpacing !== undefined)
+      run.setCharacterSpacing(formatting.characterSpacing);
+    if (formatting.vanish !== undefined) run.setVanish(formatting.vanish);
+  }
+
+  /**
+   * Merges adjacent runs that have identical formatting
+   *
+   * Walks the content array and combines consecutive Run elements whose
+   * formatting is deeply equal. Non-Run content (hyperlinks, revisions,
+   * fields, etc.) acts as a boundary — runs on opposite sides are never
+   * merged even if their formatting matches.
+   *
+   * This is useful after operations that fragment runs, such as
+   * `applyFormattingToRange()` or `Run.splitAt()`, to reduce file size
+   * and simplify the content model.
+   *
+   * @returns Number of runs that were eliminated by merging
+   *
+   * @example
+   * ```typescript
+   * const para = new Paragraph();
+   * para.addRun(new Run('Hello ', { bold: true }));
+   * para.addRun(new Run('World', { bold: true }));
+   * para.addRun(new Run('!'));
+   *
+   * const merged = para.consolidateRuns();
+   * // merged === 1 (two bold runs became one)
+   * // para now has 2 runs: "Hello World" (bold) and "!"
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Clean up after applyFormattingToRange
+   * para.applyFormattingToRange(0, 5, { bold: true });
+   * para.applyFormattingToRange(5, 10, { bold: true });
+   * para.consolidateRuns(); // merges the two bold fragments
+   * ```
+   */
+  consolidateRuns(): number {
+    if (this.content.length < 2) return 0;
+
+    const consolidated: ParagraphContent[] = [];
+    let eliminated = 0;
+
+    for (const item of this.content) {
+      if (!(item instanceof Run)) {
+        // Non-run content acts as a merge boundary
+        consolidated.push(item);
+        continue;
+      }
+
+      const prev = consolidated.length > 0 ? consolidated[consolidated.length - 1] : undefined;
+
+      if (
+        prev instanceof Run &&
+        isEqualFormatting(
+          prev.getFormatting() as unknown as Record<string, unknown>,
+          item.getFormatting() as unknown as Record<string, unknown>
+        )
+      ) {
+        // Merge: append item's content to prev run
+        const mergedContent = [...prev.getContent(), ...item.getContent()];
+        const mergedRun = Run.createFromContent(mergedContent, deepClone(prev.getFormatting()));
+        consolidated[consolidated.length - 1] = mergedRun;
+        eliminated++;
+      } else {
+        consolidated.push(item);
+      }
+    }
+
+    if (eliminated > 0) {
+      this.content = consolidated;
+    }
+
+    return eliminated;
   }
 
   /**

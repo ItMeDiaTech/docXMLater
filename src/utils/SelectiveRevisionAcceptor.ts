@@ -16,7 +16,6 @@ import type { Document } from '../core/Document';
 import type { Paragraph, ParagraphContent } from '../elements/Paragraph';
 import { Revision, RevisionType } from '../elements/Revision';
 import type { Run } from '../elements/Run';
-import type { Hyperlink } from '../elements/Hyperlink';
 import { isRunContent, isHyperlinkContent } from '../elements/RevisionContent';
 import { ChangeCategory } from './ChangelogGenerator';
 import { SelectionCriteria } from './RevisionAwareProcessor';
@@ -534,27 +533,6 @@ export class SelectiveRevisionAcceptor {
   }
 
   /**
-   * Partition revisions into matching and non-matching based on criteria.
-   */
-  private static partitionRevisions(
-    revisions: Revision[],
-    criteria: SelectionCriteria
-  ): { matching: Revision[]; nonMatching: Revision[] } {
-    const matching: Revision[] = [];
-    const nonMatching: Revision[] = [];
-
-    for (const rev of revisions) {
-      if (this.matchesCriteria(rev, criteria)) {
-        matching.push(rev);
-      } else {
-        nonMatching.push(rev);
-      }
-    }
-
-    return { matching, nonMatching };
-  }
-
-  /**
    * Check if a revision matches the given criteria.
    */
   private static matchesCriteria(revision: Revision, criteria: SelectionCriteria): boolean {
@@ -641,22 +619,5 @@ export class SelectiveRevisionAcceptor {
     }
 
     return 'content';
-  }
-
-  /**
-   * Create an empty result.
-   */
-  private static emptyResult(): SelectiveAcceptResult {
-    return {
-      accepted: [],
-      rejected: [],
-      remaining: [],
-      summary: {
-        totalProcessed: 0,
-        acceptedCount: 0,
-        rejectedCount: 0,
-        remainingCount: 0,
-      },
-    };
   }
 }

@@ -2,6 +2,17 @@
 
 A comprehensive, production-ready TypeScript/JavaScript framework for creating, reading, and manipulating Microsoft Word (.docx) documents programmatically.
 
+## When to Use docxmlater
+
+docxmlater is designed for **editing existing Word documents** with full round-trip XML fidelity. It excels at:
+
+- Loading a .docx, making targeted modifications, and saving without losing formatting or structure
+- Working with tracked changes, comments, and revision history
+- Preserving complex elements (math equations, charts, SmartArt) through raw XML passthrough
+- Programmatic batch processing of corporate documents
+
+If you only need to **generate documents from scratch** and don't need to load/edit existing files, consider the [docx](https://www.npmjs.com/package/docx) package which has a declarative builder API optimized for document creation.
+
 ## Features
 
 ### Core Document Operations
@@ -86,8 +97,20 @@ A comprehensive, production-ready TypeScript/JavaScript framework for creating, 
 - webSettings.xml auto-generation
 - Safe OOXML parsing helpers (zero-value handling, boolean parsing)
 - Full TypeScript support with comprehensive type definitions
-- Error handling utilities
-- Logging infrastructure with multiple log levels
+- Error handling utilities with custom error types (`DocxError`, `InvalidDocxError`, `CorruptedArchiveError`)
+- Logging infrastructure with multiple log levels (`DOCXMLATER_LOG_LEVEL=debug|info|warn|error`)
+- Plain text extraction (`doc.toPlainText()`) and heading hierarchy (`doc.getHeadingHierarchy()`)
+- Accessibility auditing (`doc.findImagesWithoutAltText()`)
+
+### Unsupported OOXML Features
+
+The following features are preserved as raw XML on round-trip but have no editing API:
+
+- **Charts** (c:chartSpace) -- preserved but not editable
+- **SmartArt** -- preserved as raw XML passthrough
+- **OLE embedded objects** (`<w:object>`) -- preserved, no API
+- **Glossary document** (glossary.xml) -- not handled
+- **DrawingML advanced features** -- gradient fills, pattern fills, group shapes, 3D effects, shape effects (shadow, reflection, glow)
 
 ## Installation
 
@@ -384,6 +407,46 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 
 - `optimizeImages()` - Lossless PNG re-compression and BMP-to-PNG conversion (zero dependencies)
 
+**Document Convenience:**
+
+- `addHeading(text, level?)` - Add heading paragraph (H1-H9)
+- `addPageBreak()` - Insert page break
+- `addHorizontalRule(color?, size?)` - Insert horizontal line
+- `setDefaultFont(name, size?)` - Set document default font via Normal style
+- `setDefaultFontSize(size)` - Set document default font size
+- `clear()` - Remove all body content (preserves styles/settings)
+- `clone()` - Deep copy document for template batch generation
+- `addBulletListFromArray(items)` - Create bullet list from string array
+- `addNumberedListFromArray(items)` - Create numbered list from string array
+- `createTableFromCSV(csv, delimiter?)` - Create table from CSV data
+
+**Template Engine:**
+
+- `fillTemplate(data, options?)` - Replace `{{key}}` placeholders across runs
+- `findAndHighlight(text, color?)` - Highlight all text occurrences
+- `findAndFormat(text, formatting)` - Apply formatting to all text occurrences
+
+**Document Conversion:**
+
+- `toMarkdown()` - Export as Markdown
+- `toHTML(options?)` - Export as HTML (fragment or full page)
+- `toBase64()` - Export as base64 string
+- `toDataUri()` - Export as data URI
+- `fromMarkdown(md)` - Create document from Markdown (static)
+- `loadFromBase64(base64)` - Load document from base64 (static)
+
+**Content Structure:**
+
+- `insertAfter(reference, element)` - Insert element after reference
+- `insertBefore(reference, element)` - Insert element before reference
+- `replaceElement(old, new)` - Replace body element in-place
+- `removeElement(element)` - Remove body element by reference
+- `extractByHeading(maxLevel?)` - Group content by heading sections
+- `getElementsBetween(start, end)` - Get elements between two references
+- `forEachParagraph(callback)` - Iterate top-level paragraphs
+- `forEachTable(callback)` - Iterate top-level tables
+- `getStatistics()` - Comprehensive document metrics
+
 **Saving:**
 
 - `save(filepath)` - Save to file
@@ -415,6 +478,21 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `setPageBreakBefore(value)` - Page break before
 - `clearSpacing()` - Remove direct spacing (inherit from style)
 
+**Text Manipulation:**
+
+- `applyFormattingToRange(start, end, formatting)` - Apply formatting to character range
+- `deleteRange(start, end)` - Delete character range
+- `truncate(maxLength, suffix?)` - Truncate text with ellipsis
+- `wrap(prefix, suffix, formatting?)` - Wrap content with prefix/suffix
+- `splitAt(offset)` - Split paragraph into two at character position
+- `consolidateRuns()` - Merge adjacent runs with identical formatting
+- `replaceAll(find, replace)` - Cross-run find and replace
+- `findTextCrossRun(find)` - Cross-run text search with offsets
+- `getRunAtOffset(offset)` - Get run at character position
+- `getFormattingAtOffset(offset)` - Get formatting at character position
+- `contains(text, caseSensitive?)` - Check if paragraph contains text
+- `toJSON()` / `fromJSON(data)` - Serialize/deserialize paragraph
+
 **Numbering:**
 
 - `setNumbering(numId, level)` - Apply list numbering
@@ -425,6 +503,8 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 
 - `setText(text)` - Set run text
 - `getText()` - Get run text
+- `getPlainText()` - Get text only (no tabs/breaks)
+- `splitAt(offset)` - Split run at character position
 
 **Character Formatting:**
 
@@ -444,16 +524,43 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 - `setSmallCaps(value)` - Small capitals
 - `setAllCaps(value)` - All capitals
 - `clearMatchingFormatting(styleFormatting)` - Remove formatting matching a style (for inheritance)
-- `getPropertyChangeRevision()` - Get run property change revision (w:rPrChange)
-- `setPropertyChangeRevision(propChange)` - Set run property change revision
+- `equals(other)` - Compare text and formatting equality
+- `hasSameFormatting(other)` - Compare formatting only
+- `clone()` - Deep copy run
 
 ### Table Class
 
 **Structure:**
 
 - `addRow()` - Add row
+- `addRowFromArray(cells)` - Add row from string array
 - `getRow(index)` - Get row by index
 - `getCell(row, col)` - Get specific cell
+- `setCell(row, col, text)` - Set cell text by coordinates
+- `duplicateRow(index, count?)` - Clone a row in-place
+- `addSummaryRow(options?)` - Add computed totals row
+
+**Data Conversion:**
+
+- `fromArray(data)` / `toArray()` - 2D string array I/O
+- `fromCSV(csv, delimiter?)` / `toCSV(delimiter?)` - CSV round-trip
+- `toPlainText(colSep?, rowSep?)` - Delimited text export
+- `transpose()` - Swap rows and columns
+- `clone()` - Deep copy table
+
+**Queries:**
+
+- `getColumnCells(colIndex)` - Get cells in a column
+- `getColumnTexts(colIndex)` - Get text values in a column
+- `findCell(predicate)` - Find first matching cell with coordinates
+- `filterRows(predicate)` - Get indices of matching rows
+- `forEachCell(callback)` - Iterate all cells with row/col
+- `mapColumn(colIndex, transform)` - Transform column values
+
+**Cleanup:**
+
+- `removeEmptyRows()` - Remove rows with no text
+- `removeEmptyColumns()` - Remove columns with no text
 
 **Formatting:**
 
@@ -476,7 +583,8 @@ Documents with tracked changes can cause Word corruption errors during round-tri
 **Formatting:**
 
 - `setBorders(borders)` - Cell borders
-- `setShading(color)` - Cell background
+- `setShading(shading)` - Cell shading/background
+- `setBackgroundColor(hex)` / `getBackgroundColor()` - Simple color shortcut
 - `setVerticalAlignment(alignment)` - Top, center, bottom
 - `setWidth(width)` - Cell width
 
@@ -610,7 +718,7 @@ const properties: DocumentProperties = {
 
 ## Version History
 
-**Current Version: 10.1.7**
+**Current Version: 10.4.0**
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
@@ -618,7 +726,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 The framework includes comprehensive test coverage:
 
-- **3,084 test cases** across 143 test suites
+- **4,134 test cases** across 195 test suites
 - Tests cover all phases of implementation
 - Integration tests for complex scenarios
 - Performance benchmarks
@@ -639,6 +747,49 @@ npm run test:coverage # Coverage report
 - Batch hyperlink updates are 30-50% faster than manual iteration
 - Large documents (1000+ pages) supported with memory management
 - Streaming support for very large files
+
+## Error Handling
+
+All document operations should be wrapped in try/finally to ensure proper cleanup:
+
+```typescript
+import { Document } from 'docxmlater';
+
+let doc: Document | undefined;
+try {
+  doc = await Document.load('input.docx');
+  doc.replaceText(/draft/gi, 'final');
+  await doc.save('output.docx');
+} catch (error) {
+  console.error('Document operation failed:', error);
+} finally {
+  doc?.dispose();
+}
+```
+
+For buffer-based workflows (common in web servers):
+
+```typescript
+async function processDocument(inputBuffer: Buffer): Promise<Buffer> {
+  const doc = await Document.loadFromBuffer(inputBuffer);
+  try {
+    doc.replaceText(/placeholder/g, 'actual value');
+    return await doc.toBuffer();
+  } finally {
+    doc.dispose();
+  }
+}
+```
+
+Custom error types from `docxmlater` include `InvalidDocxError`, `CorruptedArchiveError`, and `FileOperationError` — all extend `DocxError`.
+
+## Working with Large Documents
+
+- Use buffer operations (`loadFromBuffer`/`toBuffer`) for 20-30% faster I/O
+- Call `dispose()` promptly to release ZIP handles and image buffers
+- Size limits default to warning at 50MB and error at 150MB (configurable via `LoadOptions.sizeLimits`)
+- Memory usage: ~2MB base per Document, ~2 bytes/char, full buffer per embedded image, ~200 bytes/cell
+- For repeated paragraph access, cache the result of `getAllParagraphs()` rather than calling it in a loop
 
 ## Architecture
 

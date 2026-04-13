@@ -14,6 +14,7 @@ import { Section } from '../../src/elements/Section';
 import { Run } from '../../src/elements/Run';
 import { Revision } from '../../src/elements/Revision';
 import { acceptRevisionsInMemory } from '../../src/utils/InMemoryRevisionAcceptor';
+import { XMLBuilder } from '../../src/xml/XMLBuilder';
 
 // ============================================================================
 // Helper: create a document with tracking enabled
@@ -559,6 +560,46 @@ describe('*PrChange round-trip (save → load → verify)', () => {
     expect(change!.author).toBe('Author');
     expect(change!.previousProperties.pageSize).toBeDefined();
     expect(change!.previousProperties.type).toBe('continuous');
+    loaded.dispose();
+  });
+
+  it('should round-trip extended sectPrChange properties (bidi, rtlGutter, docGrid, titlePage, vAlign)', async () => {
+    const doc = Document.create();
+    const section = doc.getSection();
+    section.setSectPrChange({
+      id: '14',
+      author: 'Author',
+      date: '2026-03-01T00:00:00Z',
+      previousProperties: {
+        pageSize: { width: 12240, height: 15840 },
+        titlePage: true,
+        verticalAlignment: 'center',
+        textDirection: 'tbRl',
+        bidi: true,
+        rtlGutter: true,
+        docGrid: { type: 'lines', linePitch: 360 },
+        lineNumbering: { countBy: 5, start: 1, restart: 'newPage' },
+        pageNumbering: { start: 1, format: 'decimal' },
+      },
+    });
+    const buffer = await doc.toBuffer();
+    doc.dispose();
+
+    const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    const change = loaded.getSection().getSectPrChange();
+    expect(change).toBeDefined();
+    const prev = change!.previousProperties;
+
+    expect(prev.titlePage).toBe(true);
+    expect(prev.verticalAlignment).toBe('center');
+    expect(prev.textDirection).toBe('tbRl');
+    expect(prev.bidi).toBe(true);
+    expect(prev.rtlGutter).toBe(true);
+    expect(prev.docGrid?.type).toBe('lines');
+    expect(prev.docGrid?.linePitch).toBe(360);
+    expect(prev.lineNumbering?.countBy).toBe(5);
+    expect(prev.pageNumbering?.format).toBe('decimal');
+
     loaded.dispose();
   });
 });
@@ -1232,6 +1273,28 @@ describe('Fix A: sectPrChange preserves full original section properties', () =>
     expect(xmlStr).toContain('linePitch');
   });
 
+  it('should include gutter in sectPrChange pgMar when present', () => {
+    section.setSectPrChange({
+      id: '102',
+      author: 'TestAuthor',
+      date: '2026-02-22T00:00:00Z',
+      previousProperties: {
+        margins: {
+          top: 1440,
+          bottom: 1440,
+          left: 1440,
+          right: 1440,
+          header: 720,
+          footer: 720,
+          gutter: 360,
+        },
+      },
+    });
+    const xml = section.toXML();
+    const xmlStr = XMLBuilder.elementToString(xml);
+    expect(xmlStr).toContain('w:gutter="360"');
+  });
+
   it('should include docGrid in sectPrChange when present', () => {
     section.setSectPrChange({
       id: '101',
@@ -1345,6 +1408,32 @@ describe('Fix B: tblGridChange created when modifying table grid', () => {
   });
 });
 
+describe('tblGridChange round-trip parsing', () => {
+  it('should round-trip tblGridChange through document save/load', async () => {
+    const { TableGridChange } = require('../../src/elements/TableGridChange');
+    const table2 = new Table(1, 2);
+    table2.getRows()[0]!.getCells()[0]!.createParagraph('A');
+    table2.setTableGrid([3000, 4000]);
+    table2.setTblGridChange(TableGridChange.create(1, [{ width: 2500 }, { width: 3500 }]));
+    const doc2 = Document.create();
+    doc2.addTable(table2);
+
+    const buffer = await doc2.toBuffer();
+    const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    const loadedTable = loaded.getTables()[0];
+    const gridChange = loadedTable?.getTblGridChange();
+
+    expect(gridChange).toBeDefined();
+    const prevGrid = gridChange!.getPreviousGrid();
+    expect(prevGrid).toHaveLength(2);
+    expect(prevGrid[0]!.width).toBe(2500);
+    expect(prevGrid[1]!.width).toBe(3500);
+
+    doc2.dispose();
+    loaded.dispose();
+  });
+});
+
 // ============================================================================
 // Table Scrunching Bug Fixes — tblLook extended attributes
 // ============================================================================
@@ -1389,6 +1478,90 @@ describe('Fix C: tblLook includes extended attributes', () => {
     // tblPrChange should contain extended tblLook attributes
     expect(xmlStr).toContain('tblPrChange');
     expect(xmlStr).toContain('w:firstRow');
+  });
+
+  it('should serialize tblPrChange previousProperties in CT_TblPr schema order (ECMA-376 §17.4.58)', () => {
+    const table = new Table(1, 1);
+    table.setTblPrChange({
+      id: '60',
+      author: 'TestAuthor',
+      date: '2026-03-01T00:00:00Z',
+      previousProperties: {
+        style: 'TableGrid',
+        overlap: 'overlap',
+        bidiVisual: true,
+        tblStyleRowBandSize: 2,
+        tblStyleColBandSize: 3,
+        width: 5000,
+        widthType: 'dxa',
+        alignment: 'center',
+        cellSpacing: 20,
+        indent: 360,
+        borders: {
+          top: { style: 'single', size: 4, color: '000000' },
+          bottom: { style: 'single', size: 4, color: '000000' },
+        },
+        shading: { pattern: 'clear', fill: 'FFFFFF' },
+        layout: 'fixed',
+        cellMargins: { top: 50, bottom: 50 },
+        tblLook: '04A0',
+        caption: 'Test Caption',
+        description: 'Test Description',
+      },
+    });
+
+    const xmlElement = table.toXML();
+    const fullXml = XMLBuilder.elementToString(xmlElement);
+
+    // Extract only the tblPrChange portion to avoid matching main tblPr elements
+    const changeStart = fullXml.indexOf('<w:tblPrChange');
+    expect(changeStart).toBeGreaterThan(-1);
+    const xml = fullXml.substring(changeStart);
+
+    // Extract positions of all tblPrChange child elements
+    // These must appear in CT_TblPr order per ECMA-376
+    const tblStylePos = xml.indexOf('<w:tblStyle');
+    const tblOverlapPos = xml.indexOf('<w:tblOverlap');
+    const bidiVisualPos = xml.indexOf('<w:bidiVisual');
+    const rowBandPos = xml.indexOf('<w:tblStyleRowBandSize');
+    const colBandPos = xml.indexOf('<w:tblStyleColBandSize');
+    const tblWPos = xml.indexOf('<w:tblW');
+    const jcPos = xml.indexOf('<w:jc');
+    const cellSpacingPos = xml.indexOf('<w:tblCellSpacing');
+    const tblIndPos = xml.indexOf('<w:tblInd');
+    const tblBordersPos = xml.indexOf('<w:tblBorders');
+    const shdPos = xml.indexOf('<w:shd');
+    const tblLayoutPos = xml.indexOf('<w:tblLayout');
+    const tblCellMarPos = xml.indexOf('<w:tblCellMar');
+    const tblLookPos = xml.indexOf('<w:tblLook');
+    const captionPos = xml.indexOf('<w:tblCaption');
+    const descriptionPos = xml.indexOf('<w:tblDescription');
+
+    // All elements should be present
+    expect(tblStylePos).toBeGreaterThan(-1);
+    expect(tblOverlapPos).toBeGreaterThan(-1);
+    expect(bidiVisualPos).toBeGreaterThan(-1);
+    expect(tblWPos).toBeGreaterThan(-1);
+    expect(captionPos).toBeGreaterThan(-1);
+
+    // Verify CT_TblPr order: tblStyle < tblOverlap < bidiVisual < rowBandSize < colBandSize
+    //   < tblW < jc < tblCellSpacing < tblInd < tblBorders < shd < tblLayout
+    //   < tblCellMar < tblLook < tblCaption < tblDescription
+    expect(tblStylePos).toBeLessThan(tblOverlapPos);
+    expect(tblOverlapPos).toBeLessThan(bidiVisualPos);
+    expect(bidiVisualPos).toBeLessThan(rowBandPos);
+    expect(rowBandPos).toBeLessThan(colBandPos);
+    expect(colBandPos).toBeLessThan(tblWPos);
+    expect(tblWPos).toBeLessThan(jcPos);
+    expect(jcPos).toBeLessThan(cellSpacingPos);
+    expect(cellSpacingPos).toBeLessThan(tblIndPos);
+    expect(tblIndPos).toBeLessThan(tblBordersPos);
+    expect(tblBordersPos).toBeLessThan(shdPos);
+    expect(shdPos).toBeLessThan(tblLayoutPos);
+    expect(tblLayoutPos).toBeLessThan(tblCellMarPos);
+    expect(tblCellMarPos).toBeLessThan(tblLookPos);
+    expect(tblLookPos).toBeLessThan(captionPos);
+    expect(captionPos).toBeLessThan(descriptionPos);
   });
 });
 
@@ -1481,5 +1654,207 @@ describe('Fix D: tcPrChange preserves full original cell properties', () => {
     expect(xmlStr).toContain('tcPrChange');
     expect(xmlStr).toContain('gridSpan');
     expect(xmlStr).toContain('vMerge');
+  });
+});
+
+describe('tcPrChange previousProperties parsing completeness', () => {
+  it('should round-trip gridSpan, vMerge, margins, textDirection, noWrap in tcPrChange', async () => {
+    const doc = Document.create();
+    const table = new Table(1, 1);
+    const cell = table.getRows()[0]!.getCells()[0]!;
+    cell.createParagraph('Test');
+    cell.setTcPrChange({
+      id: '70',
+      author: 'TestAuthor',
+      date: '2026-03-01T00:00:00Z',
+      previousProperties: {
+        width: 3000,
+        widthType: 'dxa',
+        columnSpan: 3,
+        vMerge: 'restart',
+        noWrap: true,
+        margins: { top: 50, bottom: 50, left: 100, right: 100 },
+        textDirection: 'btLr',
+        fitText: true,
+        verticalAlignment: 'center',
+        hideMark: true,
+      },
+    });
+    doc.addTable(table);
+
+    const buffer = await doc.toBuffer();
+    const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    const loadedCell = loaded.getTables()[0]?.getRows()[0]?.getCells()[0];
+    const change = loadedCell?.getTcPrChange();
+
+    expect(change).toBeDefined();
+    const prev = change!.previousProperties;
+    expect(prev.width).toBe(3000);
+    expect(prev.columnSpan).toBe(3);
+    expect(prev.vMerge).toBe('restart');
+    expect(prev.noWrap).toBe(true);
+    expect(prev.margins).toBeDefined();
+    expect(prev.margins.top).toBe(50);
+    expect(prev.margins.left).toBe(100);
+    expect(prev.textDirection).toBe('btLr');
+    expect(prev.fitText).toBe(true);
+    expect(prev.verticalAlignment).toBe('center');
+    expect(prev.hideMark).toBe(true);
+
+    doc.dispose();
+    loaded.dispose();
+  });
+});
+
+describe('trPrChange previousProperties parsing completeness', () => {
+  it('should round-trip gridBefore, gridAfter, wBefore, wAfter, justification in trPrChange', async () => {
+    const doc = Document.create();
+    const table = new Table(1, 2);
+    const row = table.getRows()[0]!;
+    row.getCells()[0]!.createParagraph('Test');
+    row.setTrPrChange({
+      id: '80',
+      author: 'TestAuthor',
+      date: '2026-03-01T00:00:00Z',
+      previousProperties: {
+        height: 400,
+        heightRule: 'atLeast',
+        isHeader: true,
+        gridBefore: 1,
+        gridAfter: 2,
+        wBefore: 500,
+        wBeforeType: 'dxa',
+        wAfter: 300,
+        wAfterType: 'dxa',
+        justification: 'center',
+      },
+    });
+    doc.addTable(table);
+
+    const buffer = await doc.toBuffer();
+    const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    const loadedRow = loaded.getTables()[0]?.getRows()[0];
+    const change = loadedRow?.getTrPrChange();
+
+    expect(change).toBeDefined();
+    const prev = change!.previousProperties;
+    expect(prev.height).toBe(400);
+    expect(prev.heightRule).toBe('atLeast');
+    expect(prev.isHeader).toBe(true);
+    expect(prev.gridBefore).toBe(1);
+    expect(prev.gridAfter).toBe(2);
+    expect(prev.wBefore).toBe(500);
+    expect(prev.wAfter).toBe(300);
+    expect(prev.justification).toBe('center');
+
+    doc.dispose();
+    loaded.dispose();
+  });
+});
+
+describe('tblPrChange cellSpacingType and cellMargins parsing', () => {
+  it('should round-trip cellSpacingType in tblPrChange', async () => {
+    const doc = Document.create();
+    const table = new Table(1, 1);
+    table.getRows()[0]!.getCells()[0]!.createParagraph('Test');
+    table.setTblPrChange({
+      id: '90',
+      author: 'TestAuthor',
+      date: '2026-03-01T00:00:00Z',
+      previousProperties: {
+        style: 'TableGrid',
+        width: 5000,
+        widthType: 'dxa',
+        cellSpacing: 20,
+        cellSpacingType: 'dxa',
+      },
+    });
+    doc.addTable(table);
+
+    const buffer = await doc.toBuffer();
+    const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    const change = loaded.getTables()[0]?.getTblPrChange();
+
+    expect(change).toBeDefined();
+    expect(change!.previousProperties.cellSpacing).toBe(20);
+    expect(change!.previousProperties.cellSpacingType).toBe('dxa');
+
+    doc.dispose();
+    loaded.dispose();
+  });
+
+  it('should round-trip cellMargins in tblPrChange', async () => {
+    const doc = Document.create();
+    const table = new Table(1, 1);
+    table.getRows()[0]!.getCells()[0]!.createParagraph('Test');
+    table.setTblPrChange({
+      id: '91',
+      author: 'TestAuthor',
+      date: '2026-03-01T00:00:00Z',
+      previousProperties: {
+        width: 5000,
+        widthType: 'dxa',
+        cellMargins: { top: 50, left: 115, bottom: 50, right: 115 },
+      },
+    });
+    doc.addTable(table);
+
+    const buffer = await doc.toBuffer();
+    const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    const change = loaded.getTables()[0]?.getTblPrChange();
+
+    expect(change).toBeDefined();
+    const cm = change!.previousProperties.cellMargins;
+    expect(cm).toBeDefined();
+    expect(cm.top).toBe(50);
+    expect(cm.bottom).toBe(50);
+    expect(cm.left).toBe(115);
+    expect(cm.right).toBe(115);
+
+    doc.dispose();
+    loaded.dispose();
+  });
+});
+
+describe('tblPrChange extended table properties parsing', () => {
+  it('should round-trip tblpPr, bidiVisual, overlap, bandSizes, caption, description, tblLook in tblPrChange', async () => {
+    const doc = Document.create();
+    const table = new Table(1, 1);
+    table.getRows()[0]!.getCells()[0]!.createParagraph('Test');
+    table.setTblPrChange({
+      id: '95',
+      author: 'TestAuthor',
+      date: '2026-03-15T00:00:00Z',
+      previousProperties: {
+        style: 'TableGrid',
+        width: 5000,
+        widthType: 'dxa',
+        position: { x: 100, y: 200, horizontalAnchor: 'margin', leftFromText: 50 },
+        overlap: 'overlap',
+        bidiVisual: true,
+        tblLook: '04A0',
+        caption: 'Test Table',
+        description: 'A test table description',
+      },
+    });
+    doc.addTable(table);
+
+    const buffer = await doc.toBuffer();
+    const loaded = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    const change = loaded.getTables()[0]?.getTblPrChange();
+
+    expect(change).toBeDefined();
+    const prev = change!.previousProperties;
+    expect(prev.position).toBeDefined();
+    expect(prev.position.x).toBe(100);
+    expect(prev.position.horizontalAnchor).toBe('margin');
+    expect(prev.overlap).toBe('overlap');
+    expect(prev.bidiVisual).toBe(true);
+    expect(prev.tblLook).toBeDefined();
+    expect(prev.caption).toBe('Test Table');
+    expect(prev.description).toBe('A test table description');
+
+    doc.dispose();
+    loaded.dispose();
   });
 });

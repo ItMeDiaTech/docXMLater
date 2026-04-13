@@ -244,3 +244,68 @@ describe('Paragraph - Numbering and Indentation Conflict Resolution', () => {
     });
   });
 });
+
+describe('Paragraph numId=0 suppression round-trip (ECMA-376 §17.3.1.19)', () => {
+  it('should serialize numId=0 when numberingSuppressed is true', () => {
+    const para = new Paragraph();
+    para.addText('Suppressed numbering');
+    para.formatting.numberingSuppressed = true;
+
+    const { XMLBuilder } = require('../../src/xml/XMLBuilder');
+    const xml = XMLBuilder.elementToString(para.toXML());
+
+    expect(xml).toContain('<w:numId w:val="0"');
+    expect(xml).toContain('<w:ilvl w:val="0"');
+  });
+
+  it('should round-trip numId=0 through buffer', async () => {
+    const { Document } = require('../../src/core/Document');
+
+    const doc = Document.create();
+    const para = doc.createParagraph('No numbering');
+    para.formatting.numberingSuppressed = true;
+
+    const buffer = await doc.toBuffer();
+    const loaded = await Document.loadFromBuffer(buffer);
+    const loadedPara = loaded.getParagraphs()[0];
+
+    expect(loadedPara.formatting.numberingSuppressed).toBe(true);
+    expect(loadedPara.formatting.numbering).toBeUndefined();
+
+    doc.dispose();
+    loaded.dispose();
+  });
+
+  it('should round-trip numId=0 from injected XML', async () => {
+    const { Document } = require('../../src/core/Document');
+
+    const doc = Document.create();
+    const para = doc.createParagraph('Test');
+    para.setAlignment('left'); // Ensure w:pPr is emitted
+    const buffer = await doc.toBuffer();
+    doc.dispose();
+
+    const JSZip = (await import('jszip')).default;
+    const zip = await JSZip.loadAsync(buffer);
+    let docXml = await zip.file('word/document.xml')!.async('string');
+    // Inject numPr with numId=0 to suppress numbering
+    docXml = docXml.replace(
+      '</w:pPr>',
+      '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/></w:numPr></w:pPr>'
+    );
+    zip.file('word/document.xml', docXml);
+    const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+    // Load and verify suppression is detected
+    const loaded = await Document.loadFromBuffer(modifiedBuffer);
+    expect(loaded.getParagraphs()[0]?.formatting.numberingSuppressed).toBe(true);
+
+    // Save and reload to verify round-trip
+    const buffer2 = await loaded.toBuffer();
+    const loaded2 = await Document.loadFromBuffer(buffer2);
+    expect(loaded2.getParagraphs()[0]?.formatting.numberingSuppressed).toBe(true);
+
+    loaded.dispose();
+    loaded2.dispose();
+  });
+});

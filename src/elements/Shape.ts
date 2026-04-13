@@ -9,7 +9,7 @@
  */
 
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { inchesToEmus, pointsToHalfPoints } from '../utils/units';
+import { pointsToHalfPoints } from '../utils/units';
 import { RunFormatting } from './Run';
 import {
   ImagePosition,

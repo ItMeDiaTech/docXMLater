@@ -147,6 +147,45 @@ describe('Run Properties Gap Tests', () => {
     });
   });
 
+  describe('Highlight "none" (ECMA-376 ST_HighlightColor)', () => {
+    test('should round-trip highlight="none" to explicitly remove highlight', async () => {
+      const doc = Document.create();
+      const para = new Paragraph();
+      para.addText('no highlight', { highlight: 'none' });
+      doc.addParagraph(para);
+
+      const buffer = await doc.toBuffer();
+      const loaded = await Document.loadFromBuffer(buffer);
+      const fmt = loaded.getParagraphs()[0]?.getRuns()[0]?.getFormatting();
+      expect(fmt?.highlight).toBe('none');
+
+      doc.dispose();
+      loaded.dispose();
+    });
+
+    test('should parse highlight="none" from injected XML', async () => {
+      const doc = Document.create();
+      const para = new Paragraph();
+      para.addText('test', { highlight: 'yellow' });
+      doc.addParagraph(para);
+      const buffer = await doc.toBuffer();
+      doc.dispose();
+
+      // Replace yellow with none
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(buffer);
+      let docXml = await zip.file('word/document.xml')!.async('string');
+      docXml = docXml.replace('w:val="yellow"', 'w:val="none"');
+      zip.file('word/document.xml', docXml);
+      const modifiedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const loaded = await Document.loadFromBuffer(modifiedBuffer);
+      const fmt = loaded.getParagraphs()[0]?.getRuns()[0]?.getFormatting();
+      expect(fmt?.highlight).toBe('none');
+      loaded.dispose();
+    });
+  });
+
   describe('WebHidden (w:webHidden)', () => {
     test('should set webHidden', () => {
       const run = new Run('web hidden');
@@ -295,6 +334,33 @@ describe('Run Properties Gap Tests', () => {
       expect(fmt.webHidden).toBe(true);
       expect(fmt.complexScript).toBe(true);
       expect(fmt.subscript).toBe(true);
+    });
+  });
+
+  describe('Font size half-point rounding (ST_HpsMeasure integer requirement)', () => {
+    test('should serialize fractional font sizes as valid integer half-points', () => {
+      const { XMLBuilder } = require('../../src/xml/XMLBuilder');
+      // 10.25pt → 20.5 half-points → should round to 20 or 21, NOT emit "20.5"
+      const run = new Run('fractional size', { size: 10.25 });
+      const xml = XMLBuilder.elementToString(run.toXML());
+      // Extract w:sz val attribute
+      const szMatch = /w:val="(\d+)"/.exec(xml);
+      expect(szMatch).toBeDefined();
+      // Must be an integer, not a decimal
+      const val = szMatch![1]!;
+      expect(val).not.toContain('.');
+      expect(parseInt(val, 10).toString()).toBe(val);
+    });
+
+    test('should round-trip common fractional sizes correctly', () => {
+      const { pointsToHalfPoints, halfPointsToPoints } = require('../../src/utils/units');
+      // 10.5pt = 21 half-points (exact)
+      expect(pointsToHalfPoints(10.5)).toBe(21);
+      expect(halfPointsToPoints(21)).toBe(10.5);
+      // 10.25pt = 20.5 half-points → rounds to 21
+      expect(Number.isInteger(pointsToHalfPoints(10.25))).toBe(true);
+      // 7.5pt = 15 half-points (exact)
+      expect(pointsToHalfPoints(7.5)).toBe(15);
     });
   });
 });

@@ -16,10 +16,6 @@ import { isHyperlinkContent } from '../elements/RevisionContent';
 import { Section } from '../elements/Section';
 import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
 import { Table } from '../elements/Table';
-import { TableOfContentsElement } from '../elements/TableOfContentsElement';
-import { AlternateContent } from '../elements/AlternateContent';
-import { MathParagraph } from '../elements/MathElement';
-import { CustomXmlBlock } from '../elements/CustomXml';
 import { PreservedElement } from '../elements/PreservedElement';
 import { formatDateForXml } from '../utils/dateFormatting';
 import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
@@ -471,14 +467,17 @@ ${properties}
       );
     }
 
-    // CustomXML entries if they exist
-    if (zipHandler.hasFile?.('customXML/item1.xml')) {
-      generatedOverrides.add('/customXML/item1.xml|application/xml');
-    }
-    if (zipHandler.hasFile?.('customXML/itemProps1.xml')) {
-      generatedOverrides.add(
-        '/customXML/itemProps1.xml|application/vnd.openxmlformats-officedocument.customXmlProperties+xml'
-      );
+    // CustomXML entries — enumerate dynamically to handle multiple parts (item1, item2, etc.)
+    for (const file of zipHandler.getFilePaths?.() || []) {
+      if (file.startsWith('customXML/item') && file.endsWith('.xml')) {
+        if (file.includes('Props')) {
+          generatedOverrides.add(
+            `/${file}|application/vnd.openxmlformats-officedocument.customXmlProperties+xml`
+          );
+        } else {
+          generatedOverrides.add(`/${file}|application/xml`);
+        }
+      }
     }
 
     // Merge with original entries, but ONLY keep overrides for files that actually exist
