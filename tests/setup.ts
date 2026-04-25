@@ -4,9 +4,16 @@
  */
 
 import { createHash } from 'crypto';
+import { mkdirSync } from 'fs';
+import { join } from 'path';
 import { setGlobalLogger, SilentLogger } from '../src/utils/logger';
 import { Document } from '../src/core/Document';
 import { validateOoxml } from './helpers/validateOoxml';
+
+// Some test files write fixture artifacts to tests/output/ via fs.writeFile.
+// Ensure the directory exists on every machine (notably fresh CI runners,
+// where tests/output/ is not checked into the repository).
+mkdirSync(join(__dirname, 'output'), { recursive: true });
 
 // Increase timeout for async operations
 jest.setTimeout(30000);

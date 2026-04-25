@@ -5,6 +5,26 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.2] - 2026-04-25
+
+### Fixed
+
+- **npm package contents.** The `files` field in `package.json` now uses
+  an explicit glob (`src/**/*.ts` plus negations for `*.test.ts`,
+  `*.spec.ts`, and `src/__tests__/**`) instead of the bare `"src"`
+  whitelist. Previous releases inadvertently shipped 12 module-level
+  `CLAUDE.md` development notes plus the `helper-methods.test.ts`
+  test file inside the npm tarball; `.npmignore` patterns do not apply
+  inside directories listed verbatim in `files`. The 11.0.2 tarball
+  contains only `dist/`, `src/**/*.ts` source, `README.md`, and
+  `LICENSE`.
+- **Test suite on fresh runners.** `tests/setup.ts` now creates
+  `tests/output/` via `mkdirSync(..., { recursive: true })` at load
+  time. Previously, 17 tests in `tests/elements/ImageProperties.test.ts`
+  failed on CI with `ENOENT: no such file or directory` because the
+  fixture directory was not checked into the repository, blocking the
+  release-triggered npm publish workflow.
+
 ## [11.0.1] - 2026-04-25
 
 ### Fixed

@@ -1,6 +1,6 @@
 {
   "name": "docxmlater",
-  "version": "11.0.1",
+  "version": "11.0.2",
   "description": "A comprehensive DOCX editing framework for creating, reading, and manipulating Microsoft Word documents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -71,7 +71,10 @@
   "homepage": "https://github.com/ItMeDiaTech/docXMLater#readme",
   "files": [
     "dist",
-    "src",
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "!src/**/*.spec.ts",
+    "!src/__tests__/**",
     "README.md",
     "LICENSE"
   ],
