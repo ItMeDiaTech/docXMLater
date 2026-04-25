@@ -160,16 +160,16 @@ export {
   getRevisionsFromParagraph,
   countRevisionsByType,
   stripRevisionsFromXml,
-} from './utils/InMemoryRevisionAcceptor';
+} from './processors/InMemoryRevisionAcceptor';
 export {
   MoveOperationHelper,
   MoveOperationOptions,
   MoveOperationResult,
-} from './utils/MoveOperationHelper';
+} from './processors/MoveOperationHelper';
 export {
   SelectiveRevisionAcceptor,
   SelectiveAcceptResult,
-} from './utils/SelectiveRevisionAcceptor';
+} from './processors/SelectiveRevisionAcceptor';
 export {
   RevisionAwareProcessor,
   RevisionHandlingMode,
@@ -178,7 +178,7 @@ export {
   RevisionProcessingResult,
   ConflictInfo,
   ProcessingLogEntry,
-} from './utils/RevisionAwareProcessor';
+} from './processors/RevisionAwareProcessor';
 export {
   ChangelogGenerator,
   ChangeEntry,
@@ -188,7 +188,7 @@ export {
   ChangelogFormat,
   ConsolidatedChange,
   ChangelogSummary,
-} from './utils/ChangelogGenerator';
+} from './processors/ChangelogGenerator';
 
 // =============================================================================
 // PUBLIC API — Formatting / Styles / Numbering
@@ -316,7 +316,7 @@ export {
 // TYPES — Compatibility Upgrade
 // =============================================================================
 
-export { CompatibilityUpgrader, UpgradeReport } from './utils/CompatibilityUpgrader';
+export { CompatibilityUpgrader, UpgradeReport } from './processors/CompatibilityUpgrader';
 export {
   LEGACY_COMPAT_ELEMENTS,
   LEGACY_COMPAT_ELEMENT_NAMES,
@@ -487,9 +487,9 @@ export {
 // UTILITIES — Revision Walker
 // =============================================================================
 
-export { RevisionWalker, RevisionWalkerOptions } from './utils/RevisionWalker';
-export { resolveCellShading } from './utils/ShadingResolver';
-export { decodeCnfStyle, getActiveConditionalsInPriorityOrder } from './utils/cnfStyleDecoder';
+export { RevisionWalker, RevisionWalkerOptions } from './processors/RevisionWalker';
+export { resolveCellShading } from './processors/ShadingResolver';
+export { decodeCnfStyle, getActiveConditionalsInPriorityOrder } from './processors/cnfStyleDecoder';
 
 // =============================================================================
 // UTILITIES — Cleanup
@@ -559,3 +559,26 @@ export { DocumentContent, BodyElement } from './core/DocumentContent';
 // =============================================================================
 
 export { LIMITS } from './constants/limits';
+
+// =============================================================================
+// EXTENSIBILITY — Plugin Registries and Document Events
+// =============================================================================
+
+export {
+  ElementRegistry,
+  ElementHandler,
+  ElementParseContext,
+  ElementSerializeContext,
+} from './core/ElementRegistry';
+export {
+  ValidationRuleRegistry,
+  CustomValidationRule,
+  CustomValidationIssue,
+  CustomValidationSeverity,
+} from './validation/ValidationRuleRegistry';
+export {
+  DocumentEventEmitter,
+  DocumentEventMap,
+  DocumentEventType,
+  DocumentEventListener,
+} from './core/DocumentEvents';

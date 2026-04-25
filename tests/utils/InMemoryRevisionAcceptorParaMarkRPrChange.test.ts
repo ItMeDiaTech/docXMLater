@@ -15,7 +15,7 @@
  */
 
 import { Document } from '../../src/core/Document';
-import { acceptRevisionsInMemory } from '../../src/utils/InMemoryRevisionAcceptor';
+import { acceptRevisionsInMemory } from '../../src/processors/InMemoryRevisionAcceptor';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 
 async function makeDocxWithParaMarkRPrChange(): Promise<Buffer> {

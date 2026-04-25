@@ -6,7 +6,7 @@ import {
   RevisionAwareProcessor,
   RevisionHandlingMode,
   SelectionCriteria,
-} from '../../src/utils/RevisionAwareProcessor';
+} from '../../src/processors/RevisionAwareProcessor';
 import { Revision, RevisionType } from '../../src/elements/Revision';
 import { RevisionManager } from '../../src/elements/RevisionManager';
 import { Run } from '../../src/elements/Run';

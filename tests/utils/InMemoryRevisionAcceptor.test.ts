@@ -21,7 +21,7 @@ import {
   getRevisionsFromParagraph,
   countRevisionsByType,
   stripRevisionsFromXml,
-} from '../../src/utils/InMemoryRevisionAcceptor';
+} from '../../src/processors/InMemoryRevisionAcceptor';
 import { Hyperlink } from '../../src/elements/Hyperlink';
 import { isImageRunContent, isRunContent } from '../../src/elements/RevisionContent';
 

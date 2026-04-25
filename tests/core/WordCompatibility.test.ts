@@ -16,7 +16,7 @@ import { Paragraph, ParagraphPropertiesChange } from '../../src/elements/Paragra
 import { Run, RunFormatting } from '../../src/elements/Run';
 import { Revision } from '../../src/elements/Revision';
 import { XMLBuilder, XMLElement } from '../../src/xml/XMLBuilder';
-import { MoveOperationHelper } from '../../src/utils/MoveOperationHelper';
+import { MoveOperationHelper } from '../../src/processors/MoveOperationHelper';
 import { RunPropertyChange } from '../../src/elements/PropertyChangeTypes';
 
 describe('Word Compatibility - Track Changes', () => {

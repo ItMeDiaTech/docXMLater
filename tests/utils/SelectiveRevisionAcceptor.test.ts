@@ -2,7 +2,7 @@
  * Tests for SelectiveRevisionAcceptor
  */
 
-import { SelectiveRevisionAcceptor } from '../../src/utils/SelectiveRevisionAcceptor';
+import { SelectiveRevisionAcceptor } from '../../src/processors/SelectiveRevisionAcceptor';
 import { Revision, RevisionType } from '../../src/elements/Revision';
 import { RevisionManager } from '../../src/elements/RevisionManager';
 import { Run } from '../../src/elements/Run';

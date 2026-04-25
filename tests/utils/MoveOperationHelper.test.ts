@@ -5,7 +5,7 @@
  * range markers per ECMA-376 specification.
  */
 
-import { MoveOperationHelper } from '../../src/utils/MoveOperationHelper';
+import { MoveOperationHelper } from '../../src/processors/MoveOperationHelper';
 import { Run } from '../../src/elements/Run';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { XMLBuilder } from '../../src/xml/XMLBuilder';

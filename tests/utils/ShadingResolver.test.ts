@@ -5,11 +5,11 @@
 import { Document } from '../../src/core/Document';
 import { Table } from '../../src/elements/Table';
 import { Style } from '../../src/formatting/Style';
-import { resolveCellShading } from '../../src/utils/ShadingResolver';
+import { resolveCellShading } from '../../src/processors/ShadingResolver';
 import {
   decodeCnfStyle,
   getActiveConditionalsInPriorityOrder,
-} from '../../src/utils/cnfStyleDecoder';
+} from '../../src/processors/cnfStyleDecoder';
 
 describe('ShadingResolver', () => {
   describe('resolveCellShading', () => {

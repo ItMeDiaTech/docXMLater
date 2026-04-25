@@ -11,7 +11,7 @@ import {
   CnfStyleFlags,
   CNF_TO_CONDITIONAL_MAP,
   CONDITIONAL_PRIORITY_ORDER,
-} from '../../src/utils/cnfStyleDecoder';
+} from '../../src/processors/cnfStyleDecoder';
 
 describe('cnfStyleDecoder', () => {
   describe('decodeCnfStyle', () => {

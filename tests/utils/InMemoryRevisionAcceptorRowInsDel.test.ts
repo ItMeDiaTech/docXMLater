@@ -18,7 +18,7 @@
 
 import { Document } from '../../src/core/Document';
 import { Table } from '../../src/elements/Table';
-import { acceptRevisionsInMemory } from '../../src/utils/InMemoryRevisionAcceptor';
+import { acceptRevisionsInMemory } from '../../src/processors/InMemoryRevisionAcceptor';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 
 async function makeDocxWithTrackedRows(): Promise<Buffer> {

@@ -30,7 +30,7 @@ import { Footnote } from '../../src/elements/Footnote';
 import { Endnote } from '../../src/elements/Endnote';
 import { Header } from '../../src/elements/Header';
 import { Footer } from '../../src/elements/Footer';
-import { SelectiveRevisionAcceptor } from '../../src/utils/SelectiveRevisionAcceptor';
+import { SelectiveRevisionAcceptor } from '../../src/processors/SelectiveRevisionAcceptor';
 
 async function loadEmptyDoc() {
   const zip = new ZipHandler();

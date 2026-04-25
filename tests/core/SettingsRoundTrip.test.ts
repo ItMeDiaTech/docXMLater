@@ -14,7 +14,7 @@
 import { Document } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { CompatibilityMode } from '../../src/types/compatibility-types';
-import { CompatibilityUpgrader } from '../../src/utils/CompatibilityUpgrader';
+import { CompatibilityUpgrader } from '../../src/processors/CompatibilityUpgrader';
 import {
   LEGACY_COMPAT_ELEMENTS,
   LEGACY_COMPAT_ELEMENT_NAMES,

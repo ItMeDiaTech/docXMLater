@@ -20,7 +20,7 @@ import { PreservedElement } from '../elements/PreservedElement';
 import { formatDateForXml } from '../utils/dateFormatting';
 import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { DocumentProperties } from './Document';
+import type { DocumentProperties } from '../types/document-types';
 import { BodyElement } from './DocumentContent';
 import { RelationshipManager } from './RelationshipManager';
 import { TrackChangesSettings } from '../types/settings-types';

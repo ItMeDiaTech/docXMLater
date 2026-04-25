@@ -11,7 +11,7 @@ import { defaultLogger } from '../utils/logger';
 import { normalizeColor, validateRunText } from '../utils/validation';
 import { pointsToHalfPoints } from '../utils/units';
 import { diffText, diffHasUnchangedParts } from '../utils/textDiff';
-import { getActiveConditionalsInPriorityOrder } from '../utils/cnfStyleDecoder';
+import { getActiveConditionalsInPriorityOrder } from '../processors/cnfStyleDecoder';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import {
   ShadingPattern as CommonShadingPattern,

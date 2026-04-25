@@ -61,7 +61,7 @@ import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 import { XMLParser } from '../xml/XMLParser';
 import { ZipHandler } from '../zip/ZipHandler';
 import { DOCX_PATHS } from '../zip/types';
-import { DocumentProperties } from './Document';
+import type { DocumentProperties } from '../types/document-types';
 import { BodyElement } from './DocumentContent';
 import { RelationshipManager } from './RelationshipManager';
 

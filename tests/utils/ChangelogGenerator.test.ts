@@ -7,7 +7,7 @@ import {
   ChangeEntry,
   ChangeCategory,
   ConsolidatedChange,
-} from '../../src/utils/ChangelogGenerator';
+} from '../../src/processors/ChangelogGenerator';
 import { Revision, RevisionType } from '../../src/elements/Revision';
 import { Run } from '../../src/elements/Run';
 

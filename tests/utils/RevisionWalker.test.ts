@@ -4,7 +4,7 @@
  * Tests the DOM-based tree walking for accepting Word document revisions
  */
 
-import { RevisionWalker } from '../../src/utils/RevisionWalker';
+import { RevisionWalker } from '../../src/processors/RevisionWalker';
 import { XMLParser } from '../../src/xml/XMLParser';
 
 describe('RevisionWalker', () => {

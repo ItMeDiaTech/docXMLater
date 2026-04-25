@@ -13,7 +13,7 @@ import { TableCell } from '../../src/elements/TableCell';
 import { Section } from '../../src/elements/Section';
 import { Run } from '../../src/elements/Run';
 import { Revision } from '../../src/elements/Revision';
-import { acceptRevisionsInMemory } from '../../src/utils/InMemoryRevisionAcceptor';
+import { acceptRevisionsInMemory } from '../../src/processors/InMemoryRevisionAcceptor';
 import { XMLBuilder } from '../../src/xml/XMLBuilder';
 
 // ============================================================================

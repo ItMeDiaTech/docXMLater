@@ -25,7 +25,7 @@
  */
 
 import { ZipHandler } from '../../src/zip/ZipHandler';
-import { stripTrackedChanges } from '../../src/utils/stripTrackedChanges';
+import { stripTrackedChanges } from '../../src/processors/stripTrackedChanges';
 
 function makeBaseZip() {
   const zip = new ZipHandler();

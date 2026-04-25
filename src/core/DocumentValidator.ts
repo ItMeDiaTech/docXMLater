@@ -6,7 +6,7 @@
 import { Paragraph } from '../elements/Paragraph';
 import { Table } from '../elements/Table';
 import { ImageManager } from '../elements/ImageManager';
-import { DocumentProperties } from './Document';
+import type { DocumentProperties } from '../types/document-types';
 import { BodyElement } from './DocumentContent';
 import { LIMITS } from '../constants/limits';
 import { defaultLogger } from '../utils/logger';

@@ -25,7 +25,7 @@ import { TableRow } from '../../src/elements/TableRow';
 import { TableCell } from '../../src/elements/TableCell';
 import { Revision } from '../../src/elements/Revision';
 import { Document } from '../../src/core/Document';
-import { acceptRevisionsInMemory } from '../../src/utils/InMemoryRevisionAcceptor';
+import { acceptRevisionsInMemory } from '../../src/processors/InMemoryRevisionAcceptor';
 
 function buildDocWithCellRevisions(): Document {
   const doc = Document.create();

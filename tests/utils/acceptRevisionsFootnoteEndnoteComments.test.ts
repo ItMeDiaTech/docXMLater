@@ -23,7 +23,7 @@
  */
 
 import { ZipHandler } from '../../src/zip/ZipHandler';
-import { acceptAllRevisions } from '../../src/utils/acceptRevisions';
+import { acceptAllRevisions } from '../../src/processors/acceptRevisions';
 
 function makeBaseZip() {
   const zip = new ZipHandler();

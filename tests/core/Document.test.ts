@@ -1531,7 +1531,7 @@ describe('Document', () => {
 
       const { Revision } = await import('../../src/elements/Revision');
       const { Run } = await import('../../src/elements/Run');
-      const { ChangelogGenerator } = await import('../../src/utils/ChangelogGenerator');
+      const { ChangelogGenerator } = await import('../../src/processors/ChangelogGenerator');
 
       const deletedRun = new Run('deleted content');
       const deletion = new Revision({

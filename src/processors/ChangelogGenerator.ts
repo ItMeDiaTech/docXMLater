@@ -12,7 +12,7 @@
 
 import type { Document } from '../core/Document';
 import { Revision, RevisionType } from '../elements/Revision';
-import { getGlobalLogger, createScopedLogger, ILogger } from './logger';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
 
 // Scoped logger for ChangelogGenerator
 function getLogger(): ILogger {

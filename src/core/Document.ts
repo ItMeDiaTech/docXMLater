@@ -42,7 +42,7 @@ import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
 import { Table, TableBorder } from '../elements/Table';
 import { TableCell } from '../elements/TableCell';
 import { TableOfContentsElement } from '../elements/TableOfContentsElement';
-import { resolveCellShading } from '../utils/ShadingResolver';
+import { resolveCellShading } from '../processors/ShadingResolver';
 import {
   NumberingManager,
   NumberingConsolidationOptions,
@@ -53,7 +53,7 @@ import { StylesManager } from '../formatting/StylesManager';
 import { FormatOptions, StyleApplyOptions } from '../types/formatting';
 import { CompatibilityMode, CompatibilityInfo, CompatSetting } from '../types/compatibility-types';
 import { DocumentProtection, RevisionViewSettings, WebSettingsInfo } from '../types/settings-types';
-import { CompatibilityUpgrader, UpgradeReport } from '../utils/CompatibilityUpgrader';
+import { CompatibilityUpgrader, UpgradeReport } from '../processors/CompatibilityUpgrader';
 import { MODERN_COMPAT_SETTINGS } from '../constants/legacyCompatFlags';
 // ListNormalizationOptions and ListNormalizationReport removed - normalizeTableLists moved to consumer
 import {
@@ -73,10 +73,10 @@ function getLogger(): ILogger {
 }
 // Raw XML revision acceptance - used at load time BEFORE parsing
 // cleanupRevisionMetadata - cleanup metadata files after in-memory acceptance
-import { acceptAllRevisions, cleanupRevisionMetadata } from '../utils/acceptRevisions';
+import { acceptAllRevisions, cleanupRevisionMetadata } from '../processors/acceptRevisions';
 // In-memory revision acceptance - used AFTER parsing, allows subsequent modifications
-import { acceptRevisionsInMemory } from '../utils/InMemoryRevisionAcceptor';
-import { stripTrackedChanges } from '../utils/stripTrackedChanges';
+import { acceptRevisionsInMemory } from '../processors/InMemoryRevisionAcceptor';
+import { stripTrackedChanges } from '../processors/stripTrackedChanges';
 import { diffText, diffHasUnchangedParts } from '../utils/textDiff';
 import { XMLBuilder } from '../xml/XMLBuilder';
 import { XMLParser } from '../xml/XMLParser';
@@ -88,56 +88,21 @@ import { DocumentGenerator } from './DocumentGenerator';
 import { DocumentIdManager } from './DocumentIdManager';
 import { DocumentParser } from './DocumentParser';
 import { DocumentValidator } from './DocumentValidator';
+import {
+  DocumentEventEmitter,
+  type DocumentEventListener,
+  type DocumentEventType,
+} from './DocumentEvents';
 import { RelationshipManager } from './RelationshipManager';
 import { RelationshipType } from './Relationship';
 import { BodyElement } from './DocumentContent';
 import { optimizeImage, ImageOptimizationResult } from '../images/ImageOptimizer';
 
-/**
- * Document properties (core and extended)
- */
-export interface DocumentProperties {
-  // Core Properties (docProps/core.xml)
-  title?: string;
-  subject?: string;
-  creator?: string;
-  keywords?: string;
-  description?: string;
-  lastModifiedBy?: string;
-  revision?: number;
-  created?: Date;
-  modified?: Date;
-  language?: string;
-  category?: string;
-  contentStatus?: string;
-
-  // Extended Properties (docProps/app.xml)
-  application?: string;
-  appVersion?: string;
-  company?: string;
-  manager?: string;
-  version?: string;
-
-  // Custom Properties (docProps/custom.xml)
-  customProperties?: Record<string, string | number | boolean | Date>;
-}
-
-/**
- * Document part representation
- * Represents any part within a DOCX package (XML, binary, etc.)
- */
-export interface DocumentPart {
-  /** Part name/path within the package */
-  name: string;
-  /** Part content (string for XML/text, Buffer for binary) */
-  content: string | Buffer;
-  /** MIME content type */
-  contentType?: string;
-  /** Whether the part is binary */
-  isBinary?: boolean;
-  /** Part size in bytes */
-  size?: number;
-}
+// DocumentProperties / DocumentPart now live in `src/types/document-types.ts`
+// to break the Document ↔ DocumentParser/Generator/Validator cycle.
+// They are re-exported below for backward compat.
+export type { DocumentProperties, DocumentPart } from '../types/document-types';
+import type { DocumentProperties, DocumentPart } from '../types/document-types';
 
 /**
  * Document creation options
@@ -356,6 +321,9 @@ export class Document {
   private _originalCommentsXml?: string;
   private _commentsModified = false;
   private _originalCommentCompanionFiles = new Map<string, string>();
+
+  /** Event emitter for lifecycle and mutation events. */
+  private _events = new DocumentEventEmitter();
 
   /**
    * Serialization queue for save / toBuffer operations.
@@ -811,7 +779,9 @@ export class Document {
     const zipHandler = new ZipHandler();
     await zipHandler.load(filePath);
 
-    return Document.initializeFromZip(zipHandler, options);
+    const doc = await Document.initializeFromZip(zipHandler, options);
+    doc._events.emit('afterLoad', { source: 'file', path: filePath });
+    return doc;
   }
 
   /**
@@ -849,7 +819,9 @@ export class Document {
     const zipHandler = new ZipHandler();
     await zipHandler.loadFromBuffer(buffer);
 
-    return Document.initializeFromZip(zipHandler, options);
+    const doc = await Document.initializeFromZip(zipHandler, options);
+    doc._events.emit('afterLoad', { source: 'buffer' });
+    return doc;
   }
 
   /**
@@ -1677,6 +1649,7 @@ export class Document {
     }
 
     this.bodyElements.push(paragraph);
+    this._events.emit('paragraphAdded', { paragraph, index: this.bodyElements.length - 1 });
     return this;
   }
 
@@ -1718,7 +1691,10 @@ export class Document {
     if (text) {
       para.addText(text);
     }
+    // Apply global defaults (font / size) if registered.
+    Document.applyGlobalDefaultsToParagraph(para);
     this.bodyElements.push(para);
+    this._events.emit('paragraphAdded', { paragraph: para, index: this.bodyElements.length - 1 });
     return para;
   }
 
@@ -1824,6 +1800,7 @@ export class Document {
     }
 
     this.bodyElements.push(table);
+    this._events.emit('tableAdded', { table });
     return this;
   }
 
@@ -2590,6 +2567,7 @@ export class Document {
   private async saveImpl(filePath: string): Promise<void> {
     const logger = getLogger();
     logger.info('Saving document', { path: filePath, paragraphs: this.getParagraphCount() });
+    this._events.emit('beforeSave', { filePath });
 
     // Use atomic save pattern: save to temp file, then rename
     // This prevents partial/corrupted saves if operation fails mid-way
@@ -2620,6 +2598,7 @@ export class Document {
       saveSucceeded = true;
       this.clearSaveStateSnapshot();
       logger.info('Document saved', { path: filePath });
+      this._events.emit('afterSave', { filePath });
     } catch (error: unknown) {
       // Restore state snapshot on failure - allows retry without data loss
       this.restoreSaveStateSnapshot();
@@ -2676,6 +2655,7 @@ export class Document {
   private async toBufferImpl(): Promise<Buffer> {
     const logger = getLogger();
     logger.info('Generating document buffer', { paragraphs: this.getParagraphCount() });
+    this._events.emit('beforeSave', {});
 
     // Track whether generation succeeded for proper cleanup
     let generateSucceeded = false;
@@ -2703,6 +2683,7 @@ export class Document {
       generateSucceeded = true;
       this.clearSaveStateSnapshot();
       logger.info('Document buffer generated', { bufferSize: buffer.length });
+      this._events.emit('afterSave', { bufferSize: buffer.length });
       return buffer;
     } catch (error: unknown) {
       // Restore state snapshot on failure - allows retry without data loss
@@ -13159,9 +13140,95 @@ export class Document {
    * Call this after saving in long-running processes to free memory
    * Especially important for API servers processing many documents
    */
+  // ============================================================================
+  // Event API
+  // ============================================================================
+
+  /**
+   * Subscribe to a document lifecycle / mutation event. Returns an
+   * unsubscribe function so callers don't have to retain the listener
+   * reference for `off()`.
+   *
+   * Listener errors are caught and logged via the global logger — a
+   * misbehaving listener cannot abort `save()` or break document state.
+   *
+   * @example
+   * ```typescript
+   * const dispose = doc.on('paragraphAdded', ({ paragraph }) => {
+   *   audit.append(paragraph.getText());
+   * });
+   * // later
+   * dispose();
+   * ```
+   */
+  on<T extends DocumentEventType>(event: T, listener: DocumentEventListener<T>): () => void {
+    return this._events.on(event, listener);
+  }
+
+  /** Remove a previously registered event listener. */
+  off<T extends DocumentEventType>(event: T, listener: DocumentEventListener<T>): void {
+    this._events.off(event, listener);
+  }
+
+  /** Number of listeners registered for a given event. Useful for tests. */
+  listenerCount(event: DocumentEventType): number {
+    return this._events.listenerCount(event);
+  }
+
+  // ============================================================================
+  // Global defaults
+  // ============================================================================
+
+  /**
+   * Default font, size, and margins applied to paragraphs created via
+   * `createParagraph()` after `Document.setDefaults(...)` is called.
+   * These are runtime defaults — they do not modify document XML directly,
+   * they pre-populate run formatting on newly created elements only.
+   */
+  private static globalDefaults: {
+    font?: string;
+    fontSize?: number;
+    fontColor?: string;
+  } = {};
+
+  /**
+   * Set framework-wide defaults applied to every new paragraph created
+   * via `Document.create()` + `createParagraph()`. Existing documents and
+   * existing paragraphs are not retroactively modified. Pass an empty
+   * object to clear.
+   */
+  static setDefaults(defaults: { font?: string; fontSize?: number; fontColor?: string }): void {
+    Document.globalDefaults = { ...defaults };
+  }
+
+  /** Returns the currently registered global defaults (read-only copy). */
+  static getDefaults(): Readonly<{ font?: string; fontSize?: number; fontColor?: string }> {
+    return { ...Document.globalDefaults };
+  }
+
+  /** Reset all global defaults. */
+  static resetDefaults(): void {
+    Document.globalDefaults = {};
+  }
+
+  /** Apply globalDefaults to runs already on a freshly-created paragraph. */
+  private static applyGlobalDefaultsToParagraph(para: Paragraph): void {
+    const d = Document.globalDefaults;
+    if (!d.font && d.fontSize === undefined && !d.fontColor) return;
+    for (const run of para.getRuns()) {
+      const fmt = run.getFormatting();
+      if (d.font && !fmt.font) run.setFont(d.font);
+      if (d.fontSize !== undefined && fmt.size === undefined) run.setSize(d.fontSize);
+      if (d.fontColor && !fmt.color) run.setColor(d.fontColor);
+    }
+  }
+
   dispose(): void {
     // Clear all internal state to free memory
     // NOTE: Use clear() methods instead of creating new instances to properly free memory
+
+    // Remove all event listeners to free closure references
+    this._events.removeAllListeners();
 
     // Clear body elements
     this.bodyElements = [];

@@ -21,7 +21,7 @@ import { Revision, RevisionType } from '../elements/Revision';
 import { isRunContent, isHyperlinkContent, isImageRunContent } from '../elements/RevisionContent';
 import { ComplexField } from '../elements/Field';
 import { Table } from '../elements/Table';
-import { getGlobalLogger, createScopedLogger, ILogger } from './logger';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
 
 /**
  * Get scoped logger for this module
