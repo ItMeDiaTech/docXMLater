@@ -6,7 +6,7 @@
  * representing whether a particular conditional format applies.
  */
 
-import { ConditionalFormattingType } from '../formatting/Style';
+import { ConditionalFormattingType } from '../formatting/Style.js';
 
 /**
  * Decoded cnfStyle flags

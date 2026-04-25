@@ -3,26 +3,26 @@
  * Extracts content from ZIP archives and converts XML to structured data
  */
 
-import { AlternateContent } from '../elements/AlternateContent';
-import { Bookmark } from '../elements/Bookmark';
-import { Endnote, EndnoteType } from '../elements/Endnote';
-import { Footnote, FootnoteType } from '../elements/Footnote';
-import { BookmarkManager } from '../elements/BookmarkManager';
-import { Comment } from '../elements/Comment';
-import { CustomXmlBlock } from '../elements/CustomXml';
-import { PreservedElement } from '../elements/PreservedElement';
-import { RegisteredBodyElement } from '../elements/RegisteredBodyElement';
-import { ElementRegistry } from './ElementRegistry';
-import { MathParagraph } from '../elements/MathElement';
-import { ComplexField, Field } from '../elements/Field';
-import { isHyperlinkInstruction, parseHyperlinkInstruction } from '../elements/FieldHelpers';
-import { Footer } from '../elements/Footer';
-import { Header } from '../elements/Header';
-import { Hyperlink } from '../elements/Hyperlink';
-import { ImageManager } from '../elements/ImageManager';
-import { ImageRun } from '../elements/ImageRun';
-import { Paragraph, ParagraphFormatting, ParagraphContent } from '../elements/Paragraph';
-import { Revision } from '../elements/Revision';
+import { AlternateContent } from '../elements/AlternateContent.js';
+import { Bookmark } from '../elements/Bookmark.js';
+import { Endnote, EndnoteType } from '../elements/Endnote.js';
+import { Footnote, FootnoteType } from '../elements/Footnote.js';
+import { BookmarkManager } from '../elements/BookmarkManager.js';
+import { Comment } from '../elements/Comment.js';
+import { CustomXmlBlock } from '../elements/CustomXml.js';
+import { PreservedElement } from '../elements/PreservedElement.js';
+import { RegisteredBodyElement } from '../elements/RegisteredBodyElement.js';
+import { ElementRegistry } from './ElementRegistry.js';
+import { MathParagraph } from '../elements/MathElement.js';
+import { ComplexField, Field } from '../elements/Field.js';
+import { isHyperlinkInstruction, parseHyperlinkInstruction } from '../elements/FieldHelpers.js';
+import { Footer } from '../elements/Footer.js';
+import { Header } from '../elements/Header.js';
+import { Hyperlink } from '../elements/Hyperlink.js';
+import { ImageManager } from '../elements/ImageManager.js';
+import { ImageRun } from '../elements/ImageRun.js';
+import { Paragraph, ParagraphFormatting, ParagraphContent } from '../elements/Paragraph.js';
+import { Revision } from '../elements/Revision.js';
 import {
   BreakType,
   FormFieldCheckBox,
@@ -32,40 +32,40 @@ import {
   Run,
   RunContent,
   RunFormatting,
-} from '../elements/Run';
-import { Section, SectionProperties, SectionType } from '../elements/Section';
-import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
-import { Table, TableBorder } from '../elements/Table';
-import { TableCell } from '../elements/TableCell';
-import { TableOfContents } from '../elements/TableOfContents';
-import { TableOfContentsElement } from '../elements/TableOfContentsElement';
-import { TableGridChange } from '../elements/TableGridChange';
-import { TableRow } from '../elements/TableRow';
-import { AbstractNumbering } from '../formatting/AbstractNumbering';
-import { NumberingInstance } from '../formatting/NumberingInstance';
-import { Style, StyleProperties, StyleType } from '../formatting/Style';
-import { logParagraphContent, logParsing, logTextDirection } from '../utils/diagnostics';
-import { getGlobalLogger, createScopedLogger, ILogger, defaultLogger } from '../utils/logger';
+} from '../elements/Run.js';
+import { Section, SectionProperties, SectionType } from '../elements/Section.js';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag.js';
+import { Table, TableBorder } from '../elements/Table.js';
+import { TableCell } from '../elements/TableCell.js';
+import { TableOfContents } from '../elements/TableOfContents.js';
+import { TableOfContentsElement } from '../elements/TableOfContentsElement.js';
+import { TableGridChange } from '../elements/TableGridChange.js';
+import { TableRow } from '../elements/TableRow.js';
+import { AbstractNumbering } from '../formatting/AbstractNumbering.js';
+import { NumberingInstance } from '../formatting/NumberingInstance.js';
+import { Style, StyleProperties, StyleType } from '../formatting/Style.js';
+import { logParagraphContent, logParsing, logTextDirection } from '../utils/diagnostics.js';
+import { getGlobalLogger, createScopedLogger, ILogger, defaultLogger } from '../utils/logger.js';
 import {
   safeParseInt,
   isExplicitlySet,
   parseOoxmlBoolean,
   parseOnOffAttribute,
-} from '../utils/parsingHelpers';
-import { halfPointsToPoints } from '../utils/units';
-import type { ShadingConfig } from '../elements/CommonTypes';
+} from '../utils/parsingHelpers.js';
+import { halfPointsToPoints } from '../utils/units.js';
+import type { ShadingConfig } from '../elements/CommonTypes.js';
 
 // Create scoped logger for DocumentParser operations
 function getLogger(): ILogger {
   return createScopedLogger(getGlobalLogger(), 'DocumentParser');
 }
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { XMLParser } from '../xml/XMLParser';
-import { ZipHandler } from '../zip/ZipHandler';
-import { DOCX_PATHS } from '../zip/types';
-import type { DocumentProperties } from '../types/document-types';
-import { BodyElement } from './DocumentContent';
-import { RelationshipManager } from './RelationshipManager';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { XMLParser } from '../xml/XMLParser.js';
+import { ZipHandler } from '../zip/ZipHandler.js';
+import { DOCX_PATHS } from '../zip/types.js';
+import type { DocumentProperties } from '../types/document-types.js';
+import { BodyElement } from './DocumentContent.js';
+import { RelationshipManager } from './RelationshipManager.js';
 
 /**
  * Parse error tracking
@@ -1593,7 +1593,7 @@ export class DocumentParser {
     } = { revision: null, bookmarkStarts: [], bookmarkEnds: [] };
     try {
       // Map XML tag to RevisionType
-      let revisionType: import('../elements/Revision').RevisionType;
+      let revisionType: import('../elements/Revision.js').RevisionType;
       switch (tagName) {
         case 'w:ins':
           revisionType = 'insert';
@@ -1641,7 +1641,7 @@ export class DocumentParser {
       const runXmls = XMLParser.extractElements(xmlWithoutHyperlinks, 'w:r');
 
       // Use RevisionContent to hold both Run and Hyperlink objects
-      const content: import('../elements/RevisionContent').RevisionContent[] = [];
+      const content: import('../elements/RevisionContent.js').RevisionContent[] = [];
 
       // Parse standalone runs (not inside hyperlinks)
       for (const runXml of runXmls) {
@@ -5179,7 +5179,7 @@ export class DocumentParser {
       const typeMatch = String(instruction)
         .trim()
         .match(/^(\w+)/);
-      const type = (typeMatch?.[1] || 'PAGE') as import('../elements/Field').FieldType;
+      const type = (typeMatch?.[1] || 'PAGE') as import('../elements/Field.js').FieldType;
 
       // CT_SimpleField (§17.16.16) carries two ST_OnOff attributes besides
       // the required w:instr — w:fldLock (update lock) and w:dirty
@@ -5531,7 +5531,7 @@ export class DocumentParser {
     // This records what the run formatting was BEFORE a change was made
     if (rPrObj['w:rPrChange']) {
       const changeObj = rPrObj['w:rPrChange'];
-      const propChange: import('../elements/PropertyChangeTypes').RunPropertyChange = {
+      const propChange: import('../elements/PropertyChangeTypes.js').RunPropertyChange = {
         id: changeObj['@_w:id'] !== undefined ? parseInt(String(changeObj['@_w:id']), 10) : 0,
         author: changeObj['@_w:author'] ? String(changeObj['@_w:author']) : '',
         date: changeObj['@_w:date'] ? new Date(String(changeObj['@_w:date'])) : new Date(),
@@ -5541,7 +5541,7 @@ export class DocumentParser {
       // Parse previous run properties from child w:rPr element
       if (changeObj['w:rPr']) {
         const prevRPr = changeObj['w:rPr'];
-        const prevProps: Partial<import('../elements/Run').RunFormatting> = {};
+        const prevProps: Partial<import('../elements/Run.js').RunFormatting> = {};
 
         // Parse previous bold
         if (prevRPr['w:b']) {
@@ -5800,8 +5800,8 @@ export class DocumentParser {
         // CT_Border attribute set for rPrChange previous-properties fidelity.
         if (prevRPr['w:bdr']) {
           const bdrObj = prevRPr['w:bdr'];
-          const tb: import('../elements/Run').TextBorder = {
-            style: bdrObj['@_w:val'] as import('../elements/Run').TextBorderStyle,
+          const tb: import('../elements/Run.js').TextBorder = {
+            style: bdrObj['@_w:val'] as import('../elements/Run.js').TextBorderStyle,
             size: bdrObj['@_w:sz'] !== undefined ? safeParseInt(bdrObj['@_w:sz']) : undefined,
             space:
               bdrObj['@_w:space'] !== undefined ? safeParseInt(bdrObj['@_w:space']) : undefined,
@@ -5812,7 +5812,7 @@ export class DocumentParser {
           if (bdrObj['@_w:themeColor']) {
             tb.themeColor = String(
               bdrObj['@_w:themeColor']
-            ) as import('../elements/Run').ThemeColorValue;
+            ) as import('../elements/Run.js').ThemeColorValue;
           }
           if (bdrObj['@_w:themeTint']) tb.themeTint = String(bdrObj['@_w:themeTint']);
           if (bdrObj['@_w:themeShade']) tb.themeShade = String(bdrObj['@_w:themeShade']);
@@ -6288,7 +6288,7 @@ export class DocumentParser {
       );
 
       // Create image from buffer with all properties
-      const { Image: ImageClass } = await import('../elements/Image');
+      const { Image: ImageClass } = await import('../elements/Image.js');
       const image = await ImageClass.create({
         source: imageData,
         width,
@@ -6982,7 +6982,7 @@ export class DocumentParser {
       table.setIndent(indentVal);
       const indentType = tblPrObj['w:tblInd']['@_w:type'];
       if (indentType) {
-        table.setIndentType(indentType as import('../elements/Table').TableWidthType);
+        table.setIndentType(indentType as import('../elements/Table.js').TableWidthType);
       }
     }
 
@@ -7060,7 +7060,7 @@ export class DocumentParser {
     // the w:start/w:end it dropped).
     if (tblPrObj['w:tblBorders']) {
       const bordersObj = tblPrObj['w:tblBorders'];
-      const borders: import('../elements/Table').TableBorders = {};
+      const borders: import('../elements/Table.js').TableBorders = {};
 
       if (bordersObj['w:top']) borders.top = this.parseBorderElement(bordersObj['w:top']);
       if (bordersObj['w:bottom']) borders.bottom = this.parseBorderElement(bordersObj['w:bottom']);
@@ -7466,7 +7466,7 @@ export class DocumentParser {
             const widthType = (tcPr['w:tcW']['@_w:type'] as string | undefined) || 'dxa';
             cell.setWidthType(
               safeParseInt(rawW),
-              widthType as import('../elements/TableCell').CellWidthType
+              widthType as import('../elements/TableCell.js').CellWidthType
             );
           }
         }
@@ -9637,7 +9637,7 @@ export class DocumentParser {
     }
 
     // Parse table style properties (Phase 5.1)
-    let tableStyle: import('../formatting/Style').TableStyleProperties | undefined;
+    let tableStyle: import('../formatting/Style.js').TableStyleProperties | undefined;
     if (typeAttr === 'table') {
       tableStyle = this.parseTableStyleProperties(styleXml);
     }
@@ -10182,7 +10182,8 @@ export class DocumentParser {
       if (uColor) formatting.underlineColor = uColor;
       const uThemeColor = XMLParser.extractAttribute(uTag, 'w:themeColor');
       if (uThemeColor) {
-        formatting.underlineThemeColor = uThemeColor as import('../elements/Run').ThemeColorValue;
+        formatting.underlineThemeColor =
+          uThemeColor as import('../elements/Run.js').ThemeColorValue;
       }
       const uThemeTint = XMLParser.extractAttribute(uTag, 'w:themeTint');
       if (uThemeTint) formatting.underlineThemeTint = parseInt(uThemeTint, 16);
@@ -10267,7 +10268,7 @@ export class DocumentParser {
       }
       const themeColor = XMLParser.extractAttribute(colorTag, 'w:themeColor');
       if (themeColor) {
-        formatting.themeColor = themeColor as import('../elements/Run').ThemeColorValue;
+        formatting.themeColor = themeColor as import('../elements/Run.js').ThemeColorValue;
       }
       const themeTint = XMLParser.extractAttribute(colorTag, 'w:themeTint');
       if (themeTint) {
@@ -10522,8 +10523,8 @@ export class DocumentParser {
    */
   private parseTableStyleProperties(
     styleXml: string
-  ): import('../formatting/Style').TableStyleProperties {
-    const tableStyle: import('../formatting/Style').TableStyleProperties = {};
+  ): import('../formatting/Style.js').TableStyleProperties {
+    const tableStyle: import('../formatting/Style.js').TableStyleProperties = {};
 
     // Parse tblPr (table properties)
     const tblPrXml = XMLParser.extractBetweenTags(styleXml, '<w:tblPr>', '</w:tblPr>');
@@ -10576,8 +10577,8 @@ export class DocumentParser {
    */
   private parseTableFormattingFromXml(
     tblPrXml: string
-  ): import('../formatting/Style').TableStyleFormatting {
-    const formatting: import('../formatting/Style').TableStyleFormatting = {};
+  ): import('../formatting/Style.js').TableStyleFormatting {
+    const formatting: import('../formatting/Style.js').TableStyleFormatting = {};
 
     // Parse indent (w:tblInd) — preserve w:type per ECMA-376 ST_TblWidth
     if (tblPrXml.includes('<w:tblInd')) {
@@ -10590,7 +10591,7 @@ export class DocumentParser {
         }
         const type = XMLParser.extractAttribute(tblIndTag, 'w:type');
         if (type) {
-          formatting.indentType = type as import('../elements/Table').TableWidthType;
+          formatting.indentType = type as import('../elements/Table.js').TableWidthType;
         }
       }
     }
@@ -10610,7 +10611,7 @@ export class DocumentParser {
           val === 'start' ||
           val === 'end'
         ) {
-          formatting.alignment = val as import('../formatting/Style').TableAlignment;
+          formatting.alignment = val as import('../formatting/Style.js').TableAlignment;
         }
       }
     }
@@ -10651,8 +10652,8 @@ export class DocumentParser {
    */
   private parseTableCellFormattingFromXml(
     tcPrXml: string
-  ): import('../formatting/Style').TableCellStyleFormatting {
-    const formatting: import('../formatting/Style').TableCellStyleFormatting = {};
+  ): import('../formatting/Style.js').TableCellStyleFormatting {
+    const formatting: import('../formatting/Style.js').TableCellStyleFormatting = {};
 
     // Parse borders
     const bordersXml = XMLParser.extractBetweenTags(tcPrXml, '<w:tcBorders>', '</w:tcBorders>');
@@ -10660,7 +10661,7 @@ export class DocumentParser {
       formatting.borders = this.parseBordersFromXml(
         bordersXml,
         true
-      ) as import('../formatting/Style').CellBorders;
+      ) as import('../formatting/Style.js').CellBorders;
     }
 
     // Parse shading
@@ -10696,8 +10697,8 @@ export class DocumentParser {
    */
   private parseTableRowFormattingFromXml(
     trPrXml: string
-  ): import('../formatting/Style').TableRowStyleFormatting {
-    const formatting: import('../formatting/Style').TableRowStyleFormatting = {};
+  ): import('../formatting/Style.js').TableRowStyleFormatting {
+    const formatting: import('../formatting/Style.js').TableRowStyleFormatting = {};
 
     // Parse height
     if (trPrXml.includes('<w:trHeight')) {
@@ -10742,8 +10743,8 @@ export class DocumentParser {
    */
   private parseConditionalFormattingFromXml(
     styleXml: string
-  ): import('../formatting/Style').ConditionalTableFormatting[] | undefined {
-    const conditionalFormatting: import('../formatting/Style').ConditionalTableFormatting[] = [];
+  ): import('../formatting/Style.js').ConditionalTableFormatting[] | undefined {
+    const conditionalFormatting: import('../formatting/Style.js').ConditionalTableFormatting[] = [];
 
     // Find all tblStylePr elements
     let searchFrom = 0;
@@ -10759,8 +10760,8 @@ export class DocumentParser {
       // Extract type attribute
       const typeAttr = XMLParser.extractAttribute(tblStylePrXml, 'w:type');
       if (typeAttr) {
-        const conditional: import('../formatting/Style').ConditionalTableFormatting = {
-          type: typeAttr as import('../formatting/Style').ConditionalFormattingType,
+        const conditional: import('../formatting/Style.js').ConditionalTableFormatting = {
+          type: typeAttr as import('../formatting/Style.js').ConditionalFormattingType,
         };
 
         // Parse pPr
@@ -10810,7 +10811,7 @@ export class DocumentParser {
   private parseBordersFromXml(
     bordersXml: string,
     includeDiagonals: boolean
-  ): import('../formatting/Style').TableBorders | import('../formatting/Style').CellBorders {
+  ): import('../formatting/Style.js').TableBorders | import('../formatting/Style.js').CellBorders {
     const borders: any = {};
 
     // Local helper so both the main-side loop and the diagonal loop share
@@ -10821,11 +10822,11 @@ export class DocumentParser {
     // dropped on every load → save round-trip.
     const parseBorderAttrs = (
       type: string
-    ): import('../formatting/Style').BorderProperties | null => {
+    ): import('../formatting/Style.js').BorderProperties | null => {
       const tag = XMLParser.extractSelfClosingTag(bordersXml, `w:${type}`);
       if (!tag) return null;
       const ref = `<w:${type}${tag}`;
-      const border: import('../formatting/Style').BorderProperties = {};
+      const border: import('../formatting/Style.js').BorderProperties = {};
       const style = XMLParser.extractAttribute(ref, 'w:val');
       const size = XMLParser.extractAttribute(ref, 'w:sz');
       const space = XMLParser.extractAttribute(ref, 'w:space');
@@ -10943,8 +10944,8 @@ export class DocumentParser {
    */
   private parseCellMarginsFromXml(
     marginXml: string
-  ): import('../formatting/Style').CellMargins | undefined {
-    const margins: import('../formatting/Style').CellMargins = {};
+  ): import('../formatting/Style.js').CellMargins | undefined {
+    const margins: import('../formatting/Style.js').CellMargins = {};
 
     // Parse top and bottom directly
     for (const type of ['top', 'bottom'] as const) {
@@ -11209,23 +11210,23 @@ export class DocumentParser {
     imageManager: ImageManager
   ): Promise<{
     headers: {
-      header: import('../elements/Header').Header;
+      header: import('../elements/Header.js').Header;
       relationshipId: string;
       filename: string;
     }[];
     footers: {
-      footer: import('../elements/Footer').Footer;
+      footer: import('../elements/Footer.js').Footer;
       relationshipId: string;
       filename: string;
     }[];
   }> {
     const headers: {
-      header: import('../elements/Header').Header;
+      header: import('../elements/Header.js').Header;
       relationshipId: string;
       filename: string;
     }[] = [];
     const footers: {
-      footer: import('../elements/Footer').Footer;
+      footer: import('../elements/Footer.js').Footer;
       relationshipId: string;
       filename: string;
     }[] = [];
@@ -11239,7 +11240,7 @@ export class DocumentParser {
     // Parse headers
     // Track already-parsed headers by rId to avoid creating duplicates
     // when multiple section property types (default, first, even) reference the same header file
-    const parsedHeadersByRId = new Map<string, import('../elements/Header').Header>();
+    const parsedHeadersByRId = new Map<string, import('../elements/Header.js').Header>();
 
     if (sectionProps.headers) {
       for (const [type, rId] of Object.entries(sectionProps.headers)) {
@@ -11302,7 +11303,7 @@ export class DocumentParser {
     // Parse footers
     // Track already-parsed footers by rId to avoid creating duplicates
     // when multiple section property types (default, first, even) reference the same footer file
-    const parsedFootersByRId = new Map<string, import('../elements/Footer').Footer>();
+    const parsedFootersByRId = new Map<string, import('../elements/Footer.js').Footer>();
 
     if (sectionProps.footers) {
       for (const [type, rId] of Object.entries(sectionProps.footers)) {

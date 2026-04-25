@@ -12,8 +12,8 @@ import {
   LEGACY_COMPAT_ELEMENT_NAMES,
   MODERN_COMPAT_SETTINGS,
   MS_WORD_COMPAT_URI,
-} from '../constants/legacyCompatFlags';
-import type { CompatSetting } from '../types/compatibility-types';
+} from '../constants/legacyCompatFlags.js';
+import type { CompatSetting } from '../types/compatibility-types.js';
 
 /**
  * Report of what changed during an upgrade operation.

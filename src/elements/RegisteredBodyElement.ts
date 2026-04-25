@@ -8,9 +8,9 @@
  * If the handler's `serialize()` throws, the original raw XML is emitted
  * unchanged so a buggy custom serializer cannot corrupt the document.
  */
-import type { ElementHandler } from '../core/ElementRegistry';
-import type { XMLElement } from '../xml/XMLBuilder';
-import { getGlobalLogger } from '../utils/logger';
+import type { ElementHandler } from '../core/ElementRegistry.js';
+import type { XMLElement } from '../xml/XMLBuilder.js';
+import { getGlobalLogger } from '../utils/logger.js';
 
 export class RegisteredBodyElement<E = unknown> {
   constructor(

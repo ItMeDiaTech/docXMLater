@@ -6,9 +6,9 @@
  * paragraphs in the document.
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { NumberingLevel } from './NumberingLevel';
-import { defaultLogger } from '../utils/logger';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { NumberingLevel } from './NumberingLevel.js';
+import { defaultLogger } from '../utils/logger.js';
 
 /**
  * Properties for creating an abstract numbering definition

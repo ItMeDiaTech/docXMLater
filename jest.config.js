@@ -35,6 +35,12 @@ module.exports = {
     },
   },
   moduleFileExtensions: ['ts', 'js', 'json'],
+  // Source files use explicit `.js` extensions on relative imports for
+  // Node ESM compatibility; strip them so jest's TS resolver finds the
+  // matching `.ts` source.
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
   testTimeout: 30000,
   verbose: true,
   testPathIgnorePatterns: [

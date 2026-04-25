@@ -3,12 +3,12 @@
  * Supports paragraph, character, table, and numbering styles
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { ParagraphFormatting } from '../elements/Paragraph';
-import { Run, RunFormatting } from '../elements/Run';
-import { ShadingConfig, buildShadingAttributes } from '../elements/CommonTypes';
-import { Heading2TableOptions } from '../types/styleConfig';
-import { deepClone } from '../utils/deepClone';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { ParagraphFormatting } from '../elements/Paragraph.js';
+import { Run, RunFormatting } from '../elements/Run.js';
+import { ShadingConfig, buildShadingAttributes } from '../elements/CommonTypes.js';
+import { Heading2TableOptions } from '../types/styleConfig.js';
+import { deepClone } from '../utils/deepClone.js';
 
 /**
  * Style type

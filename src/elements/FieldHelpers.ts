@@ -2,8 +2,8 @@
  * Helper functions for creating complex and nested fields
  */
 
-import { ComplexField } from './Field';
-import { defaultLogger } from '../utils/logger';
+import { ComplexField } from './Field.js';
+import { defaultLogger } from '../utils/logger.js';
 
 /**
  * Parsed components of a HYPERLINK field instruction

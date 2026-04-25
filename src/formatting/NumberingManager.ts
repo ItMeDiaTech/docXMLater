@@ -5,11 +5,11 @@
  * and numbering instances in a document, and generating the numbering.xml file.
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { AbstractNumbering } from './AbstractNumbering';
-import { NumberingInstance } from './NumberingInstance';
-import { NumberingLevel } from './NumberingLevel';
-import { defaultLogger } from '../utils/logger';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { AbstractNumbering } from './AbstractNumbering.js';
+import { NumberingInstance } from './NumberingInstance.js';
+import { NumberingLevel } from './NumberingLevel.js';
+import { defaultLogger } from '../utils/logger.js';
 
 /**
  * Options for numbering consolidation

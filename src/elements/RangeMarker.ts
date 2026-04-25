@@ -5,8 +5,8 @@
  * They enable Word to properly display and manage complex revision regions.
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
-import { formatDateForXml } from '../utils/dateFormatting';
+import { XMLElement } from '../xml/XMLBuilder.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
 
 /**
  * Range marker type

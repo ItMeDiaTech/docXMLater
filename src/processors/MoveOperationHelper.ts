@@ -33,9 +33,9 @@
  * ```
  */
 
-import { Revision } from '../elements/Revision';
-import { RangeMarker } from '../elements/RangeMarker';
-import { Run } from '../elements/Run';
+import { Revision } from '../elements/Revision.js';
+import { RangeMarker } from '../elements/RangeMarker.js';
+import { Run } from '../elements/Run.js';
 
 /**
  * Options for creating a move operation
@@ -203,8 +203,8 @@ export class MoveOperationHelper {
    * ```
    */
   static addMoveOperation(
-    sourceParagraph: import('../elements/Paragraph').Paragraph,
-    destParagraph: import('../elements/Paragraph').Paragraph,
+    sourceParagraph: import('../elements/Paragraph.js').Paragraph,
+    destParagraph: import('../elements/Paragraph.js').Paragraph,
     options: MoveOperationOptions
   ): MoveOperationResult {
     const moveOp = this.createMoveOperation(options);

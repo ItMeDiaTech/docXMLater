@@ -7,16 +7,16 @@
  * @module RevisionValidator
  */
 
-import type { Document } from '../core/Document';
-import type { Revision } from '../elements/Revision';
+import type { Document } from '../core/Document.js';
+import type { Revision } from '../elements/Revision.js';
 import {
   REVISION_RULES,
   ValidationIssue,
   ValidationOptions,
   ValidationResult,
   createIssueFromRule,
-} from './ValidationRules';
-import { ValidationRuleRegistry } from './ValidationRuleRegistry';
+} from './ValidationRules.js';
+import { ValidationRuleRegistry } from './ValidationRuleRegistry.js';
 
 /**
  * Validates document revisions for ECMA-376 compliance.

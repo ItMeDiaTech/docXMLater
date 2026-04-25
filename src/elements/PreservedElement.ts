@@ -7,7 +7,7 @@
  * Examples: w:proofErr, w:permStart, w:permEnd, w:altChunk, w:ruby
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
+import { XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * Element context where it can appear

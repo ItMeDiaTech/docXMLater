@@ -1,4 +1,4 @@
-import { ZipHandler } from '../zip/ZipHandler';
+import { ZipHandler } from '../zip/ZipHandler.js';
 
 /**
  * Strips all tracked changes markup from a Word document

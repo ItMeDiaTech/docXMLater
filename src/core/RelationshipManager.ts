@@ -5,10 +5,10 @@
  * document parts (document.xml, header.xml, footer.xml, etc.)
  */
 
-import { Relationship, RelationshipType } from './Relationship';
-import { XMLParser } from '../xml/XMLParser';
-import { sanitizeHyperlinkUrl } from '../utils/validation';
-import { InvalidDocxError, CorruptedArchiveError } from '../zip/errors';
+import { Relationship, RelationshipType } from './Relationship.js';
+import { XMLParser } from '../xml/XMLParser.js';
+import { sanitizeHyperlinkUrl } from '../utils/validation.js';
+import { InvalidDocxError, CorruptedArchiveError } from '../zip/errors.js';
 
 /**
  * Manages relationships for a document or document part

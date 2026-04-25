@@ -21,10 +21,10 @@ export {
   getRuleByCode,
   getRulesBySeverity,
   getAutoFixableRules,
-} from './ValidationRules';
+} from './ValidationRules.js';
 
 // Validator class
-export { RevisionValidator } from './RevisionValidator';
+export { RevisionValidator } from './RevisionValidator.js';
 
 // Auto-fixer class
-export { RevisionAutoFixer } from './RevisionAutoFixer';
+export { RevisionAutoFixer } from './RevisionAutoFixer.js';

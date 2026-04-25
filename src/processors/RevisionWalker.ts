@@ -8,7 +8,7 @@
  * @module RevisionWalker
  */
 
-import { ParsedXMLObject } from '../xml/XMLParser';
+import { ParsedXMLObject } from '../xml/XMLParser.js';
 
 /**
  * Options for controlling which revision types to accept

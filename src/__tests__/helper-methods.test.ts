@@ -3,10 +3,10 @@
  * Tests Document, Paragraph, Table, and Image helper methods
  */
 
-import { Document } from '../core/Document';
-import { Paragraph } from '../elements/Paragraph';
-import { Table } from '../elements/Table';
-import { Image } from '../elements/Image';
+import { Document } from '../core/Document.js';
+import { Paragraph } from '../elements/Paragraph.js';
+import { Table } from '../elements/Table.js';
+import { Image } from '../elements/Image.js';
 
 describe('Document Helper Methods', () => {
   let doc: Document;

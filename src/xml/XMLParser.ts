@@ -4,8 +4,8 @@
  * Completes the DocXML framework (XMLBuilder + XMLParser)
  */
 
-import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
-import { XMLBuilder } from './XMLBuilder';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger.js';
+import { XMLBuilder } from './XMLBuilder.js';
 
 // Create scoped logger for XMLParser operations
 function getLogger(): ILogger {

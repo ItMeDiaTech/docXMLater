@@ -15,12 +15,12 @@
  * cleanup.all(); // Run all cleanups
  */
 
-import type { Document } from '../core/Document';
-import { Field, ComplexField } from '../elements/Field';
-import { Hyperlink } from '../elements/Hyperlink';
-import { Paragraph } from '../elements/Paragraph';
-import { Table } from '../elements/Table';
-import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
+import type { Document } from '../core/Document.js';
+import { Field, ComplexField } from '../elements/Field.js';
+import { Hyperlink } from '../elements/Hyperlink.js';
+import { Paragraph } from '../elements/Paragraph.js';
+import { Table } from '../elements/Table.js';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag.js';
 
 export interface CleanupOptions {
   /** Unlock all SDTs to enable editing */

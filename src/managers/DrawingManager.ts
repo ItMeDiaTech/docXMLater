@@ -5,9 +5,9 @@
  * Assigns unique IDs and handles relationship management.
  */
 
-import { Image } from '../elements/Image';
-import { Shape } from '../elements/Shape';
-import { TextBox } from '../elements/TextBox';
+import { Image } from '../elements/Image.js';
+import { Shape } from '../elements/Shape.js';
+import { TextBox } from '../elements/TextBox.js';
 
 /**
  * Type representing any drawing element

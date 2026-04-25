@@ -3,8 +3,8 @@
  * Provides a unified interface for reading and writing DOCX files
  */
 
-import { ZipReader } from './ZipReader';
-import { ZipWriter } from './ZipWriter';
+import { ZipReader } from './ZipReader.js';
+import { ZipWriter } from './ZipWriter.js';
 import {
   ZipFile,
   FileMap,
@@ -13,8 +13,8 @@ import {
   AddFileOptions,
   SizeLimitOptions,
   DEFAULT_SIZE_LIMITS,
-} from './types';
-import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
+} from './types.js';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger.js';
 
 // Create scoped logger for ZipHandler operations
 function getLogger(): ILogger {

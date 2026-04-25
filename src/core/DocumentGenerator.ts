@@ -3,27 +3,27 @@
  * Converts structured data to OpenXML format
  */
 
-import { CommentManager } from '../elements/CommentManager';
-import { EndnoteManager } from '../elements/EndnoteManager';
-import { FontManager } from '../elements/FontManager';
-import { FootnoteManager } from '../elements/FootnoteManager';
-import { HeaderFooterManager } from '../elements/HeaderFooterManager';
-import { Hyperlink } from '../elements/Hyperlink';
-import { ImageManager } from '../elements/ImageManager';
-import { Paragraph } from '../elements/Paragraph';
-import { Revision } from '../elements/Revision';
-import { isHyperlinkContent } from '../elements/RevisionContent';
-import { Section } from '../elements/Section';
-import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
-import { Table } from '../elements/Table';
-import { PreservedElement } from '../elements/PreservedElement';
-import { formatDateForXml } from '../utils/dateFormatting';
-import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import type { DocumentProperties } from '../types/document-types';
-import { BodyElement } from './DocumentContent';
-import { RelationshipManager } from './RelationshipManager';
-import { TrackChangesSettings } from '../types/settings-types';
+import { CommentManager } from '../elements/CommentManager.js';
+import { EndnoteManager } from '../elements/EndnoteManager.js';
+import { FontManager } from '../elements/FontManager.js';
+import { FootnoteManager } from '../elements/FootnoteManager.js';
+import { HeaderFooterManager } from '../elements/HeaderFooterManager.js';
+import { Hyperlink } from '../elements/Hyperlink.js';
+import { ImageManager } from '../elements/ImageManager.js';
+import { Paragraph } from '../elements/Paragraph.js';
+import { Revision } from '../elements/Revision.js';
+import { isHyperlinkContent } from '../elements/RevisionContent.js';
+import { Section } from '../elements/Section.js';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag.js';
+import { Table } from '../elements/Table.js';
+import { PreservedElement } from '../elements/PreservedElement.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import type { DocumentProperties } from '../types/document-types.js';
+import { BodyElement } from './DocumentContent.js';
+import { RelationshipManager } from './RelationshipManager.js';
+import { TrackChangesSettings } from '../types/settings-types.js';
 
 // Create scoped logger for DocumentGenerator operations
 function getLogger(): ILogger {

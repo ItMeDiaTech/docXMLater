@@ -5,7 +5,7 @@
  * Per ECMA-376 Part 4 §17.13.5.35
  */
 
-import { XMLElement, XMLBuilder } from '../xml/XMLBuilder';
+import { XMLElement, XMLBuilder } from '../xml/XMLBuilder.js';
 
 /**
  * Table grid column definition

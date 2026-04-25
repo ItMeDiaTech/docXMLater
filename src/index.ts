@@ -13,7 +13,7 @@ export {
   DocumentOptions,
   DocumentLoadOptions,
   DocumentPart,
-} from './core/Document';
+} from './core/Document.js';
 
 // =============================================================================
 // PUBLIC API — Document Elements
@@ -34,8 +34,8 @@ export {
   isRangeMarker,
   isShape,
   isTextBox,
-} from './elements/Paragraph';
-export { Run, RunFormatting, ThemeColorValue, LanguageConfig } from './elements/Run';
+} from './elements/Paragraph.js';
+export { Run, RunFormatting, ThemeColorValue, LanguageConfig } from './elements/Run.js';
 export {
   Section,
   PageOrientation,
@@ -48,7 +48,7 @@ export {
   SectionProperties,
   LineNumbering,
   LineNumberingRestart,
-} from './elements/Section';
+} from './elements/Section.js';
 export {
   Table,
   TableAlignment,
@@ -56,16 +56,20 @@ export {
   TableBorder,
   TableBorders,
   TableFormatting,
-} from './elements/Table';
-export { TableRow, RowFormatting } from './elements/TableRow';
+} from './elements/Table.js';
+export { TableRow, RowFormatting } from './elements/TableRow.js';
 export {
   TableCell,
   CellBorder,
   CellBorders,
   CellShading,
   CellFormatting,
-} from './elements/TableCell';
-export { TableGridChange, GridColumn, TableGridChangeProperties } from './elements/TableGridChange';
+} from './elements/TableCell.js';
+export {
+  TableGridChange,
+  GridColumn,
+  TableGridChangeProperties,
+} from './elements/TableGridChange.js';
 export {
   Image,
   ImageFormat,
@@ -76,18 +80,18 @@ export {
   BlipCompressionState,
   PicLockAttribute,
   PicNonVisualProperties,
-} from './elements/Image';
-export { ImageRun } from './elements/ImageRun';
-export { Shape, ShapeType, ShapeProperties, ShapeFill, ShapeOutline } from './elements/Shape';
-export { TextBox, TextBoxProperties, TextBoxFill, TextBoxMargins } from './elements/TextBox';
-export { Header, HeaderType, HeaderProperties } from './elements/Header';
-export { Footer, FooterType, FooterProperties } from './elements/Footer';
-export { Hyperlink, HyperlinkProperties } from './elements/Hyperlink';
-export { Bookmark, BookmarkProperties } from './elements/Bookmark';
-export { RangeMarker, RangeMarkerType, RangeMarkerProperties } from './elements/RangeMarker';
-export { Comment, CommentProperties } from './elements/Comment';
-export { Footnote, FootnoteType, FootnoteProperties } from './elements/Footnote';
-export { Endnote, EndnoteType, EndnoteProperties } from './elements/Endnote';
+} from './elements/Image.js';
+export { ImageRun } from './elements/ImageRun.js';
+export { Shape, ShapeType, ShapeProperties, ShapeFill, ShapeOutline } from './elements/Shape.js';
+export { TextBox, TextBoxProperties, TextBoxFill, TextBoxMargins } from './elements/TextBox.js';
+export { Header, HeaderType, HeaderProperties } from './elements/Header.js';
+export { Footer, FooterType, FooterProperties } from './elements/Footer.js';
+export { Hyperlink, HyperlinkProperties } from './elements/Hyperlink.js';
+export { Bookmark, BookmarkProperties } from './elements/Bookmark.js';
+export { RangeMarker, RangeMarkerType, RangeMarkerProperties } from './elements/RangeMarker.js';
+export { Comment, CommentProperties } from './elements/Comment.js';
+export { Footnote, FootnoteType, FootnoteProperties } from './elements/Footnote.js';
+export { Endnote, EndnoteType, EndnoteProperties } from './elements/Endnote.js';
 export {
   Field,
   FieldType,
@@ -97,7 +101,7 @@ export {
   FieldCharType,
   TOCFieldOptions,
   createTOCField,
-} from './elements/Field';
+} from './elements/Field.js';
 export {
   createNestedIFMergeField,
   createMergeField,
@@ -108,7 +112,7 @@ export {
   buildHyperlinkInstruction,
   isHyperlinkInstruction,
   ParsedHyperlinkInstruction,
-} from './elements/FieldHelpers';
+} from './elements/FieldHelpers.js';
 export {
   StructuredDocumentTag,
   SDTProperties,
@@ -117,20 +121,20 @@ export {
   SDTPlaceholder,
   SDTDataBinding,
   ContentControlType,
-} from './elements/StructuredDocumentTag';
-export { TableOfContents, TOCProperties } from './elements/TableOfContents';
-export { TableOfContentsElement } from './elements/TableOfContentsElement';
-export { AlternateContent } from './elements/AlternateContent';
-export { MathParagraph, MathExpression } from './elements/MathElement';
-export { CustomXmlBlock } from './elements/CustomXml';
-export { PreservedElement, PreservedElementContext } from './elements/PreservedElement';
+} from './elements/StructuredDocumentTag.js';
+export { TableOfContents, TOCProperties } from './elements/TableOfContents.js';
+export { TableOfContentsElement } from './elements/TableOfContentsElement.js';
+export { AlternateContent } from './elements/AlternateContent.js';
+export { MathParagraph, MathExpression } from './elements/MathElement.js';
+export { CustomXmlBlock } from './elements/CustomXml.js';
+export { PreservedElement, PreservedElementContext } from './elements/PreservedElement.js';
 
 // =============================================================================
 // PUBLIC API — Track Changes / Revisions
 // =============================================================================
 
-export { Revision, RevisionType, RevisionProperties, FieldContext } from './elements/Revision';
-export { RevisionContent, isRunContent, isHyperlinkContent } from './elements/RevisionContent';
+export { Revision, RevisionType, RevisionProperties, FieldContext } from './elements/Revision.js';
+export { RevisionContent, isRunContent, isHyperlinkContent } from './elements/RevisionContent.js';
 export {
   RevisionLocation,
   RunPropertyChange,
@@ -151,7 +155,7 @@ export {
   isTablePropertyChange,
   isSectionPropertyChange,
   isNumberingChange,
-} from './elements/PropertyChangeTypes';
+} from './elements/PropertyChangeTypes.js';
 export {
   acceptRevisionsInMemory,
   AcceptRevisionsOptions,
@@ -160,16 +164,16 @@ export {
   getRevisionsFromParagraph,
   countRevisionsByType,
   stripRevisionsFromXml,
-} from './processors/InMemoryRevisionAcceptor';
+} from './processors/InMemoryRevisionAcceptor.js';
 export {
   MoveOperationHelper,
   MoveOperationOptions,
   MoveOperationResult,
-} from './processors/MoveOperationHelper';
+} from './processors/MoveOperationHelper.js';
 export {
   SelectiveRevisionAcceptor,
   SelectiveAcceptResult,
-} from './processors/SelectiveRevisionAcceptor';
+} from './processors/SelectiveRevisionAcceptor.js';
 export {
   RevisionAwareProcessor,
   RevisionHandlingMode,
@@ -178,7 +182,7 @@ export {
   RevisionProcessingResult,
   ConflictInfo,
   ProcessingLogEntry,
-} from './processors/RevisionAwareProcessor';
+} from './processors/RevisionAwareProcessor.js';
 export {
   ChangelogGenerator,
   ChangeEntry,
@@ -188,19 +192,19 @@ export {
   ChangelogFormat,
   ConsolidatedChange,
   ChangelogSummary,
-} from './processors/ChangelogGenerator';
+} from './processors/ChangelogGenerator.js';
 
 // =============================================================================
 // PUBLIC API — Formatting / Styles / Numbering
 // =============================================================================
 
-export { Style, StyleType, StyleProperties } from './formatting/Style';
+export { Style, StyleType, StyleProperties } from './formatting/Style.js';
 export {
   StylesManager,
   ValidationResult,
   LatentStylesConfig,
   LatentStyleException,
-} from './formatting/StylesManager';
+} from './formatting/StylesManager.js';
 export {
   NumberingLevel,
   NumberFormat,
@@ -208,14 +212,14 @@ export {
   NumberingLevelProperties,
   WORD_NATIVE_BULLETS,
   WordNativeBullet,
-} from './formatting/NumberingLevel';
-export { AbstractNumbering, AbstractNumberingProperties } from './formatting/AbstractNumbering';
-export { NumberingInstance, NumberingInstanceProperties } from './formatting/NumberingInstance';
+} from './formatting/NumberingLevel.js';
+export { AbstractNumbering, AbstractNumberingProperties } from './formatting/AbstractNumbering.js';
+export { NumberingInstance, NumberingInstanceProperties } from './formatting/NumberingInstance.js';
 export {
   NumberingManager,
   NumberingConsolidationOptions,
   NumberingConsolidationResult,
-} from './formatting/NumberingManager';
+} from './formatting/NumberingManager.js';
 export {
   StyleRunFormatting,
   StyleParagraphFormatting,
@@ -223,33 +227,33 @@ export {
   StyleConfig,
   Heading2Config,
   ApplyCustomFormattingOptions,
-} from './types/styleConfig';
-export { FormatOptions, StyleApplyOptions, EmphasisType, ListPrefix } from './types/formatting';
+} from './types/styleConfig.js';
+export { FormatOptions, StyleApplyOptions, EmphasisType, ListPrefix } from './types/formatting.js';
 
 // =============================================================================
 // PUBLIC API — Managers
 // =============================================================================
 
-export { RevisionManager, RevisionCategory, RevisionSummary } from './elements/RevisionManager';
-export { ImageManager } from './elements/ImageManager';
-export { BookmarkManager } from './elements/BookmarkManager';
-export { CommentManager } from './elements/CommentManager';
-export { FootnoteManager } from './elements/FootnoteManager';
-export { EndnoteManager } from './elements/EndnoteManager';
-export { HeaderFooterManager } from './elements/HeaderFooterManager';
-export { FontManager, FontFormat, FontEntry } from './elements/FontManager';
+export { RevisionManager, RevisionCategory, RevisionSummary } from './elements/RevisionManager.js';
+export { ImageManager } from './elements/ImageManager.js';
+export { BookmarkManager } from './elements/BookmarkManager.js';
+export { CommentManager } from './elements/CommentManager.js';
+export { FootnoteManager } from './elements/FootnoteManager.js';
+export { EndnoteManager } from './elements/EndnoteManager.js';
+export { HeaderFooterManager } from './elements/HeaderFooterManager.js';
+export { FontManager, FontFormat, FontEntry } from './elements/FontManager.js';
 export {
   DrawingManager,
   DrawingElement,
   DrawingType,
   PreservedDrawing,
-} from './managers/DrawingManager';
+} from './managers/DrawingManager.js';
 
 // =============================================================================
 // PUBLIC API — Image Optimization
 // =============================================================================
 
-export type { ImageOptimizationResult } from './images/ImageOptimizer';
+export type { ImageOptimizationResult } from './images/ImageOptimizer.js';
 
 // =============================================================================
 // TYPES — Common / Shared Type Definitions
@@ -291,7 +295,7 @@ export {
   isWidthType,
   DEFAULT_BORDER,
   NO_BORDER,
-} from './elements/CommonTypes';
+} from './elements/CommonTypes.js';
 export {
   ListCategory,
   NumberFormat as ListNumberFormat,
@@ -301,28 +305,32 @@ export {
   ListNormalizationOptions,
   ListNormalizationReport,
   IndentationLevel,
-} from './types/list-types';
+} from './types/list-types.js';
 
-export { CompatibilityMode, CompatibilityInfo, CompatSetting } from './types/compatibility-types';
+export {
+  CompatibilityMode,
+  CompatibilityInfo,
+  CompatSetting,
+} from './types/compatibility-types.js';
 
 export {
   DocumentProtection,
   RevisionViewSettings,
   TrackChangesSettings,
   WebSettingsInfo,
-} from './types/settings-types';
+} from './types/settings-types.js';
 
 // =============================================================================
 // TYPES — Compatibility Upgrade
 // =============================================================================
 
-export { CompatibilityUpgrader, UpgradeReport } from './processors/CompatibilityUpgrader';
+export { CompatibilityUpgrader, UpgradeReport } from './processors/CompatibilityUpgrader.js';
 export {
   LEGACY_COMPAT_ELEMENTS,
   LEGACY_COMPAT_ELEMENT_NAMES,
   MODERN_COMPAT_SETTINGS,
   MS_WORD_COMPAT_URI,
-} from './constants/legacyCompatFlags';
+} from './constants/legacyCompatFlags.js';
 
 // =============================================================================
 // UTILITIES — Unit Conversions
@@ -363,7 +371,7 @@ export {
   pixelsToTwips,
   pixelsToCm,
   pixelsToPoints,
-} from './utils/units';
+} from './utils/units.js';
 
 // =============================================================================
 // UTILITIES — Validation, Corruption Detection, Error Handling
@@ -392,7 +400,7 @@ export {
   sanitizeHyperlinkUrl,
   SanitizeHyperlinkUrlResult,
   TextValidationResult,
-} from './utils/validation';
+} from './utils/validation.js';
 export {
   detectCorruptionInDocument,
   detectCorruptionInText,
@@ -401,8 +409,8 @@ export {
   CorruptionReport,
   CorruptionLocation,
   CorruptionType,
-} from './utils/corruptionDetection';
-export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandling';
+} from './utils/corruptionDetection.js';
+export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandling.js';
 export {
   REVISION_RULES,
   ValidationSeverity,
@@ -419,7 +427,7 @@ export {
   getAutoFixableRules,
   RevisionValidator,
   RevisionAutoFixer,
-} from './validation';
+} from './validation/index.js';
 
 // =============================================================================
 // UTILITIES — Formatting, Parsing, Sanitization
@@ -432,20 +440,20 @@ export {
   cleanFormatting,
   isEqualFormatting,
   applyDefaults,
-} from './utils/formatting';
+} from './utils/formatting.js';
 export {
   safeParseInt,
   parseOoxmlBoolean,
   isExplicitlySet,
   parseNumericAttribute,
   parseOnOffAttribute,
-} from './utils/parsingHelpers';
+} from './utils/parsingHelpers.js';
 export {
   removeInvalidXmlChars,
   findInvalidXmlChars,
   hasInvalidXmlChars,
   XML_CONTROL_CHARS,
-} from './utils/xmlSanitization';
+} from './utils/xmlSanitization.js';
 
 // =============================================================================
 // UTILITIES — List Detection (kept for basic detection; normalization moved to consumer)
@@ -462,7 +470,7 @@ export {
   TYPED_LIST_PATTERNS,
   PATTERN_TO_CATEGORY,
   FORMAT_TO_LEVEL,
-} from './utils/list-detection';
+} from './utils/list-detection.js';
 
 // =============================================================================
 // UTILITIES — Logging
@@ -481,84 +489,35 @@ export {
   getGlobalLogger,
   setGlobalLogger,
   resetGlobalLogger,
-} from './utils/logger';
+} from './utils/logger.js';
 
 // =============================================================================
 // UTILITIES — Revision Walker
 // =============================================================================
 
-export { RevisionWalker, RevisionWalkerOptions } from './processors/RevisionWalker';
-export { resolveCellShading } from './processors/ShadingResolver';
-export { decodeCnfStyle, getActiveConditionalsInPriorityOrder } from './processors/cnfStyleDecoder';
+export { RevisionWalker, RevisionWalkerOptions } from './processors/RevisionWalker.js';
+export { resolveCellShading } from './processors/ShadingResolver.js';
+export {
+  decodeCnfStyle,
+  getActiveConditionalsInPriorityOrder,
+} from './processors/cnfStyleDecoder.js';
 
 // =============================================================================
 // UTILITIES — Cleanup
 // =============================================================================
 
-export { CleanupHelper, CleanupOptions, CleanupReport } from './helpers/CleanupHelper';
+export { CleanupHelper, CleanupOptions, CleanupReport } from './helpers/CleanupHelper.js';
 
 // =============================================================================
-// INTERNAL — ZIP Handling (advanced usage)
+// PUBLIC — Type unions consumers see when iterating doc.getBodyElements()
 // =============================================================================
 
-export { ZipHandler } from './zip/ZipHandler';
-export { ZipReader } from './zip/ZipReader';
-export { ZipWriter } from './zip/ZipWriter';
+export type { BodyElement } from './core/DocumentContent.js';
 export {
-  ZipFile,
-  FileMap,
-  LoadOptions,
-  SaveOptions,
-  AddFileOptions,
-  SizeLimitOptions,
-  DEFAULT_SIZE_LIMITS,
-  REQUIRED_DOCX_FILES,
-  DOCX_PATHS,
-} from './zip/types';
-export {
-  DocxError,
-  DocxNotFoundError,
-  InvalidDocxError,
-  CorruptedArchiveError,
-  MissingRequiredFileError,
-  FileOperationError,
-} from './zip/errors';
-
-// =============================================================================
-// INTERNAL — XML Builder and Parser (advanced usage)
-// =============================================================================
-
-export { XMLBuilder, XMLElement } from './xml/XMLBuilder';
-export {
-  XMLParser,
-  ParseToObjectOptions,
-  ParsedXMLValue,
-  ParsedXMLObject,
-  DEFAULT_MAX_NESTING_DEPTH,
-} from './xml/XMLParser';
-
-// =============================================================================
-// INTERNAL — Parser, Generator, Validator (advanced usage)
-// =============================================================================
-
-export { Relationship, RelationshipType, RelationshipProperties } from './core/Relationship';
-export { RelationshipManager } from './core/RelationshipManager';
-export { DocumentParser, ParseError } from './core/DocumentParser';
-export { DocumentGenerator, IZipHandlerReader } from './core/DocumentGenerator';
-export { DocumentValidator, SizeEstimate, MemoryOptions } from './core/DocumentValidator';
-export { DocumentIdManager } from './core/DocumentIdManager';
-
-// =============================================================================
-// INTERNAL — Document Subsystem Classes (advanced usage)
-// =============================================================================
-
-export { DocumentContent, BodyElement } from './core/DocumentContent';
-
-// =============================================================================
-// INTERNAL — Constants
-// =============================================================================
-
-export { LIMITS } from './constants/limits';
+  RelationshipType,
+  type Relationship,
+  type RelationshipProperties,
+} from './core/Relationship.js';
 
 // =============================================================================
 // EXTENSIBILITY — Plugin Registries and Document Events
@@ -566,19 +525,28 @@ export { LIMITS } from './constants/limits';
 
 export {
   ElementRegistry,
-  ElementHandler,
-  ElementParseContext,
-  ElementSerializeContext,
-} from './core/ElementRegistry';
+  type ElementHandler,
+  type ElementParseContext,
+  type ElementSerializeContext,
+} from './core/ElementRegistry.js';
+export { RegisteredBodyElement } from './elements/RegisteredBodyElement.js';
 export {
   ValidationRuleRegistry,
-  CustomValidationRule,
-  CustomValidationIssue,
-  CustomValidationSeverity,
-} from './validation/ValidationRuleRegistry';
-export {
-  DocumentEventEmitter,
+  type CustomValidationRule,
+  type CustomValidationIssue,
+  type CustomValidationSeverity,
+} from './validation/ValidationRuleRegistry.js';
+export type {
   DocumentEventMap,
   DocumentEventType,
   DocumentEventListener,
-} from './core/DocumentEvents';
+} from './core/DocumentEvents.js';
+
+// Low-level building blocks — XMLBuilder, XMLParser, ZipHandler,
+// ZipReader, ZipWriter, DocumentParser, DocumentGenerator,
+// DocumentValidator, DocumentIdManager, DocumentContent,
+// RelationshipManager, DocumentEventEmitter, plus zip/xml types and
+// DocxError hierarchy — moved to the `docxmlater/internal` subpath in
+// 11.0.0. Migrate via:
+//   import { XMLParser, ZipHandler } from 'docxmlater/internal';
+// The internal subpath has relaxed semver — pin an exact version.

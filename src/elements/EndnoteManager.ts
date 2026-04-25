@@ -5,9 +5,9 @@
  * Maintains unique IDs and proper ordering.
  */
 
-import { Endnote, EndnoteType } from './Endnote';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { XMLParser } from '../xml/XMLParser';
+import { Endnote, EndnoteType } from './Endnote.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { XMLParser } from '../xml/XMLParser.js';
 
 /**
  * Manages endnotes in a document

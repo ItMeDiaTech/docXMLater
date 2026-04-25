@@ -5,9 +5,9 @@
  * They include author, date, content, and can have replies.
  */
 
-import { Run } from './Run';
-import { XMLElement } from '../xml/XMLBuilder';
-import { formatDateForXml } from '../utils/dateFormatting';
+import { Run } from './Run.js';
+import { XMLElement } from '../xml/XMLBuilder.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
 
 /**
  * Comment properties

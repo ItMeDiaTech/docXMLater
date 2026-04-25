@@ -5,13 +5,13 @@
  * paragraph list properties.
  */
 
-import type { Paragraph } from '../elements/Paragraph';
+import type { Paragraph } from '../elements/Paragraph.js';
 import type {
   ListCategory,
   ListDetectionResult,
   NumberFormat,
   BulletFormat,
-} from '../types/list-types';
+} from '../types/list-types.js';
 
 // =============================================================================
 // CONSTANTS

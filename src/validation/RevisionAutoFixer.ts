@@ -7,17 +7,17 @@
  * @module RevisionAutoFixer
  */
 
-import type { Document } from '../core/Document';
-import type { Revision } from '../elements/Revision';
-import type { RevisionManager } from '../elements/RevisionManager';
+import type { Document } from '../core/Document.js';
+import type { Revision } from '../elements/Revision.js';
+import type { RevisionManager } from '../elements/RevisionManager.js';
 import {
   REVISION_RULES,
   AutoFixOptions,
   AutoFixResult,
   FixAction,
   ValidationIssue,
-} from './ValidationRules';
-import { RevisionValidator } from './RevisionValidator';
+} from './ValidationRules.js';
+import { RevisionValidator } from './RevisionValidator.js';
 
 /**
  * Automatically fixes revision validation issues.

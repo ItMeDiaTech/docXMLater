@@ -2,17 +2,17 @@
  * TableRow - Represents a row in a table
  */
 
-import { deepClone } from '../utils/deepClone';
-import { TableCell } from './TableCell';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { TableBorders } from './Table';
+import { deepClone } from '../utils/deepClone.js';
+import { TableCell } from './TableCell.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { TableBorders } from './Table.js';
 import {
   BasicShadingPattern,
   RowJustification as CommonRowJustification,
   ShadingConfig,
   buildShadingAttributes,
-} from './CommonTypes';
-import { defaultLogger } from '../utils/logger';
+} from './CommonTypes.js';
+import { defaultLogger } from '../utils/logger.js';
 
 // ============================================================================
 // RE-EXPORTED TYPES (for backward compatibility)
@@ -120,9 +120,9 @@ export class TableRow {
   private cells: TableCell[] = [];
   private formatting: RowFormatting;
   /** Parent table reference (if row is inside a table) */
-  private _parentTable?: import('./Table').Table;
+  private _parentTable?: import('./Table.js').Table;
   /** Tracking context for automatic change tracking */
-  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  private trackingContext?: import('../tracking/TrackingContext.js').TrackingContext;
   /** Table row property change tracking (w:trPrChange) */
   private trPrChange?: TrPrChange;
 
@@ -148,7 +148,7 @@ export class TableRow {
    * Called by Document when track changes is enabled.
    * @internal
    */
-  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+  _setTrackingContext(context: import('../tracking/TrackingContext.js').TrackingContext): void {
     this.trackingContext = context;
   }
 
@@ -710,7 +710,7 @@ export class TableRow {
    * Called by Table when adding rows.
    * @internal
    */
-  _setParentTable(table: import('./Table').Table | undefined): void {
+  _setParentTable(table: import('./Table.js').Table | undefined): void {
     this._parentTable = table;
   }
 
@@ -718,7 +718,7 @@ export class TableRow {
    * Gets the parent table reference for this row.
    * @internal
    */
-  _getParentTable(): import('./Table').Table | undefined {
+  _getParentTable(): import('./Table.js').Table | undefined {
     return this._parentTable;
   }
 

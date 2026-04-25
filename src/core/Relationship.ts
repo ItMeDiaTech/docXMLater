@@ -5,7 +5,7 @@
  * They are stored in _rels/*.xml.rels files throughout the document structure.
  */
 
-import { XMLBuilder } from '../xml/XMLBuilder';
+import { XMLBuilder } from '../xml/XMLBuilder.js';
 
 /**
  * Relationship types used in Word documents

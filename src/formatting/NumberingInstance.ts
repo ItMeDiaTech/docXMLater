@@ -6,8 +6,8 @@
  * abstract numbering, creating separate list sequences.
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { NumberingLevel } from './NumberingLevel';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { NumberingLevel } from './NumberingLevel.js';
 
 /**
  * Properties for creating a numbering instance

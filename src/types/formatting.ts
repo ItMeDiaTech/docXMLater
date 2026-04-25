@@ -3,8 +3,8 @@
  */
 
 // Forward references to avoid circular dependencies
-import type { Paragraph } from '../elements/Paragraph';
-import type { Run } from '../elements/Run';
+import type { Paragraph } from '../elements/Paragraph.js';
+import type { Run } from '../elements/Run.js';
 
 /**
  * Border style options
@@ -45,13 +45,13 @@ export interface ParagraphBorder {
  * Shading patterns — re-exported from CommonTypes for backward compatibility.
  * @see CommonTypes.ShadingPattern for the canonical definition
  */
-export type { ShadingPattern } from '../elements/CommonTypes';
+export type { ShadingPattern } from '../elements/CommonTypes.js';
 
 /**
  * Paragraph shading configuration — re-exported from CommonTypes for backward compatibility.
  * @see CommonTypes.ShadingConfig for the canonical definition (includes theme attributes)
  */
-export type { ShadingConfig as ParagraphShading } from '../elements/CommonTypes';
+export type { ShadingConfig as ParagraphShading } from '../elements/CommonTypes.js';
 
 /**
  * Tab stop alignment

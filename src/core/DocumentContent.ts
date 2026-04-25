@@ -5,16 +5,16 @@
  * Extracted from Document.ts for better separation of concerns.
  */
 
-import { Paragraph } from '../elements/Paragraph';
-import { Table } from '../elements/Table';
-import { Section } from '../elements/Section';
-import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
-import { TableOfContentsElement } from '../elements/TableOfContentsElement';
-import { AlternateContent } from '../elements/AlternateContent';
-import { MathParagraph } from '../elements/MathElement';
-import { CustomXmlBlock } from '../elements/CustomXml';
-import { PreservedElement } from '../elements/PreservedElement';
-import { RegisteredBodyElement } from '../elements/RegisteredBodyElement';
+import { Paragraph } from '../elements/Paragraph.js';
+import { Table } from '../elements/Table.js';
+import { Section } from '../elements/Section.js';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag.js';
+import { TableOfContentsElement } from '../elements/TableOfContentsElement.js';
+import { AlternateContent } from '../elements/AlternateContent.js';
+import { MathParagraph } from '../elements/MathElement.js';
+import { CustomXmlBlock } from '../elements/CustomXml.js';
+import { PreservedElement } from '../elements/PreservedElement.js';
+import { RegisteredBodyElement } from '../elements/RegisteredBodyElement.js';
 
 /**
  * Body element type — Paragraph, Table, TOC, SDT, raw passthrough, or

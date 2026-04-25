@@ -6,9 +6,9 @@
  * tables, or other block-level elements.
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { Paragraph } from './Paragraph';
-import { Table } from './Table';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { Paragraph } from './Paragraph.js';
+import { Table } from './Table.js';
 
 /**
  * Type of content lock for SDT

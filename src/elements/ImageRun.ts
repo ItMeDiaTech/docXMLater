@@ -6,9 +6,9 @@
  * It generates proper w:r (run) XML with w:drawing child element.
  */
 
-import { Run } from './Run';
-import { Image } from './Image';
-import { XMLElement } from '../xml/XMLBuilder';
+import { Run } from './Run.js';
+import { Image } from './Image.js';
+import { XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * ImageRun - A run containing an embedded image

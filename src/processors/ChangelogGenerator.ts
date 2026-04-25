@@ -10,9 +10,9 @@
  * @module ChangelogGenerator
  */
 
-import type { Document } from '../core/Document';
-import { Revision, RevisionType } from '../elements/Revision';
-import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
+import type { Document } from '../core/Document.js';
+import { Revision, RevisionType } from '../elements/Revision.js';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger.js';
 
 // Scoped logger for ChangelogGenerator
 function getLogger(): ILogger {

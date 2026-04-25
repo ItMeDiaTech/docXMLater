@@ -3,13 +3,13 @@
  * Prevents security issues and data corruption
  */
 
-import { Paragraph } from '../elements/Paragraph';
-import { Table } from '../elements/Table';
-import { ImageManager } from '../elements/ImageManager';
-import type { DocumentProperties } from '../types/document-types';
-import { BodyElement } from './DocumentContent';
-import { LIMITS } from '../constants/limits';
-import { defaultLogger } from '../utils/logger';
+import { Paragraph } from '../elements/Paragraph.js';
+import { Table } from '../elements/Table.js';
+import { ImageManager } from '../elements/ImageManager.js';
+import type { DocumentProperties } from '../types/document-types.js';
+import { BodyElement } from './DocumentContent.js';
+import { LIMITS } from '../constants/limits.js';
+import { defaultLogger } from '../utils/logger.js';
 import * as v8 from 'v8';
 
 /**

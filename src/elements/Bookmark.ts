@@ -5,7 +5,7 @@
  * They consist of a start marker and an end marker with matching IDs.
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
+import { XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * `w:displacedByCustomXml` attribute value per ECMA-376 CT_MarkupRange —

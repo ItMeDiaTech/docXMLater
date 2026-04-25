@@ -8,10 +8,10 @@
  * in a document. Use setIdProvider() to connect to a centralized ID allocator.
  */
 
-import { Comment } from './Comment';
-import { Run } from './Run';
-import { XMLBuilder } from '../xml/XMLBuilder';
-import { formatDateForXml } from '../utils/dateFormatting';
+import { Comment } from './Comment.js';
+import { Run } from './Run.js';
+import { XMLBuilder } from '../xml/XMLBuilder.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
 
 /**
  * Type for the centralized ID provider callback.

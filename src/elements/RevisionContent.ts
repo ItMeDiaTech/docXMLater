@@ -9,9 +9,9 @@
  * This module provides the type definitions and type guards for revision content.
  */
 
-import type { Run } from './Run';
-import type { Hyperlink } from './Hyperlink';
-import type { ImageRun } from './ImageRun';
+import type { Run } from './Run.js';
+import type { Hyperlink } from './Hyperlink.js';
+import type { ImageRun } from './ImageRun.js';
 
 /**
  * Content types valid within a revision (tracked change)

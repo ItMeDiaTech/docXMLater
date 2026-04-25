@@ -6,8 +6,8 @@
  * alignment, and indentation.
  */
 
-import { parseOnOffAttribute } from '../utils/parsingHelpers';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { parseOnOffAttribute } from '../utils/parsingHelpers.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * Word-native bullet character mappings

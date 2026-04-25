@@ -1,6 +1,6 @@
-import { ZipHandler } from '../zip/ZipHandler';
-import { XMLParser } from '../xml/XMLParser';
-import { RevisionWalker } from './RevisionWalker';
+import { ZipHandler } from '../zip/ZipHandler.js';
+import { XMLParser } from '../xml/XMLParser.js';
+import { RevisionWalker } from './RevisionWalker.js';
 
 /**
  * Markers covered: w:ins, w:del, w:moveFrom, w:moveTo,

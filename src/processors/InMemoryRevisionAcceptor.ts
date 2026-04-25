@@ -14,14 +14,18 @@
  * @see https://learn.microsoft.com/en-us/previous-versions/office/developer/office-2007/ee836138(v=office.12)
  */
 
-import type { Document } from '../core/Document';
-import { Paragraph } from '../elements/Paragraph';
-import type { ParagraphContent } from '../elements/Paragraph';
-import { Revision, RevisionType } from '../elements/Revision';
-import { isRunContent, isHyperlinkContent, isImageRunContent } from '../elements/RevisionContent';
-import { ComplexField } from '../elements/Field';
-import { Table } from '../elements/Table';
-import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
+import type { Document } from '../core/Document.js';
+import { Paragraph } from '../elements/Paragraph.js';
+import type { ParagraphContent } from '../elements/Paragraph.js';
+import { Revision, RevisionType } from '../elements/Revision.js';
+import {
+  isRunContent,
+  isHyperlinkContent,
+  isImageRunContent,
+} from '../elements/RevisionContent.js';
+import { ComplexField } from '../elements/Field.js';
+import { Table } from '../elements/Table.js';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger.js';
 
 /**
  * Get scoped logger for this module

@@ -3,32 +3,32 @@
  * Provides a simple interface for creating DOCX files without managing ZIP and XML manually
  */
 
-import { parseOnOffAttribute } from '../utils/parsingHelpers';
-import { Bookmark } from '../elements/Bookmark';
-import { BookmarkManager } from '../elements/BookmarkManager';
-import { Comment } from '../elements/Comment';
-import { PreservedElement } from '../elements/PreservedElement';
-import { CommentManager } from '../elements/CommentManager';
-import { Endnote } from '../elements/Endnote';
-import { EndnoteManager } from '../elements/EndnoteManager';
-import { Field, ComplexField } from '../elements/Field';
-import { Footnote } from '../elements/Footnote';
-import { FootnoteManager } from '../elements/FootnoteManager';
-import { Footer } from '../elements/Footer';
-import { Header } from '../elements/Header';
-import { HeaderFooterManager } from '../elements/HeaderFooterManager';
-import { Hyperlink } from '../elements/Hyperlink';
-import { Image } from '../elements/Image';
-import { ImageManager } from '../elements/ImageManager';
-import { ImageRun } from '../elements/ImageRun';
-import { Paragraph, ParagraphContent, FieldLike } from '../elements/Paragraph';
-import { RangeMarker } from '../elements/RangeMarker';
-import { Revision, RevisionType } from '../elements/Revision';
-import { RevisionManager } from '../elements/RevisionManager';
-import { RevisionLocation } from '../elements/PropertyChangeTypes';
-import { Run, RunFormatting } from '../elements/Run';
-import { Shape } from '../elements/Shape';
-import { TextBox } from '../elements/TextBox';
+import { parseOnOffAttribute } from '../utils/parsingHelpers.js';
+import { Bookmark } from '../elements/Bookmark.js';
+import { BookmarkManager } from '../elements/BookmarkManager.js';
+import { Comment } from '../elements/Comment.js';
+import { PreservedElement } from '../elements/PreservedElement.js';
+import { CommentManager } from '../elements/CommentManager.js';
+import { Endnote } from '../elements/Endnote.js';
+import { EndnoteManager } from '../elements/EndnoteManager.js';
+import { Field, ComplexField } from '../elements/Field.js';
+import { Footnote } from '../elements/Footnote.js';
+import { FootnoteManager } from '../elements/FootnoteManager.js';
+import { Footer } from '../elements/Footer.js';
+import { Header } from '../elements/Header.js';
+import { HeaderFooterManager } from '../elements/HeaderFooterManager.js';
+import { Hyperlink } from '../elements/Hyperlink.js';
+import { Image } from '../elements/Image.js';
+import { ImageManager } from '../elements/ImageManager.js';
+import { ImageRun } from '../elements/ImageRun.js';
+import { Paragraph, ParagraphContent, FieldLike } from '../elements/Paragraph.js';
+import { RangeMarker } from '../elements/RangeMarker.js';
+import { Revision, RevisionType } from '../elements/Revision.js';
+import { RevisionManager } from '../elements/RevisionManager.js';
+import { RevisionLocation } from '../elements/PropertyChangeTypes.js';
+import { Run, RunFormatting } from '../elements/Run.js';
+import { Shape } from '../elements/Shape.js';
+import { TextBox } from '../elements/TextBox.js';
 import {
   RevisionValidator,
   RevisionAutoFixer,
@@ -36,25 +36,33 @@ import {
   AutoFixOptions,
   ValidationResult,
   AutoFixResult,
-} from '../validation';
-import { Section } from '../elements/Section';
-import { StructuredDocumentTag } from '../elements/StructuredDocumentTag';
-import { Table, TableBorder } from '../elements/Table';
-import { TableCell } from '../elements/TableCell';
-import { TableOfContentsElement } from '../elements/TableOfContentsElement';
-import { resolveCellShading } from '../processors/ShadingResolver';
+} from '../validation/index.js';
+import { Section } from '../elements/Section.js';
+import { StructuredDocumentTag } from '../elements/StructuredDocumentTag.js';
+import { Table, TableBorder } from '../elements/Table.js';
+import { TableCell } from '../elements/TableCell.js';
+import { TableOfContentsElement } from '../elements/TableOfContentsElement.js';
+import { resolveCellShading } from '../processors/ShadingResolver.js';
 import {
   NumberingManager,
   NumberingConsolidationOptions,
   NumberingConsolidationResult,
-} from '../formatting/NumberingManager';
-import { Style, StyleProperties } from '../formatting/Style';
-import { StylesManager } from '../formatting/StylesManager';
-import { FormatOptions, StyleApplyOptions } from '../types/formatting';
-import { CompatibilityMode, CompatibilityInfo, CompatSetting } from '../types/compatibility-types';
-import { DocumentProtection, RevisionViewSettings, WebSettingsInfo } from '../types/settings-types';
-import { CompatibilityUpgrader, UpgradeReport } from '../processors/CompatibilityUpgrader';
-import { MODERN_COMPAT_SETTINGS } from '../constants/legacyCompatFlags';
+} from '../formatting/NumberingManager.js';
+import { Style, StyleProperties } from '../formatting/Style.js';
+import { StylesManager } from '../formatting/StylesManager.js';
+import { FormatOptions, StyleApplyOptions } from '../types/formatting.js';
+import {
+  CompatibilityMode,
+  CompatibilityInfo,
+  CompatSetting,
+} from '../types/compatibility-types.js';
+import {
+  DocumentProtection,
+  RevisionViewSettings,
+  WebSettingsInfo,
+} from '../types/settings-types.js';
+import { CompatibilityUpgrader, UpgradeReport } from '../processors/CompatibilityUpgrader.js';
+import { MODERN_COMPAT_SETTINGS } from '../constants/legacyCompatFlags.js';
 // ListNormalizationOptions and ListNormalizationReport removed - normalizeTableLists moved to consumer
 import {
   ApplyStylesOptions,
@@ -62,10 +70,10 @@ import {
   StyleConfig,
   StyleRunFormatting,
   StyleParagraphFormatting,
-} from '../types/styleConfig';
+} from '../types/styleConfig.js';
 // ListNormalizer import removed - moved to consumer
-import { defaultLogger, ILogger, getGlobalLogger, createScopedLogger } from '../utils/logger';
-import { UNITS } from '../utils/units';
+import { defaultLogger, ILogger, getGlobalLogger, createScopedLogger } from '../utils/logger.js';
+import { UNITS } from '../utils/units.js';
 
 // Create scoped logger for Document operations
 function getLogger(): ILogger {
@@ -73,36 +81,36 @@ function getLogger(): ILogger {
 }
 // Raw XML revision acceptance - used at load time BEFORE parsing
 // cleanupRevisionMetadata - cleanup metadata files after in-memory acceptance
-import { acceptAllRevisions, cleanupRevisionMetadata } from '../processors/acceptRevisions';
+import { acceptAllRevisions, cleanupRevisionMetadata } from '../processors/acceptRevisions.js';
 // In-memory revision acceptance - used AFTER parsing, allows subsequent modifications
-import { acceptRevisionsInMemory } from '../processors/InMemoryRevisionAcceptor';
-import { stripTrackedChanges } from '../processors/stripTrackedChanges';
-import { diffText, diffHasUnchangedParts } from '../utils/textDiff';
-import { XMLBuilder } from '../xml/XMLBuilder';
-import { XMLParser } from '../xml/XMLParser';
-import { DocumentTrackingContext } from '../tracking/DocumentTrackingContext';
-import type { TrackingContext } from '../tracking/TrackingContext';
-import { ZipHandler } from '../zip/ZipHandler';
-import { DOCX_PATHS } from '../zip/types';
-import { DocumentGenerator } from './DocumentGenerator';
-import { DocumentIdManager } from './DocumentIdManager';
-import { DocumentParser } from './DocumentParser';
-import { DocumentValidator } from './DocumentValidator';
+import { acceptRevisionsInMemory } from '../processors/InMemoryRevisionAcceptor.js';
+import { stripTrackedChanges } from '../processors/stripTrackedChanges.js';
+import { diffText, diffHasUnchangedParts } from '../utils/textDiff.js';
+import { XMLBuilder } from '../xml/XMLBuilder.js';
+import { XMLParser } from '../xml/XMLParser.js';
+import { DocumentTrackingContext } from '../tracking/DocumentTrackingContext.js';
+import type { TrackingContext } from '../tracking/TrackingContext.js';
+import { ZipHandler } from '../zip/ZipHandler.js';
+import { DOCX_PATHS } from '../zip/types.js';
+import { DocumentGenerator } from './DocumentGenerator.js';
+import { DocumentIdManager } from './DocumentIdManager.js';
+import { DocumentParser } from './DocumentParser.js';
+import { DocumentValidator } from './DocumentValidator.js';
 import {
   DocumentEventEmitter,
   type DocumentEventListener,
   type DocumentEventType,
-} from './DocumentEvents';
-import { RelationshipManager } from './RelationshipManager';
-import { RelationshipType } from './Relationship';
-import { BodyElement } from './DocumentContent';
-import { optimizeImage, ImageOptimizationResult } from '../images/ImageOptimizer';
+} from './DocumentEvents.js';
+import { RelationshipManager } from './RelationshipManager.js';
+import { RelationshipType } from './Relationship.js';
+import { BodyElement } from './DocumentContent.js';
+import { optimizeImage, ImageOptimizationResult } from '../images/ImageOptimizer.js';
 
 // DocumentProperties / DocumentPart now live in `src/types/document-types.ts`
 // to break the Document ↔ DocumentParser/Generator/Validator cycle.
 // They are re-exported below for backward compat.
-export type { DocumentProperties, DocumentPart } from '../types/document-types';
-import type { DocumentProperties, DocumentPart } from '../types/document-types';
+export type { DocumentProperties, DocumentPart } from '../types/document-types.js';
+import type { DocumentProperties, DocumentPart } from '../types/document-types.js';
 
 /**
  * Document creation options
@@ -4302,7 +4310,7 @@ export class Document {
     table: Table,
     row: number,
     col: number
-  ): import('../elements/CommonTypes').ShadingConfig | undefined {
+  ): import('../elements/CommonTypes.js').ShadingConfig | undefined {
     const tableRow = table.getRow(row);
     if (!tableRow) return undefined;
     const cell = tableRow.getCell(col);

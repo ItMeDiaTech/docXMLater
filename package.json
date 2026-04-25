@@ -1,6 +1,6 @@
 {
   "name": "docxmlater",
-  "version": "10.4.1",
+  "version": "11.0.0",
   "description": "A comprehensive DOCX editing framework for creating, reading, and manipulating Microsoft Word documents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,11 +20,10 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "npm run build:cjs && npm run build:esm && npm run build:esm:pkg && npm run build:esm:fix",
+    "build": "npm run build:cjs && npm run build:esm && npm run build:esm:pkg",
     "build:cjs": "tsc",
     "build:esm": "tsc -p tsconfig.esm.json",
     "build:esm:pkg": "node -e \"require('fs').writeFileSync('dist/esm/package.json', JSON.stringify({type:'module'},null,2))\"",
-    "build:esm:fix": "node scripts/fix-esm-imports.mjs",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

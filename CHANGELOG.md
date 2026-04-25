@@ -5,6 +5,98 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.0] - 2026-04-25
+
+### Breaking
+
+- **Tiered API split.** Low-level building blocks have been moved out of
+  the main entry point and are now available only via the
+  `docxmlater/internal` subpath:
+  `XMLBuilder`, `XMLElement`, `XMLParser`, `ParseToObjectOptions`,
+  `ParsedXMLValue`, `ParsedXMLObject`, `DEFAULT_MAX_NESTING_DEPTH`,
+  `ZipHandler`, `ZipReader`, `ZipWriter`, `ZipFile`, `FileMap`,
+  `LoadOptions`, `SaveOptions`, `AddFileOptions`, `SizeLimitOptions`,
+  `DEFAULT_SIZE_LIMITS`, `REQUIRED_DOCX_FILES`, `DOCX_PATHS`,
+  `DocxError` and friends, `RelationshipManager`, `DocumentParser`,
+  `ParseError`, `DocumentGenerator`, `IZipHandlerReader`,
+  `DocumentValidator`, `SizeEstimate`, `MemoryOptions`,
+  `DocumentIdManager`, `DocumentContent`, `LIMITS`,
+  `DocumentEventEmitter` (the class).
+
+  Migration:
+
+  ```ts
+  // Before
+  import { XMLParser, ZipHandler } from 'docxmlater';
+  // After
+  import { XMLParser, ZipHandler } from 'docxmlater/internal';
+  ```
+
+  The `docxmlater/internal` subpath has relaxed semver — pin an exact
+  version when consuming it. The main API follows full semver.
+
+  Plugin extension points (`ElementRegistry`, `ValidationRuleRegistry`)
+  and event types (`DocumentEventMap`, `DocumentEventListener`,
+  `DocumentEventType`) remain in the main API.
+
+- **ESM build cleanup.** Source files now carry explicit `.js` extensions
+  on every relative import, matching Node ESM resolver requirements.
+  The post-build `scripts/fix-esm-imports.mjs` regex rewriter has been
+  removed. Consumers using `import { ... } from 'docxmlater'` see no
+  change; consumers building tooling against `dist/esm/*` directly will
+  find the output identical.
+
+### Added
+
+- **`ElementRegistry` plugin extension point.** `DocumentParser` now
+  consults the registry on body-level scan; matched tags route through
+  the consumer's `parse()` and produce a `RegisteredBodyElement` whose
+  `toXML()` invokes `handler.serialize()` on save. Buggy parsers degrade
+  to `PreservedElement`; buggy serializers fall back to original XML so
+  load/save can never corrupt a document.
+- **`ValidationRuleRegistry` plugin extension point.**
+  `RevisionValidator.validate()` runs every registered custom rule and
+  buckets the resulting issues alongside built-in ones by severity.
+  Custom rules execute even when the document has no revisions.
+- **`Document.iterateParagraphs()`, `iterateBodyElements()`,
+  `iterateSections()`** — generator-based traversal for very large
+  documents. `iterateParagraphs()` traverses tables and SDT content
+  identically to `getAllParagraphs()`.
+- **Event coverage**: every public body-mutation method now emits the
+  appropriate `paragraphAdded` / `tableAdded` / `paragraphRemoved` /
+  `tableRemoved` event. New `tableRemoved` event added.
+- **`Document.setDefaults()` / `getDefaults()` / `resetDefaults()`** —
+  process-global font / size / color defaults applied to runs created
+  via `createParagraph(text)`.
+- **`Document.on()` / `off()` / `listenerCount()`** — typed event API
+  with synchronous listeners and catch-and-log error containment.
+- **Save lock**: concurrent `save()` / `toBuffer()` calls are now
+  serialised on a Promise queue so `Promise.all([doc.save(a),
+doc.save(b)])` cannot corrupt internal state. Errors do not poison
+  the queue.
+- **Examples**: `examples/17-complex-fields`,
+  `examples/18-math-equations`, `examples/19-document-protection`,
+  `examples/20-compatibility-mode`.
+
+### Fixed
+
+- `iterateParagraphs()` no longer skips paragraphs nested in
+  `StructuredDocumentTag` content (matches `getAllParagraphs()`
+  semantics).
+- `deepEqual()` now treats `NaN === NaN` as structurally equal,
+  preventing spurious dirty-tracking when an attribute parses to NaN.
+- ECMA-376 round-trip fidelity sweep: comprehensive coverage of CT_OnOff
+  literal handling, numeric attribute coercion, required attribute
+  emission, and `*PrChange` round-trip parity (1,352 new tests).
+
+### Removed
+
+- Top-level exports listed under "Breaking" above. Use
+  `docxmlater/internal` to access them.
+- Dead `beforeLoad` event from `DocumentEventMap` (was never emittable
+  given the static factory pattern).
+- `scripts/fix-esm-imports.mjs` post-build script.
+
 ## [10.4.0] - 2026-04-13
 
 ### Added

@@ -8,16 +8,16 @@
  * shapes in Word documents use the wps:wsp element structure.
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { pointsToHalfPoints } from '../utils/units';
-import { RunFormatting } from './Run';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { pointsToHalfPoints } from '../utils/units.js';
+import { RunFormatting } from './Run.js';
 import {
   ImagePosition,
   ImageAnchor,
   PositionAnchor,
   HorizontalAlignment,
   VerticalAlignment,
-} from './Image';
+} from './Image.js';
 
 /**
  * Preset shape types available in DrawingML

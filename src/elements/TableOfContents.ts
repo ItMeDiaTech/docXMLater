@@ -5,7 +5,7 @@
  * based on heading styles (Heading1, Heading2, etc.) in the document.
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * TOC properties

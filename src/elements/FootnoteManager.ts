@@ -5,9 +5,9 @@
  * Maintains unique IDs and proper ordering.
  */
 
-import { Footnote, FootnoteType } from './Footnote';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { XMLParser } from '../xml/XMLParser';
+import { Footnote, FootnoteType } from './Footnote.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { XMLParser } from '../xml/XMLParser.js';
 
 /**
  * Manages footnotes in a document

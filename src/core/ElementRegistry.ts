@@ -17,7 +17,7 @@
  * });
  * ```
  */
-import { KeyedRegistry } from '../utils/KeyedRegistry';
+import { KeyedRegistry } from '../utils/KeyedRegistry.js';
 
 export interface ElementHandler<E = unknown> {
   /** Parse the raw XML fragment for this element into a model object. */

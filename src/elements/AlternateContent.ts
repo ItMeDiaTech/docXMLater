@@ -7,7 +7,7 @@
  * Stored as raw XML for round-trip fidelity since the internal structure varies widely.
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
+import { XMLElement } from '../xml/XMLBuilder.js';
 
 export class AlternateContent {
   private rawXml: string;

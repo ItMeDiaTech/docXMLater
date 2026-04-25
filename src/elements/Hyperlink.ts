@@ -48,11 +48,11 @@
  * @see {@link https://www.ecma-international.org/publications-and-standards/standards/ecma-376/ | ECMA-376 Part 1 §17.16.22}
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
-import { Run, RunFormatting } from './Run';
-import { Revision } from './Revision';
-import { validateRunText, sanitizeHyperlinkUrl } from '../utils/validation';
-import { defaultLogger } from '../utils/logger';
+import { XMLElement } from '../xml/XMLBuilder.js';
+import { Run, RunFormatting } from './Run.js';
+import { Revision } from './Revision.js';
+import { validateRunText, sanitizeHyperlinkUrl } from '../utils/validation.js';
+import { defaultLogger } from '../utils/logger.js';
 
 /**
  * Hyperlink properties
@@ -100,9 +100,9 @@ export class Hyperlink {
   /** Document location for within-document navigation in external files */
   private docLocation?: string;
   /** Tracking context for automatic change tracking */
-  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  private trackingContext?: import('../tracking/TrackingContext.js').TrackingContext;
   /** Parent paragraph reference for automatic tracking */
-  private _parentParagraph?: import('./Paragraph').Paragraph;
+  private _parentParagraph?: import('./Paragraph.js').Paragraph;
   /** Baseline formatting captured before first tracked formatting change */
   private _preTrackingFormatting?: RunFormatting;
 
@@ -176,7 +176,7 @@ export class Hyperlink {
    * Called by Document when track changes is enabled.
    * @internal
    */
-  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+  _setTrackingContext(context: import('../tracking/TrackingContext.js').TrackingContext): void {
     this.trackingContext = context;
   }
 
@@ -185,7 +185,7 @@ export class Hyperlink {
    * Called by Paragraph when hyperlink is added.
    * @internal
    */
-  _setParentParagraph(paragraph: import('./Paragraph').Paragraph): void {
+  _setParentParagraph(paragraph: import('./Paragraph.js').Paragraph): void {
     this._parentParagraph = paragraph;
   }
 
@@ -193,7 +193,7 @@ export class Hyperlink {
    * Gets the parent paragraph reference.
    * @internal
    */
-  _getParentParagraph(): import('./Paragraph').Paragraph | undefined {
+  _getParentParagraph(): import('./Paragraph.js').Paragraph | undefined {
     return this._parentParagraph;
   }
 

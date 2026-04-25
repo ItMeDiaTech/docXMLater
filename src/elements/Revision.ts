@@ -5,13 +5,13 @@
  * to document content, showing who made changes and when.
  */
 
-import { Run } from './Run';
-import type { RunFormatting } from './Run';
-import { XMLElement } from '../xml/XMLBuilder';
-import type { RevisionLocation } from './PropertyChangeTypes';
-import type { RevisionContent } from './RevisionContent';
-import { isRunContent, isHyperlinkContent } from './RevisionContent';
-import { formatDateForXml } from '../utils/dateFormatting';
+import { Run } from './Run.js';
+import type { RunFormatting } from './Run.js';
+import { XMLElement } from '../xml/XMLBuilder.js';
+import type { RevisionLocation } from './PropertyChangeTypes.js';
+import type { RevisionContent } from './RevisionContent.js';
+import { isRunContent, isHyperlinkContent } from './RevisionContent.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
 
 /**
  * Revision type - All OpenXML WordprocessingML revision types
@@ -52,7 +52,7 @@ export type RevisionType =
  */
 export interface FieldContext {
   /** Reference to the parent ComplexField (if revision is in field result) */
-  field?: import('./Field').ComplexField;
+  field?: import('./Field.js').ComplexField;
   /** Field instruction (e.g., "HYPERLINK", "TOC", "MERGEFIELD") */
   instruction?: string;
   /** Position within field: 'instruction' or 'result' */
@@ -194,8 +194,8 @@ export class Revision {
    * Gets only the Hyperlink objects from this revision
    * @returns Array of Hyperlink objects
    */
-  getHyperlinks(): import('./Hyperlink').Hyperlink[] {
-    return this.content.filter((item): item is import('./Hyperlink').Hyperlink =>
+  getHyperlinks(): import('./Hyperlink.js').Hyperlink[] {
+    return this.content.filter((item): item is import('./Hyperlink.js').Hyperlink =>
       isHyperlinkContent(item)
     );
   }
@@ -211,7 +211,7 @@ export class Revision {
   /**
    * Adds a hyperlink to this revision
    */
-  addHyperlink(hyperlink: import('./Hyperlink').Hyperlink): this {
+  addHyperlink(hyperlink: import('./Hyperlink.js').Hyperlink): this {
     this.content.push(hyperlink);
     return this;
   }
@@ -232,7 +232,7 @@ export class Revision {
   getText(): string {
     return this.content
       .filter(
-        (item): item is Run | import('./Hyperlink').Hyperlink =>
+        (item): item is Run | import('./Hyperlink.js').Hyperlink =>
           isRunContent(item) || isHyperlinkContent(item)
       )
       .map((item) => item.getText())
@@ -331,7 +331,7 @@ export class Revision {
    * Gets the parent field if this revision is inside a complex field
    * @returns The parent ComplexField or undefined
    */
-  getParentField(): import('./Field').ComplexField | undefined {
+  getParentField(): import('./Field.js').ComplexField | undefined {
     return this.fieldContext?.field;
   }
 
@@ -832,7 +832,7 @@ export class Revision {
    * <w:hyperlink r:id="rId1"><w:ins ...><w:r>...</w:r></w:ins></w:hyperlink>
    */
   private createHyperlinkWrappedRevisionXml(
-    hyperlink: import('./Hyperlink').Hyperlink,
+    hyperlink: import('./Hyperlink.js').Hyperlink,
     revisionElementName: string,
     revisionAttributes: Record<string, string>
   ): XMLElement {

@@ -5,8 +5,8 @@
  * within the document text via endnote references.
  */
 
-import { Paragraph } from './Paragraph';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { Paragraph } from './Paragraph.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * Endnote type

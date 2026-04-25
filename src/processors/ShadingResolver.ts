@@ -13,11 +13,11 @@
  * - fill: "auto" = inherit (continue resolution)
  */
 
-import type { ShadingConfig } from '../elements/CommonTypes';
-import type { Table } from '../elements/Table';
-import type { TableCell } from '../elements/TableCell';
-import type { StylesManager } from '../formatting/StylesManager';
-import { getActiveConditionalsInPriorityOrder } from './cnfStyleDecoder';
+import type { ShadingConfig } from '../elements/CommonTypes.js';
+import type { Table } from '../elements/Table.js';
+import type { TableCell } from '../elements/TableCell.js';
+import type { StylesManager } from '../formatting/StylesManager.js';
+import { getActiveConditionalsInPriorityOrder } from './cnfStyleDecoder.js';
 
 /**
  * Resolves the effective shading for a table cell through the style hierarchy.

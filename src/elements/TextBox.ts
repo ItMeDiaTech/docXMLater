@@ -8,17 +8,17 @@
  * text boxes in Word documents use the wps:wsp element with wps:txbx content.
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { UNITS } from '../utils/units';
-import { Paragraph } from './Paragraph';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { UNITS } from '../utils/units.js';
+import { Paragraph } from './Paragraph.js';
 import {
   ImagePosition,
   ImageAnchor,
   PositionAnchor,
   HorizontalAlignment,
   VerticalAlignment,
-} from './Image';
-import { BorderDefinition } from './Paragraph';
+} from './Image.js';
+import { BorderDefinition } from './Paragraph.js';
 
 /**
  * TextBox margins configuration

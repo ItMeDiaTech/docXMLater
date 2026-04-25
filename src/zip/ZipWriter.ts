@@ -9,9 +9,9 @@
 
 import JSZip from 'jszip';
 import { promises as fs } from 'fs';
-import { ZipFile, FileMap, SaveOptions, AddFileOptions } from './types';
-import { FileOperationError } from './errors';
-import { validateDocxStructure, normalizePath } from '../utils/validation';
+import { ZipFile, FileMap, SaveOptions, AddFileOptions } from './types.js';
+import { FileOperationError } from './errors.js';
+import { validateDocxStructure, normalizePath } from '../utils/validation.js';
 
 /**
  * Handles writing operations on ZIP archives with DOCX-specific compliance

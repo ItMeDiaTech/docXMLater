@@ -3,9 +3,9 @@
  * Provides a simple fluent API for generating WordprocessingML XML
  */
 
-import { removeInvalidXmlChars } from '../utils/xmlSanitization';
-import type { ShadingConfig } from '../elements/CommonTypes';
-import { buildShadingAttributes } from '../elements/CommonTypes';
+import { removeInvalidXmlChars } from '../utils/xmlSanitization.js';
+import type { ShadingConfig } from '../elements/CommonTypes.js';
+import { buildShadingAttributes } from '../elements/CommonTypes.js';
 
 /** Represents a parsed XML object from XMLParser.parseToObject() */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed XML has dynamic keys and recursive structure

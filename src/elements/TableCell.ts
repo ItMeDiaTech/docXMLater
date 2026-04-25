@@ -2,18 +2,18 @@
  * TableCell - Represents a cell in a table
  */
 
-import { deepClone } from '../utils/deepClone';
-import { formatDateForXml } from '../utils/dateFormatting';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { Paragraph, TextDirection } from './Paragraph';
-import { Revision } from './Revision';
+import { deepClone } from '../utils/deepClone.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { Paragraph, TextDirection } from './Paragraph.js';
+import { Revision } from './Revision.js';
 import {
   BorderStyle as CommonBorderStyle,
   FullBorderStyle as CommonFullBorderStyle,
   CellVerticalAlignment as CommonCellVerticalAlignment,
   ShadingConfig,
   buildShadingAttributes,
-} from './CommonTypes';
+} from './CommonTypes.js';
 
 // ============================================================================
 // RE-EXPORTED TYPES (for backward compatibility)
@@ -140,11 +140,11 @@ export class TableCell {
   /** Raw nested content (tables, SDTs) stored as XML for passthrough */
   private rawNestedContent: RawNestedContent[] = [];
   /** Parent row reference (if cell is inside a table row) */
-  private _parentRow?: import('./TableRow').TableRow;
+  private _parentRow?: import('./TableRow.js').TableRow;
   /** Table cell revision (w:cellIns, w:cellDel, w:cellMerge) per ECMA-376 Part 1 §17.13.5.4-5.6 */
   private cellRevision?: Revision;
   /** Tracking context for automatic change tracking */
-  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  private trackingContext?: import('../tracking/TrackingContext.js').TrackingContext;
   /** Table cell property change tracking (w:tcPrChange) */
   private tcPrChange?: TcPrChange;
 
@@ -161,7 +161,7 @@ export class TableCell {
    * Called by Document when track changes is enabled.
    * @internal
    */
-  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+  _setTrackingContext(context: import('../tracking/TrackingContext.js').TrackingContext): void {
     this.trackingContext = context;
   }
 
@@ -346,8 +346,8 @@ export class TableCell {
    * console.log(`Cell has ${fields.length} fields`);
    * ```
    */
-  getFields(): (import('./Field').Field | import('./Field').ComplexField)[] {
-    const fields: (import('./Field').Field | import('./Field').ComplexField)[] = [];
+  getFields(): (import('./Field.js').Field | import('./Field.js').ComplexField)[] {
+    const fields: (import('./Field.js').Field | import('./Field.js').ComplexField)[] = [];
     for (const para of this.paragraphs) {
       fields.push(...para.getFields());
     }
@@ -377,8 +377,8 @@ export class TableCell {
    * ```
    */
   findFields(
-    predicate: (field: import('./Field').Field | import('./Field').ComplexField) => boolean
-  ): (import('./Field').Field | import('./Field').ComplexField)[] {
+    predicate: (field: import('./Field.js').Field | import('./Field.js').ComplexField) => boolean
+  ): (import('./Field.js').Field | import('./Field.js').ComplexField)[] {
     return this.getFields().filter(predicate);
   }
 
@@ -825,7 +825,7 @@ export class TableCell {
    * cell.setTextAlignment('center');
    * ```
    */
-  setTextAlignment(alignment: import('./Paragraph').ParagraphAlignment): this {
+  setTextAlignment(alignment: import('./Paragraph.js').ParagraphAlignment): this {
     for (const para of this.paragraphs) {
       para.setAlignment(alignment);
     }
@@ -1266,7 +1266,7 @@ export class TableCell {
    * Called by TableRow when adding cells.
    * @internal
    */
-  _setParentRow(row: import('./TableRow').TableRow | undefined): void {
+  _setParentRow(row: import('./TableRow.js').TableRow | undefined): void {
     this._parentRow = row;
   }
 
@@ -1274,7 +1274,7 @@ export class TableCell {
    * Gets the parent row reference for this cell.
    * @internal
    */
-  _getParentRow(): import('./TableRow').TableRow | undefined {
+  _getParentRow(): import('./TableRow.js').TableRow | undefined {
     return this._parentRow;
   }
 

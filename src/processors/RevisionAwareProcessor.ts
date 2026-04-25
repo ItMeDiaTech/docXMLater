@@ -11,9 +11,9 @@
  * @module RevisionAwareProcessor
  */
 
-import type { Document } from '../core/Document';
-import { Revision, RevisionType } from '../elements/Revision';
-import { ChangeCategory, ChangeLocation } from './ChangelogGenerator';
+import type { Document } from '../core/Document.js';
+import { Revision, RevisionType } from '../elements/Revision.js';
+import { ChangeCategory, ChangeLocation } from './ChangelogGenerator.js';
 
 /**
  * Revision handling modes for document processing.

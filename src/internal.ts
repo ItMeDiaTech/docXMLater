@@ -2,35 +2,43 @@
  * docxmlater INTERNAL API
  *
  * Subpath export consumed via `import { ... } from 'docxmlater/internal'`.
- * Surfaces low-level building blocks (XMLBuilder, XMLParser, ZipHandler,
- * DocumentParser, DocumentGenerator, RelationshipManager,
- * DocumentValidator, DocumentIdManager) plus the plugin registries
- * (ElementRegistry, ValidationRuleRegistry).
+ * Surfaces low-level building blocks for advanced consumers writing
+ * tooling that needs raw XML / ZIP / parser access:
+ *   - ZipHandler, ZipReader, ZipWriter (+ types and DocxError hierarchy)
+ *   - XMLBuilder, XMLParser (+ ParseToObjectOptions etc.)
+ *   - DocumentParser, DocumentGenerator, DocumentValidator
+ *   - DocumentIdManager, DocumentContent, RelationshipManager
+ *   - DocumentEventEmitter (the emitter class itself)
+ *   - LIMITS constants
  *
  * **Stability:** these exports follow a relaxed semver — minor version
- * bumps may change signatures. Consumers building plugins or tooling
- * should pin to an exact docxmlater version. The main API
- * (`from 'docxmlater'`) follows full semver.
+ * bumps may change signatures. Pin an exact docxmlater version when
+ * consuming the internal subpath. The main API (`from 'docxmlater'`)
+ * follows full semver.
  *
- * The same identifiers are also re-exported from `src/index.ts` for
- * backward compatibility, so existing call sites are not affected.
+ * Symbols moved out of the main API in 11.0.0 — see CHANGELOG.
+ *
+ * The plugin registries (`ElementRegistry`, `ValidationRuleRegistry`)
+ * and event types (`DocumentEventMap`, `DocumentEventListener`,
+ * `DocumentEventType`) are NOT re-exported here — they belong in the
+ * main API as stable extension points.
  */
 
 // ZIP layer
-export { ZipHandler } from './zip/ZipHandler';
-export { ZipReader } from './zip/ZipReader';
-export { ZipWriter } from './zip/ZipWriter';
+export { ZipHandler } from './zip/ZipHandler.js';
+export { ZipReader } from './zip/ZipReader.js';
+export { ZipWriter } from './zip/ZipWriter.js';
 export {
-  ZipFile,
-  FileMap,
-  LoadOptions,
-  SaveOptions,
-  AddFileOptions,
-  SizeLimitOptions,
+  type ZipFile,
+  type FileMap,
+  type LoadOptions,
+  type SaveOptions,
+  type AddFileOptions,
+  type SizeLimitOptions,
   DEFAULT_SIZE_LIMITS,
   REQUIRED_DOCX_FILES,
   DOCX_PATHS,
-} from './zip/types';
+} from './zip/types.js';
 export {
   DocxError,
   DocxNotFoundError,
@@ -38,45 +46,34 @@ export {
   CorruptedArchiveError,
   MissingRequiredFileError,
   FileOperationError,
-} from './zip/errors';
+} from './zip/errors.js';
 
 // XML layer
-export { XMLBuilder, XMLElement } from './xml/XMLBuilder';
+export { XMLBuilder, type XMLElement } from './xml/XMLBuilder.js';
 export {
   XMLParser,
-  ParseToObjectOptions,
-  ParsedXMLValue,
-  ParsedXMLObject,
+  type ParseToObjectOptions,
+  type ParsedXMLValue,
+  type ParsedXMLObject,
   DEFAULT_MAX_NESTING_DEPTH,
-} from './xml/XMLParser';
+} from './xml/XMLParser.js';
 
 // Core orchestration
-export { Relationship, RelationshipType, RelationshipProperties } from './core/Relationship';
-export { RelationshipManager } from './core/RelationshipManager';
-export { DocumentParser, ParseError } from './core/DocumentParser';
-export { DocumentGenerator, IZipHandlerReader } from './core/DocumentGenerator';
-export { DocumentValidator, SizeEstimate, MemoryOptions } from './core/DocumentValidator';
-export { DocumentIdManager } from './core/DocumentIdManager';
-export { DocumentContent, BodyElement } from './core/DocumentContent';
+export { RelationshipManager } from './core/RelationshipManager.js';
+export { DocumentParser, ParseError } from './core/DocumentParser.js';
+export { DocumentGenerator, type IZipHandlerReader } from './core/DocumentGenerator.js';
+export {
+  DocumentValidator,
+  type SizeEstimate,
+  type MemoryOptions,
+} from './core/DocumentValidator.js';
+export { DocumentIdManager } from './core/DocumentIdManager.js';
+export { DocumentContent } from './core/DocumentContent.js';
 
-// Plugin registries — extension points for custom elements / validation
-export {
-  ElementRegistry,
-  ElementHandler,
-  ElementParseContext,
-  ElementSerializeContext,
-} from './core/ElementRegistry';
-export {
-  ValidationRuleRegistry,
-  CustomValidationRule,
-  CustomValidationIssue,
-  CustomValidationSeverity,
-} from './validation/ValidationRuleRegistry';
+// Document events — the emitter class is internal; the type aliases
+// (DocumentEventMap, DocumentEventListener, DocumentEventType) live in
+// the main API.
+export { DocumentEventEmitter } from './core/DocumentEvents.js';
 
-// Document events
-export {
-  DocumentEventEmitter,
-  DocumentEventMap,
-  DocumentEventType,
-  DocumentEventListener,
-} from './core/DocumentEvents';
+// Constants
+export { LIMITS } from './constants/limits.js';

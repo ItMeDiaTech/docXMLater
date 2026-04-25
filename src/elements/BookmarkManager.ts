@@ -7,8 +7,8 @@
  * in a document. Use setIdProvider() to connect to a centralized ID allocator.
  */
 
-import { Bookmark } from './Bookmark';
-import { InvalidDocxError } from '../zip/errors';
+import { Bookmark } from './Bookmark.js';
+import { InvalidDocxError } from '../zip/errors.js';
 
 /**
  * Type for the centralized ID provider callback.

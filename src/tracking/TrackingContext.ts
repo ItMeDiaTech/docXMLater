@@ -7,14 +7,14 @@
  * @module TrackingContext
  */
 
-import type { Revision, RevisionType } from '../elements/Revision';
-import type { RevisionManager } from '../elements/RevisionManager';
-import type { Run } from '../elements/Run';
-import type { Paragraph } from '../elements/Paragraph';
-import type { Table } from '../elements/Table';
-import type { TableRow } from '../elements/TableRow';
-import type { TableCell } from '../elements/TableCell';
-import type { Section } from '../elements/Section';
+import type { Revision, RevisionType } from '../elements/Revision.js';
+import type { RevisionManager } from '../elements/RevisionManager.js';
+import type { Run } from '../elements/Run.js';
+import type { Paragraph } from '../elements/Paragraph.js';
+import type { Table } from '../elements/Table.js';
+import type { TableRow } from '../elements/TableRow.js';
+import type { TableCell } from '../elements/TableCell.js';
+import type { Section } from '../elements/Section.js';
 
 /** Union of element types that can be tracked */
 export type TrackableElement =

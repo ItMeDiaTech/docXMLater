@@ -15,8 +15,8 @@
  * @module PropertyChangeTypes
  */
 
-import type { RunFormatting } from './Run';
-import type { ShadingConfig } from './CommonTypes';
+import type { RunFormatting } from './Run.js';
+import type { ShadingConfig } from './CommonTypes.js';
 
 /**
  * Common base for all property change types

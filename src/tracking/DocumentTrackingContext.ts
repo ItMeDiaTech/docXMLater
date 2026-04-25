@@ -7,17 +7,17 @@
  * @module DocumentTrackingContext
  */
 
-import { Revision, RevisionType } from '../elements/Revision';
-import { RevisionManager } from '../elements/RevisionManager';
-import { Run, type RunFormatting } from '../elements/Run';
-import { Paragraph } from '../elements/Paragraph';
-import { Table } from '../elements/Table';
-import { TableRow } from '../elements/TableRow';
-import { TableCell } from '../elements/TableCell';
-import { Section } from '../elements/Section';
-import type { TrackingContext, PendingChange, TrackableElement } from './TrackingContext';
-import { formatDateForXml } from '../utils/dateFormatting';
-import { deepEqual } from '../utils/deepEqual';
+import { Revision, RevisionType } from '../elements/Revision.js';
+import { RevisionManager } from '../elements/RevisionManager.js';
+import { Run, type RunFormatting } from '../elements/Run.js';
+import { Paragraph } from '../elements/Paragraph.js';
+import { Table } from '../elements/Table.js';
+import { TableRow } from '../elements/TableRow.js';
+import { TableCell } from '../elements/TableCell.js';
+import { Section } from '../elements/Section.js';
+import type { TrackingContext, PendingChange, TrackableElement } from './TrackingContext.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
+import { deepEqual } from '../utils/deepEqual.js';
 
 /**
  * Enable options for tracking context

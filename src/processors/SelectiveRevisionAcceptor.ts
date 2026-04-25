@@ -12,13 +12,13 @@
  * @see https://github.com/OfficeDev/Open-Xml-PowerTools - RevisionAccepter.cs
  */
 
-import type { Document } from '../core/Document';
-import type { Paragraph, ParagraphContent } from '../elements/Paragraph';
-import { Revision, RevisionType } from '../elements/Revision';
-import type { Run } from '../elements/Run';
-import { isRunContent, isHyperlinkContent } from '../elements/RevisionContent';
-import { ChangeCategory } from './ChangelogGenerator';
-import { SelectionCriteria } from './RevisionAwareProcessor';
+import type { Document } from '../core/Document.js';
+import type { Paragraph, ParagraphContent } from '../elements/Paragraph.js';
+import { Revision, RevisionType } from '../elements/Revision.js';
+import type { Run } from '../elements/Run.js';
+import { isRunContent, isHyperlinkContent } from '../elements/RevisionContent.js';
+import { ChangeCategory } from './ChangelogGenerator.js';
+import { SelectionCriteria } from './RevisionAwareProcessor.js';
 
 /**
  * Result of selective revision acceptance.

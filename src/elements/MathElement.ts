@@ -8,7 +8,7 @@
  * internal structure (fractions, radicals, matrices, etc.).
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
+import { XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * Block-level math paragraph (m:oMathPara)

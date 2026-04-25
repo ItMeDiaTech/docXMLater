@@ -4,9 +4,9 @@
  * Tracks all revisions, assigns unique IDs, and provides statistics.
  */
 
-import { Revision, RevisionType } from './Revision';
-import type { RevisionLocation } from './PropertyChangeTypes';
-import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger';
+import { Revision, RevisionType } from './Revision.js';
+import type { RevisionLocation } from './PropertyChangeTypes.js';
+import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger.js';
 
 // Scoped logger for RevisionManager
 function getLogger(): ILogger {

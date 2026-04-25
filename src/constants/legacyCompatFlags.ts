@@ -94,7 +94,7 @@ export const LEGACY_COMPAT_ELEMENT_NAMES = new Set<string>(
   LEGACY_COMPAT_ELEMENTS.map((e) => e.replace('w:', ''))
 );
 
-import type { CompatSetting } from '../types/compatibility-types';
+import type { CompatSetting } from '../types/compatibility-types.js';
 
 /**
  * The w:compatSetting entries that Word 2013+ includes for

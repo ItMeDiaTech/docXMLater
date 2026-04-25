@@ -4,19 +4,19 @@
 
 import JSZip from 'jszip';
 import { promises as fs } from 'fs';
-import { ZipFile, FileMap, LoadOptions } from './types';
+import { ZipFile, FileMap, LoadOptions } from './types.js';
 import {
   DocxNotFoundError,
   InvalidDocxError,
   CorruptedArchiveError,
   FileOperationError,
-} from './errors';
+} from './errors.js';
 import {
   validateDocxStructure,
   isBinaryFile,
   normalizePath,
   isValidZipBuffer,
-} from '../utils/validation';
+} from '../utils/validation.js';
 
 /**
  * Handles reading operations on ZIP archives

@@ -7,7 +7,7 @@
  * Stored as raw XML for round-trip fidelity.
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
+import { XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * Block-level custom XML (w:customXml wrapping block content)

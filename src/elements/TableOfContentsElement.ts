@@ -8,8 +8,8 @@
  * so this wrapper handles the XML generation properly.
  */
 
-import { TableOfContents } from './TableOfContents';
-import { XMLElement } from '../xml/XMLBuilder';
+import { TableOfContents } from './TableOfContents.js';
+import { XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * Represents a Table of Contents element in a document body

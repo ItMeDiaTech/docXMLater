@@ -3,25 +3,25 @@
  * A run is the smallest unit of text formatting in a Word document
  */
 
-import { deepClone } from '../utils/deepClone';
-import { formatDateForXml } from '../utils/dateFormatting';
-import { isEqualFormatting } from '../utils/formatting';
-import { logSerialization, logTextDirection } from '../utils/diagnostics';
-import { defaultLogger } from '../utils/logger';
-import { normalizeColor, validateRunText } from '../utils/validation';
-import { pointsToHalfPoints } from '../utils/units';
-import { diffText, diffHasUnchangedParts } from '../utils/textDiff';
-import { getActiveConditionalsInPriorityOrder } from '../processors/cnfStyleDecoder';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { deepClone } from '../utils/deepClone.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
+import { isEqualFormatting } from '../utils/formatting.js';
+import { logSerialization, logTextDirection } from '../utils/diagnostics.js';
+import { defaultLogger } from '../utils/logger.js';
+import { normalizeColor, validateRunText } from '../utils/validation.js';
+import { pointsToHalfPoints } from '../utils/units.js';
+import { diffText, diffHasUnchangedParts } from '../utils/textDiff.js';
+import { getActiveConditionalsInPriorityOrder } from '../processors/cnfStyleDecoder.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
 import {
   ShadingPattern as CommonShadingPattern,
   ShadingConfig,
   buildShadingAttributes,
   FullBorderStyle,
-} from './CommonTypes';
-import type { RunPropertyChange } from './PropertyChangeTypes';
+} from './CommonTypes.js';
+import type { RunPropertyChange } from './PropertyChangeTypes.js';
 // Type-only import to avoid circular dependency (Revision imports Run)
-import type { Revision as RevisionType } from './Revision';
+import type { Revision as RevisionType } from './Revision.js';
 
 /**
  * Run content element types
@@ -476,10 +476,10 @@ export interface RunFormatting {
 export class Run {
   private content: RunContent[];
   private formatting: RunFormatting;
-  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  private trackingContext?: import('../tracking/TrackingContext.js').TrackingContext;
   private propertyChangeRevision?: RunPropertyChange;
   /** Parent paragraph reference for automatic tracking */
-  private _parentParagraph?: import('./Paragraph').Paragraph;
+  private _parentParagraph?: import('./Paragraph.js').Paragraph;
 
   /**
    * Creates a new Run
@@ -1239,7 +1239,7 @@ export class Run {
    * Called by Document when track changes is enabled.
    * @internal
    */
-  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+  _setTrackingContext(context: import('../tracking/TrackingContext.js').TrackingContext): void {
     this.trackingContext = context;
   }
 
@@ -1247,7 +1247,7 @@ export class Run {
    * Sets the parent paragraph reference for this run
    * @internal Used for content tracking
    */
-  _setParentParagraph(paragraph: import('./Paragraph').Paragraph): void {
+  _setParentParagraph(paragraph: import('./Paragraph.js').Paragraph): void {
     this._parentParagraph = paragraph;
   }
 
@@ -1255,7 +1255,7 @@ export class Run {
    * Gets the parent paragraph reference
    * @internal Used for content tracking
    */
-  _getParentParagraph(): import('./Paragraph').Paragraph | undefined {
+  _getParentParagraph(): import('./Paragraph.js').Paragraph | undefined {
     return this._parentParagraph;
   }
 

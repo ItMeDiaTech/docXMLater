@@ -2,13 +2,13 @@
  * Table - Represents a table in a document
  */
 
-import { Paragraph } from './Paragraph';
-import { TableRow, RowFormatting } from './TableRow';
-import { TableCell, CellFormatting } from './TableCell';
-import { Revision } from './Revision';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { deepClone } from '../utils/deepClone';
-import { TableGridChange } from './TableGridChange';
+import { Paragraph } from './Paragraph.js';
+import { TableRow, RowFormatting } from './TableRow.js';
+import { TableCell, CellFormatting } from './TableCell.js';
+import { Revision } from './Revision.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { deepClone } from '../utils/deepClone.js';
+import { TableGridChange } from './TableGridChange.js';
 import {
   TableAlignment as CommonTableAlignment,
   FullBorderStyle,
@@ -18,7 +18,7 @@ import {
   VerticalAlignment,
   ShadingConfig,
   buildShadingAttributes,
-} from './CommonTypes';
+} from './CommonTypes.js';
 
 // ============================================================================
 // RE-EXPORTED TYPES (for backward compatibility)
@@ -245,9 +245,9 @@ export class Table {
   private rows: TableRow[] = [];
   private formatting: TableFormatting;
   /** StylesManager reference for conditional formatting resolution */
-  private _stylesManager?: import('../formatting/StylesManager').StylesManager;
+  private _stylesManager?: import('../formatting/StylesManager.js').StylesManager;
   /** Tracking context for automatic change tracking */
-  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  private trackingContext?: import('../tracking/TrackingContext.js').TrackingContext;
   /** Table property change tracking (w:tblPrChange) */
   private tblPrChange?: TblPrChange;
   /** Table grid change tracking (w:tblGridChange) per ECMA-376 §17.13.5.35 */
@@ -283,7 +283,7 @@ export class Table {
    * Called by Document when track changes is enabled.
    * @internal
    */
-  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+  _setTrackingContext(context: import('../tracking/TrackingContext.js').TrackingContext): void {
     this.trackingContext = context;
   }
 
@@ -1608,7 +1608,7 @@ export class Table {
    * Propagates to all paragraphs in all cells.
    * @internal
    */
-  _setStylesManager(manager: import('../formatting/StylesManager').StylesManager): void {
+  _setStylesManager(manager: import('../formatting/StylesManager.js').StylesManager): void {
     this._stylesManager = manager;
     // Propagate to all paragraphs in all cells
     for (const row of this.rows) {
@@ -1624,7 +1624,7 @@ export class Table {
    * Gets the StylesManager reference for conditional formatting resolution.
    * @internal
    */
-  _getStylesManager(): import('../formatting/StylesManager').StylesManager | undefined {
+  _getStylesManager(): import('../formatting/StylesManager.js').StylesManager | undefined {
     return this._stylesManager;
   }
 

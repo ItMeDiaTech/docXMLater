@@ -3,15 +3,15 @@
  * Contains one or more runs of formatted text
  */
 
-import { deepClone } from '../utils/deepClone';
-import { deepEqual } from '../utils/deepEqual';
-import { formatDateForXml } from '../utils/dateFormatting';
-import { logParagraphContent, logTextDirection } from '../utils/diagnostics';
-import { isEqualFormatting } from '../utils/formatting';
-import { defaultLogger } from '../utils/logger';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { Bookmark } from './Bookmark';
-import type { Comment } from './Comment';
+import { deepClone } from '../utils/deepClone.js';
+import { deepEqual } from '../utils/deepEqual.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
+import { logParagraphContent, logTextDirection } from '../utils/diagnostics.js';
+import { isEqualFormatting } from '../utils/formatting.js';
+import { defaultLogger } from '../utils/logger.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { Bookmark } from './Bookmark.js';
+import type { Comment } from './Comment.js';
 import {
   // Import common types
   ParagraphAlignment as CommonParagraphAlignment,
@@ -24,15 +24,15 @@ import {
   TextVerticalAlignment,
   ShadingConfig,
   buildShadingAttributes,
-} from './CommonTypes';
-import { ComplexField, Field } from './Field';
-import { Hyperlink } from './Hyperlink';
-import { RangeMarker } from './RangeMarker';
-import { Revision } from './Revision';
-import { Run, RunFormatting } from './Run';
-import { Shape } from './Shape';
-import { TextBox } from './TextBox';
-import { PreservedElement } from './PreservedElement';
+} from './CommonTypes.js';
+import { ComplexField, Field } from './Field.js';
+import { Hyperlink } from './Hyperlink.js';
+import { RangeMarker } from './RangeMarker.js';
+import { Revision } from './Revision.js';
+import { Run, RunFormatting } from './Run.js';
+import { Shape } from './Shape.js';
+import { TextBox } from './TextBox.js';
+import { PreservedElement } from './PreservedElement.js';
 
 // ============================================================================
 // RE-EXPORTED TYPES (for backward compatibility)
@@ -456,11 +456,11 @@ export class Paragraph {
   /** Internal flag to mark paragraph as preserved from removal operations */
   private _isPreserved = false;
   /** Tracking context for automatic change tracking */
-  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  private trackingContext?: import('../tracking/TrackingContext.js').TrackingContext;
   /** Parent table cell reference (if paragraph is inside a table cell) */
-  private _parentCell?: import('./TableCell').TableCell;
+  private _parentCell?: import('./TableCell.js').TableCell;
   /** StylesManager reference for conditional formatting resolution */
-  private _stylesManager?: import('../formatting/StylesManager').StylesManager;
+  private _stylesManager?: import('../formatting/StylesManager.js').StylesManager;
   /**
    * Internal flag to mark paragraph as part of a multi-paragraph field (e.g., TOC)
    * When true, assembleComplexFields() will skip processing this paragraph
@@ -482,7 +482,7 @@ export class Paragraph {
    * Called by Document when track changes is enabled.
    * @internal
    */
-  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+  _setTrackingContext(context: import('../tracking/TrackingContext.js').TrackingContext): void {
     this.trackingContext = context;
   }
 
@@ -491,7 +491,7 @@ export class Paragraph {
    * Called by TableCell when adding paragraphs.
    * @internal
    */
-  _setParentCell(cell: import('./TableCell').TableCell | undefined): void {
+  _setParentCell(cell: import('./TableCell.js').TableCell | undefined): void {
     this._parentCell = cell;
   }
 
@@ -499,7 +499,7 @@ export class Paragraph {
    * Gets the parent cell reference for this paragraph.
    * @internal
    */
-  _getParentCell(): import('./TableCell').TableCell | undefined {
+  _getParentCell(): import('./TableCell.js').TableCell | undefined {
     return this._parentCell;
   }
 
@@ -533,7 +533,7 @@ export class Paragraph {
    * Called by Document/Table when adding paragraphs.
    * @internal
    */
-  _setStylesManager(manager: import('../formatting/StylesManager').StylesManager): void {
+  _setStylesManager(manager: import('../formatting/StylesManager.js').StylesManager): void {
     this._stylesManager = manager;
   }
 
@@ -541,7 +541,7 @@ export class Paragraph {
    * Gets the StylesManager reference for conditional formatting resolution.
    * @internal
    */
-  _getStylesManager(): import('../formatting/StylesManager').StylesManager | undefined {
+  _getStylesManager(): import('../formatting/StylesManager.js').StylesManager | undefined {
     return this._stylesManager;
   }
 

@@ -5,8 +5,8 @@
  * with the RelationshipManager for image relationships.
  */
 
-import { Image } from './Image';
-import { defaultLogger } from '../utils/logger';
+import { Image } from './Image.js';
+import { defaultLogger } from '../utils/logger.js';
 
 /**
  * Image file entry

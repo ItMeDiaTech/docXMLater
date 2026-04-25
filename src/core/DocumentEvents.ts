@@ -11,9 +11,9 @@
  * mutation is applied. Pure structural moves (moveElement) and
  * load/parse-time construction do not fire mutation events.
  */
-import type { Paragraph } from '../elements/Paragraph';
-import type { Table } from '../elements/Table';
-import { getGlobalLogger } from '../utils/logger';
+import type { Paragraph } from '../elements/Paragraph.js';
+import type { Table } from '../elements/Table.js';
+import { getGlobalLogger } from '../utils/logger.js';
 
 export interface DocumentEventMap {
   /** Fired after a paragraph is added to the document body. */

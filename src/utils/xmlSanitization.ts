@@ -18,7 +18,7 @@
  * @module xmlSanitization
  */
 
-import { getGlobalLogger } from './logger';
+import { getGlobalLogger } from './logger.js';
 
 /**
  * Regular expression matching invalid XML 1.0 control characters.

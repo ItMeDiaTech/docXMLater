@@ -5,15 +5,15 @@
  * They are represented using the <w:fldSimple> element with field codes.
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
-import { RunFormatting, FormFieldData } from './Run';
+import { XMLElement } from '../xml/XMLBuilder.js';
+import { RunFormatting, FormFieldData } from './Run.js';
 import {
   ParsedHyperlinkInstruction,
   parseHyperlinkInstruction,
   isHyperlinkInstruction,
-} from './FieldHelpers';
-import type { Revision } from './Revision';
-import { pointsToHalfPoints } from '../utils/units';
+} from './FieldHelpers.js';
+import type { Revision } from './Revision.js';
+import { pointsToHalfPoints } from '../utils/units.js';
 
 /**
  * Common field types
@@ -661,7 +661,7 @@ export class ComplexField {
    */
   private _hasResultSection = false;
   private _formFieldData?: FormFieldData;
-  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  private trackingContext?: import('../tracking/TrackingContext.js').TrackingContext;
 
   /**
    * Creates a new complex field
@@ -882,7 +882,7 @@ export class ComplexField {
    * Sets the tracking context for automatic change tracking
    * @internal
    */
-  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+  _setTrackingContext(context: import('../tracking/TrackingContext.js').TrackingContext): void {
     this.trackingContext = context;
   }
 

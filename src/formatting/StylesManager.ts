@@ -3,10 +3,10 @@
  * Handles style registration, retrieval, and styles.xml generation
  */
 
-import { Paragraph } from '../elements/Paragraph';
-import { XMLBuilder } from '../xml/XMLBuilder';
-import { XMLParser } from '../xml/XMLParser';
-import { Style, StyleType } from './Style';
+import { Paragraph } from '../elements/Paragraph.js';
+import { XMLBuilder } from '../xml/XMLBuilder.js';
+import { XMLParser } from '../xml/XMLParser.js';
+import { Style, StyleType } from './Style.js';
 
 /**
  * Configuration for latent styles (w:latentStyles per ECMA-376 §17.7.4.6)

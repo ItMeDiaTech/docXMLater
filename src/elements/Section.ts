@@ -5,8 +5,8 @@
  * Each section can have its own headers, footers, and page numbering.
  */
 
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
-import { PAGE_SIZES } from '../utils/units';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { PAGE_SIZES } from '../utils/units.js';
 
 /**
  * Page orientation
@@ -365,7 +365,7 @@ export interface SectPrChange {
 export class Section {
   private properties: SectionProperties;
   /** Tracking context for automatic change tracking */
-  private trackingContext?: import('../tracking/TrackingContext').TrackingContext;
+  private trackingContext?: import('../tracking/TrackingContext.js').TrackingContext;
   /** Section property change tracking (w:sectPrChange) */
   private sectPrChange?: SectPrChange;
 
@@ -410,7 +410,7 @@ export class Section {
    * Called by Document when track changes is enabled.
    * @internal
    */
-  _setTrackingContext(context: import('../tracking/TrackingContext').TrackingContext): void {
+  _setTrackingContext(context: import('../tracking/TrackingContext.js').TrackingContext): void {
     this.trackingContext = context;
   }
 

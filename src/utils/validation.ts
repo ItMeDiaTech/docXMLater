@@ -2,9 +2,9 @@
  * Validation utilities for DOCX files
  */
 
-import { REQUIRED_DOCX_FILES } from '../zip/types';
-import { MissingRequiredFileError } from '../zip/errors';
-import { defaultLogger } from './logger';
+import { REQUIRED_DOCX_FILES } from '../zip/types.js';
+import { MissingRequiredFileError } from '../zip/errors.js';
+import { defaultLogger } from './logger.js';
 
 /**
  * Validates that all required DOCX files are present

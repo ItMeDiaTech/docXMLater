@@ -5,10 +5,10 @@
  * Different headers can be defined for first page, odd pages, and even pages.
  */
 
-import { XMLElement } from '../xml/XMLBuilder';
-import { Paragraph } from './Paragraph';
-import { RunFormatting } from './Run';
-import { Table } from './Table';
+import { XMLElement } from '../xml/XMLBuilder.js';
+import { Paragraph } from './Paragraph.js';
+import { RunFormatting } from './Run.js';
+import { Table } from './Table.js';
 
 /**
  * Header type

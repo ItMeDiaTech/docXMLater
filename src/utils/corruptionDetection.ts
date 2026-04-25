@@ -6,8 +6,8 @@
  * results in escaped XML tags being displayed as literal text in Word.
  */
 
-import { Paragraph } from '../elements/Paragraph';
-import { Run } from '../elements/Run';
+import { Paragraph } from '../elements/Paragraph.js';
+import { Run } from '../elements/Run.js';
 
 /** Minimal interface for document corruption scanning (avoids circular import) */
 interface DocumentLike {

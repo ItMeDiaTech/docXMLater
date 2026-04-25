@@ -6,8 +6,8 @@
  * appends `runAll()` issues to its `infos`/`warnings`/`errors` buckets
  * based on each rule's declared severity.
  */
-import type { Document } from '../core/Document';
-import { KeyedRegistry } from '../utils/KeyedRegistry';
+import type { Document } from '../core/Document.js';
+import { KeyedRegistry } from '../utils/KeyedRegistry.js';
 
 /**
  * Severity for custom validation rules. Distinct from the built-in

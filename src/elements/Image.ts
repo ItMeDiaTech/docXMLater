@@ -6,9 +6,9 @@
  */
 
 import { promises as fs } from 'fs';
-import { defaultLogger } from '../utils/logger';
-import { inchesToEmus, UNITS } from '../utils/units';
-import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
+import { defaultLogger } from '../utils/logger.js';
+import { inchesToEmus, UNITS } from '../utils/units.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
 
 /**
  * Supported image formats
