@@ -32,8 +32,8 @@
     "prepublishOnly": "npm run clean && npm run build",
     "docs:metrics": "echo 'Source Files:' && find src -name '*.ts' | wc -l && echo 'Test Files:' && find tests -name '*.test.ts' | wc -l && echo 'Lines of Code:' && find src -name '*.ts' -exec wc -l {} + | tail -1",
     "docs:check": "echo 'Checking documentation...' && ls -1 README.md CHANGELOG.md 2>/dev/null || echo 'Missing documentation files'",
-    "test-list-arch": "ts-node examples/test-list-formatting-architecture.ts",
-    "examples": "for dir in examples/[0-9][0-9]-*; do for f in \"$dir\"/*.ts; do echo \"--- $f ---\"; ts-node \"$f\" || exit 1; done; done",
+    "test-list-arch": "tsx examples/test-list-formatting-architecture.ts",
+    "examples": "for dir in examples/[0-9][0-9]-*; do for f in \"$dir\"/*.ts; do echo \"--- $f ---\"; tsx \"$f\" || exit 1; done; done",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
@@ -98,6 +98,7 @@
     "size-limit": "^12.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.56.0"
   },

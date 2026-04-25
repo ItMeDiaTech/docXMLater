@@ -781,7 +781,7 @@ async function processDocument(inputBuffer: Buffer): Promise<Buffer> {
 }
 ```
 
-Custom error types from `docxmlater` include `InvalidDocxError`, `CorruptedArchiveError`, and `FileOperationError` — all extend `DocxError`.
+Custom error types are available from `docxmlater/internal` — `InvalidDocxError`, `CorruptedArchiveError`, and `FileOperationError` all extend `DocxError`.
 
 ## Working with Large Documents
 
@@ -851,7 +851,7 @@ const doc = await Document.load('large.docx', {
 - Prevents stack overflow attacks
 
 ```typescript
-import { XMLParser } from 'docxmlater';
+import { XMLParser } from 'docxmlater/internal';
 
 // Parse with custom depth limit
 const obj = XMLParser.parseToObject(xml, {

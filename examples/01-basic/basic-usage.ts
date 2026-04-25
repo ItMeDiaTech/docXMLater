@@ -2,7 +2,7 @@
  * Basic usage examples for DocXML
  */
 
-import { ZipHandler, DOCX_PATHS } from '../src';
+import { ZipHandler, DOCX_PATHS } from '../../src/internal';
 
 // Example 1: Create a simple DOCX file
 async function createSimpleDocx() {

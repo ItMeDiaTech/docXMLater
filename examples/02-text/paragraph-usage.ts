@@ -2,7 +2,8 @@
  * Examples showing Paragraph and Run usage
  */
 
-import { ZipHandler, DOCX_PATHS, Paragraph, XMLBuilder } from "../src";
+import { Paragraph } from '../../src';
+import { ZipHandler, DOCX_PATHS, XMLBuilder } from '../../src/internal';
 
 /**
  * Example 1: Create a simple paragraph with formatted text
