@@ -1,17 +1,18 @@
 /**
- * Plugin extension point for custom validation rules.
- *
- * Existing built-in rules live in `ValidationRules.ts`. This registry
- * lets consumers add their own without modifying framework code. Custom
- * rules are evaluated alongside built-ins when `RevisionValidator`
- * runs validation passes.
+ * Plugin extension point for custom validation rules. Built-in rules
+ * live in `ValidationRules.ts`; this registry lets consumers add their
+ * own without modifying framework code. Custom rules run alongside the
+ * built-ins when `RevisionValidator.validate()` executes — the validator
+ * appends `runAll()` issues to its `infos`/`warnings`/`errors` buckets
+ * based on each rule's declared severity.
  */
 import type { Document } from '../core/Document';
+import { KeyedRegistry } from '../utils/KeyedRegistry';
 
 /**
- * Severity for custom validation rules.
- * Distinct from `ValidationSeverity` (built-in rule severity enum) to
- * avoid name collision in the public API surface.
+ * Severity for custom validation rules. Distinct from the built-in
+ * `ValidationSeverity` enum so the public API surface has no name
+ * collision.
  */
 export type CustomValidationSeverity = 'error' | 'warning' | 'info';
 
@@ -37,40 +38,36 @@ export interface CustomValidationRule {
 }
 
 class ValidationRuleRegistryImpl {
-  private rules = new Map<string, CustomValidationRule>();
+  private readonly inner = new KeyedRegistry<CustomValidationRule>('ValidationRuleRegistry');
 
   register(rule: CustomValidationRule): void {
-    if (this.rules.has(rule.code)) {
-      throw new Error(`ValidationRuleRegistry: rule "${rule.code}" already registered`);
-    }
-    this.rules.set(rule.code, rule);
+    this.inner.register(rule.code, rule);
   }
 
   unregister(code: string): boolean {
-    return this.rules.delete(code);
+    return this.inner.unregister(code);
   }
 
   has(code: string): boolean {
-    return this.rules.has(code);
+    return this.inner.has(code);
   }
 
   get(code: string): CustomValidationRule | undefined {
-    return this.rules.get(code);
+    return this.inner.get(code);
   }
 
   getAll(): CustomValidationRule[] {
-    return [...this.rules.values()];
+    return this.inner.values();
   }
 
-  /** Run every registered rule and concatenate the issues. */
+  /** Run every registered rule and concatenate the issues. A throwing
+   *  rule is captured as a synthetic 'error' issue so consumers see it. */
   runAll(doc: Document): CustomValidationIssue[] {
     const out: CustomValidationIssue[] = [];
-    for (const rule of this.rules.values()) {
+    for (const rule of this.inner.values()) {
       try {
         out.push(...rule.validate(doc));
       } catch {
-        // A throwing rule must not abort other rules. Surface as a synthetic
-        // issue so the consumer notices their rule misbehaved.
         out.push({
           ruleCode: rule.code,
           severity: 'error',
@@ -82,7 +79,7 @@ class ValidationRuleRegistryImpl {
   }
 
   clear(): void {
-    this.rules.clear();
+    this.inner.clear();
   }
 }
 

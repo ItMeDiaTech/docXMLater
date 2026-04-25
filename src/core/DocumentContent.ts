@@ -14,9 +14,11 @@ import { AlternateContent } from '../elements/AlternateContent';
 import { MathParagraph } from '../elements/MathElement';
 import { CustomXmlBlock } from '../elements/CustomXml';
 import { PreservedElement } from '../elements/PreservedElement';
+import { RegisteredBodyElement } from '../elements/RegisteredBodyElement';
 
 /**
- * Body element type - can be a Paragraph, Table, TOC, SDT, or raw XML preservation element
+ * Body element type — Paragraph, Table, TOC, SDT, raw passthrough, or
+ * a consumer-defined element produced by `ElementRegistry`.
  */
 export type BodyElement =
   | Paragraph
@@ -26,7 +28,8 @@ export type BodyElement =
   | AlternateContent
   | MathParagraph
   | CustomXmlBlock
-  | PreservedElement;
+  | PreservedElement
+  | RegisteredBodyElement;
 
 /**
  * Manages document content (paragraphs, tables, sections)

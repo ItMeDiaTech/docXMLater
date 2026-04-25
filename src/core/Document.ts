@@ -1649,7 +1649,7 @@ export class Document {
     }
 
     this.bodyElements.push(paragraph);
-    this._events.emit('paragraphAdded', { paragraph, index: this.bodyElements.length - 1 });
+    this._emitElementAdded(paragraph, this.bodyElements.length - 1);
     return this;
   }
 
@@ -1694,7 +1694,7 @@ export class Document {
     // Apply global defaults (font / size) if registered.
     Document.applyGlobalDefaultsToParagraph(para);
     this.bodyElements.push(para);
-    this._events.emit('paragraphAdded', { paragraph: para, index: this.bodyElements.length - 1 });
+    this._emitElementAdded(para, this.bodyElements.length - 1);
     return para;
   }
 
@@ -1800,7 +1800,7 @@ export class Document {
     }
 
     this.bodyElements.push(table);
-    this._events.emit('tableAdded', { table });
+    this._emitElementAdded(table, this.bodyElements.length - 1);
     return this;
   }
 
@@ -1822,6 +1822,7 @@ export class Document {
    */
   addStructuredDocumentTag(sdt: StructuredDocumentTag): this {
     this.bodyElements.push(sdt);
+    this._emitElementAdded(sdt, this.bodyElements.length - 1);
     return this;
   }
 
@@ -1857,6 +1858,7 @@ export class Document {
     const table = new Table(rows, columns);
     table._setStylesManager(this.stylesManager);
     this.bodyElements.push(table);
+    this._emitElementAdded(table, this.bodyElements.length - 1);
     return table;
   }
 
@@ -1883,6 +1885,7 @@ export class Document {
     const table = Table.fromCSV(csv, delimiter);
     table._setStylesManager(this.stylesManager);
     this.bodyElements.push(table);
+    this._emitElementAdded(table, this.bodyElements.length - 1);
     return table;
   }
 
@@ -1989,28 +1992,23 @@ export class Document {
   }
 
   /**
-   * Lazy iterator over every paragraph in the document, yielded in
-   * document order without building the full array. Use this for
-   * pipelines over very large documents (50k+ paragraphs) where
-   * `getAllParagraphs()` would materialise an array that doubles peak
-   * memory.
+   * Lazy iterator over every paragraph in the document. Yields the same
+   * set as `getAllParagraphs()` (including paragraphs inside table cells
+   * and nested SDTs) without materialising the full array — for memory
+   * pipelines over very large documents.
    *
    * Mutations during iteration are not protected — callers must not
    * structurally mutate the document while iterating.
-   *
-   * @example
-   * ```typescript
-   * for (const para of doc.iterateParagraphs()) {
-   *   if (para.getText().length > 1000) console.log('Long paragraph');
-   * }
-   * ```
    */
   *iterateParagraphs(): IterableIterator<Paragraph> {
-    for (const element of this.iterateBodyElements()) {
+    yield* Document.walkParagraphs(this.bodyElements);
+  }
+
+  private static *walkParagraphs(elements: BodyElement[]): IterableIterator<Paragraph> {
+    for (const element of elements) {
       if (element instanceof Paragraph) {
         yield element;
       } else if (element instanceof Table) {
-        // Walk table rows → cells → paragraphs.
         for (const row of element.getRows()) {
           for (const cell of row.getCells()) {
             for (const cellPara of cell.getParagraphs()) {
@@ -2018,15 +2016,16 @@ export class Document {
             }
           }
         }
+      } else if (element instanceof StructuredDocumentTag) {
+        yield* Document.walkParagraphs(element.getContent() as BodyElement[]);
       }
     }
   }
 
   /**
-   * Lazy iterator over the top-level body elements (paragraphs + tables
-   * + SDTs + custom XML blocks, in document order). Like
-   * `iterateParagraphs()` but at the body level, useful for pipelines
-   * that need to preserve table boundaries.
+   * Lazy iterator over the top-level body elements (paragraphs, tables,
+   * SDTs, custom XML blocks) in document order. Use this when table or
+   * SDT boundaries matter to your pipeline.
    */
   *iterateBodyElements(): IterableIterator<BodyElement> {
     for (const element of this.bodyElements) {
@@ -2177,6 +2176,7 @@ export class Document {
    */
   addBodyElement(element: BodyElement): this {
     this.bodyElements.push(element);
+    this._emitElementAdded(element, this.bodyElements.length - 1);
     return this;
   }
 
@@ -13248,6 +13248,28 @@ export class Document {
     return this._events.listenerCount(event);
   }
 
+  /**
+   * Emit the appropriate mutation event for `element`. No-op for body
+   * element types that don't have a dedicated event (SDT, TOC, custom XML).
+   * Centralised so every public add/insert path emits consistently.
+   */
+  private _emitElementAdded(element: BodyElement, index: number): void {
+    if (element instanceof Paragraph) {
+      this._events.emit('paragraphAdded', { paragraph: element, index });
+    } else if (element instanceof Table) {
+      this._events.emit('tableAdded', { table: element });
+    }
+  }
+
+  private _emitElementRemoved(element: BodyElement | undefined): void {
+    if (!element) return;
+    if (element instanceof Paragraph) {
+      this._events.emit('paragraphRemoved', { paragraph: element });
+    } else if (element instanceof Table) {
+      this._events.emit('tableRemoved', { table: element });
+    }
+  }
+
   // ============================================================================
   // Global defaults
   // ============================================================================
@@ -15850,7 +15872,9 @@ export class Document {
     if (index >= 0 && index < this.bodyElements.length) {
       const element = this.bodyElements[index];
       if (element instanceof Paragraph) {
-        // When tracking enabled, wrap content in w:del instead of removing
+        // When tracking enabled, wrap content in w:del instead of removing.
+        // No paragraphRemoved event in this branch — the paragraph is still
+        // structurally present, just marked deleted via revision.
         if (this.trackChangesEnabled && this.trackingContext.isEnabled()) {
           const runs = element.getRuns();
           if (runs.length > 0) {
@@ -15862,6 +15886,7 @@ export class Document {
           return true;
         }
         this.bodyElements.splice(index, 1);
+        this._emitElementRemoved(element);
         return true;
       }
     }
@@ -15896,6 +15921,7 @@ export class Document {
       const element = this.bodyElements[index];
       if (element instanceof Table) {
         this.bodyElements.splice(index, 1);
+        this._emitElementRemoved(element);
         return true;
       }
     }
@@ -16039,6 +16065,7 @@ export class Document {
 
     // Insert the paragraph
     this.bodyElements.splice(index, 0, paragraph);
+    this._emitElementAdded(paragraph, index);
     return this;
   }
 
@@ -16063,6 +16090,7 @@ export class Document {
 
     // Insert the table
     this.bodyElements.splice(index, 0, table);
+    this._emitElementAdded(table, index);
     return this;
   }
 
@@ -16270,7 +16298,8 @@ export class Document {
    */
   removeBodyElementAt(index: number): boolean {
     if (index >= 0 && index < this.bodyElements.length) {
-      this.bodyElements.splice(index, 1);
+      const [removed] = this.bodyElements.splice(index, 1);
+      this._emitElementRemoved(removed);
       return true;
     }
     return false;
@@ -16302,6 +16331,7 @@ export class Document {
     const index = this.bodyElements.indexOf(element);
     if (index === -1) return false;
     this.bodyElements.splice(index, 1);
+    this._emitElementRemoved(element);
     return true;
   }
 
@@ -16333,6 +16363,7 @@ export class Document {
     const index = this.bodyElements.indexOf(reference);
     if (index === -1) return false;
     this.bodyElements.splice(index + 1, 0, element);
+    this._emitElementAdded(element, index + 1);
     return true;
   }
 
@@ -16360,6 +16391,7 @@ export class Document {
     const index = this.bodyElements.indexOf(reference);
     if (index === -1) return false;
     this.bodyElements.splice(index, 0, element);
+    this._emitElementAdded(element, index);
     return true;
   }
 
@@ -16389,6 +16421,8 @@ export class Document {
     const index = this.bodyElements.indexOf(oldElement);
     if (index === -1) return false;
     this.bodyElements[index] = newElement;
+    this._emitElementRemoved(oldElement);
+    this._emitElementAdded(newElement, index);
     return true;
   }
 
@@ -16406,6 +16440,7 @@ export class Document {
   insertBodyElementAt(index: number, element: BodyElement): void {
     const clampedIndex = Math.max(0, Math.min(index, this.bodyElements.length));
     this.bodyElements.splice(clampedIndex, 0, element);
+    this._emitElementAdded(element, clampedIndex);
   }
 
   /**

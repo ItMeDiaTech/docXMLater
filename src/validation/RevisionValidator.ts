@@ -16,6 +16,7 @@ import {
   ValidationResult,
   createIssueFromRule,
 } from './ValidationRules';
+import { ValidationRuleRegistry } from './ValidationRuleRegistry';
 
 /**
  * Validates document revisions for ECMA-376 compliance.
@@ -41,12 +42,18 @@ export class RevisionValidator {
    */
   static validate(doc: Document, options?: ValidationOptions): ValidationResult {
     const revisionManager = doc.getRevisionManager();
+    const allIssues: ValidationIssue[] = [];
+
+    // Custom rules from ValidationRuleRegistry run regardless of whether
+    // the document has a revision manager — they validate document-level
+    // properties, not just revisions.
+    allIssues.push(...this.runCustomRules(doc));
+
     if (!revisionManager) {
-      return this.createEmptyResult();
+      return this.finalize(allIssues, options);
     }
 
     const revisions = revisionManager.getAllRevisions();
-    const allIssues: ValidationIssue[] = [];
 
     // Skip certain rules if lenient mode
     const skipRules = new Set(options?.skipRules || []);
@@ -82,16 +89,40 @@ export class RevisionValidator {
       allIssues.push(...this.validateRevisionDates(revisions));
     }
 
-    // Apply max issues limit
+    return this.finalize(allIssues, options);
+  }
+
+  /**
+   * Run every rule in `ValidationRuleRegistry` against `doc` and convert
+   * the produced `CustomValidationIssue`s into the built-in
+   * `ValidationIssue` shape so they can be merged into the final result.
+   */
+  private static runCustomRules(doc: Document): ValidationIssue[] {
+    const customIssues = ValidationRuleRegistry.runAll(doc);
+    return customIssues.map((c) => ({
+      code: c.ruleCode,
+      severity: c.severity,
+      message: c.message,
+      location: c.location ? { element: c.location } : undefined,
+      autoFixable: false,
+    }));
+  }
+
+  /**
+   * Apply maxIssues / warningsAsErrors options and bucket the issues
+   * into the standard `ValidationResult` shape.
+   */
+  private static finalize(
+    allIssues: ValidationIssue[],
+    options?: ValidationOptions
+  ): ValidationResult {
     const limitedIssues = options?.maxIssues ? allIssues.slice(0, options.maxIssues) : allIssues;
 
-    // Separate by severity
     let errors = limitedIssues.filter((i) => i.severity === 'error');
     let warnings = limitedIssues.filter((i) => i.severity === 'warning');
     const infos = limitedIssues.filter((i) => i.severity === 'info');
     const autoFixable = limitedIssues.filter((i) => i.autoFixable);
 
-    // Handle warningsAsErrors option
     if (options?.warningsAsErrors) {
       errors = [...errors, ...warnings];
       warnings = [];
@@ -109,26 +140,6 @@ export class RevisionValidator {
         warningCount: warnings.length,
         infoCount: infos.length,
         autoFixableCount: autoFixable.length,
-      },
-    };
-  }
-
-  /**
-   * Creates an empty validation result (for documents with no revisions).
-   */
-  private static createEmptyResult(): ValidationResult {
-    return {
-      valid: true,
-      errors: [],
-      warnings: [],
-      infos: [],
-      autoFixable: [],
-      summary: {
-        totalIssues: 0,
-        errorCount: 0,
-        warningCount: 0,
-        infoCount: 0,
-        autoFixableCount: 0,
       },
     };
   }

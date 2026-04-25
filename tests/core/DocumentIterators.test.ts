@@ -6,6 +6,7 @@
 import { Document } from '../../src/core/Document';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Table } from '../../src/elements/Table';
+import { StructuredDocumentTag } from '../../src/elements/StructuredDocumentTag';
 
 describe('Document iterators', () => {
   describe('iterateParagraphs', () => {
@@ -37,6 +38,20 @@ describe('Document iterators', () => {
       expect(seen).toContain('after');
       expect(seen).toContain('cell00');
       expect(seen).toContain('cell11');
+      doc.dispose();
+    });
+
+    it('yields paragraphs nested inside SDTs (matches getAllParagraphs)', () => {
+      const doc = Document.create();
+      doc.createParagraph('outer');
+      const inner = new Paragraph().addText('inside-sdt');
+      doc.addBodyElement(new StructuredDocumentTag({}, [inner]));
+      doc.createParagraph('after');
+
+      const iterated = [...doc.iterateParagraphs()].map((p) => p.getText());
+      const arr = doc.getAllParagraphs().map((p) => p.getText());
+      expect(iterated).toEqual(arr);
+      expect(iterated).toContain('inside-sdt');
       doc.dispose();
     });
 

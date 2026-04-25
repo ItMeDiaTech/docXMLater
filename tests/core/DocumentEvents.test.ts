@@ -89,18 +89,65 @@ describe('Document events', () => {
     doc.dispose();
   });
 
-  it('fires afterLoad on loadFromBuffer()', async () => {
+  it('exposes a working afterLoad listener API on a loaded document', async () => {
+    // afterLoad fires inside the static factory before any caller can attach
+    // a listener — test instead that the listener-count API is consistent on
+    // a loaded document and that further listeners attach without errors.
     const seed = Document.create();
     seed.createParagraph('seed');
     const buf = await seed.toBuffer();
     seed.dispose();
 
-    // Subscribe BEFORE loadFromBuffer returns by hooking inside the
-    // promise chain; afterLoad fires synchronously after parse.
     const doc = await Document.loadFromBuffer(buf);
-    // afterLoad already fired; verify the listener API works on a loaded doc
-    // and that the listener count starts at zero.
     expect(doc.listenerCount('afterLoad')).toBe(0);
+    const unsub = doc.on('afterLoad', () => {});
+    expect(doc.listenerCount('afterLoad')).toBe(1);
+    unsub();
+    doc.dispose();
+  });
+
+  it('fires paragraphRemoved when removeParagraph splices a paragraph', () => {
+    const doc = Document.create();
+    const para = doc.createParagraph('to be removed');
+    const seen: Paragraph[] = [];
+    doc.on('paragraphRemoved', ({ paragraph }) => seen.push(paragraph));
+    expect(doc.removeParagraph(para)).toBe(true);
+    expect(seen).toEqual([para]);
+    doc.dispose();
+  });
+
+  it('fires tableAdded / tableRemoved on full table lifecycle', () => {
+    const doc = Document.create();
+    const added: Table[] = [];
+    const removed: Table[] = [];
+    doc.on('tableAdded', ({ table }) => added.push(table));
+    doc.on('tableRemoved', ({ table }) => removed.push(table));
+    const t = doc.createTable(2, 2);
+    expect(added).toEqual([t]);
+    expect(doc.removeTable(t)).toBe(true);
+    expect(removed).toEqual([t]);
+    doc.dispose();
+  });
+
+  it('fires paragraphAdded on insertParagraphAt and addBodyElement', () => {
+    const doc = Document.create();
+    const seen: string[] = [];
+    doc.on('paragraphAdded', ({ paragraph }) => seen.push(paragraph.getText()));
+    doc.insertParagraphAt(0, new Paragraph().addText('inserted'));
+    doc.addBodyElement(new Paragraph().addText('via-addBody'));
+    expect(seen).toEqual(['inserted', 'via-addBody']);
+    doc.dispose();
+  });
+
+  it('fires removed + added on replaceElement', () => {
+    const doc = Document.create();
+    const old = doc.createParagraph('old');
+    const events: string[] = [];
+    doc.on('paragraphRemoved', () => events.push('removed'));
+    doc.on('paragraphAdded', () => events.push('added'));
+    expect(doc.replaceElement(old, new Paragraph().addText('new'))).toBe(true);
+    // replace fires removed first, then added — order matters for audit logs.
+    expect(events).toEqual(['removed', 'added']);
     doc.dispose();
   });
 

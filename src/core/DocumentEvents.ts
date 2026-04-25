@@ -1,39 +1,33 @@
 /**
  * Lightweight event system for Document lifecycle and content mutations.
  *
- * Designed for batch processing pipelines that need to react to programmatic
- * edits (e.g., audit logging a `paragraphAdded` for every paragraph the
- * pipeline appends). Not a full reactive store — there is no automatic
- * dirty tracking and listeners are synchronous.
+ * Designed for batch pipelines that need to react to programmatic edits
+ * (e.g., audit-logging every `paragraphAdded`). Listeners are synchronous;
+ * thrown errors are caught and logged via the global logger so a bad
+ * listener cannot abort `save()` or corrupt document state.
  *
- * Event guarantees:
- * - `beforeSave` / `beforeLoad` fire **inside** the save/load lock, so
- *   listeners observe a stable snapshot of in-memory state.
- * - `afterSave` / `afterLoad` fire after the operation completes
- *   successfully. They do not fire on failure.
- * - Mutation events (`paragraphAdded`, `paragraphRemoved`, `tableAdded`)
- *   fire synchronously after the mutation is applied.
- * - Listener errors do not abort the operation — they are caught and
- *   logged via the global logger so a misbehaving listener cannot corrupt
- *   document state. (Throwing from a listener is a programming error.)
+ * `beforeSave` fires inside the save lock; `afterSave` and `afterLoad`
+ * fire only after success. Mutation events fire synchronously after the
+ * mutation is applied. Pure structural moves (moveElement) and
+ * load/parse-time construction do not fire mutation events.
  */
 import type { Paragraph } from '../elements/Paragraph';
 import type { Table } from '../elements/Table';
 import { getGlobalLogger } from '../utils/logger';
 
 export interface DocumentEventMap {
-  /** Fired after a paragraph is added to the body or a table cell. */
+  /** Fired after a paragraph is added to the document body. */
   paragraphAdded: { paragraph: Paragraph; index?: number };
-  /** Fired after a paragraph is removed from the document. */
+  /** Fired after a paragraph is removed from the document body. */
   paragraphRemoved: { paragraph: Paragraph };
-  /** Fired after a table is added to the body. */
+  /** Fired after a table is added to the document body. */
   tableAdded: { table: Table };
+  /** Fired after a table is removed from the document body. */
+  tableRemoved: { table: Table };
   /** Fired immediately before save() / toBuffer() begins generation. */
   beforeSave: { filePath?: string };
   /** Fired immediately after save() / toBuffer() completes successfully. */
   afterSave: { filePath?: string; bufferSize?: number };
-  /** Fired immediately before a load() / loadFromBuffer() finishes parsing. */
-  beforeLoad: { source: 'file' | 'buffer'; path?: string };
   /** Fired immediately after a load() / loadFromBuffer() completes. */
   afterLoad: { source: 'file' | 'buffer'; path?: string };
 }

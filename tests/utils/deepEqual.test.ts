@@ -47,6 +47,21 @@ describe('deepEqual', () => {
     expect(deepEqual([1, 2], { 0: 1, 1: 2, length: 2 })).toBe(false);
   });
 
+  it('treats NaN === NaN as structurally equal', () => {
+    expect(deepEqual(NaN, NaN)).toBe(true);
+    expect(deepEqual({ x: NaN }, { x: NaN })).toBe(true);
+    expect(deepEqual([NaN, 1], [NaN, 1])).toBe(true);
+    // NaN must still differ from other numbers
+    expect(deepEqual(NaN, 0)).toBe(false);
+    expect(deepEqual(NaN, 1)).toBe(false);
+  });
+
+  it('distinguishes { a: undefined } from {} (matches structural intent, diverges from JSON.stringify)', () => {
+    expect(deepEqual({ a: undefined }, {})).toBe(false);
+    expect(deepEqual({}, { a: undefined })).toBe(false);
+    expect(deepEqual({ a: undefined }, { a: undefined })).toBe(true);
+  });
+
   it('matches the OOXML formatting object shapes used in Paragraph/tracking', () => {
     const a = {
       spacing: { before: 100, after: 100, line: 240, lineRule: 'auto' },

@@ -11,6 +11,8 @@ import { BookmarkManager } from '../elements/BookmarkManager';
 import { Comment } from '../elements/Comment';
 import { CustomXmlBlock } from '../elements/CustomXml';
 import { PreservedElement } from '../elements/PreservedElement';
+import { RegisteredBodyElement } from '../elements/RegisteredBodyElement';
+import { ElementRegistry } from './ElementRegistry';
 import { MathParagraph } from '../elements/MathElement';
 import { ComplexField, Field } from '../elements/Field';
 import { isHyperlinkInstruction, parseHyperlinkInstruction } from '../elements/FieldHelpers';
@@ -247,7 +249,7 @@ export class DocumentParser {
       const nextCXml = this.findNextTopLevelTag(bodyContent, 'w:customXml', pos);
       const nextAltChunk = this.findNextTopLevelTag(bodyContent, 'w:altChunk', pos);
 
-      const candidates = [];
+      const candidates: { type: string; pos: number; registeredTag?: string }[] = [];
       if (nextP !== -1) candidates.push({ type: 'p', pos: nextP });
       if (nextTbl !== -1) candidates.push({ type: 'tbl', pos: nextTbl });
       if (nextSdt !== -1) candidates.push({ type: 'sdt', pos: nextSdt });
@@ -255,6 +257,15 @@ export class DocumentParser {
       if (nextMath !== -1) candidates.push({ type: 'mathParagraph', pos: nextMath });
       if (nextCXml !== -1) candidates.push({ type: 'customXml', pos: nextCXml });
       if (nextAltChunk !== -1) candidates.push({ type: 'altChunk', pos: nextAltChunk });
+
+      // ElementRegistry plugin tags — consumer-registered handlers for
+      // qualified-name body elements outside the framework's native set.
+      // We scan each registered tag at every step so the position-based
+      // dispatch picks up registered elements interleaved with native ones.
+      for (const tag of ElementRegistry.registeredTags()) {
+        const p = this.findNextTopLevelTag(bodyContent, tag, pos);
+        if (p !== -1) candidates.push({ type: 'registered', pos: p, registeredTag: tag });
+      }
 
       if (candidates.length === 0) break;
 
@@ -400,6 +411,29 @@ export class DocumentParser {
           const elementXml = this.extractSingleElement(bodyContent, 'w:altChunk', next.pos);
           if (elementXml) {
             bodyElements.push(new PreservedElement(elementXml, 'altChunk', 'block'));
+            pos = next.pos + elementXml.length;
+          } else {
+            pos = next.pos + 1;
+          }
+        } else if (next.type === 'registered' && next.registeredTag) {
+          // Consumer-registered element via ElementRegistry. Hand the raw XML
+          // to the handler's parse(); on save the model is round-tripped via
+          // handler.serialize(). A throwing parse degrades gracefully to a
+          // PreservedElement so a buggy custom parser cannot fail the load.
+          const tag = next.registeredTag;
+          const elementXml = this.extractSingleElement(bodyContent, tag, next.pos);
+          if (elementXml) {
+            const handler = ElementRegistry.get(tag);
+            if (handler) {
+              try {
+                const model = handler.parse(elementXml);
+                bodyElements.push(new RegisteredBodyElement(tag, model, handler, elementXml));
+              } catch {
+                bodyElements.push(new PreservedElement(elementXml, tag, 'block'));
+              }
+            } else {
+              bodyElements.push(new PreservedElement(elementXml, tag, 'block'));
+            }
             pos = next.pos + elementXml.length;
           } else {
             pos = next.pos + 1;

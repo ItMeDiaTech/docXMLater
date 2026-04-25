@@ -12,6 +12,12 @@
  */
 export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
+  // NaN === NaN is false in JS; treat structurally as equal so a parse
+  // failure that produced two NaNs in equivalent slots doesn't dirty the
+  // tracking-context consolidation pass.
+  if (typeof a === 'number' && typeof b === 'number' && Number.isNaN(a) && Number.isNaN(b)) {
+    return true;
+  }
   if (a == null || b == null) return a === b;
 
   const typeA = typeof a;
