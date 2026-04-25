@@ -17,6 +17,7 @@ import { TableCell } from '../elements/TableCell';
 import { Section } from '../elements/Section';
 import type { TrackingContext, PendingChange, TrackableElement } from './TrackingContext';
 import { formatDateForXml } from '../utils/dateFormatting';
+import { deepEqual } from '../utils/deepEqual';
 
 /**
  * Enable options for tracking context
@@ -684,10 +685,7 @@ export class DocumentTrackingContext implements TrackingContext {
    * Deep equality check for tracking values (handles objects, primitives, null/undefined)
    */
   private valuesEqual(a: unknown, b: unknown): boolean {
-    if (a === b) return true;
-    if (a == null || b == null) return false;
-    if (typeof a !== 'object' || typeof b !== 'object') return false;
-    return JSON.stringify(a) === JSON.stringify(b);
+    return deepEqual(a, b);
   }
 
   /**

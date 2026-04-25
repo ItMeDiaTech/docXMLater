@@ -4,6 +4,7 @@
  */
 
 import { deepClone } from '../utils/deepClone';
+import { deepEqual } from '../utils/deepEqual';
 import { formatDateForXml } from '../utils/dateFormatting';
 import { logParagraphContent, logTextDirection } from '../utils/diagnostics';
 import { isEqualFormatting } from '../utils/formatting';
@@ -5445,7 +5446,7 @@ export class Paragraph {
         const paraValue = this.formatting[propKey];
         const styleValue = styleParagraphFormatting[propKey];
 
-        if (JSON.stringify(paraValue) !== JSON.stringify(styleValue)) {
+        if (!deepEqual(paraValue, styleValue)) {
           conflictingParaProps.push(propKey);
         }
       } else {

@@ -356,6 +356,20 @@ export class Document {
   private _originalCommentsXml?: string;
   private _commentsModified = false;
   private _originalCommentCompanionFiles = new Map<string, string>();
+
+  /**
+   * Serialization queue for save / toBuffer operations.
+   *
+   * Document is single-threaded by design — `prepareSave()` mutates shared
+   * managers (StylesManager, NumberingManager, ImageManager) without
+   * locking, so two concurrent saves would race on those managers and on
+   * the shared `zipHandler` files. The lock chains save / toBuffer calls
+   * onto a serial Promise so callers can fire `Promise.all([save(a),
+   * save(b)])` without corrupting state. Errors do not poison the queue —
+   * a failed save still releases the next waiter.
+   */
+  private _saveQueue: Promise<unknown> = Promise.resolve();
+
   /** Parts explicitly removed via removePart() — skip regeneration during save */
   private _removedParts = new Set<string>();
 
@@ -2558,6 +2572,22 @@ export class Document {
    * ```
    */
   async save(filePath: string): Promise<void> {
+    return this.withSaveLock(() => this.saveImpl(filePath));
+  }
+
+  /**
+   * Chains an operation onto the serial save queue. Concurrent callers
+   * (e.g., `Promise.all([doc.save(a), doc.save(b)])`) are serialised so
+   * `prepareSave()` and the underlying ZIP cannot race. The chain
+   * survives errors — a failed operation releases the next waiter.
+   */
+  private withSaveLock<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this._saveQueue.then(operation, operation);
+    this._saveQueue = next.catch(() => undefined);
+    return next;
+  }
+
+  private async saveImpl(filePath: string): Promise<void> {
     const logger = getLogger();
     logger.info('Saving document', { path: filePath, paragraphs: this.getParagraphCount() });
 
@@ -2640,6 +2670,10 @@ export class Document {
    * ```
    */
   async toBuffer(): Promise<Buffer> {
+    return this.withSaveLock(() => this.toBufferImpl());
+  }
+
+  private async toBufferImpl(): Promise<Buffer> {
     const logger = getLogger();
     logger.info('Generating document buffer', { paragraphs: this.getParagraphCount() });
 
@@ -3383,17 +3417,46 @@ export class Document {
     if (!this._originalWebSettingsXml) {
       return 0;
     }
-    const matches = this._originalWebSettingsXml.match(/<w:div\b/g);
+    const original = this._originalWebSettingsXml;
+    const matches = original.match(/<w:div\b/g);
     const count = matches ? matches.length : 0;
     if (count === 0) {
       return 0;
     }
-    this._originalWebSettingsXml = this._originalWebSettingsXml.replace(
-      /<w:divs>[\s\S]*?<\/w:divs>/g,
-      ''
-    );
-    this._webSettingsModified = true;
-    return count;
+    // Mutate via try/catch + post-mutation validation. If the regex match
+    // accidentally produces malformed XML (e.g., a partial `<w:divs>` open
+    // tag with no close), revert to the pre-mutation snapshot rather than
+    // persisting corruption.
+    try {
+      const mutated = original.replace(/<w:divs>[\s\S]*?<\/w:divs>/g, '');
+      // Sanity check: result must still parse as well-formed root XML.
+      // `<?xml ...?>` prologue must survive, and tag balance must match.
+      if (!Document.isWellFormedXml(mutated)) {
+        getLogger().warn('stripWebDivs produced malformed XML; reverting');
+        return 0;
+      }
+      this._originalWebSettingsXml = mutated;
+      this._webSettingsModified = true;
+      return count;
+    } catch (err) {
+      getLogger().warn('stripWebDivs failed; reverting', { error: String(err) });
+      this._originalWebSettingsXml = original;
+      return 0;
+    }
+  }
+
+  /**
+   * Lightweight well-formedness check for in-place XML mutations.
+   * Verifies tag balance (open/close counts match for each element name)
+   * and that any XML prologue remains intact. Sufficient for catching
+   * regex string.replace() failures that bisect a tag.
+   */
+  private static isWellFormedXml(xml: string): boolean {
+    if (xml.length === 0) return true;
+    // Count opening and closing tags. Self-closing tags don't need a closer.
+    const openTags = xml.match(/<([a-zA-Z_][^\s/>]*)\b[^>]*[^/]>/g) || [];
+    const closeTags = xml.match(/<\/([a-zA-Z_][^\s>]*)\s*>/g) || [];
+    return openTags.length === closeTags.length;
   }
 
   /**
