@@ -5,6 +5,34 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.1] - 2026-04-25
+
+### Fixed
+
+- **README import paths.** The `XMLParser` example and the
+  `DocxError`-family prose now point to the `docxmlater/internal`
+  subpath, matching the 11.0.0 tiered API split.
+- **Examples runner.** Switched the `examples` and `test-list-arch`
+  npm scripts from `ts-node` to `tsx`. The 11.0.0 `.js` extension
+  rewrite confused `ts-node`'s CJS resolver
+  (`require('./Document.js')` failed because Node CJS does not
+  auto-substitute `.js → .ts`); `tsx` handles the substitution
+  natively.
+- **Examples imports.** `examples/01-basic/basic-usage.ts` and
+  `examples/02-text/paragraph-usage.ts` were importing `ZipHandler`,
+  `DOCX_PATHS`, and `XMLBuilder` from `../src`, which no longer
+  exports them. Imports now split between the main entry point
+  (for `Paragraph`) and `docxmlater/internal` (for the moved
+  symbols).
+
+### Repository hygiene
+
+- Removed internal planning document `Future_Improvements.md`
+  from the repository (now `.gitignore`d alongside other personal
+  status files).
+- Synced `.release-please-manifest.json` to the current package
+  version.
+
 ## [11.0.0] - 2026-04-25
 
 ### Breaking
