@@ -1989,6 +1989,79 @@ export class Document {
   }
 
   /**
+   * Lazy iterator over every paragraph in the document, yielded in
+   * document order without building the full array. Use this for
+   * pipelines over very large documents (50k+ paragraphs) where
+   * `getAllParagraphs()` would materialise an array that doubles peak
+   * memory.
+   *
+   * Mutations during iteration are not protected — callers must not
+   * structurally mutate the document while iterating.
+   *
+   * @example
+   * ```typescript
+   * for (const para of doc.iterateParagraphs()) {
+   *   if (para.getText().length > 1000) console.log('Long paragraph');
+   * }
+   * ```
+   */
+  *iterateParagraphs(): IterableIterator<Paragraph> {
+    for (const element of this.iterateBodyElements()) {
+      if (element instanceof Paragraph) {
+        yield element;
+      } else if (element instanceof Table) {
+        // Walk table rows → cells → paragraphs.
+        for (const row of element.getRows()) {
+          for (const cell of row.getCells()) {
+            for (const cellPara of cell.getParagraphs()) {
+              yield cellPara;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Lazy iterator over the top-level body elements (paragraphs + tables
+   * + SDTs + custom XML blocks, in document order). Like
+   * `iterateParagraphs()` but at the body level, useful for pipelines
+   * that need to preserve table boundaries.
+   */
+  *iterateBodyElements(): IterableIterator<BodyElement> {
+    for (const element of this.bodyElements) {
+      yield element;
+    }
+  }
+
+  /**
+   * Lazy iterator that yields each section in the document along with
+   * the body elements belonging to it. A section break is identified by
+   * a paragraph carrying its own `sectPr` (CT_SectPr); the document's
+   * root `Section` closes the final group.
+   *
+   * @yields `{ sectPr, elements }` where `sectPr` is the raw section-
+   *   properties marker (string or parsed object) for inline section
+   *   breaks, or the document's root `Section` for the trailing group.
+   */
+  *iterateSections(): IterableIterator<{
+    sectPr: string | Record<string, unknown> | Section | null;
+    elements: BodyElement[];
+  }> {
+    let current: BodyElement[] = [];
+    for (const element of this.bodyElements) {
+      current.push(element);
+      if (element instanceof Paragraph && element.formatting.sectPr) {
+        yield { sectPr: element.formatting.sectPr, elements: current };
+        current = [];
+      }
+    }
+    if (current.length > 0) {
+      yield { sectPr: this.section ?? null, elements: current };
+    }
+  }
+
+  /**
    * Gets all paragraphs in the document (alias for getAllParagraphs)
    * @returns Array of all paragraphs recursively
    * @deprecated Use getAllParagraphs() instead for clarity
