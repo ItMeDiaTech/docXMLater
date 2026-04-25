@@ -5,6 +5,21 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.3] - 2026-04-25
+
+### Fixed
+
+- **Cross-platform save-failure test.**
+  `tests/core/DocumentSaveLock.test.ts` was using a Windows-illegal
+  path (`Z:\\...<>:"|?*`) to provoke a `save()` rejection. On the
+  Linux CI runner that string is a single legal filename, so
+  `save()` succeeded and the test failed with `Expected: "failed"
+/ Received: undefined`. Switched to a non-existent parent
+  directory (`__docxmlater_nonexistent_dir_<ts>__/save.docx`),
+  which rejects on both Windows and POSIX. This was the last
+  test failure blocking the release-triggered npm publish
+  workflow.
+
 ## [11.0.2] - 2026-04-25
 
 ### Fixed

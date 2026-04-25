@@ -28,8 +28,12 @@ describe('Document save lock', () => {
     const doc = Document.create();
     doc.createParagraph('Recovery test');
 
-    // First call uses an invalid path on Windows (illegal chars) — must reject.
-    const failing = doc.save('Z:\\__nonexistent_dir__\\path<>:"|?*.docx').catch(() => 'failed');
+    // Use a path whose parent directory does not exist on either Windows or
+    // POSIX. Without mkdir-p behaviour, fs.writeFile rejects on both platforms.
+    // The previous Windows-illegal-chars approach (Z:\...<>:"|?*) was a single
+    // legal filename on Linux and let save() succeed, masking the error path.
+    const badPath = `__docxmlater_nonexistent_dir_${Date.now()}__/save.docx`;
+    const failing = doc.save(badPath).catch(() => 'failed');
     // Second call should still execute against the in-memory state and succeed.
     const buffer = await doc.toBuffer();
 
