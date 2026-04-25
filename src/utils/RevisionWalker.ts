@@ -143,6 +143,16 @@ export class RevisionWalker {
       return;
     }
 
+    // Pre-recursion: row-level tracked deletions (CT_TrPr > w:del per
+    // §17.13.5.14). Must run BEFORE the depth-first recursion — otherwise
+    // processRevisions in trPr would strip the w:del marker before we can
+    // detect it at the table level. The default `w:del` removal in
+    // processRevisions only strips the marker itself, leaving a zombie
+    // empty row; per spec, accepting the deletion removes the entire row.
+    if (options.acceptDeletions && obj['w:tr']) {
+      RevisionWalker.filterDeletedRows(obj);
+    }
+
     // Get keys to process (excluding metadata keys)
     const keys = Object.keys(obj).filter(
       (k) => !k.startsWith('@_') && k !== '#text' && k !== '_orderedChildren'
@@ -163,6 +173,37 @@ export class RevisionWalker {
     // Second pass: process revision elements at this level
     // We need to iterate carefully because we're modifying the object
     RevisionWalker.processRevisions(obj, options);
+  }
+
+  /**
+   * Remove `<w:tr>` entries whose `<w:trPr>` contains a self-closing
+   * `<w:del/>` row-level deletion marker. Operates on the parsed-object
+   * representation (arrays when multiple, single object otherwise).
+   */
+  private static filterDeletedRows(tbl: any): void {
+    const rows = tbl['w:tr'];
+    const isRowDeleted = (row: any): boolean => {
+      if (!row || typeof row !== 'object') return false;
+      const trPr = row['w:trPr'];
+      if (!trPr || typeof trPr !== 'object') return false;
+      // w:del at row level is a CT_TrackChange (no children). When absent
+      // the parser leaves no key; when present it's a self-closing tag
+      // parsed as an object with only @_w:id/@_w:author/@_w:date keys.
+      return !!trPr['w:del'];
+    };
+
+    if (Array.isArray(rows)) {
+      const kept = rows.filter((r) => !isRowDeleted(r));
+      if (kept.length !== rows.length) {
+        if (kept.length === 0) {
+          delete tbl['w:tr'];
+        } else {
+          tbl['w:tr'] = kept;
+        }
+      }
+    } else if (isRowDeleted(rows)) {
+      delete tbl['w:tr'];
+    }
   }
 
   /**

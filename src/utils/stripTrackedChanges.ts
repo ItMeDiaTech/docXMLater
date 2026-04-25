@@ -13,11 +13,33 @@ class TrackedChangesStripper {
   }
 
   /**
-   * Main method to strip all tracked changes from the document
+   * Main method to strip all tracked changes from the document.
+   *
+   * Per ECMA-376 Part 1, tracked-change markup can appear in any
+   * part that carries block-level content: the body (§17.2 w:body),
+   * headers / footers (§17.10.3-4 CT_HdrFtr), footnotes (§17.11.15),
+   * endnotes (§17.11.4), and comments (§17.13.4). All of these
+   * must be walked — stripping document.xml alone would leave
+   * tracked changes visible in Word for every header / footer /
+   * note / comment revision.
    */
   public async stripTrackedChanges(): Promise<void> {
-    // Strip revision elements from document.xml
-    await this.stripDocumentRevisions();
+    // Always process the body.
+    await this.stripPartRevisions('word/document.xml');
+
+    // Process every header and footer part present in the ZIP.
+    for (const file of this.zipHandler.getFilePaths()) {
+      if (/^word\/header\d+\.xml$/.exec(file) || /^word\/footer\d+\.xml$/.exec(file)) {
+        await this.stripPartRevisions(file);
+      }
+    }
+
+    // Process singleton notes / comments parts when present.
+    for (const path of ['word/footnotes.xml', 'word/endnotes.xml', 'word/comments.xml']) {
+      if (this.zipHandler.getFileAsString(path)) {
+        await this.stripPartRevisions(path);
+      }
+    }
 
     // Clean up metadata files
     await this.cleanupPeopleXml();
@@ -26,15 +48,18 @@ class TrackedChangesStripper {
   }
 
   /**
-   * Strip ALL revision elements from word/document.xml
+   * Strip ALL revision elements from a single document part.
+   * The per-step pipeline is identical to the historical
+   * document.xml implementation; the only difference is the
+   * configurable source path.
    */
-  private async stripDocumentRevisions(): Promise<void> {
-    const documentXml = this.zipHandler.getFileAsString('word/document.xml');
-    if (!documentXml) {
+  private async stripPartRevisions(partPath: string): Promise<void> {
+    const xml = this.zipHandler.getFileAsString(partPath);
+    if (!xml) {
       return;
     }
 
-    let content = documentXml;
+    let content = xml;
 
     // STEP 1: Remove all range markers (boundary markers for tracked changes)
     content = this.removeRangeMarkers(content);
@@ -56,7 +81,7 @@ class TrackedChangesStripper {
     content = this.removeSelfClosingRevisionTags(content);
 
     // Update the file in the zip
-    this.zipHandler.updateFile('word/document.xml', content);
+    this.zipHandler.updateFile(partPath, content);
   }
 
   /**

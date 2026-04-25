@@ -3,6 +3,7 @@
  * Provides a simple interface for creating DOCX files without managing ZIP and XML manually
  */
 
+import { parseOnOffAttribute } from '../utils/parsingHelpers';
 import { Bookmark } from '../elements/Bookmark';
 import { BookmarkManager } from '../elements/BookmarkManager';
 import { Comment } from '../elements/Comment';
@@ -975,32 +976,67 @@ export class Document {
       }
     }
 
-    // Parse w:doNotTrackFormatting - presence means formatting tracking is disabled
-    const hasDoNotTrackFormatting = /<w:doNotTrackFormatting\b[^>]*\/?>/.test(settingsXml);
-    if (hasDoNotTrackFormatting) {
+    // Helper: parse a settings-level CT_OnOff flag. Returns undefined when the
+    // element is absent, or the actual boolean (respecting w:val's ST_OnOff
+    // value — "0"/"1"/"true"/"false"/"on"/"off") when present. A bare element
+    // without w:val defaults to true per ECMA-376 §17.17.4.
+    const parseSettingCtOnOff = (tagName: string): boolean | undefined => {
+      const re = new RegExp(`<${tagName}\\b([^>]*)\\/?>`);
+      const m = re.exec(settingsXml);
+      if (!m) return undefined;
+      const attrs = m[1] ?? '';
+      const valMatch = /w:val\s*=\s*"([^"]*)"/.exec(attrs);
+      if (!valMatch || valMatch[1] === undefined) return true;
+      const v = valMatch[1].toLowerCase();
+      return v !== '0' && v !== 'false' && v !== 'off';
+    };
+
+    // Parse w:doNotTrackFormatting - CT_OnOff; when true, formatting tracking
+    // is disabled. (Previously tested presence only, so `<w:doNotTrackFormatting
+    // w:val="0"/>` was silently taken to disable tracking even though it means
+    // "do not [do not track formatting]" = track formatting normally.)
+    const doNotTrackFormattingVal = parseSettingCtOnOff('w:doNotTrackFormatting');
+    if (doNotTrackFormattingVal === true) {
       this.trackFormatting = false;
-    }
-    // Parse w:trackFormatting - explicit presence means formatting tracking is enabled
-    const hasTrackFormatting = /<w:trackFormatting\b[^>]*\/?>/.test(settingsXml);
-    if (hasTrackFormatting) {
+    } else if (doNotTrackFormattingVal === false) {
       this.trackFormatting = true;
     }
+    // Parse w:trackFormatting - CT_OnOff; explicit true enables formatting tracking.
+    const trackFormattingVal = parseSettingCtOnOff('w:trackFormatting');
+    if (trackFormattingVal !== undefined) {
+      this.trackFormatting = trackFormattingVal;
+    }
 
-    // Parse w:revisionView
+    // Parse w:revisionView per ECMA-376 §17.15.1.77 (CT_TrackChangesView).
+    // @w:insDel / @w:formatting / @w:inkAnnotations are ST_OnOff attributes;
+    // accept every literal (1/0/true/false/on/off). Prior code used `!== '0'`
+    // which flipped "false" and "off" to true, silently misreporting the
+    // tracked-changes display configuration.
     const revisionViewMatch = /<w:revisionView\b([^>]*)\/?>/.exec(settingsXml);
     if (revisionViewMatch) {
       const attrs = revisionViewMatch[1] || '';
       const insDelMatch = /w:insDel\s*=\s*"([^"]*)"/.exec(attrs);
       const formattingMatch = /w:formatting\s*=\s*"([^"]*)"/.exec(attrs);
       const inkMatch = /w:inkAnnotations\s*=\s*"([^"]*)"/.exec(attrs);
+      // CT_TrackChangesView also carries w:markup (all revision markup)
+      // and w:comments (balloon visibility). Both were previously dropped
+      // on the parser even though the element was already extracted.
+      const markupMatch = /w:markup\s*=\s*"([^"]*)"/.exec(attrs);
+      const commentsMatch = /w:comments\s*=\s*"([^"]*)"/.exec(attrs);
       if (insDelMatch?.[1] !== undefined) {
-        this.revisionViewSettings.showInsertionsAndDeletions = insDelMatch[1] !== '0';
+        this.revisionViewSettings.showInsertionsAndDeletions = parseOnOffAttribute(insDelMatch[1]);
       }
       if (formattingMatch?.[1] !== undefined) {
-        this.revisionViewSettings.showFormatting = formattingMatch[1] !== '0';
+        this.revisionViewSettings.showFormatting = parseOnOffAttribute(formattingMatch[1]);
       }
       if (inkMatch?.[1] !== undefined) {
-        this.revisionViewSettings.showInkAnnotations = inkMatch[1] !== '0';
+        this.revisionViewSettings.showInkAnnotations = parseOnOffAttribute(inkMatch[1]);
+      }
+      if (markupMatch?.[1] !== undefined) {
+        this.revisionViewSettings.showMarkup = parseOnOffAttribute(markupMatch[1]);
+      }
+      if (commentsMatch?.[1] !== undefined) {
+        this.revisionViewSettings.showComments = parseOnOffAttribute(commentsMatch[1]);
       }
     }
 
@@ -1012,8 +1048,18 @@ export class Document {
       const enforcementMatch = /w:enforcement\s*=\s*"([^"]*)"/.exec(attrs);
       if (editMatch?.[1]) {
         const edit = editMatch[1] as 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
-        const enforcement = enforcementMatch?.[1] ? enforcementMatch[1] !== '0' : true;
+        // @w:enforcement is ST_OnOff — honour every literal. Default true when absent
+        // per ECMA-376 §17.15.1.29. Prior `!== '0'` missed "false" and "off".
+        const enforcement = enforcementMatch?.[1] ? parseOnOffAttribute(enforcementMatch[1]) : true;
         this.documentProtection = { edit, enforcement };
+
+        // `w:formatting` per CT_DocProtect §17.15.1.29 — ST_OnOff. When true,
+        // formatting changes are allowed even under edit protection. Parse
+        // with parseOnOffAttribute so every ST_OnOff literal maps correctly.
+        const formattingMatch = /w:formatting\s*=\s*"([^"]*)"/.exec(attrs);
+        if (formattingMatch?.[1] !== undefined) {
+          this.documentProtection.formatting = parseOnOffAttribute(formattingMatch[1]);
+        }
 
         // Parse optional crypto attributes
         const cryptProviderMatch = /w:cryptProviderType\s*=\s*"([^"]*)"/.exec(attrs);
@@ -1036,6 +1082,20 @@ export class Document {
           this.documentProtection.cryptSpinCount = parseInt(cryptSpinMatch[1], 10);
         if (hashMatch?.[1]) this.documentProtection.hash = hashMatch[1];
         if (saltMatch?.[1]) this.documentProtection.salt = saltMatch[1];
+
+        // Modern Word 2013+ crypto attributes (ISO/IEC 29500-4 §13).
+        // Previously dropped on parse — a password-protected document
+        // saved by modern Word lost its hash/salt on any programmatic
+        // resave because the legacy `hash`/`salt` regex no longer matches
+        // the modern `hashValue`/`saltValue` attribute names.
+        const algorithmNameMatch = /w:algorithmName\s*=\s*"([^"]*)"/.exec(attrs);
+        const hashValueMatch = /w:hashValue\s*=\s*"([^"]*)"/.exec(attrs);
+        const saltValueMatch = /w:saltValue\s*=\s*"([^"]*)"/.exec(attrs);
+        if (algorithmNameMatch?.[1]) {
+          this.documentProtection.algorithmName = algorithmNameMatch[1];
+        }
+        if (hashValueMatch?.[1]) this.documentProtection.hashValue = hashValueMatch[1];
+        if (saltValueMatch?.[1]) this.documentProtection.saltValue = saltValueMatch[1];
       }
     }
 
@@ -1069,30 +1129,25 @@ export class Document {
       this._documentView = viewMatch[1];
     }
 
-    // Parse w:evenAndOddHeaders per ECMA-376 Part 1 §17.15.1.28
-    if (/<w:evenAndOddHeaders\b[^>]*\/?>/.test(settingsXml)) {
-      this._evenAndOddHeaders = true;
-    }
+    // CT_OnOff settings flags (ECMA-376 §17.15.1). Each honours w:val via the
+    // parseSettingCtOnOff helper defined above — previously these used a simple
+    // presence-detect regex and silently flipped explicit `<w:X w:val="0"/>` to
+    // true, corrupting any source document that recorded an explicit-off state.
+    const evenAndOddHeadersVal = parseSettingCtOnOff('w:evenAndOddHeaders');
+    if (evenAndOddHeadersVal !== undefined) this._evenAndOddHeaders = evenAndOddHeadersVal;
 
-    // Parse w:mirrorMargins per ECMA-376 Part 1 §17.15.1.57
-    if (/<w:mirrorMargins\b[^>]*\/?>/.test(settingsXml)) {
-      this._mirrorMargins = true;
-    }
+    const mirrorMarginsVal = parseSettingCtOnOff('w:mirrorMargins');
+    if (mirrorMarginsVal !== undefined) this._mirrorMargins = mirrorMarginsVal;
 
-    // Parse w:autoHyphenation per ECMA-376 Part 1 §17.15.1.10
-    if (/<w:autoHyphenation\b[^>]*\/?>/.test(settingsXml)) {
-      this._autoHyphenation = true;
-    }
+    const autoHyphenationVal = parseSettingCtOnOff('w:autoHyphenation');
+    if (autoHyphenationVal !== undefined) this._autoHyphenation = autoHyphenationVal;
 
-    // Parse w:hideSpellingErrors per ECMA-376 Part 1 §17.15.1.43
-    if (/<w:hideSpellingErrors\b[^>]*\/?>/.test(settingsXml)) {
-      this._hideSpellingErrors = true;
-    }
+    const hideSpellingErrorsVal = parseSettingCtOnOff('w:hideSpellingErrors');
+    if (hideSpellingErrorsVal !== undefined) this._hideSpellingErrors = hideSpellingErrorsVal;
 
-    // Parse w:hideGrammaticalErrors per ECMA-376 Part 1 §17.15.1.42
-    if (/<w:hideGrammaticalErrors\b[^>]*\/?>/.test(settingsXml)) {
-      this._hideGrammaticalErrors = true;
-    }
+    const hideGrammaticalErrorsVal = parseSettingCtOnOff('w:hideGrammaticalErrors');
+    if (hideGrammaticalErrorsVal !== undefined)
+      this._hideGrammaticalErrors = hideGrammaticalErrorsVal;
 
     // Parse w:defaultTabStop per ECMA-376 Part 1 §17.15.1.25
     const defaultTabStopMatch = /<w:defaultTabStop\s+w:val\s*=\s*"(\d+)"\s*\/?>/.exec(settingsXml);
@@ -1100,25 +1155,18 @@ export class Document {
       this._defaultTabStop = parseInt(defaultTabStopMatch[1], 10);
     }
 
-    // Parse w:updateFields per ECMA-376 Part 1 §17.15.1.85
-    if (/<w:updateFields\b[^>]*\/?>/.test(settingsXml)) {
-      this._updateFields = true;
-    }
+    const updateFieldsVal = parseSettingCtOnOff('w:updateFields');
+    if (updateFieldsVal !== undefined) this._updateFields = updateFieldsVal;
 
-    // Parse w:embedTrueTypeFonts per ECMA-376 Part 1 §17.15.1.24
-    if (/<w:embedTrueTypeFonts\b[^>]*\/?>/.test(settingsXml)) {
-      this._embedTrueTypeFonts = true;
-    }
+    const embedTrueTypeFontsVal = parseSettingCtOnOff('w:embedTrueTypeFonts');
+    if (embedTrueTypeFontsVal !== undefined) this._embedTrueTypeFonts = embedTrueTypeFontsVal;
 
-    // Parse w:saveSubsetFonts per ECMA-376 Part 1 §17.15.1.78
-    if (/<w:saveSubsetFonts\b[^>]*\/?>/.test(settingsXml)) {
-      this._saveSubsetFonts = true;
-    }
+    const saveSubsetFontsVal = parseSettingCtOnOff('w:saveSubsetFonts');
+    if (saveSubsetFontsVal !== undefined) this._saveSubsetFonts = saveSubsetFontsVal;
 
-    // Parse w:doNotTrackMoves per ECMA-376 Part 1 §17.15.1.35
-    if (/<w:doNotTrackMoves\b[^>]*\/?>/.test(settingsXml)) {
-      this._doNotTrackMoves = true;
-    }
+    // w:doNotTrackMoves — tracked-changes-specific CT_OnOff flag.
+    const doNotTrackMovesVal = parseSettingCtOnOff('w:doNotTrackMoves');
+    if (doNotTrackMovesVal !== undefined) this._doNotTrackMoves = doNotTrackMovesVal;
 
     // Parse w:decimalSymbol per ECMA-376 Part 1 §17.15.1.23
     const decimalMatch = /<w:decimalSymbol\s+w:val\s*=\s*"([^"]*)"\s*\/?>/.exec(settingsXml);

@@ -3,6 +3,15 @@ import { XMLParser } from '../xml/XMLParser';
 import { RevisionWalker } from './RevisionWalker';
 
 /**
+ * Markers covered: w:ins, w:del, w:moveFrom, w:moveTo,
+ * w:rPrChange, w:pPrChange, w:tblPrChange, w:tblPrExChange,
+ * w:trPrChange, w:tcPrChange, w:sectPrChange, w:numberingChange,
+ * w:cellIns, w:cellDel, w:cellMerge, and any *RangeStart/End markers.
+ */
+const REVISION_MARKER_PATTERN =
+  /<w:(?:ins|del|moveFrom|moveTo|rPrChange|pPrChange|tblPrChange|tblPrExChange|trPrChange|tcPrChange|sectPrChange|numberingChange|cellIns|cellDel|cellMerge|moveFromRangeStart|moveFromRangeEnd|moveToRangeStart|moveToRangeEnd|customXmlInsRangeStart|customXmlInsRangeEnd|customXmlDelRangeStart|customXmlDelRangeEnd|customXmlMoveFromRangeStart|customXmlMoveFromRangeEnd|customXmlMoveToRangeStart|customXmlMoveToRangeEnd)\b/;
+
+/**
  * Accepts all tracked changes in a Word document per Microsoft's OpenXML SDK pattern
  *
  * This implementation uses DOM-based tree walking for reliability:
@@ -40,7 +49,14 @@ class RevisionAcceptor {
     // Process document.xml
     await this.processDocumentPart('word/document.xml');
 
-    // Process headers
+    // Process headers / footers / footnotes / endnotes / comments.
+    // Footnotes (§17.11.15), endnotes (§17.11.4), and comments (§17.13.4)
+    // can all carry block-level content including tracked changes
+    // (w:ins / w:del / pPrChange / rPrChange / moveFrom / moveTo).
+    // Previously only document.xml + headers + footers were walked,
+    // leaving footnote / endnote / comment revisions unaccepted so
+    // Word still showed the document as having pending tracked
+    // changes after `acceptAllRevisions()` returned.
     const files = this.zipHandler.getFilePaths();
     for (const file of files) {
       if (/^word\/header\d+\.xml$/.exec(file)) {
@@ -48,6 +64,14 @@ class RevisionAcceptor {
       }
       if (/^word\/footer\d+\.xml$/.exec(file)) {
         await this.processDocumentPart(file);
+      }
+    }
+    // Singleton notes / comments parts. Check presence explicitly
+    // (not all documents have them) — processDocumentPart is a no-op
+    // on missing files.
+    for (const notesPath of ['word/footnotes.xml', 'word/endnotes.xml', 'word/comments.xml']) {
+      if (this.zipHandler.getFileAsString(notesPath)) {
+        await this.processDocumentPart(notesPath);
       }
     }
 
@@ -61,10 +85,29 @@ class RevisionAcceptor {
    * Process a document part (document.xml, header, footer) to accept revisions
    */
   private async processDocumentPart(partPath: string): Promise<void> {
+    // Fast path: parts with no revision markup do not need to be re-serialised.
+    // Re-serialising a part destroys the original whitespace / formatting
+    // (XMLBuilder emits a different layout than the source), which can break
+    // byte-for-byte passthrough preservation in downstream consumers
+    // (e.g., comments.xml round-trip with no tracked changes inside).
+    const xml = this.zipHandler.getFileAsString(partPath);
+    if (!xml || !RevisionAcceptor.containsRevisionMarkup(xml)) {
+      return;
+    }
+
     if (this.useDomBasedProcessing) {
       return this.processDocumentPartDOM(partPath);
     }
     return this.processDocumentPartRegex(partPath);
+  }
+
+  /**
+   * Quick scan for any tracked-change marker. Returns false when the part
+   * carries none, allowing the acceptor to skip an unnecessary parse +
+   * re-serialise round-trip.
+   */
+  private static containsRevisionMarkup(xml: string): boolean {
+    return REVISION_MARKER_PATTERN.test(xml);
   }
 
   /**
@@ -200,23 +243,48 @@ class RevisionAcceptor {
   }
 
   /**
-   * Accept deletions - remove the entire <w:del> element including its content
+   * Accept deletions - remove the entire <w:del> element including its content.
    *
-   * Per Microsoft SDK: "DeletedRun elements should be removed along with their content"
+   * Per Microsoft SDK: "DeletedRun elements should be removed along with
+   * their content". Additionally, per ECMA-376 Part 1 §17.13.5.14, a
+   * self-closing `<w:del/>` inside `<w:trPr>` marks the entire row as a
+   * tracked deletion — accepting it must remove the entire `<w:tr>` block,
+   * not just the marker. Without that, zombie rows (the row wrapper with
+   * empty cells) persist in the document after revision acceptance.
    */
   private acceptDeletions(xml: string): string {
     let result = xml;
     let previousLength = 0;
 
-    // Iterate until no more deletions (handles nested cases)
+    // Pass A — row-level deletion: remove entire <w:tr> whose <w:trPr>
+    // contains a self-closing row-deletion marker. Constraints:
+    //   - `<w:trPr\b(?:\s[^>]*)?>` only matches the OPEN form of trPr (i.e.
+    //     rejects self-closing `<w:trPr/>`, which by definition contains
+    //     no del markers), so the match anchors on the correct row.
+    //   - negative lookahead `(?!<w:tc\b|<w:tr\b|<\/w:tr>)` between the
+    //     `<w:tr>` opening and the `<w:trPr>` prevents the match from
+    //     slipping past a cell boundary or nested-table row and latching
+    //     onto a later row's trPr-with-del.
+    const rowDelPattern =
+      /<w:tr\b[^>]*>(?:(?!<w:tc\b|<w:tr\b|<\/w:tr>)[\s\S])*?<w:trPr\b(?:\s[^>]*)?>(?:(?!<\/w:trPr>)[\s\S])*?<w:del\b[^>]*\/>(?:(?!<\/w:trPr>)[\s\S])*?<\/w:trPr>(?:(?!<w:tr\b|<\/w:tr>)[\s\S])*?<\/w:tr>/g;
+    previousLength = 0;
     while (result.length !== previousLength) {
       previousLength = result.length;
+      result = result.replace(rowDelPattern, '');
+    }
 
-      // Match complete <w:del ...>...</w:del> elements and remove entirely
+    // Pass B — wrapper deletions: iterate until no more <w:del>..</w:del>
+    // elements (handles nested cases).
+    previousLength = 0;
+    while (result.length !== previousLength) {
+      previousLength = result.length;
       result = result.replace(/<w:del\b[^>]*>[\s\S]*?<\/w:del>/g, '');
     }
 
-    // Also remove self-closing deletion tags
+    // Pass C — remove any remaining self-closing deletion markers (paragraph
+    // mark deletions inside pPr/rPr, orphans, etc.). By this point, any
+    // row-level markers have already triggered full-row removal in Pass A,
+    // so this pass only cleans up non-structural markers.
     result = result.replace(/<w:del\b[^>]*\/>/g, '');
 
     return result;

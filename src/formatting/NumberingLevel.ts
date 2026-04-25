@@ -6,6 +6,7 @@
  * alignment, and indentation.
  */
 
+import { parseOnOffAttribute } from '../utils/parsingHelpers';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder';
 
 /**
@@ -113,6 +114,54 @@ export interface NumberingLevelProperties {
 
   /** Paragraph style ID linked to this numbering level (w:pStyle per ECMA-376 §17.9.23) */
   pStyle?: string;
+
+  /**
+   * Tentative level flag (w:tentative per ECMA-376 §17.9.29).
+   * When true, the level is present in the definition but not displayed by
+   * default — Word uses this for the unused upper levels of a hybrid
+   * multilevel list so they can be offered in the list picker without
+   * polluting the visible outline. `undefined` / `false` = non-tentative.
+   */
+  tentative?: boolean;
+
+  /**
+   * Template code (w:tplc per ECMA-376 §17.9.30) — ST_ShortHexNumber.
+   * An 8-character hex string Word uses to identify the level template so
+   * that sibling list definitions across documents can recognise each
+   * other. Preserved verbatim for round-trip fidelity.
+   */
+  tplc?: string;
+
+  /**
+   * Picture bullet reference (w:lvlPicBulletId per ECMA-376 §17.9.15) —
+   * numeric ID of a `<w:numPicBullet>` definition elsewhere in
+   * numbering.xml. When set, the level renders its bullet as the linked
+   * picture. MUST be parsed and round-tripped or `removeOrphanedNumPicBullets`
+   * will treat every `<w:numPicBullet>` as unreferenced and delete them on save.
+   */
+  lvlPicBulletId?: number;
+
+  /**
+   * Legacy Word 97-style numbering state (`<w:legacy>` per ECMA-376 §17.9.10).
+   * Preserved on levels imported from documents that record legacy rendering
+   * information — losing this can shift the level's indentation and bullet/
+   * number spacing to Word's modern defaults on round-trip.
+   */
+  legacy?: LegacyNumbering;
+}
+
+/**
+ * CT_LvlLegacy (ECMA-376 §17.9.10) — carries Word 97 compatibility numbering.
+ * All three attributes are independently optional; presence of the element
+ * without any attributes is a valid placeholder Word emits in some cases.
+ */
+export interface LegacyNumbering {
+  /** w:legacy — ST_OnOff. Whether to render this level with legacy rules. */
+  legacy?: boolean;
+  /** w:legacySpace — ST_TwipsMeasure (non-negative). Space after the number. */
+  legacySpace?: number;
+  /** w:legacyIndent — ST_SignedTwipsMeasure. Indent (can be negative). */
+  legacyIndent?: number;
 }
 
 /**
@@ -120,9 +169,15 @@ export interface NumberingLevelProperties {
  */
 export class NumberingLevel {
   private properties: Required<
-    Omit<NumberingLevelProperties, 'lvlRestart' | 'underline' | 'pStyle'>
+    Omit<
+      NumberingLevelProperties,
+      'lvlRestart' | 'underline' | 'pStyle' | 'tentative' | 'tplc' | 'lvlPicBulletId' | 'legacy'
+    >
   > &
-    Pick<NumberingLevelProperties, 'lvlRestart' | 'underline' | 'pStyle'>;
+    Pick<
+      NumberingLevelProperties,
+      'lvlRestart' | 'underline' | 'pStyle' | 'tentative' | 'tplc' | 'lvlPicBulletId' | 'legacy'
+    >;
 
   /**
    * Creates a new numbering level
@@ -150,6 +205,12 @@ export class NumberingLevel {
       underline: properties.underline,
       lvlRestart: properties.lvlRestart, // undefined means default behavior (restart on level-1 change)
       pStyle: properties.pStyle,
+      // Explicit false differs from undefined only at serialization time;
+      // both collapse to "not tentative" semantically.
+      tentative: properties.tentative,
+      tplc: properties.tplc,
+      lvlPicBulletId: properties.lvlPicBulletId,
+      legacy: properties.legacy,
     };
 
     this.validate();
@@ -246,8 +307,16 @@ export class NumberingLevel {
   /**
    * Gets the level properties
    */
-  getProperties(): Required<Omit<NumberingLevelProperties, 'lvlRestart' | 'underline' | 'pStyle'>> &
-    Pick<NumberingLevelProperties, 'lvlRestart' | 'underline' | 'pStyle'> {
+  getProperties(): Required<
+    Omit<
+      NumberingLevelProperties,
+      'lvlRestart' | 'underline' | 'pStyle' | 'tentative' | 'tplc' | 'lvlPicBulletId' | 'legacy'
+    >
+  > &
+    Pick<
+      NumberingLevelProperties,
+      'lvlRestart' | 'underline' | 'pStyle' | 'tentative' | 'tplc' | 'lvlPicBulletId' | 'legacy'
+    > {
     return { ...this.properties };
   }
 
@@ -479,6 +548,34 @@ export class NumberingLevel {
     // 7. Level text (e.g., "%1." or "•")
     children.push(XMLBuilder.wSelf('lvlText', { 'w:val': this.properties.text }));
 
+    // 7a. Picture bullet reference (w:lvlPicBulletId per §17.9.15). CT_Lvl order
+    //     places this AFTER lvlText and BEFORE lvlJc. Must be emitted so that
+    //     orphan-cleanup of <w:numPicBullet> doesn't delete the referenced bullet.
+    if (this.properties.lvlPicBulletId !== undefined) {
+      children.push(
+        XMLBuilder.wSelf('lvlPicBulletId', {
+          'w:val': this.properties.lvlPicBulletId.toString(),
+        })
+      );
+    }
+
+    // 7b. Legacy numbering state (w:legacy per §17.9.10). CT_Lvl order places
+    //     this AFTER lvlPicBulletId and BEFORE lvlJc. Emit every attribute that
+    //     is explicitly set; omit when legacy is undefined entirely.
+    if (this.properties.legacy) {
+      const legacyAttrs: Record<string, string> = {};
+      if (this.properties.legacy.legacy !== undefined) {
+        legacyAttrs['w:legacy'] = this.properties.legacy.legacy ? '1' : '0';
+      }
+      if (this.properties.legacy.legacySpace !== undefined) {
+        legacyAttrs['w:legacySpace'] = this.properties.legacy.legacySpace.toString();
+      }
+      if (this.properties.legacy.legacyIndent !== undefined) {
+        legacyAttrs['w:legacyIndent'] = this.properties.legacy.legacyIndent.toString();
+      }
+      children.push(XMLBuilder.wSelf('legacy', legacyAttrs));
+    }
+
     // 8. Alignment
     children.push(XMLBuilder.wSelf('lvlJc', { 'w:val': this.properties.alignment }));
 
@@ -535,7 +632,18 @@ export class NumberingLevel {
     const rPr = XMLBuilder.w('rPr', undefined, rPrChildren);
     children.push(rPr);
 
-    return XMLBuilder.w('lvl', { 'w:ilvl': this.properties.level.toString() }, children);
+    // <w:lvl> opening attributes: w:ilvl (required), plus optional w:tplc
+    // (template code, §17.9.30) and w:tentative (§17.9.29). w:tentative and
+    // w:tplc were both silently dropped on parse before this — so neither
+    // could ever be regenerated on save.
+    const lvlAttrs: Record<string, string> = { 'w:ilvl': this.properties.level.toString() };
+    if (this.properties.tplc) {
+      lvlAttrs['w:tplc'] = this.properties.tplc;
+    }
+    if (this.properties.tentative) {
+      lvlAttrs['w:tentative'] = '1';
+    }
+    return XMLBuilder.w('lvl', lvlAttrs, children);
   }
 
   /**
@@ -887,6 +995,63 @@ export class NumberingLevel {
     }
     const level = parseInt(ilvlMatch[1], 10);
 
+    // Extract attributes from the <w:lvl> opening tag specifically. Restrict
+    // the regexes to the substring before the first `>` so they can't stray
+    // onto a child element that happens to also carry a similarly-named attr.
+    let tentative: boolean | undefined;
+    let tplc: string | undefined;
+    const lvlOpenEnd = xml.indexOf('>');
+    if (lvlOpenEnd !== -1) {
+      const lvlOpenTag = xml.substring(0, lvlOpenEnd);
+      // w:tentative per ECMA-376 §17.9.29 — ST_OnOff.
+      const tentativeMatch = /w:tentative\s*=\s*"([^"]*)"/.exec(lvlOpenTag);
+      if (tentativeMatch?.[1] !== undefined) {
+        tentative = parseOnOffAttribute(tentativeMatch[1]);
+      }
+      // w:tplc per ECMA-376 §17.9.30 — ST_ShortHexNumber (8-char hex).
+      const tplcMatch = /w:tplc\s*=\s*"([^"]*)"/.exec(lvlOpenTag);
+      if (tplcMatch?.[1]) {
+        tplc = tplcMatch[1];
+      }
+    }
+
+    // Extract w:lvlPicBulletId child element per ECMA-376 §17.9.15.
+    // Zero is a valid ID, so use explicit check instead of truthy coercion.
+    let lvlPicBulletId: number | undefined;
+    const picBulletMatch = /<w:lvlPicBulletId\s[^>]*w:val="([^"]+)"/.exec(xml);
+    if (picBulletMatch?.[1] !== undefined) {
+      const parsed = parseInt(picBulletMatch[1], 10);
+      if (!isNaN(parsed)) {
+        lvlPicBulletId = parsed;
+      }
+    }
+
+    // Extract <w:legacy> child per ECMA-376 §17.9.10. All three attributes are
+    // independently optional; the element itself may be bare (a valid Word
+    // placeholder). Presence of the tag at all means the level has legacy state
+    // the source author wanted preserved, so we must emit it back on save even
+    // if no attributes are set.
+    let legacy: LegacyNumbering | undefined;
+    const legacyMatch = /<w:legacy\b([^>]*)\/?>/.exec(xml);
+    if (legacyMatch) {
+      const attrs = legacyMatch[1] ?? '';
+      legacy = {};
+      const legacyValMatch = /\bw:legacy\s*=\s*"([^"]*)"/.exec(attrs);
+      if (legacyValMatch?.[1] !== undefined) {
+        legacy.legacy = parseOnOffAttribute(legacyValMatch[1]);
+      }
+      const spaceMatch = /\bw:legacySpace\s*=\s*"([^"]*)"/.exec(attrs);
+      if (spaceMatch?.[1] !== undefined) {
+        const parsed = parseInt(spaceMatch[1], 10);
+        if (!isNaN(parsed)) legacy.legacySpace = parsed;
+      }
+      const indentMatch = /\bw:legacyIndent\s*=\s*"([^"]*)"/.exec(attrs);
+      if (indentMatch?.[1] !== undefined) {
+        const parsed = parseInt(indentMatch[1], 10);
+        if (!isNaN(parsed)) legacy.legacyIndent = parsed;
+      }
+    }
+
     // Extract number format (required)
     const numFmtMatch = /<w:numFmt[^>]*w:val="([^"]+)"/.exec(xml);
     if (!numFmtMatch?.[1]) {
@@ -924,14 +1089,35 @@ export class NumberingLevel {
       pStyle = pStyleMatch[1];
     }
 
-    // Extract indentation from <w:pPr><w:ind>
+    // Extract w:isLgl (legal numbering style) per ECMA-376 §17.9.4 — CT_OnOff.
+    // Previously not parsed at all, so a source document's `<w:isLgl/>` was
+    // silently dropped on load and the level reverted to non-legal formatting
+    // on any round-trip through docxmlater.
+    let isLegalNumberingStyle: boolean | undefined;
+    const isLglMatch = /<w:isLgl\b([^>]*)\/?>/.exec(xml);
+    if (isLglMatch) {
+      const attrs = isLglMatch[1] ?? '';
+      const valMatch = /w:val\s*=\s*"([^"]*)"/.exec(attrs);
+      isLegalNumberingStyle = valMatch?.[1] !== undefined ? parseOnOffAttribute(valMatch[1]) : true;
+    }
+
+    // Extract indentation from <w:pPr><w:ind> per ECMA-376 §17.3.1.12
+    // CT_Ind. Both legacy LTR attrs (w:left / w:right) and bidi-aware
+    // aliases (w:start / w:end) are valid; Word commonly emits the
+    // bidi-aware form on modern documents. The previous regex read only
+    // w:left / w:hanging, losing the numbering-level indent entirely on
+    // any list authored or edited by a bidi-aware tool.
+    //
+    // The `[^>]*>` pattern (rather than `[^>]*\/>`) also captures the
+    // less-common non-self-closing form (`<w:ind …></w:ind>`).
     let leftIndent = 720 + level * 360; // default
     let hangingIndent = 360; // default
-    const indMatch = /<w:ind[^>]*\/>/.exec(xml);
+    const indMatch = /<w:ind\b[^>]*>/.exec(xml);
     if (indMatch) {
       const indElement = indMatch[0];
-      const leftMatch = /w:left="([^"]+)"/.exec(indElement);
-      const hangingMatch = /w:hanging="([^"]+)"/.exec(indElement);
+      const leftMatch =
+        /\bw:start\s*=\s*"([^"]+)"/.exec(indElement) || /\bw:left\s*=\s*"([^"]+)"/.exec(indElement);
+      const hangingMatch = /\bw:hanging\s*=\s*"([^"]+)"/.exec(indElement);
 
       if (leftMatch?.[1]) leftIndent = parseInt(leftMatch[1], 10);
       if (hangingMatch?.[1]) hangingIndent = parseInt(hangingMatch[1], 10);
@@ -980,6 +1166,11 @@ export class NumberingLevel {
       color,
       lvlRestart,
       pStyle,
+      isLegalNumberingStyle,
+      tentative,
+      tplc,
+      lvlPicBulletId,
+      legacy,
     });
   }
 }

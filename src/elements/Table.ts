@@ -11,7 +11,7 @@ import { deepClone } from '../utils/deepClone';
 import { TableGridChange } from './TableGridChange';
 import {
   TableAlignment as CommonTableAlignment,
-  BorderStyle,
+  FullBorderStyle,
   HorizontalAnchor,
   VerticalAnchor,
   HorizontalAlignment,
@@ -37,13 +37,28 @@ export type TableLayout = 'auto' | 'autofit' | 'fixed';
 
 /**
  * Table border definition (same as cell borders)
+ * Table border per ECMA-376 §17.4.66 (tblBorders) / §17.4.66 / etc.
+ * `style` accepts the full ST_Border enumeration (§17.18.2) — table
+ * borders support the 25+ multi-line / dot-dash / inset / outset
+ * variants, not just the narrow 6-value BorderStyle subset.
+ *
  * @see CommonTypes.BorderDefinition
  */
 export interface TableBorder {
-  style?: BorderStyle;
+  style?: FullBorderStyle;
   size?: number;
   space?: number; // Border spacing (padding) in points
   color?: string;
+  /** Theme color reference (ST_ThemeColor per §17.18.97) */
+  themeColor?: string;
+  /** Theme tint (2-hex-digit string) */
+  themeTint?: string;
+  /** Theme shade (2-hex-digit string) */
+  themeShade?: string;
+  /** Border casts a shadow (CT_OnOff attribute on CT_Border §17.18.2) */
+  shadow?: boolean;
+  /** Border is part of a frame around the content (CT_OnOff) */
+  frame?: boolean;
 }
 
 /**
@@ -142,11 +157,19 @@ export interface TableCellMargins {
 /**
  * Builds tblLook attributes including extended attributes (firstRow, lastRow, etc.)
  * Per ECMA-376 Part 1 §17.4.57, Word expects both w:val and the extended boolean attributes.
+ *
+ * CT_TblLook's `w:val` is `ST_ShortHexNumber` (XSD `hexBinary`, 2 bytes → 4
+ * hex digits). Normalise upstream inputs to 4 uppercase hex digits so we
+ * never emit invalid forms like `w:val="620"` (pre-existing upstream
+ * issue: XMLParser coerces purely-numeric hex strings like "0620" to the
+ * number 620, which would otherwise flow through unpadded).
  */
-function buildTblLookAttributes(hex: string): Record<string, string> {
-  const value = parseInt(hex, 16) || 0;
+function buildTblLookAttributes(hex: string | number): Record<string, string> {
+  const raw = typeof hex === 'number' ? hex.toString(16) : String(hex ?? '');
+  const normalized = raw.toUpperCase().padStart(4, '0');
+  const value = parseInt(normalized, 16) || 0;
   return {
-    'w:val': hex,
+    'w:val': normalized,
     'w:firstRow': (value & 0x0020) !== 0 ? '1' : '0',
     'w:lastRow': (value & 0x0040) !== 0 ? '1' : '0',
     'w:firstColumn': (value & 0x0080) !== 0 ? '1' : '0',
@@ -1652,9 +1675,15 @@ export class Table {
       );
     }
 
-    // 4. bidiVisual
-    if (this.formatting.bidiVisual) {
-      tblPrChildren.push(XMLBuilder.wSelf('bidiVisual'));
+    // 4. bidiVisual — OnOffOnlyType (not CT_OnOff); w:val is restricted to "on"/"off"
+    // by ST_OnOffOnly. Emit "off" for explicit false so the override-of-style
+    // distinction between "inherited" (absent) and "explicitly off" survives.
+    if (this.formatting.bidiVisual !== undefined) {
+      if (this.formatting.bidiVisual) {
+        tblPrChildren.push(XMLBuilder.wSelf('bidiVisual'));
+      } else {
+        tblPrChildren.push(XMLBuilder.wSelf('bidiVisual', { 'w:val': 'off' }));
+      }
     }
 
     // 5-6. tblStyleRowBandSize / tblStyleColBandSize
@@ -1841,9 +1870,13 @@ export class Table {
         if (prev.overlap) {
           prevTblPrChildren.push(XMLBuilder.wSelf('tblOverlap', { 'w:val': prev.overlap }));
         }
-        // 4. bidiVisual
-        if (prev.bidiVisual) {
-          prevTblPrChildren.push(XMLBuilder.wSelf('bidiVisual'));
+        // 4. bidiVisual — OnOffOnlyType; preserve explicit false inside tblPrChange
+        if (prev.bidiVisual !== undefined) {
+          if (prev.bidiVisual) {
+            prevTblPrChildren.push(XMLBuilder.wSelf('bidiVisual'));
+          } else {
+            prevTblPrChildren.push(XMLBuilder.wSelf('bidiVisual', { 'w:val': 'off' }));
+          }
         }
         // 5. tblStyleRowBandSize
         if (prev.tblStyleRowBandSize !== undefined) {
@@ -1884,17 +1917,32 @@ export class Table {
             XMLBuilder.wSelf('tblInd', { 'w:w': prev.indent, 'w:type': prev.indentType || 'dxa' })
           );
         }
-        // 11. tblBorders
+        // 11. tblBorders — CT_Border §17.18.2 requires w:val; default "nil".
+        // Full attribute set (themeColor/themeTint/themeShade/shadow/frame)
+        // preserved so tblPrChange tracked history matches modern Word output.
         if (prev.borders) {
           const borderChildren: XMLElement[] = [];
           const bNames = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'] as const;
           for (const name of bNames) {
             const b = prev.borders[name];
             if (b) {
-              const bAttrs: Record<string, string | number> = {};
-              if (b.style) bAttrs['w:val'] = b.style;
+              const bAttrs: Record<string, string | number> = { 'w:val': b.style ?? 'nil' };
               if (b.size !== undefined) bAttrs['w:sz'] = b.size;
               if (b.color) bAttrs['w:color'] = b.color;
+              const bx = b as {
+                space?: number;
+                themeColor?: string;
+                themeTint?: string;
+                themeShade?: string;
+                shadow?: boolean;
+                frame?: boolean;
+              };
+              if (bx.space !== undefined) bAttrs['w:space'] = bx.space;
+              if (bx.themeColor) bAttrs['w:themeColor'] = bx.themeColor;
+              if (bx.themeTint) bAttrs['w:themeTint'] = bx.themeTint;
+              if (bx.themeShade) bAttrs['w:themeShade'] = bx.themeShade;
+              if (bx.shadow !== undefined) bAttrs['w:shadow'] = bx.shadow ? '1' : '0';
+              if (bx.frame !== undefined) bAttrs['w:frame'] = bx.frame ? '1' : '0';
               borderChildren.push(XMLBuilder.wSelf(name, bAttrs));
             }
           }
@@ -2043,6 +2091,22 @@ export class Table {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Internal: removes a row without triggering tracking-context side effects.
+   * Used by the revision acceptor when resolving tracked row deletions —
+   * accepting a pre-existing tracked deletion must NOT create a new
+   * revision, so the usual `removeRow()` path (which wraps content in
+   * `w:del`) is unsuitable. Bypasses the "at least one row" guard because
+   * the caller is responsible for any empty-table cleanup.
+   *
+   * @internal
+   */
+  _removeRowAtIndex(index: number): boolean {
+    if (index < 0 || index >= this.rows.length) return false;
+    this.rows.splice(index, 1);
+    return true;
   }
 
   /**

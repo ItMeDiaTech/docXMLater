@@ -316,3 +316,4 @@ corruption_analysis.md
 # AI workflow files (not for public repo)
 .github/workflows/claude*.yml
 .gitignore
+.npmrc

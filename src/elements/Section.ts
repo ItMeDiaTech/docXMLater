@@ -255,6 +255,14 @@ export interface PageBorderDef {
   frame?: boolean;
   /** Theme color reference */
   themeColor?: string;
+  /**
+   * Theme tint (2-hex-digit string, ST_UcharHexNumber per §17.18.82) applied
+   * to themeColor lookup. CT_TopBorder/CT_BottomBorder extend CT_Border so
+   * inherit the full attribute set of §17.18.2.
+   */
+  themeTint?: string;
+  /** Theme shade (2-hex-digit string) applied to themeColor lookup */
+  themeShade?: string;
   /** Art border ID (for decorative borders) */
   artId?: number;
 }
@@ -366,8 +374,15 @@ export class Section {
    * @param properties Section properties
    */
   constructor(properties: SectionProperties = {}) {
-    // Set defaults only where necessary
+    // Spread the full input first so every SectionProperties field is preserved
+    // (bidi, rtlGutter, docGrid, lineNumbering, footnotePr, endnotePr, noEndnote,
+    // formProt, printerSettingsId, chapStyle, chapSep, etc.), then apply defaults
+    // only for the handful of fields that must always have a value.
+    // Before this change the constructor enumerated an allow-list and silently
+    // dropped every other SectionProperties field, corrupting round-trip fidelity
+    // for any source document using those properties.
     this.properties = {
+      ...properties,
       pageSize: properties.pageSize || {
         width: PAGE_SIZES.LETTER.width,
         height: PAGE_SIZES.LETTER.height,
@@ -387,15 +402,6 @@ export class Section {
       },
       // Default to next page section break
       type: properties.type || 'nextPage',
-      pageNumbering: properties.pageNumbering,
-      headers: properties.headers,
-      footers: properties.footers,
-      titlePage: properties.titlePage,
-      // Phase 4.5 - New properties
-      verticalAlignment: properties.verticalAlignment,
-      paperSource: properties.paperSource,
-      textDirection: properties.textDirection,
-      pageBorders: properties.pageBorders,
     };
   }
 
@@ -1127,19 +1133,22 @@ export class Section {
       children.push(XMLBuilder.wSelf('pgSz', attrs));
     }
 
-    // Margins
+    // Margins — CT_PageMar §17.6.11 declares ALL seven attributes
+    // (top/right/bottom/left/header/footer/gutter) as `use="required"`.
+    // Emit every one so output is spec-compliant for strict validators
+    // (the Open XML SDK validator is lenient here but third-party / XSD
+    // tooling is not). header/footer default to 720 twips (0.5"), and
+    // gutter to 0 (no gutter — the usual value for non-book-bound docs).
     if (this.properties.margins) {
       const attrs: Record<string, string> = {
         'w:top': this.properties.margins.top.toString(),
         'w:right': this.properties.margins.right.toString(),
         'w:bottom': this.properties.margins.bottom.toString(),
         'w:left': this.properties.margins.left.toString(),
+        'w:header': (this.properties.margins.header ?? 720).toString(),
+        'w:footer': (this.properties.margins.footer ?? 720).toString(),
+        'w:gutter': (this.properties.margins.gutter ?? 0).toString(),
       };
-      attrs['w:header'] = (this.properties.margins.header ?? 720).toString();
-      attrs['w:footer'] = (this.properties.margins.footer ?? 720).toString();
-      if (this.properties.margins.gutter !== undefined) {
-        attrs['w:gutter'] = this.properties.margins.gutter.toString();
-      }
       children.push(XMLBuilder.wSelf('pgMar', attrs));
     }
 
@@ -1167,16 +1176,21 @@ export class Section {
 
       const borderChildren: XMLElement[] = [];
       const buildBorder = (side: string, def: PageBorderDef) => {
-        const bAttrs: Record<string, string | number> = {};
-        if (def.style) bAttrs['w:val'] = def.style;
+        // CT_PageBorder §17.6.2 extends CT_Border (§17.18.2) — w:val is
+        // REQUIRED. Default to "nil" when consumer set only size/color.
+        const bAttrs: Record<string, string | number> = { 'w:val': def.style ?? 'nil' };
         // ECMA-376 Part 1 §17.18.2: sz valid range 2-96 (eighths of a point)
         if (def.size !== undefined) bAttrs['w:sz'] = Math.max(2, Math.min(96, def.size));
         if (def.color) bAttrs['w:color'] = def.color;
         // ECMA-376 Part 1 §17.18.88: space valid range 0-31680 (points)
         if (def.space !== undefined) bAttrs['w:space'] = Math.max(0, Math.min(31680, def.space));
-        if (def.shadow) bAttrs['w:shadow'] = '1';
-        if (def.frame) bAttrs['w:frame'] = '1';
+        // shadow / frame are CT_OnOff — use `!== undefined` so explicit false
+        // (w:shadow="0") round-trips without being dropped.
+        if (def.shadow !== undefined) bAttrs['w:shadow'] = def.shadow ? '1' : '0';
+        if (def.frame !== undefined) bAttrs['w:frame'] = def.frame ? '1' : '0';
         if (def.themeColor) bAttrs['w:themeColor'] = def.themeColor;
+        if (def.themeTint) bAttrs['w:themeTint'] = def.themeTint;
+        if (def.themeShade) bAttrs['w:themeShade'] = def.themeShade;
         if (def.artId !== undefined) bAttrs['w:id'] = def.artId;
         borderChildren.push(XMLBuilder.wSelf(side, bAttrs));
       };
@@ -1267,9 +1281,14 @@ export class Section {
       );
     }
 
-    // Form protection (w:formProt)
-    if (this.properties.formProt) {
-      children.push(XMLBuilder.wSelf('formProt'));
+    // Form protection (w:formProt) — CT_OnOff per §17.6.9. Preserve the
+    // explicit-false distinction on round-trip (parser already does so).
+    if (this.properties.formProt !== undefined) {
+      children.push(
+        this.properties.formProt
+          ? XMLBuilder.wSelf('formProt')
+          : XMLBuilder.wSelf('formProt', { 'w:val': '0' })
+      );
     }
 
     // Vertical alignment
@@ -1277,14 +1296,22 @@ export class Section {
       children.push(XMLBuilder.wSelf('vAlign', { 'w:val': this.properties.verticalAlignment }));
     }
 
-    // Suppress endnotes (w:noEndnote)
-    if (this.properties.noEndnote) {
-      children.push(XMLBuilder.wSelf('noEndnote'));
+    // Suppress endnotes (w:noEndnote) — CT_OnOff per §17.11.14.
+    if (this.properties.noEndnote !== undefined) {
+      children.push(
+        this.properties.noEndnote
+          ? XMLBuilder.wSelf('noEndnote')
+          : XMLBuilder.wSelf('noEndnote', { 'w:val': '0' })
+      );
     }
 
-    // Title page
-    if (this.properties.titlePage) {
-      children.push(XMLBuilder.wSelf('titlePg', { 'w:val': '1' }));
+    // Title page (w:titlePg) — CT_OnOff per §17.10.6.
+    if (this.properties.titlePage !== undefined) {
+      children.push(
+        this.properties.titlePage
+          ? XMLBuilder.wSelf('titlePg', { 'w:val': '1' })
+          : XMLBuilder.wSelf('titlePg', { 'w:val': '0' })
+      );
     }
 
     // Text direction (map to valid ST_TextDirection values per ECMA-376 §17.18.93)
@@ -1303,14 +1330,20 @@ export class Section {
       children.push(XMLBuilder.wSelf('textDirection', { 'w:val': val }));
     }
 
-    // Bidirectional section (RTL)
-    if (this.properties.bidi) {
-      children.push(XMLBuilder.wSelf('bidi'));
+    // Bidirectional section (RTL) — CT_OnOff per §17.6.3.
+    if (this.properties.bidi !== undefined) {
+      children.push(
+        this.properties.bidi ? XMLBuilder.wSelf('bidi') : XMLBuilder.wSelf('bidi', { 'w:val': '0' })
+      );
     }
 
-    // RTL gutter (gutter on right side)
-    if (this.properties.rtlGutter) {
-      children.push(XMLBuilder.wSelf('rtlGutter'));
+    // RTL gutter — CT_OnOff per §17.6.16.
+    if (this.properties.rtlGutter !== undefined) {
+      children.push(
+        this.properties.rtlGutter
+          ? XMLBuilder.wSelf('rtlGutter')
+          : XMLBuilder.wSelf('rtlGutter', { 'w:val': '0' })
+      );
     }
 
     // Document grid
@@ -1411,19 +1444,20 @@ export class Section {
           prevChildren.push(XMLBuilder.wSelf('pgSz', pgSzAttrs));
         }
         if (prev.margins) {
-          const pgMarAttrs: Record<string, string> = {};
-          if (prev.margins.top !== undefined) pgMarAttrs['w:top'] = prev.margins.top.toString();
-          if (prev.margins.bottom !== undefined)
-            pgMarAttrs['w:bottom'] = prev.margins.bottom.toString();
-          if (prev.margins.left !== undefined) pgMarAttrs['w:left'] = prev.margins.left.toString();
-          if (prev.margins.right !== undefined)
-            pgMarAttrs['w:right'] = prev.margins.right.toString();
-          if (prev.margins.header !== undefined)
-            pgMarAttrs['w:header'] = prev.margins.header.toString();
-          if (prev.margins.footer !== undefined)
-            pgMarAttrs['w:footer'] = prev.margins.footer.toString();
-          if (prev.margins.gutter !== undefined)
-            pgMarAttrs['w:gutter'] = prev.margins.gutter.toString();
+          // CT_PageMar §17.6.11 requires all 7 attributes. Supply defaults
+          // (top/right/bottom/left → 1440 twips = 1" following Word's default,
+          // header/footer → 720, gutter → 0) for any missing from the
+          // sectPrChange previous-properties snapshot so the emitted
+          // previous-state is still schema-compliant.
+          const pgMarAttrs: Record<string, string> = {
+            'w:top': (prev.margins.top ?? 1440).toString(),
+            'w:right': (prev.margins.right ?? 1440).toString(),
+            'w:bottom': (prev.margins.bottom ?? 1440).toString(),
+            'w:left': (prev.margins.left ?? 1440).toString(),
+            'w:header': (prev.margins.header ?? 720).toString(),
+            'w:footer': (prev.margins.footer ?? 720).toString(),
+            'w:gutter': (prev.margins.gutter ?? 0).toString(),
+          };
           prevChildren.push(XMLBuilder.wSelf('pgMar', pgMarAttrs));
         }
         if (prev.paperSource) {
@@ -1446,15 +1480,18 @@ export class Section {
           if (pgb.zOrder) pgbAttrs['w:zOrder'] = pgb.zOrder;
           const borderChildren: XMLElement[] = [];
           const buildPrevBorder = (side: string, def: PageBorderDef) => {
-            const bAttrs: Record<string, string | number> = {};
-            if (def.style) bAttrs['w:val'] = def.style;
+            // CT_PageBorder §17.6.2: w:val required. Default to "nil".
+            // Full CT_Border attribute set preserved for sectPrChange history.
+            const bAttrs: Record<string, string | number> = { 'w:val': def.style ?? 'nil' };
             if (def.size !== undefined) bAttrs['w:sz'] = Math.max(2, Math.min(96, def.size));
             if (def.color) bAttrs['w:color'] = def.color;
             if (def.space !== undefined)
               bAttrs['w:space'] = Math.max(0, Math.min(31680, def.space));
-            if (def.shadow) bAttrs['w:shadow'] = '1';
-            if (def.frame) bAttrs['w:frame'] = '1';
+            if (def.shadow !== undefined) bAttrs['w:shadow'] = def.shadow ? '1' : '0';
+            if (def.frame !== undefined) bAttrs['w:frame'] = def.frame ? '1' : '0';
             if (def.themeColor) bAttrs['w:themeColor'] = def.themeColor;
+            if (def.themeTint) bAttrs['w:themeTint'] = def.themeTint;
+            if (def.themeShade) bAttrs['w:themeShade'] = def.themeShade;
             if (def.artId !== undefined) bAttrs['w:id'] = def.artId;
             borderChildren.push(XMLBuilder.wSelf(side, bAttrs));
           };
@@ -1479,11 +1516,17 @@ export class Section {
             prevChildren.push(XMLBuilder.wSelf('lnNumType', lnAttrs));
           }
         }
-        if (prev.pageNumbering) {
+        if (prev.pageNumbering || prev.chapStyle !== undefined || prev.chapSep) {
+          // CT_PageNumber §17.6.12 has four attributes: fmt / start /
+          // chapStyle / chapSep. chapStyle/chapSep live on the root of
+          // SectionProperties (not inside pageNumbering) — mirror the
+          // main-sectPr emitter at line ~1215.
           const pnAttrs: Record<string, string> = {};
-          if (prev.pageNumbering.start !== undefined)
+          if (prev.pageNumbering?.start !== undefined)
             pnAttrs['w:start'] = prev.pageNumbering.start.toString();
-          if (prev.pageNumbering.format) pnAttrs['w:fmt'] = prev.pageNumbering.format;
+          if (prev.pageNumbering?.format) pnAttrs['w:fmt'] = prev.pageNumbering.format;
+          if (prev.chapStyle !== undefined) pnAttrs['w:chapStyle'] = prev.chapStyle.toString();
+          if (prev.chapSep) pnAttrs['w:chapSep'] = prev.chapSep;
           if (Object.keys(pnAttrs).length > 0) {
             prevChildren.push(XMLBuilder.wSelf('pgNumType', pnAttrs));
           }
@@ -1520,17 +1563,35 @@ export class Section {
               : XMLBuilder.wSelf('cols', colAttrs)
           );
         }
-        if (prev.formProt) {
-          prevChildren.push(XMLBuilder.wSelf('formProt'));
+        // Section-level CT_OnOff flags (formProt §17.6.9 / noEndnote
+        // §17.11.14 / titlePg §17.10.6 / bidi §17.6.1 / rtlGutter
+        // §17.6.16). The main emitter already preserves the explicit-
+        // false distinction via `!== undefined` (see §1286 formProt),
+        // but the sectPrChange emitter used a truthy gate — so a
+        // tracked change capturing a "previous state = false" (e.g.,
+        // form protection was OFF before the revision that turned it
+        // ON) silently dropped the `<w:formProt w:val="0"/>` marker on
+        // save. Parity-fix: guard on presence and emit w:val="0" for
+        // explicit false.
+        if (prev.formProt !== undefined) {
+          prevChildren.push(
+            prev.formProt
+              ? XMLBuilder.wSelf('formProt')
+              : XMLBuilder.wSelf('formProt', { 'w:val': '0' })
+          );
         }
         if (prev.verticalAlignment) {
           prevChildren.push(XMLBuilder.wSelf('vAlign', { 'w:val': prev.verticalAlignment }));
         }
-        if (prev.noEndnote) {
-          prevChildren.push(XMLBuilder.wSelf('noEndnote'));
+        if (prev.noEndnote !== undefined) {
+          prevChildren.push(
+            prev.noEndnote
+              ? XMLBuilder.wSelf('noEndnote')
+              : XMLBuilder.wSelf('noEndnote', { 'w:val': '0' })
+          );
         }
-        if (prev.titlePage) {
-          prevChildren.push(XMLBuilder.wSelf('titlePg'));
+        if (prev.titlePage !== undefined) {
+          prevChildren.push(XMLBuilder.wSelf('titlePg', { 'w:val': prev.titlePage ? '1' : '0' }));
         }
         if (prev.textDirection) {
           const tdMap: Record<string, string> = {
@@ -1549,11 +1610,17 @@ export class Section {
             })
           );
         }
-        if (prev.bidi) {
-          prevChildren.push(XMLBuilder.wSelf('bidi'));
+        if (prev.bidi !== undefined) {
+          prevChildren.push(
+            prev.bidi ? XMLBuilder.wSelf('bidi') : XMLBuilder.wSelf('bidi', { 'w:val': '0' })
+          );
         }
-        if (prev.rtlGutter) {
-          prevChildren.push(XMLBuilder.wSelf('rtlGutter'));
+        if (prev.rtlGutter !== undefined) {
+          prevChildren.push(
+            prev.rtlGutter
+              ? XMLBuilder.wSelf('rtlGutter')
+              : XMLBuilder.wSelf('rtlGutter', { 'w:val': '0' })
+          );
         }
         if (prev.docGrid) {
           const dgAttrs: Record<string, string> = {};

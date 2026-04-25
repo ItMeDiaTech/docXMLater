@@ -17,7 +17,7 @@ import {
   ShadingPattern as CommonShadingPattern,
   ShadingConfig,
   buildShadingAttributes,
-  ExtendedBorderStyle,
+  FullBorderStyle,
 } from './CommonTypes';
 import type { RunPropertyChange } from './PropertyChangeTypes';
 // Type-only import to avoid circular dependency (Revision imports Run)
@@ -51,8 +51,10 @@ export type RunContentType =
   | 'symbol' // <w:sym/> - Symbol character with font and char code
   | 'positionTab' // <w:ptab/> - Absolute position tab
   | 'embeddedObject' // <w:object> - Embedded OLE object (preserved as raw XML)
-  | 'footnoteReference' // <w:footnoteReference/> - Footnote reference marker
-  | 'endnoteReference'; // <w:endnoteReference/> - Endnote reference marker
+  | 'footnoteReference' // <w:footnoteReference/> - Footnote reference marker (body side)
+  | 'endnoteReference' // <w:endnoteReference/> - Endnote reference marker (body side)
+  | 'footnoteRef' // <w:footnoteRef/> - Auto-numbered mark INSIDE a footnote body (§17.11.14)
+  | 'endnoteRef'; // <w:endnoteRef/> - Auto-numbered mark INSIDE an endnote body (§17.11.3)
 
 /**
  * Break type for <w:br> elements
@@ -103,13 +105,26 @@ export interface RunContent {
   footnoteId?: number;
   /** Endnote ID (only for 'endnoteReference' type, w:endnoteReference w:id) */
   endnoteId?: number;
+  /**
+   * `w:customMarkFollows` — ST_OnOff attribute on footnoteReference /
+   * endnoteReference per ECMA-376 §17.11.13 / §17.11.2. When true, the
+   * auto-numbered reference mark is suppressed and a custom glyph
+   * rendered in the immediately following run becomes the display mark.
+   * Losing this on round-trip causes Word to render BOTH the automatic
+   * number AND the custom glyph (doubled mark).
+   */
+  customMarkFollows?: boolean;
 }
 
 /**
- * Border style for text
- * @see CommonTypes.ExtendedBorderStyle for the canonical definition
+ * Border style for text per ECMA-376 Part 1 §17.18.2 ST_Border.
+ * Widened from ExtendedBorderStyle (10 values) to FullBorderStyle (25+
+ * values incl. triple, dotDash/dotDotDash variants, multi-line gaps,
+ * and inset/outset effects). TextBorder is the character-level border
+ * on runs; anything ST_Border permits is spec-valid here.
+ * @see CommonTypes.FullBorderStyle for the canonical definition
  */
-export type TextBorderStyle = ExtendedBorderStyle;
+export type TextBorderStyle = FullBorderStyle;
 
 /**
  * Text border definition
@@ -123,6 +138,16 @@ export interface TextBorder {
   color?: string;
   /** Space between border and text in points */
   space?: number;
+  /** Theme color reference (ST_ThemeColor per §17.18.97) */
+  themeColor?: string;
+  /** Theme tint (2-hex-digit string) */
+  themeTint?: string;
+  /** Theme shade (2-hex-digit string) */
+  themeShade?: string;
+  /** Border casts a shadow (CT_OnOff on CT_Border §17.18.2) */
+  shadow?: boolean;
+  /** Border is part of a frame around the text (CT_OnOff) */
+  frame?: boolean;
 }
 
 /**
@@ -286,7 +311,32 @@ export interface RunFormatting {
   /** Language code (e.g., 'en-US', 'fr-FR', 'es-ES') or CT_Language object */
   language?: string | LanguageConfig;
   /** Underline text. Use "none" to explicitly override style underline. */
-  underline?: boolean | 'single' | 'double' | 'thick' | 'dotted' | 'dash' | 'none';
+  /**
+   * Underline style. `true` / `false` are shorthand for on/off with the
+   * default (single-line) style; the string literals correspond to the
+   * full ST_Underline enumeration per ECMA-376 §17.3.2.40. `'none'`
+   * explicitly overrides a style-inherited underline.
+   */
+  underline?:
+    | boolean
+    | 'single'
+    | 'words'
+    | 'double'
+    | 'thick'
+    | 'dotted'
+    | 'dottedHeavy'
+    | 'dash'
+    | 'dashedHeavy'
+    | 'dashLong'
+    | 'dashLongHeavy'
+    | 'dotDash'
+    | 'dashDotHeavy'
+    | 'dotDotDash'
+    | 'dashDotDotHeavy'
+    | 'wave'
+    | 'wavyHeavy'
+    | 'wavyDouble'
+    | 'none';
   /** Underline color in hex format (without #) per ECMA-376 Part 1 §17.3.2.40 */
   underlineColor?: string;
   /** Underline theme color reference per ECMA-376 Part 1 §17.3.2.40 */
@@ -855,7 +905,7 @@ export class Run {
    * Gets the underline style
    * @returns Underline style (string, boolean, or undefined)
    */
-  getUnderline(): boolean | 'none' | 'single' | 'double' | 'dotted' | 'thick' | 'dash' | undefined {
+  getUnderline(): RunFormatting['underline'] {
     return this.formatting.underline;
   }
 
@@ -2389,9 +2439,23 @@ export class Run {
                 }
               }
             }
-            runChildren.push(
-              XMLBuilder.w('fldChar', fldCharAttrs, [XMLBuilder.w('ffData', {}, ffDataChildren)])
-            );
+            // Only wrap in <w:ffData> when there is at least one child. CT_FFData
+            // §17.16.17.10 declares its content model as `<xsd:choice minOccurs="1">`
+            // — emitting empty `<w:ffData/>` fails strict OOXML validation with
+            // "The element has incomplete content". Falling back to the plain
+            // self-closing <w:fldChar/> path produces schema-valid output.
+            if (ffDataChildren.length > 0) {
+              runChildren.push(
+                XMLBuilder.w('fldChar', fldCharAttrs, [XMLBuilder.w('ffData', {}, ffDataChildren)])
+              );
+            } else {
+              runChildren.push(
+                XMLBuilder.wSelf(
+                  'fldChar',
+                  Object.keys(fldCharAttrs).length > 0 ? fldCharAttrs : undefined
+                )
+              );
+            }
           } else {
             runChildren.push(
               XMLBuilder.wSelf(
@@ -2448,41 +2512,83 @@ export class Run {
           runChildren.push(XMLBuilder.wSelf('yearLong'));
           break;
 
-        // Symbol character (w:sym) per ECMA-376 Part 1 §17.3.3.30
+        // Symbol character (w:sym) per ECMA-376 Part 1 §17.3.3.30. CT_Sym
+        // declares BOTH `w:font` (ST_String) and `w:char` (ST_ShortHexNumber)
+        // as REQUIRED. Emitting the element without either fails strict
+        // OOXML schema validation, so skip emission entirely when the
+        // RunContent is missing one — keeps the output schema-valid at the
+        // cost of dropping an incomplete symbol. Consumers should always
+        // set both `symbolFont` and `symbolChar` together.
         case 'symbol': {
-          const symAttrs: Record<string, string> = {};
-          if (contentElement.symbolFont) symAttrs['w:font'] = contentElement.symbolFont;
-          if (contentElement.symbolChar) symAttrs['w:char'] = contentElement.symbolChar;
-          runChildren.push(XMLBuilder.wSelf('sym', symAttrs));
+          if (!contentElement.symbolFont || !contentElement.symbolChar) break;
+          runChildren.push(
+            XMLBuilder.wSelf('sym', {
+              'w:font': contentElement.symbolFont,
+              'w:char': contentElement.symbolChar,
+            })
+          );
           break;
         }
 
-        // Absolute position tab (w:ptab) per ECMA-376 Part 1 §17.3.3.23
+        // Absolute position tab (w:ptab) per ECMA-376 Part 1 §17.3.3.23.
+        // CT_PTab declares all three of `w:alignment` / `w:relativeTo` /
+        // `w:leader` as REQUIRED attributes; omitting any fails strict
+        // OOXML schema validation. Supply the spec defaults
+        // (left / margin / none per ST_PTabAlignment, ST_PTabRelativeTo,
+        // ST_PTabLeader) whenever the corresponding field is unset.
         case 'positionTab': {
-          const ptabAttrs: Record<string, string> = {};
-          if (contentElement.ptabAlignment) ptabAttrs['w:alignment'] = contentElement.ptabAlignment;
-          if (contentElement.ptabRelativeTo)
-            ptabAttrs['w:relativeTo'] = contentElement.ptabRelativeTo;
-          if (contentElement.ptabLeader) ptabAttrs['w:leader'] = contentElement.ptabLeader;
+          const ptabAttrs: Record<string, string> = {
+            'w:alignment': contentElement.ptabAlignment ?? 'left',
+            'w:relativeTo': contentElement.ptabRelativeTo ?? 'margin',
+            'w:leader': contentElement.ptabLeader ?? 'none',
+          };
           runChildren.push(XMLBuilder.wSelf('ptab', ptabAttrs));
           break;
         }
 
-        // Footnote reference (w:footnoteReference) per ECMA-376 Part 1 §17.11.13
+        // Footnote reference (w:footnoteReference) per ECMA-376 Part 1 §17.11.13.
+        // CT_FtnEdnRef (§17.11.12) declares `w:id` as REQUIRED — skip emission
+        // entirely when it's missing to keep the output schema-valid rather
+        // than produce `<w:footnoteReference/>` with no attributes. Use
+        // `!== undefined` so id=0 (a valid explicit value) is preserved.
+        // Emit w:customMarkFollows only when explicitly true — the schema
+        // default is false, so dropping `false`/`undefined` keeps the output
+        // minimal without semantic change.
         case 'footnoteReference': {
-          const fnAttrs: Record<string, string | number> = {};
-          if (contentElement.footnoteId !== undefined) fnAttrs['w:id'] = contentElement.footnoteId;
+          if (contentElement.footnoteId === undefined) break;
+          const fnAttrs: Record<string, string | number> = {
+            'w:id': contentElement.footnoteId,
+          };
+          if (contentElement.customMarkFollows === true) fnAttrs['w:customMarkFollows'] = '1';
           runChildren.push(XMLBuilder.wSelf('footnoteReference', fnAttrs));
           break;
         }
 
-        // Endnote reference (w:endnoteReference) per ECMA-376 Part 1 §17.11.2
+        // Endnote reference (w:endnoteReference) per ECMA-376 Part 1 §17.11.2.
+        // Same CT_FtnEdnRef schema: `w:id` is REQUIRED; ST_OnOff treatment
+        // for w:customMarkFollows matches the footnote branch above.
         case 'endnoteReference': {
-          const enAttrs: Record<string, string | number> = {};
-          if (contentElement.endnoteId !== undefined) enAttrs['w:id'] = contentElement.endnoteId;
+          if (contentElement.endnoteId === undefined) break;
+          const enAttrs: Record<string, string | number> = {
+            'w:id': contentElement.endnoteId,
+          };
+          if (contentElement.customMarkFollows === true) enAttrs['w:customMarkFollows'] = '1';
           runChildren.push(XMLBuilder.wSelf('endnoteReference', enAttrs));
           break;
         }
+
+        // Footnote auto-numbered mark (w:footnoteRef) per ECMA-376 §17.11.14.
+        // Empty element with no attributes; appears INSIDE a footnote body to
+        // render the auto-generated footnote number as the displayed mark.
+        case 'footnoteRef':
+          runChildren.push(XMLBuilder.wSelf('footnoteRef'));
+          break;
+
+        // Endnote auto-numbered mark (w:endnoteRef) per ECMA-376 §17.11.3.
+        // Empty element with no attributes; appears INSIDE an endnote body.
+        case 'endnoteRef':
+          runChildren.push(XMLBuilder.wSelf('endnoteRef'));
+          break;
 
         // Embedded OLE object (w:object) - preserved as raw XML
         case 'embeddedObject':
@@ -2784,29 +2890,25 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('dstrike', { 'w:val': formatting.dstrike ? '1' : '0' }));
     }
 
-    // 11. w:outline — Outline text effect
-    if (formatting.outline) {
-      rPrChildren.push(XMLBuilder.wSelf('outline', { 'w:val': '1' }));
+    // 11–15. CT_OnOff text effects (OnOffType, accept full ST_OnOff).
+    // Emit w:val="0" for explicit false so override-of-style semantics survive
+    // round-trip, including inside rPrChange tracked history. (Previously each
+    // of these tested `if (formatting.x)` and emitted nothing for false,
+    // silently dropping the override.)
+    if (formatting.outline !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('outline', { 'w:val': formatting.outline ? '1' : '0' }));
     }
-
-    // 12. w:shadow — Shadow text effect
-    if (formatting.shadow) {
-      rPrChildren.push(XMLBuilder.wSelf('shadow', { 'w:val': '1' }));
+    if (formatting.shadow !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('shadow', { 'w:val': formatting.shadow ? '1' : '0' }));
     }
-
-    // 13. w:emboss — Emboss text effect
-    if (formatting.emboss) {
-      rPrChildren.push(XMLBuilder.wSelf('emboss', { 'w:val': '1' }));
+    if (formatting.emboss !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('emboss', { 'w:val': formatting.emboss ? '1' : '0' }));
     }
-
-    // 14. w:imprint — Imprint/engrave text effect
-    if (formatting.imprint) {
-      rPrChildren.push(XMLBuilder.wSelf('imprint', { 'w:val': '1' }));
+    if (formatting.imprint !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('imprint', { 'w:val': formatting.imprint ? '1' : '0' }));
     }
-
-    // 15. w:noProof — No proofing
-    if (formatting.noProof) {
-      rPrChildren.push(XMLBuilder.wSelf('noProof', { 'w:val': '1' }));
+    if (formatting.noProof !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('noProof', { 'w:val': formatting.noProof ? '1' : '0' }));
     }
 
     // 16. w:snapToGrid — Snap to grid
@@ -2818,14 +2920,16 @@ export class Run {
       );
     }
 
-    // 17. w:vanish — Hidden text
-    if (formatting.vanish) {
-      rPrChildren.push(XMLBuilder.wSelf('vanish', { 'w:val': '1' }));
+    // 17. w:vanish — Hidden text (CT_OnOff). Explicit false must round-trip.
+    if (formatting.vanish !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('vanish', { 'w:val': formatting.vanish ? '1' : '0' }));
     }
 
-    // 18. w:webHidden — Web hidden
-    if (formatting.webHidden) {
-      rPrChildren.push(XMLBuilder.wSelf('webHidden', { 'w:val': '1' }));
+    // 18. w:webHidden — Web hidden (CT_OnOff).
+    if (formatting.webHidden !== undefined) {
+      rPrChildren.push(
+        XMLBuilder.wSelf('webHidden', { 'w:val': formatting.webHidden ? '1' : '0' })
+      );
     }
 
     // 19. w:color — Text color
@@ -2920,17 +3024,30 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('effect', { 'w:val': formatting.effect }));
     }
 
-    // 29. w:bdr — Text border
+    // 29. w:bdr — Text (character) border per ECMA-376 §17.3.2.5. CT_Border
+    // (§17.18.2) requires `w:val`, so default to "nil" when the consumer
+    // set only size/color/space. Full CT_Border attribute set emitted
+    // (themeColor/themeTint/themeShade/shadow/frame) for themed-character-
+    // border fidelity.
     if (formatting.border) {
-      const bdrAttrs: Record<string, string | number> = {};
-      if (formatting.border.style) bdrAttrs['w:val'] = formatting.border.style;
-      if (formatting.border.size !== undefined) bdrAttrs['w:sz'] = formatting.border.size;
-      if (formatting.border.color) bdrAttrs['w:color'] = formatting.border.color;
-      if (formatting.border.space !== undefined) bdrAttrs['w:space'] = formatting.border.space;
-
-      if (Object.keys(bdrAttrs).length > 0) {
-        rPrChildren.push(XMLBuilder.wSelf('bdr', bdrAttrs));
-      }
+      const b = formatting.border;
+      const bdrAttrs: Record<string, string | number> = { 'w:val': b.style ?? 'nil' };
+      if (b.size !== undefined) bdrAttrs['w:sz'] = b.size;
+      if (b.color) bdrAttrs['w:color'] = b.color;
+      if (b.space !== undefined) bdrAttrs['w:space'] = b.space;
+      const bb = b as {
+        themeColor?: string;
+        themeTint?: string;
+        themeShade?: string;
+        shadow?: boolean;
+        frame?: boolean;
+      };
+      if (bb.themeColor) bdrAttrs['w:themeColor'] = bb.themeColor;
+      if (bb.themeTint) bdrAttrs['w:themeTint'] = bb.themeTint;
+      if (bb.themeShade) bdrAttrs['w:themeShade'] = bb.themeShade;
+      if (bb.shadow !== undefined) bdrAttrs['w:shadow'] = bb.shadow ? '1' : '0';
+      if (bb.frame !== undefined) bdrAttrs['w:frame'] = bb.frame ? '1' : '0';
+      rPrChildren.push(XMLBuilder.wSelf('bdr', bdrAttrs));
     }
 
     // 30. w:shd — Character shading
@@ -2955,14 +3072,14 @@ export class Run {
       rPrChildren.push(XMLBuilder.wSelf('vertAlign', { 'w:val': 'baseline' }));
     }
 
-    // 33. w:rtl — Right-to-left text
-    if (formatting.rtl) {
-      rPrChildren.push(XMLBuilder.wSelf('rtl', { 'w:val': '1' }));
+    // 33. w:rtl — Right-to-left text (CT_OnOff).
+    if (formatting.rtl !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('rtl', { 'w:val': formatting.rtl ? '1' : '0' }));
     }
 
-    // 34. w:cs — Complex script flag
-    if (formatting.complexScript) {
-      rPrChildren.push(XMLBuilder.wSelf('cs', { 'w:val': '1' }));
+    // 34. w:cs — Complex script flag (CT_OnOff).
+    if (formatting.complexScript !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('cs', { 'w:val': formatting.complexScript ? '1' : '0' }));
     }
 
     // 35. w:em — Emphasis marks
@@ -2985,14 +3102,22 @@ export class Run {
       }
     }
 
-    // 37. w:eastAsianLayout — East Asian layout
+    // 37. w:eastAsianLayout — East Asian layout per ECMA-376 §17.3.2.10.
+    // `w:vert` / `w:vertCompress` / `w:combine` are ST_OnOff attributes
+    // with NO spec-mandated default — preserve the explicit-false form
+    // (`w:vert="0"`) so an override of a style-inherited true round-trips
+    // intact. The parser (main + rPrChange) stores `false` when the
+    // source had `w:vert="0"`; emitting only when truthy would drop
+    // those overrides.
     if (formatting.eastAsianLayout) {
       const layout = formatting.eastAsianLayout;
       const attrs: Record<string, string | number> = {};
       if (layout.id !== undefined) attrs['w:id'] = layout.id;
-      if (layout.vert) attrs['w:vert'] = '1';
-      if (layout.vertCompress) attrs['w:vertCompress'] = '1';
-      if (layout.combine) attrs['w:combine'] = '1';
+      if (layout.vert !== undefined) attrs['w:vert'] = layout.vert ? '1' : '0';
+      if (layout.vertCompress !== undefined) {
+        attrs['w:vertCompress'] = layout.vertCompress ? '1' : '0';
+      }
+      if (layout.combine !== undefined) attrs['w:combine'] = layout.combine ? '1' : '0';
       if (layout.combineBrackets) attrs['w:combineBrackets'] = layout.combineBrackets;
 
       if (Object.keys(attrs).length > 0) {
@@ -3000,9 +3125,11 @@ export class Run {
       }
     }
 
-    // 38. w:specVanish — Special vanish
-    if (formatting.specVanish) {
-      rPrChildren.push(XMLBuilder.wSelf('specVanish', { 'w:val': '1' }));
+    // 38. w:specVanish — Special vanish (CT_OnOff).
+    if (formatting.specVanish !== undefined) {
+      rPrChildren.push(
+        XMLBuilder.wSelf('specVanish', { 'w:val': formatting.specVanish ? '1' : '0' })
+      );
     }
 
     // 39. w:oMath — (not currently generated)

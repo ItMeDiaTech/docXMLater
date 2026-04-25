@@ -61,6 +61,17 @@ export interface FieldProperties {
   preserveFormatting?: boolean;
   /** Run formatting for field result */
   formatting?: RunFormatting;
+  /**
+   * `<w:fldSimple w:fldLock="…">` — CT_OnOff per ECMA-376 §17.16.16.
+   * When true, the field is locked against automatic updates.
+   */
+  fldLock?: boolean;
+  /**
+   * `<w:fldSimple w:dirty="…">` — CT_OnOff per ECMA-376 §17.16.16.
+   * When true, the field's cached result is out of date and Word should
+   * refresh it at open-time.
+   */
+  dirty?: boolean;
 }
 
 /**
@@ -70,6 +81,8 @@ export class Field {
   private type: FieldType;
   private instruction: string;
   private formatting?: RunFormatting;
+  private fldLock?: boolean;
+  private dirty?: boolean;
 
   /**
    * Creates a new field
@@ -78,6 +91,8 @@ export class Field {
   constructor(properties: FieldProperties) {
     this.type = properties.type;
     this.formatting = properties.formatting;
+    this.fldLock = properties.fldLock;
+    this.dirty = properties.dirty;
 
     // Build field instruction
     if (properties.instruction) {
@@ -180,16 +195,35 @@ export class Field {
     if (this.formatting) {
       runChildren.push(this.createRunProperties());
     }
+    // Per ECMA-376 §22.1.2.33 CT_Text, `xml:space="preserve"` is the
+    // standard sentinel that stops XML processors from collapsing leading /
+    // trailing whitespace in the text content. Run.ts always emits it;
+    // emit it here too so field placeholders with spaces (e.g. localized
+    // date formats like "1 Jan 2026") survive XML round-trip intact.
     runChildren.push({
       name: 'w:t',
+      attributes: { 'xml:space': 'preserve' },
       children: [this.getPlaceholderText()],
     });
 
+    // CT_SimpleField (§17.16.16) carries two ST_OnOff attributes beyond
+    // the required w:instr: w:fldLock (locked against updates) and
+    // w:dirty (cached result out of date). Emit when the caller set
+    // them so Word-authored fldSimple documents round-trip their
+    // lock/dirty state instead of silently clearing it.
+    const fldSimpleAttrs: Record<string, string> = {
+      'w:instr': this.instruction,
+    };
+    if (this.fldLock !== undefined) {
+      fldSimpleAttrs['w:fldLock'] = this.fldLock ? '1' : '0';
+    }
+    if (this.dirty !== undefined) {
+      fldSimpleAttrs['w:dirty'] = this.dirty ? '1' : '0';
+    }
+
     return {
       name: 'w:fldSimple',
-      attributes: {
-        'w:instr': this.instruction,
-      },
+      attributes: fldSimpleAttrs,
       children: [
         {
           name: 'w:r',

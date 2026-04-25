@@ -16,12 +16,15 @@ import { deepClone } from '../utils/deepClone';
 export type StyleType = 'paragraph' | 'character' | 'table' | 'numbering';
 
 /**
- * Table alignment
+ * Table alignment per ECMA-376 Part 1 §17.18.45 ST_JcTable.
+ * `start` / `end` are the bidi-aware alternatives to `left` / `right`.
  */
-export type TableAlignment = 'left' | 'center' | 'right';
+export type TableAlignment = 'left' | 'center' | 'right' | 'start' | 'end';
 
 /**
- * Border properties
+ * Border properties (style-level). Mirrors `BorderDefinition` in
+ * `elements/CommonTypes.ts` — both represent CT_Border per ECMA-376
+ * §17.18.2.
  */
 export interface BorderProperties {
   /** Border style */
@@ -32,6 +35,16 @@ export interface BorderProperties {
   space?: number;
   /** Border color (hex without #) */
   color?: string;
+  /** Theme color reference (ST_ThemeColor per §17.18.97) */
+  themeColor?: string;
+  /** Theme tint (2-hex-digit string) */
+  themeTint?: string;
+  /** Theme shade (2-hex-digit string) */
+  themeShade?: string;
+  /** Border casts a shadow (CT_OnOff attribute on CT_Border) */
+  shadow?: boolean;
+  /** Border is part of a frame around the content (CT_OnOff) */
+  frame?: boolean;
 }
 
 /**
@@ -109,7 +122,11 @@ export interface TableCellStyleFormatting {
   /** Cell-specific margins */
   margins?: CellMargins;
   /** Vertical alignment in cell */
-  verticalAlignment?: 'top' | 'center' | 'bottom';
+  /**
+   * Cell vertical alignment per ECMA-376 Part 1 §17.18.101 ST_VerticalJc.
+   * `both` distributes content with equal top/bottom gaps.
+   */
+  verticalAlignment?: 'top' | 'center' | 'both' | 'bottom';
 }
 
 /**
@@ -217,6 +234,13 @@ export interface StyleProperties {
   uiPriority?: number;
   /** Semi-hidden - hide from gallery unless in use */
   semiHidden?: boolean;
+  /**
+   * Hidden - completely hide the style (stronger than semiHidden).
+   * Per ECMA-376 Part 1 §17.7.4 CT_Style, `<w:hidden>` between
+   * `autoRedefine` and `uiPriority`. OnOffOnlyType — explicit false
+   * is `w:val="off"`.
+   */
+  hidden?: boolean;
   /** Unhide when used - auto-show when applied */
   unhideWhenUsed?: boolean;
   /** Locked - prevent modification */
@@ -227,6 +251,13 @@ export interface StyleProperties {
   personalCompose?: boolean;
   /** Personal reply - style for replying to messages */
   personalReply?: boolean;
+  /**
+   * Revision-save ID for the style definition (§17.7.4 CT_Style child
+   * `<w:rsid>`, CT_LongHexNumber §17.18.50). 8-character uppercase hex
+   * string matching the session-level `w:rsid` entries in settings.xml.
+   * Schema position: between `personalReply` and `pPr` in CT_Style.
+   */
+  rsid?: string;
   /** Link - linked character/paragraph style ID */
   link?: string;
   /** Auto-redefine - update style from manual formatting */
@@ -757,9 +788,29 @@ export class Style {
       styleChildren.push(XMLBuilder.wSelf('link', { 'w:val': this.properties.link }));
     }
 
-    // Add autoRedefine
-    if (this.properties.autoRedefine) {
-      styleChildren.push(XMLBuilder.wSelf('autoRedefine'));
+    // Add autoRedefine — OnOffOnlyType per ECMA-376 §17.7.4.5; w:val is
+    // restricted to "on"/"off" by ST_OnOffOnly. Emit w:val="off" for explicit
+    // false so an override of a based-on style's autoRedefine=true survives
+    // round-trip. (w:val="0" would fail Open XML SDK schema validation.)
+    if (this.properties.autoRedefine !== undefined) {
+      if (this.properties.autoRedefine) {
+        styleChildren.push(XMLBuilder.wSelf('autoRedefine'));
+      } else {
+        styleChildren.push(XMLBuilder.wSelf('autoRedefine', { 'w:val': 'off' }));
+      }
+    }
+
+    // hidden — CT_OnOff (OnOffOnlyType) per ECMA-376 §17.7.4, positioned
+    // BETWEEN autoRedefine and uiPriority per CT_Style schema order.
+    // Completely hides the style (stronger than semiHidden). Emit
+    // w:val="off" for explicit false so an override of a based-on
+    // style's hidden=true survives round-trip.
+    if (this.properties.hidden !== undefined) {
+      if (this.properties.hidden) {
+        styleChildren.push(XMLBuilder.wSelf('hidden'));
+      } else {
+        styleChildren.push(XMLBuilder.wSelf('hidden', { 'w:val': 'off' }));
+      }
     }
 
     // Add metadata properties — ordered per ECMA-376 CT_Style
@@ -772,44 +823,79 @@ export class Style {
       );
     }
 
-    // semiHidden - Hide from recommended list
-    if (this.properties.semiHidden) {
-      styleChildren.push(XMLBuilder.wSelf('semiHidden'));
+    // semiHidden — CT_OnOff. Emit explicit false to preserve override intent.
+    if (this.properties.semiHidden !== undefined) {
+      if (this.properties.semiHidden) {
+        styleChildren.push(XMLBuilder.wSelf('semiHidden'));
+      } else {
+        styleChildren.push(XMLBuilder.wSelf('semiHidden', { 'w:val': 'off' }));
+      }
     }
 
-    // unhideWhenUsed - Auto-show when applied
-    if (this.properties.unhideWhenUsed) {
-      styleChildren.push(XMLBuilder.wSelf('unhideWhenUsed'));
+    // unhideWhenUsed — CT_OnOff.
+    if (this.properties.unhideWhenUsed !== undefined) {
+      if (this.properties.unhideWhenUsed) {
+        styleChildren.push(XMLBuilder.wSelf('unhideWhenUsed'));
+      } else {
+        styleChildren.push(XMLBuilder.wSelf('unhideWhenUsed', { 'w:val': 'off' }));
+      }
     }
 
-    // qFormat - Quick style gallery appearance
+    // qFormat — CT_OnOff. Explicit false must round-trip (override a based-on
+    // style's qFormat=true). Built-in non-custom styles default to emitting
+    // qFormat when the field is absent entirely (legacy behaviour).
     if (this.properties.qFormat !== undefined) {
       if (this.properties.qFormat) {
         styleChildren.push(XMLBuilder.wSelf('qFormat'));
+      } else {
+        styleChildren.push(XMLBuilder.wSelf('qFormat', { 'w:val': 'off' }));
       }
     } else if (!this.properties.customStyle) {
-      // Default: built-in styles have qFormat
       styleChildren.push(XMLBuilder.wSelf('qFormat'));
     }
 
-    // locked - Prevent modification
-    if (this.properties.locked) {
-      styleChildren.push(XMLBuilder.wSelf('locked'));
+    // locked — CT_OnOff.
+    if (this.properties.locked !== undefined) {
+      if (this.properties.locked) {
+        styleChildren.push(XMLBuilder.wSelf('locked'));
+      } else {
+        styleChildren.push(XMLBuilder.wSelf('locked', { 'w:val': 'off' }));
+      }
     }
 
-    // personal - User-specific style
-    if (this.properties.personal) {
-      styleChildren.push(XMLBuilder.wSelf('personal'));
+    // personal — CT_OnOff.
+    if (this.properties.personal !== undefined) {
+      if (this.properties.personal) {
+        styleChildren.push(XMLBuilder.wSelf('personal'));
+      } else {
+        styleChildren.push(XMLBuilder.wSelf('personal', { 'w:val': 'off' }));
+      }
     }
 
-    // personalCompose - Style for composing new messages
-    if (this.properties.personalCompose) {
-      styleChildren.push(XMLBuilder.wSelf('personalCompose'));
+    // personalCompose — CT_OnOff.
+    if (this.properties.personalCompose !== undefined) {
+      if (this.properties.personalCompose) {
+        styleChildren.push(XMLBuilder.wSelf('personalCompose'));
+      } else {
+        styleChildren.push(XMLBuilder.wSelf('personalCompose', { 'w:val': 'off' }));
+      }
     }
 
-    // personalReply - Style for replying to messages
-    if (this.properties.personalReply) {
-      styleChildren.push(XMLBuilder.wSelf('personalReply'));
+    // personalReply — CT_OnOff.
+    if (this.properties.personalReply !== undefined) {
+      if (this.properties.personalReply) {
+        styleChildren.push(XMLBuilder.wSelf('personalReply'));
+      } else {
+        styleChildren.push(XMLBuilder.wSelf('personalReply', { 'w:val': 'off' }));
+      }
+    }
+
+    // rsid — CT_LongHexNumber (§17.18.50) per CT_Style §17.7.4. Schema
+    // position: between personalReply (#15) and pPr (#17). Emit only when
+    // an rsid stamp was carried over from load (we never synthesize one
+    // for programmatically authored styles).
+    if (this.properties.rsid !== undefined && this.properties.rsid !== '') {
+      styleChildren.push(XMLBuilder.wSelf('rsid', { 'w:val': this.properties.rsid }));
     }
 
     // Add paragraph properties
@@ -829,23 +915,23 @@ export class Style {
           );
         }
         if (numPrChildren.length > 0) {
-          // Per CT_PPrBase, numPr is at position #7: after keepNext, keepLines, pageBreakBefore,
-          // framePr, widowControl — insert after the last of these that's present.
+          // Per CT_PPrBase, numPr is at position #7: after keepNext (#2),
+          // keepLines (#3), pageBreakBefore (#4), framePr (#5), widowControl (#6).
+          // Insert after the last of these that's present in the serialized pPr.
           const numPrEl = XMLBuilder.w('numPr', undefined, numPrChildren);
           if (pPr.children && pPr.children.length > 0) {
-            // Find insertion point: after keepNext/keepLines/pageBreakBefore (positions #2-#4)
-            // These are the only elements generateParagraphProperties() emits before numPr
+            const preNumPr = new Set([
+              'w:keepNext',
+              'w:keepLines',
+              'w:pageBreakBefore',
+              'w:framePr',
+              'w:widowControl',
+            ]);
             let insertIdx = 0;
             for (let i = 0; i < pPr.children.length; i++) {
               const child = pPr.children[i];
-              if (child && typeof child !== 'string') {
-                if (
-                  child.name === 'w:keepNext' ||
-                  child.name === 'w:keepLines' ||
-                  child.name === 'w:pageBreakBefore'
-                ) {
-                  insertIdx = i + 1;
-                }
+              if (child && typeof child !== 'string' && preNumPr.has(child.name)) {
+                insertIdx = i + 1;
               }
             }
             pPr.children.splice(insertIdx, 0, numPrEl);
@@ -916,23 +1002,169 @@ export class Style {
   private generateParagraphProperties(formatting: ParagraphFormatting): XMLElement {
     const pPrChildren: XMLElement[] = [];
 
-    // Ordered per ECMA-376 CT_PPrBase
-    if (formatting.keepNext) {
-      pPrChildren.push(XMLBuilder.wSelf('keepNext'));
-    }
-    if (formatting.keepLines) {
-      pPrChildren.push(XMLBuilder.wSelf('keepLines'));
-    }
-    if (formatting.pageBreakBefore) {
-      pPrChildren.push(XMLBuilder.wSelf('pageBreakBefore'));
+    // CT_OnOff paragraph flags use ST_OnOff. Emit bare `<w:x/>` for explicit
+    // true and `<w:x w:val="0"/>` for explicit false. Undefined means
+    // "inherit from base style" — omit the element entirely. Omitting an
+    // explicit-false value would silently revert to the inherited true,
+    // losing the user's override. Mirrors the Paragraph-level generator.
+    const emitCtOnOff = (tag: string, value: boolean | undefined): void => {
+      if (value === undefined) return;
+      pPrChildren.push(value ? XMLBuilder.wSelf(tag) : XMLBuilder.wSelf(tag, { 'w:val': '0' }));
+    };
+
+    // Children ordered per ECMA-376 CT_PPrBase schema (§17.3.1.26).
+    // Note: numPr (#7) is inserted post-hoc by the caller because it
+    // depends on `this.properties.numPr`, not `formatting`. The insertion
+    // logic searches for the last CT_PPrBase child that appears before
+    // numPr in the schema.
+
+    emitCtOnOff('keepNext', formatting.keepNext); // #2
+    emitCtOnOff('keepLines', formatting.keepLines); // #3
+    emitCtOnOff('pageBreakBefore', formatting.pageBreakBefore); // #4
+
+    // framePr (#5) — text frame properties (drop cap, floating-frame
+    // positioning) per ECMA-376 §17.3.1.11 CT_FramePr. Previously dropped on
+    // the style serializer, so a custom drop-cap paragraph style lost its
+    // frame configuration on any managed save. Mirrors the Paragraph-level
+    // serializer emission order for attribute output.
+    if (formatting.framePr) {
+      const f = formatting.framePr;
+      const attrs: Record<string, string> = {};
+      if (f.w !== undefined) attrs['w:w'] = f.w.toString();
+      if (f.h !== undefined) attrs['w:h'] = f.h.toString();
+      if (f.hRule) attrs['w:hRule'] = f.hRule;
+      if (f.x !== undefined) attrs['w:x'] = f.x.toString();
+      if (f.y !== undefined) attrs['w:y'] = f.y.toString();
+      if (f.xAlign) attrs['w:xAlign'] = f.xAlign;
+      if (f.yAlign) attrs['w:yAlign'] = f.yAlign;
+      if (f.hAnchor) attrs['w:hAnchor'] = f.hAnchor;
+      if (f.vAnchor) attrs['w:vAnchor'] = f.vAnchor;
+      if (f.hSpace !== undefined) attrs['w:hSpace'] = f.hSpace.toString();
+      if (f.vSpace !== undefined) attrs['w:vSpace'] = f.vSpace.toString();
+      if (f.wrap) attrs['w:wrap'] = f.wrap;
+      if (f.dropCap) attrs['w:dropCap'] = f.dropCap;
+      if (f.lines !== undefined) attrs['w:lines'] = f.lines.toString();
+      if (f.anchorLock !== undefined) attrs['w:anchorLock'] = f.anchorLock ? '1' : '0';
+      if (Object.keys(attrs).length > 0) {
+        pPrChildren.push(XMLBuilder.wSelf('framePr', attrs));
+      }
     }
 
-    // Add spacing
+    emitCtOnOff('widowControl', formatting.widowControl); // #6
+    // numPr (#7) inserted post-hoc by caller.
+    emitCtOnOff('suppressLineNumbers', formatting.suppressLineNumbers); // #8
+
+    // pBdr (#9) — paragraph borders (six sides: top, left, bottom, right,
+    // between, bar) per ECMA-376 §17.3.1.24. Mirrors the Paragraph-level
+    // serializer's order. Previously dropped on the style serializer even
+    // though the style parser reads borders into `formatting.borders`.
+    if (formatting.borders) {
+      const borderChildren: XMLElement[] = [];
+      const b = formatting.borders;
+      const createBorder = (
+        tag: string,
+        def:
+          | {
+              style?: string;
+              size?: number;
+              space?: number;
+              color?: string;
+              themeColor?: string;
+              themeTint?: string;
+              themeShade?: string;
+              shadow?: boolean;
+              frame?: boolean;
+            }
+          | undefined
+      ): void => {
+        if (!def) return;
+        // CT_Border §17.18.2: `w:val` (ST_Border) is REQUIRED. Default to
+        // "nil" when caller set only size/color/space so the style-level
+        // pBdr survives strict OOXML validation even for the common
+        // "turn off this inherited side" override pattern. Full attribute
+        // set (themeColor/themeTint/themeShade/shadow/frame) emitted for
+        // themed-border fidelity.
+        const attrs: Record<string, string | number> = { 'w:val': def.style ?? 'nil' };
+        if (def.size !== undefined) attrs['w:sz'] = def.size;
+        if (def.space !== undefined) attrs['w:space'] = def.space;
+        if (def.color) attrs['w:color'] = def.color;
+        if (def.themeColor) attrs['w:themeColor'] = def.themeColor;
+        if (def.themeTint) attrs['w:themeTint'] = def.themeTint;
+        if (def.themeShade) attrs['w:themeShade'] = def.themeShade;
+        if (def.shadow !== undefined) attrs['w:shadow'] = def.shadow ? '1' : '0';
+        if (def.frame !== undefined) attrs['w:frame'] = def.frame ? '1' : '0';
+        borderChildren.push(XMLBuilder.wSelf(tag, attrs));
+      };
+      // Ordered per CT_PBdr (top → left → bottom → right → between → bar).
+      createBorder('top', b.top);
+      createBorder('left', b.left);
+      createBorder('bottom', b.bottom);
+      createBorder('right', b.right);
+      createBorder('between', b.between);
+      createBorder('bar', b.bar);
+      if (borderChildren.length > 0) {
+        pPrChildren.push(XMLBuilder.w('pBdr', undefined, borderChildren));
+      }
+    }
+
+    // shd (#10) — paragraph shading. Previously dropped on the style
+    // serializer; the parser reads it into `formatting.shading` already.
+    if (formatting.shading) {
+      const shdAttrs = buildShadingAttributes(formatting.shading);
+      if (Object.keys(shdAttrs).length > 0) {
+        pPrChildren.push(XMLBuilder.wSelf('shd', shdAttrs));
+      }
+    }
+
+    // tabs (#11) — paragraph tab stops per ECMA-376 §17.3.1.38 / CT_TabStop
+    // §17.3.1.37. BOTH `w:val` (ST_TabJc) and `w:pos` (ST_SignedTwipsMeasure)
+    // are REQUIRED. Default `w:val` to "left" so consumers setting only
+    // position produce validator-clean output.
+    if (formatting.tabs && formatting.tabs.length > 0) {
+      const tabChildren: XMLElement[] = [];
+      for (const tab of formatting.tabs) {
+        const attrs: Record<string, string | number> = {
+          'w:val': tab.val ?? 'left',
+          'w:pos': tab.position,
+        };
+        if (tab.leader) attrs['w:leader'] = tab.leader;
+        tabChildren.push(XMLBuilder.wSelf('tab', attrs));
+      }
+      if (tabChildren.length > 0) {
+        pPrChildren.push(XMLBuilder.w('tabs', undefined, tabChildren));
+      }
+    }
+
+    emitCtOnOff('suppressAutoHyphens', formatting.suppressAutoHyphens); // #12
+    emitCtOnOff('kinsoku', formatting.kinsoku); // #13
+    emitCtOnOff('wordWrap', formatting.wordWrap); // #14
+    emitCtOnOff('overflowPunct', formatting.overflowPunct); // #15
+    emitCtOnOff('topLinePunct', formatting.topLinePunct); // #16
+    emitCtOnOff('autoSpaceDE', formatting.autoSpaceDE); // #17
+    emitCtOnOff('autoSpaceDN', formatting.autoSpaceDN); // #18
+    emitCtOnOff('bidi', formatting.bidi); // #19
+    emitCtOnOff('adjustRightInd', formatting.adjustRightInd); // #20
+    // snapToGrid (#21) is a run property, not paragraph.
+
+    // Add spacing — full CT_Spacing attribute coverage per ECMA-376 §17.3.1.33.
+    // Previously emitted only w:before / w:after / w:line / w:lineRule; the
+    // four line-unit / auto-spacing attributes (beforeLines, afterLines,
+    // beforeAutospacing, afterAutospacing) were silently dropped on save
+    // even though the parser already read them correctly, creating a
+    // parser/generator asymmetry for CJK-authored styles.
     if (formatting.spacing) {
       const spc = formatting.spacing;
       const attributes: Record<string, number | string> = {};
       if (spc.before !== undefined) attributes['w:before'] = spc.before;
+      if (spc.beforeLines !== undefined) attributes['w:beforeLines'] = spc.beforeLines;
+      if (spc.beforeAutospacing !== undefined) {
+        attributes['w:beforeAutospacing'] = spc.beforeAutospacing ? '1' : '0';
+      }
       if (spc.after !== undefined) attributes['w:after'] = spc.after;
+      if (spc.afterLines !== undefined) attributes['w:afterLines'] = spc.afterLines;
+      if (spc.afterAutospacing !== undefined) {
+        attributes['w:afterAutospacing'] = spc.afterAutospacing ? '1' : '0';
+      }
       if (spc.line !== undefined) attributes['w:line'] = spc.line;
       if (spc.lineRule) attributes['w:lineRule'] = spc.lineRule;
       if (Object.keys(attributes).length > 0) {
@@ -940,30 +1172,63 @@ export class Style {
       }
     }
 
-    // Add indentation
+    // Add indentation — twips + CJK character-unit variants per ECMA-376
+    // §17.3.1.12. hanging / firstLine are mutually exclusive; same for
+    // hangingChars / firstLineChars. When both are set we emit hanging
+    // (matching the Paragraph-level generator's precedence).
     if (formatting.indentation) {
       const ind = formatting.indentation;
       const attributes: Record<string, number> = {};
       if (ind.left !== undefined) attributes['w:left'] = ind.left;
       if (ind.right !== undefined) attributes['w:right'] = ind.right;
-      if (ind.firstLine !== undefined) attributes['w:firstLine'] = ind.firstLine;
-      if (ind.hanging !== undefined) attributes['w:hanging'] = ind.hanging;
+      if (ind.hanging !== undefined) {
+        attributes['w:hanging'] = ind.hanging;
+      } else if (ind.firstLine !== undefined) {
+        attributes['w:firstLine'] = ind.firstLine;
+      }
+      if (ind.leftChars !== undefined) attributes['w:leftChars'] = ind.leftChars;
+      if (ind.rightChars !== undefined) attributes['w:rightChars'] = ind.rightChars;
+      if (ind.hangingChars !== undefined) {
+        attributes['w:hangingChars'] = ind.hangingChars;
+      } else if (ind.firstLineChars !== undefined) {
+        attributes['w:firstLineChars'] = ind.firstLineChars;
+      }
       if (Object.keys(attributes).length > 0) {
         pPrChildren.push(XMLBuilder.wSelf('ind', attributes));
       }
     }
 
     // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
-    // Removes spacing between paragraphs of the same style
-    if (formatting.contextualSpacing) {
-      pPrChildren.push(XMLBuilder.wSelf('contextualSpacing', { 'w:val': '1' }));
-    }
+    // Removes spacing between paragraphs of the same style.
+    // Position #24 in CT_PPrBase — after ind, before mirrorIndents.
+    emitCtOnOff('contextualSpacing', formatting.contextualSpacing);
 
-    // Add alignment
+    emitCtOnOff('mirrorIndents', formatting.mirrorIndents); // #25
+    emitCtOnOff('suppressOverlap', formatting.suppressOverlap); // #26
+
+    // Add alignment (jc, CT_PPrBase #27)
     if (formatting.alignment) {
       // Map 'justify' to 'both' per ECMA-376 (Word uses 'both' for justified text)
       const alignmentValue = formatting.alignment === 'justify' ? 'both' : formatting.alignment;
       pPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': alignmentValue }));
+    }
+
+    // textDirection / textAlignment / textboxTightWrap per CT_PPrBase
+    // positions #28-#30. Previously dropped on the style serializer even
+    // though the Paragraph-level generator and the style parser handle
+    // them — a paragraph style that set any of these (e.g. `textDirection:
+    // "tbRl"` for vertical CJK flow) lost the override on any programmatic
+    // save that bypassed raw XML passthrough.
+    if (formatting.textDirection) {
+      pPrChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': formatting.textDirection }));
+    }
+    if (formatting.textAlignment) {
+      pPrChildren.push(XMLBuilder.wSelf('textAlignment', { 'w:val': formatting.textAlignment }));
+    }
+    if (formatting.textboxTightWrap) {
+      pPrChildren.push(
+        XMLBuilder.wSelf('textboxTightWrap', { 'w:val': formatting.textboxTightWrap })
+      );
     }
 
     // Add outline level for TOC support (Heading 1 = 0, Heading 2 = 1, etc.)
@@ -971,6 +1236,18 @@ export class Style {
       pPrChildren.push(
         XMLBuilder.wSelf('outlineLvl', { 'w:val': formatting.outlineLevel.toString() })
       );
+    }
+
+    // CT_PPrBase #32 divId (§17.3.1.10) — HTML div association. Numeric.
+    // Previously never emitted on styles; the parser also used to drop it.
+    if (formatting.divId !== undefined) {
+      pPrChildren.push(XMLBuilder.wSelf('divId', { 'w:val': formatting.divId.toString() }));
+    }
+
+    // CT_PPrBase #33 cnfStyle (§17.3.1.8) — conditional formatting bitmask.
+    // Positioned last per schema, after divId and outlineLvl.
+    if (formatting.cnfStyle) {
+      pPrChildren.push(XMLBuilder.wSelf('cnfStyle', { 'w:val': formatting.cnfStyle }));
     }
 
     return XMLBuilder.w('pPr', undefined, pPrChildren);
@@ -1257,42 +1534,61 @@ export class Style {
     for (const prop of borderProps) {
       const border = borders[prop];
       if (border) {
-        const attrs: Record<string, string | number> = {};
-        if (border.style) attrs['w:val'] = border.style;
+        // CT_Border §17.18.2: w:val required. Default to "nil" so size/color-
+        // only borders in style-level tblBorders/tcBorders still validate.
+        // Emit full CT_Border attribute set for themed-border fidelity.
+        const attrs: Record<string, string | number> = { 'w:val': border.style ?? 'nil' };
         if (border.size !== undefined) attrs['w:sz'] = border.size;
         if (border.space !== undefined) attrs['w:space'] = border.space;
         if (border.color) attrs['w:color'] = border.color;
-
-        if (Object.keys(attrs).length > 0) {
-          borderElements.push(XMLBuilder.wSelf(prop, attrs));
-        }
+        const b = border as {
+          themeColor?: string;
+          themeTint?: string;
+          themeShade?: string;
+          shadow?: boolean;
+          frame?: boolean;
+        };
+        if (b.themeColor) attrs['w:themeColor'] = b.themeColor;
+        if (b.themeTint) attrs['w:themeTint'] = b.themeTint;
+        if (b.themeShade) attrs['w:themeShade'] = b.themeShade;
+        if (b.shadow !== undefined) attrs['w:shadow'] = b.shadow ? '1' : '0';
+        if (b.frame !== undefined) attrs['w:frame'] = b.frame ? '1' : '0';
+        borderElements.push(XMLBuilder.wSelf(prop, attrs));
       }
     }
 
-    // Add diagonal borders for cells
+    // Add diagonal borders for cells. CT_Border §17.18.2 requires w:val;
+    // default "nil" matches the other cell-border paths. Full CT_Border
+    // attribute set emitted.
+    const buildDiagonalAttrs = (b: {
+      style?: string;
+      size?: number;
+      space?: number;
+      color?: string;
+      themeColor?: string;
+      themeTint?: string;
+      themeShade?: string;
+      shadow?: boolean;
+      frame?: boolean;
+    }): Record<string, string | number> => {
+      const attrs: Record<string, string | number> = { 'w:val': b.style ?? 'nil' };
+      if (b.size !== undefined) attrs['w:sz'] = b.size;
+      if (b.space !== undefined) attrs['w:space'] = b.space;
+      if (b.color) attrs['w:color'] = b.color;
+      if (b.themeColor) attrs['w:themeColor'] = b.themeColor;
+      if (b.themeTint) attrs['w:themeTint'] = b.themeTint;
+      if (b.themeShade) attrs['w:themeShade'] = b.themeShade;
+      if (b.shadow !== undefined) attrs['w:shadow'] = b.shadow ? '1' : '0';
+      if (b.frame !== undefined) attrs['w:frame'] = b.frame ? '1' : '0';
+      return attrs;
+    };
     if (includeDiagonals) {
       const cellBorders = borders as CellBorders;
       if (cellBorders.tl2br) {
-        const attrs: Record<string, string | number> = {};
-        if (cellBorders.tl2br.style) attrs['w:val'] = cellBorders.tl2br.style;
-        if (cellBorders.tl2br.size !== undefined) attrs['w:sz'] = cellBorders.tl2br.size;
-        if (cellBorders.tl2br.space !== undefined) attrs['w:space'] = cellBorders.tl2br.space;
-        if (cellBorders.tl2br.color) attrs['w:color'] = cellBorders.tl2br.color;
-
-        if (Object.keys(attrs).length > 0) {
-          borderElements.push(XMLBuilder.wSelf('tl2br', attrs));
-        }
+        borderElements.push(XMLBuilder.wSelf('tl2br', buildDiagonalAttrs(cellBorders.tl2br)));
       }
       if (cellBorders.tr2bl) {
-        const attrs: Record<string, string | number> = {};
-        if (cellBorders.tr2bl.style) attrs['w:val'] = cellBorders.tr2bl.style;
-        if (cellBorders.tr2bl.size !== undefined) attrs['w:sz'] = cellBorders.tr2bl.size;
-        if (cellBorders.tr2bl.space !== undefined) attrs['w:space'] = cellBorders.tr2bl.space;
-        if (cellBorders.tr2bl.color) attrs['w:color'] = cellBorders.tr2bl.color;
-
-        if (Object.keys(attrs).length > 0) {
-          borderElements.push(XMLBuilder.wSelf('tr2bl', attrs));
-        }
+        borderElements.push(XMLBuilder.wSelf('tr2bl', buildDiagonalAttrs(cellBorders.tr2bl)));
       }
     }
 

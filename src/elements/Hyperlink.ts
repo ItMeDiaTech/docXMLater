@@ -1208,8 +1208,12 @@ export class Hyperlink {
       attributes['w:tgtFrame'] = this.tgtFrame;
     }
 
-    // History tracking attribute
-    if (this.history) {
+    // History tracking attribute (CT_OnOff per ECMA-376 §17.16.22).
+    // Use `!== undefined` rather than a truthy check so explicit "0" /
+    // "false" / "off" overrides survive round-trip — the parser
+    // normalises to "1"/"0", but external callers may still set any
+    // ST_OnOff literal.
+    if (this.history !== undefined) {
       attributes['w:history'] = this.history;
     }
 

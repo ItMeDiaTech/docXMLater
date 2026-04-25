@@ -26,6 +26,13 @@ export type RangeMarkerType =
   | 'customXmlDelRangeEnd';
 
 /**
+ * `w:displacedByCustomXml` attribute value per ECMA-376 §17.13.5 — ST_DisplacedByCustomXml.
+ * Indicates which side of a custom-XML boundary a displaced range marker
+ * semantically belongs to.
+ */
+export type DisplacedByCustomXml = 'next' | 'prev';
+
+/**
  * Range marker properties
  */
 export interface RangeMarkerProperties {
@@ -39,6 +46,26 @@ export interface RangeMarkerProperties {
   author?: string;
   /** Date when the change was made (for start markers only) */
   date?: Date;
+  /**
+   * `w:displacedByCustomXml` per ECMA-376 CT_MarkupRange / CT_MoveBookmark.
+   * Only valid on moveFromRangeStart, moveToRangeStart, moveFromRangeEnd,
+   * and moveToRangeEnd (the CT_MarkupRange-derived marker types).
+   * Ignored on serialize for other types. "next" / "prev".
+   */
+  displacedByCustomXml?: DisplacedByCustomXml;
+  /**
+   * `w:colFirst` per ECMA-376 CT_BookmarkRange — first column index for
+   * table-column-scoped moves. Only valid on moveFromRangeStart /
+   * moveToRangeStart (CT_MoveBookmark-derived). Ignored on serialize for
+   * other types. 0-based, inclusive.
+   */
+  colFirst?: number;
+  /**
+   * `w:colLast` per ECMA-376 CT_BookmarkRange — last column index for
+   * table-column-scoped moves. Only valid on moveFromRangeStart /
+   * moveToRangeStart. 0-based, inclusive.
+   */
+  colLast?: number;
 }
 
 /**
@@ -51,6 +78,9 @@ export class RangeMarker {
   private name?: string;
   private author?: string;
   private date?: Date;
+  private displacedByCustomXml?: DisplacedByCustomXml;
+  private colFirst?: number;
+  private colLast?: number;
 
   /**
    * Creates a new RangeMarker
@@ -62,6 +92,9 @@ export class RangeMarker {
     this.name = properties.name;
     this.author = properties.author;
     this.date = properties.date;
+    this.displacedByCustomXml = properties.displacedByCustomXml;
+    this.colFirst = properties.colFirst;
+    this.colLast = properties.colLast;
   }
 
   /**
@@ -105,6 +138,30 @@ export class RangeMarker {
    */
   getDate(): Date | undefined {
     return this.date;
+  }
+
+  /**
+   * Gets the w:displacedByCustomXml attribute value. Only meaningful on
+   * moveFrom/moveTo range start/end markers; undefined on all other types.
+   */
+  getDisplacedByCustomXml(): DisplacedByCustomXml | undefined {
+    return this.displacedByCustomXml;
+  }
+
+  /**
+   * Gets the w:colFirst column index. Only meaningful on CT_MoveBookmark-
+   * derived start markers; undefined otherwise.
+   */
+  getColFirst(): number | undefined {
+    return this.colFirst;
+  }
+
+  /**
+   * Gets the w:colLast column index. Only meaningful on CT_MoveBookmark-
+   * derived start markers; undefined otherwise.
+   */
+  getColLast(): number | undefined {
+    return this.colLast;
   }
 
   /**
@@ -164,24 +221,108 @@ export class RangeMarker {
   }
 
   /**
-   * Generates XML for this range marker
-   * @returns XMLElement representing the range marker
+   * Returns true for marker types whose OOXML schema base is CT_MoveBookmark
+   * (ECMA-376 §17.13.5.15 / 19). Only these carry a w:name attribute.
+   * moveFromRangeEnd/moveToRangeEnd derive from CT_MarkupRange, and all
+   * customXml* markers derive from CT_TrackChange or CT_Markup — none of
+   * those have w:name in the schema, so emitting it produces invalid XML
+   * that fails Open XML SDK validation.
+   */
+  private supportsName(): boolean {
+    return this.type === 'moveFromRangeStart' || this.type === 'moveToRangeStart';
+  }
+
+  /**
+   * Returns true for marker types derived from CT_MarkupRange, which are the
+   * only ones whose schema permits `w:displacedByCustomXml` (ECMA-376 §17.13.5).
+   * customXml* markers (CT_TrackChange / CT_Markup) do NOT have this attribute,
+   * so emitting it there would fail schema validation.
+   */
+  private supportsDisplacedByCustomXml(): boolean {
+    return (
+      this.type === 'moveFromRangeStart' ||
+      this.type === 'moveToRangeStart' ||
+      this.type === 'moveFromRangeEnd' ||
+      this.type === 'moveToRangeEnd'
+    );
+  }
+
+  /**
+   * Returns true for marker types derived from CT_BookmarkRange, the only
+   * ones whose schema permits `w:colFirst` / `w:colLast` (ECMA-376 §17.13.5).
+   * The end markers and customXml* markers do NOT have these attributes.
+   */
+  private supportsColumnRange(): boolean {
+    return this.type === 'moveFromRangeStart' || this.type === 'moveToRangeStart';
+  }
+
+  /**
+   * Generates XML for this range marker.
+   *
+   * Required-attribute compliance per ECMA-376:
+   *   - moveFromRangeStart / moveToRangeStart (CT_MoveBookmark §17.13.5.24):
+   *     REQUIRE w:id, w:author, w:date, w:name. If any is missing, supply a
+   *     sentinel default so the emitted XML stays schema-valid:
+   *       - author → "Unknown"     (matches CT_TrackChange fallback elsewhere)
+   *       - date   → new Date()    (best-effort; the revision couldn't be
+   *                                 recorded without any time information)
+   *       - name   → "_move_${id}" (synthesized link name; both halves of a
+   *                                 move operation must use the same name,
+   *                                 so construct it deterministically from
+   *                                 the id)
+   *   - customXml*RangeStart (CT_TrackChangeRange §17.13.5.5): REQUIRE
+   *     w:id, w:author, w:date. Same defaults for author/date.
+   *   - End markers (CT_MarkupRange §17.13.5.4): only w:id required.
+   *
+   * Defaults are preferred over throwing or returning null because they
+   * keep the surrounding tracked-change context intact and leave the
+   * document openable. Factory methods (`createMoveFromStart`, etc.)
+   * already enforce the required fields at construction, so the defaults
+   * only fire when a caller directly invokes the public constructor with
+   * incomplete properties.
+   *
+   * @returns XMLElement representing the range marker.
    */
   toXML(): XMLElement {
     const attributes: Record<string, string> = {
       'w:id': this.id.toString(),
     };
 
-    // Add name attribute for move operations
-    if (this.name) {
-      attributes['w:name'] = this.name;
+    const isStart = this.isStartMarker();
+    const isMoveBookmark = this.supportsName();
+
+    // Emit w:name only on CT_MoveBookmark-derived elements (moveFromRangeStart /
+    // moveToRangeStart). CT_MoveBookmark requires w:name (§17.13.5.24); supply a
+    // synthesized fallback if the caller constructed the marker without one.
+    // Other range markers — customXml*Range* (CT_TrackChange / CT_Markup) and
+    // moveFrom/ToRangeEnd (CT_MarkupRange) — have no w:name in their schema.
+    if (isMoveBookmark) {
+      attributes['w:name'] = this.name || `_move_${this.id}`;
     }
 
-    // Add author and date for start markers
-    if (this.isStartMarker() && this.author) {
-      attributes['w:author'] = this.author;
-      if (this.date) {
-        attributes['w:date'] = this.formatDate(this.date);
+    // Author and date are required on both CT_MoveBookmark and CT_TrackChange
+    // start markers. Supply defaults if missing so the emission stays valid.
+    if (isStart) {
+      attributes['w:author'] = this.author || 'Unknown';
+      attributes['w:date'] = this.formatDate(this.date ?? new Date());
+    }
+
+    // Emit w:displacedByCustomXml only on CT_MarkupRange-derived types
+    // (move*RangeStart / move*RangeEnd). On CT_TrackChange and CT_Markup
+    // elements the attribute is not defined by the schema.
+    if (this.displacedByCustomXml && this.supportsDisplacedByCustomXml()) {
+      attributes['w:displacedByCustomXml'] = this.displacedByCustomXml;
+    }
+
+    // Emit w:colFirst / w:colLast only on CT_BookmarkRange-derived start
+    // markers (moveFromRangeStart / moveToRangeStart). Explicit-undefined
+    // check so valid column index 0 is not dropped.
+    if (this.supportsColumnRange()) {
+      if (this.colFirst !== undefined) {
+        attributes['w:colFirst'] = this.colFirst.toString();
+      }
+      if (this.colLast !== undefined) {
+        attributes['w:colLast'] = this.colLast.toString();
       }
     }
 

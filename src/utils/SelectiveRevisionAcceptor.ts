@@ -62,23 +62,9 @@ export class SelectiveRevisionAcceptor {
     const hasFullApi = typeof (doc as any).getAllParagraphs === 'function';
 
     if (hasFullApi) {
-      // Full in-memory DOM transformation
-      const paragraphs = (doc as any).getAllParagraphs();
-      for (const paragraph of paragraphs) {
+      this.walkAllParagraphs(doc, (paragraph) => {
         this.processSelectiveParagraph(paragraph, criteria, 'accept', accepted, remaining);
-      }
-
-      // Process paragraphs in tables
-      const tables = (doc as any).getTables();
-      for (const table of tables) {
-        for (const row of table.getRows()) {
-          for (const cell of row.getCells()) {
-            for (const paragraph of cell.getParagraphs()) {
-              this.processSelectiveParagraph(paragraph, criteria, 'accept', accepted, remaining);
-            }
-          }
-        }
-      }
+      });
     } else {
       // Fallback: Filter revisions from RevisionManager only (for backward compatibility)
       const revisionManager = doc.getRevisionManager();
@@ -136,23 +122,9 @@ export class SelectiveRevisionAcceptor {
     const hasFullApi = typeof (doc as any).getAllParagraphs === 'function';
 
     if (hasFullApi) {
-      // Full in-memory DOM transformation
-      const paragraphs = (doc as any).getAllParagraphs();
-      for (const paragraph of paragraphs) {
+      this.walkAllParagraphs(doc, (paragraph) => {
         this.processSelectiveParagraph(paragraph, criteria, 'reject', rejected, remaining);
-      }
-
-      // Process paragraphs in tables
-      const tables = (doc as any).getTables();
-      for (const table of tables) {
-        for (const row of table.getRows()) {
-          for (const cell of row.getCells()) {
-            for (const paragraph of cell.getParagraphs()) {
-              this.processSelectiveParagraph(paragraph, criteria, 'reject', rejected, remaining);
-            }
-          }
-        }
-      }
+      });
     } else {
       // Fallback: Filter revisions from RevisionManager only (for backward compatibility)
       const revisionManager = doc.getRevisionManager();
@@ -187,6 +159,93 @@ export class SelectiveRevisionAcceptor {
         remainingCount: remaining.length,
       },
     };
+  }
+
+  /**
+   * Walk every paragraph that can carry tracked-change content per
+   * ECMA-376: body, tables (recursively), headers, footers, footnotes,
+   * and endnotes. Mirrors the in-memory acceptor traversal so
+   * selective accept / reject covers the same surface as
+   * `acceptRevisionsInMemory`. Comments are deliberately excluded —
+   * `Comment` stores `Run[]` rather than `Paragraph[]`, so revisions
+   * are never represented in the in-memory model and must be cleaned
+   * via the raw-XML path on load.
+   */
+  private static walkAllParagraphs(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    doc: any,
+    visit: (paragraph: Paragraph) => void
+  ): void {
+    // Body paragraphs
+    for (const paragraph of doc.getAllParagraphs()) {
+      visit(paragraph);
+    }
+
+    // Tables (body-level)
+    for (const table of doc.getTables()) {
+      for (const row of table.getRows()) {
+        for (const cell of row.getCells()) {
+          for (const paragraph of cell.getParagraphs()) {
+            visit(paragraph);
+          }
+        }
+      }
+    }
+
+    // Headers and footers
+    const hfManager = doc.getHeaderFooterManager?.();
+    if (hfManager) {
+      for (const headerEntry of hfManager.getAllHeaders()) {
+        for (const element of headerEntry.header.getElements()) {
+          if (typeof element.getContent === 'function' && typeof element.getRuns === 'function') {
+            // Paragraph
+            visit(element);
+          } else if (typeof element.getRows === 'function') {
+            // Table
+            for (const row of element.getRows()) {
+              for (const cell of row.getCells()) {
+                for (const paragraph of cell.getParagraphs()) {
+                  visit(paragraph);
+                }
+              }
+            }
+          }
+        }
+      }
+      for (const footerEntry of hfManager.getAllFooters()) {
+        for (const element of footerEntry.footer.getElements()) {
+          if (typeof element.getContent === 'function' && typeof element.getRuns === 'function') {
+            visit(element);
+          } else if (typeof element.getRows === 'function') {
+            for (const row of element.getRows()) {
+              for (const cell of row.getCells()) {
+                for (const paragraph of cell.getParagraphs()) {
+                  visit(paragraph);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Footnotes and endnotes
+    const footnoteManager = doc.getFootnoteManager?.();
+    if (footnoteManager) {
+      for (const fn of footnoteManager.getAllFootnotes()) {
+        for (const paragraph of fn.getParagraphs()) {
+          visit(paragraph);
+        }
+      }
+    }
+    const endnoteManager = doc.getEndnoteManager?.();
+    if (endnoteManager) {
+      for (const en of endnoteManager.getAllEndnotes()) {
+        for (const paragraph of en.getParagraphs()) {
+          visit(paragraph);
+        }
+      }
+    }
   }
 
   /**

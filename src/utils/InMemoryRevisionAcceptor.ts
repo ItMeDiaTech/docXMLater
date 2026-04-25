@@ -240,6 +240,31 @@ export function acceptRevisionsInMemory(
       result.propertyChangesAccepted++;
     }
 
+    // Row-level tracked ins / del (CT_TrPr: w:ins / w:del per ECMA-376
+    // §17.13.5.19 / §17.13.5.14) — these mark the ENTIRE row as a tracked
+    // insertion or deletion. Previously the acceptor only cleared the
+    // tcPrChange / trPrChange / cellRevision metadata and silently ignored
+    // row-level markers, so deleted rows persisted and inserted rows kept
+    // their pending state. Collect deletion indices up front so we can
+    // splice them out after iteration (reverse order to keep indices stable).
+    const rowsToRemove: number[] = [];
+    const allRows = table.getRows();
+    for (let rowIdx = 0; rowIdx < allRows.length; rowIdx++) {
+      const row = allRows[rowIdx]!;
+      const fmt = row.getFormatting();
+      if (fmt.rowInsertion && opts.acceptInsertions) {
+        row.setRowInsertion(undefined);
+        result.insertionsAccepted++;
+      }
+      if (fmt.rowDeletion && opts.acceptDeletions) {
+        rowsToRemove.push(rowIdx);
+        result.deletionsAccepted++;
+      }
+    }
+    for (let i = rowsToRemove.length - 1; i >= 0; i--) {
+      table._removeRowAtIndex(rowsToRemove[i]!);
+    }
+
     for (const row of table.getRows()) {
       // Clear trPrChange on row
       if (opts.acceptPropertyChanges && row.getTrPrChange()) {
@@ -254,10 +279,28 @@ export function acceptRevisionsInMemory(
           result.propertyChangesAccepted++;
         }
 
-        // Clear cell structural revision markers (cellIns/cellDel/cellMerge)
-        if (opts.acceptPropertyChanges && cell.getCellRevision()) {
-          cell.clearCellRevision();
-          result.propertyChangesAccepted++;
+        // Route cellIns / cellDel / cellMerge by their semantic revision type
+        // (per ECMA-376 §17.13.5.4-6). Previously all three were lumped under
+        // `acceptPropertyChanges`, which meant `{ acceptInsertions: true }`
+        // alone never cleared a cellIns marker, and `{ acceptPropertyChanges:
+        // true }` alone cleared everything including insertions. Correct
+        // mapping:
+        //   - tableCellInsert (w:cellIns)   → acceptInsertions
+        //   - tableCellDelete (w:cellDel)   → acceptDeletions
+        //   - tableCellMerge  (w:cellMerge) → acceptPropertyChanges
+        const cellRev = cell.getCellRevision();
+        if (cellRev) {
+          const revType = cellRev.getType();
+          if (revType === 'tableCellInsert' && opts.acceptInsertions) {
+            cell.clearCellRevision();
+            result.insertionsAccepted++;
+          } else if (revType === 'tableCellDelete' && opts.acceptDeletions) {
+            cell.clearCellRevision();
+            result.deletionsAccepted++;
+          } else if (revType === 'tableCellMerge' && opts.acceptPropertyChanges) {
+            cell.clearCellRevision();
+            result.propertyChangesAccepted++;
+          }
         }
 
         // Process paragraphs in the cell
@@ -381,6 +424,40 @@ export function acceptRevisionsInMemory(
             }
           }
         }
+      }
+    }
+  }
+
+  // Walk footnote and endnote paragraphs. Per ECMA-376 §17.11.4 /
+  // §17.11.15, notes can hold any block-level content including
+  // tracked changes; programmatically-added Revision objects on note
+  // paragraphs (e.g.
+  // `footnote.getParagraphs()[0].addContent(new Revision(...))`)
+  // were never visited by the in-memory acceptor and stayed in the
+  // model after `acceptAllRevisions()`. The raw-XML acceptor
+  // (iter 135) already handles existing-document note revisions on
+  // load, so this loop's job is the programmatic-API path.
+  const footnoteManager = doc.getFootnoteManager?.();
+  if (footnoteManager) {
+    for (const fn of footnoteManager.getAllFootnotes()) {
+      for (const paragraph of fn.getParagraphs()) {
+        const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+        result.insertionsAccepted += paragraphResult.insertionsAccepted;
+        result.deletionsAccepted += paragraphResult.deletionsAccepted;
+        result.movesAccepted += paragraphResult.movesAccepted;
+        result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
+      }
+    }
+  }
+  const endnoteManager = doc.getEndnoteManager?.();
+  if (endnoteManager) {
+    for (const en of endnoteManager.getAllEndnotes()) {
+      for (const paragraph of en.getParagraphs()) {
+        const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+        result.insertionsAccepted += paragraphResult.insertionsAccepted;
+        result.deletionsAccepted += paragraphResult.deletionsAccepted;
+        result.movesAccepted += paragraphResult.movesAccepted;
+        result.propertyChangesAccepted += paragraphResult.propertyChangesAccepted;
       }
     }
   }
@@ -579,6 +656,13 @@ function acceptRevisionsInParagraph(
     const formatting = paragraph.getFormatting();
     if (formatting.pPrChange) {
       paragraph.clearParagraphPropertiesChange();
+      result.propertyChangesAccepted++;
+    }
+    // Paragraph-mark rPrChange (CT_ParaRPrChange, §17.3.1.30) — same
+    // rationale as pPrChange: acceptance clears the "previous" snapshot,
+    // current formatting (paragraphMarkRunProperties) stays intact.
+    if (formatting.paragraphMarkRunPropertiesChange) {
+      paragraph.formatting.paragraphMarkRunPropertiesChange = undefined;
       result.propertyChangesAccepted++;
     }
   }

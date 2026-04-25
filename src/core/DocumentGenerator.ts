@@ -964,11 +964,23 @@ ${properties}
       if (
         !view.showInsertionsAndDeletions ||
         !view.showFormatting ||
-        view.showInkAnnotations === false
+        view.showInkAnnotations === false ||
+        view.showMarkup === false ||
+        view.showComments === false
       ) {
         xml += `\n  <w:revisionView w:insDel="${view.showInsertionsAndDeletions ? '1' : '0'}" w:formatting="${view.showFormatting ? '1' : '0'}"`;
         if (view.showInkAnnotations !== undefined) {
           xml += ` w:inkAnnotations="${view.showInkAnnotations ? '1' : '0'}"`;
+        }
+        // CT_TrackChangesView §17.15.1.77: w:markup and w:comments control
+        // whether revision markup / comment balloons are visible. Emit
+        // when the field is set so the reviewer's default markup view
+        // survives round-trip.
+        if (view.showMarkup !== undefined) {
+          xml += ` w:markup="${view.showMarkup ? '1' : '0'}"`;
+        }
+        if (view.showComments !== undefined) {
+          xml += ` w:comments="${view.showComments ? '1' : '0'}"`;
         }
         xml += '/>';
       }
@@ -989,6 +1001,11 @@ ${properties}
     if (trackChangesSettings?.documentProtection) {
       const prot = trackChangesSettings.documentProtection;
       xml += `\n  <w:documentProtection w:edit="${prot.edit}" w:enforcement="${prot.enforcement ? '1' : '0'}"`;
+      // Emit w:formatting (CT_DocProtect §17.15.1.29) — allows formatting
+      // changes under edit protection, commonly paired with tracked edits.
+      if (prot.formatting !== undefined) {
+        xml += ` w:formatting="${prot.formatting ? '1' : '0'}"`;
+      }
       if (prot.cryptProviderType) {
         xml += ` w:cryptProviderType="${prot.cryptProviderType}"`;
       }
@@ -1009,6 +1026,16 @@ ${properties}
       }
       if (prot.salt) {
         xml += ` w:salt="${prot.salt}"`;
+      }
+      // Modern Word 2013+ crypto attributes (ISO/IEC 29500-4 §13).
+      if (prot.algorithmName) {
+        xml += ` w:algorithmName="${prot.algorithmName}"`;
+      }
+      if (prot.hashValue) {
+        xml += ` w:hashValue="${prot.hashValue}"`;
+      }
+      if (prot.saltValue) {
+        xml += ` w:saltValue="${prot.saltValue}"`;
       }
       xml += '/>';
     }

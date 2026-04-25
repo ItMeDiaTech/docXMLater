@@ -759,6 +759,11 @@ export class XMLBuilder {
       size?: number;
       color?: string;
       space?: number;
+      themeColor?: string;
+      themeTint?: string;
+      themeShade?: string;
+      shadow?: boolean;
+      frame?: boolean;
     }
   ): XMLElement {
     const attrs = XMLBuilder.buildAttributes({
@@ -766,6 +771,11 @@ export class XMLBuilder {
       'w:sz': border.size,
       'w:color': border.color,
       'w:space': border.space,
+      'w:themeColor': border.themeColor,
+      'w:themeTint': border.themeTint,
+      'w:themeShade': border.themeShade,
+      'w:shadow': border.shadow === undefined ? undefined : border.shadow ? '1' : '0',
+      'w:frame': border.frame === undefined ? undefined : border.frame ? '1' : '0',
     });
 
     return XMLBuilder.wSelf(side, attrs);

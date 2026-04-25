@@ -10,6 +10,7 @@ import {
   BasicShadingPattern,
   RowJustification as CommonRowJustification,
   ShadingConfig,
+  buildShadingAttributes,
 } from './CommonTypes';
 import { defaultLogger } from '../utils/logger';
 
@@ -75,6 +76,30 @@ export interface RowFormatting {
   cellSpacingType?: string; // Cell spacing type (dxa, pct)
   cnfStyle?: string; // Conditional formatting bitmask (per ECMA-376 §17.3.1.8)
   divId?: number; // HTML div association (per ECMA-376 §17.4.9)
+  /**
+   * Tracked row insertion (w:ins inside w:trPr) — ECMA-376 §17.13.5.19.
+   * Marks the entire row as inserted as part of a tracked revision. String
+   * fields for consistency with `TrPrChange`.
+   */
+  rowInsertion?: RowTrackChange;
+  /**
+   * Tracked row deletion (w:del inside w:trPr) — ECMA-376 §17.13.5.14.
+   * Marks the entire row as deleted as part of a tracked revision.
+   */
+  rowDeletion?: RowTrackChange;
+}
+
+/**
+ * Track-change metadata for row-level w:ins / w:del (CT_TrackChange).
+ * Per ECMA-376 Part 1 §17.13.5: each requires author + date; id per ST_DecimalNumber.
+ */
+export interface RowTrackChange {
+  /** Unique revision id (ST_DecimalNumber, represented as string to match TrPrChange) */
+  id: string;
+  /** Author of the revision (required per schema) */
+  author: string;
+  /** ISO-8601 date string of the revision */
+  date: string;
 }
 
 /**
@@ -146,6 +171,38 @@ export class TableRow {
    */
   clearTrPrChange(): void {
     this.trPrChange = undefined;
+  }
+
+  /**
+   * Gets tracked row-insertion metadata (w:ins inside w:trPr).
+   * Per ECMA-376 Part 1 §17.13.5.19.
+   */
+  getRowInsertion(): RowTrackChange | undefined {
+    return this.formatting.rowInsertion;
+  }
+
+  /**
+   * Sets tracked row-insertion metadata. Pass undefined to clear.
+   */
+  setRowInsertion(change: RowTrackChange | undefined): this {
+    this.formatting.rowInsertion = change;
+    return this;
+  }
+
+  /**
+   * Gets tracked row-deletion metadata (w:del inside w:trPr).
+   * Per ECMA-376 Part 1 §17.13.5.14.
+   */
+  getRowDeletion(): RowTrackChange | undefined {
+    return this.formatting.rowDeletion;
+  }
+
+  /**
+   * Sets tracked row-deletion metadata. Pass undefined to clear.
+   */
+  setRowDeletion(change: RowTrackChange | undefined): this {
+    this.formatting.rowDeletion = change;
+    return this;
   }
 
   /**
@@ -683,9 +740,18 @@ export class TableRow {
       );
     }
 
-    // Add table justification exception (w:jc)
+    // Add table justification exception (w:jc). Per §17.4.29 CT_JcTable the
+    // ISO/ECMA spec allows five values (start, center, end, left, right),
+    // but the Open XML SDK's `TableJustification` class (used for jc inside
+    // tblPrEx AND trPr) only accepts Center/Left/Right via the narrower
+    // `TableRowAlignmentValues` enum. Map bidi-aware spellings down to
+    // their LTR equivalents so output passes strict validation. (Same
+    // mapping as the trPr path — see `project_sdk_rowjc_narrower_than_spec`
+    // memory and iteration 67.)
     if (exceptions.justification) {
-      children.push(XMLBuilder.wSelf('jc', { 'w:val': exceptions.justification }));
+      const jcMap: Record<string, string> = { start: 'left', end: 'right' };
+      const jcVal = jcMap[exceptions.justification] || exceptions.justification;
+      children.push(XMLBuilder.wSelf('jc', { 'w:val': jcVal }));
     }
 
     // Add cell spacing exception (w:tblCellSpacing)
@@ -716,21 +782,18 @@ export class TableRow {
       }
     }
 
-    // Add shading exception (w:shd)
+    // Add shading exception (w:shd). `w:val` is REQUIRED on CT_Shd per
+    // ECMA-376 §17.3.1.31 — use the shared helper so callers that set
+    // only `fill` (no `pattern`) still produce a validator-clean
+    // `<w:shd w:val="clear" w:fill="…"/>` rather than an invalid
+    // `<w:shd w:fill="…"/>` missing the required attribute.
     if (exceptions.shading) {
-      const shdAttrs: Record<string, string> = {};
-      if (exceptions.shading.pattern) shdAttrs['w:val'] = exceptions.shading.pattern;
-      if (exceptions.shading.color) shdAttrs['w:color'] = exceptions.shading.color;
-      if (exceptions.shading.fill) shdAttrs['w:fill'] = exceptions.shading.fill;
-      if (exceptions.shading.themeColor) shdAttrs['w:themeColor'] = exceptions.shading.themeColor;
-      if (exceptions.shading.themeFill) shdAttrs['w:themeFill'] = exceptions.shading.themeFill;
-      if (exceptions.shading.themeFillShade)
-        shdAttrs['w:themeFillShade'] = exceptions.shading.themeFillShade;
-      if (exceptions.shading.themeFillTint)
-        shdAttrs['w:themeFillTint'] = exceptions.shading.themeFillTint;
-      if (exceptions.shading.themeShade) shdAttrs['w:themeShade'] = exceptions.shading.themeShade;
-      if (exceptions.shading.themeTint) shdAttrs['w:themeTint'] = exceptions.shading.themeTint;
-      children.push(XMLBuilder.w('shd', shdAttrs));
+      const shdAttrs = buildShadingAttributes(exceptions.shading);
+      // wSelf so the emitted shd is self-closing (matches all other shd
+      // emission in the codebase). The previous `XMLBuilder.w(...)` call
+      // produced `<w:shd>…</w:shd>` with no children — structurally ok
+      // but inconsistent with the rest of the serializer.
+      children.push(XMLBuilder.wSelf('shd', shdAttrs));
     }
 
     return children;
@@ -756,14 +819,29 @@ export class TableRow {
       const border = borders[name];
       if (border) {
         const attrs: Record<string, string | number> = {};
-        if (border.style) attrs['w:val'] = border.style;
+        // CT_Border §17.18.2 requires w:val (ST_Border). Default to "nil"
+        // when caller didn't specify a style — otherwise strict OOXML
+        // validation fails with "The required attribute 'val' is missing."
+        attrs['w:val'] = border.style ?? 'nil';
         if (border.size !== undefined) attrs['w:sz'] = border.size;
         if (border.space !== undefined) attrs['w:space'] = border.space;
         if (border.color) attrs['w:color'] = border.color;
+        // Full CT_Border attribute set (§17.18.2) for themed-border fidelity
+        // on tblPrEx borders.
+        const b = border as {
+          themeColor?: string;
+          themeTint?: string;
+          themeShade?: string;
+          shadow?: boolean;
+          frame?: boolean;
+        };
+        if (b.themeColor) attrs['w:themeColor'] = b.themeColor;
+        if (b.themeTint) attrs['w:themeTint'] = b.themeTint;
+        if (b.themeShade) attrs['w:themeShade'] = b.themeShade;
+        if (b.shadow !== undefined) attrs['w:shadow'] = b.shadow ? '1' : '0';
+        if (b.frame !== undefined) attrs['w:frame'] = b.frame ? '1' : '0';
 
-        if (Object.keys(attrs).length > 0) {
-          children.push(XMLBuilder.wSelf(name, attrs));
-        }
+        children.push(XMLBuilder.wSelf(name, attrs));
       }
     }
 
@@ -821,9 +899,15 @@ export class TableRow {
       );
     }
 
-    // 7. cantSplit
-    if (this.formatting.cantSplit) {
-      trPrChildren.push(XMLBuilder.wSelf('cantSplit'));
+    // 7. cantSplit — OnOffOnlyType (not CT_OnOff); ST_OnOffOnly only accepts "on"/"off".
+    // Emit "off" for explicit false so an override of a style-inherited cantSplit=true
+    // survives round-trip. "0"/"false" would fail OOXML schema validation here.
+    if (this.formatting.cantSplit !== undefined) {
+      if (this.formatting.cantSplit) {
+        trPrChildren.push(XMLBuilder.wSelf('cantSplit'));
+      } else {
+        trPrChildren.push(XMLBuilder.wSelf('cantSplit', { 'w:val': 'off' }));
+      }
     }
 
     // 8. trHeight
@@ -837,9 +921,13 @@ export class TableRow {
       trPrChildren.push(XMLBuilder.wSelf('trHeight', attrs));
     }
 
-    // 9. tblHeader
-    if (this.formatting.isHeader) {
-      trPrChildren.push(XMLBuilder.wSelf('tblHeader'));
+    // 9. tblHeader — OnOffOnlyType
+    if (this.formatting.isHeader !== undefined) {
+      if (this.formatting.isHeader) {
+        trPrChildren.push(XMLBuilder.wSelf('tblHeader'));
+      } else {
+        trPrChildren.push(XMLBuilder.wSelf('tblHeader', { 'w:val': 'off' }));
+      }
     }
 
     // 10. tblCellSpacing
@@ -852,16 +940,60 @@ export class TableRow {
       );
     }
 
-    // 11. jc (map 'start'/'end' to valid ST_JcTable values)
+    // 11. jc — CT_JcTable per ECMA-376 §17.4.28. The ISO/ECMA spec's
+    // ST_JcTable §17.18.45 lists five values (start, center, end, left,
+    // right), but the Open XML SDK's row-level TableRowAlignmentValues
+    // (and by extension the strict OOXML validator) accepts only three:
+    // center / left / right. We therefore map the bidi-aware spellings
+    // down to their LTR equivalents on emission. The mapping IS lossy —
+    // a row authored with `w:val="start"` in an RTL section will lose
+    // its RTL-awareness on round-trip — but emitting start/end directly
+    // fails validation. See `project_sdk_rowjc_narrower_than_spec.md`.
     if (this.formatting.justification) {
       const jcMap: Record<string, string> = { start: 'left', end: 'right' };
       const jcVal = jcMap[this.formatting.justification] || this.formatting.justification;
       trPrChildren.push(XMLBuilder.wSelf('jc', { 'w:val': jcVal }));
     }
 
-    // 12. hidden
-    if (this.formatting.hidden) {
-      trPrChildren.push(XMLBuilder.wSelf('hidden'));
+    // 12. hidden — OnOffType (full CT_OnOff); emit "false" for explicit override
+    if (this.formatting.hidden !== undefined) {
+      if (this.formatting.hidden) {
+        trPrChildren.push(XMLBuilder.wSelf('hidden'));
+      } else {
+        trPrChildren.push(XMLBuilder.wSelf('hidden', { 'w:val': 'false' }));
+      }
+    }
+
+    // Tracked row insertion / deletion per CT_TrPr (§17.4.79):
+    // <xsd:extension base="CT_TrPrBase">
+    //   <xsd:sequence>
+    //     <xsd:element name="ins" type="CT_TrackChange" minOccurs="0"/>
+    //     <xsd:element name="del" type="CT_TrackChange" minOccurs="0"/>
+    //     <xsd:element name="trPrChange" type="CT_TrPrChange" minOccurs="0"/>
+    //   </xsd:sequence>
+    // </xsd:extension>
+    // These markers must appear AFTER the CT_TrPrBase children (cnfStyle..hidden)
+    // and BEFORE w:trPrChange — they're how Word records that the entire row
+    // was inserted or deleted as a tracked revision.
+    if (this.formatting.rowInsertion) {
+      const ins = this.formatting.rowInsertion;
+      trPrChildren.push(
+        XMLBuilder.wSelf('ins', {
+          'w:id': ins.id,
+          'w:author': ins.author,
+          'w:date': ins.date,
+        })
+      );
+    }
+    if (this.formatting.rowDeletion) {
+      const del = this.formatting.rowDeletion;
+      trPrChildren.push(
+        XMLBuilder.wSelf('del', {
+          'w:id': del.id,
+          'w:author': del.author,
+          'w:date': del.date,
+        })
+      );
     }
 
     // Add table row property change (w:trPrChange) per ECMA-376 Part 1 §17.13.5.38
@@ -906,16 +1038,24 @@ export class TableRow {
             })
           );
         }
-        if (prev.cantSplit) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('cantSplit'));
+        if (prev.cantSplit !== undefined) {
+          if (prev.cantSplit) {
+            prevTrPrChildren.push(XMLBuilder.wSelf('cantSplit'));
+          } else {
+            prevTrPrChildren.push(XMLBuilder.wSelf('cantSplit', { 'w:val': 'off' }));
+          }
         }
         if (prev.height !== undefined) {
           const heightAttrs: Record<string, string | number> = { 'w:val': prev.height };
           if (prev.heightRule) heightAttrs['w:hRule'] = prev.heightRule;
           prevTrPrChildren.push(XMLBuilder.wSelf('trHeight', heightAttrs));
         }
-        if (prev.isHeader) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('tblHeader'));
+        if (prev.isHeader !== undefined) {
+          if (prev.isHeader) {
+            prevTrPrChildren.push(XMLBuilder.wSelf('tblHeader'));
+          } else {
+            prevTrPrChildren.push(XMLBuilder.wSelf('tblHeader', { 'w:val': 'off' }));
+          }
         }
         if (prev.cellSpacing !== undefined) {
           prevTrPrChildren.push(
@@ -931,8 +1071,12 @@ export class TableRow {
             XMLBuilder.wSelf('jc', { 'w:val': jcPrevMap[prev.justification] || prev.justification })
           );
         }
-        if (prev.hidden) {
-          prevTrPrChildren.push(XMLBuilder.wSelf('hidden'));
+        if (prev.hidden !== undefined) {
+          if (prev.hidden) {
+            prevTrPrChildren.push(XMLBuilder.wSelf('hidden'));
+          } else {
+            prevTrPrChildren.push(XMLBuilder.wSelf('hidden', { 'w:val': 'false' }));
+          }
         }
       }
       const prevTrPr = XMLBuilder.w('trPr', undefined, prevTrPrChildren);

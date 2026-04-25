@@ -8,6 +8,15 @@
 import { XMLElement } from '../xml/XMLBuilder';
 
 /**
+ * `w:displacedByCustomXml` attribute value per ECMA-376 CT_MarkupRange —
+ * ST_DisplacedByCustomXml enum: "next" | "prev". Indicates which side of
+ * a custom-XML boundary the marker semantically belongs to when the
+ * marker had to be displaced because a custom-XML node boundary fell at
+ * the same position.
+ */
+export type DisplacedByCustomXml = 'next' | 'prev';
+
+/**
  * Bookmark properties
  */
 export interface BookmarkProperties {
@@ -21,6 +30,13 @@ export interface BookmarkProperties {
   colFirst?: number;
   /** Last column in table bookmark range (ECMA-376 §17.16.5) */
   colLast?: number;
+  /**
+   * `w:displacedByCustomXml` per ECMA-376 CT_MarkupRange / CT_Bookmark.
+   * Valid on both `<w:bookmarkStart>` (CT_Bookmark) and `<w:bookmarkEnd>`
+   * (CT_MarkupRange). Preserves the custom-XML boundary disambiguator
+   * that Word emits when a bookmark was displaced by a custom-XML node.
+   */
+  displacedByCustomXml?: DisplacedByCustomXml;
 }
 
 /**
@@ -31,6 +47,7 @@ export class Bookmark {
   private name: string;
   private colFirst?: number;
   private colLast?: number;
+  private displacedByCustomXml?: DisplacedByCustomXml;
 
   /**
    * Creates a new Bookmark
@@ -45,6 +62,7 @@ export class Bookmark {
       : this.normalizeName(properties.name);
     this.colFirst = properties.colFirst;
     this.colLast = properties.colLast;
+    this.displacedByCustomXml = properties.displacedByCustomXml;
   }
 
   /**
@@ -168,6 +186,24 @@ export class Bookmark {
   }
 
   /**
+   * Gets the `w:displacedByCustomXml` attribute value.
+   * Preserved on both bookmarkStart and bookmarkEnd per ECMA-376
+   * CT_MarkupRange (§17.13.5) / CT_Bookmark (§17.16.5).
+   */
+  getDisplacedByCustomXml(): DisplacedByCustomXml | undefined {
+    return this.displacedByCustomXml;
+  }
+
+  /**
+   * Sets the `w:displacedByCustomXml` attribute value.
+   * @param value "next" | "prev" | undefined
+   */
+  setDisplacedByCustomXml(value: DisplacedByCustomXml | undefined): this {
+    this.displacedByCustomXml = value;
+    return this;
+  }
+
+  /**
    * Generates XML for the bookmark start marker
    * @returns XMLElement for bookmarkStart
    */
@@ -179,6 +215,11 @@ export class Bookmark {
     // Table bookmark column range per ECMA-376 §17.16.5
     if (this.colFirst !== undefined) attrs['w:colFirst'] = this.colFirst.toString();
     if (this.colLast !== undefined) attrs['w:colLast'] = this.colLast.toString();
+    // Custom-XML displacement marker per CT_MarkupRange (§17.13.5) —
+    // the same attribute also carried by the RangeMarker sibling class.
+    if (this.displacedByCustomXml) {
+      attrs['w:displacedByCustomXml'] = this.displacedByCustomXml;
+    }
     return {
       name: 'w:bookmarkStart',
       attributes: attrs,
@@ -191,11 +232,18 @@ export class Bookmark {
    * @returns XMLElement for bookmarkEnd
    */
   toEndXML(): XMLElement {
+    const attrs: Record<string, string | number> = {
+      'w:id': this.id.toString(),
+    };
+    // bookmarkEnd is CT_MarkupRange per ECMA-376 §17.13.6.1 — w:displacedByCustomXml
+    // is valid here too (the BookmarkRange column attributes are NOT, so those
+    // stay scoped to toStartXML above).
+    if (this.displacedByCustomXml) {
+      attrs['w:displacedByCustomXml'] = this.displacedByCustomXml;
+    }
     return {
       name: 'w:bookmarkEnd',
-      attributes: {
-        'w:id': this.id.toString(),
-      },
+      attributes: attrs,
       selfClosing: true,
     };
   }

@@ -15,6 +15,7 @@ import {
   // Import common types
   ParagraphAlignment as CommonParagraphAlignment,
   BorderStyle as CommonBorderStyle,
+  FullBorderStyle as CommonFullBorderStyle,
   BasicShadingPattern,
   TabAlignment as CommonTabAlignment,
   TabLeader as CommonTabLeader,
@@ -126,8 +127,12 @@ export interface FrameProperties {
   y?: number;
   /** Relative horizontal alignment */
   xAlign?: 'left' | 'center' | 'right' | 'inside' | 'outside';
-  /** Relative vertical alignment */
-  yAlign?: 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+  /**
+   * Relative vertical alignment per ECMA-376 Part 1 §17.18.110 ST_YAlign.
+   * `inline` anchors the frame in line with the surrounding text rather
+   * than offsetting it vertically.
+   */
+  yAlign?: 'top' | 'center' | 'bottom' | 'inline' | 'inside' | 'outside';
   /** Horizontal anchor/positioning base */
   hAnchor?: 'page' | 'margin' | 'text';
   /** Vertical anchor/positioning base */
@@ -147,17 +152,30 @@ export interface FrameProperties {
 }
 
 /**
- * Single border definition
+ * Single paragraph-border definition. `style` uses FullBorderStyle (25+
+ * ST_Border values per ECMA-376 §17.18.2) — paragraph borders support
+ * the full multi-line-gap / triple / inset / outset set, not just the
+ * narrow 6-value BorderStyle subset that this field previously used.
  */
 export interface BorderDefinition {
-  /** Border style */
-  style?: BorderStyle;
+  /** Border style (full ST_Border enumeration) */
+  style?: CommonFullBorderStyle;
   /** Border width in eighths of a point (1-96) */
   size?: number;
   /** Border color (hex without #) */
   color?: string;
   /** Space between border and text in points (0-31) */
   space?: number;
+  /** Theme color reference (ST_ThemeColor per §17.18.97) */
+  themeColor?: string;
+  /** Theme tint (2-hex-digit string) */
+  themeTint?: string;
+  /** Theme shade (2-hex-digit string) */
+  themeShade?: string;
+  /** Border casts a shadow (ST_OnOff attribute on CT_Border §17.18.2) */
+  shadow?: boolean;
+  /** Border is part of a frame around the content (ST_OnOff) */
+  frame?: boolean;
 }
 
 /**
@@ -184,6 +202,18 @@ export interface ParagraphFormatting {
     right?: number;
     firstLine?: number;
     hanging?: number;
+    /**
+     * CJK character-unit indentation attributes per ECMA-376 §17.3.1.12.
+     * Values are in hundredths of a character unit (200 = 2 character widths).
+     * Used alongside (not instead of) the twips attributes: Word authors
+     * specify one or the other based on document language, and both are
+     * preserved on round-trip so downstream consumers keep the author's
+     * original intent.
+     */
+    leftChars?: number;
+    rightChars?: number;
+    firstLineChars?: number;
+    hangingChars?: number;
   };
   /** Spacing per ECMA-376 §17.3.1.33 (CT_Spacing) */
   spacing?: {
@@ -278,6 +308,19 @@ export interface ParagraphFormatting {
   pPrChange?: ParagraphPropertiesChange;
   /** Run properties for the paragraph mark (¶ symbol formatting) */
   paragraphMarkRunProperties?: RunFormatting;
+  /**
+   * Paragraph mark run-properties change tracking (w:rPrChange inside
+   * <w:pPr><w:rPr>), per ECMA-376 Part 1 §17.3.1.30 / CT_ParaRPrChange.
+   * Stores the previous rPr of the pilcrow glyph when its formatting has
+   * been modified under track changes. Emitted as the LAST child of the
+   * paragraph-mark <w:rPr> per CT_ParaRPr schema.
+   */
+  paragraphMarkRunPropertiesChange?: {
+    id: number;
+    author: string;
+    date: Date;
+    previousProperties: Partial<RunFormatting>;
+  };
   /** Paragraph mark deletion tracking (for deleted ¶ symbols) */
   paragraphMarkDeletion?: {
     /** Unique revision ID */
@@ -3169,15 +3212,25 @@ export class Paragraph {
         border: BorderDefinition | undefined
       ): XMLElement | null => {
         if (!border) return null;
-        const attributes: Record<string, string | number> = {};
-        if (border.style) attributes['w:val'] = border.style;
+        // CT_Border §17.18.2: `w:val` (ST_Border) is REQUIRED. Default to
+        // "nil" (the "no visible border" sentinel) when the consumer set
+        // only size/color/space — otherwise strict OOXML validators reject
+        // the document with "The required attribute 'val' is missing".
+        const attributes: Record<string, string | number> = {
+          'w:val': border.style ?? 'nil',
+        };
         if (border.size !== undefined) attributes['w:sz'] = border.size;
         if (border.color) attributes['w:color'] = border.color;
         if (border.space !== undefined) attributes['w:space'] = border.space;
-        if (Object.keys(attributes).length > 0) {
-          return XMLBuilder.wSelf(borderType, attributes);
-        }
-        return null;
+        // Full CT_Border attribute set (§17.18.2): themeColor / themeTint /
+        // themeShade / shadow / frame. Round-trips themed paragraph borders
+        // authored by Word — previously all five were silently stripped.
+        if (border.themeColor) attributes['w:themeColor'] = border.themeColor;
+        if (border.themeTint) attributes['w:themeTint'] = border.themeTint;
+        if (border.themeShade) attributes['w:themeShade'] = border.themeShade;
+        if (border.shadow !== undefined) attributes['w:shadow'] = border.shadow ? '1' : '0';
+        if (border.frame !== undefined) attributes['w:frame'] = border.frame ? '1' : '0';
+        return XMLBuilder.wSelf(borderType, attributes);
       };
 
       // Add borders in order: top, left, bottom, right, between, bar
@@ -3212,13 +3265,18 @@ export class Paragraph {
       }
     }
 
-    // 11. Tab stops
+    // 11. Tab stops. CT_TabStop §17.3.1.37 declares BOTH `w:val` (ST_TabJc)
+    // and `w:pos` (ST_SignedTwipsMeasure) as REQUIRED attributes. Default
+    // `w:val` to "left" (ST_TabJc default and Word's authored default) when
+    // caller didn't specify — otherwise strict OOXML validation rejects
+    // the output with "The required attribute 'val' is missing".
     if (this.formatting.tabs && this.formatting.tabs.length > 0) {
       const tabChildren: XMLElement[] = [];
       for (const tab of this.formatting.tabs) {
-        const attributes: Record<string, string | number> = {};
-        attributes['w:pos'] = tab.position;
-        if (tab.val) attributes['w:val'] = tab.val;
+        const attributes: Record<string, string | number> = {
+          'w:val': tab.val ?? 'left',
+          'w:pos': tab.position,
+        };
         if (tab.leader) attributes['w:leader'] = tab.leader;
         tabChildren.push(XMLBuilder.wSelf('tab', attributes));
       }
@@ -3301,8 +3359,11 @@ export class Paragraph {
       }
     }
 
-    // 17. Indentation (left/right/firstLine/hanging)
-    // Per ECMA-376 §17.3.1.12, firstLine and hanging are mutually exclusive — hanging takes precedence
+    // 17. Indentation (left/right/firstLine/hanging + CJK character-unit variants)
+    // Per ECMA-376 §17.3.1.12, firstLine and hanging are mutually exclusive —
+    // hanging takes precedence. The *Chars attributes (ST_DecimalNumber, in
+    // hundredths of a character unit) are independent of the twips variants;
+    // Word authors in CJK locales emit them alongside — preserve both on save.
     if (this.formatting.indentation) {
       const ind = this.formatting.indentation;
       const attributes: Record<string, number> = {};
@@ -3312,6 +3373,15 @@ export class Paragraph {
         attributes['w:hanging'] = ind.hanging;
       } else if (ind.firstLine !== undefined) {
         attributes['w:firstLine'] = ind.firstLine;
+      }
+      if (ind.leftChars !== undefined) attributes['w:leftChars'] = ind.leftChars;
+      if (ind.rightChars !== undefined) attributes['w:rightChars'] = ind.rightChars;
+      // Same mutual-exclusive treatment: hangingChars wins over firstLineChars
+      // when both are set, mirroring the twips behaviour above.
+      if (ind.hangingChars !== undefined) {
+        attributes['w:hangingChars'] = ind.hangingChars;
+      } else if (ind.firstLineChars !== undefined) {
+        attributes['w:firstLineChars'] = ind.firstLineChars;
       }
       if (Object.keys(attributes).length > 0) {
         pPrChildren.push(XMLBuilder.wSelf('ind', attributes));
@@ -3397,15 +3467,52 @@ export class Paragraph {
     }
 
     // 19. Paragraph mark run properties per ECMA-376 Part 1 §17.3.1.29
-    // Per CT_PPr, w:rPr comes after all CT_PPrBase elements and before w:sectPr/w:pPrChange
+    // Per CT_PPr, w:rPr comes after all CT_PPrBase elements and before w:sectPr/w:pPrChange.
+    //
+    // CT_ParaRPr content model (ECMA-376 Part 1, Annex A / wml.xsd):
+    //   <xsd:sequence>
+    //     <xsd:group ref="EG_ParaRPrTrackChanges" minOccurs="0"/>   <!-- ins, del, moveFrom, moveTo -->
+    //     <xsd:group ref="EG_RPrBase" minOccurs="0" maxOccurs="unbounded"/>  <!-- rStyle, rFonts, b, bCs, i, ... -->
+    //     <xsd:element name="rPrChange" type="CT_ParaRPrChange" minOccurs="0"/>
+    //   </xsd:sequence>
+    //
+    // The track-change markers (w:ins / w:del) must precede the EG_RPrBase
+    // run-property children. Earlier revisions of this code emitted run
+    // properties first and then ins/del, which is a schema violation — strict
+    // validators reject the inverted order, and tracked-change-aware tools
+    // may misinterpret the revision state of the paragraph mark.
     if (
       this.formatting.paragraphMarkRunProperties ||
       this.formatting.paragraphMarkDeletion ||
-      this.formatting.paragraphMarkInsertion
+      this.formatting.paragraphMarkInsertion ||
+      this.formatting.paragraphMarkRunPropertiesChange
     ) {
       const rPrChildren: XMLElement[] = [];
 
-      // Add run properties for the paragraph mark if they exist
+      // EG_ParaRPrTrackChanges (ins → del → moveFrom → moveTo) — FIRST per CT_ParaRPr.
+      if (this.formatting.paragraphMarkInsertion) {
+        const ins = this.formatting.paragraphMarkInsertion;
+        rPrChildren.push(
+          XMLBuilder.wSelf('ins', {
+            'w:id': ins.id.toString(),
+            'w:author': ins.author,
+            'w:date': formatDateForXml(ins.date),
+          })
+        );
+      }
+
+      if (this.formatting.paragraphMarkDeletion) {
+        const del = this.formatting.paragraphMarkDeletion;
+        rPrChildren.push(
+          XMLBuilder.wSelf('del', {
+            'w:id': del.id.toString(),
+            'w:author': del.author,
+            'w:date': formatDateForXml(del.date),
+          })
+        );
+      }
+
+      // EG_RPrBase run properties — AFTER the track-change markers.
       if (this.formatting.paragraphMarkRunProperties) {
         const rPr = Run.generateRunPropertiesXML(this.formatting.paragraphMarkRunProperties);
         if (rPr?.children) {
@@ -3418,31 +3525,29 @@ export class Paragraph {
         }
       }
 
-      // Per CT_ParaRPr schema, w:ins precedes w:del in the sequence
-      // Add insertion marker if the paragraph mark is inserted (w:ins)
-      // Per ECMA-376 Part 1 §17.13.5.18 - tracks insertion of paragraph mark
-      if (this.formatting.paragraphMarkInsertion) {
-        const ins = this.formatting.paragraphMarkInsertion;
-        rPrChildren.push(
-          XMLBuilder.wSelf('ins', {
-            'w:id': ins.id.toString(),
-            'w:author': ins.author,
-            'w:date': formatDateForXml(ins.date),
-          })
+      // <w:rPrChange> (CT_ParaRPrChange, §17.3.1.30) — LAST per CT_ParaRPr.
+      // Contains a single <w:rPr> child with the previous run properties of
+      // the paragraph mark. Reuses Run.generateRunPropertiesXML for full
+      // CT_RPr coverage in the previous-properties block.
+      const paraRPrChange = this.formatting.paragraphMarkRunPropertiesChange;
+      if (paraRPrChange) {
+        const prevRPr = Run.generateRunPropertiesXML(
+          paraRPrChange.previousProperties as RunFormatting
         );
-      }
-
-      // Add deletion marker if the paragraph mark is deleted (w:del)
-      // Per ECMA-376 Part 1 §17.13.5.14 - tracks deletion of paragraph mark
-      if (this.formatting.paragraphMarkDeletion) {
-        const del = this.formatting.paragraphMarkDeletion;
-        rPrChildren.push(
-          XMLBuilder.wSelf('del', {
-            'w:id': del.id.toString(),
-            'w:author': del.author,
-            'w:date': formatDateForXml(del.date),
-          })
-        );
+        const prevRPrElement: XMLElement = prevRPr ?? {
+          name: 'w:rPr',
+          attributes: {},
+          children: [],
+        };
+        rPrChildren.push({
+          name: 'w:rPrChange',
+          attributes: {
+            'w:id': paraRPrChange.id.toString(),
+            'w:author': paraRPrChange.author,
+            'w:date': formatDateForXml(paraRPrChange.date),
+          },
+          children: [prevRPrElement],
+        });
       }
 
       // Add w:rPr element if there are any run properties
@@ -3583,28 +3688,37 @@ export class Paragraph {
           );
         }
 
-        // 7. suppressLineNumbers
+        // 7. suppressLineNumbers — CT_OnOff. Emit w:val="0" for explicit false so the
+        // tracked "previous" value round-trips losslessly (see main generator line ~3154).
         if (prev.suppressLineNumbers !== undefined) {
-          if (prev.suppressLineNumbers) {
-            prevPPrChildren.push(XMLBuilder.wSelf('suppressLineNumbers'));
-          }
+          prevPPrChildren.push(
+            XMLBuilder.wSelf('suppressLineNumbers', {
+              'w:val': prev.suppressLineNumbers ? '1' : '0',
+            })
+          );
         }
 
-        // 8. pBdr (paragraph borders)
+        // 8. pBdr (paragraph borders) — CT_Border §17.18.2 requires w:val.
+        // Default to "nil" when style undefined so pPrChange's previous
+        // border set round-trips through strict validation. Full CT_Border
+        // attribute set (themeColor/themeTint/themeShade/shadow/frame) is
+        // preserved so Word's themed borders survive tracked-change history.
         if (prev.borders) {
           const borderChildren: XMLElement[] = [];
           const borderSides = ['top', 'left', 'bottom', 'right', 'between', 'bar'] as const;
           for (const side of borderSides) {
             const border = prev.borders[side];
             if (border) {
-              const attrs: Record<string, string> = {};
-              if (border.style) attrs['w:val'] = border.style;
+              const attrs: Record<string, string> = { 'w:val': border.style ?? 'nil' };
               if (border.size !== undefined) attrs['w:sz'] = border.size.toString();
               if (border.color) attrs['w:color'] = border.color;
               if (border.space !== undefined) attrs['w:space'] = border.space.toString();
-              if (Object.keys(attrs).length > 0) {
-                borderChildren.push(XMLBuilder.wSelf(side, attrs));
-              }
+              if (border.themeColor) attrs['w:themeColor'] = border.themeColor;
+              if (border.themeTint) attrs['w:themeTint'] = border.themeTint;
+              if (border.themeShade) attrs['w:themeShade'] = border.themeShade;
+              if (border.shadow !== undefined) attrs['w:shadow'] = border.shadow ? '1' : '0';
+              if (border.frame !== undefined) attrs['w:frame'] = border.frame ? '1' : '0';
+              borderChildren.push(XMLBuilder.wSelf(side, attrs));
             }
           }
           if (borderChildren.length > 0) {
@@ -3620,24 +3734,28 @@ export class Paragraph {
           }
         }
 
-        // 10. tabs
+        // 10. tabs — CT_TabStop §17.3.1.37 requires w:val AND w:pos. Default
+        // w:val to "left" when pPrChange's previous state didn't record one.
         if (prev.tabs && prev.tabs.length > 0) {
           const tabChildren: XMLElement[] = prev.tabs.map((tab) => {
             const tabAttrs: Record<string, string> = {
+              'w:val': tab.val ?? 'left',
               'w:pos': tab.position.toString(),
             };
-            if (tab.val) tabAttrs['w:val'] = tab.val;
             if (tab.leader) tabAttrs['w:leader'] = tab.leader;
             return XMLBuilder.wSelf('tab', tabAttrs);
           });
           prevPPrChildren.push(XMLBuilder.w('tabs', undefined, tabChildren));
         }
 
-        // 11. suppressAutoHyphens
+        // 11. suppressAutoHyphens — CT_OnOff. Emit w:val="0" for explicit false so the
+        // tracked "previous" value round-trips losslessly (see main generator line ~3231).
         if (prev.suppressAutoHyphens !== undefined) {
-          if (prev.suppressAutoHyphens) {
-            prevPPrChildren.push(XMLBuilder.wSelf('suppressAutoHyphens', { 'w:val': '1' }));
-          }
+          prevPPrChildren.push(
+            XMLBuilder.wSelf('suppressAutoHyphens', {
+              'w:val': prev.suppressAutoHyphens ? '1' : '0',
+            })
+          );
         }
 
         // 12. CJK paragraph properties
@@ -3707,17 +3825,31 @@ export class Paragraph {
           }
         }
 
-        // 15. ind (indentation)
+        // 15. ind (indentation + CJK character-unit variants per ECMA-376 §17.3.1.12)
+        // hanging / firstLine are conceptually mutually exclusive (opposite-
+        // direction first-line indents). Mirror the direct paragraph generator's
+        // precedence: hanging wins when both are set. Previously this path emitted
+        // BOTH attributes, producing ambiguous tracked-change history that Word
+        // renders inconsistently across versions.
         if (prev.indentation) {
           const indAttrs: Record<string, string> = {};
-          if (prev.indentation.left !== undefined)
-            indAttrs['w:left'] = prev.indentation.left.toString();
-          if (prev.indentation.right !== undefined)
-            indAttrs['w:right'] = prev.indentation.right.toString();
-          if (prev.indentation.firstLine !== undefined)
-            indAttrs['w:firstLine'] = prev.indentation.firstLine.toString();
-          if (prev.indentation.hanging !== undefined)
-            indAttrs['w:hanging'] = prev.indentation.hanging.toString();
+          const indentation = prev.indentation as Record<string, number | undefined>;
+          if (indentation.left !== undefined) indAttrs['w:left'] = indentation.left.toString();
+          if (indentation.right !== undefined) indAttrs['w:right'] = indentation.right.toString();
+          if (indentation.hanging !== undefined) {
+            indAttrs['w:hanging'] = indentation.hanging.toString();
+          } else if (indentation.firstLine !== undefined) {
+            indAttrs['w:firstLine'] = indentation.firstLine.toString();
+          }
+          if (indentation.leftChars !== undefined)
+            indAttrs['w:leftChars'] = indentation.leftChars.toString();
+          if (indentation.rightChars !== undefined)
+            indAttrs['w:rightChars'] = indentation.rightChars.toString();
+          if (indentation.hangingChars !== undefined) {
+            indAttrs['w:hangingChars'] = indentation.hangingChars.toString();
+          } else if (indentation.firstLineChars !== undefined) {
+            indAttrs['w:firstLineChars'] = indentation.firstLineChars.toString();
+          }
           prevPPrChildren.push(XMLBuilder.wSelf('ind', indAttrs));
         }
 

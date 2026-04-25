@@ -44,7 +44,12 @@ import { NumberingInstance } from '../formatting/NumberingInstance';
 import { Style, StyleProperties, StyleType } from '../formatting/Style';
 import { logParagraphContent, logParsing, logTextDirection } from '../utils/diagnostics';
 import { getGlobalLogger, createScopedLogger, ILogger, defaultLogger } from '../utils/logger';
-import { safeParseInt, isExplicitlySet, parseOoxmlBoolean } from '../utils/parsingHelpers';
+import {
+  safeParseInt,
+  isExplicitlySet,
+  parseOoxmlBoolean,
+  parseOnOffAttribute,
+} from '../utils/parsingHelpers';
 import { halfPointsToPoints } from '../utils/units';
 import type { ShadingConfig } from '../elements/CommonTypes';
 
@@ -507,10 +512,18 @@ export class DocumentParser {
       if (idAttr) {
         const id = parseInt(idAttr, 10);
         if (!isNaN(id)) {
+          // CT_MarkupRange §17.13.5 — preserve w:displacedByCustomXml.
+          const displacedAttr = XMLParser.extractAttribute(
+            bookmarkEndXml,
+            'w:displacedByCustomXml'
+          );
+          const displacedByCustomXml =
+            displacedAttr === 'next' || displacedAttr === 'prev' ? displacedAttr : undefined;
           const bookmark = new Bookmark({
             name: `_end_${id}`,
             id: id,
             skipNormalization: true,
+            displacedByCustomXml,
           });
           bookmarks.push(bookmark);
         }
@@ -905,14 +918,27 @@ export class DocumentParser {
         }
       }
 
-      // Parse w14:paraId and w14:textId if present
-      const paraId = pElement['w14:paraId'];
+      // Parse w14:paraId and w14:textId (Word 2010+ paragraph identifiers
+      // per MC-DOCX §2.6.19, ST_LongHexNumber — 8-char hex string). These
+      // are XML *attributes* on w:p, so XMLParser stores them under the
+      // @_-prefixed keys. The previous lookup (`pElement['w14:paraId']`)
+      // accessed an element-shaped key that never exists, silently
+      // dropping both IDs on every load → save cycle. XMLParser's
+      // numeric coercion of purely-digit hex strings (e.g. "00000001" →
+      // 1) means we normalise back to the zero-padded 8-char form so
+      // validators accept the output.
+      const normaliseHexId = (raw: unknown): string | undefined => {
+        if (raw === undefined || raw === null) return undefined;
+        const asStr = typeof raw === 'number' ? raw.toString(16) : String(raw);
+        return asStr.toUpperCase().padStart(8, '0');
+      };
+      const paraId = normaliseHexId(pElement['@_w14:paraId']);
       if (paraId) {
-        paragraph.formatting.paraId = paraId as string;
+        paragraph.formatting.paraId = paraId;
       }
-      const textId = pElement['w14:textId'];
+      const textId = normaliseHexId(pElement['@_w14:textId']);
       if (textId) {
-        paragraph.formatting.textId = textId as string;
+        paragraph.formatting.textId = textId;
       }
 
       // CRITICAL FIX: Preserve document order of paragraph children (runs, hyperlinks, fields)
@@ -1727,8 +1753,8 @@ export class DocumentParser {
       const id = parseInt(idAttr, 10);
       const date = dateAttr ? new Date(dateAttr) : new Date();
       const parentId = parentIdAttr ? parseInt(parentIdAttr, 10) : undefined;
-      // Per ECMA-376, w:done="1" or "true" indicates resolved
-      const done = doneAttr === '1' || doneAttr === 'true';
+      // Per ECMA-376 §17.17.4, w:done is ST_OnOff — accept 1/0/true/false/on/off
+      const done = parseOnOffAttribute(doneAttr);
 
       // Parse content (runs from paragraphs within the comment)
       const runs: Run[] = [];
@@ -1921,12 +1947,20 @@ export class DocumentParser {
       // Parse optional column range for table bookmarks (ECMA-376 §17.16.5)
       const colFirstAttr = XMLParser.extractAttribute(bookmarkXml, 'w:colFirst');
       const colLastAttr = XMLParser.extractAttribute(bookmarkXml, 'w:colLast');
+      // Parse optional w:displacedByCustomXml per CT_MarkupRange (§17.13.5).
+      // Without this the attribute was dropped on load, so any Word document
+      // with custom-XML-displaced bookmarks lost the disambiguator even
+      // though the model now supports round-tripping it.
+      const displacedAttr = XMLParser.extractAttribute(bookmarkXml, 'w:displacedByCustomXml');
+      const displacedByCustomXml =
+        displacedAttr === 'next' || displacedAttr === 'prev' ? displacedAttr : undefined;
       const bookmark = new Bookmark({
         name: nameAttr,
         id: id,
         skipNormalization: true,
         colFirst: colFirstAttr ? parseInt(colFirstAttr, 10) : undefined,
         colLast: colLastAttr ? parseInt(colLastAttr, 10) : undefined,
+        displacedByCustomXml,
       });
 
       // Register with BookmarkManager to enable hasBookmark() checks
@@ -1969,12 +2003,22 @@ export class DocumentParser {
 
       const id = parseInt(idAttr, 10);
 
+      // CT_MarkupRange (§17.13.5) also permits w:displacedByCustomXml on
+      // the end marker. Previously dropped on load, so a Word document
+      // whose bookmark-end was displaced across a custom-XML node lost
+      // the disambiguator even though the Bookmark model already emits
+      // it from toEndXML().
+      const displacedAttr = XMLParser.extractAttribute(bookmarkXml, 'w:displacedByCustomXml');
+      const displacedByCustomXml =
+        displacedAttr === 'next' || displacedAttr === 'prev' ? displacedAttr : undefined;
+
       // Create a placeholder bookmark for the end marker
       // The name doesn't matter for bookmarkEnd as it only uses the ID
       const bookmark = new Bookmark({
         name: `_end_${id}`,
         id: id,
         skipNormalization: true,
+        displacedByCustomXml,
       });
 
       return bookmark;
@@ -1996,12 +2040,23 @@ export class DocumentParser {
     try {
       const paragraph = new Paragraph();
 
-      // Parse w14:paraId and w14:textId attributes from paragraph element (Word 2010+)
-      const paraId = paraObj['w14:paraId'];
+      // Parse w14:paraId and w14:textId attributes from paragraph element
+      // (Word 2010+, ST_LongHexNumber 8-char hex). XMLParser keys
+      // attributes under the @_ prefix and may numeric-coerce purely-
+      // digit hex strings like "00000001" to the number 1 — normalise
+      // back to 8-char uppercase hex so the output passes strict
+      // validation. The prior code used the un-prefixed element-shaped
+      // keys and always saw `undefined`.
+      const normaliseHexId = (raw: unknown): string | undefined => {
+        if (raw === undefined || raw === null) return undefined;
+        const asStr = typeof raw === 'number' ? raw.toString(16) : String(raw);
+        return asStr.toUpperCase().padStart(8, '0');
+      };
+      const paraId = normaliseHexId(paraObj['@_w14:paraId']);
       if (paraId) {
         paragraph.formatting.paraId = paraId;
       }
-      const textId = paraObj['w14:textId'];
+      const textId = normaliseHexId(paraObj['@_w14:textId']);
       if (textId) {
         paragraph.formatting.textId = textId;
       }
@@ -2171,6 +2226,22 @@ export class DocumentParser {
       // Extract the formatting and set it as paragraph mark properties
       paragraph.setParagraphMarkFormatting(tempRun.getFormatting());
 
+      // Transfer w:rPrChange (CT_ParaRPrChange, §17.3.1.30) from the
+      // temp run onto the paragraph's formatting. Without this the
+      // paragraph-mark rPrChange is silently dropped because
+      // `tempRun.getFormatting()` exposes RunFormatting fields only —
+      // `propertyChangeRevision` is a separate field on Run that was
+      // previously discarded along with the temp run.
+      const rPrChangeRev = tempRun.getPropertyChangeRevision();
+      if (rPrChangeRev) {
+        paragraph.formatting.paragraphMarkRunPropertiesChange = {
+          id: rPrChangeRev.id,
+          author: rPrChangeRev.author,
+          date: rPrChangeRev.date,
+          previousProperties: rPrChangeRev.previousProperties,
+        };
+      }
+
       // Parse paragraph mark deletion tracking (w:del in w:pPr/w:rPr)
       // Per ECMA-376 Part 1 §17.13.5.14 - indicates the paragraph mark was deleted
       if (rPrObj['w:del']) {
@@ -2210,9 +2281,14 @@ export class DocumentParser {
       paragraph.setAlignment(pPrObj['w:jc']['@_w:val']);
     }
 
-    // Style
-    if (pPrObj['w:pStyle']?.['@_w:val']) {
-      paragraph.setStyle(pPrObj['w:pStyle']['@_w:val']);
+    // Style (w:pStyle per ECMA-376 §17.3.1.27 — `w:val` is ST_String
+    // referencing a style ID). Cast via String(...) so purely-numeric
+    // style IDs that XMLParser's `parseAttributeValue: true` coerces to
+    // JS numbers (e.g., a custom styleId of "1") survive as strings,
+    // matching the `style?: string` field contract on
+    // ParagraphFormatting.
+    if (pPrObj['w:pStyle']?.['@_w:val'] !== undefined) {
+      paragraph.setStyle(String(pPrObj['w:pStyle']['@_w:val']));
     }
 
     // Indentation
@@ -2231,6 +2307,24 @@ export class DocumentParser {
       // Parse hanging indent per ECMA-376 Part 1 §17.3.1.17
       if (isExplicitlySet(ind['@_w:hanging']))
         paragraph.setHangingIndent(safeParseInt(ind['@_w:hanging']));
+
+      // CJK character-unit indentation attributes per ECMA-376 §17.3.1.12.
+      // start/endChars are bidi-aware alternatives to left/rightChars; collapse
+      // them onto the leftChars/rightChars fields the same way the twips parser
+      // collapses w:start → left. Values are ST_DecimalNumber (hundredths of a
+      // character unit), and 0 is a legitimate value — use isExplicitlySet so
+      // number-0 from XMLParser.parseAttributeValue is preserved.
+      if (!paragraph.formatting.indentation) paragraph.formatting.indentation = {};
+      const leftCharsVal = ind['@_w:startChars'] ?? ind['@_w:leftChars'];
+      const rightCharsVal = ind['@_w:endChars'] ?? ind['@_w:rightChars'];
+      if (isExplicitlySet(leftCharsVal))
+        paragraph.formatting.indentation.leftChars = safeParseInt(leftCharsVal);
+      if (isExplicitlySet(rightCharsVal))
+        paragraph.formatting.indentation.rightChars = safeParseInt(rightCharsVal);
+      if (isExplicitlySet(ind['@_w:firstLineChars']))
+        paragraph.formatting.indentation.firstLineChars = safeParseInt(ind['@_w:firstLineChars']);
+      if (isExplicitlySet(ind['@_w:hangingChars']))
+        paragraph.formatting.indentation.hangingChars = safeParseInt(ind['@_w:hangingChars']);
     }
 
     // Spacing (ECMA-376 §17.3.1.33 — 8 attributes)
@@ -2251,14 +2345,13 @@ export class DocumentParser {
         paragraph.formatting.spacing.beforeLines = safeParseInt(spacing['@_w:beforeLines']);
       if (isExplicitlySet(spacing['@_w:afterLines']))
         paragraph.formatting.spacing.afterLines = safeParseInt(spacing['@_w:afterLines']);
+      // ST_OnOff per ECMA-376 §17.17.4 — accept 1/0/true/false/on/off
       const beforeAuto = spacing['@_w:beforeAutospacing'];
       if (beforeAuto !== undefined)
-        paragraph.formatting.spacing.beforeAutospacing =
-          String(beforeAuto) === '1' || String(beforeAuto) === 'true';
+        paragraph.formatting.spacing.beforeAutospacing = parseOnOffAttribute(beforeAuto);
       const afterAuto = spacing['@_w:afterAutospacing'];
       if (afterAuto !== undefined)
-        paragraph.formatting.spacing.afterAutospacing =
-          String(afterAuto) === '1' || String(afterAuto) === 'true';
+        paragraph.formatting.spacing.afterAutospacing = parseOnOffAttribute(afterAuto);
     }
 
     // Keep properties — preserve explicit val="0" to override style inheritance
@@ -2306,7 +2399,12 @@ export class DocumentParser {
       const pBdr = pPrObj['w:pBdr'];
       const borders: any = {};
 
-      // Helper function to parse border definition
+      // Helper function to parse border definition.
+      // Covers the full CT_Border attribute set per ECMA-376 §17.18.2:
+      // w:val, w:sz, w:color, w:space, w:themeColor, w:themeTint,
+      // w:themeShade, w:shadow, w:frame. The last two are ST_OnOff —
+      // route through parseOnOffAttribute so "off"/"false"/"0"/"on"
+      // all resolve correctly even after XMLParser numeric coercion.
       const parseBorder = (borderObj: any): any => {
         if (!borderObj) return undefined;
         const border: any = {};
@@ -2315,6 +2413,15 @@ export class DocumentParser {
         if (borderObj['@_w:color']) border.color = borderObj['@_w:color'];
         if (borderObj['@_w:space'] !== undefined)
           border.space = safeParseInt(borderObj['@_w:space']);
+        if (borderObj['@_w:themeColor']) border.themeColor = String(borderObj['@_w:themeColor']);
+        if (borderObj['@_w:themeTint']) border.themeTint = String(borderObj['@_w:themeTint']);
+        if (borderObj['@_w:themeShade']) border.themeShade = String(borderObj['@_w:themeShade']);
+        if (borderObj['@_w:shadow'] !== undefined) {
+          border.shadow = parseOnOffAttribute(String(borderObj['@_w:shadow']), true);
+        }
+        if (borderObj['@_w:frame'] !== undefined) {
+          border.frame = parseOnOffAttribute(String(borderObj['@_w:frame']), true);
+        }
         return Object.keys(border).length > 0 ? border : undefined;
       };
 
@@ -2353,7 +2460,15 @@ export class DocumentParser {
 
       for (const tabObj of tabElements) {
         const tab: any = {};
-        if (tabObj['@_w:pos']) tab.position = parseInt(tabObj['@_w:pos'], 10);
+        // w:pos is REQUIRED per §17.3.1.38 and is ST_SignedTwipsMeasure — 0 and
+        // negative values are both valid. Use `!== undefined` so that XMLParser's
+        // parseAttributeValue coercion of "0" to number 0 doesn't silently drop
+        // tabs at the left margin (the previous `if (tabObj['@_w:pos'])` truthy
+        // check turned pos=0 into an invisible tab-loss bug).
+        if (tabObj['@_w:pos'] !== undefined) {
+          const parsed = parseInt(String(tabObj['@_w:pos']), 10);
+          if (!isNaN(parsed)) tab.position = parsed;
+        }
         if (tabObj['@_w:val']) tab.val = tabObj['@_w:val'];
         if (tabObj['@_w:leader']) tab.leader = tabObj['@_w:leader'];
 
@@ -2369,19 +2484,10 @@ export class DocumentParser {
 
     // Widow control per ECMA-376 Part 1 §17.3.1.40
     if (pPrObj['w:widowControl'] !== undefined) {
-      const widowControlVal = pPrObj['w:widowControl']?.['@_w:val'];
-      // Parse w:val attribute - can be "0"/"1" or "false"/"true"
-      if (
-        widowControlVal === '0' ||
-        widowControlVal === 'false' ||
-        widowControlVal === false ||
-        widowControlVal === 0
-      ) {
-        paragraph.setWidowControl(false);
-      } else {
-        // If w:val is "1", "true", true, 1, or undefined (element present without val), default to true
-        paragraph.setWidowControl(true);
-      }
+      // Delegate to parseOoxmlBoolean so every ST_OnOff literal — including
+      // "off" / "on" — resolves correctly. The previous bespoke check missed
+      // "off", silently flipping explicit-off to explicit-on.
+      paragraph.setWidowControl(parseOoxmlBoolean(pPrObj['w:widowControl']));
     }
 
     // Outline level per ECMA-376 Part 1 §17.3.1.19
@@ -2397,15 +2503,11 @@ export class DocumentParser {
       paragraph.setSuppressLineNumbers(parseOoxmlBoolean(pPrObj['w:suppressLineNumbers']));
     }
 
-    // Bidirectional layout per ECMA-376 Part 1 §17.3.1.6
+    // Bidirectional layout per ECMA-376 Part 1 §17.3.1.6 — delegate to
+    // parseOoxmlBoolean so "off"/"on" literals resolve correctly (the
+    // previous bespoke check missed them).
     if (pPrObj['w:bidi'] !== undefined) {
-      const bidiVal = pPrObj['w:bidi']?.['@_w:val'];
-      if (bidiVal === '0' || bidiVal === 'false' || bidiVal === false || bidiVal === 0) {
-        paragraph.setBidi(false);
-      } else {
-        // Default is true when element present without val attribute or val="1"
-        paragraph.setBidi(true);
-      }
+      paragraph.setBidi(parseOoxmlBoolean(pPrObj['w:bidi']));
     }
 
     // Text direction per ECMA-376 Part 1 §17.3.1.36
@@ -2423,20 +2525,10 @@ export class DocumentParser {
       paragraph.setMirrorIndents(parseOoxmlBoolean(pPrObj['w:mirrorIndents']));
     }
 
-    // Auto-adjust right indent per ECMA-376 Part 1 §17.3.1.1
+    // Auto-adjust right indent per ECMA-376 Part 1 §17.3.1.1 — delegate to
+    // parseOoxmlBoolean so "off"/"on" literals resolve correctly.
     if (pPrObj['w:adjustRightInd'] !== undefined) {
-      const adjustRightIndVal = pPrObj['w:adjustRightInd']?.['@_w:val'];
-      if (
-        adjustRightIndVal === '0' ||
-        adjustRightIndVal === 'false' ||
-        adjustRightIndVal === false ||
-        adjustRightIndVal === 0
-      ) {
-        paragraph.setAdjustRightInd(false);
-      } else {
-        // Default is true when element present without val attribute or val="1"
-        paragraph.setAdjustRightInd(true);
-      }
+      paragraph.setAdjustRightInd(parseOoxmlBoolean(pPrObj['w:adjustRightInd']));
     }
 
     // Text frame properties per ECMA-376 Part 1 §17.3.1.11
@@ -2510,11 +2602,16 @@ export class DocumentParser {
       }
     }
 
-    // HTML div ID per ECMA-376 Part 1 §17.3.1.9
+    // HTML div ID per ECMA-376 Part 1 §17.3.1.10 (CT_DivId). `w:val` is
+    // ST_DecimalNumber — 0 is a valid ID referencing the first div in
+    // web settings. XMLParser coerces `"0"` to the number 0, and the
+    // previous `if (divIdVal)` truthy check silently dropped it, breaking
+    // the paragraph's link to div index 0 on every round-trip.
     if (pPrObj['w:divId']) {
       const divIdVal = pPrObj['w:divId']?.['@_w:val'];
-      if (divIdVal) {
-        paragraph.setDivId(parseInt(divIdVal, 10));
+      if (isExplicitlySet(divIdVal)) {
+        const parsed = safeParseInt(divIdVal);
+        if (!isNaN(parsed)) paragraph.setDivId(parsed);
       }
     }
 
@@ -2529,13 +2626,27 @@ export class DocumentParser {
       }
     }
 
-    // Paragraph property change tracking per ECMA-376 Part 1 §17.3.1.27
+    // Paragraph property change tracking per ECMA-376 Part 1 §17.3.1.27.
+    // CT_TrackChange attributes — `w:id` (ST_DecimalNumber, required),
+    // `w:author` (ST_String, required), `w:date` (ST_DateTime, optional).
+    // XMLParser coerces `w:id="0"` to the number 0; the previous
+    // `if (changeObj['@_w:id'])` truthy gate silently dropped id=0,
+    // producing `<w:pPrChange w:author="…" w:date="…"/>` on emission —
+    // missing the required `w:id` and failing strict validation. The
+    // sibling `trPrChange` / `tblPrChange` / `tcPrChange` / `sectPrChange`
+    // parsers already use `|| '0'` or `!== undefined` for the same reason.
     if (pPrObj['w:pPrChange']) {
       const changeObj = pPrObj['w:pPrChange'];
       const change: any = {};
-      if (changeObj['@_w:author']) change.author = String(changeObj['@_w:author']);
-      if (changeObj['@_w:date']) change.date = String(changeObj['@_w:date']);
-      if (changeObj['@_w:id']) change.id = String(changeObj['@_w:id']);
+      if (changeObj['@_w:author'] !== undefined) {
+        change.author = String(changeObj['@_w:author']);
+      }
+      if (changeObj['@_w:date'] !== undefined) {
+        change.date = String(changeObj['@_w:date']);
+      }
+      if (changeObj['@_w:id'] !== undefined) {
+        change.id = String(changeObj['@_w:id']);
+      }
 
       // Parse child w:pPr for previousProperties to preserve tracked change history
       if (changeObj['w:pPr']) {
@@ -2566,7 +2677,11 @@ export class DocumentParser {
         }
 
         // Parse previous indentation
-        // Per ECMA-376 §17.3.1.15: w:start/w:end are bidi-aware alternatives to w:left/w:right
+        // Per ECMA-376 §17.3.1.15: w:start/w:end are bidi-aware alternatives to w:left/w:right.
+        // Also parse the six CJK character-unit variants (ST_DecimalNumber) per §17.3.1.12;
+        // these round-trip alongside the twips so Word's rendering of the tracked "previous"
+        // state stays locale-accurate for CJK-authored documents. Matches the iteration-21
+        // fix on the main-path parser.
         if (prevPPr['w:ind']) {
           const ind = prevPPr['w:ind'];
           previousProperties.indentation = {};
@@ -2578,6 +2693,18 @@ export class DocumentParser {
             previousProperties.indentation.firstLine = parseInt(ind['@_w:firstLine'], 10);
           if (ind['@_w:hanging'] !== undefined)
             previousProperties.indentation.hanging = parseInt(ind['@_w:hanging'], 10);
+          // CJK character-unit variants. startChars/endChars collapse onto
+          // leftChars/rightChars (same pattern as the twips variants).
+          const leftCharsVal = ind['@_w:startChars'] ?? ind['@_w:leftChars'];
+          const rightCharsVal = ind['@_w:endChars'] ?? ind['@_w:rightChars'];
+          if (leftCharsVal !== undefined)
+            previousProperties.indentation.leftChars = parseInt(leftCharsVal, 10);
+          if (rightCharsVal !== undefined)
+            previousProperties.indentation.rightChars = parseInt(rightCharsVal, 10);
+          if (ind['@_w:firstLineChars'] !== undefined)
+            previousProperties.indentation.firstLineChars = parseInt(ind['@_w:firstLineChars'], 10);
+          if (ind['@_w:hangingChars'] !== undefined)
+            previousProperties.indentation.hangingChars = parseInt(ind['@_w:hangingChars'], 10);
         }
 
         // Parse previous alignment
@@ -2601,48 +2728,51 @@ export class DocumentParser {
             previousProperties.spacing.beforeLines = parseInt(spacing['@_w:beforeLines'], 10);
           if (spacing['@_w:afterLines'] !== undefined)
             previousProperties.spacing.afterLines = parseInt(spacing['@_w:afterLines'], 10);
+          // ST_OnOff per ECMA-376 §17.17.4 — accept 1/0/true/false/on/off
           const beforeAuto = spacing['@_w:beforeAutospacing'];
           if (beforeAuto !== undefined)
-            previousProperties.spacing.beforeAutospacing =
-              String(beforeAuto) === '1' || String(beforeAuto) === 'true';
+            previousProperties.spacing.beforeAutospacing = parseOnOffAttribute(beforeAuto);
           const afterAuto = spacing['@_w:afterAutospacing'];
           if (afterAuto !== undefined)
-            previousProperties.spacing.afterAutospacing =
-              String(afterAuto) === '1' || String(afterAuto) === 'true';
+            previousProperties.spacing.afterAutospacing = parseOnOffAttribute(afterAuto);
         }
 
-        // Parse previous keepNext/keepLines/pageBreakBefore
+        // CT_OnOff properties per ECMA-376 §17.17.4 — accept "1"/"0"/"true"/"false"/"on"/"off"
+        // plus the number forms produced by fast-xml-parser's parseAttributeValue. Using
+        // parseOoxmlBoolean() keeps pPrChange round-trips consistent with the main pPr parser;
+        // the previous `!== '0'` pattern silently flipped "false", "off", and the numeric 0.
         if (prevPPr['w:keepNext']) {
-          previousProperties.keepNext = prevPPr['w:keepNext']['@_w:val'] !== '0';
+          previousProperties.keepNext = parseOoxmlBoolean(prevPPr['w:keepNext']);
         }
         if (prevPPr['w:keepLines']) {
-          previousProperties.keepLines = prevPPr['w:keepLines']['@_w:val'] !== '0';
+          previousProperties.keepLines = parseOoxmlBoolean(prevPPr['w:keepLines']);
         }
         if (prevPPr['w:pageBreakBefore']) {
-          previousProperties.pageBreakBefore = prevPPr['w:pageBreakBefore']['@_w:val'] !== '0';
+          previousProperties.pageBreakBefore = parseOoxmlBoolean(prevPPr['w:pageBreakBefore']);
         }
 
         // === Extended paragraph property parsing per ECMA-376 Part 1 §17.3.1 ===
 
         // Parse widowControl (w:widowControl) - orphan/widow control
         if (prevPPr['w:widowControl']) {
-          previousProperties.widowControl = prevPPr['w:widowControl']['@_w:val'] !== '0';
+          previousProperties.widowControl = parseOoxmlBoolean(prevPPr['w:widowControl']);
         }
 
         // Parse suppressAutoHyphens (w:suppressAutoHyphens)
         if (prevPPr['w:suppressAutoHyphens']) {
-          previousProperties.suppressAutoHyphens =
-            prevPPr['w:suppressAutoHyphens']['@_w:val'] !== '0';
+          previousProperties.suppressAutoHyphens = parseOoxmlBoolean(
+            prevPPr['w:suppressAutoHyphens']
+          );
         }
 
         // Parse contextualSpacing (w:contextualSpacing)
         if (prevPPr['w:contextualSpacing']) {
-          previousProperties.contextualSpacing = prevPPr['w:contextualSpacing']['@_w:val'] !== '0';
+          previousProperties.contextualSpacing = parseOoxmlBoolean(prevPPr['w:contextualSpacing']);
         }
 
         // Parse mirrorIndents (w:mirrorIndents)
         if (prevPPr['w:mirrorIndents']) {
-          previousProperties.mirrorIndents = prevPPr['w:mirrorIndents']['@_w:val'] !== '0';
+          previousProperties.mirrorIndents = parseOoxmlBoolean(prevPPr['w:mirrorIndents']);
         }
 
         // Parse outlineLevel (w:outlineLvl @w:val)
@@ -2650,40 +2780,106 @@ export class DocumentParser {
           previousProperties.outlineLevel = parseInt(prevPPr['w:outlineLvl']['@_w:val'], 10);
         }
 
+        // Parse previous text frame properties (w:framePr) per ECMA-376
+        // Part 1 §17.3.1.11 CT_FramePr. The pPrChange emitter already
+        // rebuilds every framePr attribute (see Paragraph.ts §3634), but
+        // the parser never read them — so a tracked change to any
+        // frame property (drop-cap, text-box positioning, wrap mode,
+        // anchor lock…) silently lost the previous state on round-trip.
+        if (prevPPr['w:framePr']) {
+          const framePr = prevPPr['w:framePr'];
+          const frameProps: any = {};
+          if (isExplicitlySet(framePr['@_w:w'])) frameProps.w = safeParseInt(framePr['@_w:w']);
+          if (isExplicitlySet(framePr['@_w:h'])) frameProps.h = safeParseInt(framePr['@_w:h']);
+          if (framePr['@_w:hRule']) frameProps.hRule = String(framePr['@_w:hRule']);
+          if (isExplicitlySet(framePr['@_w:x'])) frameProps.x = safeParseInt(framePr['@_w:x']);
+          if (isExplicitlySet(framePr['@_w:y'])) frameProps.y = safeParseInt(framePr['@_w:y']);
+          if (framePr['@_w:xAlign']) frameProps.xAlign = String(framePr['@_w:xAlign']);
+          if (framePr['@_w:yAlign']) frameProps.yAlign = String(framePr['@_w:yAlign']);
+          if (framePr['@_w:hAnchor']) frameProps.hAnchor = String(framePr['@_w:hAnchor']);
+          if (framePr['@_w:vAnchor']) frameProps.vAnchor = String(framePr['@_w:vAnchor']);
+          if (isExplicitlySet(framePr['@_w:hSpace'])) {
+            frameProps.hSpace = safeParseInt(framePr['@_w:hSpace']);
+          }
+          if (isExplicitlySet(framePr['@_w:vSpace'])) {
+            frameProps.vSpace = safeParseInt(framePr['@_w:vSpace']);
+          }
+          if (framePr['@_w:wrap']) frameProps.wrap = String(framePr['@_w:wrap']);
+          if (framePr['@_w:dropCap']) frameProps.dropCap = String(framePr['@_w:dropCap']);
+          if (isExplicitlySet(framePr['@_w:lines'])) {
+            frameProps.lines = safeParseInt(framePr['@_w:lines']);
+          }
+          if (isExplicitlySet(framePr['@_w:anchorLock'])) {
+            frameProps.anchorLock = parseOnOffAttribute(String(framePr['@_w:anchorLock']), true);
+          }
+          if (Object.keys(frameProps).length > 0) {
+            previousProperties.framePr = frameProps;
+          }
+        }
+
         // Parse bidi (w:bidi) - right-to-left paragraph
         if (prevPPr['w:bidi']) {
-          previousProperties.bidi = prevPPr['w:bidi']['@_w:val'] !== '0';
+          previousProperties.bidi = parseOoxmlBoolean(prevPPr['w:bidi']);
         }
 
         // Parse suppressLineNumbers (w:suppressLineNumbers)
         if (prevPPr['w:suppressLineNumbers']) {
-          previousProperties.suppressLineNumbers =
-            prevPPr['w:suppressLineNumbers']['@_w:val'] !== '0';
+          previousProperties.suppressLineNumbers = parseOoxmlBoolean(
+            prevPPr['w:suppressLineNumbers']
+          );
         }
 
         // Parse adjustRightInd (w:adjustRightInd)
         if (prevPPr['w:adjustRightInd']) {
-          previousProperties.adjustRightInd = prevPPr['w:adjustRightInd']['@_w:val'] !== '0';
+          previousProperties.adjustRightInd = parseOoxmlBoolean(prevPPr['w:adjustRightInd']);
         }
 
         // Parse snapToGrid (w:snapToGrid)
         if (prevPPr['w:snapToGrid']) {
-          previousProperties.snapToGrid = prevPPr['w:snapToGrid']['@_w:val'] !== '0';
+          previousProperties.snapToGrid = parseOoxmlBoolean(prevPPr['w:snapToGrid']);
         }
 
         // Parse wordWrap (w:wordWrap)
         if (prevPPr['w:wordWrap']) {
-          previousProperties.wordWrap = prevPPr['w:wordWrap']['@_w:val'] !== '0';
+          previousProperties.wordWrap = parseOoxmlBoolean(prevPPr['w:wordWrap']);
         }
 
         // Parse autoSpaceDE (w:autoSpaceDE) - East Asian/numeric spacing
         if (prevPPr['w:autoSpaceDE']) {
-          previousProperties.autoSpaceDE = prevPPr['w:autoSpaceDE']['@_w:val'] !== '0';
+          previousProperties.autoSpaceDE = parseOoxmlBoolean(prevPPr['w:autoSpaceDE']);
         }
 
         // Parse autoSpaceDN (w:autoSpaceDN) - East Asian/Western spacing
         if (prevPPr['w:autoSpaceDN']) {
-          previousProperties.autoSpaceDN = prevPPr['w:autoSpaceDN']['@_w:val'] !== '0';
+          previousProperties.autoSpaceDN = parseOoxmlBoolean(prevPPr['w:autoSpaceDN']);
+        }
+
+        // Parse kinsoku / overflowPunct / topLinePunct / suppressOverlap —
+        // CJK typography CT_OnOff flags. The Paragraph pPrChange generator
+        // already emits these in the previous-properties block, but the
+        // parser was missing the read side, so tracked paragraph-property
+        // revisions that recorded any of these four flags were silently
+        // dropped on load → save. Uses `parseOoxmlBoolean` to honour every
+        // ST_OnOff literal (bare, 1/0, true/false, on/off).
+        if (prevPPr['w:kinsoku']) {
+          (previousProperties as { kinsoku?: boolean }).kinsoku = parseOoxmlBoolean(
+            prevPPr['w:kinsoku']
+          );
+        }
+        if (prevPPr['w:overflowPunct']) {
+          (previousProperties as { overflowPunct?: boolean }).overflowPunct = parseOoxmlBoolean(
+            prevPPr['w:overflowPunct']
+          );
+        }
+        if (prevPPr['w:topLinePunct']) {
+          (previousProperties as { topLinePunct?: boolean }).topLinePunct = parseOoxmlBoolean(
+            prevPPr['w:topLinePunct']
+          );
+        }
+        if (prevPPr['w:suppressOverlap']) {
+          (previousProperties as { suppressOverlap?: boolean }).suppressOverlap = parseOoxmlBoolean(
+            prevPPr['w:suppressOverlap']
+          );
         }
 
         // Parse textDirection (w:textDirection @w:val)
@@ -2696,23 +2892,68 @@ export class DocumentParser {
           previousProperties.textAlignment = String(prevPPr['w:textAlignment']['@_w:val']);
         }
 
+        // Parse previous divId (w:divId) per ECMA-376 §17.3.1.10 —
+        // ST_DecimalNumber referencing a web-settings div. Zero is a
+        // legal ID (first div). XMLParser coerces `"0"` to number 0, so
+        // gate via `isExplicitlySet` to preserve divId=0 on tracked
+        // previous state. The pPrChange emitter (Paragraph.ts §3915)
+        // re-emits prev.divId via `!== undefined`.
+        if (prevPPr['w:divId']?.['@_w:val'] !== undefined) {
+          const rawDivId = prevPPr['w:divId']['@_w:val'];
+          const parsedDivId = safeParseInt(rawDivId);
+          if (!isNaN(parsedDivId)) {
+            previousProperties.divId = parsedDivId;
+          }
+        }
+
+        // Parse previous cnfStyle (w:cnfStyle) per ECMA-376 §17.3.1.8 —
+        // 12-character bitmask identifying which conditional-formatting
+        // flags from the parent table style apply. XMLParser coerces
+        // purely-numeric hex strings, but the custom parseValue keeps
+        // 7+-digit strings as-is (so 12-char bitmasks survive); use
+        // String + padStart to defensively normalise any shorter form.
+        if (prevPPr['w:cnfStyle']?.['@_w:val'] !== undefined) {
+          previousProperties.cnfStyle = String(prevPPr['w:cnfStyle']['@_w:val']).padStart(12, '0');
+        }
+
         // Parse paragraph borders (w:pBdr) per ECMA-376 Part 1 §17.3.1.24
+        // Previous versions stored the attribute values under the wrong
+        // field names (`val`/`sz` instead of `style`/`size`) — the
+        // paragraph emitter reads `style`/`size`, so every tracked
+        // previous border collapsed to `<w:top w:val="nil"/>` on
+        // round-trip. The CT_Border attribute coverage here now matches
+        // the main parser (§17.18.2): all nine attrs, with shadow/frame
+        // routed through parseOnOffAttribute so ST_OnOff literals
+        // ("on"/"off"/"true"/"false") resolve correctly.
         if (prevPPr['w:pBdr']) {
           const pBdr = prevPPr['w:pBdr'];
           previousProperties.borders = {};
 
           const parseBorder = (borderObj: any) => {
             if (!borderObj) return undefined;
-            return {
-              val: borderObj['@_w:val'],
-              sz: borderObj['@_w:sz'] !== undefined ? parseInt(borderObj['@_w:sz'], 10) : undefined,
-              space:
-                borderObj['@_w:space'] !== undefined
-                  ? parseInt(borderObj['@_w:space'], 10)
-                  : undefined,
-              color: borderObj['@_w:color'],
-              themeColor: borderObj['@_w:themeColor'],
-            };
+            const border: any = {};
+            if (borderObj['@_w:val']) border.style = borderObj['@_w:val'];
+            if (borderObj['@_w:sz'] !== undefined) border.size = safeParseInt(borderObj['@_w:sz']);
+            if (borderObj['@_w:space'] !== undefined) {
+              border.space = safeParseInt(borderObj['@_w:space']);
+            }
+            if (borderObj['@_w:color']) border.color = borderObj['@_w:color'];
+            if (borderObj['@_w:themeColor']) {
+              border.themeColor = String(borderObj['@_w:themeColor']);
+            }
+            if (borderObj['@_w:themeTint']) {
+              border.themeTint = String(borderObj['@_w:themeTint']);
+            }
+            if (borderObj['@_w:themeShade']) {
+              border.themeShade = String(borderObj['@_w:themeShade']);
+            }
+            if (borderObj['@_w:shadow'] !== undefined) {
+              border.shadow = parseOnOffAttribute(String(borderObj['@_w:shadow']), true);
+            }
+            if (borderObj['@_w:frame'] !== undefined) {
+              border.frame = parseOnOffAttribute(String(borderObj['@_w:frame']), true);
+            }
+            return Object.keys(border).length > 0 ? border : undefined;
           };
 
           if (pBdr['w:top']) previousProperties.borders.top = parseBorder(pBdr['w:top']);
@@ -3873,11 +4114,15 @@ export class DocumentParser {
         return XMLBuilder.unescapeXml(String(node));
       };
 
-      const parseBooleanAttr = (value: any): boolean | undefined => {
+      // Field-character attributes (w:dirty, w:fldLock, w:lock on w:fldChar) are
+      // ST_OnOff per ECMA-376 §17.16.18. Delegate to parseOnOffAttribute so every
+      // literal is honoured — the previous inline check missed "on" (silently
+      // coerced to false) and was tighter than the spec requires.
+      const parseBooleanAttr = (value: unknown): boolean | undefined => {
         if (value === undefined || value === null) {
           return undefined;
         }
-        return value === '1' || value === 1 || value === true || value === 'true';
+        return parseOnOffAttribute(value);
       };
 
       // Parse w:ffData from a fldChar object (form field data per ECMA-376 §17.16.17)
@@ -3892,15 +4137,13 @@ export class DocumentParser {
         if (ffDataObj['w:name']?.['@_w:val'] !== undefined) {
           ffd.name = String(ffDataObj['w:name']['@_w:val']);
         }
-        // w:enabled (presence = true, w:val="0" = false)
+        // w:enabled — CT_OnOff per ECMA-376 §17.16.11; presence = true, w:val honours ST_OnOff
         if (ffDataObj['w:enabled'] !== undefined) {
-          const enabledVal = ffDataObj['w:enabled']?.['@_w:val'];
-          ffd.enabled = enabledVal === '0' || enabledVal === 0 ? false : true;
+          ffd.enabled = parseOoxmlBoolean(ffDataObj['w:enabled']);
         }
-        // w:calcOnExit
+        // w:calcOnExit — CT_OnOff per ECMA-376 §17.16.4; presence = true, w:val honours ST_OnOff
         if (ffDataObj['w:calcOnExit'] !== undefined) {
-          const calcVal = ffDataObj['w:calcOnExit']?.['@_w:val'];
-          ffd.calcOnExit = calcVal === '1' || calcVal === 1 || calcVal === true;
+          ffd.calcOnExit = parseOoxmlBoolean(ffDataObj['w:calcOnExit']);
         }
         // w:helpText
         if (ffDataObj['w:helpText']?.['@_w:val'] !== undefined) {
@@ -3936,13 +4179,14 @@ export class DocumentParser {
         if (ffDataObj['w:checkBox'] !== undefined) {
           const cb: XmlNode = ffDataObj['w:checkBox'];
           const checkBox: FormFieldCheckBox = { type: 'checkBox' };
-          if (cb['w:default']?.['@_w:val'] !== undefined) {
-            checkBox.defaultChecked =
-              cb['w:default']['@_w:val'] === '1' || cb['w:default']['@_w:val'] === 1;
+          // w:default / w:checked are CT_OnOff per ECMA-376 §17.16.18 —
+          // honour every ST_OnOff literal ("true"/"false"/"1"/"0"/"on"/"off")
+          // and treat a bare self-closing element as true.
+          if (cb['w:default'] !== undefined) {
+            checkBox.defaultChecked = parseOoxmlBoolean(cb['w:default']);
           }
-          if (cb['w:checked']?.['@_w:val'] !== undefined) {
-            checkBox.checked =
-              cb['w:checked']['@_w:val'] === '1' || cb['w:checked']['@_w:val'] === 1;
+          if (cb['w:checked'] !== undefined) {
+            checkBox.checked = parseOoxmlBoolean(cb['w:checked']);
           }
           if (cb['w:size']?.['@_w:val'] !== undefined) {
             checkBox.size = Number(cb['w:size']['@_w:val']);
@@ -4146,29 +4390,46 @@ export class DocumentParser {
               content.push({ type: 'annotationRef' });
               break;
 
-            // Footnote reference (w:footnoteReference) per ECMA-376 Part 1 §17.11.13
+            // Footnote reference (w:footnoteReference) per ECMA-376 Part 1 §17.11.13.
+            // w:customMarkFollows is ST_OnOff — honour every literal via parseOnOffAttribute.
             case 'w:footnoteReference': {
               const fnRefElements = toArray(runObj['w:footnoteReference']);
               const fnRef = fnRefElements[elementIndex] || fnRefElements[0];
               const fnId = fnRef?.['@_w:id'];
+              const fnCustomMark = fnRef?.['@_w:customMarkFollows'];
               content.push({
                 type: 'footnoteReference',
                 footnoteId: fnId !== undefined ? parseInt(fnId, 10) : undefined,
+                customMarkFollows:
+                  fnCustomMark !== undefined ? parseOnOffAttribute(fnCustomMark) : undefined,
               });
               break;
             }
 
-            // Endnote reference (w:endnoteReference) per ECMA-376 Part 1 §17.11.2
+            // Endnote reference (w:endnoteReference) per ECMA-376 Part 1 §17.11.2.
+            // Same ST_OnOff treatment for w:customMarkFollows.
             case 'w:endnoteReference': {
               const enRefElements = toArray(runObj['w:endnoteReference']);
               const enRef = enRefElements[elementIndex] || enRefElements[0];
               const enId = enRef?.['@_w:id'];
+              const enCustomMark = enRef?.['@_w:customMarkFollows'];
               content.push({
                 type: 'endnoteReference',
                 endnoteId: enId !== undefined ? parseInt(enId, 10) : undefined,
+                customMarkFollows:
+                  enCustomMark !== undefined ? parseOnOffAttribute(enCustomMark) : undefined,
               });
               break;
             }
+
+            // Auto-numbered marks INSIDE a footnote/endnote body per
+            // ECMA-376 §17.11.14 / §17.11.3. Empty self-closing elements.
+            case 'w:footnoteRef':
+              content.push({ type: 'footnoteRef' });
+              break;
+            case 'w:endnoteRef':
+              content.push({ type: 'endnoteRef' });
+              break;
 
             case 'w:dayShort':
               content.push({ type: 'dayShort' });
@@ -4355,14 +4616,18 @@ export class DocumentParser {
         if (runObj['w:annotationRef'] !== undefined) {
           content.push({ type: 'annotationRef' });
         }
-        // Footnote/endnote reference fallback
+        // Footnote/endnote reference fallback. w:customMarkFollows is ST_OnOff
+        // per ECMA-376 §17.11.13 / §17.11.2 — honour every literal.
         if (runObj['w:footnoteReference'] !== undefined) {
           const fnRefElements = toArray(runObj['w:footnoteReference']);
           for (const fnRef of fnRefElements) {
             const fnId = fnRef?.['@_w:id'];
+            const fnCustomMark = fnRef?.['@_w:customMarkFollows'];
             content.push({
               type: 'footnoteReference',
               footnoteId: fnId !== undefined ? parseInt(fnId, 10) : undefined,
+              customMarkFollows:
+                fnCustomMark !== undefined ? parseOnOffAttribute(fnCustomMark) : undefined,
             });
           }
         }
@@ -4370,11 +4635,21 @@ export class DocumentParser {
           const enRefElements = toArray(runObj['w:endnoteReference']);
           for (const enRef of enRefElements) {
             const enId = enRef?.['@_w:id'];
+            const enCustomMark = enRef?.['@_w:customMarkFollows'];
             content.push({
               type: 'endnoteReference',
               endnoteId: enId !== undefined ? parseInt(enId, 10) : undefined,
+              customMarkFollows:
+                enCustomMark !== undefined ? parseOnOffAttribute(enCustomMark) : undefined,
             });
           }
+        }
+        // Auto-numbered marks INSIDE a footnote/endnote body — empty elements.
+        if (runObj['w:footnoteRef'] !== undefined) {
+          content.push({ type: 'footnoteRef' });
+        }
+        if (runObj['w:endnoteRef'] !== undefined) {
+          content.push({ type: 'endnoteRef' });
         }
         if (runObj['w:dayShort'] !== undefined) {
           content.push({ type: 'dayShort' });
@@ -4474,12 +4749,40 @@ export class DocumentParser {
           : [hyperlinkObj['w:bookmarkStart']];
         for (const bs of bookmarkStarts) {
           const id = bs['@_w:id'];
-          const name = bs['@_w:name'];
+          // w:name is ST_String per §17.16.5 CT_Bookmark. XMLParser
+          // coerces purely-numeric bookmark names ("12345") to JS
+          // numbers; cast so Bookmark.name holds the declared string
+          // type contract (parent parsers already do the same —
+          // iter 125 toOptString helper).
+          const rawName = bs['@_w:name'];
+          const name =
+            rawName === undefined || rawName === null || rawName === ''
+              ? undefined
+              : String(rawName);
           if (id !== undefined && name) {
+            // CT_Bookmark per ECMA-376 §17.16.5: the object-form parser
+            // must carry the same four "markup" attributes that the
+            // XML-string bookmarkStart parser handles — colFirst/colLast
+            // (table-column-scoped bookmarks) and displacedByCustomXml
+            // (custom-XML boundary disambiguator). Previously dropped
+            // whenever a hyperlink wrapped a bookmark, so inline
+            // hyperlinks anchored to table-column bookmarks lost their
+            // column range on round-trip.
+            const rawColFirst = bs['@_w:colFirst'];
+            const rawColLast = bs['@_w:colLast'];
+            const rawDisplaced = bs['@_w:displacedByCustomXml'];
+            const colFirst =
+              rawColFirst === undefined ? undefined : parseInt(String(rawColFirst), 10);
+            const colLast = rawColLast === undefined ? undefined : parseInt(String(rawColLast), 10);
+            const displacedByCustomXml =
+              rawDisplaced === 'next' || rawDisplaced === 'prev' ? rawDisplaced : undefined;
             const bookmark = new Bookmark({
               name: name,
               id: typeof id === 'number' ? id : parseInt(id, 10),
               skipNormalization: true,
+              colFirst: Number.isNaN(colFirst as number) ? undefined : colFirst,
+              colLast: Number.isNaN(colLast as number) ? undefined : colLast,
+              displacedByCustomXml,
             });
             result.bookmarkStarts.push(bookmark);
             // Also register with BookmarkManager
@@ -4501,23 +4804,47 @@ export class DocumentParser {
         for (const be of bookmarkEnds) {
           const id = be['@_w:id'];
           if (id !== undefined) {
+            // CT_MarkupRange per ECMA-376 §17.13.5 — preserve
+            // w:displacedByCustomXml on bookmarkEnd when a custom-XML
+            // boundary forced the marker to be displaced.
+            const rawDisplaced = be['@_w:displacedByCustomXml'];
+            const displacedByCustomXml =
+              rawDisplaced === 'next' || rawDisplaced === 'prev' ? rawDisplaced : undefined;
             const bookmark = new Bookmark({
               name: `_end_${id}`,
               id: typeof id === 'number' ? id : parseInt(id, 10),
               skipNormalization: true,
+              displacedByCustomXml,
             });
             result.bookmarkEnds.push(bookmark);
           }
         }
       }
 
-      // Extract hyperlink attributes
-      const relationshipId = hyperlinkObj['@_r:id'];
-      const anchor = hyperlinkObj['@_w:anchor'];
-      const tooltip = hyperlinkObj['@_w:tooltip'];
-      const tgtFrame = hyperlinkObj['@_w:tgtFrame'];
-      const history = hyperlinkObj['@_w:history'];
-      const docLocation = hyperlinkObj['@_w:docLocation'];
+      // Extract hyperlink attributes. Per ECMA-376 §17.16.22 CT_Hyperlink,
+      // w:anchor / w:tooltip / w:tgtFrame / w:docLocation / r:id are all
+      // ST_String. XMLParser's `parseAttributeValue: true` coerces
+      // purely-numeric strings (e.g., a bookmark name like "12345") to
+      // JS numbers — cast via String(...) so downstream `Hyperlink`
+      // storage and string-method callers see the declared `string`
+      // type contract.
+      const toOptString = (v: unknown): string | undefined =>
+        v === undefined || v === null ? undefined : String(v);
+      const relationshipId = toOptString(hyperlinkObj['@_r:id']);
+      const anchor = toOptString(hyperlinkObj['@_w:anchor']);
+      const tooltip = toOptString(hyperlinkObj['@_w:tooltip']);
+      const tgtFrame = toOptString(hyperlinkObj['@_w:tgtFrame']);
+      // w:history is CT_OnOff per ECMA-376 §17.16.22 — honour every
+      // ST_OnOff literal ("1"/"0"/"true"/"false"/"on"/"off") and every
+      // XMLParser-coerced form (number 0/1, boolean). The Hyperlink
+      // serializer accepts a string, so normalise to the canonical
+      // "1"/"0" form. Without this, `w:history="0"` or `w:history="false"`
+      // coerced to falsy values and the emitter's truthy check dropped
+      // the attribute on round-trip.
+      const rawHistory = hyperlinkObj['@_w:history'];
+      const history =
+        rawHistory === undefined ? undefined : parseOnOffAttribute(rawHistory) ? '1' : '0';
+      const docLocation = toOptString(hyperlinkObj['@_w:docLocation']);
 
       // Parse runs inside the hyperlink
       const runs = hyperlinkObj['w:r'];
@@ -4815,8 +5142,20 @@ export class DocumentParser {
       }
 
       // Extract field type from instruction (first word)
-      const typeMatch = instruction.trim().match(/^(\w+)/);
+      const typeMatch = String(instruction)
+        .trim()
+        .match(/^(\w+)/);
       const type = (typeMatch?.[1] || 'PAGE') as import('../elements/Field').FieldType;
+
+      // CT_SimpleField (§17.16.16) carries two ST_OnOff attributes besides
+      // the required w:instr — w:fldLock (update lock) and w:dirty
+      // (cached-result staleness). Previously neither was parsed, so
+      // Word's "update field" indicator and "lock field" flag were
+      // silently cleared on every load → save round-trip.
+      const fldLockRaw = fieldObj['@_w:fldLock'];
+      const dirtyRaw = fieldObj['@_w:dirty'];
+      const fldLock = fldLockRaw !== undefined ? parseOnOffAttribute(fldLockRaw) : undefined;
+      const dirty = dirtyRaw !== undefined ? parseOnOffAttribute(dirtyRaw) : undefined;
 
       // Parse run formatting from w:rPr if present
       let formatting: RunFormatting | undefined;
@@ -4829,8 +5168,10 @@ export class DocumentParser {
       // Create field with instruction
       const field = Field.create({
         type,
-        instruction,
+        instruction: String(instruction),
         formatting,
+        fldLock,
+        dirty,
       });
 
       return field;
@@ -4848,15 +5189,25 @@ export class DocumentParser {
   private parseRunPropertiesFromObject(rPrObj: any, run: Run): void {
     if (!rPrObj) return;
 
-    // Parse character style reference (w:rStyle) per ECMA-376 Part 1 §17.3.2.36
+    // Parse character style reference (w:rStyle) per ECMA-376 Part 1
+    // §17.3.2.36 — `w:val` is ST_String referencing a style ID. Cast
+    // via String(...) so a purely-numeric style ID (e.g., "1") that
+    // XMLParser coerces to the number 1 survives as the string "1",
+    // matching the `characterStyle?: string` field contract on
+    // RunFormatting.
     if (rPrObj['w:rStyle']) {
       const styleId = rPrObj['w:rStyle']['@_w:val'];
-      if (styleId) {
-        run.setCharacterStyle(styleId);
+      if (styleId !== undefined && styleId !== null && styleId !== '') {
+        run.setCharacterStyle(String(styleId));
       }
     }
 
-    // Parse text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5
+    // Parse text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5 — CT_Border
+    // §17.18.2 attribute set: val / sz / space / color / themeColor /
+    // themeTint / themeShade / shadow / frame. Previously only the first
+    // four were read, so themed character borders lost their theme linkage
+    // on round-trip. The emitter (Run.generateRunPropertiesXML) handles
+    // all nine since iteration 79.
     if (rPrObj['w:bdr']) {
       const bdr = rPrObj['w:bdr'];
       const border: any = {};
@@ -4864,6 +5215,20 @@ export class DocumentParser {
       if (bdr['@_w:sz']) border.size = parseInt(bdr['@_w:sz'], 10);
       if (bdr['@_w:color']) border.color = bdr['@_w:color'];
       if (bdr['@_w:space']) border.space = parseInt(bdr['@_w:space'], 10);
+      // Per ECMA-376 §17.18.82 CT_Border: themeTint / themeShade are
+      // ST_UcharHexNumber (2-char hex). XMLParser coerces purely-digit
+      // hex strings like "80" / "50" to JS numbers; cast via String(...)
+      // so the declared `string` contract on the model holds for any
+      // downstream code that calls string methods (.toUpperCase(), etc.).
+      if (bdr['@_w:themeColor']) border.themeColor = String(bdr['@_w:themeColor']);
+      if (bdr['@_w:themeTint']) border.themeTint = String(bdr['@_w:themeTint']);
+      if (bdr['@_w:themeShade']) border.themeShade = String(bdr['@_w:themeShade']);
+      if (bdr['@_w:shadow'] !== undefined) {
+        border.shadow = parseOnOffAttribute(String(bdr['@_w:shadow']), true);
+      }
+      if (bdr['@_w:frame'] !== undefined) {
+        border.frame = parseOnOffAttribute(String(bdr['@_w:frame']), true);
+      }
       if (Object.keys(border).length > 0) {
         run.setBorder(border);
       }
@@ -4883,26 +5248,30 @@ export class DocumentParser {
       if (val) run.setEmphasis(val);
     }
 
-    // Parse boolean text effects — use parseOoxmlBoolean to correctly handle w:val="0"/"false"
-    // Per ECMA-376, <w:xxx/> or <w:xxx w:val="1"/> = true; <w:xxx w:val="0"/> = false (explicit off)
-    if (parseOoxmlBoolean(rPrObj['w:outline'])) run.setOutline(true);
-    if (parseOoxmlBoolean(rPrObj['w:shadow'])) run.setShadow(true);
-    if (parseOoxmlBoolean(rPrObj['w:emboss'])) run.setEmboss(true);
-    if (parseOoxmlBoolean(rPrObj['w:imprint'])) run.setImprint(true);
-    if (parseOoxmlBoolean(rPrObj['w:noProof'])) run.setNoProof(true);
+    // CT_OnOff text effects — presence + w:val both matter. Use `!== undefined`
+    // to detect presence, then parseOoxmlBoolean() for the value, so an explicit
+    // `<w:outline w:val="0"/>` override of a style-inherited true is preserved
+    // (not silently dropped into "inherit"). Applies to all OnOffType rPr flags
+    // per ECMA-376 §17.3.2.
+    if (rPrObj['w:outline'] !== undefined) run.setOutline(parseOoxmlBoolean(rPrObj['w:outline']));
+    if (rPrObj['w:shadow'] !== undefined) run.setShadow(parseOoxmlBoolean(rPrObj['w:shadow']));
+    if (rPrObj['w:emboss'] !== undefined) run.setEmboss(parseOoxmlBoolean(rPrObj['w:emboss']));
+    if (rPrObj['w:imprint'] !== undefined) run.setImprint(parseOoxmlBoolean(rPrObj['w:imprint']));
+    if (rPrObj['w:noProof'] !== undefined) run.setNoProof(parseOoxmlBoolean(rPrObj['w:noProof']));
     // snapToGrid: default when absent is true (§17.3.2.34), so explicit val="0" must be preserved
     if (rPrObj['w:snapToGrid'] !== undefined) {
       run.setSnapToGrid(parseOoxmlBoolean(rPrObj['w:snapToGrid']));
     }
-    if (parseOoxmlBoolean(rPrObj['w:vanish'])) run.setVanish(true);
-    if (parseOoxmlBoolean(rPrObj['w:specVanish'])) run.setSpecVanish(true);
+    if (rPrObj['w:vanish'] !== undefined) run.setVanish(parseOoxmlBoolean(rPrObj['w:vanish']));
+    if (rPrObj['w:specVanish'] !== undefined)
+      run.setSpecVanish(parseOoxmlBoolean(rPrObj['w:specVanish']));
 
     // Boolean properties - use parseOoxmlBoolean helper
     // Per ECMA-376: <w:b/> or <w:b w:val="1"/> or <w:b w:val="true"/> means true
     // <w:b w:val="0"/> or <w:b w:val="false"/> means false (omit from document)
 
     // Parse RTL text (w:rtl) per ECMA-376 Part 1 §17.3.2.30
-    if (parseOoxmlBoolean(rPrObj['w:rtl'])) run.setRTL(true);
+    if (rPrObj['w:rtl'] !== undefined) run.setRTL(parseOoxmlBoolean(rPrObj['w:rtl']));
 
     // b, bCs, i, iCs: preserve explicit val="0" to override style-inherited formatting
     if (rPrObj['w:b'] !== undefined) run.setBold(parseOoxmlBoolean(rPrObj['w:b']));
@@ -4919,11 +5288,12 @@ export class DocumentParser {
       run.setSmallCaps(parseOoxmlBoolean(rPrObj['w:smallCaps']));
     if (rPrObj['w:caps'] !== undefined) run.setAllCaps(parseOoxmlBoolean(rPrObj['w:caps']));
 
-    // Parse complex script flag (w:cs) per ECMA-376 Part 1 §17.3.2.7
-    if (parseOoxmlBoolean(rPrObj['w:cs'])) run.setComplexScript(true);
+    // Parse complex script flag (w:cs) per ECMA-376 Part 1 §17.3.2.7 — CT_OnOff
+    if (rPrObj['w:cs'] !== undefined) run.setComplexScript(parseOoxmlBoolean(rPrObj['w:cs']));
 
-    // Parse web hidden (w:webHidden) per ECMA-376 Part 1 §17.3.2.44
-    if (parseOoxmlBoolean(rPrObj['w:webHidden'])) run.setWebHidden(true);
+    // Parse web hidden (w:webHidden) per ECMA-376 Part 1 §17.3.2.44 — CT_OnOff
+    if (rPrObj['w:webHidden'] !== undefined)
+      run.setWebHidden(parseOoxmlBoolean(rPrObj['w:webHidden']));
 
     if (rPrObj['w:u']) {
       // XMLParser adds @_ prefix to attributes
@@ -4943,28 +5313,37 @@ export class DocumentParser {
         );
     }
 
-    // Parse character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.33
+    // Parse character spacing (w:spacing) per ECMA-376 Part 1 §17.3.2.35.
+    // ST_SignedTwipsMeasure — 0 and negative values are valid (default /
+    // tighter spacing). XMLParser.parseAttributeValue coerces "0" to number 0,
+    // which is falsy — so the previous `if (val)` truthy check silently dropped
+    // explicit zero / baseline-reset formatting on every run that used it.
+    // Matches the rPrChange parser below which already uses `!== undefined`.
     if (rPrObj['w:spacing']) {
       const val = rPrObj['w:spacing']['@_w:val'];
-      if (val) run.setCharacterSpacing(parseInt(val, 10));
+      if (val !== undefined) run.setCharacterSpacing(parseInt(String(val), 10));
     }
 
-    // Parse horizontal scaling (w:w) per ECMA-376 Part 1 §17.3.2.43
+    // Parse horizontal scaling (w:w) per ECMA-376 Part 1 §17.3.2.43.
+    // ST_TextScale — min 1 per schema, so value 0 is not spec-valid; keep
+    // truthy check as a mild sanity guard against malformed sources.
     if (rPrObj['w:w']) {
       const val = rPrObj['w:w']['@_w:val'];
-      if (val) run.setScaling(parseInt(val, 10));
+      if (val) run.setScaling(parseInt(String(val), 10));
     }
 
-    // Parse vertical position (w:position) per ECMA-376 Part 1 §17.3.2.31
+    // Parse vertical position (w:position) per ECMA-376 Part 1 §17.3.2.31.
+    // ST_SignedHpsMeasure — 0 = baseline (default / explicit reset).
     if (rPrObj['w:position']) {
       const val = rPrObj['w:position']['@_w:val'];
-      if (val) run.setPosition(parseInt(val, 10));
+      if (val !== undefined) run.setPosition(parseInt(String(val), 10));
     }
 
-    // Parse kerning (w:kern) per ECMA-376 Part 1 §17.3.2.20
+    // Parse kerning (w:kern) per ECMA-376 Part 1 §17.3.2.20.
+    // ST_HpsMeasure — 0 means "kern at every size" (no minimum threshold).
     if (rPrObj['w:kern']) {
       const val = rPrObj['w:kern']['@_w:val'];
-      if (val) run.setKerning(parseInt(val, 10));
+      if (val !== undefined) run.setKerning(parseInt(String(val), 10));
     }
 
     // Parse language (w:lang) per ECMA-376 Part 1 §17.3.2.20 (CT_Language)
@@ -4984,14 +5363,27 @@ export class DocumentParser {
       }
     }
 
-    // Parse East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
+    // Parse East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1
+    // §17.3.2.10 CT_EastAsianLayout. `w:vert` / `w:vertCompress` /
+    // `w:combine` are ST_OnOff attributes — route through
+    // parseOnOffAttribute so every literal ("1"/"0"/"true"/"false"/
+    // "on"/"off") resolves correctly. The previous truthy gate both
+    // dropped explicit false (`w:vert="0"` → coerced 0 → undefined) AND
+    // wrongly marked `w:vert="off"` as true (non-empty string is truthy
+    // without parsing).
     if (rPrObj['w:eastAsianLayout']) {
       const layoutObj = rPrObj['w:eastAsianLayout'];
       const layout: any = {};
       if (layoutObj['@_w:id'] !== undefined) layout.id = Number(layoutObj['@_w:id']);
-      if (layoutObj['@_w:vert']) layout.vert = true;
-      if (layoutObj['@_w:vertCompress']) layout.vertCompress = true;
-      if (layoutObj['@_w:combine']) layout.combine = true;
+      if (layoutObj['@_w:vert'] !== undefined) {
+        layout.vert = parseOnOffAttribute(String(layoutObj['@_w:vert']), true);
+      }
+      if (layoutObj['@_w:vertCompress'] !== undefined) {
+        layout.vertCompress = parseOnOffAttribute(String(layoutObj['@_w:vertCompress']), true);
+      }
+      if (layoutObj['@_w:combine'] !== undefined) {
+        layout.combine = parseOnOffAttribute(String(layoutObj['@_w:combine']), true);
+      }
       if (layoutObj['@_w:combineBrackets'])
         layout.combineBrackets = layoutObj['@_w:combineBrackets'];
 
@@ -5021,17 +5413,23 @@ export class DocumentParser {
 
     if (rPrObj['w:rFonts']) {
       const rFonts = rPrObj['w:rFonts'];
-      if (rFonts['@_w:ascii']) run.setFont(rFonts['@_w:ascii']);
+      // Per ECMA-376 §17.3.2.26 CT_Fonts, all four literal-font
+      // attributes (ascii/hAnsi/eastAsia/cs) are ST_String. XMLParser
+      // coerces purely-numeric font names ("2010", etc.) to JS
+      // numbers; cast through String() so RunFormatting's
+      // declared-string font fields keep their type contract.
+      if (rFonts['@_w:ascii'] !== undefined) run.setFont(String(rFonts['@_w:ascii']));
       // Parse additional font variants per ECMA-376 Part 1 §17.3.2.26
-      if (rFonts['@_w:hAnsi']) run.setFontHAnsi(rFonts['@_w:hAnsi']);
-      if (rFonts['@_w:eastAsia']) run.setFontEastAsia(rFonts['@_w:eastAsia']);
-      if (rFonts['@_w:cs']) run.setFontCs(rFonts['@_w:cs']);
-      if (rFonts['@_w:hint']) run.setFontHint(rFonts['@_w:hint']);
+      if (rFonts['@_w:hAnsi'] !== undefined) run.setFontHAnsi(String(rFonts['@_w:hAnsi']));
+      if (rFonts['@_w:eastAsia'] !== undefined) run.setFontEastAsia(String(rFonts['@_w:eastAsia']));
+      if (rFonts['@_w:cs'] !== undefined) run.setFontCs(String(rFonts['@_w:cs']));
+      if (rFonts['@_w:hint']) run.setFontHint(String(rFonts['@_w:hint']));
       // Parse theme font references per ECMA-376 Part 1 §17.3.2.26
-      if (rFonts['@_w:asciiTheme']) run.setFontAsciiTheme(rFonts['@_w:asciiTheme']);
-      if (rFonts['@_w:hAnsiTheme']) run.setFontHAnsiTheme(rFonts['@_w:hAnsiTheme']);
-      if (rFonts['@_w:eastAsiaTheme']) run.setFontEastAsiaTheme(rFonts['@_w:eastAsiaTheme']);
-      if (rFonts['@_w:cstheme']) run.setFontCsTheme(rFonts['@_w:cstheme']);
+      if (rFonts['@_w:asciiTheme']) run.setFontAsciiTheme(String(rFonts['@_w:asciiTheme']));
+      if (rFonts['@_w:hAnsiTheme']) run.setFontHAnsiTheme(String(rFonts['@_w:hAnsiTheme']));
+      if (rFonts['@_w:eastAsiaTheme'])
+        run.setFontEastAsiaTheme(String(rFonts['@_w:eastAsiaTheme']));
+      if (rFonts['@_w:cstheme']) run.setFontCsTheme(String(rFonts['@_w:cstheme']));
     }
 
     if (rPrObj['w:sz']) {
@@ -5121,10 +5519,22 @@ export class DocumentParser {
           prevProps.italic = parseOoxmlBoolean(prevRPr['w:i']);
         }
 
-        // Parse previous underline
+        // Parse previous underline — CT_Underline per §17.3.2.40 has `val`
+        // plus color / themeColor / themeTint / themeShade. Main rPr parser
+        // reads all of them; rPrChange previously only read `val`, so
+        // underline color metadata on tracked "previous" state was dropped.
         if (prevRPr['w:u']) {
-          const uVal = prevRPr['w:u']['@_w:val'];
+          const uObj = prevRPr['w:u'];
+          const uVal = uObj['@_w:val'];
           prevProps.underline = uVal || true;
+          if (uObj['@_w:color']) prevProps.underlineColor = uObj['@_w:color'];
+          if (uObj['@_w:themeColor']) prevProps.underlineThemeColor = uObj['@_w:themeColor'];
+          if (uObj['@_w:themeTint'] !== undefined) {
+            prevProps.underlineThemeTint = parseInt(String(uObj['@_w:themeTint']), 16);
+          }
+          if (uObj['@_w:themeShade'] !== undefined) {
+            prevProps.underlineThemeShade = parseInt(String(uObj['@_w:themeShade']), 16);
+          }
         }
 
         // Parse previous strikethrough
@@ -5133,13 +5543,28 @@ export class DocumentParser {
         }
 
         // Parse previous font (all w:rFonts attributes per ECMA-376 Part 1 §17.3.2.26)
+        // including theme font references (asciiTheme/hAnsiTheme/eastAsiaTheme/
+        // cstheme). Previously only the literal-font attributes were read, so
+        // rPrChange tracked history of theme-font changes lost the theme linkage
+        // on round-trip — a paragraph whose "previous" font was a theme
+        // reference (e.g. w:asciiTheme="minorHAnsi") silently dropped it.
         if (prevRPr['w:rFonts']) {
           const rFonts = prevRPr['w:rFonts'];
-          if (rFonts['@_w:ascii']) prevProps.font = rFonts['@_w:ascii'];
-          if (rFonts['@_w:hAnsi']) prevProps.fontHAnsi = rFonts['@_w:hAnsi'];
-          if (rFonts['@_w:eastAsia']) prevProps.fontEastAsia = rFonts['@_w:eastAsia'];
-          if (rFonts['@_w:cs']) prevProps.fontCs = rFonts['@_w:cs'];
-          if (rFonts['@_w:hint']) prevProps.fontHint = rFonts['@_w:hint'];
+          // Mirror the main-path String() casts on rPrChange
+          // previous-font reads — ECMA-376 §17.3.2.26 CT_Fonts declares
+          // ascii/hAnsi/eastAsia/cs as ST_String, so purely-numeric
+          // font names must survive round-trip as strings here too.
+          if (rFonts['@_w:ascii'] !== undefined) prevProps.font = String(rFonts['@_w:ascii']);
+          if (rFonts['@_w:hAnsi'] !== undefined) prevProps.fontHAnsi = String(rFonts['@_w:hAnsi']);
+          if (rFonts['@_w:eastAsia'] !== undefined)
+            prevProps.fontEastAsia = String(rFonts['@_w:eastAsia']);
+          if (rFonts['@_w:cs'] !== undefined) prevProps.fontCs = String(rFonts['@_w:cs']);
+          if (rFonts['@_w:hint']) prevProps.fontHint = String(rFonts['@_w:hint']);
+          if (rFonts['@_w:asciiTheme']) prevProps.fontAsciiTheme = String(rFonts['@_w:asciiTheme']);
+          if (rFonts['@_w:hAnsiTheme']) prevProps.fontHAnsiTheme = String(rFonts['@_w:hAnsiTheme']);
+          if (rFonts['@_w:eastAsiaTheme'])
+            prevProps.fontEastAsiaTheme = String(rFonts['@_w:eastAsiaTheme']);
+          if (rFonts['@_w:cstheme']) prevProps.fontCsTheme = String(rFonts['@_w:cstheme']);
         }
 
         // Parse previous size (half-points to points)
@@ -5337,17 +5762,33 @@ export class DocumentParser {
           }
         }
 
-        // Parse text border (w:bdr) per ECMA-376 Part 1 §17.3.2.4
-        // Maps to TextBorder interface: style, size, color, space
+        // Parse text border (w:bdr) per ECMA-376 Part 1 §17.3.2.5 — full
+        // CT_Border attribute set for rPrChange previous-properties fidelity.
         if (prevRPr['w:bdr']) {
           const bdrObj = prevRPr['w:bdr'];
-          prevProps.border = {
+          const tb: import('../elements/Run').TextBorder = {
             style: bdrObj['@_w:val'] as import('../elements/Run').TextBorderStyle,
             size: bdrObj['@_w:sz'] !== undefined ? safeParseInt(bdrObj['@_w:sz']) : undefined,
             space:
               bdrObj['@_w:space'] !== undefined ? safeParseInt(bdrObj['@_w:space']) : undefined,
             color: bdrObj['@_w:color'],
           };
+          // String(...) cast: XMLParser coerces "80"/"50" hex to numbers
+          // — preserve the declared string contract on the model.
+          if (bdrObj['@_w:themeColor']) {
+            tb.themeColor = String(
+              bdrObj['@_w:themeColor']
+            ) as import('../elements/Run').ThemeColorValue;
+          }
+          if (bdrObj['@_w:themeTint']) tb.themeTint = String(bdrObj['@_w:themeTint']);
+          if (bdrObj['@_w:themeShade']) tb.themeShade = String(bdrObj['@_w:themeShade']);
+          if (bdrObj['@_w:shadow'] !== undefined) {
+            tb.shadow = parseOnOffAttribute(String(bdrObj['@_w:shadow']), true);
+          }
+          if (bdrObj['@_w:frame'] !== undefined) {
+            tb.frame = parseOnOffAttribute(String(bdrObj['@_w:frame']), true);
+          }
+          prevProps.border = tb;
         }
 
         // Parse character shading (w:shd) per ECMA-376 Part 1 §17.3.2.32
@@ -5358,22 +5799,52 @@ export class DocumentParser {
           }
         }
 
-        // Parse East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1 §17.3.2.10
+        // Parse East Asian layout (w:eastAsianLayout) per ECMA-376 Part 1
+        // §17.3.2.10 CT_EastAsianLayout. Parity-fix with the main rPr
+        // parser: route the three ST_OnOff attributes through
+        // parseOnOffAttribute so every literal — including "0"
+        // (explicit-false override) and "off" — resolves correctly. The
+        // previous truthy gate both dropped explicit-false (XMLParser
+        // coerces "0" to number 0 → falsy → undefined) and wrongly
+        // coerced "off" to true.
         if (prevRPr['w:eastAsianLayout']) {
           const eaObj = prevRPr['w:eastAsianLayout'];
           prevProps.eastAsianLayout = {
             id: eaObj['@_w:id'] !== undefined ? safeParseInt(eaObj['@_w:id']) : undefined,
-            combine: eaObj['@_w:combine']
-              ? parseOoxmlBoolean({ '@_w:val': eaObj['@_w:combine'] })
-              : undefined,
+            combine:
+              eaObj['@_w:combine'] !== undefined
+                ? parseOnOffAttribute(String(eaObj['@_w:combine']), true)
+                : undefined,
             combineBrackets: eaObj['@_w:combineBrackets'],
-            vert: eaObj['@_w:vert']
-              ? parseOoxmlBoolean({ '@_w:val': eaObj['@_w:vert'] })
-              : undefined,
-            vertCompress: eaObj['@_w:vertCompress']
-              ? parseOoxmlBoolean({ '@_w:val': eaObj['@_w:vertCompress'] })
-              : undefined,
+            vert:
+              eaObj['@_w:vert'] !== undefined
+                ? parseOnOffAttribute(String(eaObj['@_w:vert']), true)
+                : undefined,
+            vertCompress:
+              eaObj['@_w:vertCompress'] !== undefined
+                ? parseOnOffAttribute(String(eaObj['@_w:vertCompress']), true)
+                : undefined,
           };
+        }
+
+        // Collect w14: namespace elements from the previous rPr for
+        // passthrough (Word 2010+ text effects: w14:textOutline,
+        // w14:shadow, w14:reflection, w14:glow, w14:ligatures,
+        // w14:numForm, w14:numSpacing, w14:cntxtAlts, w14:stylisticSets).
+        // The main rPr parser already collects these and the rPrChange
+        // emitter (via generateRunPropertiesXML line 3130) re-emits
+        // prevProps.rawW14Properties, but the rPrChange parser never
+        // captured them — so tracked changes to any w14 text effect
+        // silently lost the previous state on load → save.
+        const prevRawW14: string[] = [];
+        for (const key of Object.keys(prevRPr)) {
+          if (key.startsWith('w14:')) {
+            const rawXml = this.objectToXml({ [key]: prevRPr[key] });
+            if (rawXml) prevRawW14.push(rawXml);
+          }
+        }
+        if (prevRawW14.length > 0) {
+          (prevProps as { rawW14Properties?: string[] }).rawW14Properties = prevRawW14;
         }
 
         propChange.previousProperties = prevProps;
@@ -5446,8 +5917,15 @@ export class DocumentParser {
       let docPrId = 1;
       let hidden = false;
       if (docPrObj) {
-        name = docPrObj['@_name'] || 'image';
-        description = docPrObj['@_descr'] || 'Image';
+        // wp:docPr @name and @descr are xsd:string per ECMA-376
+        // §20.4.2.5 CT_NonVisualDrawingProps. XMLParser coerces
+        // purely-numeric values ("2010") to JS numbers; cast through
+        // String() so Image.name / Image.description keep the declared
+        // string contract (matches the @_title handling below).
+        const rawName = docPrObj['@_name'];
+        name = rawName !== undefined && rawName !== null ? String(rawName) : 'image';
+        const rawDescr = docPrObj['@_descr'];
+        description = rawDescr !== undefined && rawDescr !== null ? String(rawDescr) : 'Image';
         if (docPrObj['@_title']) {
           title = String(docPrObj['@_title']);
         }
@@ -6137,12 +6615,36 @@ export class DocumentParser {
    */
   private parseBorderElement(borderObj: any): TableBorder | undefined {
     if (!borderObj) return undefined;
+    // Extract the full CT_Border attribute set per ECMA-376 §17.18.2:
+    // val (required) / sz / space / color / themeColor / themeTint /
+    // themeShade / shadow / frame. Previously the last five were silently
+    // dropped on load, so themed borders and shadow/frame flags were lost
+    // on every round-trip.
     const border: TableBorder = {
       style: (borderObj['@_w:val'] || 'single') as TableBorder['style'],
     };
     if (borderObj['@_w:sz'] !== undefined) border.size = safeParseInt(borderObj['@_w:sz']);
     if (borderObj['@_w:space'] !== undefined) border.space = safeParseInt(borderObj['@_w:space']);
-    if (borderObj['@_w:color']) border.color = borderObj['@_w:color'];
+    if (borderObj['@_w:color']) border.color = String(borderObj['@_w:color']);
+    // String(...) cast: themeTint / themeShade are ST_UcharHexNumber
+    // (2-char hex) declared as `string` on the model. XMLParser coerces
+    // purely-digit hex like "80"/"50" to numbers — cast to preserve
+    // the type contract.
+    if (borderObj['@_w:themeColor']) {
+      (border as any).themeColor = String(borderObj['@_w:themeColor']);
+    }
+    if (borderObj['@_w:themeTint']) {
+      (border as any).themeTint = String(borderObj['@_w:themeTint']);
+    }
+    if (borderObj['@_w:themeShade']) {
+      (border as any).themeShade = String(borderObj['@_w:themeShade']);
+    }
+    if (borderObj['@_w:shadow'] !== undefined) {
+      (border as any).shadow = parseOnOffAttribute(String(borderObj['@_w:shadow']), true);
+    }
+    if (borderObj['@_w:frame'] !== undefined) {
+      (border as any).frame = parseOnOffAttribute(String(borderObj['@_w:frame']), true);
+    }
     return border;
   }
 
@@ -6188,8 +6690,10 @@ export class DocumentParser {
           const gridChange = TableGridChange.create(
             safeParseInt(changeObj['@_w:id'], 0),
             prevWidths,
-            changeObj['@_w:author'] || undefined,
-            changeObj['@_w:date'] ? new Date(changeObj['@_w:date']) : undefined
+            changeObj['@_w:author'] !== undefined ? String(changeObj['@_w:author']) : undefined,
+            changeObj['@_w:date'] !== undefined
+              ? new Date(String(changeObj['@_w:date']))
+              : undefined
           );
           table.setTblGridChange(gridChange);
         }
@@ -6284,53 +6788,90 @@ export class DocumentParser {
   private parseTablePropertiesFromObject(tblPrObj: any, table: Table): void {
     if (!tblPrObj) return;
 
-    // Parse table style reference (w:tblStyle)
+    // Parse table style reference (w:tblStyle) per ECMA-376 §17.7.4.62.
+    // w:val is ST_String — cast through String() so purely-numeric
+    // custom style IDs ("2025", "1", …) don't leak as JS numbers
+    // through XMLParser's parseAttributeValue coercion into the
+    // string-typed `formatting.style` field.
     if (tblPrObj['w:tblStyle']) {
       const styleId = tblPrObj['w:tblStyle']['@_w:val'];
-      if (styleId) {
-        table.setStyle(styleId);
+      if (styleId !== undefined && styleId !== null && styleId !== '') {
+        table.setStyle(String(styleId));
       }
     }
 
-    // Parse table look flags (w:tblLook) - for conditional formatting
-    // Supports both hex string format (w:val="04A0") and individual attributes
+    // Parse table look flags (w:tblLook) per ECMA-376 §17.4.57 — supports both
+    // hex-string format (w:val="04A0") AND individual ST_OnOff attributes
+    // (firstRow/lastRow/firstColumn/lastColumn/noHBand/noVBand).
+    //
+    // XMLParser.parseToObject runs with `parseAttributeValue: true` by default,
+    // so `"1"` coerces to the number `1` and `"true"` to the boolean `true`.
+    // The previous `=== '1'` strict-string comparison missed both coerced
+    // forms, silently flipping every individually-set flag to OFF and
+    // producing `tblLook="0000"` for every Word-authored document whose
+    // tblLook used the expanded attribute syntax. Route each attribute
+    // through `parseOoxmlBoolean` (attribute form) so string/number/boolean
+    // representations all resolve correctly.
     if (tblPrObj['w:tblLook']) {
       const look = tblPrObj['w:tblLook'];
       if (look['@_w:val']) {
         // Hex string format
         table.setTblLook(look['@_w:val']);
       } else {
-        // Individual attribute format - construct hex value
-        // Per ECMA-376 §17.4.57: bit5=firstRow, bit6=lastRow, bit7=firstCol, bit8=lastCol, bit9=noHBand, bit10=noVBand
+        // Individual attribute format — construct hex value.
+        // Bits per §17.4.57: firstRow=0x0020, lastRow=0x0040, firstCol=0x0080,
+        // lastCol=0x0100, noHBand=0x0200, noVBand=0x0400.
+        const attrIsOn = (name: string): boolean => {
+          const v = look[name];
+          if (v === undefined) return false;
+          // parseOoxmlBoolean accepts the value wrapped as `{'@_w:val': v}` —
+          // handles string "1"/"0"/"true"/"false"/"on"/"off", number 1/0,
+          // and boolean true/false uniformly.
+          return parseOoxmlBoolean({ '@_w:val': v });
+        };
         let value = 0;
-        if (look['@_w:firstRow'] === '1') value |= 0x0020;
-        if (look['@_w:lastRow'] === '1') value |= 0x0040;
-        if (look['@_w:firstColumn'] === '1') value |= 0x0080;
-        if (look['@_w:lastColumn'] === '1') value |= 0x0100;
-        if (look['@_w:noHBand'] === '1') value |= 0x0200;
-        if (look['@_w:noVBand'] === '1') value |= 0x0400;
+        if (attrIsOn('@_w:firstRow')) value |= 0x0020;
+        if (attrIsOn('@_w:lastRow')) value |= 0x0040;
+        if (attrIsOn('@_w:firstColumn')) value |= 0x0080;
+        if (attrIsOn('@_w:lastColumn')) value |= 0x0100;
+        if (attrIsOn('@_w:noHBand')) value |= 0x0200;
+        if (attrIsOn('@_w:noVBand')) value |= 0x0400;
         table.setTblLook(value.toString(16).toUpperCase().padStart(4, '0'));
       }
     }
 
-    // Parse table positioning (tblpPr) - for floating tables
+    // Parse table positioning (tblpPr) - for floating tables.
+    // Per ECMA-376 §17.4.52 CT_TblPPr, the six numeric attributes
+    // (tblpX/tblpY/leftFromText/rightFromText/topFromText/bottomFromText)
+    // are ST_SignedTwipsMeasure / ST_TwipsMeasure where 0 is a valid
+    // value (e.g. float table anchored exactly at the anchor point).
+    // XMLParser coerces "0" to the number 0 (falsy), so the previous
+    // truthy gate silently dropped zero-offset positions. Table's
+    // emitter uses `!== undefined`, so the asymmetry lost zeroes on
+    // round-trip. Route each numeric read through isExplicitlySet +
+    // safeParseInt.
     if (tblPrObj['w:tblpPr']) {
       const tblpPr = tblPrObj['w:tblpPr'];
       const position: any = {};
 
-      if (tblpPr['@_w:tblpX']) position.x = parseInt(tblpPr['@_w:tblpX'], 10);
-      if (tblpPr['@_w:tblpY']) position.y = parseInt(tblpPr['@_w:tblpY'], 10);
+      if (isExplicitlySet(tblpPr['@_w:tblpX'])) position.x = safeParseInt(tblpPr['@_w:tblpX']);
+      if (isExplicitlySet(tblpPr['@_w:tblpY'])) position.y = safeParseInt(tblpPr['@_w:tblpY']);
       if (tblpPr['@_w:horzAnchor']) position.horizontalAnchor = tblpPr['@_w:horzAnchor'];
       if (tblpPr['@_w:vertAnchor']) position.verticalAnchor = tblpPr['@_w:vertAnchor'];
       if (tblpPr['@_w:tblpXSpec']) position.horizontalAlignment = tblpPr['@_w:tblpXSpec'];
       if (tblpPr['@_w:tblpYSpec']) position.verticalAlignment = tblpPr['@_w:tblpYSpec'];
-      if (tblpPr['@_w:leftFromText'])
-        position.leftFromText = parseInt(tblpPr['@_w:leftFromText'], 10);
-      if (tblpPr['@_w:rightFromText'])
-        position.rightFromText = parseInt(tblpPr['@_w:rightFromText'], 10);
-      if (tblpPr['@_w:topFromText']) position.topFromText = parseInt(tblpPr['@_w:topFromText'], 10);
-      if (tblpPr['@_w:bottomFromText'])
-        position.bottomFromText = parseInt(tblpPr['@_w:bottomFromText'], 10);
+      if (isExplicitlySet(tblpPr['@_w:leftFromText'])) {
+        position.leftFromText = safeParseInt(tblpPr['@_w:leftFromText']);
+      }
+      if (isExplicitlySet(tblpPr['@_w:rightFromText'])) {
+        position.rightFromText = safeParseInt(tblpPr['@_w:rightFromText']);
+      }
+      if (isExplicitlySet(tblpPr['@_w:topFromText'])) {
+        position.topFromText = safeParseInt(tblpPr['@_w:topFromText']);
+      }
+      if (isExplicitlySet(tblpPr['@_w:bottomFromText'])) {
+        position.bottomFromText = safeParseInt(tblpPr['@_w:bottomFromText']);
+      }
 
       if (Object.keys(position).length > 0) {
         table.setPosition(position);
@@ -6343,9 +6884,9 @@ export class DocumentParser {
       table.setOverlap(val === 'overlap');
     }
 
-    // Parse bidirectional visual layout
+    // Parse bidirectional visual layout — CT_OnOff, honour w:val per ECMA-376 §17.17.4
     if (tblPrObj['w:bidiVisual']) {
-      table.setBidiVisual(true);
+      table.setBidiVisual(parseOoxmlBoolean(tblPrObj['w:bidiVisual']));
     }
 
     // Parse table width — always set when w:tblW is present, including w:w="0" w:type="auto"
@@ -6358,24 +6899,37 @@ export class DocumentParser {
       table.setWidthType(widthType);
     }
 
-    // Parse table caption
+    // Parse table caption — ST_String per §17.4.62. Cast through
+    // String() so a purely-numeric caption ("42") is preserved as a
+    // string in `formatting.caption` rather than a JS number.
     if (tblPrObj['w:tblCaption']) {
       const caption = tblPrObj['w:tblCaption']['@_w:val'];
-      if (caption) table.setCaption(caption);
+      if (caption !== undefined && caption !== null && caption !== '') {
+        table.setCaption(String(caption));
+      }
     }
 
-    // Parse table description
+    // Parse table description — ST_String per §17.4.63.
     if (tblPrObj['w:tblDescription']) {
       const description = tblPrObj['w:tblDescription']['@_w:val'];
-      if (description) table.setDescription(description);
+      if (description !== undefined && description !== null && description !== '') {
+        table.setDescription(String(description));
+      }
     }
 
-    // Parse cell spacing
+    // Parse table-level cell spacing (w:tblCellSpacing) per ECMA-376
+    // §17.4.44 CT_TblCellSpacing. w:w is ST_MeasurementOrPercent; 0 is
+    // a legal "explicit zero spacing" value (overrides any style-level
+    // inherited tblCellSpacing). The emitter uses `!== undefined`, so
+    // the previous `spacing > 0` gate created a parser/emitter
+    // asymmetry: a tracked table-property change recording a *previous*
+    // state of `<w:tblCellSpacing w:w="0" …/>` lost the override on
+    // every round-trip.
     if (tblPrObj['w:tblCellSpacing']) {
-      const spacing = parseInt(tblPrObj['w:tblCellSpacing']['@_w:w'] || '0', 10);
-      const spacingType = tblPrObj['w:tblCellSpacing']['@_w:type'] || 'dxa';
-      if (spacing > 0) {
-        table.setCellSpacing(spacing);
+      const rawW = tblPrObj['w:tblCellSpacing']['@_w:w'];
+      if (isExplicitlySet(rawW)) {
+        table.setCellSpacing(safeParseInt(rawW));
+        const spacingType = tblPrObj['w:tblCellSpacing']['@_w:type'] || 'dxa';
         table.setCellSpacingType(spacingType);
       }
     }
@@ -6460,15 +7014,26 @@ export class DocumentParser {
       }
     }
 
-    // Parse table borders (w:tblBorders) per ECMA-376 Part 1 §17.4.40
+    // Parse table borders (w:tblBorders) per ECMA-376 Part 1 §17.4.40.
+    // left / right have bidi-aware aliases `w:start` / `w:end` (the
+    // preferred spelling in modern Word-authored documents). Prefer
+    // them when present, falling back to the legacy names — the
+    // internal model stores under `left` / `right`, matching the
+    // emitter. Without this fallback, any table whose side borders
+    // were authored with the bidi-aware form silently lost those
+    // borders on every round-trip (the emitter would replace them
+    // with absent w:left/w:right, and the parser would never revive
+    // the w:start/w:end it dropped).
     if (tblPrObj['w:tblBorders']) {
       const bordersObj = tblPrObj['w:tblBorders'];
       const borders: import('../elements/Table').TableBorders = {};
 
       if (bordersObj['w:top']) borders.top = this.parseBorderElement(bordersObj['w:top']);
       if (bordersObj['w:bottom']) borders.bottom = this.parseBorderElement(bordersObj['w:bottom']);
-      if (bordersObj['w:left']) borders.left = this.parseBorderElement(bordersObj['w:left']);
-      if (bordersObj['w:right']) borders.right = this.parseBorderElement(bordersObj['w:right']);
+      const leftBorder = bordersObj['w:start'] ?? bordersObj['w:left'];
+      if (leftBorder) borders.left = this.parseBorderElement(leftBorder);
+      const rightBorder = bordersObj['w:end'] ?? bordersObj['w:right'];
+      if (rightBorder) borders.right = this.parseBorderElement(rightBorder);
       if (bordersObj['w:insideH'])
         borders.insideH = this.parseBorderElement(bordersObj['w:insideH']);
       if (bordersObj['w:insideV'])
@@ -6484,8 +7049,8 @@ export class DocumentParser {
       const changeObj = tblPrObj['w:tblPrChange'];
       table.setTblPrChange({
         id: String(changeObj['@_w:id'] || '0'),
-        author: changeObj['@_w:author'] || '',
-        date: changeObj['@_w:date'] || '',
+        author: changeObj['@_w:author'] !== undefined ? String(changeObj['@_w:author']) : '',
+        date: changeObj['@_w:date'] !== undefined ? String(changeObj['@_w:date']) : '',
         previousProperties: this.parseGenericPreviousProperties(changeObj['w:tblPr']),
       });
     }
@@ -6562,14 +7127,20 @@ export class DocumentParser {
   private parseTableRowPropertiesFromObject(trPrObj: any, row: TableRow): void {
     if (!trPrObj) return;
 
-    // Parse row height (w:trHeight) per ECMA-376 Part 1 §17.4.81
-    // Per §17.18.33 (ST_HeightRule), when w:hRule is absent the default is "auto"
+    // Parse row height (w:trHeight) per ECMA-376 Part 1 §17.4.81.
+    // w:val is ST_TwipsMeasure; zero is a valid value and, combined
+    // with w:hRule="exact", represents a hidden / collapsed row.
+    // XMLParser coerces "0" to the number 0 (falsy), and the previous
+    // `heightVal > 0` gate silently dropped explicit zero-height rows
+    // even though the emitter (TableRow.ts §914) preserves them via
+    // `!== undefined`. Route through isExplicitlySet so zero survives.
+    // Per §17.18.33 (ST_HeightRule), when w:hRule is absent the
+    // default is "auto".
     if (trPrObj['w:trHeight']) {
-      const heightVal = parseInt(trPrObj['w:trHeight']['@_w:val'] || '0', 10);
+      const rawVal = trPrObj['w:trHeight']['@_w:val'];
       const heightRule = trPrObj['w:trHeight']['@_w:hRule'];
-      if (heightVal > 0) {
-        // Set height without defaulting hRule — setHeight defaults to 'atLeast'
-        // so we set height first, then override the rule only if explicitly present
+      if (isExplicitlySet(rawVal)) {
+        const heightVal = safeParseInt(rawVal);
         row.setHeight(heightVal);
         if (heightRule) {
           row.setHeightRule(heightRule);
@@ -6581,14 +7152,14 @@ export class DocumentParser {
       }
     }
 
-    // Parse table header row (w:tblHeader) per ECMA-376 Part 1 §17.4.49
+    // Parse table header row (w:tblHeader) per ECMA-376 Part 1 §17.4.49 — CT_OnOff
     if (trPrObj['w:tblHeader']) {
-      row.setHeader(true);
+      row.setHeader(parseOoxmlBoolean(trPrObj['w:tblHeader']));
     }
 
-    // Parse can't split (w:cantSplit) per ECMA-376 Part 1 §17.4.5
+    // Parse can't split (w:cantSplit) per ECMA-376 Part 1 §17.4.5 — CT_OnOff
     if (trPrObj['w:cantSplit']) {
-      row.setCantSplit(true);
+      row.setCantSplit(parseOoxmlBoolean(trPrObj['w:cantSplit']));
     }
 
     // Parse row justification (w:jc) per ECMA-376 Part 1 §17.4.79
@@ -6599,9 +7170,9 @@ export class DocumentParser {
       }
     }
 
-    // Parse hidden (w:hidden) per ECMA-376 Part 1 §17.4.23
+    // Parse hidden (w:hidden) per ECMA-376 Part 1 §17.4.23 — CT_OnOff
     if (trPrObj['w:hidden']) {
-      row.setHidden(true);
+      row.setHidden(parseOoxmlBoolean(trPrObj['w:hidden']));
     }
 
     // Parse grid before (w:gridBefore) per ECMA-376 Part 1 §17.4.15
@@ -6620,30 +7191,36 @@ export class DocumentParser {
       }
     }
 
-    // Parse width before (w:wBefore) per ECMA-376 Part 1 §17.4.83
+    // Parse width before (w:wBefore) per ECMA-376 Part 1 §17.4.83.
+    // w:w is ST_TblWidth; 0 paired with w:type="auto" is the idiomatic
+    // "no width" form, and explicit 0 in dxa twips can override an
+    // inherited wBefore. Previous `w > 0` gate silently dropped both.
     if (trPrObj['w:wBefore']) {
-      const w = parseInt(trPrObj['w:wBefore']['@_w:w'] || '0', 10);
-      const type = trPrObj['w:wBefore']['@_w:type'] || 'dxa';
-      if (w > 0) {
-        row.setWBefore(w, type);
+      const rawW = trPrObj['w:wBefore']['@_w:w'];
+      if (isExplicitlySet(rawW)) {
+        const type = (trPrObj['w:wBefore']['@_w:type'] as string | undefined) || 'dxa';
+        row.setWBefore(safeParseInt(rawW), type);
       }
     }
 
-    // Parse width after (w:wAfter) per ECMA-376 Part 1 §17.4.82
+    // Parse width after (w:wAfter) per ECMA-376 Part 1 §17.4.82 — same
+    // ST_TblWidth semantics as wBefore.
     if (trPrObj['w:wAfter']) {
-      const w = parseInt(trPrObj['w:wAfter']['@_w:w'] || '0', 10);
-      const type = trPrObj['w:wAfter']['@_w:type'] || 'dxa';
-      if (w > 0) {
-        row.setWAfter(w, type);
+      const rawW = trPrObj['w:wAfter']['@_w:w'];
+      if (isExplicitlySet(rawW)) {
+        const type = (trPrObj['w:wAfter']['@_w:type'] as string | undefined) || 'dxa';
+        row.setWAfter(safeParseInt(rawW), type);
       }
     }
 
-    // Parse row-level cell spacing (w:tblCellSpacing)
+    // Parse row-level cell spacing (w:tblCellSpacing). Zero is a valid
+    // override — "explicitly no extra spacing" on a row overriding a
+    // non-zero table-level tblCellSpacing.
     if (trPrObj['w:tblCellSpacing']) {
-      const w = parseInt(trPrObj['w:tblCellSpacing']['@_w:w'] || '0', 10);
-      const type = trPrObj['w:tblCellSpacing']['@_w:type'] || 'dxa';
-      if (w > 0) {
-        row.setRowCellSpacing(w, type);
+      const rawW = trPrObj['w:tblCellSpacing']['@_w:w'];
+      if (isExplicitlySet(rawW)) {
+        const type = (trPrObj['w:tblCellSpacing']['@_w:type'] as string | undefined) || 'dxa';
+        row.setRowCellSpacing(safeParseInt(rawW), type);
       }
     }
 
@@ -6655,11 +7232,39 @@ export class DocumentParser {
       }
     }
 
-    // Parse divId (w:divId) per ECMA-376 Part 1 §17.4.9
+    // Parse divId (w:divId) per ECMA-376 Part 1 §17.4.9. `w:val` is
+    // ST_DecimalNumber; 0 is a valid reference to the first div in web
+    // settings. The previous `val > 0` gate silently dropped it on load.
     if (trPrObj['w:divId']) {
-      const val = parseInt(trPrObj['w:divId']['@_w:val'] || '0', 10);
-      if (val > 0) {
-        row.setDivId(val);
+      const rawVal = trPrObj['w:divId']['@_w:val'];
+      if (isExplicitlySet(rawVal)) {
+        const parsed = safeParseInt(rawVal);
+        if (!isNaN(parsed)) row.setDivId(parsed);
+      }
+    }
+
+    // Parse tracked row insertion / deletion (CT_TrackChange inside CT_TrPr)
+    // per ECMA-376 Part 1 §17.13.5.19 (ins) / §17.13.5.14 (del). These mark
+    // the entire row as a tracked revision; a previous version silently
+    // dropped both markers on load → save because the parser skipped them.
+    if (trPrObj['w:ins']) {
+      const insObj = Array.isArray(trPrObj['w:ins']) ? trPrObj['w:ins'][0] : trPrObj['w:ins'];
+      if (insObj && typeof insObj === 'object') {
+        row.setRowInsertion({
+          id: String(insObj['@_w:id'] ?? '0'),
+          author: String(insObj['@_w:author'] ?? ''),
+          date: String(insObj['@_w:date'] ?? ''),
+        });
+      }
+    }
+    if (trPrObj['w:del']) {
+      const delObj = Array.isArray(trPrObj['w:del']) ? trPrObj['w:del'][0] : trPrObj['w:del'];
+      if (delObj && typeof delObj === 'object') {
+        row.setRowDeletion({
+          id: String(delObj['@_w:id'] ?? '0'),
+          author: String(delObj['@_w:author'] ?? ''),
+          date: String(delObj['@_w:date'] ?? ''),
+        });
       }
     }
 
@@ -6668,8 +7273,8 @@ export class DocumentParser {
       const changeObj = trPrObj['w:trPrChange'];
       row.setTrPrChange({
         id: String(changeObj['@_w:id'] || '0'),
-        author: changeObj['@_w:author'] || '',
-        date: changeObj['@_w:date'] || '',
+        author: changeObj['@_w:author'] !== undefined ? String(changeObj['@_w:author']) : '',
+        date: changeObj['@_w:date'] !== undefined ? String(changeObj['@_w:date']) : '',
         previousProperties: this.parseGenericPreviousProperties(changeObj['w:trPr']),
       });
     }
@@ -6685,11 +7290,15 @@ export class DocumentParser {
 
     const exceptions: any = {};
 
-    // Parse table width exception (w:tblW)
+    // Parse table width exception (w:tblW). The `val > 0` gate previously
+    // dropped both w:w="0" (explicit zero-width override, valid when
+    // paired with w:type="nil"/"auto") and negative overrides. Route
+    // through isExplicitlySet + safeParseInt so zero and negative widths
+    // round-trip.
     if (tblPrExObj['w:tblW']) {
-      const widthVal = parseInt(tblPrExObj['w:tblW']['@_w:w'] || '0', 10);
-      if (widthVal > 0) {
-        exceptions.width = widthVal;
+      const rawW = tblPrExObj['w:tblW']['@_w:w'];
+      if (isExplicitlySet(rawW)) {
+        exceptions.width = safeParseInt(rawW);
       }
     }
 
@@ -6701,19 +7310,26 @@ export class DocumentParser {
       }
     }
 
-    // Parse cell spacing exception (w:tblCellSpacing)
+    // Parse cell spacing exception (w:tblCellSpacing). Zero-value
+    // override is valid (= "explicit no cell spacing" on a row that
+    // would otherwise inherit non-zero spacing from the table-level
+    // tblCellSpacing).
     if (tblPrExObj['w:tblCellSpacing']) {
-      const val = parseInt(tblPrExObj['w:tblCellSpacing']['@_w:w'] || '0', 10);
-      if (val > 0) {
-        exceptions.cellSpacing = val;
+      const rawW = tblPrExObj['w:tblCellSpacing']['@_w:w'];
+      if (isExplicitlySet(rawW)) {
+        exceptions.cellSpacing = safeParseInt(rawW);
       }
     }
 
-    // Parse table indentation exception (w:tblInd)
+    // Parse table indentation exception (w:tblInd). Per ECMA-376
+    // §17.4.62 CT_TblWidth, w:w is ST_MeasurementOrPercent — 0 is a
+    // legal "reset" value and negative values indicate an outdent (table
+    // hanging into the page margin). The previous `val > 0` check
+    // silently dropped both.
     if (tblPrExObj['w:tblInd']) {
-      const val = parseInt(tblPrExObj['w:tblInd']['@_w:w'] || '0', 10);
-      if (val > 0) {
-        exceptions.indentation = val;
+      const rawW = tblPrExObj['w:tblInd']['@_w:w'];
+      if (isExplicitlySet(rawW)) {
+        exceptions.indentation = safeParseInt(rawW);
       }
     }
 
@@ -6744,15 +7360,40 @@ export class DocumentParser {
     const borderNames = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'];
 
     for (const name of borderNames) {
-      const borderKey = `w:${name}`;
-      if (bordersObj[borderKey]) {
-        const borderObj = bordersObj[borderKey];
+      // Prefer bidi-aware `w:start`/`w:end` aliases over legacy `w:left`/
+      // `w:right` per ECMA-376 §17.4.40 CT_TblBorders. Modern Word-
+      // authored documents emit the bidi-aware form by default; the
+      // internal model stores under the legacy keys to match the emitter.
+      const aliasKey = name === 'left' ? 'w:start' : name === 'right' ? 'w:end' : undefined;
+      const borderObj = (aliasKey && bordersObj[aliasKey]) || bordersObj[`w:${name}`];
+      if (borderObj) {
         borders[name] = {};
 
+        // Full CT_Border attribute set (§17.18.2) — previously only the four
+        // basic attrs were read, so tblPrEx borders lost themed-color linkage
+        // on every round-trip.
         if (borderObj['@_w:val']) borders[name].style = borderObj['@_w:val'];
         if (borderObj['@_w:sz']) borders[name].size = parseInt(borderObj['@_w:sz'], 10);
         if (borderObj['@_w:space']) borders[name].space = parseInt(borderObj['@_w:space'], 10);
-        if (borderObj['@_w:color']) borders[name].color = borderObj['@_w:color'];
+        if (borderObj['@_w:color']) borders[name].color = String(borderObj['@_w:color']);
+        // String(...) cast: themeTint / themeShade are ST_UcharHexNumber
+        // (2-char hex). XMLParser coerces purely-digit hex to numbers —
+        // cast so the string contract on the model is preserved.
+        if (borderObj['@_w:themeColor']) {
+          borders[name].themeColor = String(borderObj['@_w:themeColor']);
+        }
+        if (borderObj['@_w:themeTint']) {
+          borders[name].themeTint = String(borderObj['@_w:themeTint']);
+        }
+        if (borderObj['@_w:themeShade']) {
+          borders[name].themeShade = String(borderObj['@_w:themeShade']);
+        }
+        if (borderObj['@_w:shadow'] !== undefined) {
+          borders[name].shadow = parseOnOffAttribute(String(borderObj['@_w:shadow']), true);
+        }
+        if (borderObj['@_w:frame'] !== undefined) {
+          borders[name].frame = parseOnOffAttribute(String(borderObj['@_w:frame']), true);
+        }
       }
     }
 
@@ -6773,12 +7414,26 @@ export class DocumentParser {
       // Parse cell properties (w:tcPr) per ECMA-376 Part 1 §17.4.42
       const tcPr = cellObj['w:tcPr'];
       if (tcPr) {
-        // Parse cell width (w:tcW) with type per ECMA-376 Part 1 §17.4.81
+        // Parse cell width (w:tcW) with type per ECMA-376 Part 1 §17.4.72
+        // CT_TblWidth — w:w is ST_MeasurementOrPercent, w:type is
+        // ST_TblWidth. Zero is a legal explicit override:
+        //   - `w:w="0" w:type="auto"` is the idiomatic "size to content"
+        //     form (also the default when w:tcW is absent).
+        //   - `w:w="0" w:type="dxa"` / `"pct"` / `"nil"` explicitly
+        //     override an inherited non-zero width back to zero.
+        // The emitter at TableCell.ts:1353 uses `!== undefined`, so the
+        // previous `widthVal > 0 || widthType === 'auto'` gate created a
+        // parser/emitter asymmetry — any cell with an explicit zero
+        // override in a non-auto width type silently reinherited the
+        // style-level width on every round-trip.
         if (tcPr['w:tcW']) {
-          const widthVal = parseInt(tcPr['w:tcW']['@_w:w'] || '0', 10);
-          const widthType = tcPr['w:tcW']['@_w:type'] || 'dxa';
-          if (widthVal > 0 || widthType === 'auto') {
-            cell.setWidthType(widthVal, widthType);
+          const rawW = tcPr['w:tcW']['@_w:w'];
+          if (isExplicitlySet(rawW)) {
+            const widthType = (tcPr['w:tcW']['@_w:type'] as string | undefined) || 'dxa';
+            cell.setWidthType(
+              safeParseInt(rawW),
+              widthType as import('../elements/TableCell').CellWidthType
+            );
           }
         }
 
@@ -6790,7 +7445,11 @@ export class DocumentParser {
           }
         }
 
-        // Parse cell borders (w:tcBorders)
+        // Parse cell borders (w:tcBorders) per ECMA-376 Part 1 §17.4.66.
+        // Supports both legacy LTR names (w:left / w:right) and bidi-
+        // aware aliases (w:start / w:end). Prefer w:start / w:end when
+        // present. Includes diagonal borders (w:tl2br / w:tr2bl) which
+        // are cell-specific.
         if (tcPr['w:tcBorders']) {
           const bordersObj = tcPr['w:tcBorders'];
           const borders: any = {};
@@ -6798,8 +7457,10 @@ export class DocumentParser {
           if (bordersObj['w:top']) borders.top = this.parseBorderElement(bordersObj['w:top']);
           if (bordersObj['w:bottom'])
             borders.bottom = this.parseBorderElement(bordersObj['w:bottom']);
-          if (bordersObj['w:left']) borders.left = this.parseBorderElement(bordersObj['w:left']);
-          if (bordersObj['w:right']) borders.right = this.parseBorderElement(bordersObj['w:right']);
+          const leftBorder = bordersObj['w:start'] ?? bordersObj['w:left'];
+          if (leftBorder) borders.left = this.parseBorderElement(leftBorder);
+          const rightBorder = bordersObj['w:end'] ?? bordersObj['w:right'];
+          if (rightBorder) borders.right = this.parseBorderElement(rightBorder);
           if (bordersObj['w:tl2br']) borders.tl2br = this.parseBorderElement(bordersObj['w:tl2br']);
           if (bordersObj['w:tr2bl']) borders.tr2bl = this.parseBorderElement(bordersObj['w:tr2bl']);
 
@@ -6842,10 +7503,15 @@ export class DocumentParser {
           }
         }
 
-        // Parse vertical alignment (w:vAlign)
+        // Parse vertical alignment (w:vAlign) per ECMA-376 §17.4.83.
+        // ST_VerticalJc has four values (§17.18.101): top, center, both,
+        // bottom. The previous whitelist dropped "both" silently — the
+        // style-level parser accepts it, so the asymmetry truncated cell
+        // vertical alignment on cells using the "both" (justified)
+        // vertical alignment on load.
         if (tcPr['w:vAlign']) {
           const valign = tcPr['w:vAlign']['@_w:val'];
-          if (valign && (valign === 'top' || valign === 'center' || valign === 'bottom')) {
+          if (valign === 'top' || valign === 'center' || valign === 'both' || valign === 'bottom') {
             cell.setVerticalAlignment(valign);
           }
         }
@@ -6866,14 +7532,14 @@ export class DocumentParser {
           }
         }
 
-        // Parse no wrap (w:noWrap) per ECMA-376 Part 1 §17.4.34
+        // Parse no wrap (w:noWrap) per ECMA-376 Part 1 §17.4.34 — CT_OnOff
         if (tcPr['w:noWrap']) {
-          cell.setNoWrap(true);
+          cell.setNoWrap(parseOoxmlBoolean(tcPr['w:noWrap']));
         }
 
-        // Parse hide mark (w:hideMark) per ECMA-376 Part 1 §17.4.24
+        // Parse hide mark (w:hideMark) per ECMA-376 Part 1 §17.4.24 — CT_OnOff
         if (tcPr['w:hideMark']) {
-          cell.setHideMark(true);
+          cell.setHideMark(parseOoxmlBoolean(tcPr['w:hideMark']));
         }
 
         // Parse headers (w:headers) per ECMA-376 Part 1 §17.4.26
@@ -6884,9 +7550,9 @@ export class DocumentParser {
           }
         }
 
-        // Parse fit text (w:tcFitText) per ECMA-376 Part 1 §17.4.68
+        // Parse fit text (w:tcFitText) per ECMA-376 Part 1 §17.4.68 — CT_OnOff
         if (tcPr['w:tcFitText']) {
-          cell.setFitText(true);
+          cell.setFitText(parseOoxmlBoolean(tcPr['w:tcFitText']));
         }
 
         // Parse vertical merge (w:vMerge) per ECMA-376 Part 1 §17.4.85
@@ -6913,10 +7579,11 @@ export class DocumentParser {
         // Parse table cell insertion marker (w:cellIns) per ECMA-376 Part 1 §17.13.5.5
         if (tcPr['w:cellIns']) {
           const cellIns = tcPr['w:cellIns'];
-          const id = parseInt(cellIns['@_w:id'] || '0', 10);
-          const author = cellIns['@_w:author'] || 'Unknown';
+          const id = parseInt(String(cellIns['@_w:id'] ?? '0'), 10);
+          const author =
+            cellIns['@_w:author'] !== undefined ? String(cellIns['@_w:author']) : 'Unknown';
           const dateAttr = cellIns['@_w:date'];
-          const date = dateAttr ? new Date(dateAttr) : new Date();
+          const date = dateAttr !== undefined ? new Date(String(dateAttr)) : new Date();
 
           const revision = new Revision({
             id,
@@ -6931,10 +7598,11 @@ export class DocumentParser {
         // Parse table cell deletion marker (w:cellDel) per ECMA-376 Part 1 §17.13.5.6
         if (tcPr['w:cellDel']) {
           const cellDel = tcPr['w:cellDel'];
-          const id = parseInt(cellDel['@_w:id'] || '0', 10);
-          const author = cellDel['@_w:author'] || 'Unknown';
+          const id = parseInt(String(cellDel['@_w:id'] ?? '0'), 10);
+          const author =
+            cellDel['@_w:author'] !== undefined ? String(cellDel['@_w:author']) : 'Unknown';
           const dateAttr = cellDel['@_w:date'];
-          const date = dateAttr ? new Date(dateAttr) : new Date();
+          const date = dateAttr !== undefined ? new Date(String(dateAttr)) : new Date();
 
           const revision = new Revision({
             id,
@@ -6949,10 +7617,11 @@ export class DocumentParser {
         // Parse table cell merge marker (w:cellMerge) per ECMA-376 Part 1 §17.13.5.4
         if (tcPr['w:cellMerge']) {
           const cellMerge = tcPr['w:cellMerge'];
-          const id = parseInt(cellMerge['@_w:id'] || '0', 10);
-          const author = cellMerge['@_w:author'] || 'Unknown';
+          const id = parseInt(String(cellMerge['@_w:id'] ?? '0'), 10);
+          const author =
+            cellMerge['@_w:author'] !== undefined ? String(cellMerge['@_w:author']) : 'Unknown';
           const dateAttr = cellMerge['@_w:date'];
-          const date = dateAttr ? new Date(dateAttr) : new Date();
+          const date = dateAttr !== undefined ? new Date(String(dateAttr)) : new Date();
           const vMergeAttr = cellMerge['@_w:vMerge'];
           const vMergeOrigAttr = cellMerge['@_w:vMergeOrig'];
           // ST_AnnotationVMerge uses "rest"/"cont" but API uses "restart"/"continue"
@@ -6977,8 +7646,8 @@ export class DocumentParser {
           const changeObj = tcPr['w:tcPrChange'];
           cell.setTcPrChange({
             id: String(changeObj['@_w:id'] || '0'),
-            author: changeObj['@_w:author'] || '',
-            date: changeObj['@_w:date'] || '',
+            author: changeObj['@_w:author'] !== undefined ? String(changeObj['@_w:author']) : '',
+            date: changeObj['@_w:date'] !== undefined ? String(changeObj['@_w:date']) : '',
             previousProperties: this.parseGenericPreviousProperties(changeObj['w:tcPr']),
           });
         }
@@ -7226,28 +7895,40 @@ export class DocumentParser {
       // Parse SDT properties (sdtPr)
       const sdtPr = sdtObj['w:sdtPr'];
       if (sdtPr) {
-        // Parse ID
+        // Parse `<w:id w:val="…"/>` per ECMA-376 §17.5.2.18. `w:val` is
+        // ST_DecimalNumber (xsd:integer) — 0 is legal. XMLParser coerces
+        // `"0"` to the number `0`, so the previous truthy gate silently
+        // dropped w:id=0 on every load → save cycle. The emitter uses
+        // `!== undefined`, creating a parser/emitter asymmetry.
         const idElement = sdtPr['w:id'];
-        if (idElement?.['@_w:val']) {
-          properties.id = parseInt(idElement['@_w:val'], 10);
+        if (isExplicitlySet(idElement?.['@_w:val'])) {
+          const parsed = safeParseInt(idElement['@_w:val']);
+          if (!isNaN(parsed)) properties.id = parsed;
         }
 
-        // Parse tag
+        // Parse `<w:tag w:val="…"/>` per ECMA-376 §17.5.2.34. `w:val`
+        // is ST_String — any string is legal, including numeric-looking
+        // strings like "123" that XMLParser coerces to the number 123.
+        // Cast via `String(…)` so the tag round-trips as text rather
+        // than leaking a JS number into a `tag?: string` field.
         const tagElement = sdtPr['w:tag'];
-        if (tagElement?.['@_w:val']) {
-          properties.tag = tagElement['@_w:val'];
+        if (tagElement?.['@_w:val'] !== undefined) {
+          properties.tag = String(tagElement['@_w:val']);
         }
 
-        // Parse lock
+        // Parse lock — ST_Lock enum: "sdtLocked" / "contentLocked" /
+        // "sdtContentLocked" / "unlocked". Always a non-numeric string,
+        // so no XMLParser coercion concern; truthy check fine.
         const lockElement = sdtPr['w:lock'];
         if (lockElement?.['@_w:val']) {
           properties.lock = lockElement['@_w:val'];
         }
 
-        // Parse alias
+        // Parse alias — ST_String. Same numeric-coercion concern as
+        // `w:tag`; cast via `String(…)`.
         const aliasElement = sdtPr['w:alias'];
-        if (aliasElement?.['@_w:val']) {
-          properties.alias = aliasElement['@_w:val'];
+        if (aliasElement?.['@_w:val'] !== undefined) {
+          properties.alias = String(aliasElement['@_w:val']);
         }
 
         // Parse control type from various elements
@@ -7256,9 +7937,18 @@ export class DocumentParser {
         } else if (sdtPr['w:text']) {
           properties.controlType = 'plainText';
           const textElement = sdtPr['w:text'];
+          // w:multiLine is an OPTIONAL ST_OnOff attribute per ECMA-376
+          // §17.5.2.33 CT_SdtText. Only record a value when the source
+          // actually set it — otherwise leave the field undefined so
+          // the emitter (which uses `!== undefined`) preserves the
+          // "attribute absent" state on round-trip. Previously the
+          // parser unconditionally stored `false` for any absent
+          // attribute, then the emitter wrote `w:multiLine="0"` —
+          // adding spec-noise that wasn't in the source.
+          const rawMultiLine = textElement?.['@_w:multiLine'];
           properties.plainText = {
             multiLine:
-              textElement?.['@_w:multiLine'] === '1' || textElement?.['@_w:multiLine'] === 'true',
+              rawMultiLine === undefined ? undefined : parseOnOffAttribute(String(rawMultiLine)),
           };
         } else if (sdtPr['w:comboBox']) {
           properties.controlType = 'comboBox';
@@ -7286,14 +7976,11 @@ export class DocumentParser {
         } else if (sdtPr['w14:checkbox']) {
           properties.controlType = 'checkbox';
           const checkboxElement = sdtPr['w14:checkbox'];
-          // Handle both string and numeric values from XML parser
-          const checkedVal = checkboxElement?.['w14:checked']?.['@_w14:val'];
+          // <w14:checked> is CT_OnOff in the Word 2010+ extension namespace.
+          // Honour every ST_OnOff literal ("1"/"0"/"true"/"false"/"on"/"off")
+          // and treat a bare self-closing `<w14:checked/>` as true.
           properties.checkbox = {
-            checked:
-              checkedVal === 1 ||
-              checkedVal === '1' ||
-              checkedVal === true ||
-              checkedVal === 'true',
+            checked: parseOoxmlBoolean(checkboxElement?.['w14:checked'], '@_w14:val'),
             checkedState: String(checkboxElement?.['w14:checkedState']?.['@_w14:val'] ?? ''),
             uncheckedState: String(checkboxElement?.['w14:uncheckedState']?.['@_w14:val'] ?? ''),
           };
@@ -7343,11 +8030,10 @@ export class DocumentParser {
           };
         }
 
-        // Parse showing placeholder flag (w:showingPlcHdr)
+        // Parse showing placeholder flag (w:showingPlcHdr) — CT_OnOff per ECMA-376 §17.5.2.40
         const showingPlcHdr = sdtPr['w:showingPlcHdr'];
         if (showingPlcHdr) {
-          const val = showingPlcHdr['@_w:val'];
-          properties.showingPlcHdr = val === '1' || val === 'true' || val === true;
+          properties.showingPlcHdr = parseOoxmlBoolean(showingPlcHdr);
         }
       }
 
@@ -7887,7 +8573,25 @@ export class DocumentParser {
   }
 
   /**
-   * Helper to parse list items for combo box / dropdown
+   * Helper to parse list items for combo box / dropdown per ECMA-376
+   * Part 1 §17.5.2.13 CT_SdtListItem. `w:value` is required; both
+   * `w:displayText` and `w:value` are ST_String so any string
+   * (including the empty string) is legal.
+   *
+   * The previous truthy gate dropped legitimate list items whenever:
+   *   - `w:value="0"` / `w:value="123"` — XMLParser coerces numeric
+   *     strings to numbers; `0` fails the truthy check entirely, and
+   *     storing a raw number instead of a string breaks the `ListItem`
+   *     `value: string` contract downstream.
+   *   - `w:displayText=""` — empty displayText is legal (e.g. a
+   *     separator / blank choice); the gate dropped it.
+   * The fix:
+   *   - Gate on presence (`!== undefined`), not truthiness.
+   *   - Coerce both attributes to `String(…)` so numeric-coerced
+   *     attribute values serialise back to their original textual form.
+   *   - Default missing `w:displayText` to the stringified `w:value`
+   *     (the idiomatic Word fallback when authors author list items
+   *     with only a value attribute).
    */
   private parseListItems(element: any): any {
     const items: any[] = [];
@@ -7895,17 +8599,18 @@ export class DocumentParser {
     const itemArray = Array.isArray(listItems) ? listItems : listItems ? [listItems] : [];
 
     for (const item of itemArray) {
-      if (item['@_w:displayText'] && item['@_w:value']) {
-        items.push({
-          displayText: item['@_w:displayText'],
-          value: item['@_w:value'],
-        });
-      }
+      const rawValue = item['@_w:value'];
+      if (rawValue === undefined) continue; // w:value is required by the schema
+      const value = String(rawValue);
+      const rawDisplay = item['@_w:displayText'];
+      const displayText = rawDisplay === undefined ? value : String(rawDisplay);
+      items.push({ displayText, value });
     }
 
+    const rawLast = element?.['@_w:lastValue'];
     return {
       items,
-      lastValue: element?.['@_w:lastValue'],
+      lastValue: rawLast === undefined ? undefined : String(rawLast),
     };
   }
 
@@ -8381,12 +9086,21 @@ export class DocumentParser {
             if (color) border.color = color;
             const space = XMLParser.extractAttribute(sideXml, 'w:space');
             if (space) border.space = parseInt(space.toString(), 10);
+            // w:shadow and w:frame are ST_OnOff per ECMA-376 §17.17.4.
+            // Use `!== undefined` gating so explicit-false survives round-trip
+            // (previous code only stored `true`, silently dropping `w:shadow="0"`).
             const shadow = XMLParser.extractAttribute(sideXml, 'w:shadow');
-            if (shadow === '1' || shadow === 'true') border.shadow = true;
+            if (shadow !== undefined) border.shadow = parseOnOffAttribute(shadow, true);
             const frame = XMLParser.extractAttribute(sideXml, 'w:frame');
-            if (frame === '1' || frame === 'true') border.frame = true;
+            if (frame !== undefined) border.frame = parseOnOffAttribute(frame, true);
             const themeColor = XMLParser.extractAttribute(sideXml, 'w:themeColor');
             if (themeColor) border.themeColor = themeColor;
+            // Theme tint / shade per §17.18.82 — CT_TopBorder/CT_BottomBorder extend
+            // CT_Border so inherit the full themed-color attribute set.
+            const themeTint = XMLParser.extractAttribute(sideXml, 'w:themeTint');
+            if (themeTint) border.themeTint = themeTint;
+            const themeShade = XMLParser.extractAttribute(sideXml, 'w:themeShade');
+            if (themeShade) border.themeShade = themeShade;
             const artId = XMLParser.extractAttribute(sideXml, 'w:id');
             if (artId) border.artId = parseInt(artId.toString(), 10);
             return Object.keys(border).length > 0 ? border : undefined;
@@ -8407,7 +9121,14 @@ export class DocumentParser {
         }
       }
 
-      // Parse columns (enhanced with separator and custom widths)
+      // Parse columns per ECMA-376 §17.6.4 CT_Columns. Every attribute
+      // (num / sep / space / equalWidth) is optional with spec-defined
+      // defaults — num defaults to 1, equalWidth to true, sep to false,
+      // space to 720 twips. The previous `if (num)` gate silently dropped
+      // every `<w:cols>` that relied on the default num=1 (e.g. a bare
+      // `<w:cols w:sep="1" w:space="720"/>` specifying a single column
+      // with a separator), which is the exact form Word emits when the
+      // user toggles the column separator without changing column count.
       const colsElements = XMLParser.extractElements(sectPr, 'w:cols');
       if (colsElements.length > 0) {
         const cols = colsElements[0];
@@ -8436,19 +9157,23 @@ export class DocumentParser {
             }
           }
 
-          // Helper to handle boolean conversion (XMLParser may return string or number)
-          const toBool = (val: any) => val === '1' || val === 1 || val === 'true' || val === true;
+          // Spec default for num is 1; fall back to column-count from
+          // child `<w:col>` children when available (the expanded per-column
+          // form), otherwise to the literal default.
+          const count = num
+            ? parseInt(num.toString(), 10)
+            : columnWidths.length > 0
+              ? columnWidths.length
+              : 1;
 
-          if (num) {
-            sectionProps.columns = {
-              count: parseInt(num.toString(), 10),
-              space: space ? parseInt(space.toString(), 10) : undefined,
-              equalWidth: equalWidth ? toBool(equalWidth) : undefined,
-              separator: sep ? toBool(sep) : undefined,
-              columnWidths: columnWidths.length > 0 ? columnWidths : undefined,
-              columnSpaces: hasColumnSpaces ? columnSpaces : undefined,
-            };
-          }
+          sectionProps.columns = {
+            count,
+            space: space ? parseInt(space.toString(), 10) : undefined,
+            equalWidth: equalWidth ? parseOnOffAttribute(equalWidth) : undefined,
+            separator: sep ? parseOnOffAttribute(sep) : undefined,
+            columnWidths: columnWidths.length > 0 ? columnWidths : undefined,
+            columnSpaces: hasColumnSpaces ? columnSpaces : undefined,
+          };
         }
       }
 
@@ -8489,9 +9214,13 @@ export class DocumentParser {
         }
       }
 
-      // Parse title page flag
-      if (XMLParser.hasSelfClosingTag(sectPr, 'w:titlePg')) {
-        sectionProps.titlePage = true;
+      // Parse title page flag (w:titlePg) — CT_OnOff per ECMA-376 §17.6.23;
+      // honour w:val so an explicit `w:val="0"` override of an inherited
+      // true is not silently flipped to true.
+      const titlePgEls = XMLParser.extractElements(sectPr, 'w:titlePg');
+      if (titlePgEls.length > 0 && titlePgEls[0]) {
+        const v = XMLParser.extractAttribute(titlePgEls[0], 'w:val');
+        sectionProps.titlePage = parseOnOffAttribute(v, true);
       }
 
       // Parse header references
@@ -8574,14 +9303,18 @@ export class DocumentParser {
         }
       }
 
-      // Parse bidi (right-to-left section layout)
-      if (XMLParser.hasSelfClosingTag(sectPr, 'w:bidi')) {
-        sectionProps.bidi = true;
+      // Parse bidi (w:bidi) — CT_OnOff per ECMA-376 §17.6.1 (RTL section)
+      const bidiEls = XMLParser.extractElements(sectPr, 'w:bidi');
+      if (bidiEls.length > 0 && bidiEls[0]) {
+        const v = XMLParser.extractAttribute(bidiEls[0], 'w:val');
+        sectionProps.bidi = parseOnOffAttribute(v, true);
       }
 
-      // Parse RTL gutter
-      if (XMLParser.hasSelfClosingTag(sectPr, 'w:rtlGutter')) {
-        sectionProps.rtlGutter = true;
+      // Parse RTL gutter (w:rtlGutter) — CT_OnOff per ECMA-376 §17.6.16
+      const rtlGutterEls = XMLParser.extractElements(sectPr, 'w:rtlGutter');
+      if (rtlGutterEls.length > 0 && rtlGutterEls[0]) {
+        const v = XMLParser.extractAttribute(rtlGutterEls[0], 'w:val');
+        sectionProps.rtlGutter = parseOnOffAttribute(v, true);
       }
 
       // Parse document grid (w:docGrid)
@@ -8659,14 +9392,18 @@ export class DocumentParser {
         if (Object.keys(props).length > 0) sectionProps.endnotePr = props;
       }
 
-      // Parse noEndnote
-      if (XMLParser.hasSelfClosingTag(sectPr, 'w:noEndnote')) {
-        sectionProps.noEndnote = true;
+      // Parse noEndnote (w:noEndnote) — CT_OnOff per ECMA-376 §17.11.14
+      const noEndEls = XMLParser.extractElements(sectPr, 'w:noEndnote');
+      if (noEndEls.length > 0 && noEndEls[0]) {
+        const v = XMLParser.extractAttribute(noEndEls[0], 'w:val');
+        sectionProps.noEndnote = parseOnOffAttribute(v, true);
       }
 
-      // Parse form protection
-      if (XMLParser.hasSelfClosingTag(sectPr, 'w:formProt')) {
-        sectionProps.formProt = true;
+      // Parse form protection (w:formProt) — CT_OnOff per ECMA-376 §17.6.8
+      const formProtEls = XMLParser.extractElements(sectPr, 'w:formProt');
+      if (formProtEls.length > 0 && formProtEls[0]) {
+        const v = XMLParser.extractAttribute(formProtEls[0], 'w:val');
+        sectionProps.formProt = parseOnOffAttribute(v, true);
       }
 
       // Parse printer settings (w:printerSettings r:id)
@@ -8789,34 +9526,45 @@ export class DocumentParser {
       runFormatting = this.parseRunFormattingFromXml(rPrXml);
     }
 
-    // Parse metadata properties (Phase 5.3)
-    // qFormat - Quick style gallery
-    const qFormat = styleXml.includes('<w:qFormat/>') || styleXml.includes('<w:qFormat ');
+    // Parse metadata CT_OnOff flags per ECMA-376 §17.7.4 (OnOffType bindings).
+    // Each flag honours `w:val` so an explicit `<w:qFormat w:val="0"/>` override
+    // of a based-on style's qFormat=true round-trips as `false`. The old code
+    // detected presence via `styleXml.includes('<w:qFormat/>')` which ignored
+    // w:val entirely and flipped any explicit-false to true.
+    const parseStyleOnOffFlag = (tagName: string): boolean | undefined => {
+      const els = XMLParser.extractElements(styleXml, tagName);
+      if (els.length === 0 || !els[0]) return undefined;
+      const v = XMLParser.extractAttribute(els[0], 'w:val');
+      return parseOnOffAttribute(v, true);
+    };
 
-    // semiHidden - Hide from recommended list
-    const semiHidden = styleXml.includes('<w:semiHidden/>') || styleXml.includes('<w:semiHidden ');
+    const qFormat = parseStyleOnOffFlag('w:qFormat');
+    const semiHidden = parseStyleOnOffFlag('w:semiHidden');
+    const unhideWhenUsed = parseStyleOnOffFlag('w:unhideWhenUsed');
+    const locked = parseStyleOnOffFlag('w:locked');
+    const personal = parseStyleOnOffFlag('w:personal');
+    const personalCompose = parseStyleOnOffFlag('w:personalCompose');
+    const personalReply = parseStyleOnOffFlag('w:personalReply');
+    const autoRedefine = parseStyleOnOffFlag('w:autoRedefine');
+    // `<w:hidden>` (CT_Style §17.7.4, OnOffOnlyType) — completely hide the
+    // style. Previously not modeled; now round-trips as `properties.hidden`.
+    const hidden = parseStyleOnOffFlag('w:hidden');
 
-    // unhideWhenUsed - Auto-show when applied
-    const unhideWhenUsed =
-      styleXml.includes('<w:unhideWhenUsed/>') || styleXml.includes('<w:unhideWhenUsed ');
-
-    // locked - Prevent modification
-    const locked = styleXml.includes('<w:locked/>') || styleXml.includes('<w:locked ');
-
-    // personal - User-specific style
-    const personal = styleXml.includes('<w:personal/>') || styleXml.includes('<w:personal ');
-
-    // personalCompose - Style for composing new messages
-    const personalCompose =
-      styleXml.includes('<w:personalCompose/>') || styleXml.includes('<w:personalCompose ');
-
-    // personalReply - Style for replying to messages
-    const personalReply =
-      styleXml.includes('<w:personalReply/>') || styleXml.includes('<w:personalReply ');
-
-    // autoRedefine - Update style from formatting
-    const autoRedefine =
-      styleXml.includes('<w:autoRedefine/>') || styleXml.includes('<w:autoRedefine ');
+    // `<w:rsid w:val="HEX"/>` (CT_Style §17.7.4, CT_LongHexNumber §17.18.50) —
+    // revision-save ID stamp identifying the session in which this style
+    // definition was last edited. Schema position: between `personalReply`
+    // and `pPr`. Previously dropped entirely on parse, now preserved on
+    // StyleProperties so round-trips stay faithful.
+    let styleRsid: string | undefined;
+    if (styleXml.includes('<w:rsid')) {
+      const rsidTag = XMLParser.extractSelfClosingTag(styleXml, 'w:rsid');
+      if (rsidTag) {
+        const v = XMLParser.extractAttribute(`<w:rsid${rsidTag}`, 'w:val');
+        if (v && v.length > 0) {
+          styleRsid = v;
+        }
+      }
+    }
 
     // uiPriority - Sort order
     let uiPriority: number | undefined;
@@ -8867,21 +9615,27 @@ export class DocumentParser {
       type: typeAttr,
       basedOn,
       next,
-      isDefault: defaultAttr === '1' || defaultAttr === 'true',
-      customStyle: customStyleAttr === '1' || customStyleAttr === 'true',
+      // w:default and w:customStyle are ST_OnOff per ECMA-376 §17.17.4
+      isDefault: parseOnOffAttribute(defaultAttr),
+      customStyle: parseOnOffAttribute(customStyleAttr),
       paragraphFormatting,
       numPr: styleNumPr,
       runFormatting,
       tableStyle,
-      // Metadata properties (Phase 5.3)
-      qFormat: qFormat || undefined,
-      semiHidden: semiHidden || undefined,
-      unhideWhenUsed: unhideWhenUsed || undefined,
-      locked: locked || undefined,
-      personal: personal || undefined,
-      personalCompose: personalCompose || undefined,
-      personalReply: personalReply || undefined,
-      autoRedefine: autoRedefine || undefined,
+      // Metadata CT_OnOff flags (ECMA-376 §17.7.4). parseStyleOnOffFlag returns
+      // undefined when the element is absent, or the actual boolean (true/false)
+      // when present — preserve both "explicit false" (override) and "absent"
+      // (inherit) faithfully through the Style properties record.
+      qFormat,
+      semiHidden,
+      hidden,
+      unhideWhenUsed,
+      locked,
+      personal,
+      personalCompose,
+      personalReply,
+      rsid: styleRsid,
+      autoRedefine,
       uiPriority,
       link,
       aliases,
@@ -8897,6 +9651,86 @@ export class DocumentParser {
    */
   private parseParagraphFormattingFromXml(pPrXml: string): ParagraphFormatting {
     const formatting: ParagraphFormatting = {};
+
+    // Parse framePr (text frame properties) per ECMA-376 Part 1 §17.3.1.11 —
+    // CT_FramePr is a CT_PPrBase child (#5, between pageBreakBefore and
+    // widowControl). Each attribute is independently optional; numeric
+    // attributes (w/h/x/y/hSpace/vSpace/lines) may legitimately be zero
+    // so use explicit string presence rather than truthy checks.
+    const framePrTag = XMLParser.extractSelfClosingTag(pPrXml, 'w:framePr');
+    if (framePrTag) {
+      const fpStr = `<w:framePr${framePrTag}`;
+      const frameProps: NonNullable<ParagraphFormatting['framePr']> = {};
+      const wAttr = XMLParser.extractAttribute(fpStr, 'w:w');
+      if (wAttr !== undefined) frameProps.w = parseInt(wAttr, 10);
+      const hAttr = XMLParser.extractAttribute(fpStr, 'w:h');
+      if (hAttr !== undefined) frameProps.h = parseInt(hAttr, 10);
+      const hRule = XMLParser.extractAttribute(fpStr, 'w:hRule');
+      if (hRule === 'auto' || hRule === 'atLeast' || hRule === 'exact') {
+        frameProps.hRule = hRule;
+      }
+      const xAttr = XMLParser.extractAttribute(fpStr, 'w:x');
+      if (xAttr !== undefined) frameProps.x = parseInt(xAttr, 10);
+      const yAttr = XMLParser.extractAttribute(fpStr, 'w:y');
+      if (yAttr !== undefined) frameProps.y = parseInt(yAttr, 10);
+      const xAlign = XMLParser.extractAttribute(fpStr, 'w:xAlign');
+      if (
+        xAlign === 'left' ||
+        xAlign === 'center' ||
+        xAlign === 'right' ||
+        xAlign === 'inside' ||
+        xAlign === 'outside'
+      ) {
+        frameProps.xAlign = xAlign;
+      }
+      const yAlign = XMLParser.extractAttribute(fpStr, 'w:yAlign');
+      if (
+        yAlign === 'top' ||
+        yAlign === 'center' ||
+        yAlign === 'bottom' ||
+        yAlign === 'inline' ||
+        yAlign === 'inside' ||
+        yAlign === 'outside'
+      ) {
+        frameProps.yAlign = yAlign;
+      }
+      const hAnchor = XMLParser.extractAttribute(fpStr, 'w:hAnchor');
+      if (hAnchor === 'page' || hAnchor === 'margin' || hAnchor === 'text') {
+        frameProps.hAnchor = hAnchor;
+      }
+      const vAnchor = XMLParser.extractAttribute(fpStr, 'w:vAnchor');
+      if (vAnchor === 'page' || vAnchor === 'margin' || vAnchor === 'text') {
+        frameProps.vAnchor = vAnchor;
+      }
+      const hSpace = XMLParser.extractAttribute(fpStr, 'w:hSpace');
+      if (hSpace !== undefined) frameProps.hSpace = parseInt(hSpace, 10);
+      const vSpace = XMLParser.extractAttribute(fpStr, 'w:vSpace');
+      if (vSpace !== undefined) frameProps.vSpace = parseInt(vSpace, 10);
+      const wrap = XMLParser.extractAttribute(fpStr, 'w:wrap');
+      if (
+        wrap === 'around' ||
+        wrap === 'auto' ||
+        wrap === 'none' ||
+        wrap === 'notBeside' ||
+        wrap === 'through' ||
+        wrap === 'tight'
+      ) {
+        frameProps.wrap = wrap;
+      }
+      const dropCap = XMLParser.extractAttribute(fpStr, 'w:dropCap');
+      if (dropCap === 'none' || dropCap === 'drop' || dropCap === 'margin') {
+        frameProps.dropCap = dropCap;
+      }
+      const lines = XMLParser.extractAttribute(fpStr, 'w:lines');
+      if (lines !== undefined) frameProps.lines = parseInt(lines, 10);
+      const anchorLock = XMLParser.extractAttribute(fpStr, 'w:anchorLock');
+      if (anchorLock !== undefined) {
+        frameProps.anchorLock = parseOnOffAttribute(anchorLock, true);
+      }
+      if (Object.keys(frameProps).length > 0) {
+        formatting.framePr = frameProps;
+      }
+    }
 
     // Parse alignment (w:jc)
     const jcElement = XMLParser.extractSelfClosingTag(pPrXml, 'w:jc');
@@ -8937,15 +9771,17 @@ export class DocumentParser {
         lineRule: validatedLineRule,
         beforeLines: beforeLines ? parseInt(beforeLines, 10) : undefined,
         afterLines: afterLines ? parseInt(afterLines, 10) : undefined,
-        beforeAutospacing: beforeAutosp
-          ? beforeAutosp === '1' || beforeAutosp === 'true'
-          : undefined,
-        afterAutospacing: afterAutosp ? afterAutosp === '1' || afterAutosp === 'true' : undefined,
+        // ST_OnOff per ECMA-376 §17.17.4 — accept 1/0/true/false/on/off
+        beforeAutospacing: beforeAutosp ? parseOnOffAttribute(beforeAutosp) : undefined,
+        afterAutospacing: afterAutosp ? parseOnOffAttribute(afterAutosp) : undefined,
       };
     }
 
     // Parse indentation (w:ind)
-    // Per ECMA-376 §17.3.1.15: w:start/w:end are bidi-aware alternatives to w:left/w:right
+    // Per ECMA-376 §17.3.1.15: w:start/w:end are bidi-aware alternatives to
+    // w:left/w:right. §17.3.1.12 also defines six CJK character-unit variants
+    // (ST_DecimalNumber) — parse those alongside so styles authored in CJK
+    // locales preserve their character-unit indent spec through round-trip.
     const indElement = XMLParser.extractSelfClosingTag(pPrXml, 'w:ind');
     if (indElement) {
       const indTag = `<w:ind${indElement}`;
@@ -8955,33 +9791,137 @@ export class DocumentParser {
       const right = XMLParser.extractAttribute(indTag, 'w:right');
       const firstLine = XMLParser.extractAttribute(indTag, 'w:firstLine');
       const hanging = XMLParser.extractAttribute(indTag, 'w:hanging');
+      // CJK character-unit variants. startChars/endChars collapse to
+      // leftChars/rightChars (same bidi-aware rule as the twips pair).
+      const startChars = XMLParser.extractAttribute(indTag, 'w:startChars');
+      const leftChars = XMLParser.extractAttribute(indTag, 'w:leftChars');
+      const endChars = XMLParser.extractAttribute(indTag, 'w:endChars');
+      const rightChars = XMLParser.extractAttribute(indTag, 'w:rightChars');
+      const firstLineChars = XMLParser.extractAttribute(indTag, 'w:firstLineChars');
+      const hangingChars = XMLParser.extractAttribute(indTag, 'w:hangingChars');
 
       const leftVal = start || left;
       const rightVal = end || right;
+      const leftCharsVal = startChars || leftChars;
+      const rightCharsVal = endChars || rightChars;
 
       formatting.indentation = {
         left: leftVal ? parseInt(leftVal, 10) : undefined,
         right: rightVal ? parseInt(rightVal, 10) : undefined,
         firstLine: firstLine ? parseInt(firstLine, 10) : undefined,
         hanging: hanging ? parseInt(hanging, 10) : undefined,
+        leftChars: leftCharsVal ? parseInt(leftCharsVal, 10) : undefined,
+        rightChars: rightCharsVal ? parseInt(rightCharsVal, 10) : undefined,
+        firstLineChars: firstLineChars ? parseInt(firstLineChars, 10) : undefined,
+        hangingChars: hangingChars ? parseInt(hangingChars, 10) : undefined,
       };
     }
 
-    // Parse boolean properties
-    if (pPrXml.includes('<w:keepNext/>') || pPrXml.includes('<w:keepNext ')) {
-      formatting.keepNext = true;
-    }
-    if (pPrXml.includes('<w:keepLines/>') || pPrXml.includes('<w:keepLines ')) {
-      formatting.keepLines = true;
-    }
-    if (pPrXml.includes('<w:pageBreakBefore/>') || pPrXml.includes('<w:pageBreakBefore ')) {
-      formatting.pageBreakBefore = true;
+    // Parse CT_OnOff boolean flags per ECMA-376 §17.17.4 / §17.3.1. The previous
+    // substring-only detection (`pPrXml.includes('<w:keepNext/>') ||
+    // pPrXml.includes('<w:keepNext ')`) hard-coded the flag to true whenever
+    // the element appeared at all — silently flipping `<w:keepNext w:val="0"/>`
+    // (explicit override) into an enabled flag. Read w:val when present and
+    // honour every ST_OnOff literal (1/0/true/false/on/off).
+    const parseStylePPrCtOnOff = (tagName: string): boolean | undefined => {
+      // extractSelfClosingTag returns the ATTRIBUTE STRING (possibly empty)
+      // when found, or `undefined` when absent. Earlier this helper checked
+      // `=== null` by mistake — that let the "absent" case fall through and
+      // construct a garbage tag that produced `true`, silently enabling the
+      // flag on every style that didn't set it.
+      const el = XMLParser.extractSelfClosingTag(pPrXml, tagName);
+      if (el === undefined) return undefined;
+      const val = XMLParser.extractAttribute(`<${tagName}${el}`, 'w:val');
+      if (val === undefined) return true;
+      return parseOnOffAttribute(val, true);
+    };
+
+    const keepNextVal = parseStylePPrCtOnOff('w:keepNext');
+    if (keepNextVal !== undefined) formatting.keepNext = keepNextVal;
+
+    const keepLinesVal = parseStylePPrCtOnOff('w:keepLines');
+    if (keepLinesVal !== undefined) formatting.keepLines = keepLinesVal;
+
+    const pageBreakBeforeVal = parseStylePPrCtOnOff('w:pageBreakBefore');
+    if (pageBreakBeforeVal !== undefined) formatting.pageBreakBefore = pageBreakBeforeVal;
+
+    // Contextual spacing per ECMA-376 Part 1 §17.3.1.9
+    // "Don't add space between paragraphs of the same style"
+    const contextualSpacingVal = parseStylePPrCtOnOff('w:contextualSpacing');
+    if (contextualSpacingVal !== undefined) formatting.contextualSpacing = contextualSpacingVal;
+
+    // Remaining CT_PPrBase CT_OnOff flags per ECMA-376 Part 1 §17.3.1.
+    // The main paragraph parser handles all of these; the style-level parser
+    // previously dropped them (substring matches existed only for the four
+    // flags above). Any style using the explicit-false form to override a
+    // based-on style's enabled flag was silently losing the override.
+    const widowControlVal = parseStylePPrCtOnOff('w:widowControl');
+    if (widowControlVal !== undefined) formatting.widowControl = widowControlVal;
+
+    const suppressLineNumbersVal = parseStylePPrCtOnOff('w:suppressLineNumbers');
+    if (suppressLineNumbersVal !== undefined)
+      formatting.suppressLineNumbers = suppressLineNumbersVal;
+
+    const bidiVal = parseStylePPrCtOnOff('w:bidi');
+    if (bidiVal !== undefined) formatting.bidi = bidiVal;
+
+    const mirrorIndentsVal = parseStylePPrCtOnOff('w:mirrorIndents');
+    if (mirrorIndentsVal !== undefined) formatting.mirrorIndents = mirrorIndentsVal;
+
+    const adjustRightIndVal = parseStylePPrCtOnOff('w:adjustRightInd');
+    if (adjustRightIndVal !== undefined) formatting.adjustRightInd = adjustRightIndVal;
+
+    const suppressAutoHyphensVal = parseStylePPrCtOnOff('w:suppressAutoHyphens');
+    if (suppressAutoHyphensVal !== undefined)
+      formatting.suppressAutoHyphens = suppressAutoHyphensVal;
+
+    const kinsokuVal = parseStylePPrCtOnOff('w:kinsoku');
+    if (kinsokuVal !== undefined) formatting.kinsoku = kinsokuVal;
+
+    const wordWrapVal = parseStylePPrCtOnOff('w:wordWrap');
+    if (wordWrapVal !== undefined) formatting.wordWrap = wordWrapVal;
+
+    const overflowPunctVal = parseStylePPrCtOnOff('w:overflowPunct');
+    if (overflowPunctVal !== undefined) formatting.overflowPunct = overflowPunctVal;
+
+    const topLinePunctVal = parseStylePPrCtOnOff('w:topLinePunct');
+    if (topLinePunctVal !== undefined) formatting.topLinePunct = topLinePunctVal;
+
+    const autoSpaceDEVal = parseStylePPrCtOnOff('w:autoSpaceDE');
+    if (autoSpaceDEVal !== undefined) formatting.autoSpaceDE = autoSpaceDEVal;
+
+    const autoSpaceDNVal = parseStylePPrCtOnOff('w:autoSpaceDN');
+    if (autoSpaceDNVal !== undefined) formatting.autoSpaceDN = autoSpaceDNVal;
+
+    const suppressOverlapVal = parseStylePPrCtOnOff('w:suppressOverlap');
+    if (suppressOverlapVal !== undefined) formatting.suppressOverlap = suppressOverlapVal;
+
+    // Parse `w:val`-attribute string-enum children per CT_PPrBase.
+    // Position #28 textDirection (ST_TextDirection), #29 textAlignment
+    // (ST_TextAlignment), #30 textboxTightWrap (ST_TextboxTightWrapType).
+    // The main paragraph parser handles these; the style-level parser
+    // previously dropped them because the substring scan was never
+    // extended past the iteration-25 CT_OnOff helper.
+    const parseStylePPrValAttr = (tagName: string): string | undefined => {
+      const el = XMLParser.extractSelfClosingTag(pPrXml, tagName);
+      if (el === undefined) return undefined;
+      const val = XMLParser.extractAttribute(`<${tagName}${el}`, 'w:val');
+      return val === undefined ? undefined : String(val);
+    };
+
+    const textDirectionVal = parseStylePPrValAttr('w:textDirection');
+    if (textDirectionVal !== undefined) {
+      formatting.textDirection = textDirectionVal as ParagraphFormatting['textDirection'];
     }
 
-    // Contextual spacing per ECMA-376 Part 1 §17.3.1.8
-    // "Don't add space between paragraphs of the same style"
-    if (pPrXml.includes('<w:contextualSpacing/>') || pPrXml.includes('<w:contextualSpacing ')) {
-      formatting.contextualSpacing = true;
+    const textAlignmentVal = parseStylePPrValAttr('w:textAlignment');
+    if (textAlignmentVal !== undefined) {
+      formatting.textAlignment = textAlignmentVal as ParagraphFormatting['textAlignment'];
+    }
+
+    const textboxTightWrapVal = parseStylePPrValAttr('w:textboxTightWrap');
+    if (textboxTightWrapVal !== undefined) {
+      formatting.textboxTightWrap = textboxTightWrapVal as ParagraphFormatting['textboxTightWrap'];
     }
 
     // Parse outline level (w:outlineLvl) - used for TOC generation
@@ -8997,7 +9937,29 @@ export class DocumentParser {
       }
     }
 
-    // Parse paragraph borders (w:pBdr) per ECMA-376 Part 1 §17.3.1.24
+    // Parse divId (CT_PPrBase #32, §17.3.1.10) — numeric HTML div
+    // association. Previously dropped on the style parser; the main
+    // paragraph parser reads it at the pPrObj level but the style pPr
+    // parser used string-based extraction and skipped both divId and
+    // cnfStyle below.
+    const divIdVal = parseStylePPrValAttr('w:divId');
+    if (divIdVal !== undefined) {
+      const parsedDivId = parseInt(divIdVal, 10);
+      if (!isNaN(parsedDivId)) formatting.divId = parsedDivId;
+    }
+
+    // Parse cnfStyle (CT_PPrBase #33, §17.3.1.8) — conditional formatting
+    // bitmask string (12-char 0/1 sequence, e.g. "100000000100").
+    const cnfStyleVal = parseStylePPrValAttr('w:cnfStyle');
+    if (cnfStyleVal !== undefined) formatting.cnfStyle = cnfStyleVal;
+
+    // Parse paragraph borders (w:pBdr) per ECMA-376 Part 1 §17.3.1.24.
+    // Covers the full CT_Border attribute set (§17.18.2): val, sz, space,
+    // color, themeColor, themeTint, themeShade, shadow, frame. The style
+    // *emitter* already round-trips all nine, so any style-pBdr authored
+    // by Word with themed or shadow/frame attributes was silently flattened
+    // here before this fix. Shadow/frame route through parseOnOffAttribute
+    // so ST_OnOff literals ("on"/"off"/"1"/"0"/"true"/"false") resolve.
     const pBdrXml = XMLParser.extractBetweenTags(pPrXml, '<w:pBdr>', '</w:pBdr>');
     if (pBdrXml) {
       const borders: any = {};
@@ -9011,11 +9973,21 @@ export class DocumentParser {
             const size = XMLParser.extractAttribute(bTag, 'w:sz');
             const space = XMLParser.extractAttribute(bTag, 'w:space');
             const color = XMLParser.extractAttribute(bTag, 'w:color');
+            const themeColor = XMLParser.extractAttribute(bTag, 'w:themeColor');
+            const themeTint = XMLParser.extractAttribute(bTag, 'w:themeTint');
+            const themeShade = XMLParser.extractAttribute(bTag, 'w:themeShade');
+            const shadow = XMLParser.extractAttribute(bTag, 'w:shadow');
+            const frame = XMLParser.extractAttribute(bTag, 'w:frame');
             const border: any = {};
             if (style) border.style = style;
             if (size) border.size = parseInt(size, 10);
             if (space) border.space = parseInt(space, 10);
             if (color) border.color = color;
+            if (themeColor) border.themeColor = themeColor;
+            if (themeTint) border.themeTint = themeTint;
+            if (themeShade) border.themeShade = themeShade;
+            if (shadow !== undefined) border.shadow = parseOnOffAttribute(shadow, true);
+            if (frame !== undefined) border.frame = parseOnOffAttribute(frame, true);
             if (Object.keys(border).length > 0) borders[type] = border;
           }
         }
@@ -9062,37 +10034,113 @@ export class DocumentParser {
   private parseRunFormattingFromXml(rPrXml: string): RunFormatting {
     const formatting: RunFormatting = {};
 
-    // Parse boolean properties
-    if (rPrXml.includes('<w:b/>') || rPrXml.includes('<w:b ')) {
-      formatting.bold = true;
-    }
-    if (rPrXml.includes('<w:i/>') || rPrXml.includes('<w:i ')) {
-      formatting.italic = true;
-    }
-    if (rPrXml.includes('<w:strike/>') || rPrXml.includes('<w:strike ')) {
-      formatting.strike = true;
-    }
-    if (rPrXml.includes('<w:smallCaps/>') || rPrXml.includes('<w:smallCaps ')) {
-      formatting.smallCaps = true;
-    }
-    if (rPrXml.includes('<w:caps/>') || rPrXml.includes('<w:caps ')) {
-      formatting.allCaps = true;
-    }
+    // CT_OnOff rPr children per ECMA-376 §17.3.2. Previously detected via
+    // substring-include which hard-coded the flag to `true` whenever the
+    // element appeared — silently flipping `<w:b w:val="0"/>` (explicit
+    // override of a based-on style's bold) into an enabled flag, and
+    // never setting the field to `false` for legitimate overrides.
+    // Mirrors the pPr `parseStylePPrCtOnOff` helper introduced in
+    // iteration 25 / 26.
+    const parseStyleRPrCtOnOff = (tagName: string): boolean | undefined => {
+      const el = XMLParser.extractSelfClosingTag(rPrXml, tagName);
+      if (el === undefined) return undefined;
+      const val = XMLParser.extractAttribute(`<${tagName}${el}`, 'w:val');
+      if (val === undefined) return true;
+      return parseOnOffAttribute(val, true);
+    };
 
-    // Parse underline — all attributes per ECMA-376 §17.3.2.40
+    const boldVal = parseStyleRPrCtOnOff('w:b');
+    if (boldVal !== undefined) formatting.bold = boldVal;
+
+    const italicVal = parseStyleRPrCtOnOff('w:i');
+    if (italicVal !== undefined) formatting.italic = italicVal;
+
+    const strikeVal = parseStyleRPrCtOnOff('w:strike');
+    if (strikeVal !== undefined) formatting.strike = strikeVal;
+
+    const smallCapsVal = parseStyleRPrCtOnOff('w:smallCaps');
+    if (smallCapsVal !== undefined) formatting.smallCaps = smallCapsVal;
+
+    const allCapsVal = parseStyleRPrCtOnOff('w:caps');
+    if (allCapsVal !== undefined) formatting.allCaps = allCapsVal;
+
+    // Extended CT_OnOff run children per ECMA-376 §17.3.2. The style-level
+    // rPr parser previously dropped all of these silently, so character
+    // styles setting dstrike, outline, shadow, emboss, imprint, rtl,
+    // vanish, noProof, snapToGrid, specVanish, webHidden, or complex-script
+    // variants (bCs / iCs / cs) lost their overrides on programmatic save.
+    const boldCsVal = parseStyleRPrCtOnOff('w:bCs');
+    if (boldCsVal !== undefined) formatting.complexScriptBold = boldCsVal;
+
+    const italicCsVal = parseStyleRPrCtOnOff('w:iCs');
+    if (italicCsVal !== undefined) formatting.complexScriptItalic = italicCsVal;
+
+    const csVal = parseStyleRPrCtOnOff('w:cs');
+    if (csVal !== undefined) formatting.complexScript = csVal;
+
+    const dstrikeVal = parseStyleRPrCtOnOff('w:dstrike');
+    if (dstrikeVal !== undefined) formatting.dstrike = dstrikeVal;
+
+    const outlineVal = parseStyleRPrCtOnOff('w:outline');
+    if (outlineVal !== undefined) formatting.outline = outlineVal;
+
+    const shadowVal = parseStyleRPrCtOnOff('w:shadow');
+    if (shadowVal !== undefined) formatting.shadow = shadowVal;
+
+    const embossVal = parseStyleRPrCtOnOff('w:emboss');
+    if (embossVal !== undefined) formatting.emboss = embossVal;
+
+    const imprintVal = parseStyleRPrCtOnOff('w:imprint');
+    if (imprintVal !== undefined) formatting.imprint = imprintVal;
+
+    const rtlVal = parseStyleRPrCtOnOff('w:rtl');
+    if (rtlVal !== undefined) formatting.rtl = rtlVal;
+
+    const vanishVal = parseStyleRPrCtOnOff('w:vanish');
+    if (vanishVal !== undefined) formatting.vanish = vanishVal;
+
+    const noProofVal = parseStyleRPrCtOnOff('w:noProof');
+    if (noProofVal !== undefined) formatting.noProof = noProofVal;
+
+    const snapToGridVal = parseStyleRPrCtOnOff('w:snapToGrid');
+    if (snapToGridVal !== undefined) formatting.snapToGrid = snapToGridVal;
+
+    const specVanishVal = parseStyleRPrCtOnOff('w:specVanish');
+    if (specVanishVal !== undefined) formatting.specVanish = specVanishVal;
+
+    const webHiddenVal = parseStyleRPrCtOnOff('w:webHidden');
+    if (webHiddenVal !== undefined) formatting.webHidden = webHiddenVal;
+
+    // Parse underline — all attributes per ECMA-376 §17.3.2.40.
+    // Whitelist covers the full ST_Underline enumeration (18 values);
+    // unknown / out-of-spec values fall through to `underline = true`
+    // (underline enabled with default style) to match the main parser.
     const uElement = XMLParser.extractSelfClosingTag(rPrXml, 'w:u');
     if (uElement) {
       const uTag = `<w:u${uElement}`;
       const uVal = XMLParser.extractAttribute(uTag, 'w:val');
-      if (
-        uVal === 'single' ||
-        uVal === 'double' ||
-        uVal === 'thick' ||
-        uVal === 'dotted' ||
-        uVal === 'dash' ||
-        uVal === 'none'
-      ) {
-        formatting.underline = uVal;
+      const ST_UNDERLINE = new Set<string>([
+        'single',
+        'words',
+        'double',
+        'thick',
+        'dotted',
+        'dottedHeavy',
+        'dash',
+        'dashedHeavy',
+        'dashLong',
+        'dashLongHeavy',
+        'dotDash',
+        'dashDotHeavy',
+        'dotDotDash',
+        'dashDotDotHeavy',
+        'wave',
+        'wavyHeavy',
+        'wavyDouble',
+        'none',
+      ]);
+      if (uVal !== undefined && ST_UNDERLINE.has(String(uVal))) {
+        formatting.underline = String(uVal) as RunFormatting['underline'];
       } else {
         formatting.underline = true;
       }
@@ -9167,12 +10215,20 @@ export class DocumentParser {
       }
     }
 
-    // Parse color (w:color) — all attributes per ECMA-376 §17.3.2.6
+    // Parse color (w:color) — all attributes per ECMA-376 §17.3.2.6 / ST_HexColor
+    // per §17.18.38. `w:val="auto"` is a valid ST_HexColorAuto sentinel that
+    // tells Word to use the automatic/window text color; the previous parser
+    // dropped it (only storing non-auto hex values), so a style-level rPr with
+    // `<w:color w:val="auto"/>` silently lost that marker on round-trip and
+    // the emitter defaulted to `"000000"` — changing the rendering of any
+    // style that relied on the auto fallback. Preserve the literal "auto" so
+    // it survives through emission. (Matches the object-format parser path
+    // for direct-run rPr at parseRunFromObject line ~5210.)
     const colorElement = XMLParser.extractSelfClosingTag(rPrXml, 'w:color');
     if (colorElement) {
       const colorTag = `<w:color${colorElement}`;
       const val = XMLParser.extractAttribute(colorTag, 'w:val');
-      if (val && val !== 'auto') {
+      if (val) {
         formatting.color = val;
       }
       const themeColor = XMLParser.extractAttribute(colorTag, 'w:themeColor');
@@ -9240,6 +10296,186 @@ export class DocumentParser {
     const shading = this.parseShadingFromXml(rPrXml);
     if (shading) {
       formatting.shading = shading;
+    }
+
+    // Character spacing (w:spacing §17.3.2.35, ST_SignedTwipsMeasure) —
+    // previously dropped on the style parser; 0 and negative values are
+    // valid per spec.
+    const spacingEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:spacing');
+    if (spacingEl !== undefined) {
+      const val = XMLParser.extractAttribute(`<w:spacing${spacingEl}`, 'w:val');
+      if (val !== undefined) {
+        const n = parseInt(String(val), 10);
+        if (!isNaN(n)) formatting.characterSpacing = n;
+      }
+    }
+
+    // Vertical position (w:position §17.3.2.31, ST_SignedHpsMeasure).
+    // 0 = baseline (explicit reset); negative = lowered; positive = raised.
+    const positionEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:position');
+    if (positionEl !== undefined) {
+      const val = XMLParser.extractAttribute(`<w:position${positionEl}`, 'w:val');
+      if (val !== undefined) {
+        const n = parseInt(String(val), 10);
+        if (!isNaN(n)) formatting.position = n;
+      }
+    }
+
+    // Kerning threshold (w:kern §17.3.2.20, ST_HpsMeasure). 0 = kern at
+    // every size (no minimum font-size threshold).
+    const kernEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:kern');
+    if (kernEl !== undefined) {
+      const val = XMLParser.extractAttribute(`<w:kern${kernEl}`, 'w:val');
+      if (val !== undefined) {
+        const n = parseInt(String(val), 10);
+        if (!isNaN(n)) formatting.kerning = n;
+      }
+    }
+
+    // Language (w:lang §17.3.2.20, CT_Language). Single val → plain string;
+    // multi-script (eastAsia and/or bidi present) → LanguageConfig object.
+    const langEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:lang');
+    if (langEl !== undefined) {
+      const langTag = `<w:lang${langEl}`;
+      const val = XMLParser.extractAttribute(langTag, 'w:val');
+      const eastAsia = XMLParser.extractAttribute(langTag, 'w:eastAsia');
+      const bidi = XMLParser.extractAttribute(langTag, 'w:bidi');
+      if (eastAsia || bidi) {
+        formatting.language = {
+          val: val ? String(val) : undefined,
+          eastAsia: eastAsia ? String(eastAsia) : undefined,
+          bidi: bidi ? String(bidi) : undefined,
+        };
+      } else if (val) {
+        formatting.language = String(val);
+      }
+    }
+
+    // Horizontal scaling (w:w §17.3.2.43, ST_TextScale — percentage,
+    // min 1 per spec, so 0 is not valid and we keep a truthy check).
+    const scaleEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:w');
+    if (scaleEl !== undefined) {
+      const val = XMLParser.extractAttribute(`<w:w${scaleEl}`, 'w:val');
+      if (val) {
+        const n = parseInt(String(val), 10);
+        if (!isNaN(n)) formatting.scaling = n;
+      }
+    }
+
+    // Emphasis mark (w:em §17.3.2.13, ST_Em — "dot"/"comma"/"circle"/
+    // "underDot"/"none"). Commonly paired with East Asian typography.
+    const emEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:em');
+    if (emEl !== undefined) {
+      const val = XMLParser.extractAttribute(`<w:em${emEl}`, 'w:val');
+      if (val) {
+        formatting.emphasis = String(val) as RunFormatting['emphasis'];
+      }
+    }
+
+    // Animated text effect (w:effect §17.3.2.12, ST_TextEffect —
+    // "blinkBackground"/"lights"/"antsBlack"/"antsRed"/"shimmer"/"sparkle"/
+    // "none"). Legacy feature but still valid per schema.
+    const effectEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:effect');
+    if (effectEl !== undefined) {
+      const val = XMLParser.extractAttribute(`<w:effect${effectEl}`, 'w:val');
+      if (val) {
+        formatting.effect = String(val) as RunFormatting['effect'];
+      }
+    }
+
+    // Text border (w:bdr §17.3.2.5) — character/run border. Full CT_Border
+    // attribute set (§17.18.2): val / sz / space / color / themeColor /
+    // themeTint / themeShade / shadow / frame.
+    const bdrEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:bdr');
+    if (bdrEl !== undefined) {
+      const bdrTag = `<w:bdr${bdrEl}`;
+      const border: {
+        style?: string;
+        size?: number;
+        color?: string;
+        space?: number;
+        themeColor?: string;
+        themeTint?: string;
+        themeShade?: string;
+        shadow?: boolean;
+        frame?: boolean;
+      } = {};
+      const val = XMLParser.extractAttribute(bdrTag, 'w:val');
+      if (val) border.style = String(val);
+      const sz = XMLParser.extractAttribute(bdrTag, 'w:sz');
+      if (sz !== undefined) {
+        const n = parseInt(String(sz), 10);
+        if (!isNaN(n)) border.size = n;
+      }
+      const color = XMLParser.extractAttribute(bdrTag, 'w:color');
+      if (color) border.color = String(color);
+      const space = XMLParser.extractAttribute(bdrTag, 'w:space');
+      if (space !== undefined) {
+        const n = parseInt(String(space), 10);
+        if (!isNaN(n)) border.space = n;
+      }
+      const themeColor = XMLParser.extractAttribute(bdrTag, 'w:themeColor');
+      if (themeColor) border.themeColor = String(themeColor);
+      const themeTint = XMLParser.extractAttribute(bdrTag, 'w:themeTint');
+      if (themeTint) border.themeTint = String(themeTint);
+      const themeShade = XMLParser.extractAttribute(bdrTag, 'w:themeShade');
+      if (themeShade) border.themeShade = String(themeShade);
+      const shadow = XMLParser.extractAttribute(bdrTag, 'w:shadow');
+      if (shadow !== undefined) border.shadow = parseOnOffAttribute(shadow, true);
+      const frame = XMLParser.extractAttribute(bdrTag, 'w:frame');
+      if (frame !== undefined) border.frame = parseOnOffAttribute(frame, true);
+      if (Object.keys(border).length > 0) {
+        formatting.border = border as RunFormatting['border'];
+      }
+    }
+
+    // Manual run width (w:fitText §17.3.2.15). Value is twips; 0 is
+    // technically representable as "explicit zero" — use `!== undefined`.
+    const fitTextEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:fitText');
+    if (fitTextEl !== undefined) {
+      const val = XMLParser.extractAttribute(`<w:fitText${fitTextEl}`, 'w:val');
+      if (val !== undefined) {
+        const n = parseInt(String(val), 10);
+        if (!isNaN(n)) formatting.fitText = n;
+      }
+    }
+
+    // East Asian layout (w:eastAsianLayout §17.3.2.10) — combined
+    // characters / vertical text / compression attributes.
+    const ealEl = XMLParser.extractSelfClosingTag(rPrXml, 'w:eastAsianLayout');
+    if (ealEl !== undefined) {
+      const ealTag = `<w:eastAsianLayout${ealEl}`;
+      const layout: Partial<{
+        id: number;
+        vert: boolean;
+        vertCompress: boolean;
+        combine: boolean;
+        combineBrackets: 'none' | 'round' | 'square' | 'angle' | 'curly';
+      }> = {};
+      const id = XMLParser.extractAttribute(ealTag, 'w:id');
+      if (id !== undefined) {
+        const n = Number(id);
+        if (!isNaN(n)) layout.id = n;
+      }
+      const vert = XMLParser.extractAttribute(ealTag, 'w:vert');
+      if (vert !== undefined && parseOnOffAttribute(vert, true)) layout.vert = true;
+      const vertCompress = XMLParser.extractAttribute(ealTag, 'w:vertCompress');
+      if (vertCompress !== undefined && parseOnOffAttribute(vertCompress, true))
+        layout.vertCompress = true;
+      const combine = XMLParser.extractAttribute(ealTag, 'w:combine');
+      if (combine !== undefined && parseOnOffAttribute(combine, true)) layout.combine = true;
+      const combineBrackets = XMLParser.extractAttribute(ealTag, 'w:combineBrackets');
+      if (combineBrackets) {
+        layout.combineBrackets = String(combineBrackets) as
+          | 'none'
+          | 'round'
+          | 'square'
+          | 'angle'
+          | 'curly';
+      }
+      if (Object.keys(layout).length > 0) {
+        formatting.eastAsianLayout = layout as RunFormatting['eastAsianLayout'];
+      }
     }
 
     return formatting;
@@ -9325,13 +10561,22 @@ export class DocumentParser {
       }
     }
 
-    // Parse alignment
+    // Parse alignment — ST_JcTable has 5 values (start, end, center, left,
+    // right) per ECMA-376 §17.18.45. The whitelist previously only accepted
+    // the three legacy LTR-centric values, silently dropping `start` / `end`
+    // (the bidi-aware defaults a modern authoring tool emits).
     if (tblPrXml.includes('<w:jc')) {
       const tag = XMLParser.extractSelfClosingTag(tblPrXml, 'w:jc');
       if (tag) {
         const val = XMLParser.extractAttribute(`<w:jc${tag}`, 'w:val');
-        if (val === 'left' || val === 'center' || val === 'right') {
-          formatting.alignment = val;
+        if (
+          val === 'left' ||
+          val === 'center' ||
+          val === 'right' ||
+          val === 'start' ||
+          val === 'end'
+        ) {
+          formatting.alignment = val as import('../formatting/Style').TableAlignment;
         }
       }
     }
@@ -9395,12 +10640,15 @@ export class DocumentParser {
       formatting.margins = this.parseCellMarginsFromXml(marginXml);
     }
 
-    // Parse vertical alignment
+    // Parse vertical alignment — ST_VerticalJc has four values
+    // (top / center / both / bottom) per ECMA-376 §17.18.101. Previously
+    // the whitelist only accepted the first three, silently dropping
+    // `<w:vAlign w:val="both"/>` on cell styles.
     if (tcPrXml.includes('<w:vAlign')) {
       const tag = XMLParser.extractSelfClosingTag(tcPrXml, 'w:vAlign');
       if (tag) {
         const val = XMLParser.extractAttribute(`<w:vAlign${tag}`, 'w:val');
-        if (val === 'top' || val === 'center' || val === 'bottom') {
+        if (val === 'top' || val === 'center' || val === 'both' || val === 'bottom') {
           formatting.verticalAlignment = val;
         }
       }
@@ -9432,15 +10680,25 @@ export class DocumentParser {
       }
     }
 
-    // Parse cantSplit
-    if (trPrXml.includes('<w:cantSplit/>') || trPrXml.includes('<w:cantSplit ')) {
-      formatting.cantSplit = true;
-    }
+    // Parse cantSplit / tblHeader — both OnOffOnlyType (§17.4.6, §17.4.50).
+    // Previous substring-include detection hard-coded the flag to `true`
+    // whenever the element appeared, silently flipping an explicit-off
+    // override (e.g., a tblStylePr conditional un-splitting a header row)
+    // into an enabled flag. Reuse parseOnOffAttribute so bare, "on", and
+    // "off" all map correctly, and so absent stays undefined.
+    const parseTrPrOnOffOnly = (tagName: string): boolean | undefined => {
+      const el = XMLParser.extractSelfClosingTag(trPrXml, tagName);
+      if (el === undefined) return undefined;
+      const val = XMLParser.extractAttribute(`<${tagName}${el}`, 'w:val');
+      if (val === undefined) return true;
+      return parseOnOffAttribute(val, true);
+    };
 
-    // Parse tblHeader (isHeader)
-    if (trPrXml.includes('<w:tblHeader/>') || trPrXml.includes('<w:tblHeader ')) {
-      formatting.isHeader = true;
-    }
+    const cantSplitVal = parseTrPrOnOffOnly('w:cantSplit');
+    if (cantSplitVal !== undefined) formatting.cantSplit = cantSplitVal;
+
+    const tblHeaderVal = parseTrPrOnOffOnly('w:tblHeader');
+    if (tblHeaderVal !== undefined) formatting.isHeader = tblHeaderVal;
 
     return formatting;
   }
@@ -9521,26 +10779,55 @@ export class DocumentParser {
   ): import('../formatting/Style').TableBorders | import('../formatting/Style').CellBorders {
     const borders: any = {};
 
+    // Local helper so both the main-side loop and the diagonal loop share
+    // the full CT_Border attribute set (§17.18.2): val / sz / space / color
+    // / themeColor / themeTint / themeShade / shadow / frame. Previously
+    // this parser only extracted the four "basic" attrs, so themed borders
+    // and shadow/frame flags on page/table/cell borders were silently
+    // dropped on every load → save round-trip.
+    const parseBorderAttrs = (
+      type: string
+    ): import('../formatting/Style').BorderProperties | null => {
+      const tag = XMLParser.extractSelfClosingTag(bordersXml, `w:${type}`);
+      if (!tag) return null;
+      const ref = `<w:${type}${tag}`;
+      const border: import('../formatting/Style').BorderProperties = {};
+      const style = XMLParser.extractAttribute(ref, 'w:val');
+      const size = XMLParser.extractAttribute(ref, 'w:sz');
+      const space = XMLParser.extractAttribute(ref, 'w:space');
+      const color = XMLParser.extractAttribute(ref, 'w:color');
+      const themeColor = XMLParser.extractAttribute(ref, 'w:themeColor');
+      const themeTint = XMLParser.extractAttribute(ref, 'w:themeTint');
+      const themeShade = XMLParser.extractAttribute(ref, 'w:themeShade');
+      const shadow = XMLParser.extractAttribute(ref, 'w:shadow');
+      const frame = XMLParser.extractAttribute(ref, 'w:frame');
+      if (style) border.style = style as any;
+      if (size) border.size = parseInt(size, 10);
+      if (space) border.space = parseInt(space, 10);
+      if (color) border.color = color;
+      if (themeColor) (border as any).themeColor = themeColor;
+      if (themeTint) (border as any).themeTint = themeTint;
+      if (themeShade) (border as any).themeShade = themeShade;
+      if (shadow !== undefined) (border as any).shadow = parseOnOffAttribute(shadow, true);
+      if (frame !== undefined) (border as any).frame = parseOnOffAttribute(frame, true);
+      return Object.keys(border).length > 0 ? border : null;
+    };
+
+    // Per ECMA-376 §17.4.40 CT_TblBorders and §17.4.66 CT_TcBorders the
+    // left / right borders have bidi-aware aliases `w:start` / `w:end`.
+    // Modern authoring tools (Word 2013+, Google Docs) emit the bidi-
+    // aware form by default — prefer those over the legacy `w:left` /
+    // `w:right` so bidi-authored tables round-trip their side borders
+    // (the internal model stores under the left/right keys, matching
+    // the emitter).
     const borderTypes = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'];
     for (const type of borderTypes) {
-      if (bordersXml.includes(`<w:${type}`)) {
-        const tag = XMLParser.extractSelfClosingTag(bordersXml, `w:${type}`);
-        if (tag) {
-          const style = XMLParser.extractAttribute(`<w:${type}${tag}`, 'w:val');
-          const size = XMLParser.extractAttribute(`<w:${type}${tag}`, 'w:sz');
-          const space = XMLParser.extractAttribute(`<w:${type}${tag}`, 'w:space');
-          const color = XMLParser.extractAttribute(`<w:${type}${tag}`, 'w:color');
-
-          const border: import('../formatting/Style').BorderProperties = {};
-          if (style) border.style = style as any;
-          if (size) border.size = parseInt(size, 10);
-          if (space) border.space = parseInt(space, 10);
-          if (color) border.color = color;
-
-          if (Object.keys(border).length > 0) {
-            borders[type] = border;
-          }
-        }
+      // For left/right: prefer bidi-aware start/end alias if present.
+      const alias = type === 'left' ? 'start' : type === 'right' ? 'end' : type;
+      const tagNameToRead = bordersXml.includes(`<w:${alias}`) ? alias : type;
+      if (bordersXml.includes(`<w:${tagNameToRead}`)) {
+        const border = parseBorderAttrs(tagNameToRead);
+        if (border) borders[type] = border;
       }
     }
 
@@ -9549,23 +10836,8 @@ export class DocumentParser {
       const diagonalTypes = ['tl2br', 'tr2bl'];
       for (const type of diagonalTypes) {
         if (bordersXml.includes(`<w:${type}`)) {
-          const tag = XMLParser.extractSelfClosingTag(bordersXml, `w:${type}`);
-          if (tag) {
-            const style = XMLParser.extractAttribute(`<w:${type}${tag}`, 'w:val');
-            const size = XMLParser.extractAttribute(`<w:${type}${tag}`, 'w:sz');
-            const space = XMLParser.extractAttribute(`<w:${type}${tag}`, 'w:space');
-            const color = XMLParser.extractAttribute(`<w:${type}${tag}`, 'w:color');
-
-            const border: import('../formatting/Style').BorderProperties = {};
-            if (style) border.style = style as any;
-            if (size) border.size = parseInt(size, 10);
-            if (space) border.space = parseInt(space, 10);
-            if (color) border.color = color;
-
-            if (Object.keys(border).length > 0) {
-              borders[type] = border;
-            }
-          }
+          const border = parseBorderAttrs(type);
+          if (border) borders[type] = border;
         }
       }
     }
@@ -9578,16 +10850,25 @@ export class DocumentParser {
    * Extracts all 9 ECMA-376 shading attributes including theme colors.
    */
   private parseShadingFromObj(shd: any): ShadingConfig | undefined {
+    // Per ECMA-376 §17.3.1.32 CT_Shd, every string-typed attribute
+    // (ST_UcharHexNumber tint/shade, ST_ThemeColor theme refs,
+    // ST_HexColor fill/color, ST_Shd pattern) can be purely numeric in
+    // hex form — "80", "00", "FF", "80000000", etc. XMLParser's
+    // `parseAttributeValue: true` coerces purely-digit hex strings like
+    // "80" to the JS number 80, violating the `string` type on
+    // ShadingConfig. Previously stored values leaked downstream as
+    // numbers (e.g. `.toUpperCase()` would throw); cast every attribute
+    // through `String(...)` so the declared-type contract holds.
     const shading: ShadingConfig = {};
-    if (shd['@_w:val']) shading.pattern = shd['@_w:val'];
-    if (shd['@_w:fill']) shading.fill = shd['@_w:fill'];
-    if (shd['@_w:color']) shading.color = shd['@_w:color'];
-    if (shd['@_w:themeFill']) shading.themeFill = shd['@_w:themeFill'];
-    if (shd['@_w:themeColor']) shading.themeColor = shd['@_w:themeColor'];
-    if (shd['@_w:themeFillTint']) shading.themeFillTint = shd['@_w:themeFillTint'];
-    if (shd['@_w:themeFillShade']) shading.themeFillShade = shd['@_w:themeFillShade'];
-    if (shd['@_w:themeTint']) shading.themeTint = shd['@_w:themeTint'];
-    if (shd['@_w:themeShade']) shading.themeShade = shd['@_w:themeShade'];
+    if (shd['@_w:val']) shading.pattern = String(shd['@_w:val']) as ShadingConfig['pattern'];
+    if (shd['@_w:fill']) shading.fill = String(shd['@_w:fill']);
+    if (shd['@_w:color']) shading.color = String(shd['@_w:color']);
+    if (shd['@_w:themeFill']) shading.themeFill = String(shd['@_w:themeFill']);
+    if (shd['@_w:themeColor']) shading.themeColor = String(shd['@_w:themeColor']);
+    if (shd['@_w:themeFillTint']) shading.themeFillTint = String(shd['@_w:themeFillTint']);
+    if (shd['@_w:themeFillShade']) shading.themeFillShade = String(shd['@_w:themeFillShade']);
+    if (shd['@_w:themeTint']) shading.themeTint = String(shd['@_w:themeTint']);
+    if (shd['@_w:themeShade']) shading.themeShade = String(shd['@_w:themeShade']);
     return Object.keys(shading).length > 0 ? shading : undefined;
   }
 
@@ -10176,29 +11457,42 @@ export class DocumentParser {
 
     // Table-level properties (w:tblPr context)
     if (propsObj['w:tblStyle']) {
-      result.style = propsObj['w:tblStyle']['@_w:val'] || '';
+      // w:tblStyle w:val is ST_String (§17.7.4.62). XMLParser coerces
+      // purely-numeric style IDs (e.g. "2025") to numbers; cast so the
+      // declared `string` contract holds on tracked-change history.
+      const v = propsObj['w:tblStyle']['@_w:val'];
+      result.style = v !== undefined && v !== null ? String(v) : '';
     }
-    // tblpPr (floating table position)
+    // tblpPr (floating table position) — mirror main-path zero-value
+    // preservation. The tblPrChange emitter re-emits position via
+    // `!== undefined`, so dropping zero-valued tracked "previous"
+    // positions here lost them silently on round-trip.
     if (propsObj['w:tblpPr']) {
       const tblpPr = propsObj['w:tblpPr'];
       const pos: any = {};
-      if (tblpPr['@_w:tblpX']) pos.x = parseInt(tblpPr['@_w:tblpX'], 10);
-      if (tblpPr['@_w:tblpY']) pos.y = parseInt(tblpPr['@_w:tblpY'], 10);
+      if (isExplicitlySet(tblpPr['@_w:tblpX'])) pos.x = safeParseInt(tblpPr['@_w:tblpX']);
+      if (isExplicitlySet(tblpPr['@_w:tblpY'])) pos.y = safeParseInt(tblpPr['@_w:tblpY']);
       if (tblpPr['@_w:horzAnchor']) pos.horizontalAnchor = tblpPr['@_w:horzAnchor'];
       if (tblpPr['@_w:vertAnchor']) pos.verticalAnchor = tblpPr['@_w:vertAnchor'];
-      if (tblpPr['@_w:leftFromText']) pos.leftFromText = parseInt(tblpPr['@_w:leftFromText'], 10);
-      if (tblpPr['@_w:rightFromText'])
-        pos.rightFromText = parseInt(tblpPr['@_w:rightFromText'], 10);
-      if (tblpPr['@_w:topFromText']) pos.topFromText = parseInt(tblpPr['@_w:topFromText'], 10);
-      if (tblpPr['@_w:bottomFromText'])
-        pos.bottomFromText = parseInt(tblpPr['@_w:bottomFromText'], 10);
+      if (isExplicitlySet(tblpPr['@_w:leftFromText'])) {
+        pos.leftFromText = safeParseInt(tblpPr['@_w:leftFromText']);
+      }
+      if (isExplicitlySet(tblpPr['@_w:rightFromText'])) {
+        pos.rightFromText = safeParseInt(tblpPr['@_w:rightFromText']);
+      }
+      if (isExplicitlySet(tblpPr['@_w:topFromText'])) {
+        pos.topFromText = safeParseInt(tblpPr['@_w:topFromText']);
+      }
+      if (isExplicitlySet(tblpPr['@_w:bottomFromText'])) {
+        pos.bottomFromText = safeParseInt(tblpPr['@_w:bottomFromText']);
+      }
       if (Object.keys(pos).length > 0) result.position = pos;
     }
     if (propsObj['w:tblOverlap']) {
       result.overlap = propsObj['w:tblOverlap']['@_w:val'];
     }
     if (propsObj['w:bidiVisual']) {
-      result.bidiVisual = true;
+      result.bidiVisual = parseOoxmlBoolean(propsObj['w:bidiVisual']);
     }
     if (propsObj['w:tblStyleRowBandSize']) {
       result.tblStyleRowBandSize = parseInt(
@@ -10244,21 +11538,55 @@ export class DocumentParser {
       const borders: any = {};
       const bordersObj = propsObj['w:tblBorders'];
       for (const side of ['top', 'bottom', 'left', 'right', 'insideH', 'insideV']) {
-        if (bordersObj[`w:${side}`]) {
-          borders[side] = this.parseBorderElement(bordersObj[`w:${side}`]);
+        // Prefer bidi-aware w:start/w:end aliases over legacy w:left/
+        // w:right (ECMA-376 §17.4.40 CT_TblBorders). Same pattern as
+        // the main table borders parser — the bidi-aware form is the
+        // preferred modern spelling.
+        const aliasKey = side === 'left' ? 'w:start' : side === 'right' ? 'w:end' : undefined;
+        const borderObj = (aliasKey && bordersObj[aliasKey]) || bordersObj[`w:${side}`];
+        if (borderObj) {
+          borders[side] = this.parseBorderElement(borderObj);
         }
       }
       if (Object.keys(borders).length > 0) result.borders = borders;
     }
+    // tblLook per ECMA-376 §17.4.57 — supports both hex-string format
+    // (w:val="04A0") AND the expanded individual-attribute form
+    // (firstRow/lastRow/firstColumn/lastColumn/noHBand/noVBand).
+    // Word often emits the expanded form (no w:val) inside *PrChange
+    // previous-properties; the hex-only read silently collapsed every
+    // flag to "0000" on round-trip.
     if (propsObj['w:tblLook']) {
       const look = propsObj['w:tblLook'];
-      result.tblLook = look['@_w:val'] || '0000';
+      if (look['@_w:val']) {
+        result.tblLook = String(look['@_w:val']);
+      } else {
+        const attrIsOn = (name: string): boolean => {
+          const v = look[name];
+          if (v === undefined) return false;
+          return parseOoxmlBoolean({ '@_w:val': v });
+        };
+        let value = 0;
+        if (attrIsOn('@_w:firstRow')) value |= 0x0020;
+        if (attrIsOn('@_w:lastRow')) value |= 0x0040;
+        if (attrIsOn('@_w:firstColumn')) value |= 0x0080;
+        if (attrIsOn('@_w:lastColumn')) value |= 0x0100;
+        if (attrIsOn('@_w:noHBand')) value |= 0x0200;
+        if (attrIsOn('@_w:noVBand')) value |= 0x0400;
+        result.tblLook = value.toString(16).toUpperCase().padStart(4, '0');
+      }
     }
     if (propsObj['w:tblCaption']) {
-      result.caption = propsObj['w:tblCaption']['@_w:val'];
+      // w:tblCaption w:val is ST_String (§17.4.62). Cast through
+      // String() so purely-numeric caption text round-trips as a
+      // string inside the tracked-change previousProperties.
+      const v = propsObj['w:tblCaption']['@_w:val'];
+      result.caption = v !== undefined && v !== null ? String(v) : undefined;
     }
     if (propsObj['w:tblDescription']) {
-      result.description = propsObj['w:tblDescription']['@_w:val'];
+      // w:tblDescription w:val is ST_String (§17.4.63).
+      const v = propsObj['w:tblDescription']['@_w:val'];
+      result.description = v !== undefined && v !== null ? String(v) : undefined;
     }
 
     // Row-level properties (w:trPr context) — all CT_TrPr elements
@@ -10289,14 +11617,15 @@ export class DocumentParser {
       const rule = propsObj['w:trHeight']['@_w:hRule'];
       if (rule) result.heightRule = rule;
     }
+    // Row CT_OnOff — honour w:val per ECMA-376 §17.17.4 (ST_OnOff)
     if (propsObj['w:tblHeader']) {
-      result.isHeader = true;
+      result.isHeader = parseOoxmlBoolean(propsObj['w:tblHeader']);
     }
     if (propsObj['w:cantSplit']) {
-      result.cantSplit = true;
+      result.cantSplit = parseOoxmlBoolean(propsObj['w:cantSplit']);
     }
     if (propsObj['w:hidden']) {
-      result.hidden = true;
+      result.hidden = parseOoxmlBoolean(propsObj['w:hidden']);
     }
 
     // Cell-level properties (w:tcPr context) — all CT_TcPr elements
@@ -10317,14 +11646,19 @@ export class DocumentParser {
       const borders: any = {};
       const bordersObj = propsObj['w:tcBorders'];
       for (const side of ['top', 'bottom', 'left', 'right', 'tl2br', 'tr2bl']) {
-        if (bordersObj[`w:${side}`]) {
-          borders[side] = this.parseBorderElement(bordersObj[`w:${side}`]);
+        // Prefer bidi-aware w:start/w:end aliases for left/right
+        // (ECMA-376 §17.4.66 CT_TcBorders). Diagonals (tl2br/tr2bl)
+        // have no bidi aliases.
+        const aliasKey = side === 'left' ? 'w:start' : side === 'right' ? 'w:end' : undefined;
+        const borderObj = (aliasKey && bordersObj[aliasKey]) || bordersObj[`w:${side}`];
+        if (borderObj) {
+          borders[side] = this.parseBorderElement(borderObj);
         }
       }
       if (Object.keys(borders).length > 0) result.borders = borders;
     }
     if (propsObj['w:noWrap']) {
-      result.noWrap = true;
+      result.noWrap = parseOoxmlBoolean(propsObj['w:noWrap']);
     }
     if (propsObj['w:tcMar']) {
       const tcMar = propsObj['w:tcMar'];
@@ -10341,13 +11675,13 @@ export class DocumentParser {
       result.textDirection = propsObj['w:textDirection']['@_w:val'];
     }
     if (propsObj['w:tcFitText']) {
-      result.fitText = true;
+      result.fitText = parseOoxmlBoolean(propsObj['w:tcFitText']);
     }
     if (propsObj['w:vAlign']) {
       result.verticalAlignment = propsObj['w:vAlign']['@_w:val'];
     }
     if (propsObj['w:hideMark']) {
-      result.hideMark = true;
+      result.hideMark = parseOoxmlBoolean(propsObj['w:hideMark']);
     }
     if (propsObj['w:cnfStyle']) {
       result.cnfStyle = propsObj['w:cnfStyle']['@_w:val'];
@@ -10377,6 +11711,79 @@ export class DocumentParser {
     if (!sectPrXml) return {};
     const result: Record<string, any> = {};
 
+    // Footnote properties (w:footnotePr) per §17.11.9. The main sectPr parser
+    // reads these, and the emitter supports prev.footnotePr, but the
+    // sectPrChange parser previously dropped them entirely — tracked history
+    // of changes to footnote numbering format / position / start / restart
+    // was lost on every round-trip.
+    const footnotePrElements = XMLParser.extractElements(sectPrXml, 'w:footnotePr');
+    if (footnotePrElements.length > 0 && footnotePrElements[0]) {
+      const fnPr = footnotePrElements[0];
+      const fnObj: any = {};
+      const posElements = XMLParser.extractElements(fnPr, 'w:pos');
+      if (posElements[0]) {
+        const pos = XMLParser.extractAttribute(posElements[0], 'w:val');
+        if (pos) fnObj.position = pos;
+      }
+      const numFmtElements = XMLParser.extractElements(fnPr, 'w:numFmt');
+      if (numFmtElements[0]) {
+        const fmt = XMLParser.extractAttribute(numFmtElements[0], 'w:val');
+        if (fmt) fnObj.numberFormat = fmt;
+      }
+      const numStartElements = XMLParser.extractElements(fnPr, 'w:numStart');
+      if (numStartElements[0]) {
+        const start = XMLParser.extractAttribute(numStartElements[0], 'w:val');
+        if (start !== undefined) fnObj.startNumber = parseInt(String(start), 10);
+      }
+      const numRestartElements = XMLParser.extractElements(fnPr, 'w:numRestart');
+      if (numRestartElements[0]) {
+        const restart = XMLParser.extractAttribute(numRestartElements[0], 'w:val');
+        if (restart) fnObj.restart = restart;
+      }
+      if (Object.keys(fnObj).length > 0) result.footnotePr = fnObj;
+    }
+
+    // Endnote properties (w:endnotePr) per §17.11.5 — mirror of footnotePr.
+    const endnotePrElements = XMLParser.extractElements(sectPrXml, 'w:endnotePr');
+    if (endnotePrElements.length > 0 && endnotePrElements[0]) {
+      const enPr = endnotePrElements[0];
+      const enObj: any = {};
+      const posElements = XMLParser.extractElements(enPr, 'w:pos');
+      if (posElements[0]) {
+        const pos = XMLParser.extractAttribute(posElements[0], 'w:val');
+        if (pos) enObj.position = pos;
+      }
+      const numFmtElements = XMLParser.extractElements(enPr, 'w:numFmt');
+      if (numFmtElements[0]) {
+        const fmt = XMLParser.extractAttribute(numFmtElements[0], 'w:val');
+        if (fmt) enObj.numberFormat = fmt;
+      }
+      const numStartElements = XMLParser.extractElements(enPr, 'w:numStart');
+      if (numStartElements[0]) {
+        const start = XMLParser.extractAttribute(numStartElements[0], 'w:val');
+        if (start !== undefined) enObj.startNumber = parseInt(String(start), 10);
+      }
+      const numRestartElements = XMLParser.extractElements(enPr, 'w:numRestart');
+      if (numRestartElements[0]) {
+        const restart = XMLParser.extractAttribute(numRestartElements[0], 'w:val');
+        if (restart) enObj.restart = restart;
+      }
+      if (Object.keys(enObj).length > 0) result.endnotePr = enObj;
+    }
+
+    // Paper source (w:paperSrc) per §17.6.12 CT_PaperSource — first-page / other
+    // paper tray selection. Both attributes optional per schema.
+    const paperSrcElements = XMLParser.extractElements(sectPrXml, 'w:paperSrc');
+    if (paperSrcElements.length > 0 && paperSrcElements[0]) {
+      const ps = paperSrcElements[0];
+      const psObj: any = {};
+      const first = XMLParser.extractAttribute(ps, 'w:first');
+      if (first !== undefined) psObj.first = parseInt(String(first), 10);
+      const other = XMLParser.extractAttribute(ps, 'w:other');
+      if (other !== undefined) psObj.other = parseInt(String(other), 10);
+      if (Object.keys(psObj).length > 0) result.paperSource = psObj;
+    }
+
     // Page size
     const pgSzElements = XMLParser.extractElements(sectPrXml, 'w:pgSz');
     if (pgSzElements.length > 0 && pgSzElements[0]) {
@@ -10395,7 +11802,10 @@ export class DocumentParser {
       }
     }
 
-    // Margins
+    // Margins — full CT_PageMar attribute set (§17.6.11) including w:gutter
+    // (the book-binding margin). Previously gutter was dropped on sectPrChange
+    // history, so any tracked change to a binding-gutter value lost the
+    // previous value on round-trip.
     const pgMarElements = XMLParser.extractElements(sectPrXml, 'w:pgMar');
     if (pgMarElements.length > 0 && pgMarElements[0]) {
       const pgMar = pgMarElements[0];
@@ -10412,6 +11822,8 @@ export class DocumentParser {
       if (header) margins.header = parseInt(header, 10);
       const footer = XMLParser.extractAttribute(pgMar, 'w:footer');
       if (footer) margins.footer = parseInt(footer, 10);
+      const gutter = XMLParser.extractAttribute(pgMar, 'w:gutter');
+      if (gutter) margins.gutter = parseInt(gutter, 10);
       if (Object.keys(margins).length > 0) result.margins = margins;
     }
 
@@ -10438,7 +11850,13 @@ export class DocumentParser {
       if (Object.keys(lnObj).length > 0) result.lineNumbering = lnObj;
     }
 
-    // Page numbering
+    // Page numbering — full CT_PageNumber attribute set (§17.6.12):
+    // fmt / start / chapStyle / chapSep. Previously only fmt+start were read,
+    // so tracked-change history of chapter-numbering edits (e.g. switching
+    // from "Heading 1" to "Heading 2" as the chapter marker, or changing the
+    // chapter separator from hyphen to emDash) lost the previous values.
+    // The Section.ts emitter stores chapStyle / chapSep as top-level
+    // properties rather than on pageNumbering, so expose them the same way.
     const pgNumElements = XMLParser.extractElements(sectPrXml, 'w:pgNumType');
     if (pgNumElements.length > 0 && pgNumElements[0]) {
       const pn = pgNumElements[0];
@@ -10448,6 +11866,12 @@ export class DocumentParser {
       const fmt = XMLParser.extractAttribute(pn, 'w:fmt');
       if (fmt) pnObj.format = fmt;
       if (Object.keys(pnObj).length > 0) result.pageNumbering = pnObj;
+      // Mirror the main-sectPr parser: chapStyle / chapSep live at the root
+      // of the section properties, not inside pageNumbering.
+      const chapStyle = XMLParser.extractAttribute(pn, 'w:chapStyle');
+      if (chapStyle !== undefined) result.chapStyle = parseInt(String(chapStyle), 10);
+      const chapSep = XMLParser.extractAttribute(pn, 'w:chapSep');
+      if (chapSep) result.chapSep = chapSep;
     }
 
     // Columns
@@ -10456,16 +11880,58 @@ export class DocumentParser {
       const cols = colsElements[0];
       const num = XMLParser.extractAttribute(cols, 'w:num');
       const space = XMLParser.extractAttribute(cols, 'w:space');
+      // Full CT_Columns attribute set (§17.6.4): num / space / equalWidth / sep
+      // plus the child <w:col w:w="..." w:space="..."/> entries for per-column
+      // widths. Previously only num+space were read, so sectPrChange history of
+      // a columns-layout change dropped equalWidth, the separator line, and
+      // the entire custom column-width / per-column-space configuration.
+      const equalWidth = XMLParser.extractAttribute(cols, 'w:equalWidth');
+      const sep = XMLParser.extractAttribute(cols, 'w:sep');
+
+      // Extract individual <w:col> children for non-equal-width layouts.
+      const colChildElements = XMLParser.extractElements(cols, 'w:col');
+      const columnWidths: number[] = [];
+      const columnSpaces: number[] = [];
+      let hasColumnSpaces = false;
+      for (const col of colChildElements) {
+        const width = XMLParser.extractAttribute(col, 'w:w');
+        if (width) columnWidths.push(parseInt(width, 10));
+        const colSpace = XMLParser.extractAttribute(col, 'w:space');
+        if (colSpace) {
+          columnSpaces.push(parseInt(colSpace, 10));
+          hasColumnSpaces = true;
+        } else {
+          columnSpaces.push(0);
+        }
+      }
+
       if (num) {
         result.columns = {
           count: parseInt(num, 10),
           space: space ? parseInt(space, 10) : undefined,
+          equalWidth: equalWidth ? parseOnOffAttribute(equalWidth) : undefined,
+          separator: sep ? parseOnOffAttribute(sep) : undefined,
+          columnWidths: columnWidths.length > 0 ? columnWidths : undefined,
+          columnSpaces: hasColumnSpaces ? columnSpaces : undefined,
         };
       }
     }
 
-    // Form protection
-    if (sectPrXml.includes('<w:formProt')) result.formProt = true;
+    // CT_OnOff sectPr flags — honour w:val per ECMA-376 §17.17.4 (ST_OnOff).
+    // Previously these used substring `.includes()`, which both ignored w:val
+    // (flipping explicit false to true) and could false-positive on prefix
+    // matches (e.g. "<w:bidi" inside "<w:bidiVisual"). Use extractElements +
+    // extractAttribute + parseOnOffAttribute instead.
+    const parseSectCtOnOff = (tagName: string): boolean | undefined => {
+      const els = XMLParser.extractElements(sectPrXml, tagName);
+      if (els.length === 0 || !els[0]) return undefined;
+      const v = XMLParser.extractAttribute(els[0], 'w:val');
+      return parseOnOffAttribute(v, true);
+    };
+
+    // Form protection (w:formProt) — CT_OnOff
+    const formProtVal = parseSectCtOnOff('w:formProt');
+    if (formProtVal !== undefined) result.formProt = formProtVal;
 
     // Vertical alignment
     const vAlignElements = XMLParser.extractElements(sectPrXml, 'w:vAlign');
@@ -10474,11 +11940,13 @@ export class DocumentParser {
       if (val) result.verticalAlignment = val;
     }
 
-    // Suppress endnotes
-    if (sectPrXml.includes('<w:noEndnote')) result.noEndnote = true;
+    // Suppress endnotes (w:noEndnote) — CT_OnOff
+    const noEndnoteVal = parseSectCtOnOff('w:noEndnote');
+    if (noEndnoteVal !== undefined) result.noEndnote = noEndnoteVal;
 
-    // Title page
-    if (sectPrXml.includes('<w:titlePg')) result.titlePage = true;
+    // Title page (w:titlePg) — CT_OnOff
+    const titlePgVal = parseSectCtOnOff('w:titlePg');
+    if (titlePgVal !== undefined) result.titlePage = titlePgVal;
 
     // Text direction
     const textDirElements = XMLParser.extractElements(sectPrXml, 'w:textDirection');
@@ -10487,11 +11955,13 @@ export class DocumentParser {
       if (val) result.textDirection = val;
     }
 
-    // Bidi section
-    if (sectPrXml.includes('<w:bidi')) result.bidi = true;
+    // Bidi section (w:bidi) — CT_OnOff
+    const bidiVal = parseSectCtOnOff('w:bidi');
+    if (bidiVal !== undefined) result.bidi = bidiVal;
 
-    // RTL gutter
-    if (sectPrXml.includes('<w:rtlGutter')) result.rtlGutter = true;
+    // RTL gutter (w:rtlGutter) — CT_OnOff
+    const rtlGutterVal = parseSectCtOnOff('w:rtlGutter');
+    if (rtlGutterVal !== undefined) result.rtlGutter = rtlGutterVal;
 
     // Document grid
     const docGridElements = XMLParser.extractElements(sectPrXml, 'w:docGrid');
@@ -10505,6 +11975,64 @@ export class DocumentParser {
       const charSpace = XMLParser.extractAttribute(dg, 'w:charSpace');
       if (charSpace) dgObj.charSpace = parseInt(charSpace, 10);
       if (Object.keys(dgObj).length > 0) result.docGrid = dgObj;
+    }
+
+    // Page borders (w:pgBorders) per ECMA-376 §17.6.10. The main sectPr parser
+    // reads these, but the sectPrChange previous-sectPr parser previously
+    // didn't — so a tracked-change history of page-border edits lost the
+    // entire "previous" border configuration (style, color, themeColor,
+    // themeTint, themeShade, shadow, frame) every round-trip. The emitter
+    // supports prev.pageBorders already; this is the missing parser half.
+    const pgBordersElements = XMLParser.extractElements(sectPrXml, 'w:pgBorders');
+    if (pgBordersElements.length > 0 && pgBordersElements[0]) {
+      const pgBordersXml = pgBordersElements[0];
+      const pageBorders: any = {};
+      const offsetFrom = XMLParser.extractAttribute(pgBordersXml, 'w:offsetFrom');
+      if (offsetFrom) pageBorders.offsetFrom = offsetFrom;
+      const display = XMLParser.extractAttribute(pgBordersXml, 'w:display');
+      if (display) pageBorders.display = display;
+      const zOrder = XMLParser.extractAttribute(pgBordersXml, 'w:zOrder');
+      if (zOrder) pageBorders.zOrder = zOrder;
+
+      // Per-side border parser mirrors the main-sectPr logic — full CT_Border
+      // attribute set including themed colors and shadow/frame flags.
+      const parsePrevBorder = (sideXml: string): any | undefined => {
+        if (!sideXml) return undefined;
+        const border: any = {};
+        const val = XMLParser.extractAttribute(sideXml, 'w:val');
+        if (val) border.style = val;
+        const sz = XMLParser.extractAttribute(sideXml, 'w:sz');
+        if (sz) border.size = parseInt(sz, 10);
+        const color = XMLParser.extractAttribute(sideXml, 'w:color');
+        if (color) border.color = color;
+        const space = XMLParser.extractAttribute(sideXml, 'w:space');
+        if (space) border.space = parseInt(space, 10);
+        const shadow = XMLParser.extractAttribute(sideXml, 'w:shadow');
+        if (shadow !== undefined) border.shadow = parseOnOffAttribute(shadow, true);
+        const frame = XMLParser.extractAttribute(sideXml, 'w:frame');
+        if (frame !== undefined) border.frame = parseOnOffAttribute(frame, true);
+        const themeColor = XMLParser.extractAttribute(sideXml, 'w:themeColor');
+        if (themeColor) border.themeColor = themeColor;
+        const themeTint = XMLParser.extractAttribute(sideXml, 'w:themeTint');
+        if (themeTint) border.themeTint = themeTint;
+        const themeShade = XMLParser.extractAttribute(sideXml, 'w:themeShade');
+        if (themeShade) border.themeShade = themeShade;
+        const artId = XMLParser.extractAttribute(sideXml, 'w:id');
+        if (artId) border.artId = parseInt(artId, 10);
+        return Object.keys(border).length > 0 ? border : undefined;
+      };
+
+      for (const side of ['top', 'left', 'bottom', 'right']) {
+        const sideElements = XMLParser.extractElements(pgBordersXml, `w:${side}`);
+        if (sideElements.length > 0 && sideElements[0]) {
+          const border = parsePrevBorder(sideElements[0]);
+          if (border) pageBorders[side] = border;
+        }
+      }
+
+      if (Object.keys(pageBorders).length > 0) {
+        result.pageBorders = pageBorders;
+      }
     }
 
     return result;

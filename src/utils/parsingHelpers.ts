@@ -54,6 +54,10 @@ export function safeParseInt(value: unknown, defaultValue = 0): number {
  * - Absent element = false (handled by caller checking for property existence)
  *
  * @param prop - The parsed XML property object (e.g., pPrObj["w:bold"])
+ * @param valAttr - The attribute key that carries the ST_OnOff literal.
+ *   Defaults to `"@_w:val"` for the main WordprocessingML namespace.
+ *   Pass `"@_w14:val"` for w14 extension elements such as
+ *   `<w14:checked w14:val="1"/>` (CT_OnOff in the Word 2010+ namespace).
  * @returns Boolean value
  *
  * @example
@@ -66,17 +70,21 @@ export function safeParseInt(value: unknown, defaultValue = 0): number {
  * // For XML: <w:bold w:val="0"/>
  * parseOoxmlBoolean({ "@_w:val": "0" }) // false
  *
+ * // For XML: <w14:checked w14:val="on"/>
+ * parseOoxmlBoolean({ "@_w14:val": "on" }, "@_w14:val") // true
+ *
  * // For absent element
  * parseOoxmlBoolean(undefined) // false
  */
-export function parseOoxmlBoolean(prop: unknown): boolean {
+export function parseOoxmlBoolean(prop: unknown, valAttr = '@_w:val'): boolean {
   // Absent element = false
   if (!prop) {
     return false;
   }
 
-  // Get the w:val attribute value
-  const val = (prop as Record<string, unknown>)['@_w:val'];
+  // Get the val attribute value (w:val by default, w14:val or similar for
+  // extension namespaces).
+  const val = (prop as Record<string, unknown>)[valAttr];
 
   // Self-closing tag without w:val attribute = true
   // Per ECMA-376, presence of element without val means "on"

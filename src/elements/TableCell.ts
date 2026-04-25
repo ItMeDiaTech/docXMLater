@@ -9,6 +9,7 @@ import { Paragraph, TextDirection } from './Paragraph';
 import { Revision } from './Revision';
 import {
   BorderStyle as CommonBorderStyle,
+  FullBorderStyle as CommonFullBorderStyle,
   CellVerticalAlignment as CommonCellVerticalAlignment,
   ShadingConfig,
   buildShadingAttributes,
@@ -25,11 +26,13 @@ import {
 export type BorderStyle = CommonBorderStyle;
 
 /**
- * Cell border definition
- * @see CommonTypes.BorderDefinition
+ * Cell border definition. `style` uses FullBorderStyle (25+ ST_Border
+ * values per ECMA-376 §17.18.2) — cell borders support the full
+ * multi-line-gap / triple / inset / outset set, not just the narrow
+ * 6-value BorderStyle subset.
  */
 export interface CellBorder {
-  style?: BorderStyle;
+  style?: CommonFullBorderStyle;
   size?: number; // Size in eighths of a point
   color?: string; // Hex color without #
 }
@@ -1415,9 +1418,14 @@ export class TableCell {
       }
     }
 
-    // noWrap
-    if (this.formatting.noWrap) {
-      tcPrChildren.push(XMLBuilder.wSelf('noWrap'));
+    // noWrap — OnOffOnlyType (ST_OnOffOnly accepts only "on"/"off"). Emit "off" to
+    // preserve an explicit-false override vs. style inheritance.
+    if (this.formatting.noWrap !== undefined) {
+      if (this.formatting.noWrap) {
+        tcPrChildren.push(XMLBuilder.wSelf('noWrap'));
+      } else {
+        tcPrChildren.push(XMLBuilder.wSelf('noWrap', { 'w:val': 'off' }));
+      }
     }
 
     // tcMar - cell margins (ordered per CT_TcMar: top, left, bottom, right)
@@ -1472,9 +1480,13 @@ export class TableCell {
       );
     }
 
-    // tcFitText
-    if (this.formatting.fitText) {
-      tcPrChildren.push(XMLBuilder.wSelf('tcFitText'));
+    // tcFitText — OnOffOnlyType
+    if (this.formatting.fitText !== undefined) {
+      if (this.formatting.fitText) {
+        tcPrChildren.push(XMLBuilder.wSelf('tcFitText'));
+      } else {
+        tcPrChildren.push(XMLBuilder.wSelf('tcFitText', { 'w:val': 'off' }));
+      }
     }
 
     // vAlign - vertical alignment
@@ -1486,9 +1498,13 @@ export class TableCell {
       );
     }
 
-    // hideMark
-    if (this.formatting.hideMark) {
-      tcPrChildren.push(XMLBuilder.wSelf('hideMark'));
+    // hideMark — OnOffOnlyType
+    if (this.formatting.hideMark !== undefined) {
+      if (this.formatting.hideMark) {
+        tcPrChildren.push(XMLBuilder.wSelf('hideMark'));
+      } else {
+        tcPrChildren.push(XMLBuilder.wSelf('hideMark', { 'w:val': 'off' }));
+      }
     }
 
     // Note: w:headers (cell headers for accessibility) is defined in ECMA-376 Part 1 §17.4.26
@@ -1586,8 +1602,12 @@ export class TableCell {
             prevTcPrChildren.push(XMLBuilder.wSelf('shd', shadingAttrs));
           }
         }
-        if (prev.noWrap) {
-          prevTcPrChildren.push(XMLBuilder.wSelf('noWrap'));
+        if (prev.noWrap !== undefined) {
+          if (prev.noWrap) {
+            prevTcPrChildren.push(XMLBuilder.wSelf('noWrap'));
+          } else {
+            prevTcPrChildren.push(XMLBuilder.wSelf('noWrap', { 'w:val': 'off' }));
+          }
         }
         if (prev.margins) {
           const marginChildren: XMLElement[] = [];
@@ -1618,14 +1638,22 @@ export class TableCell {
         if (prev.textDirection) {
           prevTcPrChildren.push(XMLBuilder.wSelf('textDirection', { 'w:val': prev.textDirection }));
         }
-        if (prev.fitText) {
-          prevTcPrChildren.push(XMLBuilder.wSelf('tcFitText'));
+        if (prev.fitText !== undefined) {
+          if (prev.fitText) {
+            prevTcPrChildren.push(XMLBuilder.wSelf('tcFitText'));
+          } else {
+            prevTcPrChildren.push(XMLBuilder.wSelf('tcFitText', { 'w:val': 'off' }));
+          }
         }
         if (prev.verticalAlignment) {
           prevTcPrChildren.push(XMLBuilder.wSelf('vAlign', { 'w:val': prev.verticalAlignment }));
         }
-        if (prev.hideMark) {
-          prevTcPrChildren.push(XMLBuilder.wSelf('hideMark'));
+        if (prev.hideMark !== undefined) {
+          if (prev.hideMark) {
+            prevTcPrChildren.push(XMLBuilder.wSelf('hideMark'));
+          } else {
+            prevTcPrChildren.push(XMLBuilder.wSelf('hideMark', { 'w:val': 'off' }));
+          }
         }
       }
       const prevTcPr =

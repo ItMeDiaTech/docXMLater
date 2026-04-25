@@ -150,14 +150,37 @@ export type FullBorderStyle =
  * TableCell.ts (CellBorder), Table.ts (TableBorder)
  */
 export interface BorderDefinition {
-  /** Border style */
-  style?: BorderStyle | ExtendedBorderStyle;
+  /**
+   * Border style per ECMA-376 Part 1 §17.18.2 ST_Border. Uses the full
+   * 25+ value set (triple / dotDash / multi-line gap variants / inset /
+   * outset / etc.) rather than the narrower ExtendedBorderStyle subset
+   * — the generator passes the raw string through unfiltered, so any
+   * ST_Border value is spec-valid here.
+   */
+  style?: FullBorderStyle;
   /** Border width in eighths of a point (1-96) */
   size?: number;
   /** Border color in hex format (without #) */
   color?: string;
   /** Space between border and content in points (0-31) */
   space?: number;
+  /**
+   * Theme color reference (ST_ThemeColor per §17.18.97) — e.g. "accent1",
+   * "text2". When both `color` and `themeColor` are set, Word uses the
+   * themeColor lookup and treats `color` as a fallback.
+   */
+  themeColor?: string;
+  /** Theme tint (0-255, hex string) applied to themeColor lookup */
+  themeTint?: string;
+  /** Theme shade (0-255, hex string) applied to themeColor lookup */
+  themeShade?: string;
+  /** Whether the border casts a shadow (CT_OnOff attribute on CT_Border) */
+  shadow?: boolean;
+  /**
+   * Whether the border is part of a frame around the content (CT_OnOff).
+   * Primarily used on page borders but valid per CT_Border for all sides.
+   */
+  frame?: boolean;
 }
 
 /**
@@ -216,11 +239,13 @@ export type VerticalAlignment =
 export type PageVerticalAlignment = 'top' | 'center' | 'bottom' | 'both';
 
 /**
- * Vertical alignment for table cells
+ * Vertical alignment for table cells per ECMA-376 Part 1 §17.18.101
+ * ST_VerticalJc. `both` distributes the cell content vertically with
+ * equal top/bottom gaps — the vertical-axis analogue of justified text.
  *
  * From: TableCell.ts (CellVerticalAlignment)
  */
-export type CellVerticalAlignment = 'top' | 'center' | 'bottom';
+export type CellVerticalAlignment = 'top' | 'center' | 'both' | 'bottom';
 
 /**
  * Paragraph text alignment per ECMA-376 §17.18.44 (ST_Jc)
@@ -241,7 +266,13 @@ export type ParagraphAlignment =
   | 'mediumKashida'
   | 'highKashida'
   | 'lowKashida'
-  | 'thaiDistribute';
+  | 'thaiDistribute'
+  /**
+   * `numTab` per ST_Jc — numbering tab alignment mode used when the paragraph
+   * is the anchor of a numbered list and the alignment should follow the
+   * numbering tab stop. Rare in practice but spec-valid per §17.18.44.
+   */
+  | 'numTab';
 
 /**
  * Table alignment (horizontal positioning) per ECMA-376 §17.18.45 (ST_JcTable)
@@ -270,11 +301,17 @@ export type TextVerticalAlignment = 'top' | 'center' | 'baseline' | 'bottom' | '
  *
  * From: Paragraph.ts (TabAlignment)
  */
+/**
+ * Tab stop alignment per ECMA-376 Part 1 §17.18.94 ST_TabJc.
+ * `start` / `end` are the bidi-aware alternatives to `left` / `right`.
+ */
 export type TabAlignment =
   | 'clear' // Remove tab stop
-  | 'left' // Left-aligned
+  | 'left' // Left-aligned (LTR-biased)
+  | 'start' // Start-aligned (bidi-aware)
   | 'center' // Center-aligned
-  | 'right' // Right-aligned
+  | 'right' // Right-aligned (LTR-biased)
+  | 'end' // End-aligned (bidi-aware)
   | 'decimal' // Decimal-aligned (for numbers)
   | 'bar' // Bar tab (vertical line)
   | 'num'; // List number alignment
@@ -493,6 +530,7 @@ export function isParagraphAlignment(value: string): value is ParagraphAlignment
     'highKashida',
     'lowKashida',
     'thaiDistribute',
+    'numTab',
   ].includes(value);
 }
 
