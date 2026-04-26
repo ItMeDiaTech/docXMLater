@@ -6,10 +6,27 @@
   "type": "module",
   "scripts": {
     "start": "tsx index.ts",
-    "create": "tsx examples/create.ts",
-    "edit": "tsx examples/edit.ts",
-    "track-changes": "tsx examples/track-changes.ts",
-    "comments": "tsx examples/comments.ts"
+    "01-basic": "tsx examples/01-basic.ts",
+    "02-text": "tsx examples/02-text.ts",
+    "03-lists": "tsx examples/03-lists.ts",
+    "04-styles": "tsx examples/04-styles.ts",
+    "05-images": "tsx examples/05-images.ts",
+    "06-headers-footers": "tsx examples/06-headers-footers.ts",
+    "07-hyperlinks": "tsx examples/07-hyperlinks.ts",
+    "08-table-of-contents": "tsx examples/08-table-of-contents.ts",
+    "09-bookmarks": "tsx examples/09-bookmarks.ts",
+    "10-track-changes": "tsx examples/10-track-changes.ts",
+    "11-comments": "tsx examples/11-comments.ts",
+    "12-tables": "tsx examples/12-tables.ts",
+    "13-logging": "tsx examples/13-logging.ts",
+    "14-fonts": "tsx examples/14-fonts.ts",
+    "15-footnotes-endnotes": "tsx examples/15-footnotes-endnotes.ts",
+    "16-content-controls": "tsx examples/16-content-controls.ts",
+    "17-complex-fields": "tsx examples/17-complex-fields.ts",
+    "18-math-equations": "tsx examples/18-math-equations.ts",
+    "19-document-protection": "tsx examples/19-document-protection.ts",
+    "20-compatibility-mode": "tsx examples/20-compatibility-mode.ts",
+    "all": "for f in examples/*.ts; do echo \"--- $f ---\"; tsx \"$f\" || exit 1; done"
   },
   "dependencies": {
     "docxmlater": "^11.0.4"
