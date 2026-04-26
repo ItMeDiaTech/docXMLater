@@ -1,6 +1,43 @@
 # docxmlater
 
-A production-ready TypeScript framework for creating, reading, editing, and manipulating Microsoft Word `.docx` documents with full ECMA-376 (Office Open XML) fidelity.
+**The TypeScript library for editing existing Word documents with full tracked-changes, comment, and bookmark fidelity.**
+
+Most DOCX libraries can generate documents from scratch. docxmlater is built for the harder problem: loading an existing `.docx`, modifying it, and saving it back without corrupting it. That includes documents that already contain tracked changes, comments, or bookmarks - which most other libraries silently break on round-trip.
+
+[Try it in your browser](https://stackblitz.com/github/ItMeDiaTech/docXMLater/tree/main/playground) | [Why docxmlater](#why-docxmlater) | [Quick Start](#quick-start) | [API Reference](#api-reference)
+
+```bash
+npm install docxmlater
+```
+
+---
+
+## Why docxmlater
+
+|                                 | `docx` |       `docxtemplater`        | **docxmlater** |
+| ------------------------------- | :----: | :--------------------------: | :------------: |
+| Generate documents from scratch |   ✓    |              ✓               |       ✓        |
+| Load and edit existing files    |   ✗    |   partial (templates only)   |       ✓        |
+| Round-trip XML fidelity         |   ✗    |           partial            |       ✓        |
+| Tracked-changes preservation    |   ✗    |              ✗               |       ✓        |
+| Comments (resolve / unresolve)  |   ✗    |              ✗               |       ✓        |
+| Bookmarks (block and inline)    |   ✗    |           partial            |       ✓        |
+| Compatibility-mode upgrade      |   ✗    |              ✗               |       ✓        |
+| Free / open-source              |   ✓    | partial (commercial modules) |       ✓        |
+
+### When docxmlater is the right choice
+
+- You need to **load existing Word documents** and modify any element with full fidelity.
+- You're working with documents that contain **tracked changes**, **comments**, or **bookmarks** that must round-trip cleanly.
+- You programmatically apply formatting on top of someone else's drafted document.
+- You're processing documents from older Word versions and need **compatibility-mode upgrade**.
+- You want a single library with no commercial tier behind features you actually need.
+
+### When you might want something else
+
+- If you only need to **generate a document from scratch** with no edit or round-trip requirement, the `docx` package has a more declarative builder API.
+- If your entire workflow is **template-fill** (placeholders in a designer-authored docx), `docxtemplater` may fit better.
+- If you only need to **convert docx to HTML or Markdown for display**, `mammoth` is purpose-built.
 
 ---
 
@@ -8,7 +45,7 @@ A production-ready TypeScript framework for creating, reading, editing, and mani
 
 docxmlater began in early 2025 as a personal effort to build a TypeScript framework capable of full programmatic interaction with `.docx` files. What started as a focused side project grew into a much larger undertaking as the depth of the OOXML specification revealed itself. The work is implemented directly against the 6,000+ page ECMA-376 standard, with attention paid to round-trip fidelity, schema correctness, and the practical edge cases real-world Word documents introduce.
 
-The library is in active production use on a small team for day-to-day document formatting workflows. The aim is to provide a free, capable alternative to commercial DOCX engines that charge thousands of dollars per year per seat. If you need a TypeScript library to read, edit, or manipulate Word documents, docxmlater is designed to be a complete solution rather than a thin wrapper.
+The library is in active production use on a small team for day-to-day document formatting workflows. The aim is to provide a free, capable alternative to commercial DOCX engines that charge thousands of dollars per year per seat.
 
 What distinguishes docxmlater from existing libraries is its first-class support for revision workflows. Tracked changes, comments, and bookmarks are fully integrated. Documents that already contain tracked changes can be processed without corruption, preserving the existing revision history where required while still applying new formatting on top.
 
@@ -18,6 +55,7 @@ If you encounter a use case that is not yet implemented and would be broadly use
 
 ## Table of Contents
 
+- [Why docxmlater](#why-docxmlater)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Feature Overview](#feature-overview)
@@ -95,8 +133,8 @@ const doc = Document.create();
 const table = doc.createTable(3, 4);
 
 const header = table.getRow(0);
-header.getCell(0).addParagraph().addText('Column 1', { bold: true });
-header.getCell(1).addParagraph().addText('Column 2', { bold: true });
+header.getCell(0).createParagraph().addText('Column 1', { bold: true });
+header.getCell(1).createParagraph().addText('Column 2', { bold: true });
 
 table.setBorders({
   top: { style: 'single', size: 4, color: '000000' },

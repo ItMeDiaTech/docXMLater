@@ -1,0 +1,25 @@
+{
+  "name": "docxmlater-playground",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live playground for docxmlater. Open in StackBlitz to try the library without installing anything locally.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "create": "tsx examples/create.ts",
+    "edit": "tsx examples/edit.ts",
+    "track-changes": "tsx examples/track-changes.ts",
+    "comments": "tsx examples/comments.ts"
+  },
+  "dependencies": {
+    "docxmlater": "^11.0.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.2",
+    "@types/node": "^22.0.0"
+  },
+  "stackblitz": {
+    "startCommand": "npm start"
+  }
+}
