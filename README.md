@@ -6,11 +6,11 @@ A production-ready TypeScript framework for creating, reading, editing, and mani
 
 ## About the Project
 
-docxmlater began in early 2025 as a personal effort to build a TypeScript framework capable of full programmatic interaction with `.docx` files. What started as a focused side project grew into a much larger undertaking as the depth of the OOXML specification revealed itself — the work is implemented directly against the 6,000+ page ECMA-376 standard, with attention paid to round-trip fidelity, schema correctness, and the practical edge cases real-world Word documents introduce.
+docxmlater began in early 2025 as a personal effort to build a TypeScript framework capable of full programmatic interaction with `.docx` files. What started as a focused side project grew into a much larger undertaking as the depth of the OOXML specification revealed itself. The work is implemented directly against the 6,000+ page ECMA-376 standard, with attention paid to round-trip fidelity, schema correctness, and the practical edge cases real-world Word documents introduce.
 
 The library is in active production use on a small team for day-to-day document formatting workflows. The aim is to provide a free, capable alternative to commercial DOCX engines that charge thousands of dollars per year per seat. If you need a TypeScript library to read, edit, or manipulate Word documents, docxmlater is designed to be a complete solution rather than a thin wrapper.
 
-What distinguishes docxmlater from existing libraries is its first-class support for revision workflows. Tracked changes, comments, and bookmarks are fully integrated, and documents that already contain tracked changes can be processed without corruption — preserving the existing revision history where required while continuing to apply new formatting on top.
+What distinguishes docxmlater from existing libraries is its first-class support for revision workflows. Tracked changes, comments, and bookmarks are fully integrated. Documents that already contain tracked changes can be processed without corruption, preserving the existing revision history where required while still applying new formatting on top.
 
 If you encounter a use case that is not yet implemented and would be broadly useful, please open an issue.
 
@@ -155,7 +155,7 @@ Create, load, and save documents from files or buffers. Manage core, extended, a
 
 ### Rich Content
 
-- Images: PNG, JPEG, GIF, SVG, EMF, WMF — with positioning, text wrapping, and full DrawingML attribute coverage
+- Images: PNG, JPEG, GIF, SVG, EMF, WMF - with positioning, text wrapping, and full DrawingML attribute coverage
 - Headers and footers with first-page and odd/even variants
 - Hyperlinks (external and internal), with defragmentation and URL sanitization utilities
 - Bookmarks (block and inline level) and cross-references
@@ -266,14 +266,14 @@ The following features round-trip safely as raw XML but have no editing API:
 
 **Sanitization & Optimization**
 
-- `flattenFieldCodes()` — strip INCLUDEPICTURE markup, keep images
-- `stripOrphanRSIDs()` — remove unused RSIDs from `settings.xml`
-- `clearDirectSpacingForStyles(ids)` — remove direct spacing on styled paragraphs
-- `optimizeImages()` — lossless PNG re-compression, BMP-to-PNG
+- `flattenFieldCodes()` - strip INCLUDEPICTURE markup, keep images
+- `stripOrphanRSIDs()` - remove unused RSIDs from `settings.xml`
+- `clearDirectSpacingForStyles(ids)` - remove direct spacing on styled paragraphs
+- `optimizeImages()` - lossless PNG re-compression, BMP-to-PNG
 
 **Templates & Highlighting**
 
-- `fillTemplate(data, options?)` — replace `{{key}}` placeholders across runs
+- `fillTemplate(data, options?)` - replace `{{key}}` placeholders across runs
 - `findAndHighlight(text, color?)`, `findAndFormat(text, formatting)`
 
 **Conversion**
@@ -284,7 +284,7 @@ The following features round-trip safely as raw XML but have no editing API:
 
 **Saving**
 
-- `save(path)`, `toBuffer()`, `dispose()` — _always call `dispose()` when finished_
+- `save(path)`, `toBuffer()`, `dispose()` - _always call `dispose()` when finished_
 
 ### Paragraph
 
@@ -386,9 +386,9 @@ By default, `Document.load()` accepts all tracked changes during loading. This p
 
 ```typescript
 const doc = await Document.load('document.docx', {
-  revisionHandling: 'accept', // default — keep insertions, drop deletions
-  // revisionHandling: 'strip',    — remove all revision markup entirely
-  // revisionHandling: 'preserve', — keep tracked changes verbatim (advanced)
+  revisionHandling: 'accept', // default - keep insertions, drop deletions
+  // revisionHandling: 'strip',    - remove all revision markup entirely
+  // revisionHandling: 'preserve', - keep tracked changes verbatim (advanced)
 });
 ```
 
@@ -437,7 +437,7 @@ await doc.save('updated.docx');
 doc.dispose();
 ```
 
-`defragmentHyperlinks` repairs fragmented links commonly produced by Google Docs exports. Batch URL updates run 30–50% faster than manual iteration.
+`defragmentHyperlinks` repairs fragmented links commonly produced by Google Docs exports. Batch URL updates run 30-50% faster than manual iteration.
 
 ### Compatibility Mode
 
@@ -495,7 +495,7 @@ doc.dispose();
 ## Performance & Memory Management
 
 - **Always call `dispose()`** to release ZIP handles and image buffers
-- Buffer-based I/O (`loadFromBuffer` / `toBuffer`) is 20–30% faster than file-path I/O
+- Buffer-based I/O (`loadFromBuffer` / `toBuffer`) is 20-30% faster than file-path I/O
 - Default size limits: warn at 50 MB, error at 150 MB (configurable via `LoadOptions.sizeLimits`)
 - Memory footprint: ~2 MB per `Document`, ~2 bytes/character, full buffer per embedded image, ~200 bytes/cell
 - For repeated paragraph access, cache `getAllParagraphs()` rather than calling it inside a loop
@@ -532,7 +532,7 @@ async function processDocument(input: Buffer): Promise<Buffer> {
 }
 ```
 
-Custom error types — `DocxError`, `InvalidDocxError`, `CorruptedArchiveError`, `FileOperationError` — are available from `docxmlater/internal`.
+Custom error types are available from `docxmlater/internal`. These include `DocxError`, `InvalidDocxError`, `CorruptedArchiveError`, and `FileOperationError`.
 
 Logging is configurable via `DOCXMLATER_LOG_LEVEL=debug|info|warn|error`.
 
@@ -563,18 +563,18 @@ src/
 - Round-trip XML fidelity through `_originalXml` preservation and dirty-flag regeneration
 - Explicit memory management via the `dispose()` pattern
 - Defensive validation with comprehensive type coverage
-- KISS — no speculative abstractions
+- KISS - no speculative abstractions
 
 ---
 
 ## Security
 
-- **ReDoS protection** — position-based XML parsing eliminates catastrophic backtracking
-- **Path traversal prevention** — DOCX archive entries are validated against `../`, absolute paths, and URL-encoded traversal
-- **XML injection prevention** — all text and attribute content is escaped via `XMLBuilder.escapeXmlText()` and `XMLBuilder.escapeXmlAttribute()`
-- **Size limits** — configurable warning (50 MB) and hard cap (150 MB) on document size
-- **Nesting limits** — XML parser caps nesting depth at 256 levels (configurable) to prevent stack overflow
-- **UTF-8 enforcement** — all text content is explicitly UTF-8 encoded per ECMA-376
+- **ReDoS protection** - position-based XML parsing eliminates catastrophic backtracking
+- **Path traversal prevention** - DOCX archive entries are validated against `../`, absolute paths, and URL-encoded traversal
+- **XML injection prevention** - all text and attribute content is escaped via `XMLBuilder.escapeXmlText()` and `XMLBuilder.escapeXmlAttribute()`
+- **Size limits** - configurable warning (50 MB) and hard cap (150 MB) on document size
+- **Nesting limits** - XML parser caps nesting depth at 256 levels (configurable) to prevent stack overflow
+- **UTF-8 enforcement** - all text content is explicitly UTF-8 encoded per ECMA-376
 
 ```typescript
 const doc = await Document.load('large.docx', {
