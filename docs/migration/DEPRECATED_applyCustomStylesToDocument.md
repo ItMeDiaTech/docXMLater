@@ -1,1 +1,0 @@
-# Migration Guide: `applyCustomStylesToDocument()` Deprecation

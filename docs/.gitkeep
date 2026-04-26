@@ -1,6 +1,0 @@
-# Documentation Directory
-
-## Structure
-- `dev/` - Development notes and workspace files (gitignored)
-- `releases/` - Release notes and changelogs
-- Root docs/ - Public-facing documentation

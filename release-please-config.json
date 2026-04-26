@@ -1,9 +1,0 @@
-{
-  "packages": {
-    ".": {
-      "release-type": "node",
-      "changelog-type": "github",
-      "bump-minor-pre-major": true
-    }
-  }
-}
