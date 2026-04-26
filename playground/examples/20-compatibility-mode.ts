@@ -28,10 +28,12 @@ async function main() {
   // The call returns a report of what was changed:
   doc.createParagraph('Upgrade workflow').setStyle('Heading1');
   doc.createParagraph('For a real legacy document loaded via Document.load(path), call:');
-  doc.createParagraph('const report = doc.upgradeToModernFormat();', {
-    font: 'Courier New',
-    size: 10,
-  });
+  doc
+    .createParagraph()
+    .addText('const report = doc.upgradeToModernFormat();', {
+      font: 'Courier New',
+      size: 10,
+    });
   doc.createParagraph(
     'The returned report lists removedFlags and addedSettings so you know exactly what changed.'
   );

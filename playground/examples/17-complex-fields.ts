@@ -11,7 +11,7 @@ async function main() {
   const doc = Document.create({
     properties: {
       title: 'Field Demonstration',
-      author: 'docxmlater',
+      creator: 'docxmlater',
       subject: 'Dynamic field rendering',
     },
   });

@@ -39,8 +39,7 @@ async function main() {
     },
     paragraphFormatting: {
       alignment: 'center',
-      spacingBefore: 240,
-      spacingAfter: 240,
+      spacing: { before: 240, after: 240 },
     },
   });
   doc.getStylesManager().addStyle(callout);

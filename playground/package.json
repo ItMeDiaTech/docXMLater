@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx index.ts",
+    "typecheck": "tsc --noEmit",
     "01-basic": "tsx examples/01-basic.ts",
     "02-text": "tsx examples/02-text.ts",
     "03-lists": "tsx examples/03-lists.ts",

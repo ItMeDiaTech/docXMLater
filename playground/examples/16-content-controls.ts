@@ -13,7 +13,7 @@ async function main() {
 
   doc.createParagraph('New Hire Onboarding Form').setStyle('Title');
   doc.createParagraph(
-    'Structured Document Tags (SDTs) are Word’s native form fields. They round-trip cleanly through docxmlater and are accessible to users via the Developer tab in Word.'
+    "Structured Document Tags (SDTs) are Word's native form fields. They round-trip cleanly through docxmlater and are accessible to users via the Developer tab in Word."
   );
 
   // Plain text input.

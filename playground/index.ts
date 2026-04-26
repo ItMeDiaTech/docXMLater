@@ -12,11 +12,8 @@
  *
  * Try editing this file, then run `npm start` in the terminal panel.
  *
- * Other examples available:
- *   npm run create          - basic document creation
- *   npm run edit            - load and modify a document
- *   npm run track-changes   - this file (default)
- *   npm run comments        - add and resolve comments
+ * Twenty topical examples are also available - see README.md for the full
+ * list, or run any of `npm run 01-basic` through `npm run 20-compatibility-mode`.
  */
 
 import { Document } from 'docxmlater';
@@ -27,7 +24,7 @@ async function main() {
   const original = Document.create();
   original.createParagraph().addText('Quarterly Report', {
     bold: true,
-    fontSize: 28,
+    size: 28,
     color: '1F4E79',
   });
   original
