@@ -563,7 +563,6 @@ src/
 - Round-trip XML fidelity through `_originalXml` preservation and dirty-flag regeneration
 - Explicit memory management via the `dispose()` pattern
 - Defensive validation with comprehensive type coverage
-- KISS - no speculative abstractions
 
 ---
 
