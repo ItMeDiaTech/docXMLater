@@ -5,6 +5,65 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.5] - 2026-05-05
+
+### Documentation
+
+- **README rewrite.** Reframed the project around its actual niche
+  (round-trip-safe DOCX modification with full tracked-changes,
+  comment, and bookmark fidelity) instead of a generic "DOCX
+  framework" pitch. Added a "Why docxmlater" comparison table
+  versus `docx` and `docxtemplater`, expanded npm keywords for
+  search discoverability, restructured into a clearer About →
+  Install → Quick Start → Features → API navigation, and
+  normalized prose punctuation. No source changes.
+
+### Playground
+
+- **20 runnable examples on StackBlitz.** The in-browser
+  `playground/` (linked from the README) now ships 20 focused
+  scripts mirroring the main repo's `examples/` folder, one per
+  topic: basic, text, lists, styles, images, headers/footers,
+  hyperlinks, TOC, bookmarks, track-changes, comments, tables,
+  logging, fonts, footnotes/endnotes, content controls, complex
+  fields, math equations, document protection, and compatibility
+  mode. Each example was verified against the published
+  `docxmlater@11.0.4` API surface.
+- **Headline demo no longer triggers Word's "unreadable content"
+  warning.** The default `playground/index.ts` previously enabled
+  track changes and then created new paragraphs - a v11 pattern
+  that does not wrap new paragraphs in the paragraph-mark
+  insertion markup Word expects when `w:trackRevisions` is set,
+  causing a recovery prompt on open. The demo now uses a clean
+  load → modify → save flow that opens with no warnings; example
+  10 (`10-track-changes.ts`) keeps `enableTrackChanges()` but
+  only uses `replaceText()` (the safe pattern) and documents the
+  limitation in a header comment.
+- **Silent type-drops fixed.** Several playground examples were
+  exiting `0` while quietly dropping properties that did not
+  match the v11 API surface (`fontSize` instead of `size`,
+  `spacingBefore` instead of `spacing.before`, `properties.author`
+  instead of `properties.creator`, `formatting` argument on
+  `createParagraph(text)`). Generated documents now match what
+  the source code claims. Added a `typecheck` npm script so
+  future drift is caught before commit.
+
+### Repository hygiene
+
+- Untracked release-please tooling, internal agent docs, and
+  development-only workflow files so they no longer surface in
+  contributor diffs. The npm tarball is unaffected (already
+  scoped to `dist/`, `src/**/*.ts` source, `README.md`, and
+  `LICENSE` since 11.0.2). Verified via `npm pack --dry-run`:
+  zero `CLAUDE.md`, test, agent-doc, or env files in the
+  tarball.
+
+### No source changes
+
+- All 5573 tests pass. No changes to `src/`, no API changes,
+  no behavior changes. Safe to upgrade from any 11.0.x release
+  without code changes.
+
 ## [11.0.3] - 2026-04-25
 
 ### Fixed
