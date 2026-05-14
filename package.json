@@ -1,6 +1,6 @@
 {
   "name": "docxmlater",
-  "version": "11.0.5",
+  "version": "11.0.6",
   "description": "TypeScript library for editing existing Word documents with full tracked-changes, comment, and bookmark fidelity. Round-trip safe DOCX modification.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

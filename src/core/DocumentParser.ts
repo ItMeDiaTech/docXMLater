@@ -1349,6 +1349,11 @@ export class DocumentParser {
                 imageManager
               );
               if (imageRun) {
+                // Preserve the parent run's w:rPr (rFonts, noProof, b, etc.)
+                // — without this, ImageRun.toXML() emits <w:r><w:drawing/></w:r>
+                // and Word recalculates line height with the default font,
+                // shifting the image and clipping it into adjacent cells.
+                this.parseRunPropertiesFromObject(runObj['w:rPr'], imageRun);
                 paragraph.addRun(imageRun);
               }
             }
@@ -2123,6 +2128,7 @@ export class DocumentParser {
                     imageManager
                   );
                   if (imageRun) {
+                    this.parseRunPropertiesFromObject(child['w:rPr'], imageRun);
                     paragraph.addRun(imageRun);
                   }
                 }
@@ -2184,6 +2190,7 @@ export class DocumentParser {
                 imageManager
               );
               if (imageRun) {
+                this.parseRunPropertiesFromObject(child['w:rPr'], imageRun);
                 paragraph.addRun(imageRun);
               }
             }

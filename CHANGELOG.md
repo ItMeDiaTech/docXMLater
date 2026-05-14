@@ -5,6 +5,38 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.6] - 2026-05-14
+
+### Fixed
+
+- **Inline-drawing runs lost their `w:rPr` on round-trip, causing
+  images to clip into adjacent table cells in Word.** When a run
+  contained `<w:r><w:rPr>...</w:rPr><w:drawing/></w:r>`, the
+  parent run's properties (`w:rFonts`, `w:noProof`, `w:b`,
+  `w:color`, etc.) were silently dropped during parse and never
+  re-emitted by `ImageRun.toXML()`. Word then computed line
+  metrics for the drawing's line using the default font instead
+  of the explicit `w:rFonts` from the source, shifting the
+  baseline; images with a drop-shadow `wp:effectExtent` overflowed
+  their containing row and rendered as clipping into the previous
+  cell. `ImageRun` now serializes `w:rPr` via the standard
+  `Run.generateRunPropertiesXML` path, and `DocumentParser`
+  applies the parent run's properties at all three drawing parse
+  sites (matching what `w:pict` / `w:object` runs have always
+  done). Affects any loaded document with images in tables;
+  particularly visible when images carry a drop shadow or border
+  with non-zero `effectExtent`. Programmatic image creation via
+  `createImageRun()` was not affected.
+
+### Tests
+
+- New regression coverage in
+  `tests/core/ImageRunRPrRoundTrip.test.ts`: `w:rFonts` /
+  `w:noProof` / `w:color` survive on a body-level drawing run, the
+  same survives inside a table cell, and a source run with no
+  `w:rPr` does not get a synthetic one fabricated on save. Full
+  suite: 5576 tests pass.
+
 ## [11.0.5] - 2026-05-05
 
 ### Documentation

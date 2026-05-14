@@ -63,9 +63,18 @@ export class ImageRun extends Run {
       return { name: '__rawXml', rawXml: this._rawRunXml };
     }
     const drawing = this.imageElement.toXML();
+    const children: XMLElement[] = [];
+    // Per ECMA-376 §17.3.2.28, w:rPr (if present) must precede the run's
+    // content. For runs containing an inline drawing, the rPr's w:rFonts
+    // affects line metrics in Word; dropping it shifts the baseline and
+    // can let images (with shadow effectExtent) overflow their containing
+    // cell. Emit rPr whenever the run carries formatting.
+    const rPr = Run.generateRunPropertiesXML(this.getFormatting());
+    if (rPr) children.push(rPr);
+    children.push(drawing);
     return {
       name: 'w:r',
-      children: [drawing],
+      children,
     };
   }
 }
