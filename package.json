@@ -1,6 +1,6 @@
 {
   "name": "docxmlater",
-  "version": "11.0.6",
+  "version": "11.0.8",
   "description": "TypeScript library for editing existing Word documents with full tracked-changes, comment, and bookmark fidelity. Round-trip safe DOCX modification.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -74,7 +74,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ItMeDiaTech/docXMLater.git"
+    "url": "git+https://github.com/ItMeDiaTech/docXMLater.git"
   },
   "bugs": {
     "url": "https://github.com/ItMeDiaTech/docXMLater/issues"

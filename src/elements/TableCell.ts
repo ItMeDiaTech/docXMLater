@@ -1145,6 +1145,16 @@ export class TableCell {
       const hasContentAfter = this.rawNestedContent.some((item) => item.position >= lastIndex);
       if (hasContentAfter) break;
 
+      // ECMA-376 §17.13.5.15: a <w:del/> inside the preceding paragraph's
+      // <w:pPr>/<w:rPr> marks its paragraph mark (¶) for tracked deletion.
+      // Accepting that revision merges the paragraph with the NEXT paragraph.
+      // If we strip this trailing blank, the next paragraph lives in the next
+      // cell of the next row, so Word's "Accept All" merges across the cell
+      // boundary and collapses the cell to its first character. Keep the
+      // trailing blank as the merge target.
+      const prevPara = this.paragraphs[lastIndex - 1];
+      if (prevPara && prevPara.isParagraphMarkDeleted()) break;
+
       this.removeParagraph(lastIndex);
       removed++;
     }

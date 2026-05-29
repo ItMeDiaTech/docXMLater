@@ -304,5 +304,41 @@ describe('TableCell Position Tracking', () => {
       expect(removed).toBe(0);
       expect(cell.getParagraphs().length).toBe(2);
     });
+
+    it('should NOT remove trailing blank when preceding paragraph has paragraph-mark deletion', () => {
+      // ECMA-376 §17.13.5.15: a <w:del/> inside <w:pPr>/<w:rPr> marks the paragraph
+      // mark (¶) for tracked deletion. When Word accepts that deletion the paragraph
+      // merges with the next paragraph. If we strip the trailing blank, the next
+      // paragraph lives in the next cell of the next row, so acceptance merges
+      // across the cell boundary and collapses the cell content (Word renders only
+      // the first character — "S" for "Suggest", "R" for "Refer").
+      // The trailing blank is the safety merge target — keep it.
+      const cell = new TableCell();
+
+      const content = cell.createParagraph('Suggest member reach out to prescriber.');
+      content.markParagraphMarkAsDeleted(99, 'Test Author', new Date());
+      cell.createParagraph(''); // safety blank
+
+      expect(cell.getParagraphs().length).toBe(2);
+
+      const removed = cell.removeTrailingBlankParagraphs({ ignorePreserveFlag: true });
+
+      expect(removed).toBe(0);
+      expect(cell.getParagraphs().length).toBe(2);
+      expect(cell.getParagraphs()[0]?.isParagraphMarkDeleted()).toBe(true);
+    });
+
+    it('should still remove trailing blank when preceding paragraph has no mark deletion', () => {
+      // Sanity check the new guard does not over-trigger.
+      const cell = new TableCell();
+
+      cell.createParagraph('Normal content with no tracked mark deletion.');
+      cell.createParagraph('');
+
+      const removed = cell.removeTrailingBlankParagraphs({ ignorePreserveFlag: true });
+
+      expect(removed).toBe(1);
+      expect(cell.getParagraphs().length).toBe(1);
+    });
   });
 });
