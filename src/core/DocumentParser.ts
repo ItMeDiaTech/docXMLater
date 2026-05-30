@@ -3787,13 +3787,18 @@ export class DocumentParser {
             hyperlink.setTooltip(parsed.tooltip);
           }
 
-          // Group field runs by paragraph index
-          const runsByParagraph = new Map<number, Set<number>>();
+          // Group field runs by paragraph, keyed by Run OBJECT IDENTITY (not index).
+          // Adjacent HYPERLINK fields chain across paragraph boundaries (one paragraph holds
+          // the previous field's `end` followed by the next field's `begin`). Processing the
+          // earlier field mutates that shared paragraph via setContent, shifting run indices;
+          // a captured runIndex for a later field would then point at the wrong run and drop
+          // its content. Matching by object identity is stable across those mutations.
+          const runsByParagraph = new Map<number, Set<Run>>();
           for (const fr of fieldTracker.fieldRuns) {
             if (!runsByParagraph.has(fr.paragraphIndex)) {
               runsByParagraph.set(fr.paragraphIndex, new Set());
             }
-            runsByParagraph.get(fr.paragraphIndex)!.add(fr.runIndex);
+            runsByParagraph.get(fr.paragraphIndex)!.add(fr.run);
           }
 
           // Process each affected paragraph
@@ -3801,7 +3806,7 @@ export class DocumentParser {
 
           for (const pIdx of affectedParagraphIndices) {
             const paragraph = allParagraphs[pIdx]!;
-            const runIndicesToRemove = runsByParagraph.get(pIdx)!;
+            const runsToRemove = runsByParagraph.get(pIdx)!;
             const content = paragraph.getContent();
 
             if (pIdx === targetParagraphIndex) {
@@ -3810,7 +3815,7 @@ export class DocumentParser {
               let hyperlinkInserted = false;
 
               for (let rIdx = 0; rIdx < content.length; rIdx++) {
-                if (runIndicesToRemove.has(rIdx)) {
+                if (runsToRemove.has(content[rIdx] as Run)) {
                   // Insert Hyperlink at position of first field run in this paragraph
                   if (!hyperlinkInserted) {
                     newContent.push(hyperlink);
@@ -3826,7 +3831,7 @@ export class DocumentParser {
             } else {
               // Other paragraphs: remove field runs entirely
               const newContent = content.filter(
-                (_: ParagraphContent, rIdx: number) => !runIndicesToRemove.has(rIdx)
+                (item: ParagraphContent) => !runsToRemove.has(item as Run)
               );
               paragraph.setContent(newContent);
             }
