@@ -5,6 +5,24 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.10] - 2026-05-30
+
+### Fixed
+
+- **Chained multi-paragraph `HYPERLINK` fields lost their content on round-trip.** When consecutive complex-field `HYPERLINK` fields chained across paragraph boundaries — a paragraph holding the previous field's `fldChar` `end` immediately followed by the next field's `begin` — `assembleMultiParagraphFields()` removed each field's runs by a run index captured during the first pass. Converting an earlier field mutated the shared paragraph via `setContent()`, shifting the run indices, so a later field's now-stale indices removed the wrong runs and dropped its text and hyperlink (e.g. a vertical navigation list silently lost its last entries on load + save). Field runs are now matched by object identity, which is stable across the prior field's mutation.
+
+## [11.0.9] - 2026-05-29
+
+### Fixed
+
+- **`Image.setBorder()` / `setSize()` were discarded for images inside tracked insertions (`w:ins`).** An `ImageRun` parsed from a tracked-insertion run carries the captured raw run XML, and `ImageRun.toXML()` returned that XML verbatim — ignoring any later mutation of the live `Image`, so borders and size changes never reached the saved document for revision-nested images (non-revision images were unaffected). `Image` now tracks a mutation flag set by `setBorder()` / `setSize()`; when set, `ImageRun.toXML()` splices the regenerated `<w:drawing>` into the captured run XML, applying the change while preserving the run's `w:rPr`. Unmutated images still round-trip verbatim.
+
+## [11.0.8] - 2026-05-29
+
+### Fixed
+
+- **Tables with pre-existing tracked changes corrupted on Word's "Accept All Changes."** `TableCell.removeTrailingBlankParagraphs()` removed a cell's trailing blank "anchor" paragraph even when the preceding paragraph's mark was tracked-deleted (`<w:pPr>`/`<w:rPr>`/`<w:del>`). With no following paragraph to merge into, accepting the revision in Word merged across the cell boundary and collapsed the cell. The removal now stops when the preceding paragraph's mark is tracked-deleted, keeping the trailing blank as a valid merge target.
+
 ## [11.0.6] - 2026-05-14
 
 ### Fixed
