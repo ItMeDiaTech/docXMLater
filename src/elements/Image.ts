@@ -335,6 +335,10 @@ export class Image {
   private flipV = false;
   private border?: ImageBorder;
 
+  // Set true when a serialization-affecting setter (setBorder/setSize) mutates this image
+  // after parse, so an owning ImageRun knows to refresh its captured raw run XML.
+  private _mutated = false;
+
   // Group A: Simple attribute preservation (ECMA-376 compliance)
   private presetGeometry: PresetGeometry = 'rect';
   private compressionState: BlipCompressionState = 'none';
@@ -978,7 +982,16 @@ export class Image {
   setSize(width: number, height: number): this {
     this.width = width;
     this.height = height;
+    this._mutated = true;
     return this;
+  }
+
+  /**
+   * Returns true if a serialization-affecting setter mutated this image after parse.
+   * An owning ImageRun uses this to refresh its captured raw run XML.
+   */
+  isMutated(): boolean {
+    return this._mutated;
   }
 
   async updateImageData(newSource: string | Buffer): Promise<void> {
@@ -1510,6 +1523,7 @@ export class Image {
     this.effectExtent.right = Math.max(this.effectExtent.right, halfBorderEmu);
     this.effectExtent.bottom = Math.max(this.effectExtent.bottom, halfBorderEmu);
 
+    this._mutated = true;
     return this;
   }
 

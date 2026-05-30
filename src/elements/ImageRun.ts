@@ -8,7 +8,7 @@
 
 import { Run } from './Run.js';
 import { Image } from './Image.js';
-import { XMLElement } from '../xml/XMLBuilder.js';
+import { XMLElement, XMLBuilder } from '../xml/XMLBuilder.js';
 
 /**
  * ImageRun - A run containing an embedded image
@@ -60,7 +60,20 @@ export class ImageRun extends Run {
    */
   toXML(): XMLElement {
     if (this._rawRunXml) {
-      return { name: '__rawXml', rawXml: this._rawRunXml };
+      // No live mutation since parse — emit the captured run XML verbatim (round-trip).
+      if (!this.imageElement.isMutated()) {
+        return { name: '__rawXml', rawXml: this._rawRunXml };
+      }
+      // The live image was mutated (e.g. setBorder/setSize). Splice the regenerated
+      // <w:drawing> into the captured run XML so the change applies while preserving the
+      // run's rPr and other captured details — a full regenerate would drop the parsed
+      // rPr (not modeled on revision-nested image runs) and can clip the image in Word.
+      const drawingXml = XMLBuilder.elementToString(this.imageElement.toXML());
+      const spliced = this._rawRunXml.replace(/<w:drawing\b[\s\S]*<\/w:drawing>/, drawingXml);
+      if (spliced !== this._rawRunXml) {
+        return { name: '__rawXml', rawXml: spliced };
+      }
+      // No <w:drawing> found to splice (unexpected) — fall through to full regeneration.
     }
     const drawing = this.imageElement.toXML();
     const children: XMLElement[] = [];
