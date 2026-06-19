@@ -158,6 +158,9 @@ describe('Document Helper Methods', () => {
     });
 
     it('should remove paragraph by index', () => {
+      // Table first: paragraph-ordinal index 1 is bodyElements index 2,
+      // so this catches removeParagraph(n) using the wrong index space.
+      doc.createTable(1, 1);
       doc.createParagraph('First');
       doc.createParagraph('Second');
       doc.createParagraph('Third');
@@ -165,7 +168,9 @@ describe('Document Helper Methods', () => {
       const removed = doc.removeParagraph(1);
       expect(removed).toBe(true);
       expect(doc.getParagraphCount()).toBe(2);
+      expect(doc.getParagraphs()[0]?.getText()).toBe('First');
       expect(doc.getParagraphs()[1]?.getText()).toBe('Third');
+      expect(doc.getTableCount()).toBe(1);
     });
 
     it('should return false for invalid index', () => {
@@ -497,7 +502,8 @@ describe('Image Helper Methods', () => {
       expect(image.getRotation()).toBe(270);
     });
 
-    it('should swap dimensions on 90/270 degree rotation', async () => {
+    it('should keep dimensions unchanged on 90/270 degree rotation', async () => {
+      // Extents stay at the pre-rotation size; a:xfrm/@rot handles orientation
       const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
       const image = await Image.fromBuffer(imageBuffer, { width: 1000, height: 2000 });
 
@@ -505,8 +511,12 @@ describe('Image Helper Methods', () => {
       const originalHeight = image.getHeight();
 
       image.rotate(90);
-      expect(image.getWidth()).toBe(originalHeight);
-      expect(image.getHeight()).toBe(originalWidth);
+      expect(image.getWidth()).toBe(originalWidth);
+      expect(image.getHeight()).toBe(originalHeight);
+
+      image.rotate(270);
+      expect(image.getWidth()).toBe(originalWidth);
+      expect(image.getHeight()).toBe(originalHeight);
     });
   });
 });

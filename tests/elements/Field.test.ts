@@ -202,6 +202,8 @@ describe('Field Tests', () => {
       const para = Paragraph.create();
 
       const customField = Field.createCustom('PAGE \\* ARABIC \\* MERGEFORMAT');
+      expect(customField.getType()).toBe('CUSTOM');
+      expect(customField.getInstruction()).toBe('PAGE \\* ARABIC \\* MERGEFORMAT');
       para.addField(customField);
       doc.addParagraph(para);
 

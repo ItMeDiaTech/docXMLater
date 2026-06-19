@@ -7,7 +7,7 @@
 
 import { Run } from './Run.js';
 import type { RunFormatting } from './Run.js';
-import { XMLElement } from '../xml/XMLBuilder.js';
+import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
 import type { RevisionLocation } from './PropertyChangeTypes.js';
 import type { RevisionContent } from './RevisionContent.js';
 import { isRunContent, isHyperlinkContent } from './RevisionContent.js';
@@ -477,15 +477,21 @@ export class Revision {
    * - w:date: When the change was made (ST_DateTime, ISO 8601) - OPTIONAL
    *
    * **Move Operations:**
-   * For moveFrom/moveTo, an additional w:moveId attribute links the source and destination:
-   * ```xml
-   * <w:moveFrom w:id="3" w:author="Author" w:date="..." w:moveId="move-1">...</w:moveFrom>
-   * <w:moveTo w:id="4" w:author="Author" w:date="..." w:moveId="move-1">...</w:moveTo>
-   * ```
+   * w:moveFrom/w:moveTo are CT_RunTrackChange and carry only w:id/w:author/w:date.
+   * The moveId field stays in-memory pairing metadata (getMovePair/validateMovePairs);
+   * on disk, source/destination linkage is expressed solely via the w:name attribute
+   * on w:moveFromRangeStart/w:moveToRangeStart (see RangeMarker.toXML()).
    *
    * **Content vs Property Changes:**
    * - Content revisions (insert/delete/move): Contain w:r elements with text runs
    * - Property revisions (rPrChange/pPrChange): Contain previous property elements (w:rPr, w:pPr)
+   *
+   * **Hyperlink Content:**
+   * w:hyperlink is not a valid child of CT_RunTrackChange, so hyperlink content is
+   * serialized with inverted nesting (<w:hyperlink><w:ins>...</w:ins></w:hyperlink>).
+   * Mixed Run + Hyperlink content produces sibling elements (one revision element per
+   * run group, one hyperlink-wrapped revision element per link), returned as a single
+   * raw-XML fragment element that XMLBuilder emits verbatim.
    *
    * @returns XMLElement representing the revision in OOXML format, or null for internal-only types
    * @see ECMA-376 Part 1 §17.13.5 (Revision Identifiers for Paragraph Content)
@@ -515,10 +521,9 @@ export class Revision {
       'w:date': this.formatDate(this.date),
     };
 
-    // Add move-specific attributes
-    if ((this.type === 'moveFrom' || this.type === 'moveTo') && this.moveId) {
-      attributes['w:moveId'] = this.moveId;
-    }
+    // moveId is intentionally NOT serialized: ECMA-376 CT_RunTrackChange declares no
+    // such attribute, and an undeclared w: attribute fails Open XML schema validation.
+    // On-disk move pairing is carried by w:name on the move range start markers.
 
     const elementName = this.getElementName();
     const children: XMLElement[] = [];
@@ -531,43 +536,84 @@ export class Revision {
       }
     }
 
-    // Check if content contains only a single hyperlink (needs nesting inversion per ECMA-376)
-    // w:hyperlink is NOT a valid child of w:ins/w:del; instead w:ins/w:del must be inside w:hyperlink
-    const firstItem = this.content[0];
-    const singleHyperlink =
-      this.content.length === 1 && firstItem && isHyperlinkContent(firstItem) ? firstItem : null;
+    // Per ECMA-376, w:hyperlink is NOT a valid child of w:ins/w:del (CT_RunTrackChange);
+    // the nesting must be inverted so w:ins/w:del sits inside w:hyperlink. Content is
+    // therefore split into sibling segments: each consecutive run group gets its own
+    // revision element and each hyperlink wraps its own revision element, preserving
+    // the link target (r:id/w:anchor) instead of downgrading it to plain runs.
+    if (!this.isPropertyChangeType()) {
+      const segments: XMLElement[] = [];
+      // CT_TrackChange requires a document-unique w:id, so sibling segments
+      // cannot share the revision's id. Extra segments derive ids from a high
+      // base (deterministic, stable across saves) that cannot collide with the
+      // small sequential ids RevisionManager issues.
+      const segmentAttributes = (segmentIndex: number): Record<string, string> =>
+        segmentIndex === 0
+          ? attributes
+          : {
+              ...attributes,
+              'w:id': String(500000000 + (this.id % 1000000) * 1000 + segmentIndex),
+            };
+      let pendingRuns: XMLElement[] = [];
+      const flushRuns = (): void => {
+        if (pendingRuns.length > 0) {
+          segments.push({
+            name: elementName,
+            attributes: segmentAttributes(segments.length),
+            children: pendingRuns,
+          });
+          pendingRuns = [];
+        }
+      };
 
-    if (singleHyperlink && !this.isPropertyChangeType()) {
-      return this.createHyperlinkWrappedRevisionXml(singleHyperlink, elementName, attributes);
+      for (const item of this.content) {
+        if (isHyperlinkContent(item)) {
+          flushRuns();
+          segments.push(
+            this.createHyperlinkWrappedRevisionXml(
+              item,
+              elementName,
+              segmentAttributes(segments.length)
+            )
+          );
+        } else if (isRunContent(item)) {
+          if (this.type === 'delete' || this.type === 'moveFrom') {
+            pendingRuns.push(this.createDeletedRunXml(item));
+          } else {
+            pendingRuns.push(item.toXML());
+          }
+        }
+      }
+      flushRuns();
+
+      if (segments.length === 0) {
+        return { name: elementName, attributes, children: [] };
+      }
+      if (segments.length === 1) {
+        return segments[0]!;
+      }
+      // Multiple sibling elements cannot share one XML root; emit them as a
+      // pre-serialized fragment that XMLBuilder passes through verbatim.
+      return {
+        name: '__rawXml',
+        rawXml: segments.map((segment) => XMLBuilder.elementToString(segment)).join(''),
+      };
     }
 
-    // Add content to the revision (handles both Run and Hyperlink)
+    // Property change revisions keep their content runs alongside the
+    // previous-properties element
     for (const item of this.content) {
       if (isHyperlinkContent(item)) {
-        // For multiple-item revisions containing hyperlinks, extract the runs
-        // and add them directly (hyperlink wrapper omitted to maintain validity)
         const hyperlinkXml = item.toXML();
         if (hyperlinkXml.children) {
           for (const child of hyperlinkXml.children) {
             if (typeof child === 'object' && child.name === 'w:r') {
-              if (this.type === 'delete' || this.type === 'moveFrom') {
-                children.push(this.convertRunXmlToDeleted(child));
-              } else {
-                children.push(child);
-              }
+              children.push(child);
             }
           }
         }
       } else if (isRunContent(item)) {
-        // Handle Run content (existing behavior)
-        if (this.type === 'delete' || this.type === 'moveFrom') {
-          // For deletions and moveFrom, we need to modify the run XML to use w:delText instead of w:t
-          const runXml = this.createDeletedRunXml(item);
-          children.push(runXml);
-        } else {
-          // For other types, use normal run XML
-          children.push(item.toXML());
-        }
+        children.push(item.toXML());
       }
     }
 
@@ -647,8 +693,11 @@ export class Revision {
    *
    * **Implementation:**
    * This method converts the previousProperties object into OOXML elements.
-   * - Boolean properties (e.g., bold) → <w:b/>
-   * - Value properties (e.g., font size) → <w:sz w:val="24"/>
+   * - runPropertiesChange delegates to Run.generateRunPropertiesXML
+   * - Other types translate API-style keys to their schema local names
+   *   (e.g., alignment → w:jc), serialize known object values (spacing,
+   *   indentation, borders, shading, table widths), and order children
+   *   per the schema sequence of the containing property element
    *
    * @returns XMLElement containing previous properties (w:rPr, w:pPr, etc.)
    * @see ECMA-376 Part 1 §17.13.5.31 (Run Properties Change)
@@ -692,22 +741,29 @@ export class Revision {
         break;
     }
 
-    // Build property children from previousProperties
+    // Build property children from previousProperties, translating API-style
+    // keys to their OOXML local names (keys already given as local names pass
+    // through unchanged)
+    const keyMap = Revision.PROPERTY_KEY_TO_ELEMENT[this.type] ?? {};
     const propChildren: XMLElement[] = [];
     if (this.previousProperties) {
       for (const [key, value] of Object.entries(this.previousProperties)) {
-        if (typeof value === 'boolean' && value) {
-          // Boolean properties (e.g., bold, italic)
-          propChildren.push({ name: `w:${key}`, attributes: {}, children: [] });
-        } else if (typeof value === 'string' || typeof value === 'number') {
-          // Value properties (e.g., font size, color)
-          propChildren.push({
-            name: `w:${key}`,
-            attributes: { 'w:val': value.toString() },
-            children: [],
-          });
+        const child = this.createPreviousPropertyXml(`w:${keyMap[key] ?? key}`, value);
+        if (child) {
+          propChildren.push(child);
         }
       }
+    }
+
+    // CT_PPrBase, CT_TblPrBase, CT_TrPr, CT_TcPr and CT_SectPr are xsd:sequence
+    // types, so children must follow the declared order to stay schema-valid
+    const order = Revision.PROPERTY_CHILD_ORDER[propElementName];
+    if (order) {
+      const rank = (name: string): number => {
+        const index = order.indexOf(name);
+        return index === -1 ? order.length : index;
+      };
+      propChildren.sort((a, b) => rank(a.name) - rank(b.name));
     }
 
     return {
@@ -715,6 +771,349 @@ export class Revision {
       attributes: {},
       children: propChildren,
     };
+  }
+
+  /**
+   * API-key → OOXML local-name translations for property-change snapshots.
+   * previousProperties accepts the same key names as the element formatting
+   * APIs (e.g. ParagraphFormatting.alignment); the schema requires the local
+   * element names (w:jc), so keys are translated before serialization.
+   */
+  private static readonly PROPERTY_KEY_TO_ELEMENT: Partial<
+    Record<RevisionType, Record<string, string>>
+  > = {
+    paragraphPropertiesChange: {
+      alignment: 'jc',
+      style: 'pStyle',
+      styleId: 'pStyle',
+      indentation: 'ind',
+      numbering: 'numPr',
+      outlineLevel: 'outlineLvl',
+      shading: 'shd',
+      borders: 'pBdr',
+    },
+    tablePropertiesChange: {
+      alignment: 'jc',
+      style: 'tblStyle',
+      styleId: 'tblStyle',
+      width: 'tblW',
+      indent: 'tblInd',
+      borders: 'tblBorders',
+      shading: 'shd',
+      layout: 'tblLayout',
+      cellMargins: 'tblCellMar',
+      cellSpacing: 'tblCellSpacing',
+    },
+    tableExceptionPropertiesChange: {
+      alignment: 'jc',
+      width: 'tblW',
+      indent: 'tblInd',
+      borders: 'tblBorders',
+      shading: 'shd',
+      layout: 'tblLayout',
+      cellMargins: 'tblCellMar',
+      cellSpacing: 'tblCellSpacing',
+    },
+    tableRowPropertiesChange: {
+      alignment: 'jc',
+      height: 'trHeight',
+      isHeader: 'tblHeader',
+      cellSpacing: 'tblCellSpacing',
+    },
+    tableCellPropertiesChange: {
+      width: 'tcW',
+      borders: 'tcBorders',
+      shading: 'shd',
+      verticalAlignment: 'vAlign',
+      margins: 'tcMar',
+    },
+    sectionPropertiesChange: {
+      pageSize: 'pgSz',
+      margins: 'pgMar',
+      columns: 'cols',
+      pageNumbering: 'pgNumType',
+    },
+  };
+
+  /**
+   * Schema child order for property snapshot containers (xsd:sequence order
+   * from the corresponding CT_* types). Unknown children sort after known ones.
+   */
+  private static readonly PROPERTY_CHILD_ORDER: Record<string, readonly string[]> = {
+    'w:pPr': [
+      'w:pStyle',
+      'w:keepNext',
+      'w:keepLines',
+      'w:pageBreakBefore',
+      'w:framePr',
+      'w:widowControl',
+      'w:numPr',
+      'w:suppressLineNumbers',
+      'w:pBdr',
+      'w:shd',
+      'w:tabs',
+      'w:suppressAutoHyphens',
+      'w:kinsoku',
+      'w:wordWrap',
+      'w:overflowPunct',
+      'w:topLinePunct',
+      'w:autoSpaceDE',
+      'w:autoSpaceDN',
+      'w:bidi',
+      'w:adjustRightInd',
+      'w:snapToGrid',
+      'w:spacing',
+      'w:ind',
+      'w:contextualSpacing',
+      'w:mirrorIndents',
+      'w:suppressOverlap',
+      'w:jc',
+      'w:textDirection',
+      'w:textAlignment',
+      'w:textboxTightWrap',
+      'w:outlineLvl',
+    ],
+    'w:tblPr': [
+      'w:tblStyle',
+      'w:tblpPr',
+      'w:tblOverlap',
+      'w:bidiVisual',
+      'w:tblStyleRowBandSize',
+      'w:tblStyleColBandSize',
+      'w:tblW',
+      'w:jc',
+      'w:tblCellSpacing',
+      'w:tblInd',
+      'w:tblBorders',
+      'w:shd',
+      'w:tblLayout',
+      'w:tblCellMar',
+      'w:tblLook',
+      'w:tblCaption',
+      'w:tblDescription',
+    ],
+    'w:tblPrEx': [
+      'w:tblW',
+      'w:jc',
+      'w:tblCellSpacing',
+      'w:tblInd',
+      'w:tblBorders',
+      'w:shd',
+      'w:tblLayout',
+      'w:tblCellMar',
+      'w:tblLook',
+    ],
+    'w:trPr': [
+      'w:cnfStyle',
+      'w:divId',
+      'w:gridBefore',
+      'w:gridAfter',
+      'w:wBefore',
+      'w:wAfter',
+      'w:cantSplit',
+      'w:trHeight',
+      'w:tblHeader',
+      'w:tblCellSpacing',
+      'w:jc',
+      'w:hidden',
+    ],
+    'w:tcPr': [
+      'w:cnfStyle',
+      'w:tcW',
+      'w:gridSpan',
+      'w:hMerge',
+      'w:vMerge',
+      'w:tcBorders',
+      'w:shd',
+      'w:noWrap',
+      'w:tcMar',
+      'w:textDirection',
+      'w:tcFitText',
+      'w:vAlign',
+      'w:hideMark',
+    ],
+    'w:sectPr': [
+      'w:headerReference',
+      'w:footerReference',
+      'w:footnotePr',
+      'w:endnotePr',
+      'w:type',
+      'w:pgSz',
+      'w:pgMar',
+      'w:paperSrc',
+      'w:pgBorders',
+      'w:lnNumType',
+      'w:pgNumType',
+      'w:cols',
+      'w:formProt',
+      'w:vAlign',
+      'w:noEndnote',
+      'w:titlePg',
+      'w:textDirection',
+      'w:bidi',
+      'w:rtlGutter',
+      'w:docGrid',
+    ],
+    'w:numPr': ['w:ilvl', 'w:numId', 'w:numberingChange', 'w:ins'],
+  };
+
+  /**
+   * Serializes one previous-property entry to its OOXML element.
+   * Booleans follow the CT_OnOff convention (true = on, false = explicit off
+   * via w:val="0") so the snapshot keeps the same tri-state information the
+   * main property serializers emit.
+   */
+  private createPreviousPropertyXml(name: string, value: unknown): XMLElement | null {
+    if (typeof value === 'boolean') {
+      return { name, attributes: value ? {} : { 'w:val': '0' }, children: [] };
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      return { name, attributes: { 'w:val': value.toString() }, children: [] };
+    }
+    if (value && typeof value === 'object') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- previousProperties is Record<string, any>
+      return this.createObjectPropertyXml(name, value as Record<string, any>);
+    }
+    return null;
+  }
+
+  /**
+   * Serializes object-valued previous properties (complex OOXML structures).
+   * Only shapes with a known schema mapping are emitted; unknown objects are
+   * skipped because their attribute layout cannot be inferred safely.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- previousProperties is Record<string, any>
+  private createObjectPropertyXml(name: string, value: Record<string, any>): XMLElement | null {
+    switch (name) {
+      case 'w:spacing':
+        return {
+          name,
+          attributes: XMLBuilder.buildAttributes({
+            'w:before': value.before,
+            'w:beforeLines': value.beforeLines,
+            'w:beforeAutospacing':
+              value.beforeAutospacing === undefined
+                ? undefined
+                : value.beforeAutospacing
+                  ? '1'
+                  : '0',
+            'w:after': value.after,
+            'w:afterLines': value.afterLines,
+            'w:afterAutospacing':
+              value.afterAutospacing === undefined ? undefined : value.afterAutospacing ? '1' : '0',
+            'w:line': value.line,
+            'w:lineRule': value.lineRule,
+          }),
+          children: [],
+        };
+      case 'w:ind':
+        return {
+          name,
+          attributes: XMLBuilder.buildAttributes({
+            'w:start': value.start,
+            'w:end': value.end,
+            'w:left': value.left,
+            'w:leftChars': value.leftChars,
+            'w:right': value.right,
+            'w:rightChars': value.rightChars,
+            'w:firstLine': value.firstLine,
+            'w:firstLineChars': value.firstLineChars,
+            'w:hanging': value.hanging,
+            'w:hangingChars': value.hangingChars,
+          }),
+          children: [],
+        };
+      case 'w:numPr': {
+        const numPrChildren: XMLElement[] = [];
+        const level = value.level ?? value.ilvl;
+        const numId = value.numId ?? value.id;
+        if (level !== undefined) {
+          numPrChildren.push({
+            name: 'w:ilvl',
+            attributes: { 'w:val': String(level) },
+            children: [],
+          });
+        }
+        if (numId !== undefined) {
+          numPrChildren.push({
+            name: 'w:numId',
+            attributes: { 'w:val': String(numId) },
+            children: [],
+          });
+        }
+        return numPrChildren.length > 0 ? { name, attributes: {}, children: numPrChildren } : null;
+      }
+      case 'w:shd':
+        return XMLBuilder.createShading(value);
+      case 'w:pBdr':
+      case 'w:tblBorders':
+      case 'w:tcBorders': {
+        const sides =
+          name === 'w:pBdr'
+            ? ['top', 'left', 'bottom', 'right', 'between', 'bar']
+            : ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'];
+        const borderChildren: XMLElement[] = [];
+        for (const side of sides) {
+          if (value[side]) {
+            borderChildren.push(XMLBuilder.createBorder(side, value[side]));
+          }
+        }
+        return borderChildren.length > 0
+          ? { name, attributes: {}, children: borderChildren }
+          : null;
+      }
+      case 'w:tblW':
+      case 'w:tcW':
+      case 'w:tblInd':
+      case 'w:tblCellSpacing':
+        return {
+          name,
+          attributes: XMLBuilder.buildAttributes({
+            'w:w': value.w ?? value.width ?? value.value,
+            'w:type': value.type ?? 'dxa',
+          }),
+          children: [],
+        };
+      case 'w:trHeight':
+        return {
+          name,
+          attributes: XMLBuilder.buildAttributes({
+            'w:val': value.value ?? value.val ?? value.height,
+            'w:hRule': value.rule ?? value.hRule,
+          }),
+          children: [],
+        };
+      case 'w:tcMar':
+      case 'w:tblCellMar':
+        return XMLBuilder.createMargins(name.slice(2), value);
+      case 'w:pgSz':
+        return {
+          name,
+          attributes: XMLBuilder.buildAttributes({
+            'w:w': value.width ?? value.w,
+            'w:h': value.height ?? value.h,
+            'w:orient': value.orientation ?? value.orient,
+          }),
+          children: [],
+        };
+      case 'w:pgMar':
+        return {
+          name,
+          attributes: XMLBuilder.buildAttributes({
+            'w:top': value.top,
+            'w:right': value.right,
+            'w:bottom': value.bottom,
+            'w:left': value.left,
+            'w:header': value.header,
+            'w:footer': value.footer,
+            'w:gutter': value.gutter,
+          }),
+          children: [],
+        };
+      default:
+        // Unknown object shape — no schema mapping to apply
+        return null;
+    }
   }
 
   /**

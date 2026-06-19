@@ -9,12 +9,14 @@ import { Endnote, EndnoteType } from '../elements/Endnote.js';
 import { Footnote, FootnoteType } from '../elements/Footnote.js';
 import { BookmarkManager } from '../elements/BookmarkManager.js';
 import { Comment } from '../elements/Comment.js';
+import type { CommentContentItem, CommentParagraph } from '../elements/Comment.js';
 import { CustomXmlBlock } from '../elements/CustomXml.js';
 import { PreservedElement } from '../elements/PreservedElement.js';
 import { RegisteredBodyElement } from '../elements/RegisteredBodyElement.js';
 import { ElementRegistry } from './ElementRegistry.js';
 import { MathParagraph } from '../elements/MathElement.js';
 import { ComplexField, Field } from '../elements/Field.js';
+import type { CachedFieldResultRun } from '../elements/Field.js';
 import { isHyperlinkInstruction, parseHyperlinkInstruction } from '../elements/FieldHelpers.js';
 import { Footer } from '../elements/Footer.js';
 import { Header } from '../elements/Header.js';
@@ -133,6 +135,7 @@ export class DocumentParser {
       themeColor?: string;
       themeTint?: string;
       themeShade?: string;
+      rawInnerXml?: string;
     };
   }> {
     const logger = getLogger();
@@ -368,9 +371,18 @@ export class DocumentParser {
               parsed['w:sdt'],
               relationshipManager,
               zipHandler,
-              imageManager
+              imageManager,
+              elementXml
             );
-            if (sdt) bodyElements.push(sdt);
+            if (sdt) {
+              bodyElements.push(sdt);
+            } else {
+              // A null result means the content control could not be modeled.
+              // Preserve the raw block so the SDT and everything inside it
+              // survives the save, mirroring the failed registered-element
+              // path below — otherwise the whole control would be deleted.
+              bodyElements.push(new PreservedElement(elementXml, 'sdt', 'block'));
+            }
             pos = next.pos + elementXml.length;
           } else {
             pos = next.pos + 1;
@@ -1072,6 +1084,7 @@ export class DocumentParser {
         | 'w:permEnd'
         | 'm:oMath'
         | 'w:ruby'
+        | 'w:sdt'
         | 'w:commentRangeStart'
         | 'w:commentRangeEnd';
       pos: number;
@@ -1093,6 +1106,7 @@ export class DocumentParser {
     let permEndIndex = 0;
     let oMathIndex = 0;
     let rubyIndex = 0;
+    let sdtIndex = 0;
     let commentRangeStartIndex = 0;
     let commentRangeEndIndex = 0;
 
@@ -1252,6 +1266,18 @@ export class DocumentParser {
           index: rubyIndex++,
         });
         searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, 'w:ruby', tagEnd);
+      } else if (tagName === 'w:sdt') {
+        // Inline structured document tag (CT_SdtRun, ECMA-376 §17.5.2.31) —
+        // date pickers, dropdowns, citations inline in a sentence. Preserve
+        // as raw XML; skipping past the closing tag also keeps run indices
+        // aligned with pElement['w:r'] (sdt-nested runs are not direct
+        // paragraph children in the parsed object).
+        children.push({
+          type: 'w:sdt',
+          pos: tagStart,
+          index: sdtIndex++,
+        });
+        searchPos = selfClosing ? tagEnd + 1 : findClosingTagEnd(paraContent, 'w:sdt', tagEnd);
       } else {
         searchPos = tagEnd + 1;
       }
@@ -1340,21 +1366,57 @@ export class DocumentParser {
             if (runXml) {
               paragraph.addContent(new PreservedElement(runXml, 'w:r', 'inline'));
             }
+          } else if (runObj['mc:AlternateContent']) {
+            // Word 2010+ emits every text box, WordArt, and wps shape as
+            // <w:r><mc:AlternateContent><mc:Choice>… with a VML fallback
+            // (ECMA-376 Part 3 §10). There is no editing model for these,
+            // so preserve the whole run verbatim — otherwise the shape and
+            // all its w:txbxContent text are deleted on save.
+            const runXml = extractRunXmlAtPosition(child.pos);
+            if (runXml) {
+              paragraph.addContent(new PreservedElement(runXml, 'w:r', 'inline'));
+            }
           } else if (runObj['w:drawing']) {
+            let imageRun: ImageRun | null = null;
             if (zipHandler && imageManager) {
-              const imageRun = await this.parseDrawingFromObject(
+              imageRun = await this.parseDrawingFromObject(
                 runObj['w:drawing'],
                 zipHandler,
                 relationshipManager,
                 imageManager
               );
-              if (imageRun) {
-                // Preserve the parent run's w:rPr (rFonts, noProof, b, etc.)
-                // — without this, ImageRun.toXML() emits <w:r><w:drawing/></w:r>
-                // and Word recalculates line height with the default font,
-                // shifting the image and clipping it into adjacent cells.
-                this.parseRunPropertiesFromObject(runObj['w:rPr'], imageRun);
-                paragraph.addRun(imageRun);
+            }
+            if (imageRun) {
+              // Preserve the parent run's w:rPr (rFonts, noProof, b, etc.)
+              // — without this, ImageRun.toXML() emits <w:r><w:drawing/></w:r>
+              // and Word recalculates line height with the default font,
+              // shifting the image and clipping it into adjacent cells.
+              this.parseRunPropertiesFromObject(runObj['w:rPr'], imageRun);
+              paragraph.addRun(imageRun);
+              // EG_RunInnerContent (ECMA-376 §17.3.3) lets a single run mix a
+              // drawing with text/tab/break siblings. Word isolates drawings,
+              // but other generators do not — parse any sibling content as a
+              // separate Run so its text is not dropped alongside the image.
+              if (
+                runObj['w:t'] ||
+                runObj['w:tab'] ||
+                runObj['w:br'] ||
+                runObj['w:cr'] ||
+                runObj['w:noBreakHyphen']
+              ) {
+                const siblingRun = this.parseRunFromObject(runObj);
+                if (siblingRun) {
+                  paragraph.addRun(siblingRun);
+                }
+              }
+            } else {
+              // Charts (c:chart), SmartArt (dgm:relIds), and other
+              // non-picture graphicData have no editing model — preserve
+              // the whole run verbatim so the drawing reference survives
+              // round-trip instead of leaving an orphaned part.
+              const runXml = extractRunXmlAtPosition(child.pos);
+              if (runXml) {
+                paragraph.addContent(new PreservedElement(runXml, 'w:r', 'inline'));
               }
             }
           } else if (runObj['w:pict']) {
@@ -1401,16 +1463,22 @@ export class DocumentParser {
         if (child.index < hyperlinkArray.length) {
           const hyperlinkObj = hyperlinkArray[child.index];
 
-          // Hyperlinks containing tracked changes (w:del/w:ins inside w:hyperlink)
-          // cannot survive parseHyperlinkFromObject round-trip — preserve as raw XML
+          // Hyperlinks containing tracked changes (w:del/w:ins/w:moveFrom/
+          // w:moveTo inside w:hyperlink) are always flattened to an editable
+          // Hyperlink object, regardless of the revisionHandling mode (including
+          // 'preserve'). This is a deliberate exception to 'preserve' — see the
+          // flattening note below and src/core/CLAUDE.md.
           const hasRevisionChildren =
             hyperlinkObj['w:del'] ||
             hyperlinkObj['w:ins'] ||
             hyperlinkObj['w:moveFrom'] ||
             hyperlinkObj['w:moveTo'];
           if (hasRevisionChildren) {
-            // Flatten revisions to make hyperlink editable (setUrl/setText).
-            // Trades revision fidelity inside the hyperlink for editability.
+            // Flatten revisions to make the hyperlink editable (setUrl/setText):
+            // unwrap w:ins/w:moveTo runs (kept), drop w:del/w:moveFrom content.
+            // Applied in every load mode — 'preserve' does not retain revision
+            // markup inside hyperlinks. Trades in-hyperlink revision fidelity
+            // for editability.
             const flattenedObj = { ...hyperlinkObj };
             const allRuns: any[] = [];
 
@@ -1566,6 +1634,14 @@ export class DocumentParser {
         if (elementXml) {
           paragraph.addContent(new PreservedElement(elementXml, child.type, 'inline'));
         }
+      } else if (child.type === 'w:sdt') {
+        // Inline content control — no run-level editing model, so preserve
+        // the whole w:sdt verbatim; dropping it deletes the user-visible
+        // text inside the control on every save.
+        const sdtXml = extractElementXmlAtPosition(child.pos, 'w:sdt');
+        if (sdtXml) {
+          paragraph.addContent(new PreservedElement(sdtXml, 'w:sdt', 'inline'));
+        }
       }
     }
   }
@@ -1634,39 +1710,98 @@ export class DocumentParser {
       // that is NOT inside hyperlinks to avoid duplicate content
       const hyperlinkXmls = XMLParser.extractElements(revisionXml, 'w:hyperlink');
 
-      // Create a version of the XML with hyperlinks removed to extract standalone runs
-      // Use split().join() instead of replace() to remove ALL occurrences of identical hyperlinks
-      // (replace() only removes the first match, causing duplicate content)
+      // Blank out hyperlinks with same-length padding (not removal) so that
+      // standalone-run positions still line up with revisionXml — needed below
+      // to restore the original document order of interleaved runs/hyperlinks.
+      // Use split().join() instead of replace() to blank ALL occurrences of
+      // identical hyperlinks (replace() only hits the first match, causing
+      // duplicate content)
       let xmlWithoutHyperlinks = revisionXml;
       for (const hyperlinkXml of hyperlinkXmls) {
-        xmlWithoutHyperlinks = xmlWithoutHyperlinks.split(hyperlinkXml).join('');
+        xmlWithoutHyperlinks = xmlWithoutHyperlinks
+          .split(hyperlinkXml)
+          .join(' '.repeat(hyperlinkXml.length));
       }
 
       // Extract runs from the XML without hyperlinks (these are standalone runs)
       const runXmls = XMLParser.extractElements(xmlWithoutHyperlinks, 'w:r');
 
+      // Interleave runs and hyperlinks by source position. Two type-grouped
+      // passes (all runs, then all hyperlinks) would emit every hyperlink
+      // after the last run, reordering revision text on round-trip under
+      // preserve mode.
+      const orderedChildren: { pos: number; type: 'w:r' | 'w:hyperlink'; xml: string }[] = [];
+      let runCursor = 0;
+      for (const runXml of runXmls) {
+        const pos = xmlWithoutHyperlinks.indexOf(runXml, runCursor);
+        orderedChildren.push({ pos: pos === -1 ? runCursor : pos, type: 'w:r', xml: runXml });
+        if (pos !== -1) {
+          runCursor = pos + runXml.length;
+        }
+      }
+      let hyperlinkCursor = 0;
+      for (const hyperlinkXml of hyperlinkXmls) {
+        const pos = revisionXml.indexOf(hyperlinkXml, hyperlinkCursor);
+        orderedChildren.push({
+          pos: pos === -1 ? hyperlinkCursor : pos,
+          type: 'w:hyperlink',
+          xml: hyperlinkXml,
+        });
+        if (pos !== -1) {
+          hyperlinkCursor = pos + hyperlinkXml.length;
+        }
+      }
+      orderedChildren.sort((a, b) => a.pos - b.pos);
+
       // Use RevisionContent to hold both Run and Hyperlink objects
       const content: import('../elements/RevisionContent.js').RevisionContent[] = [];
 
-      // Parse standalone runs (not inside hyperlinks)
-      for (const runXml of runXmls) {
-        // Parse the run object
+      for (const child of orderedChildren) {
+        if (child.type === 'w:hyperlink') {
+          // Parse hyperlink inside revision (for tracked hyperlink changes)
+          const hyperlinkObj = XMLParser.parseToObject(child.xml, { trimValues: false });
+          const hyperlinkResult = this.parseHyperlinkFromObject(
+            hyperlinkObj['w:hyperlink'],
+            relationshipManager
+          );
+          if (hyperlinkResult.hyperlink) {
+            content.push(hyperlinkResult.hyperlink);
+          }
+          // Collect bookmarks from hyperlinks inside revisions
+          result.bookmarkStarts.push(...hyperlinkResult.bookmarkStarts);
+          result.bookmarkEnds.push(...hyperlinkResult.bookmarkEnds);
+          continue;
+        }
+
+        // Parse standalone run (not inside hyperlinks)
+        const runXml = child.xml;
         const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const runElement = runObj['w:r'] as any;
 
         // Check if this run contains a drawing (image)
         if (runElement?.['w:drawing']) {
+          let imageRun: ImageRun | null = null;
           if (zipHandler && imageManager) {
-            const imageRun = await this.parseDrawingFromObject(
+            imageRun = await this.parseDrawingFromObject(
               runElement['w:drawing'],
               zipHandler,
               relationshipManager,
               imageManager
             );
-            if (imageRun) {
-              imageRun.setRawRunXml(runXml);
-              content.push(imageRun);
+          }
+          if (imageRun) {
+            imageRun.setRawRunXml(runXml);
+            content.push(imageRun);
+          } else {
+            // Non-picture graphicData (charts, SmartArt) — RevisionContent
+            // cannot hold a PreservedElement, so carry the w:drawing through
+            // as raw XML inside a passthrough run to keep the reference.
+            const drawingXmls = XMLParser.extractElements(runXml, 'w:drawing');
+            if (drawingXmls.length > 0 && drawingXmls[0]) {
+              const run = Run.createFromContent([{ type: 'vml', rawXml: drawingXmls[0] }]);
+              this.parseRunPropertiesFromObject(runElement['w:rPr'], run);
+              content.push(run);
             }
           }
         } else {
@@ -1676,21 +1811,6 @@ export class DocumentParser {
             content.push(run);
           }
         }
-      }
-
-      // Parse hyperlinks inside revision (for tracked hyperlink changes)
-      for (const hyperlinkXml of hyperlinkXmls) {
-        const hyperlinkObj = XMLParser.parseToObject(hyperlinkXml, { trimValues: false });
-        const hyperlinkResult = this.parseHyperlinkFromObject(
-          hyperlinkObj['w:hyperlink'],
-          relationshipManager
-        );
-        if (hyperlinkResult.hyperlink) {
-          content.push(hyperlinkResult.hyperlink);
-        }
-        // Collect bookmarks from hyperlinks inside revisions
-        result.bookmarkStarts.push(...hyperlinkResult.bookmarkStarts);
-        result.bookmarkEnds.push(...hyperlinkResult.bookmarkEnds);
       }
 
       // Extract bookmarks directly inside the revision (not nested in hyperlinks)
@@ -1748,16 +1868,23 @@ export class DocumentParser {
   /**
    * Parses comments from word/comments.xml
    * @param commentsXml - Raw XML content of comments.xml
+   * @param commentsExtendedXml - Optional word/commentsExtended.xml content;
+   *   its w15:commentEx entries carry the resolved state (w15:done) keyed by
+   *   the w14:paraId of each comment's last paragraph
    * @returns Array of parsed Comment objects
    */
-  parseCommentsXml(commentsXml: string): Comment[] {
+  parseCommentsXml(commentsXml: string, commentsExtendedXml?: string): Comment[] {
     const comments: Comment[] = [];
+
+    const doneByParaId = commentsExtendedXml
+      ? this.parseCommentsExtendedDone(commentsExtendedXml)
+      : undefined;
 
     // Extract all w:comment elements
     const commentXmls = XMLParser.extractElements(commentsXml, 'w:comment');
 
     for (const commentXml of commentXmls) {
-      const comment = this.parseCommentFromXml(commentXml);
+      const comment = this.parseCommentFromXml(commentXml, doneByParaId);
       if (comment) {
         comments.push(comment);
       }
@@ -1767,11 +1894,34 @@ export class DocumentParser {
   }
 
   /**
+   * Builds the paraId -> done map from commentsExtended.xml. Word stores
+   * comment resolution there (w15:commentEx w15:done) rather than on
+   * w:comment, which declares no done attribute.
+   */
+  private parseCommentsExtendedDone(commentsExtendedXml: string): Map<string, boolean> {
+    const doneByParaId = new Map<string, boolean>();
+    for (const commentExXml of XMLParser.extractElements(commentsExtendedXml, 'w15:commentEx')) {
+      const paraId = XMLParser.extractAttribute(commentExXml, 'w15:paraId');
+      if (!paraId) {
+        continue;
+      }
+      const done = parseOnOffAttribute(XMLParser.extractAttribute(commentExXml, 'w15:done'));
+      doneByParaId.set(paraId.toUpperCase(), done);
+    }
+    return doneByParaId;
+  }
+
+  /**
    * Parses a single comment element from XML
    * @param commentXml - XML string for one w:comment element
+   * @param doneByParaId - Resolved state from commentsExtended.xml, keyed by
+   *   uppercased last-paragraph w14:paraId
    * @returns Parsed Comment or null
    */
-  private parseCommentFromXml(commentXml: string): Comment | null {
+  private parseCommentFromXml(
+    commentXml: string,
+    doneByParaId?: Map<string, boolean>
+  ): Comment | null {
     try {
       // Extract attributes
       const idAttr = XMLParser.extractAttribute(commentXml, 'w:id');
@@ -1792,20 +1942,45 @@ export class DocumentParser {
       const id = parseInt(idAttr, 10);
       const date = dateAttr ? new Date(dateAttr) : new Date();
       const parentId = parentIdAttr ? parseInt(parentIdAttr, 10) : undefined;
-      // Per ECMA-376 §17.17.4, w:done is ST_OnOff — accept 1/0/true/false/on/off
-      const done = parseOnOffAttribute(doneAttr);
+      // Accept legacy done attributes as ST_OnOff (1/0/true/false/on/off);
+      // commentsExtended.xml (checked below) is the authoritative source
+      let done = parseOnOffAttribute(doneAttr);
 
-      // Parse content (runs from paragraphs within the comment)
+      // Parse content per source paragraph so regeneration can restore the
+      // original <w:p> boundaries, paragraph properties, and hyperlink
+      // wrappers — multi-paragraph comments are legal per ECMA-376
+      // §17.13.4.2 and flattening them concatenates words across the lost
+      // paragraph breaks
       const runs: Run[] = [];
-      const runXmls = XMLParser.extractElements(commentXml, 'w:r');
+      const paragraphs: CommentParagraph[] = [];
+      const paraXmls = XMLParser.extractElements(commentXml, 'w:p');
+      const runSources = paraXmls.length > 0 ? paraXmls : [commentXml];
 
-      for (const runXml of runXmls) {
-        const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const run = this.parseRunFromObject(runObj['w:r'] as any);
-        if (run) {
-          runs.push(run);
+      // commentsExtended.xml references a comment via the w14:paraId of its
+      // last paragraph; when an entry exists it overrides the legacy attr
+      if (doneByParaId && paraXmls.length > 0) {
+        const lastParaXml = paraXmls[paraXmls.length - 1]!;
+        const lastParaId = XMLParser.extractAttribute(lastParaXml, 'w14:paraId');
+        if (lastParaId) {
+          const extendedDone = doneByParaId.get(lastParaId.toUpperCase());
+          if (extendedDone !== undefined) {
+            done = extendedDone;
+          }
         }
+      }
+
+      for (const sourceXml of runSources) {
+        const content = this.parseCommentParagraphContent(sourceXml);
+        for (const item of content) {
+          if (item instanceof Run) {
+            runs.push(item);
+          } else {
+            runs.push(...item.runs);
+          }
+        }
+        const pPr =
+          paraXmls.length > 0 ? XMLParser.extractElements(sourceXml, 'w:pPr')[0] : undefined;
+        paragraphs.push({ pPr, content });
       }
 
       // Create comment with parsed data
@@ -1819,6 +1994,10 @@ export class DocumentParser {
         done,
       });
 
+      if (paraXmls.length > 0) {
+        comment.setParagraphs(paragraphs);
+      }
+
       return comment;
     } catch (error: unknown) {
       defaultLogger.warn(
@@ -1830,14 +2009,75 @@ export class DocumentParser {
   }
 
   /**
-   * Parses footnotes.xml into Footnote array
+   * Parses one comment paragraph's inline content in document order.
+   * Top-level runs become Run instances; w:hyperlink wrappers pass through
+   * as raw XML (their r:id targets live in word/_rels/comments.xml.rels,
+   * which is preserved verbatim) with their inner runs parsed alongside so
+   * text extraction still sees the link text.
+   * @param sourceXml - XML of one w:p element (or the whole w:comment when
+   *   it has no paragraph children)
+   * @returns Ordered paragraph content
    */
-  parseFootnotesXml(footnotesXml: string): Footnote[] {
+  private parseCommentParagraphContent(sourceXml: string): CommentContentItem[] {
+    const positioned: Array<{ pos: number; item: CommentContentItem }> = [];
+
+    const hyperlinkRanges: Array<{ start: number; end: number }> = [];
+    let hyperlinkCursor = 0;
+    for (const hyperlinkXml of XMLParser.extractElements(sourceXml, 'w:hyperlink')) {
+      const start = sourceXml.indexOf(hyperlinkXml, hyperlinkCursor);
+      if (start === -1) {
+        continue;
+      }
+      hyperlinkCursor = start + hyperlinkXml.length;
+      hyperlinkRanges.push({ start, end: hyperlinkCursor });
+
+      const innerRuns: Run[] = [];
+      for (const runXml of XMLParser.extractElements(hyperlinkXml, 'w:r')) {
+        const run = this.parseCommentRun(runXml);
+        if (run) {
+          innerRuns.push(run);
+        }
+      }
+      positioned.push({ pos: start, item: { rawXml: hyperlinkXml, runs: innerRuns } });
+    }
+
+    let runCursor = 0;
+    for (const runXml of XMLParser.extractElements(sourceXml, 'w:r')) {
+      const start = sourceXml.indexOf(runXml, runCursor);
+      if (start === -1) {
+        continue;
+      }
+      runCursor = start + runXml.length;
+      // Runs inside a hyperlink are already covered by its raw passthrough
+      if (hyperlinkRanges.some((range) => start >= range.start && start < range.end)) {
+        continue;
+      }
+      const run = this.parseCommentRun(runXml);
+      if (run) {
+        positioned.push({ pos: start, item: run });
+      }
+    }
+
+    return positioned.sort((a, b) => a.pos - b.pos).map((entry) => entry.item);
+  }
+
+  private parseCommentRun(runXml: string): Run | null {
+    const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.parseRunFromObject(runObj['w:r'] as any);
+  }
+
+  /**
+   * Parses footnotes.xml into Footnote array
+   * @param partRels - Part-scoped relationships (word/_rels/footnotes.xml.rels)
+   *   used to resolve hyperlink r:id targets inside footnote content
+   */
+  parseFootnotesXml(footnotesXml: string, partRels?: RelationshipManager): Footnote[] {
     const footnotes: Footnote[] = [];
     const footnoteXmls = XMLParser.extractElements(footnotesXml, 'w:footnote');
 
     for (const footnoteXml of footnoteXmls) {
-      const footnote = this.parseFootnoteFromXml(footnoteXml);
+      const footnote = this.parseFootnoteFromXml(footnoteXml, partRels);
       if (footnote) {
         footnotes.push(footnote);
       }
@@ -1846,7 +2086,10 @@ export class DocumentParser {
     return footnotes;
   }
 
-  private parseFootnoteFromXml(footnoteXml: string): Footnote | null {
+  private parseFootnoteFromXml(
+    footnoteXml: string,
+    partRels?: RelationshipManager
+  ): Footnote | null {
     try {
       const idAttr = XMLParser.extractAttribute(footnoteXml, 'w:id');
       const typeAttr = XMLParser.extractAttribute(footnoteXml, 'w:type');
@@ -1870,7 +2113,7 @@ export class DocumentParser {
 
       const paraXmls = XMLParser.extractElements(footnoteXml, 'w:p');
       for (const paraXml of paraXmls) {
-        const para = this.parseNoteParaFromXml(paraXml);
+        const para = this.parseNoteParaFromXml(paraXml, partRels);
         if (para) {
           footnote.addParagraph(para);
         }
@@ -1888,13 +2131,15 @@ export class DocumentParser {
 
   /**
    * Parses endnotes.xml into Endnote array
+   * @param partRels - Part-scoped relationships (word/_rels/endnotes.xml.rels)
+   *   used to resolve hyperlink r:id targets inside endnote content
    */
-  parseEndnotesXml(endnotesXml: string): Endnote[] {
+  parseEndnotesXml(endnotesXml: string, partRels?: RelationshipManager): Endnote[] {
     const endnotes: Endnote[] = [];
     const endnoteXmls = XMLParser.extractElements(endnotesXml, 'w:endnote');
 
     for (const endnoteXml of endnoteXmls) {
-      const endnote = this.parseEndnoteFromXml(endnoteXml);
+      const endnote = this.parseEndnoteFromXml(endnoteXml, partRels);
       if (endnote) {
         endnotes.push(endnote);
       }
@@ -1903,7 +2148,7 @@ export class DocumentParser {
     return endnotes;
   }
 
-  private parseEndnoteFromXml(endnoteXml: string): Endnote | null {
+  private parseEndnoteFromXml(endnoteXml: string, partRels?: RelationshipManager): Endnote | null {
     try {
       const idAttr = XMLParser.extractAttribute(endnoteXml, 'w:id');
       const typeAttr = XMLParser.extractAttribute(endnoteXml, 'w:type');
@@ -1927,7 +2172,7 @@ export class DocumentParser {
 
       const paraXmls = XMLParser.extractElements(endnoteXml, 'w:p');
       for (const paraXml of paraXmls) {
-        const para = this.parseNoteParaFromXml(paraXml);
+        const para = this.parseNoteParaFromXml(paraXml, partRels);
         if (para) {
           endnote.addParagraph(para);
         }
@@ -1945,20 +2190,80 @@ export class DocumentParser {
 
   /**
    * Parses a paragraph from a footnote or endnote element.
-   * Uses run-level parsing (like comments) to avoid async dependency on relationship manager.
+   * Uses run-level parsing (like comments) to avoid async dependency on the
+   * document relationship manager. Paragraph properties (pStyle FootnoteText
+   * per ECMA-376 §17.7.4) and w:hyperlink wrappers are parsed so regeneration
+   * after a real edit keeps note styling and working links instead of
+   * flattening hyperlinks to plain runs; r:id targets resolve against the
+   * part-scoped rels when provided.
    */
-  private parseNoteParaFromXml(paraXml: string): Paragraph | null {
+  private parseNoteParaFromXml(paraXml: string, partRels?: RelationshipManager): Paragraph | null {
     try {
       const para = new Paragraph();
-      const runXmls = XMLParser.extractElements(paraXml, 'w:r');
-      for (const runXml of runXmls) {
-        const runObj = XMLParser.parseToObject(runXml, { trimValues: false });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const run = this.parseRunFromObject(runObj['w:r'] as any);
-        if (run) {
-          para.addRun(run);
+
+      const paraObj = XMLParser.parseToObject(paraXml, { trimValues: false });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pElement = paraObj['w:p'] as any;
+      if (pElement?.['w:pPr']) {
+        this.parseParagraphPropertiesFromObject(pElement['w:pPr'], para);
+      }
+
+      // Scan children in document order, consuming w:r/w:hyperlink subtrees
+      // whole so hyperlink inner runs are not double-counted as paragraph
+      // runs; unhandled containers (w:ins, w:smartTag, ...) are descended
+      // into so their nested runs still contribute text as before
+      const pPrEnd = paraXml.indexOf('</w:pPr>');
+      const contentStart = pPrEnd !== -1 ? pPrEnd + '</w:pPr>'.length : paraXml.indexOf('>') + 1;
+      const contentEnd = paraXml.lastIndexOf('</w:p>');
+      if (contentEnd <= contentStart) {
+        return para;
+      }
+      const content = paraXml.substring(contentStart, contentEnd);
+
+      let searchPos = 0;
+      while (searchPos < content.length) {
+        const tagStart = content.indexOf('<', searchPos);
+        if (tagStart === -1) break;
+        const tagEnd = content.indexOf('>', tagStart);
+        if (tagEnd === -1) break;
+        const tagBody = content.substring(tagStart + 1, tagEnd);
+        const tagName = tagBody.split(/[\s/>]/)[0];
+        const selfClosing = tagBody.endsWith('/');
+
+        if ((tagName === 'w:r' || tagName === 'w:hyperlink') && !selfClosing) {
+          const closingTag = `</${tagName}>`;
+          const closingPos = content.indexOf(closingTag, tagEnd);
+          const childEnd = closingPos === -1 ? tagEnd + 1 : closingPos + closingTag.length;
+          const childXml = content.substring(tagStart, childEnd);
+          const childObj = XMLParser.parseToObject(childXml, { trimValues: false });
+
+          if (tagName === 'w:r') {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const run = this.parseRunFromObject(childObj['w:r'] as any);
+            if (run) {
+              para.addRun(run);
+            }
+          } else {
+            const result = this.parseHyperlinkFromObject(
+              childObj['w:hyperlink'],
+              partRels ?? RelationshipManager.create()
+            );
+            if (result.hyperlink) {
+              para.addHyperlink(result.hyperlink);
+            }
+            for (const bookmark of result.bookmarkStarts) {
+              para.addBookmarkStart(bookmark);
+            }
+            for (const bookmark of result.bookmarkEnds) {
+              para.addBookmarkEnd(bookmark);
+            }
+          }
+          searchPos = childEnd;
+        } else {
+          searchPos = tagEnd + 1;
         }
       }
+
       return para;
     } catch {
       return null;
@@ -2120,16 +2425,40 @@ export class DocumentParser {
             if (elementIndex < runArray.length) {
               const child = runArray[elementIndex];
               if (child['w:drawing']) {
+                let imageRun: ImageRun | null = null;
                 if (zipHandler && imageManager) {
-                  const imageRun = await this.parseDrawingFromObject(
+                  imageRun = await this.parseDrawingFromObject(
                     child['w:drawing'],
                     zipHandler,
                     relationshipManager,
                     imageManager
                   );
-                  if (imageRun) {
-                    this.parseRunPropertiesFromObject(child['w:rPr'], imageRun);
-                    paragraph.addRun(imageRun);
+                }
+                if (imageRun) {
+                  this.parseRunPropertiesFromObject(child['w:rPr'], imageRun);
+                  paragraph.addRun(imageRun);
+                  // A run may legally mix a drawing with text/tab/break
+                  // siblings (ECMA-376 §17.3.3) — parse those as a separate
+                  // Run so the text is not dropped alongside the image.
+                  if (
+                    child['w:t'] ||
+                    child['w:tab'] ||
+                    child['w:br'] ||
+                    child['w:cr'] ||
+                    child['w:noBreakHyphen']
+                  ) {
+                    const siblingRun = this.parseRunFromObject(child);
+                    if (siblingRun) {
+                      paragraph.addRun(siblingRun);
+                    }
+                  }
+                } else {
+                  // No raw paragraph XML on this path — rebuild the run from
+                  // the parsed object so non-picture drawings (charts,
+                  // SmartArt) survive round-trip instead of being dropped.
+                  const runXml = this.objectToXml({ 'w:r': child });
+                  if (runXml) {
+                    paragraph.addContent(new PreservedElement(runXml, 'w:r', 'inline'));
                   }
                 }
               } else {
@@ -2181,17 +2510,41 @@ export class DocumentParser {
 
         for (const child of runChildren) {
           if (child['w:drawing']) {
+            let imageRun: ImageRun | null = null;
             if (zipHandler && imageManager) {
               // Parse as image run
-              const imageRun = await this.parseDrawingFromObject(
+              imageRun = await this.parseDrawingFromObject(
                 child['w:drawing'],
                 zipHandler,
                 relationshipManager,
                 imageManager
               );
-              if (imageRun) {
-                this.parseRunPropertiesFromObject(child['w:rPr'], imageRun);
-                paragraph.addRun(imageRun);
+            }
+            if (imageRun) {
+              this.parseRunPropertiesFromObject(child['w:rPr'], imageRun);
+              paragraph.addRun(imageRun);
+              // A run may legally mix a drawing with text/tab/break siblings
+              // (ECMA-376 §17.3.3) — parse those as a separate Run so the text
+              // is not dropped alongside the image.
+              if (
+                child['w:t'] ||
+                child['w:tab'] ||
+                child['w:br'] ||
+                child['w:cr'] ||
+                child['w:noBreakHyphen']
+              ) {
+                const siblingRun = this.parseRunFromObject(child);
+                if (siblingRun) {
+                  paragraph.addRun(siblingRun);
+                }
+              }
+            } else {
+              // No raw paragraph XML on this path — rebuild the run from the
+              // parsed object so non-picture drawings (charts, SmartArt)
+              // survive round-trip instead of being dropped.
+              const runXml = this.objectToXml({ 'w:r': child });
+              if (runXml) {
+                paragraph.addContent(new PreservedElement(runXml, 'w:r', 'inline'));
               }
             }
           } else {
@@ -4154,10 +4507,15 @@ export class DocumentParser {
         if (node === undefined || node === null) {
           return '';
         }
+        // XMLParser.parseElementToObject already unescaped entities while
+        // building #text, so the value here is plain text. A second
+        // unescapeXml would corrupt literal entity sequences (e.g. text that
+        // was authored as "&lt;" — stored as "&amp;lt;" — would collapse to
+        // "<"), breaking load→save fidelity.
         if (typeof node === 'object') {
-          return XMLBuilder.unescapeXml(node['#text'] || '');
+          return node['#text'] != null ? String(node['#text']) : '';
         }
-        return XMLBuilder.unescapeXml(String(node));
+        return String(node);
       };
 
       // Field-character attributes (w:dirty, w:fldLock, w:lock on w:fldChar) are
@@ -4989,6 +5347,11 @@ export class DocumentParser {
         anchor: finalAnchor,
         text: displayText,
         formatting,
+        // Word-authored hyperlinks usually carry only <w:rStyle w:val="Hyperlink"/>
+        // (or no rPr at all) — merging the constructor's default styling
+        // underneath would inject direct formatting that never existed in the
+        // source and override the document's Hyperlink character style
+        preserveFormatting: true,
         tooltip,
         relationshipId: finalRelationshipId,
         tgtFrame,
@@ -4996,9 +5359,20 @@ export class DocumentParser {
         docLocation,
       });
 
-      // If we successfully parsed a run with tabs/breaks, use it instead of the default run
-      // This preserves TOC structure (text → tab → text)
-      if (parsedRun && parsedRun.getContent().length > 1) {
+      // Replace the constructor-built run with the parsed run(s). Word splits
+      // a hyperlink's display text into one run per formatting change, so
+      // multi-run sources must keep every run with its own rPr — collapsing
+      // to the first run's formatting silently drops bold/italic/color on
+      // the later runs. Single runs are preserved verbatim when they carry
+      // text or structure like TOC tabs/breaks that a plain text run cannot
+      // represent. Empty-text runs keep the constructor run so the
+      // display-text fallback ('[Link]'/URL) survives.
+      if (parsedRuns.length > 1 && (text || parsedRuns.some((r) => r.getContent().length > 1))) {
+        hyperlink.setRuns(parsedRuns);
+      } else if (
+        parsedRun &&
+        ((parsedRuns.length === 1 && text) || parsedRun.getContent().length > 1)
+      ) {
         hyperlink.setRun(parsedRun);
       }
 
@@ -5219,6 +5593,32 @@ export class DocumentParser {
         fldLock,
         dirty,
       });
+
+      // Per ECMA-376 §17.16.16 CT_SimpleField, the child runs hold the
+      // field's current (cached) result. Word does not refresh fields on
+      // open by default, so the cached text + per-run formatting must
+      // survive round-trip — otherwise the visible content is silently
+      // replaced by a synthetic placeholder on save.
+      const resultRuns = fieldObj['w:r'];
+      const resultRunArray = Array.isArray(resultRuns)
+        ? resultRuns
+        : resultRuns
+          ? [resultRuns]
+          : [];
+      const cachedRuns: CachedFieldResultRun[] = [];
+      for (const runObj of resultRunArray) {
+        const run = this.parseRunFromObject(runObj);
+        if (run) {
+          const runFormatting = run.getFormatting();
+          cachedRuns.push({
+            text: run.getText(),
+            formatting: Object.keys(runFormatting).length > 0 ? runFormatting : undefined,
+          });
+        }
+      }
+      if (cachedRuns.length > 0) {
+        field.setCachedResultRuns(cachedRuns);
+      }
 
       return field;
     } catch (error: unknown) {
@@ -5464,7 +5864,11 @@ export class DocumentParser {
       // coerces purely-numeric font names ("2010", etc.) to JS
       // numbers; cast through String() so RunFormatting's
       // declared-string font fields keep their type contract.
-      if (rFonts['@_w:ascii'] !== undefined) run.setFont(String(rFonts['@_w:ascii']));
+      // Use setFontAscii (not setFont) so only the declared ascii slot is set;
+      // setFont mirrors into hAnsi/cs for programmatic convenience, which would
+      // fabricate those slots on round-trip and override style/theme-inherited
+      // fonts.
+      if (rFonts['@_w:ascii'] !== undefined) run.setFontAscii(String(rFonts['@_w:ascii']));
       // Parse additional font variants per ECMA-376 Part 1 §17.3.2.26
       if (rFonts['@_w:hAnsi'] !== undefined) run.setFontHAnsi(String(rFonts['@_w:hAnsi']));
       if (rFonts['@_w:eastAsia'] !== undefined) run.setFontEastAsia(String(rFonts['@_w:eastAsia']));
@@ -7931,7 +8335,8 @@ export class DocumentParser {
     sdtObj: any,
     relationshipManager: RelationshipManager,
     zipHandler: ZipHandler,
-    imageManager: ImageManager
+    imageManager: ImageManager,
+    rawSdtXml?: string
   ): Promise<StructuredDocumentTag | TableOfContentsElement | null> {
     try {
       if (!sdtObj) return null;
@@ -8025,10 +8430,18 @@ export class DocumentParser {
           // <w14:checked> is CT_OnOff in the Word 2010+ extension namespace.
           // Honour every ST_OnOff literal ("1"/"0"/"true"/"false"/"on"/"off")
           // and treat a bare self-closing `<w14:checked/>` as true.
+          // CT_SdtCheckboxSymbol pairs the character code with a glyph font;
+          // capture w14:font (String-cast — XMLParser coerces numeric-looking
+          // values) so a custom font like Wingdings survives re-serialization
+          // instead of being rewritten to the MS Gothic default.
+          const rawCheckedFont = checkboxElement?.['w14:checkedState']?.['@_w14:font'];
+          const rawUncheckedFont = checkboxElement?.['w14:uncheckedState']?.['@_w14:font'];
           properties.checkbox = {
             checked: parseOoxmlBoolean(checkboxElement?.['w14:checked'], '@_w14:val'),
             checkedState: String(checkboxElement?.['w14:checkedState']?.['@_w14:val'] ?? ''),
             uncheckedState: String(checkboxElement?.['w14:uncheckedState']?.['@_w14:val'] ?? ''),
+            checkedFont: rawCheckedFont === undefined ? undefined : String(rawCheckedFont),
+            uncheckedFont: rawUncheckedFont === undefined ? undefined : String(rawUncheckedFont),
           };
         } else if (sdtPr['w:picture']) {
           properties.controlType = 'picture';
@@ -8080,6 +8493,43 @@ export class DocumentParser {
         const showingPlcHdr = sdtPr['w:showingPlcHdr'];
         if (showingPlcHdr) {
           properties.showingPlcHdr = parseOoxmlBoolean(showingPlcHdr);
+        }
+      }
+
+      // Capture the original w:sdtPr / w:sdtEndPr markup. The modeled
+      // properties above are a subset of CT_SdtPr (ECMA-376 §17.5.2.38);
+      // rebuilding sdtPr from them on save would drop unmodeled children
+      // (w:rPr, w15:appearance, w15:color, w:temporary, repeatingSection,
+      // ...), and w:sdtEndPr has no model at all. Prefer the verbatim
+      // substring when the caller supplied the raw element XML; nested
+      // SDTs only have the parsed object, so reconstruct from it. Both
+      // outer parts precede w:sdtContent per CT_SdtBlock, so when present
+      // the first occurrence in the raw XML belongs to this SDT, never to
+      // a nested one.
+      let rawSdtPrXml: string | undefined;
+      if (sdtPr !== undefined) {
+        if (rawSdtXml) {
+          const prPos = rawSdtXml.indexOf('<w:sdtPr');
+          if (prPos !== -1) {
+            rawSdtPrXml = this.extractSingleElement(rawSdtXml, 'w:sdtPr', prPos) || undefined;
+          }
+        }
+        if (rawSdtPrXml === undefined) {
+          rawSdtPrXml = this.objectToXml({ 'w:sdtPr': sdtPr }) || undefined;
+        }
+      }
+      let rawSdtEndPrXml: string | undefined;
+      const sdtEndPr = sdtObj['w:sdtEndPr'];
+      if (sdtEndPr !== undefined) {
+        if (rawSdtXml) {
+          const endPrPos = rawSdtXml.indexOf('<w:sdtEndPr');
+          if (endPrPos !== -1) {
+            rawSdtEndPrXml =
+              this.extractSingleElement(rawSdtXml, 'w:sdtEndPr', endPrPos) || undefined;
+          }
+        }
+        if (rawSdtEndPrXml === undefined) {
+          rawSdtEndPrXml = this.objectToXml({ 'w:sdtEndPr': sdtEndPr }) || undefined;
         }
       }
 
@@ -8143,6 +8593,23 @@ export class DocumentParser {
                 );
                 if (nestedSdt) content.push(nestedSdt);
               }
+            } else if (!elementType.startsWith('@_') && elementType !== '#text') {
+              // CT_SdtContentBlock also admits w:customXml plus
+              // EG_RunLevelElts (bookmark/comment/perm range markers,
+              // w:proofErr, w:ins/w:del, math, move-range markers).
+              // Regenerating document.xml without them unbalances range
+              // pairs and drops content, so pass them through as raw XML —
+              // mirrors the body-level preservation of these same types.
+              const others = sdtContent[elementType];
+              const otherArray = Array.isArray(others)
+                ? others
+                : others !== undefined
+                  ? [others]
+                  : [];
+              if (elementIndex < otherArray.length) {
+                const rawXml = this.objectToXml({ [elementType]: otherArray[elementIndex] });
+                if (rawXml) content.push(new PreservedElement(rawXml, elementType, 'block'));
+              }
             }
           }
         } else {
@@ -8186,6 +8653,33 @@ export class DocumentParser {
             );
             if (nestedSdt) content.push(nestedSdt);
           }
+
+          // Preserve remaining CT_SdtContentBlock children (range markers,
+          // w:customXml, math, tracked-change wrappers) that the typed
+          // branches above do not model — same raw passthrough as the
+          // ordered path, original order unknown without _orderedChildren.
+          for (const key of Object.keys(sdtContent)) {
+            if (
+              key === 'w:p' ||
+              key === 'w:tbl' ||
+              key === 'w:sdt' ||
+              key === '#text' ||
+              key === '_orderedChildren' ||
+              key.startsWith('@_')
+            ) {
+              continue;
+            }
+            const others = sdtContent[key];
+            const otherArray = Array.isArray(others)
+              ? others
+              : others !== undefined
+                ? [others]
+                : [];
+            for (const otherObj of otherArray) {
+              const rawXml = this.objectToXml({ [key]: otherObj });
+              if (rawXml) content.push(new PreservedElement(rawXml, key, 'block'));
+            }
+          }
         }
       }
 
@@ -8198,7 +8692,10 @@ export class DocumentParser {
         }
       }
 
-      return new StructuredDocumentTag(properties, content);
+      const sdt = new StructuredDocumentTag(properties, content);
+      if (rawSdtPrXml !== undefined) sdt._setRawSdtPrXml(rawSdtPrXml);
+      if (rawSdtEndPrXml !== undefined) sdt._setRawSdtEndPrXml(rawSdtEndPrXml);
+      return sdt;
     } catch (error: unknown) {
       defaultLogger.warn(
         '[DocumentParser] Failed to parse SDT:',
@@ -8668,8 +9165,13 @@ export class DocumentParser {
     // FIX (v1.3.1): Use _orderedChildren to maintain document order of elements
     // This fixes TOC tab preservation - tabs must be in correct position
     const buildXml = (o: any, name?: string): string => {
-      if (typeof o === 'string') return o;
-      if (typeof o !== 'object') return String(o);
+      // Text-only elements parse to a bare primitive (e.g. <w:t>Hi</w:t>
+      // becomes 'Hi'); when a tag name is known the wrapper must be
+      // re-emitted or the reconstructed XML silently loses the element.
+      if (typeof o !== 'object' || o === null) {
+        const text = String(o ?? '');
+        return name ? `<${name}>${text}</${name}>` : text;
+      }
 
       const keys = Object.keys(o);
 
@@ -9057,6 +9559,16 @@ export class DocumentParser {
           return null;
         }
       }
+
+      // The nested previous <w:sectPr> inside <w:sectPrChange> holds the
+      // section's pre-revision state. Because extractElements is a flat scan,
+      // any per-property call below would otherwise match that nested previous
+      // element when the live sectPr omits the property — resurrecting a
+      // tracked-removed property (e.g. titlePg/bidi) as a live one. Strip the
+      // change subtree so only current properties are read here; the original
+      // string is retained for the sectPrChange extraction further down.
+      const sectPrWithChange = sectPr;
+      sectPr = sectPr.replace(/<w:sectPrChange[\s\S]*?<\/w:sectPrChange>/, '');
 
       const sectionProps: SectionProperties = {};
 
@@ -9464,8 +9976,10 @@ export class DocumentParser {
 
       const section = new Section(sectionProps);
 
-      // Parse section property change (w:sectPrChange) per ECMA-376 Part 1 §17.13.5.32
-      const sectPrChangeElements = XMLParser.extractElements(sectPr, 'w:sectPrChange');
+      // Parse section property change (w:sectPrChange) per ECMA-376 Part 1 §17.13.5.32.
+      // Use the unstripped string: the change subtree was removed from `sectPr`
+      // above so it could not leak into the live property reads.
+      const sectPrChangeElements = XMLParser.extractElements(sectPrWithChange, 'w:sectPrChange');
       if (sectPrChangeElements.length > 0 && sectPrChangeElements[0]) {
         const changeXml = sectPrChangeElements[0];
         const id = XMLParser.extractAttribute(changeXml, 'w:id') || '0';
@@ -9530,22 +10044,36 @@ export class DocumentParser {
       }
     }
 
-    // Extract basedOn
-    const basedOnElement = XMLParser.extractBetweenTags(styleXml, '<w:basedOn', '</w:basedOn>');
-    const basedOn = basedOnElement
-      ? XMLParser.extractAttribute(`<w:basedOn${basedOnElement}`, 'w:val')
-      : undefined;
+    // Extract basedOn (CT_String is empty-content per ECMA-376 §17.7.4.3, so Word
+    // serializes <w:basedOn w:val="..."/> self-closing; extractBetweenTags only
+    // matches an explicit closing tag and would drop the inheritance chain)
+    let basedOn: string | undefined;
+    const basedOnAttrs = XMLParser.extractSelfClosingTag(styleXml, 'w:basedOn');
+    if (basedOnAttrs) {
+      basedOn = XMLParser.extractAttribute(`<w:basedOn${basedOnAttrs}/>`, 'w:val');
+    }
 
-    // Extract next
-    const nextElement = XMLParser.extractBetweenTags(styleXml, '<w:next', '</w:next>');
-    const next = nextElement
-      ? XMLParser.extractAttribute(`<w:next${nextElement}`, 'w:val')
-      : undefined;
+    // Extract next (same empty-content serialization as basedOn)
+    let next: string | undefined;
+    const nextAttrs = XMLParser.extractSelfClosingTag(styleXml, 'w:next');
+    if (nextAttrs) {
+      next = XMLParser.extractAttribute(`<w:next${nextAttrs}/>`, 'w:val');
+    }
+
+    // Conditional table-style blocks (w:tblStylePr) carry their own pPr/rPr.
+    // Per CT_Style (ECMA-376 §17.7.4.17) the root pPr/rPr precede those
+    // blocks, so a first-match search over the full element would misattribute
+    // a conditional block's formatting (e.g. firstRow bold/centered in banded
+    // table styles) as the style's unconditional base formatting whenever the
+    // root pPr/rPr are absent. Search a copy with the conditional blocks
+    // stripped; parseConditionalFormattingFromXml still receives the full
+    // styleXml and parses those blocks separately.
+    const styleBase = styleXml.replace(/<w:tblStylePr[\s\S]*?<\/w:tblStylePr>/g, '');
 
     // Parse paragraph formatting (w:pPr)
     let paragraphFormatting: ParagraphFormatting | undefined;
     let styleNumPr: { numId?: number; ilvl?: number } | undefined;
-    const pPrXml = XMLParser.extractBetweenTags(styleXml, '<w:pPr>', '</w:pPr>');
+    const pPrXml = XMLParser.extractBetweenTags(styleBase, '<w:pPr>', '</w:pPr>');
     if (pPrXml) {
       paragraphFormatting = this.parseParagraphFormattingFromXml(pPrXml);
 
@@ -9567,7 +10095,7 @@ export class DocumentParser {
 
     // Parse run formatting (w:rPr)
     let runFormatting: RunFormatting | undefined;
-    const rPrXml = XMLParser.extractBetweenTags(styleXml, '<w:rPr>', '</w:rPr>');
+    const rPrXml = XMLParser.extractBetweenTags(styleBase, '<w:rPr>', '</w:rPr>');
     if (rPrXml) {
       runFormatting = this.parseRunFormattingFromXml(rPrXml);
     }
@@ -11181,15 +11709,43 @@ export class DocumentParser {
    * Parses document background (w:background) per ECMA-376 Part 1 §17.2.1
    * The w:background element appears as a child of w:document, before w:body
    */
-  private parseDocumentBackground(
-    docXml: string
-  ): { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } | undefined {
-    const bgMatch = /<w:background([^>]*?)\/>/.exec(docXml);
-    if (!bgMatch?.[1]) return undefined;
+  private parseDocumentBackground(docXml: string):
+    | {
+        color?: string;
+        themeColor?: string;
+        themeTint?: string;
+        themeShade?: string;
+        rawInnerXml?: string;
+      }
+    | undefined {
+    // Match both the self-closing form (flat-color backgrounds) and the
+    // expanded form: Word emits <w:background ...><v:background>...</v:background>
+    // </w:background> for picture/gradient/texture page backgrounds per
+    // ECMA-376 §17.2.1, and that child fill must survive the round-trip.
+    const bgMatch = /<w:background([^>]*?)(\/>|>)/.exec(docXml);
+    if (!bgMatch) return undefined;
 
-    const attrStr = bgMatch[1];
-    const result: { color?: string; themeColor?: string; themeTint?: string; themeShade?: string } =
-      {};
+    const attrStr = bgMatch[1] ?? '';
+    const result: {
+      color?: string;
+      themeColor?: string;
+      themeTint?: string;
+      themeShade?: string;
+      rawInnerXml?: string;
+    } = {};
+
+    // Expanded form: capture inner content verbatim as a passthrough slot
+    // (VML has no object model here; re-emitted untouched by the generator)
+    if (bgMatch[2] === '>') {
+      const innerStart = bgMatch.index + bgMatch[0].length;
+      const closeIndex = docXml.indexOf('</w:background>', innerStart);
+      if (closeIndex !== -1) {
+        const inner = docXml.substring(innerStart, closeIndex);
+        if (inner.length > 0) {
+          result.rawInnerXml = inner;
+        }
+      }
+    }
 
     const colorMatch = /w:color="([^"]+)"/.exec(attrStr);
     if (colorMatch?.[1]) result.color = colorMatch[1];

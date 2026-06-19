@@ -8,6 +8,7 @@
 
 import { Document } from '../../src/core/Document';
 import { Relationship } from '../../src/core/Relationship';
+import { Header } from '../../src/elements/Header';
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Footnote, FootnoteType } from '../../src/elements/Footnote';
 import { Endnote, EndnoteType } from '../../src/elements/Endnote';
@@ -227,5 +228,58 @@ describe('Hyperlink Relationship Preservation', () => {
     // Truly orphaned relationship removed
     expect(relsXml).not.toContain('rId999');
     expect(relsXml).not.toContain('https://example.com/orphaned');
+  });
+
+  it('should not remove a colliding main rels entry for a loaded header hyperlink', async () => {
+    // Per OPC, relationship IDs are part-scoped: rId1 in header1.xml.rels is
+    // independent of rId1 in document.xml.rels (typically styles/settings).
+    const doc1 = Document.create();
+    const header = Header.createDefault();
+    header.createParagraph('Placeholder');
+    doc1.setHeader(header);
+    doc1.createParagraph('Body');
+    const created = await doc1.toBuffer();
+    doc1.dispose();
+
+    // Inject a header hyperlink whose part-scoped ID is rId1
+    const zip1 = new ZipHandler();
+    await zip1.loadFromBuffer(created);
+    zip1.updateFile(
+      'word/header1.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+        '<w:p><w:hyperlink r:id="rId1"><w:r><w:t>Header Link</w:t></w:r></w:hyperlink></w:p>' +
+        '</w:hdr>'
+    );
+    zip1.addFile(
+      'word/_rels/header1.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        `<Relationship Id="rId1" Type="${HYPERLINK_REL_TYPE}" Target="https://example.com/header-link" TargetMode="External"/>` +
+        '</Relationships>'
+    );
+    const input = await zip1.toBuffer();
+
+    const mainRelsBefore = zip1.getFileAsString('word/_rels/document.xml.rels')!;
+    const rId1Before = /<Relationship[^>]*Id="rId1"[^>]*\/>/.exec(mainRelsBefore)![0];
+    expect(rId1Before).not.toContain(HYPERLINK_REL_TYPE);
+
+    const doc2 = await Document.loadFromBuffer(input);
+    let saved: Buffer;
+    try {
+      saved = await doc2.toBuffer();
+    } finally {
+      doc2.dispose();
+    }
+
+    const zip2 = new ZipHandler();
+    await zip2.loadFromBuffer(saved);
+    // The unrelated main entry sharing the ID survives the round trip
+    const mainRelsAfter = zip2.getFileAsString('word/_rels/document.xml.rels')!;
+    expect(mainRelsAfter).toContain(rId1Before);
+    // The header hyperlink stays in the part-scoped rels
+    const headerRels = zip2.getFileAsString('word/_rels/header1.xml.rels');
+    expect(headerRels).toContain('https://example.com/header-link');
   });
 });

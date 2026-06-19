@@ -131,6 +131,24 @@ describe('Paragraph.replaceTextCrossRun()', () => {
       expect(helloRun).toBeDefined();
     });
 
+    it('preserves formatting of the partially-consumed trailing run', () => {
+      const para = new Paragraph();
+      para.addRun(new Run('Hello {{na'));
+      para.addRun(new Run('me}}, your balance is ', { bold: true, color: 'FF0000' }));
+
+      const count = para.replaceTextCrossRun('{{name}}', 'Alice');
+
+      expect(count).toBe(1);
+      expect(para.getText()).toBe('Hello Alice, your balance is ');
+
+      const runs = para.getRuns();
+      expect(runs).toHaveLength(2);
+      expect(runs[0]!.getText()).toBe('Hello Alice');
+      expect(runs[1]!.getText()).toBe(', your balance is ');
+      expect(runs[1]!.getFormatting().bold).toBe(true);
+      expect(runs[1]!.getFormatting().color).toBe('FF0000');
+    });
+
     it('preserves non-affected runs', () => {
       const para = new Paragraph();
       para.addRun(new Run('Before ', { italic: true }));

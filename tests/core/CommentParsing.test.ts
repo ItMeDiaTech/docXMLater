@@ -149,14 +149,30 @@ describe('Comment Parsing', () => {
       doc.getCommentManager().register(comment);
 
       const buffer = await doc.toBuffer();
+
+      // Run formatting must survive serialization into comments.xml
+      const zip = new ZipHandler();
+      await zip.loadFromBuffer(buffer);
+      const commentsXml = zip.getFileAsString('word/comments.xml')!;
+      expect(commentsXml).toMatch(/<w:b(?: w:val="(?:1|true|on)")?\/>/);
+      expect(commentsXml).toMatch(/<w:i(?: w:val="(?:1|true|on)")?\/>/);
+
       const loadedDoc = await Document.loadFromBuffer(buffer);
 
       const loadedComments = loadedDoc.getAllComments();
       expect(loadedComments).toHaveLength(1);
 
       // Comment content should be preserved
-      const content = loadedComments[0]?.getContent();
-      expect(content).toBeDefined();
+      expect(loadedComments[0]?.getContent()).toBe('Bold text and italic text');
+
+      // ...and so should the per-run formatting after reload
+      const loadedRuns = loadedComments[0]!.getRuns();
+      const boldRun = loadedRuns.find((r) => r.getText() === 'Bold text');
+      const plainRun = loadedRuns.find((r) => r.getText() === ' and ');
+      const italicRun = loadedRuns.find((r) => r.getText() === 'italic text');
+      expect(boldRun?.getFormatting().bold).toBe(true);
+      expect(plainRun?.getFormatting().bold).toBeUndefined();
+      expect(italicRun?.getFormatting().italic).toBe(true);
     });
 
     it('should handle empty comments', async () => {
@@ -445,10 +461,11 @@ describe('Comment Parsing', () => {
     });
 
     it('should clean up comments.xml and companions when all comments are removed', async () => {
-      // Create a document with comments
+      // Create a document with a comment anchored to a paragraph
       const doc = Document.create();
-      doc.createParagraph('Text with a comment');
-      doc.createComment('Author', 'Comment text');
+      const para = doc.createParagraph('Text with a comment');
+      const comment = doc.createComment('Author', 'Comment text');
+      para.addComment(comment);
       const buffer1 = await doc.toBuffer();
       doc.dispose();
 
@@ -491,6 +508,12 @@ describe('Comment Parsing', () => {
       // Verify no orphaned comments relationship in rels
       const relsXml = zip2.getFileAsString('word/_rels/document.xml.rels')!;
       expect(relsXml).not.toContain('/relationships/comments');
+
+      // Verify no dangling comment anchors remain in the body
+      const docXml = zip2.getFileAsString('word/document.xml')!;
+      expect(docXml).not.toContain('w:commentRangeStart');
+      expect(docXml).not.toContain('w:commentRangeEnd');
+      expect(docXml).not.toContain('w:commentReference');
     });
 
     it('should preserve Content_Types entries for companion files on passthrough', async () => {

@@ -542,6 +542,10 @@ export class NumberingManager {
     numLevel.setLeftIndent(leftIndent);
     numLevel.setHangingIndent(hangingIndent);
 
+    // NumberingLevel setters don't notify the manager; without this flag the
+    // save pipeline preserves the original numbering.xml and drops the change
+    this.markAbstractNumberingModified(instance.getAbstractNumId());
+
     return true;
   }
 
@@ -584,6 +588,10 @@ export class NumberingManager {
       level.setLeftIndent(standardIndent.leftIndent);
       level.setHangingIndent(standardIndent.hangingIndent);
     }
+
+    // NumberingLevel setters don't notify the manager; without this flag the
+    // save pipeline preserves the original numbering.xml and drops the change
+    this.markAbstractNumberingModified(instance.getAbstractNumId());
 
     return true;
   }
@@ -708,8 +716,10 @@ export class NumberingManager {
    * For each group with >1 member, picks the lowest abstractNumId as canonical,
    * remaps all instances pointing to non-canonical IDs, and removes duplicates.
    *
-   * This is safe because multiple num instances can reference the same abstractNum —
-   * each instance maintains its own independent counter via level overrides.
+   * Numbering counters belong to the abstract numbering definition: instances
+   * sharing an abstractNum continue one sequence in document order unless a
+   * startOverride restarts them (ECMA-376 §17.9.27). Remapped instances get a
+   * startOverride per counted level so each list keeps its independent restart.
    *
    * @param options Optional configuration (e.g., protected IDs to skip)
    * @returns Summary of what was consolidated
@@ -748,9 +758,23 @@ export class NumberingManager {
       groupsConsolidated++;
 
       // Remap instances pointing to duplicate abstractNums
+      const canonicalAbstract = this.abstractNumberings.get(canonicalId);
       for (const instance of this.instances.values()) {
         if (duplicateIds.has(instance.getAbstractNumId())) {
           instance.setAbstractNumId(canonicalId);
+
+          // Counters live on the abstractNum, so without a startOverride the
+          // remapped list would continue the canonical sequence instead of
+          // restarting — bullets carry no counter and are skipped
+          if (canonicalAbstract) {
+            for (const level of canonicalAbstract.getAllLevels()) {
+              const levelIndex = level.getLevel();
+              if (level.getFormat() === 'bullet') continue;
+              if (instance.getLevelOverride(levelIndex) !== undefined) continue;
+              instance.setLevelOverride(levelIndex, level.getProperties().start);
+            }
+          }
+
           this._modifiedNumIds.add(instance.getNumId());
           instancesRemapped++;
         }
@@ -785,11 +809,16 @@ export class NumberingManager {
 
     for (const level of abstractNum.getAllLevels()) {
       const props = level.getProperties();
+      // pStyle, lvlPicBulletId, and legacy all affect rendering (style-to-level
+      // linkage, picture bullet image, legacy indentation), so definitions
+      // differing on any of them must not be treated as duplicates
       parts.push(
         `${props.level}|${props.format}|${props.text}|${props.font}|${props.fontSize}|` +
           `${props.color}|${props.leftIndent}|${props.hangingIndent}|${props.alignment}|` +
           `${props.start}|${props.bold}|${props.italic}|${props.underline ?? ''}|` +
-          `${props.suffix}|${props.isLegalNumberingStyle}|${props.lvlRestart ?? ''}`
+          `${props.suffix}|${props.isLegalNumberingStyle}|${props.lvlRestart ?? ''}|` +
+          `${props.pStyle ?? ''}|${props.lvlPicBulletId ?? ''}|` +
+          `${JSON.stringify(props.legacy ?? null)}`
       );
     }
 

@@ -265,18 +265,23 @@ describe('Word Compatibility - Track Changes', () => {
       expect(destEndXml.name).toBe('w:moveToRangeEnd');
     });
 
-    it('should include moveId attribute in move revisions', () => {
+    it('should omit moveId from move revision XML and pair via range marker names', () => {
       const moveOp = MoveOperationHelper.createMoveOperation({
         author: 'Author',
         content: new Run('text'),
         moveId: 'move-123',
       });
 
+      // CT_RunTrackChange declares no w:moveId attribute
       const moveFromXml = moveOp.source.moveFrom.toXML();
-      expect(moveFromXml!.attributes?.['w:moveId']).toBe('move-123');
+      expect(moveFromXml!.attributes?.['w:moveId']).toBeUndefined();
 
       const moveToXml = moveOp.destination.moveTo.toXML();
-      expect(moveToXml!.attributes?.['w:moveId']).toBe('move-123');
+      expect(moveToXml!.attributes?.['w:moveId']).toBeUndefined();
+
+      // On-disk pairing uses w:name on the move range start markers
+      expect(moveOp.source.rangeStart.toXML().attributes?.['w:name']).toBe('move-123');
+      expect(moveOp.destination.rangeStart.toXML().attributes?.['w:name']).toBe('move-123');
     });
   });
 

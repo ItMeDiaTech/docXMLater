@@ -247,11 +247,10 @@ export class TableOfContents {
 
     // Add specific styles switch OR heading levels switch
     if (this.includeStyles && this.includeStyles.length > 0) {
-      // Use \t switch to specify exact styles
-      // Format: \t "StyleName,Level," for each style
-      for (const style of this.includeStyles) {
-        instruction += ` \\t "${style.styleName},${style.level},"`;
-      }
+      // Per ECMA-376 §17.16.5.68, \t takes a single field-argument with all
+      // StyleName,Level doublets — Word honors only one \t instance
+      const doublets = this.includeStyles.map((s) => `${s.styleName},${s.level}`).join(',');
+      instruction += ` \\t "${doublets}"`;
     } else {
       // Use \o switch for heading levels
       instruction += ` \\o "1-${this.levels}"`;
@@ -273,11 +272,13 @@ export class TableOfContents {
     }
 
     // Add tab leader switch
-    if (this.tabLeader !== 'dot') {
+    // Per ECMA-376 §17.16.5.68, \p takes the literal separator character(s)
+    // between entry and page number, not an ST_TabTlc letter code.
+    // 'none' omits the switch so Word uses its default separator.
+    if (this.tabLeader !== 'dot' && this.tabLeader !== 'none') {
       const leaderMap = {
-        hyphen: 'h',
-        underscore: 'u',
-        none: 'n',
+        hyphen: '-',
+        underscore: '_',
       };
       instruction += ` \\p "${leaderMap[this.tabLeader]}"`;
     }

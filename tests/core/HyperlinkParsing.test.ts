@@ -1363,9 +1363,10 @@ describe('Hyperlinks in Tables (processHyperlinks fix)', () => {
       // Get all hyperlinks from the document
       const hyperlinks = doc2.getHyperlinks();
 
-      // Should have 4 hyperlinks - one in each cell
-      // Note: getHyperlinks() returns all hyperlinks in the document
-      expect(hyperlinks.length).toBeGreaterThanOrEqual(4);
+      // Should have exactly 4 hyperlinks - one in each cell.
+      // getAllParagraphs() already walks table-cell paragraphs, so no entry
+      // is double-counted.
+      expect(hyperlinks.length).toBe(4);
 
       // Verify we can find each hyperlink by text (getHyperlinks returns { hyperlink, paragraph })
       const link1 = hyperlinks.find((h) => h.hyperlink.getText() === 'Link 1');

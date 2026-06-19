@@ -153,6 +153,45 @@ describe('Footnote/Endnote Save Pipeline', () => {
       doc3.dispose();
     });
 
+    it('should preserve footnote pStyle and hyperlink wrappers on plain load->save', async () => {
+      // Build a doc whose footnotes.xml carries a paragraph style and a
+      // w:hyperlink wrapper — both must survive an unmodified round-trip
+      const doc = Document.create();
+      doc.createParagraph('Body text');
+      const baseBuffer = await doc.toBuffer();
+      doc.dispose();
+
+      const JSZip = require('jszip');
+      const zip = await JSZip.loadAsync(baseBuffer);
+      const footnotesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>
+  <w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>
+  <w:footnote w:id="1"><w:p><w:pPr><w:pStyle w:val="FootnoteText"/></w:pPr><w:r><w:footnoteRef/></w:r><w:hyperlink r:id="rId100"><w:r><w:t>link text</w:t></w:r></w:hyperlink></w:p></w:footnote>
+</w:footnotes>`;
+      zip.file('word/footnotes.xml', footnotesXml);
+      zip.file(
+        'word/_rels/footnotes.xml.rels',
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId100" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/" TargetMode="External"/>
+</Relationships>`
+      );
+      const fixtureBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      const doc2 = await Document.loadFromBuffer(fixtureBuffer);
+      const outBuffer = await doc2.toBuffer();
+      doc2.dispose();
+
+      const outZip = new ZipHandler();
+      await outZip.loadFromBuffer(outBuffer);
+      const outFootnotes = outZip.getFileAsString('word/footnotes.xml');
+      expect(outFootnotes).toBeDefined();
+      expect(outFootnotes).toContain('<w:pStyle w:val="FootnoteText"/>');
+      expect(outFootnotes).toContain('<w:hyperlink r:id="rId100">');
+      expect(outFootnotes).toContain('link text');
+    });
+
     it('should not create duplicate footnotes relationships on round-trip', async () => {
       const doc = Document.create();
       doc.createParagraph('Text');

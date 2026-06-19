@@ -251,6 +251,32 @@ export class TableRow {
   }
 
   /**
+   * Replaces the cell at the specified index in the row's live cell array.
+   * getCells() returns a defensive copy, so callers cannot persist a
+   * replacement by writing into that copy — this is the write-through path.
+   * @param index - Position to replace (0-based)
+   * @returns The replaced cell, or undefined if index is out of bounds
+   */
+  setCellAt(index: number, cell: TableCell): TableCell | undefined {
+    if (index < 0 || index >= this.cells.length) return undefined;
+    const previous = this.cells[index];
+    this.cells[index] = cell;
+    cell._setParentRow(this);
+    // During a swap the outgoing cell may already have been re-homed to
+    // another row (or re-inserted elsewhere in this row) — only orphan it
+    // when it genuinely left the table.
+    if (
+      previous &&
+      previous !== cell &&
+      previous._getParentRow() === this &&
+      !this.cells.includes(previous)
+    ) {
+      previous._setParentRow(undefined);
+    }
+    return previous;
+  }
+
+  /**
    * Removes and returns the cell at the specified index
    * @param index - Position to remove (0-based)
    * @returns The removed cell, or undefined if index is out of bounds
@@ -283,9 +309,14 @@ export class TableRow {
    * Calculates the total grid span of the row (considering column spans)
    *
    * For tables with merged cells, this returns the number of logical columns
-   * this row spans based on the columnSpan values of each cell.
+   * this row spans based on the columnSpan values of each cell. Per ECMA-376
+   * §17.4.14/§17.4.15, w:gridBefore/w:gridAfter consume grid columns before
+   * the first and after the last cell, so they count toward the row's grid
+   * footprint — otherwise auto-generated w:tblGrid would declare fewer
+   * columns than offset rows actually occupy.
    *
-   * @returns Total grid span (sum of all cell spans, where unspanned cells count as 1)
+   * @returns Total grid span (gridBefore + sum of all cell spans + gridAfter,
+   *   where unspanned cells count as 1)
    *
    * @example
    * ```typescript
@@ -298,11 +329,12 @@ export class TableRow {
    * ```
    */
   getTotalGridSpan(): number {
-    let totalSpan = 0;
+    let totalSpan = this.formatting.gridBefore ?? 0;
     for (const cell of this.cells) {
       const formatting = cell.getFormatting();
       totalSpan += formatting.columnSpan || 1;
     }
+    totalSpan += this.formatting.gridAfter ?? 0;
     return totalSpan;
   }
 

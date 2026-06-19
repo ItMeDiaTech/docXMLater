@@ -66,6 +66,13 @@ export interface HyperlinkProperties {
   text?: string;
   /** Text formatting */
   formatting?: RunFormatting;
+  /**
+   * Use the supplied formatting exactly as given instead of layering it over
+   * the default hyperlink styling. Set when the formatting comes from parsed
+   * XML, so load→save does not inject direct formatting that overrides the
+   * document's Hyperlink character style.
+   */
+  preserveFormatting?: boolean;
   /** Tooltip text */
   tooltip?: string;
   /** Relationship ID (set by Document when saving) */
@@ -87,7 +94,12 @@ export class Hyperlink {
   private url?: string;
   private anchor?: string;
   private text: string;
-  private run: Run;
+  /**
+   * Display-text runs. Word splits hyperlink text into multiple runs when
+   * formatting varies mid-link, so a single-run model would drop per-run
+   * formatting on round-trip. Always holds at least one run.
+   */
+  private runs: Run[];
   private tooltip?: string;
   private relationshipId?: string;
   private formatting: RunFormatting;
@@ -137,7 +149,7 @@ export class Hyperlink {
     if (this._isEmpty) {
       this.text = '';
       this.formatting = {};
-      this.run = new Run('', {});
+      this.runs = [new Run('', {})];
       return;
     }
 
@@ -159,16 +171,22 @@ export class Hyperlink {
       this.text = validation.cleanedText;
     }
 
-    // Create run with default hyperlink styling (Verdana 12pt blue underlined)
-    this.formatting = {
-      font: 'Verdana',
-      size: 12,
-      color: '0000FF', // Standard hyperlink blue
-      underline: 'single',
-      ...properties.formatting,
-    };
+    // Default hyperlink styling (Verdana 12pt blue underlined) is for
+    // programmatically created links. Parsed links must keep exactly the
+    // formatting found in the source XML — merging these defaults underneath
+    // would add direct formatting that overrides the document's Hyperlink
+    // character style on round-trip.
+    this.formatting = properties.preserveFormatting
+      ? { ...properties.formatting }
+      : {
+          font: 'Verdana',
+          size: 12,
+          color: '0000FF', // Standard hyperlink blue
+          underline: 'single',
+          ...properties.formatting,
+        };
 
-    this.run = new Run(this.text, this.formatting);
+    this.runs = [new Run(this.text, this.formatting)];
   }
 
   /**
@@ -239,7 +257,7 @@ export class Hyperlink {
     const revisionId = this.trackingContext!.getRevisionManager().consumeNextId();
     const author = this.trackingContext!.getAuthor();
 
-    this.run.setPropertyChangeRevision({
+    this.runs[0]!.setPropertyChangeRevision({
       id: revisionId,
       author,
       date: new Date(),
@@ -357,14 +375,26 @@ export class Hyperlink {
   /**
    * Gets the display text
    *
-   * This method delegates to the internal run to ensure the returned text
+   * This method delegates to the internal runs to ensure the returned text
    * is always accurate and matches what will be in the generated XML,
-   * per ECMA-376 Part 1 §17.16.22.
+   * per ECMA-376 Part 1 §17.16.22. Multi-run hyperlinks concatenate the
+   * text of every run in document order.
    *
    * @returns The display text including any special characters (tabs, breaks, etc.)
    */
   getText(): string {
-    return this.run.getText();
+    return this.runs.map((run) => run.getText()).join('');
+  }
+
+  /**
+   * Replaces the display text. Collapses to a single run (keeping the first
+   * run's formatting) because the caller-supplied text supersedes any
+   * per-run split the source document had.
+   */
+  private replaceRunText(text: string): void {
+    const first = this.runs[0]!;
+    first.setText(text);
+    this.runs = [first];
   }
 
   /**
@@ -379,10 +409,17 @@ export class Hyperlink {
       warnToConsole: true,
     });
 
-    // Use cleaned text if available
-    const cleanedText = validation.cleanedText || text;
+    // Use cleaned text if available.
+    // `??` (not `||`) so a cleaned result of '' (input that was entirely XML
+    // markup) is kept rather than falling back to the original markup-laden text.
+    const cleanedText = validation.cleanedText ?? text;
 
     const previousValue = this.text;
+
+    // Assigning display text clears the empty/invisible flag — otherwise
+    // toXML() would keep emitting a childless w:hyperlink and silently drop
+    // the text that was just set.
+    this._isEmpty = false;
 
     // Skip if text unchanged
     if (previousValue === cleanedText) {
@@ -398,7 +435,7 @@ export class Hyperlink {
 
       // Apply the change to this hyperlink
       this.text = cleanedText;
-      this.run.setText(cleanedText);
+      this.replaceRunText(cleanedText);
 
       // Create delete/insert revision pair
       const deletion = Revision.createDeletion(author, [oldHyperlink]);
@@ -418,7 +455,7 @@ export class Hyperlink {
 
     // Non-tracking path (original behavior)
     this.text = cleanedText;
-    this.run.setText(cleanedText);
+    this.replaceRunText(cleanedText);
     return this;
   }
 
@@ -428,9 +465,33 @@ export class Hyperlink {
    * @param run - The run to use for this hyperlink
    */
   setRun(run: Run): this {
-    this.run = run;
+    this.runs = [run];
     this.text = run.getText();
     return this;
+  }
+
+  /**
+   * Replaces all runs of this hyperlink (multi-run display text)
+   * Used by DocumentParser when a w:hyperlink holds multiple w:r children —
+   * Word splits the display text into one run per formatting change, and
+   * each run must keep its own rPr for round-trip fidelity.
+   * @param runs - Runs in document order (ignored if empty)
+   */
+  setRuns(runs: Run[]): this {
+    if (runs.length === 0) {
+      return this;
+    }
+    this.runs = [...runs];
+    this.text = this.getText();
+    return this;
+  }
+
+  /**
+   * Gets all runs carrying the display text
+   * Single-run hyperlinks return a one-element array.
+   */
+  getRuns(): Run[] {
+    return [...this.runs];
   }
 
   /**
@@ -524,7 +585,7 @@ export class Hyperlink {
     // Validate that clearing URL doesn't create empty hyperlink
     if (!url && !this.anchor) {
       throw new Error(
-        `Cannot set URL to undefined: Hyperlink "${this.run.getText()}" has no anchor. ` +
+        `Cannot set URL to undefined: Hyperlink "${this.getText()}" has no anchor. ` +
           `Clearing the URL would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
           `Either provide a new URL or delete the hyperlink entirely.`
       );
@@ -549,9 +610,9 @@ export class Hyperlink {
       // Apply the change to this hyperlink
       this.url = url;
       this.relationshipId = undefined;
-      if (this.run.getText() === oldUrl) {
+      if (this.getText() === oldUrl) {
         this.text = url || this.anchor || 'Link';
-        this.run.setText(this.text);
+        this.replaceRunText(this.text);
       }
 
       // Create delete/insert revision pair
@@ -576,10 +637,10 @@ export class Hyperlink {
 
     // Update text ONLY if it was auto-generated from the old URL
     // This preserves user-provided text (even if it's "Link")
-    // Use run.getText() to ensure we check the actual current text, not stale cache
-    if (this.run.getText() === oldUrl) {
+    // Use getText() to ensure we check the actual current text, not stale cache
+    if (this.getText() === oldUrl) {
       this.text = url || this.anchor || 'Link';
-      this.run.setText(this.text);
+      this.replaceRunText(this.text);
     }
 
     return this;
@@ -600,7 +661,7 @@ export class Hyperlink {
     // Validate that clearing anchor doesn't create empty hyperlink
     if (!anchor && !this.url) {
       throw new Error(
-        `Cannot set anchor to undefined: Hyperlink "${this.run.getText()}" has no URL. ` +
+        `Cannot set anchor to undefined: Hyperlink "${this.getText()}" has no URL. ` +
           `Clearing the anchor would create an invalid hyperlink per ECMA-376 §17.16.22. ` +
           `Either provide a new anchor or delete the hyperlink entirely.`
       );
@@ -632,9 +693,9 @@ export class Hyperlink {
         this.url = undefined;
         this.relationshipId = undefined;
       }
-      if (this.run.getText() === oldAnchor) {
+      if (this.getText() === oldAnchor) {
         this.text = anchor || this.url || 'Link';
-        this.run.setText(this.text);
+        this.replaceRunText(this.text);
       }
 
       // Create delete/insert revision pair
@@ -664,10 +725,10 @@ export class Hyperlink {
     }
 
     // Update text ONLY if it was auto-generated from the old anchor
-    // Use run.getText() to ensure we check the actual current text, not stale cache
-    if (this.run.getText() === oldAnchor) {
+    // Use getText() to ensure we check the actual current text, not stale cache
+    if (this.getText() === oldAnchor) {
       this.text = anchor || this.url || 'Link';
-      this.run.setText(this.text);
+      this.replaceRunText(this.text);
     }
 
     return this;
@@ -675,9 +736,10 @@ export class Hyperlink {
 
   /**
    * Gets the run
+   * Multi-run hyperlinks return the first run — use getRuns() for all of them.
    */
   getRun(): Run {
-    return this.run;
+    return this.runs[0]!;
   }
 
   /**
@@ -707,14 +769,32 @@ export class Hyperlink {
       // Merge mode (default, backwards-compatible): merge with existing
       this.formatting = { ...this.formatting, ...formatting };
     }
-    // Create new run with updated formatting, preserving current text
-    const currentText = this.run.getText();
-    this.run = new Run(currentText, this.formatting);
-    this.text = currentText; // Keep cache in sync
+    // Rebuild every run, layering the patch over each run's own rPr so
+    // multi-run links keep per-run distinctions the caller did not touch.
+    // Replace mode discards per-run rPr by design.
+    this.runs = this.runs.map((run) =>
+      Run.createFromContent(
+        run.getContent(),
+        options?.replace ? { ...formatting } : { ...run.getFormatting(), ...formatting }
+      )
+    );
+    this.text = this.getText(); // Keep cache in sync
     if (this.trackingContext?.isEnabled()) {
       this._applyFormattingRPrChange(previousFormatting);
     }
     return this;
+  }
+
+  /**
+   * Layers a formatting patch over every display-text run. Content is
+   * rebuilt via Run.createFromContent so tabs/breaks survive, and each
+   * run keeps its other rPr values — stamping the hyperlink-level
+   * formatting over them would erase per-run formatting in multi-run links.
+   */
+  private patchRunFormatting(patch: RunFormatting): void {
+    this.runs = this.runs.map((run) =>
+      Run.createFromContent(run.getContent(), { ...run.getFormatting(), ...patch })
+    );
   }
 
   /**
@@ -798,7 +878,7 @@ export class Hyperlink {
   setColor(color: string): this {
     const previousFormatting = { ...this.formatting };
     this.formatting.color = color;
-    this.run = new Run(this.text, this.formatting);
+    this.patchRunFormatting({ color });
     if (this.trackingContext?.isEnabled() && previousFormatting.color !== color) {
       this._applyFormattingRPrChange(previousFormatting);
     }
@@ -813,7 +893,7 @@ export class Hyperlink {
   setUnderline(underline: boolean | 'single' | 'double' | 'dotted' | 'thick' | 'dash'): this {
     const previousFormatting = { ...this.formatting };
     this.formatting.underline = underline;
-    this.run = new Run(this.text, this.formatting);
+    this.patchRunFormatting({ underline });
     if (this.trackingContext?.isEnabled() && previousFormatting.underline !== underline) {
       this._applyFormattingRPrChange(previousFormatting);
     }
@@ -828,7 +908,7 @@ export class Hyperlink {
   setBold(bold = true): this {
     const previousFormatting = { ...this.formatting };
     this.formatting.bold = bold;
-    this.run = new Run(this.text, this.formatting);
+    this.patchRunFormatting({ bold });
     if (this.trackingContext?.isEnabled() && previousFormatting.bold !== bold) {
       this._applyFormattingRPrChange(previousFormatting);
     }
@@ -843,7 +923,7 @@ export class Hyperlink {
   setItalic(italic = true): this {
     const previousFormatting = { ...this.formatting };
     this.formatting.italic = italic;
-    this.run = new Run(this.text, this.formatting);
+    this.patchRunFormatting({ italic });
     if (this.trackingContext?.isEnabled() && previousFormatting.italic !== italic) {
       this._applyFormattingRPrChange(previousFormatting);
     }
@@ -858,7 +938,7 @@ export class Hyperlink {
   setFont(font: string): this {
     const previousFormatting = { ...this.formatting };
     this.formatting.font = font;
-    this.run = new Run(this.text, this.formatting);
+    this.patchRunFormatting({ font });
     if (this.trackingContext?.isEnabled() && previousFormatting.font !== font) {
       this._applyFormattingRPrChange(previousFormatting);
     }
@@ -873,7 +953,7 @@ export class Hyperlink {
   setSize(size: number): this {
     const previousFormatting = { ...this.formatting };
     this.formatting.size = size;
-    this.run = new Run(this.text, this.formatting);
+    this.patchRunFormatting({ size });
     if (this.trackingContext?.isEnabled() && previousFormatting.size !== size) {
       this._applyFormattingRPrChange(previousFormatting);
     }
@@ -1007,8 +1087,13 @@ export class Hyperlink {
       }
 
       // Fix 5: Fix common typos
+      // Compare against the value immediately before this replace (not this.url)
+      // so 'Upgraded HTTP to HTTPS' is reported only when the http→https
+      // rewrite actually fired — an earlier fix (space encoding, double-slash
+      // collapse) on an already-https URL must not trigger this message.
+      const beforeUpgrade = fixedUrl;
       fixedUrl = fixedUrl.replace(/^http:\/\//i, 'https://'); // Prefer HTTPS
-      if (fixedUrl !== this.url && fixedUrl.startsWith('https://')) {
+      if (fixedUrl !== beforeUpgrade) {
         fixed.push('Upgraded HTTP to HTTPS');
       }
 
@@ -1134,21 +1219,32 @@ export class Hyperlink {
       tooltip: this.tooltip,
       relationshipId: this.relationshipId,
       formatting: { ...this.formatting },
+      // this.formatting is already fully resolved — re-merging constructor
+      // defaults would resurrect styling the original no longer carries
+      preserveFormatting: true,
       tgtFrame: this.tgtFrame,
       history: this.history,
       docLocation: this.docLocation,
+      // Carry the empty/invisible flag so a clone of a self-closing hyperlink
+      // serializes self-closing too (matters for the deletion half of tracked
+      // changes, which snapshots the source via clone()).
+      isEmpty: this._isEmpty,
     });
 
-    // Copy the run with its formatting
-    if (this.run) {
-      cloned.run = new Run(this.run.getText(), { ...this.run.getFormatting() });
+    // Copy every run with its content and formatting (multi-run links keep
+    // one cloned run per source run)
+    cloned.runs = this.runs.map((run) => {
+      const copy = run.clone();
 
       // Preserve rPrChange from the original run (formatting tracked changes)
-      const existingRPrChange = this.run.getPropertyChangeRevision();
+      // — Run.clone() copies content/formatting but not the revision
+      const existingRPrChange = run.getPropertyChangeRevision();
       if (existingRPrChange) {
-        cloned.run.setPropertyChangeRevision({ ...existingRPrChange });
+        copy.setPropertyChangeRevision({ ...existingRPrChange });
       }
-    }
+      return copy;
+    });
+    cloned.text = cloned.getText();
 
     return cloned;
   }
@@ -1231,13 +1327,12 @@ export class Hyperlink {
       };
     }
 
-    // Generate run XML
-    const runXml = this.run.toXML();
-
+    // One <w:r> child per run, each with its own <w:rPr> — collapsing to a
+    // single run would drop per-run formatting in multi-run display text
     return {
       name: 'w:hyperlink',
       attributes,
-      children: [runXml],
+      children: this.runs.map((run) => run.toXML()),
     };
   }
 

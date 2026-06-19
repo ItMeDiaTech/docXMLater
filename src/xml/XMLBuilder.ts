@@ -162,9 +162,12 @@ export class XMLBuilder {
     // Add attributes
     if (element.attributes) {
       for (const [key, value] of Object.entries(element.attributes)) {
-        if (value !== undefined && value !== null && value !== false) {
-          // Handle boolean attributes
-          const attrValue = value === true ? key : String(value);
+        if (value !== undefined && value !== null) {
+          // Booleans serialize as ST_OnOff literals (ECMA-376 §22.9.2.13).
+          // Explicit false must emit "0" — dropping it would flip an explicit
+          // override to inherited/on under CT_OnOff presence semantics.
+          // Callers signal absence with undefined, never false.
+          const attrValue = value === true ? '1' : value === false ? '0' : String(value);
           // Use escapeXmlAttribute for attribute values (Issue #8)
           xml += ` ${key}="${XMLBuilder.escapeXmlAttribute(attrValue)}"`;
         }
@@ -245,18 +248,47 @@ export class XMLBuilder {
       .replace(/'/g, '&apos;');
   }
 
+  /** The five predefined XML 1.0 named entities */
+  private static readonly NAMED_ENTITIES: Record<string, string> = {
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    amp: '&',
+  };
+
   /**
    * Unescapes XML entities back to original characters
+   * Decodes the five predefined named entities plus numeric character
+   * references (&#8217; / &#xA0;), which XML 1.0 §4.1 requires every
+   * conforming processor to expand — third-party producers emit them, and
+   * leaving them raw double-escapes the ampersand on save.
    * @param text Text with XML entities
    * @returns Unescaped text
    */
   static unescapeXml(text: string): string {
-    return text
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&amp;/g, '&'); // Must be last to avoid double-unescaping
+    // Single pass so text produced by one decode is never re-decoded by a
+    // later one (e.g. '&#38;amp;' must yield '&amp;', not '&').
+    return text.replace(
+      /&(?:(lt|gt|quot|apos|amp)|#x([0-9A-Fa-f]+)|#(\d+));/g,
+      (match, named?: string, hex?: string, dec?: string) => {
+        if (named !== undefined) {
+          return XMLBuilder.NAMED_ENTITIES[named] ?? match;
+        }
+        const code = hex !== undefined ? parseInt(hex, 16) : Number(dec);
+        // Code points outside the XML 1.0 Char production (NUL, surrogates,
+        // beyond U+10FFFF) would make the decoded string unserializable —
+        // keep the raw reference instead of injecting an invalid character.
+        const isXmlChar =
+          code === 0x9 ||
+          code === 0xa ||
+          code === 0xd ||
+          (code >= 0x20 && code <= 0xd7ff) ||
+          (code >= 0xe000 && code <= 0xfffd) ||
+          (code >= 0x10000 && code <= 0x10ffff);
+        return isXmlChar ? String.fromCodePoint(code) : match;
+      }
+    );
   }
 
   /**
@@ -633,11 +665,7 @@ export class XMLBuilder {
     const builder = new XMLBuilder();
     const element = XMLBuilder.objectToElement(obj, rootName);
     if (element) {
-      if (typeof element === 'string') {
-        builder.text(element);
-      } else {
-        builder.elements.push(element);
-      }
+      builder.elements.push(element);
     }
     return builder.build();
   }
@@ -649,21 +677,20 @@ export class XMLBuilder {
   private static objectToElement(
     obj: ParsedXmlObject | string | number | boolean | null | undefined,
     name: string
-  ): XMLElement | string | null {
+  ): XMLElement | null {
     if (obj === null || obj === undefined) {
       return null;
     }
 
-    if (typeof obj !== 'object' || obj === null) {
-      return String(obj);
+    if (typeof obj !== 'object') {
+      // The parser collapses text-only elements to their primitive value, so
+      // the wrapping tag must be re-emitted here — bare text inside container
+      // elements (e.g. w:r) is invalid WordprocessingML.
+      return { name, children: [String(obj)] };
     }
 
     const attributes: Record<string, string | number | boolean> = {};
     const children: (XMLElement | string)[] = [];
-
-    if (obj['#text'] && Object.keys(obj).length === 1) {
-      return String(obj['#text']);
-    }
 
     for (const key in obj) {
       if (key.startsWith('@_')) {
@@ -674,7 +701,40 @@ export class XMLBuilder {
         }
       } else if (key === '#text') {
         children.push(String(obj[key]));
-      } else {
+      }
+    }
+
+    // _orderedChildren is parser metadata, never document content. When
+    // present, it restores the original interleaving of same-named siblings
+    // (e.g. w:t / w:tab / w:t in a run) that the keyed object form loses.
+    const orderedChildren = obj['_orderedChildren'] as
+      | { type: string; index: number }[]
+      | undefined;
+
+    if (orderedChildren && orderedChildren.length > 0) {
+      for (const childInfo of orderedChildren) {
+        const childValue = obj[childInfo.type];
+        if (childValue === undefined) {
+          continue;
+        }
+        const item = Array.isArray(childValue)
+          ? childValue[childInfo.index]
+          : childInfo.index === 0
+            ? childValue
+            : undefined;
+        if (item === undefined) {
+          continue;
+        }
+        const childElement = XMLBuilder.objectToElement(item, childInfo.type);
+        if (childElement) {
+          children.push(childElement);
+        }
+      }
+    } else {
+      for (const key in obj) {
+        if (key.startsWith('@_') || key === '#text' || key === '_orderedChildren') {
+          continue;
+        }
         const childObj = obj[key];
         if (Array.isArray(childObj)) {
           childObj.forEach((item) => {

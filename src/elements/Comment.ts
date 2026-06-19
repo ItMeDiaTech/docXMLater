@@ -10,6 +10,34 @@ import { XMLElement } from '../xml/XMLBuilder.js';
 import { formatDateForXml } from '../utils/dateFormatting.js';
 
 /**
+ * Inline comment content preserved as raw XML (e.g. w:hyperlink wrappers
+ * from a parsed comments.xml). The wrapper is re-emitted verbatim on
+ * regeneration so its r:id target survives; the runs parsed from inside
+ * it are kept alongside so text extraction still sees their text.
+ */
+export interface CommentPreservedContent {
+  /** Original XML emitted verbatim when comments.xml is regenerated */
+  rawXml: string;
+  /** Runs parsed from inside the preserved element (text extraction only) */
+  runs: Run[];
+}
+
+/** Ordered item of comment paragraph content */
+export type CommentContentItem = Run | CommentPreservedContent;
+
+/**
+ * One paragraph of comment content. CT_Comment accepts block-level content
+ * (ECMA-376 §17.13.4.2), so comments can span multiple paragraphs, each
+ * with its own paragraph properties (typically the CommentText style).
+ */
+export interface CommentParagraph {
+  /** Raw <w:pPr> XML preserved for round-trip */
+  pPr?: string;
+  /** Paragraph content in document order */
+  content: CommentContentItem[];
+}
+
+/**
  * Comment properties
  */
 export interface CommentProperties {
@@ -37,9 +65,10 @@ export class Comment {
   private author: string;
   private initials: string;
   private date: Date;
-  private runs: Run[];
+  private paragraphs: CommentParagraph[];
   private parentId?: number;
   private done: boolean;
+  private onModified: (() => void) | null = null;
 
   /**
    * Creates a new Comment
@@ -53,14 +82,16 @@ export class Comment {
     this.parentId = properties.parentId;
     this.done = properties.done ?? false;
 
-    // Convert content to runs
+    // Convert content to runs in a single paragraph
+    let runs: Run[];
     if (typeof properties.content === 'string') {
-      this.runs = [new Run(properties.content)];
+      runs = [new Run(properties.content)];
     } else if (Array.isArray(properties.content)) {
-      this.runs = properties.content;
+      runs = properties.content;
     } else {
-      this.runs = [properties.content];
+      runs = [properties.content];
     }
+    this.paragraphs = [{ content: runs }];
   }
 
   /**
@@ -99,6 +130,23 @@ export class Comment {
   }
 
   /**
+   * Registers a callback invoked whenever this comment is mutated.
+   * Document wires this to its comments dirty flag so edits to parsed
+   * comments trigger regeneration of comments.xml instead of being
+   * silently discarded by the original-XML passthrough on save.
+   * @internal
+   */
+  setModifiedCallback(callback: () => void): void {
+    this.onModified = callback;
+  }
+
+  private notifyModified(): void {
+    if (this.onModified) {
+      this.onModified();
+    }
+  }
+
+  /**
    * Gets the author
    */
   getAuthor(): string {
@@ -110,6 +158,7 @@ export class Comment {
    */
   setAuthor(author: string): this {
     this.author = author;
+    this.notifyModified();
     return this;
   }
 
@@ -125,6 +174,7 @@ export class Comment {
    */
   setInitials(initials: string): this {
     this.initials = initials;
+    this.notifyModified();
     return this;
   }
 
@@ -140,6 +190,7 @@ export class Comment {
    */
   setDate(date: Date): this {
     this.date = date;
+    this.notifyModified();
     return this;
   }
 
@@ -167,42 +218,84 @@ export class Comment {
 
   /**
    * Marks the comment as resolved/done
-   * Sets w:done="1" in the XML output
+   * Persists as w15:done="1" in word/commentsExtended.xml on save
    */
   resolve(): this {
     this.done = true;
+    this.notifyModified();
     return this;
   }
 
   /**
    * Marks the comment as unresolved
-   * Removes w:done attribute from XML output
+   * Drops the w15:done flag from word/commentsExtended.xml on save
    */
   unresolve(): this {
     this.done = false;
+    this.notifyModified();
     return this;
   }
 
   /**
-   * Gets the runs in this comment
+   * Gets the runs in this comment (flattened across paragraphs,
+   * including runs inside preserved inline content)
    */
   getRuns(): Run[] {
-    return [...this.runs];
+    const runs: Run[] = [];
+    for (const paragraph of this.paragraphs) {
+      for (const item of paragraph.content) {
+        if (item instanceof Run) {
+          runs.push(item);
+        } else {
+          runs.push(...item.runs);
+        }
+      }
+    }
+    return runs;
   }
 
   /**
-   * Adds a run to this comment
+   * Adds a run to this comment (appended to the last paragraph)
    */
   addRun(run: Run): this {
-    this.runs.push(run);
+    let last = this.paragraphs[this.paragraphs.length - 1];
+    if (!last) {
+      last = { content: [] };
+      this.paragraphs.push(last);
+    }
+    last.content.push(run);
+    this.notifyModified();
     return this;
+  }
+
+  /**
+   * Gets the comment content grouped by paragraph
+   */
+  getParagraphs(): CommentParagraph[] {
+    return this.paragraphs.map((paragraph) => ({
+      pPr: paragraph.pPr,
+      content: [...paragraph.content],
+    }));
+  }
+
+  /**
+   * Replaces the comment content with parsed paragraphs.
+   * Used by DocumentParser to preserve <w:p> boundaries, paragraph
+   * properties, and hyperlink wrappers of comments loaded from an
+   * existing comments.xml. Not a user mutation — no dirty notification.
+   * @internal
+   */
+  setParagraphs(paragraphs: CommentParagraph[]): void {
+    this.paragraphs = paragraphs;
   }
 
   /**
    * Gets the comment text (combines all runs)
    */
   getText(): string {
-    return this.runs.map((run) => run.getText()).join('');
+    return this.getRuns()
+      .map((run) => run.getText())
+      .join('');
   }
 
   /**
@@ -289,16 +382,28 @@ export class Comment {
       attributes['w:done'] = '1';
     }
 
-    // Create paragraph containing the comment content
-    const commentParagraph: XMLElement = {
-      name: 'w:p',
-      children: this.runs.map((run) => run.toXML()),
-    };
+    // One <w:p> per stored paragraph — collapsing into a single paragraph
+    // concatenates words across the lost boundaries and drops the
+    // CommentText paragraph style of parsed comments
+    const commentParagraphs: XMLElement[] = this.paragraphs.map((paragraph) => {
+      const children: XMLElement[] = [];
+      if (paragraph.pPr) {
+        children.push({ name: '__rawXml', rawXml: paragraph.pPr });
+      }
+      for (const item of paragraph.content) {
+        if (item instanceof Run) {
+          children.push(item.toXML());
+        } else {
+          children.push({ name: '__rawXml', rawXml: item.rawXml });
+        }
+      }
+      return { name: 'w:p', children };
+    });
 
     return {
       name: 'w:comment',
       attributes,
-      children: [commentParagraph],
+      children: commentParagraphs,
     };
   }
 

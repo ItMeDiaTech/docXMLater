@@ -215,6 +215,16 @@ export class ImageManager {
     const oldFilename = entry.filename;
     if (oldFilename === newFilename) return oldFilename;
 
+    // Guard against clobbering a distinct image: if another entry already owns
+    // newFilename, renaming here would point two different images at the same
+    // media part and saveImages() would write both to the same path (last write
+    // wins). Callers must resolve the collision to a fresh name first.
+    if (this.isFilenameOwnedByOther(newFilename, oldFilename)) {
+      throw new Error(
+        `Cannot rename image to "${newFilename}": filename already in use by a different image`
+      );
+    }
+
     // Update all entries sharing the old filename
     for (const e of this.images.values()) {
       if (e.filename === oldFilename) e.filename = newFilename;
@@ -223,6 +233,20 @@ export class ImageManager {
       if (e.filename === oldFilename) e.filename = newFilename;
     }
     return oldFilename;
+  }
+
+  /**
+   * Returns true if a registered image other than those sharing `excludeFilename`
+   * already uses `filename`. Used to detect rename collisions before they
+   * silently clobber a distinct media part.
+   */
+  isFilenameOwnedByOther(filename: string, excludeFilename: string): boolean {
+    for (const e of this.images.values()) {
+      if (e.filename === filename && e.filename !== excludeFilename) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

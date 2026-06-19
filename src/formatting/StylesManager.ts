@@ -74,6 +74,9 @@ export class StylesManager {
   // Track which specific styles have been modified (for selective merging)
   private _modifiedStyleIds = new Set<string>();
 
+  // Track which styles have been removed (for removal from original XML during merge)
+  private _removedStyleIds = new Set<string>();
+
   // Latent styles configuration
   private latentStyles?: LatentStylesConfig;
   private latentStyleExceptions: LatentStyleException[] = [];
@@ -176,6 +179,9 @@ export class StylesManager {
     }
     this.styles.set(style.getStyleId(), style);
     this._modifiedStyleIds.add(style.getStyleId());
+    // Re-adding a previously removed style cancels the pending removal —
+    // otherwise the merge would strip the style right after appending it
+    this._removedStyleIds.delete(style.getStyleId());
     this._modified = true;
     return this;
   }
@@ -218,7 +224,10 @@ export class StylesManager {
     const source = this.getStyle(sourceId);
     if (!source) return undefined;
 
-    const props = source.getProperties();
+    // Use Style.clone()'s deepClone path so nested formatting (runFormatting,
+    // paragraphFormatting, tableStyle) is fully copied — not reference-shared
+    // with the source — matching this method's documented deep-copy guarantee.
+    const props = source.clone().getProperties();
     props.styleId = newId;
     props.name = newName ?? newId;
     props.isDefault = false; // Clones should never be default
@@ -249,7 +258,15 @@ export class StylesManager {
    * @returns True if the style was removed
    */
   removeStyle(styleId: string): boolean {
-    return this.styles.delete(styleId);
+    const deleted = this.styles.delete(styleId);
+    if (deleted) {
+      // Drop from the modified set so the merge cannot resurrect the style
+      // (getStyle lazily re-creates built-ins, which would re-append it)
+      this._modifiedStyleIds.delete(styleId);
+      this._removedStyleIds.add(styleId);
+      this._modified = true;
+    }
+    return deleted;
   }
 
   /**
@@ -276,6 +293,7 @@ export class StylesManager {
   resetModified(): void {
     this._modified = false;
     this._modifiedStyleIds.clear();
+    this._removedStyleIds.clear();
   }
 
   /**
@@ -285,6 +303,15 @@ export class StylesManager {
    */
   getModifiedStyleIds(): Set<string> {
     return new Set(this._modifiedStyleIds);
+  }
+
+  /**
+   * Gets the IDs of styles that have been removed since loading
+   * Used for removal from original styles.xml during merge
+   * @returns Set of removed style IDs
+   */
+  getRemovedStyleIds(): Set<string> {
+    return new Set(this._removedStyleIds);
   }
 
   /**

@@ -393,10 +393,14 @@ export class RelationshipManager {
     // Use XMLParser to extract all Relationship elements
     const relationshipElements = XMLParser.extractElements(xml, 'Relationship');
 
-    // Prevent infinite loops: check relationship count
-    if (relationshipElements.length > 1000) {
+    // The 10MB size cap above is the primary bound on the work performed here;
+    // this count check is a far-above-normal backstop. Link- and image-heavy
+    // documents (each unique hyperlink URL or image is one OPC relationship)
+    // legitimately exceed several thousand entries, so the limit must stay well
+    // clear of any realistic part.
+    if (relationshipElements.length > 100000) {
       throw new CorruptedArchiveError(
-        'Too many relationships in XML file (>1000). Possible malicious input.'
+        'Too many relationships in XML file (>100000). Possible malicious input or corrupted file.'
       );
     }
 

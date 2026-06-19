@@ -213,7 +213,9 @@ describe('MoveOperationHelper', () => {
       expect(xml).not.toBeNull();
       expect(xml!.name).toBe('w:moveFrom');
       expect(xml!.attributes?.['w:author']).toBe('TestAuthor');
-      expect(xml!.attributes?.['w:moveId']).toBe('move-1');
+      // CT_RunTrackChange has no w:moveId; pairing is via w:name on the range start
+      expect(xml!.attributes?.['w:moveId']).toBeUndefined();
+      expect(moveOp.source.rangeStart.toXML().attributes?.['w:name']).toBe('move-1');
     });
 
     it('should generate correct XML for moveToRangeStart', () => {
@@ -240,7 +242,9 @@ describe('MoveOperationHelper', () => {
       expect(xml).not.toBeNull();
       expect(xml!.name).toBe('w:moveTo');
       expect(xml!.attributes?.['w:author']).toBe('TestAuthor');
-      expect(xml!.attributes?.['w:moveId']).toBe('move-1');
+      // CT_RunTrackChange has no w:moveId; pairing is via w:name on the range start
+      expect(xml!.attributes?.['w:moveId']).toBeUndefined();
+      expect(moveOp.destination.rangeStart.toXML().attributes?.['w:name']).toBe('move-1');
     });
   });
 

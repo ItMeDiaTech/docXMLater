@@ -77,6 +77,25 @@ describe('Document.setDefaultFont()', () => {
     loaded.dispose();
     doc.dispose();
   });
+
+  it('persists font change when the document was loaded from a buffer', async () => {
+    const created = Document.create();
+    created.setDefaultFont('Calibri', 11);
+    created.createParagraph('Body text');
+    const initialBuffer = await created.toBuffer();
+    created.dispose();
+
+    const loaded = await Document.loadFromBuffer(initialBuffer);
+    loaded.setDefaultFont('Times New Roman', 14);
+    const savedBuffer = await loaded.toBuffer();
+    loaded.dispose();
+
+    const reloaded = await Document.loadFromBuffer(savedBuffer);
+    const fmt = reloaded.getStylesManager().getStyle('Normal')!.getRunFormatting()!;
+    expect(fmt.font).toBe('Times New Roman');
+    expect(fmt.size).toBe(14);
+    reloaded.dispose();
+  });
 });
 
 describe('Document.setDefaultFontSize()', () => {
@@ -116,6 +135,24 @@ describe('Document.setDefaultFontSize()', () => {
     expect(fmt.font).toBe('Georgia');
     expect(fmt.size).toBe(11);
     doc.dispose();
+  });
+
+  it('persists size change when the document was loaded from a buffer', async () => {
+    const created = Document.create();
+    created.setDefaultFont('Calibri', 11);
+    created.createParagraph('Body text');
+    const initialBuffer = await created.toBuffer();
+    created.dispose();
+
+    const loaded = await Document.loadFromBuffer(initialBuffer);
+    loaded.setDefaultFontSize(18);
+    const savedBuffer = await loaded.toBuffer();
+    loaded.dispose();
+
+    const reloaded = await Document.loadFromBuffer(savedBuffer);
+    const fmt = reloaded.getStylesManager().getStyle('Normal')!.getRunFormatting()!;
+    expect(fmt.size).toBe(18);
+    reloaded.dispose();
   });
 });
 

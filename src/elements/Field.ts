@@ -6,11 +6,12 @@
  */
 
 import { XMLElement } from '../xml/XMLBuilder.js';
-import { RunFormatting, FormFieldData } from './Run.js';
+import { Run, RunFormatting, FormFieldData } from './Run.js';
 import {
   ParsedHyperlinkInstruction,
   parseHyperlinkInstruction,
   isHyperlinkInstruction,
+  escapeFieldArgument,
 } from './FieldHelpers.js';
 import type { Revision } from './Revision.js';
 import { pointsToHalfPoints } from '../utils/units.js';
@@ -75,6 +76,15 @@ export interface FieldProperties {
 }
 
 /**
+ * One run of a simple field's cached result: the text Word last computed
+ * for the field plus the run formatting it was displayed with.
+ */
+export interface CachedFieldResultRun {
+  text: string;
+  formatting?: RunFormatting;
+}
+
+/**
  * Represents a dynamic field
  */
 export class Field {
@@ -83,6 +93,21 @@ export class Field {
   private formatting?: RunFormatting;
   private fldLock?: boolean;
   private dirty?: boolean;
+  /**
+   * Cached field result emitted as the fldSimple run text. For fields like
+   * HYPERLINK the visible text is NOT derivable from the instruction, so
+   * without this Word would display a generic placeholder until the user
+   * manually refreshes fields (F9).
+   */
+  private cachedResult?: string;
+  /**
+   * Per-run cached result parsed from a loaded `<w:fldSimple>`. Per
+   * ECMA-376 §17.16.16 CT_SimpleField, the child runs hold the field's
+   * current (cached) result — Word does not refresh fields on open by
+   * default, so discarding them replaces the user-visible text with a
+   * synthetic placeholder. Takes precedence over `cachedResult` in toXML().
+   */
+  private cachedResultRuns?: CachedFieldResultRun[];
 
   /**
    * Creates a new field
@@ -161,6 +186,36 @@ export class Field {
   }
 
   /**
+   * Sets the cached field result as plain text (single run; the field's
+   * own formatting applies). Clears any per-run cached result.
+   */
+  setCachedResult(text: string): this {
+    this.cachedResult = text;
+    this.cachedResultRuns = undefined;
+    return this;
+  }
+
+  /**
+   * Sets the cached field result as individual runs so per-run formatting
+   * from a parsed document survives round-trip.
+   */
+  setCachedResultRuns(runs: CachedFieldResultRun[]): this {
+    this.cachedResultRuns = runs.length > 0 ? [...runs] : undefined;
+    return this;
+  }
+
+  /**
+   * Gets the cached field result text (concatenated across runs), or
+   * undefined when the field has no cached result.
+   */
+  getCachedResult(): string | undefined {
+    if (this.cachedResultRuns) {
+      return this.cachedResultRuns.map((run) => run.text).join('');
+    }
+    return this.cachedResult;
+  }
+
+  /**
    * Checks if this field is a HYPERLINK field
    * @returns True if the field type is HYPERLINK or instruction starts with HYPERLINK
    */
@@ -190,21 +245,49 @@ export class Field {
    * The fldSimple element should be added directly to paragraph children (not wrapped in w:r).
    */
   toXML(): XMLElement {
-    // Build the inner run with optional formatting
-    const runChildren: XMLElement[] = [];
-    if (this.formatting) {
-      runChildren.push(this.createRunProperties());
+    let resultRuns: XMLElement[];
+    if (this.cachedResultRuns) {
+      // Re-emit the parsed cached result runs verbatim: per ECMA-376
+      // §17.16.16 they ARE the field's current result, and Word does not
+      // refresh fields on open by default — substituting a placeholder
+      // would corrupt the visible content. Field-level formatting (e.g.
+      // setColor after parse) is layered over each run's own formatting
+      // so programmatic styling still takes effect.
+      resultRuns = this.cachedResultRuns.map((cached) => {
+        const children: XMLElement[] = [];
+        const merged =
+          cached.formatting || this.formatting
+            ? { ...cached.formatting, ...this.formatting }
+            : undefined;
+        const rPr = merged ? Run.generateRunPropertiesXML(merged) : null;
+        if (rPr) {
+          children.push(rPr);
+        }
+        children.push({
+          name: 'w:t',
+          attributes: { 'xml:space': 'preserve' },
+          children: [cached.text],
+        });
+        return { name: 'w:r', children };
+      });
+    } else {
+      // Build the inner run with optional formatting
+      const runChildren: XMLElement[] = [];
+      if (this.formatting) {
+        runChildren.push(this.createRunProperties());
+      }
+      // Per ECMA-376 §22.1.2.33 CT_Text, `xml:space="preserve"` is the
+      // standard sentinel that stops XML processors from collapsing leading /
+      // trailing whitespace in the text content. Run.ts always emits it;
+      // emit it here too so field placeholders with spaces (e.g. localized
+      // date formats like "1 Jan 2026") survive XML round-trip intact.
+      runChildren.push({
+        name: 'w:t',
+        attributes: { 'xml:space': 'preserve' },
+        children: [this.cachedResult ?? this.getPlaceholderText()],
+      });
+      resultRuns = [{ name: 'w:r', children: runChildren }];
     }
-    // Per ECMA-376 §22.1.2.33 CT_Text, `xml:space="preserve"` is the
-    // standard sentinel that stops XML processors from collapsing leading /
-    // trailing whitespace in the text content. Run.ts always emits it;
-    // emit it here too so field placeholders with spaces (e.g. localized
-    // date formats like "1 Jan 2026") survive XML round-trip intact.
-    runChildren.push({
-      name: 'w:t',
-      attributes: { 'xml:space': 'preserve' },
-      children: [this.getPlaceholderText()],
-    });
 
     // CT_SimpleField (§17.16.16) carries two ST_OnOff attributes beyond
     // the required w:instr: w:fldLock (locked against updates) and
@@ -224,12 +307,7 @@ export class Field {
     return {
       name: 'w:fldSimple',
       attributes: fldSimpleAttrs,
-      children: [
-        {
-          name: 'w:r',
-          children: runChildren,
-        },
-      ],
+      children: resultRuns,
     };
   }
 
@@ -481,23 +559,25 @@ export class Field {
    */
   static createHyperlink(
     url: string,
-    _displayText: string = url,
+    displayText: string = url,
     tooltip?: string,
     formatting?: RunFormatting
   ): Field {
-    let instruction = `HYPERLINK "${url}"`;
+    let instruction = `HYPERLINK "${escapeFieldArgument(url)}"`;
 
     if (tooltip) {
-      instruction += ` \\o "${tooltip}"`;
+      instruction += ` \\o "${escapeFieldArgument(tooltip)}"`;
     }
 
     instruction += ' \\* MERGEFORMAT';
 
-    return new Field({
+    const field = new Field({
       type: 'HYPERLINK',
       instruction,
       formatting,
     });
+    field.cachedResult = displayText;
+    return field;
   }
 
   /**
@@ -535,7 +615,7 @@ export class Field {
       throw new Error('TC level must be between 1 and 9');
     }
 
-    const instruction = `TC "${text}" \\f C \\l ${level}`;
+    const instruction = `TC "${escapeFieldArgument(text)}" \\f C \\l ${level}`;
 
     return new Field({
       type: 'TC',
@@ -551,11 +631,12 @@ export class Field {
    * @param formatting Optional run formatting
    */
   static createXEEntry(text: string, subEntry?: string, formatting?: RunFormatting): Field {
-    let instruction = `XE "${text}"`;
-
-    if (subEntry) {
-      instruction += `:${subEntry}`;
-    }
+    // Per ECMA-376 §17.16.5.75 the main-entry/subentry colon separator
+    // belongs INSIDE the quoted field-argument ({ XE "Main:Sub" }) —
+    // text after the closing quote would be misparsed as stray switches.
+    const instruction = subEntry
+      ? `XE "${escapeFieldArgument(text)}:${escapeFieldArgument(subEntry)}"`
+      : `XE "${escapeFieldArgument(text)}"`;
 
     return new Field({
       type: 'XE',
@@ -571,7 +652,7 @@ export class Field {
    */
   static createCustom(instruction: string, formatting?: RunFormatting): Field {
     return new Field({
-      type: 'PAGE', // Placeholder type
+      type: 'CUSTOM',
       instruction,
       formatting,
     });
@@ -1120,17 +1201,27 @@ export class ComplexField {
       runs.push(...nestedField.toXML());
     }
 
-    // 3. Separator run
-    runs.push({
-      name: 'w:r',
-      children: [
-        {
-          name: 'w:fldChar',
-          attributes: { 'w:fldCharType': 'separate' },
-          selfClosing: true,
-        },
-      ],
-    });
+    // 3. Separator run — only when the field carries a result section.
+    // Per ECMA-376, fields without results (XE/TC markers, never-updated
+    // fields) skip w:fldSep entirely; synthesizing one would break
+    // round-trip fidelity for parsed separator-less fields.
+    const emitsResultSection =
+      this._hasResultSection ||
+      !!this.result ||
+      this.resultContent.length > 0 ||
+      this.resultRevisions.length > 0;
+    if (emitsResultSection) {
+      runs.push({
+        name: 'w:r',
+        children: [
+          {
+            name: 'w:fldChar',
+            attributes: { 'w:fldCharType': 'separate' },
+            selfClosing: true,
+          },
+        ],
+      });
+    }
 
     // 4. Result content (prioritize custom XML content, then simple text)
     // Design note: For INCLUDEPICTURE fields, the parser stores the w:drawing

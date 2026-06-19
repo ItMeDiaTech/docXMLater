@@ -279,8 +279,11 @@ describe('Style Property Preservation', () => {
       // AND the formatting should be updated
       expect(mergedStylesXml).toContain('w:styleId="Heading1"');
       // basedOn, next, link should appear in the merged style's toXML() output
-      // (they were preserved from existing style via addStyle())
-      expect(mergedStylesXml).toContain('w:val="Normal"'); // basedOn
+      // (they were preserved from existing style via addStyle()). Assert the
+      // element names explicitly — a bare w:val="Normal" check is satisfied by
+      // the untouched Normal style's <w:name/> and hides a dropped basedOn.
+      expect(mergedStylesXml).toContain('<w:basedOn w:val="Normal"/>');
+      expect(mergedStylesXml).toContain('<w:next w:val="Heading4"/>');
       expect(mergedStylesXml).toContain('w:val="Heading1Char"'); // link preserved
 
       // Heading1Char should still be untouched (not in modifiedStyleIds)

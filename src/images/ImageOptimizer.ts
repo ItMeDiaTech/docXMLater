@@ -145,6 +145,26 @@ export function optimizePng(buffer: Buffer): Buffer | null {
 // =============================================================================
 
 /**
+ * Maps a 32-bit BI_BITFIELDS channel mask to its byte index within a
+ * little-endian pixel. Only byte-aligned 8-bit masks map losslessly onto
+ * PNG's 8-bit channels; anything else returns null.
+ */
+function maskToByteIndex(mask: number): number | null {
+  switch (mask) {
+    case 0x000000ff:
+      return 0;
+    case 0x0000ff00:
+      return 1;
+    case 0x00ff0000:
+      return 2;
+    case 0xff000000:
+      return 3;
+    default:
+      return null;
+  }
+}
+
+/**
  * Converts a BMP buffer to PNG format. Lossless conversion.
  * Supports 24-bit (RGB) and 32-bit (RGBA) uncompressed BMPs.
  * Returns null for unsupported variants (indexed, 16-bit, RLE-compressed).
@@ -186,6 +206,45 @@ export function convertBmpToPng(buffer: Buffer): Buffer | null {
   // Validate buffer has enough pixel data
   if (pixelDataOffset + absHeight * rowSize > buffer.length) return null;
 
+  // Channel byte offsets within a pixel; defaults match the standard BGR(A) layout
+  let rOff = 2;
+  let gOff = 1;
+  let bOff = 0;
+  let aOff = 3;
+  let forceOpaqueAlpha = false;
+
+  if (bitsPerPixel === 32) {
+    if (compression === 3) {
+      // BI_BITFIELDS: channel masks follow BITMAPINFOHEADER (the same file
+      // offsets hold the masks inside V4/V5 headers), so they must be honored
+      // to keep the conversion lossless
+      if (buffer.length < 66) return null;
+      const rIdx = maskToByteIndex(buffer.readUInt32LE(54));
+      const gIdx = maskToByteIndex(buffer.readUInt32LE(58));
+      const bIdx = maskToByteIndex(buffer.readUInt32LE(62));
+      if (rIdx === null || gIdx === null || bIdx === null) return null;
+      if (rIdx === gIdx || rIdx === bIdx || gIdx === bIdx) return null;
+      rOff = rIdx;
+      gOff = gIdx;
+      bOff = bIdx;
+      aOff = 6 - rIdx - gIdx - bIdx; // the byte not claimed by R/G/B carries alpha
+    } else {
+      // BI_RGB: the 4th byte is reserved and writers commonly zero it, so
+      // copying it as alpha would render the whole image transparent. Treat it
+      // as alpha only when at least one pixel carries a non-zero value.
+      forceOpaqueAlpha = true;
+      for (let y = 0; forceOpaqueAlpha && y < absHeight; y++) {
+        const rowOffset = pixelDataOffset + y * rowSize;
+        for (let x = 0; x < width; x++) {
+          if (buffer[rowOffset + x * 4 + 3] !== 0) {
+            forceOpaqueAlpha = false;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   // PNG color type: 2 = RGB (24-bit), 6 = RGBA (32-bit)
   const colorType = bitsPerPixel === 32 ? 6 : 2;
   const pngBytesPerPixel = bitsPerPixel === 32 ? 4 : 3;
@@ -216,13 +275,13 @@ export function convertBmpToPng(buffer: Buffer): Buffer | null {
       const bmpPixelOffset = bmpRowOffset + x * bytesPerPixel;
       const pngPixelOffset = pngRowOffset + 1 + x * pngBytesPerPixel;
 
-      // Convert BGR(A) → RGB(A)
-      rawData[pngPixelOffset] = buffer[bmpPixelOffset + 2]!; // R
-      rawData[pngPixelOffset + 1] = buffer[bmpPixelOffset + 1]!; // G
-      rawData[pngPixelOffset + 2] = buffer[bmpPixelOffset]!; // B
+      // Route channels by resolved byte offsets (BGR(A) unless masks say otherwise)
+      rawData[pngPixelOffset] = buffer[bmpPixelOffset + rOff]!; // R
+      rawData[pngPixelOffset + 1] = buffer[bmpPixelOffset + gOff]!; // G
+      rawData[pngPixelOffset + 2] = buffer[bmpPixelOffset + bOff]!; // B
 
       if (bitsPerPixel === 32) {
-        rawData[pngPixelOffset + 3] = buffer[bmpPixelOffset + 3]!; // A
+        rawData[pngPixelOffset + 3] = forceOpaqueAlpha ? 0xff : buffer[bmpPixelOffset + aOff]!; // A
       }
     }
   }

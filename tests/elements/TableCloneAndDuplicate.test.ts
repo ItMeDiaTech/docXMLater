@@ -3,9 +3,11 @@
  */
 
 import { Table } from '../../src/elements/Table';
+import { TableGridChange } from '../../src/elements/TableGridChange';
 import { TableRow } from '../../src/elements/TableRow';
 import { TableCell } from '../../src/elements/TableCell';
 import { Paragraph } from '../../src/elements/Paragraph';
+import { Run } from '../../src/elements/Run';
 
 describe('TableCell.clone()', () => {
   it('clones an empty cell', () => {
@@ -47,6 +49,30 @@ describe('TableCell.clone()', () => {
     // Mutating cloned paragraphs does not affect original
     clone.getParagraphs()[0]!.setText('Changed');
     expect(cell.getParagraphs()[0]!.getText()).toBe('Hello');
+  });
+
+  it('preserves non-text run content (page break, footnote reference) through clone', () => {
+    const cell = new TableCell();
+    const para = new Paragraph();
+    const breakRun = new Run('Section end');
+    breakRun.addBreak('page');
+    para.addRun(breakRun);
+    para.addRun(Run.createFromContent([{ type: 'footnoteReference', footnoteId: 5 }], {}));
+    cell.addParagraph(para);
+
+    const clone = cell.clone();
+    const clonedContent = clone
+      .getParagraphs()[0]!
+      .getRuns()
+      .flatMap((r) => r.getContent());
+
+    const breakContent = clonedContent.find((c) => c.type === 'break');
+    expect(breakContent).toBeDefined();
+    expect(breakContent!.breakType).toBe('page');
+
+    const refContent = clonedContent.find((c) => c.type === 'footnoteReference');
+    expect(refContent).toBeDefined();
+    expect(refContent!.footnoteId).toBe(5);
   });
 
   it('clones raw nested content', () => {
@@ -288,6 +314,35 @@ describe('Table.clone() uses TableRow.clone()', () => {
     const clonedCell = clone.getCell(0, 0)!;
     expect(clonedCell.hasNestedTables()).toBe(true);
     expect(clonedCell.getRawNestedContent()).toHaveLength(1);
+  });
+
+  it('clones tblPrChange and tblGridChange tracking as independent copies', () => {
+    const table = new Table(1, 2);
+    table.setTblPrChange({
+      author: 'Editor',
+      date: '2024-05-01T08:30:00Z',
+      id: '3',
+      previousProperties: { width: 4000 },
+    });
+    table.setTblGridChange(TableGridChange.create(4, [{ width: 1800 }, { width: 1800 }]));
+
+    const clone = table.clone();
+
+    const prChange = clone.getTblPrChange();
+    expect(prChange).toBeDefined();
+    expect(prChange!.author).toBe('Editor');
+    expect(prChange!.previousProperties.width).toBe(4000);
+
+    const gridChange = clone.getTblGridChange();
+    expect(gridChange).toBeDefined();
+    expect(gridChange!.getId()).toBe(4);
+    expect(gridChange!.getPreviousGrid()).toEqual([{ width: 1800 }, { width: 1800 }]);
+
+    // Independent copies: mutating the clone's metadata leaves the original intact
+    expect(prChange).not.toBe(table.getTblPrChange());
+    expect(gridChange).not.toBe(table.getTblGridChange());
+    prChange!.previousProperties.width = 1;
+    expect(table.getTblPrChange()!.previousProperties.width).toBe(4000);
   });
 });
 

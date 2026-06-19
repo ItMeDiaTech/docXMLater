@@ -65,6 +65,13 @@ function extractSectPrChange(xml: string): string {
   return xml.match(/<w:sectPrChange[\s\S]*?<\/w:sectPrChange>/)?.[0] ?? '';
 }
 
+// The live sectPr is everything before the nested <w:sectPrChange> block.
+function extractLiveSectPr(xml: string): string {
+  const sectPr = xml.match(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/)?.[0] ?? '';
+  const changeStart = sectPr.indexOf('<w:sectPrChange');
+  return changeStart === -1 ? sectPr : sectPr.slice(0, changeStart);
+}
+
 describe('<w:sectPrChange> previous CT_OnOff explicit-false round-trip', () => {
   it('preserves previous w:formProt w:val="0" (explicit false)', async () => {
     const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -164,5 +171,38 @@ describe('<w:sectPrChange> previous CT_OnOff explicit-false round-trip', () => {
     expect(changeBlock).toMatch(/<w:formProt(\/>|[^/]*w:val="1"[^/]*\/>)/);
     // titlePg: explicit true with w:val="1"
     expect(changeBlock).toMatch(/<w:titlePg[^/]*w:val="1"/);
+  });
+
+  it('does not resurrect previous-only titlePg/bidi into the live main sectPr', async () => {
+    // The live sectPr lacks titlePg/bidi; both exist only in the previous
+    // sectPr inside sectPrChange. A flat element scan would otherwise apply
+    // the previous values as live section properties.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>content</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+      <w:sectPrChange w:id="5" w:author="T" w:date="2026-01-01T00:00:00Z">
+        <w:sectPr>
+          <w:pgSz w:w="12240" w:h="15840"/>
+          <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+          <w:titlePg/>
+          <w:bidi/>
+        </w:sectPr>
+      </w:sectPrChange>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+    const out = await loadAndResaveDocXml(xml);
+    const live = extractLiveSectPr(out);
+    // The live sectPr must NOT gain the previous-only flags.
+    expect(live).not.toContain('<w:titlePg');
+    expect(live).not.toContain('<w:bidi');
+    // They remain recorded in the change history.
+    const changeBlock = extractSectPrChange(out);
+    expect(changeBlock).toContain('<w:titlePg');
+    expect(changeBlock).toContain('<w:bidi');
   });
 });

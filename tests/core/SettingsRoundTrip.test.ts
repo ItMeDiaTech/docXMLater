@@ -626,6 +626,17 @@ describe('Settings.xml Round-Trip and Compatibility Mode', () => {
       expect(report.addedSettings).toContain('compatibilityMode');
       expect(doc.getCompatibilityMode()).toBe(CompatibilityMode.Word2013Plus);
 
+      // CT_Settings is an xsd:sequence: w:compat must precede w:themeFontLang
+      const savedBuffer = await doc.toBuffer();
+      const zip = new ZipHandler();
+      await zip.loadFromBuffer(savedBuffer);
+      const settingsXml = zip.getFileAsString(DOCX_PATHS.SETTINGS)!;
+      const compatIndex = settingsXml.indexOf('<w:compat>');
+      const themeFontLangIndex = settingsXml.indexOf('<w:themeFontLang');
+      expect(compatIndex).toBeGreaterThan(-1);
+      expect(themeFontLangIndex).toBeGreaterThan(-1);
+      expect(compatIndex).toBeLessThan(themeFontLangIndex);
+
       doc.dispose();
     });
 

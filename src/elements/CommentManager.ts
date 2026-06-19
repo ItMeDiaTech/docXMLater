@@ -42,6 +42,7 @@ export class CommentManager {
   private nextId = 0;
   private idProvider: IdProviderCallback | null = null;
   private idExistsNotifier: IdExistsCallback | null = null;
+  private modifiedNotifier: (() => void) | null = null;
 
   /**
    * Sets the centralized ID provider callback.
@@ -57,6 +58,21 @@ export class CommentManager {
   }
 
   /**
+   * Sets the callback invoked when a registered comment is mutated.
+   * Document wires this to its comments dirty flag so instance-level edits
+   * (resolve, setAuthor, addRun, ...) force comments.xml regeneration
+   * instead of being silently discarded by the original-XML passthrough.
+   *
+   * @param notifier - Callback invoked on any comment mutation
+   */
+  setModifiedNotifier(notifier: () => void): void {
+    this.modifiedNotifier = notifier;
+    for (const entry of this.comments.values()) {
+      entry.comment.setModifiedCallback(notifier);
+    }
+  }
+
+  /**
    * Registers a comment with the manager
    * Assigns a unique ID
    * @param comment - Comment to register
@@ -66,6 +82,10 @@ export class CommentManager {
     // Assign unique ID - use centralized provider if available
     const id = this.idProvider ? this.idProvider() : this.nextId++;
     comment.setId(id);
+
+    if (this.modifiedNotifier) {
+      comment.setModifiedCallback(this.modifiedNotifier);
+    }
 
     // Store comment
     const entry: CommentEntry = {
@@ -97,6 +117,10 @@ export class CommentManager {
     // Notify centralized ID manager if connected
     if (this.idExistsNotifier) {
       this.idExistsNotifier(id);
+    }
+
+    if (this.modifiedNotifier) {
+      comment.setModifiedCallback(this.modifiedNotifier);
     }
 
     // Store comment
@@ -249,6 +273,16 @@ export class CommentManager {
     // Remove all replies first
     for (const reply of entry.replies) {
       this.comments.delete(reply.getId());
+    }
+
+    // A reply is also tracked in its parent's replies array — drop it there
+    // too so getReplies()/hasReplies()/getCommentThread() agree with the map
+    const parentId = entry.comment.getParentId();
+    if (parentId !== undefined) {
+      const parentEntry = this.comments.get(parentId);
+      if (parentEntry) {
+        parentEntry.replies = parentEntry.replies.filter((reply) => reply !== entry.comment);
+      }
     }
 
     // Remove the comment itself
@@ -420,19 +454,33 @@ export class CommentManager {
 
     // Build XML manually for comments
     const hasReplies = comments.some((c) => c.isReply());
+    const hasResolved = comments.some((c) => c.isResolved());
     let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     xml += '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
     xml += ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    if (hasResolved) {
+      xml += ' xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"';
+    }
     if (hasReplies) {
       xml += ' xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"';
-      xml +=
-        ' xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="w15"';
+    }
+    if (hasReplies || hasResolved) {
+      const ignorable = [hasResolved ? 'w14' : '', hasReplies ? 'w15' : '']
+        .filter((ns) => ns.length > 0)
+        .join(' ');
+      xml += ` xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="${ignorable}"`;
     }
     xml += '>\n';
 
-    // Add each comment
+    // Add each comment. CT_Comment declares no resolved-state attribute —
+    // that lives in commentsExtended.xml keyed by the w14:paraId of each
+    // comment's last paragraph, so emit those anchors when any comment is
+    // resolved (see generateCommentsExtendedXml)
     for (const comment of comments) {
-      xml += this.commentToXmlString(comment);
+      xml += this.commentToXmlString(
+        comment,
+        hasResolved ? CommentManager.commentParaId(comment.getId()) : undefined
+      );
     }
 
     xml += '</w:comments>';
@@ -440,11 +488,54 @@ export class CommentManager {
   }
 
   /**
+   * Derives the w14:paraId anchor for a comment's last paragraph.
+   * Deterministic so comments.xml and commentsExtended.xml agree without
+   * shared state. Values must be 8 hex digits, nonzero, and below
+   * 0x80000000 per ST_LongHexNumber conventions for paraId.
+   * @param commentId - Comment ID
+   * @returns 8-character uppercase hex paraId
+   */
+  static commentParaId(commentId: number): string {
+    return ((commentId + 1) & 0x7fffffff).toString(16).toUpperCase().padStart(8, '0');
+  }
+
+  /**
+   * Generates the word/commentsExtended.xml content carrying resolved
+   * state (w15:done) and reply threading (w15:paraIdParent).
+   * @returns XML string, or null when no comment is resolved (the part is
+   *   only regenerated when it carries information)
+   */
+  generateCommentsExtendedXml(): string | null {
+    const comments = this.getAllCommentsWithReplies();
+    if (!comments.some((c) => c.isResolved())) {
+      return null;
+    }
+
+    let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    xml += '<w15:commentsEx xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"';
+    xml +=
+      ' xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" mc:Ignorable="w15">\n';
+    for (const comment of comments) {
+      xml += `  <w15:commentEx w15:paraId="${CommentManager.commentParaId(comment.getId())}"`;
+      const parentId = comment.getParentId();
+      if (parentId !== undefined && this.comments.has(parentId)) {
+        xml += ` w15:paraIdParent="${CommentManager.commentParaId(parentId)}"`;
+      }
+      xml += ` w15:done="${comment.isResolved() ? '1' : '0'}"/>\n`;
+    }
+    xml += '</w15:commentsEx>';
+    return xml;
+  }
+
+  /**
    * Converts a comment to XML string
    * @param comment - Comment to convert
+   * @param paraId - w14:paraId to anchor on the last paragraph (links the
+   *   comment to its commentsExtended.xml entry), omitted when no comment
+   *   in the document is resolved
    * @returns XML string for the comment
    */
-  private commentToXmlString(comment: Comment): string {
+  private commentToXmlString(comment: Comment, paraId?: string): string {
     let xml = `  <w:comment w:id="${comment.getId()}"`;
     xml += ` w:author="${XMLBuilder.escapeXmlAttribute(comment.getAuthor())}"`;
     xml += ` w:date="${formatDateForXml(comment.getDate())}"`;
@@ -454,19 +545,31 @@ export class CommentManager {
       xml += ` w15:parentId="${comment.getParentId()}"`;
     }
 
-    // Add done attribute for resolved comments (per ECMA-376)
-    if (comment.isResolved()) {
-      xml += ` w:done="1"`;
-    }
-
     xml += '>\n';
 
-    // Add paragraph with runs
-    xml += '    <w:p>\n';
-    for (const run of comment.getRuns()) {
-      xml += this.runToXmlString(run, 6);
+    // One <w:p> per stored paragraph — collapsing into a single paragraph
+    // concatenates words across the lost boundaries and drops paragraph
+    // properties (CommentText pStyle) of parsed comments
+    const paragraphs = comment.getParagraphs();
+    for (let i = 0; i < paragraphs.length; i++) {
+      const paragraph = paragraphs[i]!;
+      // commentsExtended.xml entries reference the LAST paragraph's paraId
+      const isLast = i === paragraphs.length - 1;
+      xml += isLast && paraId ? `    <w:p w14:paraId="${paraId}">\n` : '    <w:p>\n';
+      if (paragraph.pPr) {
+        xml += `      ${paragraph.pPr}\n`;
+      }
+      for (const item of paragraph.content) {
+        if (item instanceof Run) {
+          xml += this.runToXmlString(item, 6);
+        } else {
+          // Preserved inline XML (e.g. w:hyperlink) re-emitted verbatim so
+          // its r:id target keeps pointing at word/_rels/comments.xml.rels
+          xml += `      ${item.rawXml}\n`;
+        }
+      }
+      xml += '    </w:p>\n';
     }
-    xml += '    </w:p>\n';
 
     xml += '  </w:comment>\n';
     return xml;
@@ -480,13 +583,9 @@ export class CommentManager {
    */
   private runToXmlString(run: Run, indent: number): string {
     const spaces = ' '.repeat(indent);
-    const text = XMLBuilder.escapeXmlText(run.getText());
-
-    let xml = `${spaces}<w:r>\n`;
-    xml += `${spaces}  <w:t xml:space="preserve">${text}</w:t>\n`;
-    xml += `${spaces}</w:r>\n`;
-
-    return xml;
+    // Serialize through Run.toXML() so w:rPr formatting and non-text
+    // content (w:annotationRef, tabs, breaks) survive regeneration
+    return `${spaces}${XMLBuilder.elementToString(run.toXML())}\n`;
   }
 
   /**

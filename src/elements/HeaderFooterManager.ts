@@ -51,18 +51,31 @@ export class HeaderFooterManager {
    * Registers a header with the manager
    * @param header The header to register
    * @param relationshipId The relationship ID for this header
+   * @param originalFilename Part name from the relationship target for loaded
+   *   headers — kept as-is so saved content lands where the relationship points
    * @returns The filename assigned to this header
    */
-  registerHeader(header: Header, relationshipId: string): string {
+  registerHeader(header: Header, relationshipId: string, originalFilename?: string): string {
     // Check if already registered
     const existing = this.headers.get(header);
     if (existing) {
       return existing.filename;
     }
 
-    // Generate filename
-    const number = this.nextHeaderNumber++;
-    const filename = header.getFilename(number);
+    let number: number;
+    let filename: string;
+    if (originalFilename) {
+      filename = originalFilename;
+      const digits = /(\d+)\.xml$/i.exec(originalFilename)?.[1];
+      number = digits ? parseInt(digits, 10) : this.nextHeaderNumber;
+      // Keep the counter ahead of parsed part names so generated names never collide
+      if (number >= this.nextHeaderNumber) {
+        this.nextHeaderNumber = number + 1;
+      }
+    } else {
+      number = this.nextHeaderNumber++;
+      filename = header.getFilename(number);
+    }
 
     // Set header ID
     header.setHeaderId(relationshipId);
@@ -84,18 +97,31 @@ export class HeaderFooterManager {
    * Registers a footer with the manager
    * @param footer The footer to register
    * @param relationshipId The relationship ID for this footer
+   * @param originalFilename Part name from the relationship target for loaded
+   *   footers — kept as-is so saved content lands where the relationship points
    * @returns The filename assigned to this footer
    */
-  registerFooter(footer: Footer, relationshipId: string): string {
+  registerFooter(footer: Footer, relationshipId: string, originalFilename?: string): string {
     // Check if already registered
     const existing = this.footers.get(footer);
     if (existing) {
       return existing.filename;
     }
 
-    // Generate filename
-    const number = this.nextFooterNumber++;
-    const filename = footer.getFilename(number);
+    let number: number;
+    let filename: string;
+    if (originalFilename) {
+      filename = originalFilename;
+      const digits = /(\d+)\.xml$/i.exec(originalFilename)?.[1];
+      number = digits ? parseInt(digits, 10) : this.nextFooterNumber;
+      // Keep the counter ahead of parsed part names so generated names never collide
+      if (number >= this.nextFooterNumber) {
+        this.nextFooterNumber = number + 1;
+      }
+    } else {
+      number = this.nextFooterNumber++;
+      filename = footer.getFilename(number);
+    }
 
     // Set footer ID
     footer.setFooterId(relationshipId);
@@ -111,6 +137,28 @@ export class HeaderFooterManager {
     this.footers.set(footer, entry);
 
     return filename;
+  }
+
+  /**
+   * Returns the part filename this header has, or would receive when
+   * registered. Does not consume a sequence number — callers can create the
+   * relationship targeting the same part name registerHeader() will assign.
+   * @param header The header
+   * @returns The current or upcoming filename
+   */
+  peekHeaderFilename(header: Header): string {
+    return this.headers.get(header)?.filename ?? header.getFilename(this.nextHeaderNumber);
+  }
+
+  /**
+   * Returns the part filename this footer has, or would receive when
+   * registered. Does not consume a sequence number — callers can create the
+   * relationship targeting the same part name registerFooter() will assign.
+   * @param footer The footer
+   * @returns The current or upcoming filename
+   */
+  peekFooterFilename(footer: Footer): string {
+    return this.footers.get(footer)?.filename ?? footer.getFilename(this.nextFooterNumber);
   }
 
   /**

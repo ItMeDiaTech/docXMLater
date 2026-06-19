@@ -5,6 +5,7 @@
 import { Paragraph } from '../../src/elements/Paragraph';
 import { Run } from '../../src/elements/Run';
 import { Hyperlink } from '../../src/elements/Hyperlink';
+import { XMLBuilder } from '../../src/xml/XMLBuilder';
 
 describe('Paragraph.consolidateRuns()', () => {
   describe('basic merging', () => {
@@ -111,6 +112,59 @@ describe('Paragraph.consolidateRuns()', () => {
       const runs = para.getRuns();
       // getRuns() also extracts runs from hyperlinks
       expect(runs.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('tracked formatting history (w:rPrChange)', () => {
+    it('does not merge runs carrying rPrChange and preserves both in XML', () => {
+      const run1 = new Run('Hello ', { bold: true });
+      run1.setPropertyChangeRevision({
+        id: 1,
+        author: 'Alice',
+        date: new Date('2024-01-01T00:00:00Z'),
+        previousProperties: { italic: true },
+      });
+      const run2 = new Run('World', { bold: true });
+      run2.setPropertyChangeRevision({
+        id: 2,
+        author: 'Bob',
+        date: new Date('2024-01-02T00:00:00Z'),
+        previousProperties: { bold: false },
+      });
+
+      const para = new Paragraph();
+      para.addRun(run1);
+      para.addRun(run2);
+
+      const eliminated = para.consolidateRuns();
+
+      expect(eliminated).toBe(0);
+      const runs = para.getRuns();
+      expect(runs).toHaveLength(2);
+      expect(runs[0]!.hasPropertyChangeRevision()).toBe(true);
+      expect(runs[1]!.hasPropertyChangeRevision()).toBe(true);
+
+      const xml = XMLBuilder.elementToString(para.toXML());
+      expect((xml.match(/<w:rPrChange /g) ?? []).length).toBe(2);
+    });
+
+    it('does not merge when only one run carries rPrChange', () => {
+      const run1 = new Run('Hello ', { bold: true });
+      run1.setPropertyChangeRevision({
+        id: 3,
+        author: 'Alice',
+        date: new Date('2024-01-01T00:00:00Z'),
+        previousProperties: { italic: true },
+      });
+      const run2 = new Run('World', { bold: true });
+
+      const para = new Paragraph();
+      para.addRun(run1);
+      para.addRun(run2);
+
+      expect(para.consolidateRuns()).toBe(0);
+      expect(para.getRuns()).toHaveLength(2);
+      expect(para.getRuns()[0]!.hasPropertyChangeRevision()).toBe(true);
     });
   });
 

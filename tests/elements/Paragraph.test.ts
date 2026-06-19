@@ -561,6 +561,35 @@ describe('Paragraph', () => {
         expect(clone.getText()).toBe('Original Text - Modified');
       });
 
+      test('should clone runs with non-text content (page break, footnote reference)', () => {
+        const original = new Paragraph();
+        const breakRun = new Run('Chapter end', { bold: true });
+        breakRun.addBreak('page');
+        original.addRun(breakRun);
+        original.addRun(Run.createFromContent([{ type: 'footnoteReference', footnoteId: 3 }], {}));
+
+        const clone = original.clone();
+
+        const clonedBreak = clone
+          .getRuns()
+          .flatMap((r) => r.getContent())
+          .find((c) => c.type === 'break');
+        expect(clonedBreak).toBeDefined();
+        expect(clonedBreak!.breakType).toBe('page');
+
+        const clonedRef = clone
+          .getRuns()
+          .flatMap((r) => r.getContent())
+          .find((c) => c.type === 'footnoteReference');
+        expect(clonedRef).toBeDefined();
+        expect(clonedRef!.footnoteId).toBe(3);
+
+        // Content arrays are deep copies, not shared references
+        clonedBreak!.breakType = 'column';
+        const originalBreak = breakRun.getContent().find((c) => c.type === 'break');
+        expect(originalBreak!.breakType).toBe('page');
+      });
+
       test('should set complex formatting on detached paragraph', () => {
         const para = Paragraph.create()
           .addText('Complex Paragraph')

@@ -18,12 +18,19 @@
  * Iteration 120 gates the parse on attribute presence so absent stays
  * absent, and the existing ST_OnOff literal coverage (for explicit-set
  * values) is preserved.
+ *
+ * Since the w:sdtPr raw-XML passthrough landed, a plain load -> save
+ * re-emits the captured sdtPr markup verbatim — so "on"/"off" (valid
+ * ST_OnOff literals in Transitional) survive untouched. Normalisation
+ * to "1"/"0" now happens only on the rebuild path, i.e. after a modeled
+ * sdtPr property is mutated.
  */
 
 import { Document } from '../../src/core/Document';
+import { StructuredDocumentTag } from '../../src/elements/StructuredDocumentTag';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 
-async function loadAndResaveDocXml(xml: string): Promise<string> {
+async function buildDocxBuffer(xml: string): Promise<Buffer> {
   const zipHandler = new ZipHandler();
   zipHandler.addFile(
     '[Content_Types].xml',
@@ -42,8 +49,11 @@ async function loadAndResaveDocXml(xml: string): Promise<string> {
 </Relationships>`
   );
   zipHandler.addFile('word/document.xml', xml);
-  const buffer = await zipHandler.toBuffer();
-  const doc = await Document.loadFromBuffer(buffer);
+  return zipHandler.toBuffer();
+}
+
+async function loadAndResaveDocXml(xml: string): Promise<string> {
+  const doc = await Document.loadFromBuffer(await buildDocxBuffer(xml));
   const out = await doc.toBuffer();
   doc.dispose();
   const zip = new ZipHandler();
@@ -93,13 +103,37 @@ describe('<w:sdtPr><w:text> w:multiLine absence preservation', () => {
     expect(extractSdtText(out)).toMatch(/w:multiLine="0"/);
   });
 
-  it('normalises w:multiLine="on" to "1"', async () => {
+  it('preserves w:multiLine="on" verbatim on plain round-trip', async () => {
     const out = await loadAndResaveDocXml(buildTextSdtDoc(' w:multiLine="on"'));
-    expect(extractSdtText(out)).toMatch(/w:multiLine="1"/);
+    expect(extractSdtText(out)).toMatch(/w:multiLine="on"/);
   });
 
-  it('normalises w:multiLine="off" to "0"', async () => {
+  it('preserves w:multiLine="off" verbatim on plain round-trip', async () => {
     const out = await loadAndResaveDocXml(buildTextSdtDoc(' w:multiLine="off"'));
-    expect(extractSdtText(out)).toMatch(/w:multiLine="0"/);
+    expect(extractSdtText(out)).toMatch(/w:multiLine="off"/);
+  });
+
+  it('normalises w:multiLine="on" to "1" when sdtPr is rebuilt after mutation', async () => {
+    const doc = await Document.loadFromBuffer(
+      await buildDocxBuffer(buildTextSdtDoc(' w:multiLine="on"'))
+    );
+    try {
+      const sdt = doc
+        .getBodyElements()
+        .find((el) => el instanceof StructuredDocumentTag) as StructuredDocumentTag;
+      expect(sdt).toBeDefined();
+      // Mutating a modeled property invalidates the captured sdtPr markup,
+      // forcing the rebuild path — which emits canonical "1"/"0".
+      sdt.setTag('mutated');
+
+      const out = await doc.toBuffer();
+      const zip = new ZipHandler();
+      await zip.loadFromBuffer(out);
+      const content = zip.getFile('word/document.xml')?.content;
+      const xml = content instanceof Buffer ? content.toString('utf8') : String(content);
+      expect(extractSdtText(xml)).toMatch(/w:multiLine="1"/);
+    } finally {
+      doc.dispose();
+    }
   });
 });

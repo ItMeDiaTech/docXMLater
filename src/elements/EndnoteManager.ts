@@ -130,7 +130,10 @@ export class EndnoteManager {
   }
 
   /**
-   * Removes an endnote
+   * Removes an endnote from the model only. Does not touch body
+   * w:endnoteReference runs or the document's dirty flags — callers going
+   * through a Document should use Document.removeEndnote(), which also
+   * strips the matching references and forces endnotes.xml regeneration.
    * @param id Endnote ID
    * @returns True if removed, false if not found or if it's a special type
    */

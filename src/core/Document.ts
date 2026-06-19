@@ -102,7 +102,7 @@ import {
   type DocumentEventType,
 } from './DocumentEvents.js';
 import { RelationshipManager } from './RelationshipManager.js';
-import { RelationshipType } from './Relationship.js';
+import { Relationship, RelationshipType } from './Relationship.js';
 import { BodyElement } from './DocumentContent.js';
 import { optimizeImage, ImageOptimizationResult } from '../images/ImageOptimizer.js';
 
@@ -249,6 +249,12 @@ export class Document {
       () => this.documentIdManager.getNextId(),
       (existingId) => this.documentIdManager.ensureNextIdAbove(existingId)
     );
+    // Instance-level comment edits (resolve, setAuthor, addRun, ...) must
+    // flip the dirty flag, otherwise saveComments() takes the passthrough
+    // branch and writes the original comments.xml, silently dropping them
+    this.commentManager.setModifiedNotifier(() => {
+      this._commentsModified = true;
+    });
 
     this.trackingContext = new DocumentTrackingContext(this.revisionManager);
     this.parser = new DocumentParser();
@@ -324,6 +330,7 @@ export class Document {
   private _originalNumberingXml?: string;
   private _originalSettingsXml?: string;
   private _originalAppPropsXml?: string;
+  private _originalCorePropsXml?: string;
   private _originalFootnotesXml?: string;
   private _originalEndnotesXml?: string;
   private _originalCommentsXml?: string;
@@ -351,6 +358,9 @@ export class Document {
 
   // Track whether app properties have been programmatically modified since load
   private _appPropsModified = false;
+
+  // Track whether core properties have been programmatically modified since load
+  private _corePropsModified = false;
 
   // Track whether footnotes/endnotes have been programmatically modified since load
   private _footnotesModified = false;
@@ -907,6 +917,15 @@ export class Document {
       doc._originalAppPropsXml = appPropsXml;
     }
 
+    // Preserve original core.xml for round-trip fidelity. parseProperties only
+    // extracts a fixed subset of OPC core properties; optional elements like
+    // cp:lastPrinted, dc:identifier, and cp:version would otherwise be dropped
+    // on a plain load→save round-trip.
+    const corePropsXml = zipHandler.getFileAsString(DOCX_PATHS.CORE_PROPS);
+    if (corePropsXml) {
+      doc._originalCorePropsXml = corePropsXml;
+    }
+
     // Preserve original webSettings.xml for round-trip fidelity (w:divs, flags, etc.)
     const webSettingsXml = zipHandler.getFileAsString(DOCX_PATHS.WEB_SETTINGS);
     if (webSettingsXml) {
@@ -1306,18 +1325,20 @@ export class Document {
 
       // Register headers with HeaderFooterManager (deduplicate by rId)
       // Multiple section property types may reference the same rId
+      // The parsed filename (relationship target) is preserved so saveHeaders()
+      // writes content back to the part the relationship actually points at
       const registeredHeaderRIds = new Set<string>();
-      for (const { header, relationshipId } of headersFooters.headers) {
+      for (const { header, relationshipId, filename } of headersFooters.headers) {
         if (registeredHeaderRIds.has(relationshipId)) continue;
-        this.headerFooterManager.registerHeader(header, relationshipId);
+        this.headerFooterManager.registerHeader(header, relationshipId, filename);
         registeredHeaderRIds.add(relationshipId);
       }
 
       // Register footers with HeaderFooterManager (deduplicate by rId)
       const registeredFooterRIds = new Set<string>();
-      for (const { footer, relationshipId } of headersFooters.footers) {
+      for (const { footer, relationshipId, filename } of headersFooters.footers) {
         if (registeredFooterRIds.has(relationshipId)) continue;
-        this.headerFooterManager.registerFooter(footer, relationshipId);
+        this.headerFooterManager.registerFooter(footer, relationshipId, filename);
         registeredFooterRIds.add(relationshipId);
       }
     } catch (headerFooterError) {
@@ -1413,7 +1434,13 @@ export class Document {
     }
 
     const parser = new DocumentParser();
-    const comments = parser.parseCommentsXml(commentsXml);
+    // commentsExtended.xml carries the resolved state (w15:done) keyed by
+    // each comment's last-paragraph paraId — CT_Comment itself declares no
+    // done attribute, so isResolved() needs the companion part
+    const comments = parser.parseCommentsXml(
+      commentsXml,
+      this._originalCommentCompanionFiles.get(DOCX_PATHS.COMMENTS_EXTENDED)
+    );
 
     // Register each comment with its existing ID
     for (const comment of comments) {
@@ -1435,7 +1462,12 @@ export class Document {
 
     try {
       const parser = new DocumentParser();
-      const footnotes = parser.parseFootnotesXml(footnotesXml);
+      // Hyperlink r:id targets live in the part-scoped rels file per OPC;
+      // resolving them at parse time lets a real footnote edit regenerate
+      // working links instead of dangling r:id references
+      const relsXml = this.zipHandler.getFileAsString('word/_rels/footnotes.xml.rels');
+      const partRels = relsXml ? RelationshipManager.fromXml(relsXml) : undefined;
+      const footnotes = parser.parseFootnotesXml(footnotesXml, partRels);
 
       for (const footnote of footnotes) {
         const id = footnote.getId();
@@ -1461,7 +1493,9 @@ export class Document {
 
     try {
       const parser = new DocumentParser();
-      const endnotes = parser.parseEndnotesXml(endnotesXml);
+      const relsXml = this.zipHandler.getFileAsString('word/_rels/endnotes.xml.rels');
+      const partRels = relsXml ? RelationshipManager.fromXml(relsXml) : undefined;
+      const endnotes = parser.parseEndnotesXml(endnotesXml, partRels);
 
       for (const endnote of endnotes) {
         const id = endnote.getId();
@@ -1647,12 +1681,18 @@ export class Document {
     // When tracking enabled, bind context and wrap existing content in w:ins revisions
     if (this.trackChangesEnabled && this.trackingContext.isEnabled()) {
       this.bindTrackingToElement(paragraph);
-      const runs = paragraph.getRuns();
-      if (runs.length > 0) {
-        const author = this.trackingContext.getAuthor();
-        const insertion = Revision.createInsertion(author, runs);
-        this.trackingContext.getRevisionManager().register(insertion);
-        paragraph.addRevision(insertion);
+      const author = this.trackingContext.getAuthor();
+      // Each top-level Run/Hyperlink is REPLACED by its insert revision in
+      // place. Wrapping paragraph.getRuns() and appending the revision would
+      // leave the originals live alongside the w:ins copy (text serialized
+      // twice, unremovable by accept/reject) and would re-wrap runs already
+      // inside existing revisions or hyperlinks.
+      for (const item of paragraph.getContent()) {
+        if (item instanceof Run || item instanceof Hyperlink) {
+          const insertion = Revision.createInsertion(author, item);
+          this.trackingContext.getRevisionManager().register(insertion);
+          paragraph.replaceContent(item, [insertion]);
+        }
       }
     }
 
@@ -2307,6 +2347,7 @@ export class Document {
    */
   setTitle(title: string): this {
     this.properties.title = title;
+    this._corePropsModified = true;
     return this;
   }
 
@@ -2317,6 +2358,7 @@ export class Document {
    */
   setSubject(subject: string): this {
     this.properties.subject = subject;
+    this._corePropsModified = true;
     return this;
   }
 
@@ -2327,6 +2369,7 @@ export class Document {
    */
   setCreator(creator: string): this {
     this.properties.creator = creator;
+    this._corePropsModified = true;
     return this;
   }
 
@@ -2351,6 +2394,7 @@ export class Document {
    */
   setKeywords(keywords: string): this {
     this.properties.keywords = keywords;
+    this._corePropsModified = true;
     return this;
   }
 
@@ -2361,6 +2405,7 @@ export class Document {
    */
   setDescription(description: string): this {
     this.properties.description = description;
+    this._corePropsModified = true;
     return this;
   }
 
@@ -2371,6 +2416,7 @@ export class Document {
    */
   setCategory(category: string): this {
     this.properties.category = category;
+    this._corePropsModified = true;
     return this;
   }
 
@@ -2381,6 +2427,7 @@ export class Document {
    */
   setContentStatus(status: string): this {
     this.properties.contentStatus = status;
+    this._corePropsModified = true;
     return this;
   }
 
@@ -3327,6 +3374,7 @@ export class Document {
 
   /**
    * Updates the core properties with current values
+   * Uses preservation strategy to maintain original metadata when unmodified
    */
   private updateCoreProps(): void {
     if (
@@ -3334,8 +3382,65 @@ export class Document {
       this._removedParts.has('docProps/core.xml')
     )
       return;
-    const xml = this.generator.generateCoreProps(this.properties);
-    this.zipHandler.updateFile(DOCX_PATHS.CORE_PROPS, xml);
+    if (this._originalCorePropsXml && !this._corePropsModified) {
+      // Preserve original as-is — no changes to core properties. Keeps
+      // unparsed elements (cp:lastPrinted, dc:identifier, cp:version) intact.
+      return;
+    }
+    if (this._originalCorePropsXml && this._corePropsModified) {
+      // Merge: update only changed fields in original XML
+      const mergedXml = this.mergeCorePropsWithOriginal();
+      this.zipHandler.updateFile(DOCX_PATHS.CORE_PROPS, mergedXml);
+    } else {
+      // New document — generate from scratch
+      const xml = this.generator.generateCoreProps(this.properties);
+      this.zipHandler.updateFile(DOCX_PATHS.CORE_PROPS, xml);
+    }
+  }
+
+  /**
+   * Merges modified core properties with the original core.xml.
+   * Updates only fields that have been programmatically changed, preserving
+   * unparsed OPC core properties (cp:lastPrinted, dc:identifier, cp:version,
+   * dcterms:created/modified, etc.) that the parser never extracts.
+   */
+  private mergeCorePropsWithOriginal(): string {
+    if (!this._originalCorePropsXml) {
+      return this.generator.generateCoreProps(this.properties);
+    }
+
+    let xml = this._originalCorePropsXml;
+
+    // Each parsed core property maps to a single OOXML element. Replace the
+    // existing element's text in place; if the element is absent, insert it
+    // before the closing tag so the new value is not silently dropped.
+    const mergeField = (tag: string, value: string | undefined): void => {
+      if (value === undefined) return;
+      const escaped = XMLBuilder.sanitizeXmlContent(value);
+      const openClose = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?</${tag}>`);
+      const selfClosing = new RegExp(`<${tag}\\b[^>]*/>`);
+      if (openClose.test(xml)) {
+        xml = xml.replace(openClose, `<${tag}>${escaped}</${tag}>`);
+      } else if (selfClosing.test(xml)) {
+        xml = xml.replace(selfClosing, `<${tag}>${escaped}</${tag}>`);
+      } else {
+        xml = xml.replace(
+          /<\/cp:coreProperties>/,
+          `  <${tag}>${escaped}</${tag}>\n</cp:coreProperties>`
+        );
+      }
+    };
+
+    mergeField('dc:title', this.properties.title);
+    mergeField('dc:subject', this.properties.subject);
+    mergeField('dc:creator', this.properties.creator);
+    mergeField('cp:keywords', this.properties.keywords);
+    mergeField('dc:description', this.properties.description);
+    mergeField('cp:category', this.properties.category);
+    mergeField('cp:contentStatus', this.properties.contentStatus);
+    mergeField('dc:language', this.properties.language);
+
+    return xml;
   }
 
   /**
@@ -3379,6 +3484,9 @@ export class Document {
         xml = xml.replace(/<Company>[^<]*<\/Company>/, `<Company>${escaped}</Company>`);
       } else if (xml.includes('<Company/>')) {
         xml = xml.replace(/<Company\/>/, `<Company>${escaped}</Company>`);
+      } else {
+        // Tag fully absent: insert so the value is not silently dropped on save
+        xml = xml.replace(/<\/Properties>/, `  <Company>${escaped}</Company>\n</Properties>`);
       }
     }
 
@@ -3390,6 +3498,12 @@ export class Document {
           /<Application>[^<]*<\/Application>/,
           `<Application>${escaped}</Application>`
         );
+      } else {
+        // Tag fully absent: insert so the value is not silently dropped on save
+        xml = xml.replace(
+          /<\/Properties>/,
+          `  <Application>${escaped}</Application>\n</Properties>`
+        );
       }
     }
 
@@ -3398,6 +3512,9 @@ export class Document {
       const escaped = XMLBuilder.sanitizeXmlContent(this.properties.appVersion);
       if (xml.includes('<AppVersion>')) {
         xml = xml.replace(/<AppVersion>[^<]*<\/AppVersion>/, `<AppVersion>${escaped}</AppVersion>`);
+      } else {
+        // Tag fully absent: insert so the value is not silently dropped on save
+        xml = xml.replace(/<\/Properties>/, `  <AppVersion>${escaped}</AppVersion>\n</Properties>`);
       }
     }
 
@@ -3406,6 +3523,9 @@ export class Document {
       const escaped = XMLBuilder.sanitizeXmlContent(this.properties.manager);
       if (xml.includes('<Manager>')) {
         xml = xml.replace(/<Manager>[^<]*<\/Manager>/, `<Manager>${escaped}</Manager>`);
+      } else {
+        // Tag fully absent: insert so the value is not silently dropped on save
+        xml = xml.replace(/<\/Properties>/, `  <Manager>${escaped}</Manager>\n</Properties>`);
       }
     }
 
@@ -3592,9 +3712,10 @@ export class Document {
    * Merges modified styles with the original styles.xml
    *
    * This preserves all styles from the original document while only updating
-   * styles that have been explicitly modified via addStyle().
+   * styles that have been explicitly modified via addStyle() and stripping
+   * styles that have been removed via removeStyle().
    *
-   * @returns Merged XML string with original styles + modified styles
+   * @returns Merged XML string with original styles + modified styles - removed styles
    * @private
    */
   private mergeStylesWithOriginal(): string {
@@ -3603,9 +3724,10 @@ export class Document {
     }
 
     const modifiedStyleIds = this.stylesManager.getModifiedStyleIds();
+    const removedStyleIds = this.stylesManager.getRemovedStyleIds();
 
-    // If nothing was modified, return original as-is
-    if (modifiedStyleIds.size === 0) {
+    // If nothing was modified or removed, return original as-is
+    if (modifiedStyleIds.size === 0 && removedStyleIds.size === 0) {
       return this._originalStylesXml;
     }
 
@@ -3644,6 +3766,16 @@ export class Document {
         // Style doesn't exist in original - append before </w:styles>
         resultXml = resultXml.replace('</w:styles>', `${newStyleXml}\n</w:styles>`);
       }
+    }
+
+    // Strip removed style definitions — without this, removals never reach
+    // the saved styles.xml (mirrors the numbering merge's removed-ID handling)
+    for (const styleId of removedStyleIds) {
+      const escapedStyleId = styleId.replace(/[.*+?^${}()|[\]\\"]/g, '\\$&');
+      const removedPattern = new RegExp(
+        `\\s*<w:style[^>]*\\sw:styleId="${escapedStyleId}"[^>]*>[\\s\\S]*?</w:style>`
+      );
+      resultXml = resultXml.replace(removedPattern, '');
     }
 
     return resultXml;
@@ -4003,9 +4135,22 @@ export class Document {
 
     // w:revisionView (#31 in CT_Settings)
     const view = this.revisionViewSettings;
-    // Only emit revisionView if it differs from defaults (all true)
-    if (!view.showInsertionsAndDeletions || !view.showFormatting || !view.showInkAnnotations) {
-      trackBlock += `\n  <w:revisionView w:insDel="${view.showInsertionsAndDeletions ? '1' : '0'}" w:formatting="${view.showFormatting ? '1' : '0'}" w:inkAnnotations="${view.showInkAnnotations ? '1' : '0'}"/>`;
+    // Only emit revisionView if it differs from defaults (all true). showMarkup
+    // and showComments default true when absent, so a parsed w:markup="0" /
+    // w:comments="0" must also trigger emission or it would be dropped here.
+    if (
+      !view.showInsertionsAndDeletions ||
+      !view.showFormatting ||
+      !view.showInkAnnotations ||
+      view.showMarkup === false ||
+      view.showComments === false
+    ) {
+      // CT_TrackChangesView §17.15.1.77: append w:markup / w:comments only when
+      // explicitly false (absent = default true) so the reviewer's default
+      // markup view survives round-trip, mirroring DocumentGenerator.
+      const markupAttr = view.showMarkup === false ? ' w:markup="0"' : '';
+      const commentsAttr = view.showComments === false ? ' w:comments="0"' : '';
+      trackBlock += `\n  <w:revisionView w:insDel="${view.showInsertionsAndDeletions ? '1' : '0'}" w:formatting="${view.showFormatting ? '1' : '0'}" w:inkAnnotations="${view.showInkAnnotations ? '1' : '0'}"${markupAttr}${commentsAttr}/>`;
     }
 
     // w:trackRevisions (#32)
@@ -4062,6 +4207,8 @@ export class Document {
     const prot = this.documentProtection;
     const esc = XMLBuilder.escapeXmlAttribute;
     let protXml = `\n  <w:documentProtection w:edit="${esc(prot.edit)}" w:enforcement="${prot.enforcement ? '1' : '0'}"`;
+    // w:formatting (CT_DocProtect §17.15.1.29) — tri-state, emit explicit 0/1
+    if (prot.formatting !== undefined) protXml += ` w:formatting="${prot.formatting ? '1' : '0'}"`;
     if (prot.cryptProviderType) protXml += ` w:cryptProviderType="${esc(prot.cryptProviderType)}"`;
     if (prot.cryptAlgorithmClass)
       protXml += ` w:cryptAlgorithmClass="${esc(prot.cryptAlgorithmClass)}"`;
@@ -4072,6 +4219,12 @@ export class Document {
     if (prot.cryptSpinCount) protXml += ` w:cryptSpinCount="${esc(String(prot.cryptSpinCount))}"`;
     if (prot.hash) protXml += ` w:hash="${esc(prot.hash)}"`;
     if (prot.salt) protXml += ` w:salt="${esc(prot.salt)}"`;
+    // Modern Word 2013+ crypto attributes (ISO/IEC 29500-4 §13) — without
+    // these a modern password-protected document loses its password material
+    // whenever any settings-modifying API runs before save.
+    if (prot.algorithmName) protXml += ` w:algorithmName="${esc(prot.algorithmName)}"`;
+    if (prot.hashValue) protXml += ` w:hashValue="${esc(prot.hashValue)}"`;
+    if (prot.saltValue) protXml += ` w:saltValue="${esc(prot.saltValue)}"`;
     protXml += '/>';
 
     // Insert before w:autoFormatOverride (#36) if exists,
@@ -5597,7 +5750,10 @@ export class Document {
    * - numId references inside body-level tracked deletions (w:del blocks
    *   that were skipped during parsing)
    * - Header, footer, footnote, and endnote XML files
-   * - Raw XML safety net scan of all relevant ZIP entries
+   * - Style definitions (w:numPr in a style's pPr), since styles attach
+   *   list numbering without any paragraph carrying a direct numId
+   * - Raw XML safety net scan of all relevant ZIP entries, including
+   *   styles.xml and comments.xml
    *
    * A definition is only removed if it appears in NONE of these sources.
    *
@@ -5660,6 +5816,25 @@ export class Document {
         if (xml) {
           this.collectNumIdsFromXml(xml, usedNumIds);
         }
+      }
+    }
+
+    // 7. Scan style definitions for numPr references — Word attaches multilevel
+    //    list numbering to paragraph styles (e.g., Headings, list styles), so a
+    //    numId can be in use while no paragraph carries a direct w:numPr
+    for (const style of this.stylesManager.getAllStyles()) {
+      const styleNumId = style.getProperties().numPr?.numId;
+      if (styleNumId !== undefined) {
+        usedNumIds.add(styleNumId);
+      }
+    }
+
+    // 8. Raw safety net for styles.xml and comments.xml — preserved XML can
+    //    carry numId references not represented in the in-memory model
+    for (const filePath of [DOCX_PATHS.STYLES, 'word/comments.xml']) {
+      const xml = this.zipHandler.getFileAsString(filePath);
+      if (xml) {
+        this.collectNumIdsFromXml(xml, usedNumIds);
       }
     }
 
@@ -5868,7 +6043,69 @@ export class Document {
     }
     const registeredSet = new Set(existingRevisions);
 
-    let docPrId = 1;
+    // Preserved raw XML (revision-nested image runs, w:pict/chart passthrough run
+    // content, preserved elements, nested-table passthrough) is emitted verbatim
+    // with its original wp:docPr id, outside the renumbering below. Reassigned ids
+    // must start above every id that survives serialization unchanged, otherwise a
+    // renumbered drawing can duplicate a preserved one (wp:docPr/@id must be
+    // unique per ECMA-376 Part 1 §20.4.2.5).
+    let maxPreservedDocPrId = 0;
+    const collectPreservedDocPrIds = (rawXml: string | undefined): void => {
+      if (!rawXml || !rawXml.includes('wp:docPr')) return;
+      const docPrPattern = /<wp:docPr\b[^>]*\bid="(\d+)"/g;
+      let match: RegExpExecArray | null;
+      while ((match = docPrPattern.exec(rawXml)) !== null) {
+        const id = parseInt(match[1]!, 10);
+        if (id > maxPreservedDocPrId) maxPreservedDocPrId = id;
+      }
+    };
+    const collectFromRun = (run: Run): void => {
+      if (run instanceof ImageRun) {
+        collectPreservedDocPrIds(run.getRawRunXml());
+        return;
+      }
+      for (const contentItem of run.getContent()) {
+        collectPreservedDocPrIds(contentItem.rawXml);
+      }
+    };
+    const collectFromParagraph = (para: Paragraph): void => {
+      for (const item of para.getContent()) {
+        if (item instanceof Revision) {
+          for (const revItem of item.getContent()) {
+            if (revItem instanceof Run) collectFromRun(revItem);
+          }
+        } else if (item instanceof Run) {
+          collectFromRun(item);
+        } else if (item instanceof PreservedElement) {
+          collectPreservedDocPrIds(item.getRawXml());
+        }
+      }
+    };
+    for (const element of this.bodyElements) {
+      if (element instanceof Paragraph) {
+        collectFromParagraph(element);
+      } else if (element instanceof Table) {
+        for (const row of element.getRows()) {
+          for (const cell of row.getCells()) {
+            for (const para of cell.getParagraphs()) {
+              collectFromParagraph(para);
+            }
+            for (const nested of cell.getRawNestedContent()) {
+              collectPreservedDocPrIds(nested.xml);
+            }
+          }
+        }
+      } else {
+        // Raw-XML passthrough body elements (AlternateContent, MathParagraph,
+        // CustomXmlBlock, PreservedElement, registered elements) expose getRawXml().
+        const passthrough = element as { getRawXml?: () => string };
+        if (typeof passthrough.getRawXml === 'function') {
+          collectPreservedDocPrIds(passthrough.getRawXml());
+        }
+      }
+    }
+
+    let docPrId = maxPreservedDocPrId + 1;
 
     // Collect existing paraIds to avoid collisions when generating new ones
     const existingParaIds = new Set<string>();
@@ -5906,6 +6143,16 @@ export class Document {
           item.setDocPrId(docPrId++);
         } else if (item instanceof ImageRun) {
           item.getImageElement().setDocPrId(docPrId++);
+        } else if (item instanceof Revision) {
+          // Revision-nested images serialize from the model when no raw run XML
+          // was captured (programmatic) or after a mutation splices a regenerated
+          // w:drawing — give them fresh ids so they cannot collide with the
+          // renumbered top-level drawings. Unmutated raw runs ignore the model id.
+          for (const revItem of item.getContent()) {
+            if (revItem instanceof ImageRun) {
+              revItem.getImageElement().setDocPrId(docPrId++);
+            }
+          }
         }
       }
 
@@ -6631,6 +6878,10 @@ export class Document {
         numLevel.setHangingIndent(360);
       }
 
+      // Level setters don't propagate dirty state; without this the save
+      // pipeline writes the original numbering.xml verbatim for loaded docs
+      this.numberingManager.markAbstractNumberingModified(abstractNumId);
+
       // Apply paragraph formatting to all paragraphs using this list
       this.applyFormattingToListParagraphs(instance.getNumId());
       count++;
@@ -6696,6 +6947,10 @@ export class Document {
         // Set alignment to left
         numLevel.setAlignment('left');
       }
+
+      // Level setters don't propagate dirty state; without this the save
+      // pipeline writes the original numbering.xml verbatim for loaded docs
+      this.numberingManager.markAbstractNumberingModified(abstractNumId);
 
       // Apply paragraph formatting to all paragraphs using this list
       this.applyFormattingToListParagraphs(instance.getNumId());
@@ -9778,8 +10033,11 @@ export class Document {
    * @returns This document for chaining
    */
   setHeader(header: Header): this {
-    // Generate relationship for header
-    const relationship = this.relationshipManager.addHeader(`${header.getFilename(1)}`);
+    // The relationship must target the part name the manager assigns,
+    // otherwise saveHeaders() writes content to a part nothing references
+    const relationship = this.relationshipManager.addHeader(
+      this.headerFooterManager.peekHeaderFilename(header)
+    );
 
     // Register with manager
     this.headerFooterManager.registerHeader(header, relationship.getId());
@@ -9799,9 +10057,9 @@ export class Document {
     // Enable title page
     this.section.setTitlePage(true);
 
-    // Generate relationship for header
+    // Target the part name the manager will assign on registration
     const relationship = this.relationshipManager.addHeader(
-      `${header.getFilename(this.headerFooterManager.getHeaderCount() + 1)}`
+      this.headerFooterManager.peekHeaderFilename(header)
     );
 
     // Register with manager
@@ -9819,9 +10077,9 @@ export class Document {
    * @returns This document for chaining
    */
   setEvenPageHeader(header: Header): this {
-    // Generate relationship for header
+    // Target the part name the manager will assign on registration
     const relationship = this.relationshipManager.addHeader(
-      `${header.getFilename(this.headerFooterManager.getHeaderCount() + 1)}`
+      this.headerFooterManager.peekHeaderFilename(header)
     );
 
     // Register with manager
@@ -9839,8 +10097,11 @@ export class Document {
    * @returns This document for chaining
    */
   setFooter(footer: Footer): this {
-    // Generate relationship for footer
-    const relationship = this.relationshipManager.addFooter(`${footer.getFilename(1)}`);
+    // The relationship must target the part name the manager assigns,
+    // otherwise saveFooters() writes content to a part nothing references
+    const relationship = this.relationshipManager.addFooter(
+      this.headerFooterManager.peekFooterFilename(footer)
+    );
 
     // Register with manager
     this.headerFooterManager.registerFooter(footer, relationship.getId());
@@ -9860,9 +10121,9 @@ export class Document {
     // Enable title page
     this.section.setTitlePage(true);
 
-    // Generate relationship for footer
+    // Target the part name the manager will assign on registration
     const relationship = this.relationshipManager.addFooter(
-      `${footer.getFilename(this.headerFooterManager.getFooterCount() + 1)}`
+      this.headerFooterManager.peekFooterFilename(footer)
     );
 
     // Register with manager
@@ -9880,9 +10141,9 @@ export class Document {
    * @returns This document for chaining
    */
   setEvenPageFooter(footer: Footer): this {
-    // Generate relationship for footer
+    // Target the part name the manager will assign on registration
     const relationship = this.relationshipManager.addFooter(
-      `${footer.getFilename(this.headerFooterManager.getFooterCount() + 1)}`
+      this.headerFooterManager.peekFooterFilename(footer)
     );
 
     // Register with manager
@@ -10188,6 +10449,26 @@ export class Document {
       }
       // Remove companion files since regenerated comments lack w14:paraId
       this.removeCommentCompanionFiles();
+
+      // Resolved state lives in commentsExtended.xml (w15:commentEx
+      // w15:done) — CT_Comment declares no done attribute, so the part is
+      // regenerated alongside comments.xml whenever a comment is resolved
+      const extendedXml = this.commentManager.generateCommentsExtendedXml();
+      if (extendedXml) {
+        this.zipHandler.addFile(DOCX_PATHS.COMMENTS_EXTENDED, extendedXml);
+        const hasExtendedRel = this.relationshipManager
+          .getAllRelationships()
+          .some((rel) => rel.getTarget() === 'commentsExtended.xml');
+        if (!hasExtendedRel) {
+          this.relationshipManager.addRelationship(
+            Relationship.create({
+              id: this.relationshipManager.generateId(),
+              type: 'http://schemas.microsoft.com/office/2011/relationships/commentsExtended',
+              target: 'commentsExtended.xml',
+            })
+          );
+        }
+      }
     } else if (this._originalCommentsXml) {
       // Passthrough — preserve original comments.xml exactly
       this.zipHandler.addFile('word/comments.xml', this._originalCommentsXml);
@@ -10236,7 +10517,14 @@ export class Document {
   }
 
   private saveFootnotes(): void {
-    if (this._footnotesModified || this.footnoteManager.getCount() > 0) {
+    // Dirty flag gates regeneration (mirrors saveComments) so an unmodified
+    // loaded footnotes.xml round-trips via passthrough; the count check only
+    // covers footnotes registered directly on the manager for documents that
+    // never had a footnotes part.
+    if (
+      this._footnotesModified ||
+      (!this._originalFootnotesXml && this.footnoteManager.getCount() > 0)
+    ) {
       const xml = this.footnoteManager.generateFootnotesXml();
       this.zipHandler.addFile(DOCX_PATHS.FOOTNOTES, xml);
 
@@ -10267,7 +10555,11 @@ export class Document {
   }
 
   private saveEndnotes(): void {
-    if (this._endnotesModified || this.endnoteManager.getCount() > 0) {
+    // Same passthrough gating as saveFootnotes
+    if (
+      this._endnotesModified ||
+      (!this._originalEndnotesXml && this.endnoteManager.getCount() > 0)
+    ) {
       const xml = this.endnoteManager.generateEndnotesXml();
       this.zipHandler.addFile(DOCX_PATHS.ENDNOTES, xml);
 
@@ -10364,10 +10656,21 @@ export class Document {
 
       this.zipHandler.addFile(relsPath, xml);
 
-      // Remove these relationships from the main RelationshipManager
-      // so they don't appear in document.xml.rels
+      // Remove these relationships from the main RelationshipManager so they
+      // don't appear in document.xml.rels. Per OPC, relationship IDs are
+      // part-scoped: a loaded header/footnote hyperlink keeps an ID from its
+      // own .rels file that may collide with an unrelated document.xml.rels
+      // entry (styles, settings, an image). Only remove when the main entry
+      // is genuinely the same hyperlink (type and target match).
       for (const rel of hyperlinkRels) {
-        this.relationshipManager.removeRelationship(rel.id);
+        const mainRel = this.relationshipManager.getRelationship(rel.id);
+        if (
+          mainRel &&
+          mainRel.getType() === RelationshipType.HYPERLINK &&
+          mainRel.getTarget() === rel.url
+        ) {
+          this.relationshipManager.removeRelationship(rel.id);
+        }
       }
     }
   }
@@ -10531,20 +10834,32 @@ export class Document {
     const defaults = new Set<string>();
     const overrides = new Set<string>();
 
-    // Extract all <Default Extension="..." ContentType="..."/> entries
-    const defaultMatches = xml.matchAll(
-      /<Default\s+Extension="([^"]+)"\s+ContentType="([^"]+)"\s*\/>/g
-    );
-    for (const match of defaultMatches) {
-      defaults.add(`${match[1]}|${match[2]}`); // Store as "ext|mimetype"
+    // Per XML 1.0, attribute order is insignificant, values may use single or
+    // double quotes, and empty elements may be expanded (<Override ...></Override>).
+    // Match each opening tag and pull attributes out individually so spec-valid
+    // packages from non-Word producers keep their entries on save (the generator
+    // regenerates [Content_Types].xml; unmatched entries would be silently lost).
+    const readAttr = (tag: string, name: string): string | undefined => {
+      const match = tag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*("([^"]*)"|'([^']*)')`));
+      if (!match) return undefined;
+      // Unescape so re-serialization (which escapes) doesn't double-escape
+      return XMLBuilder.unescapeXml(match[2] ?? match[3] ?? '');
+    };
+
+    for (const tagMatch of xml.matchAll(/<Default\b[^>]*>/g)) {
+      const ext = readAttr(tagMatch[0], 'Extension');
+      const contentType = readAttr(tagMatch[0], 'ContentType');
+      if (ext && contentType) {
+        defaults.add(`${ext}|${contentType}`); // Store as "ext|mimetype"
+      }
     }
 
-    // Extract all <Override PartName="..." ContentType="..."/> entries
-    const overrideMatches = xml.matchAll(
-      /<Override\s+PartName="([^"]+)"\s+ContentType="([^"]+)"\s*\/>/g
-    );
-    for (const match of overrideMatches) {
-      overrides.add(`${match[1]}|${match[2]}`); // Store as "path|mimetype"
+    for (const tagMatch of xml.matchAll(/<Override\b[^>]*>/g)) {
+      const partName = readAttr(tagMatch[0], 'PartName');
+      const contentType = readAttr(tagMatch[0], 'ContentType');
+      if (partName && contentType) {
+        overrides.add(`${partName}|${contentType}`); // Store as "path|mimetype"
+      }
     }
 
     return { defaults, overrides };
@@ -11876,6 +12191,10 @@ export class Document {
       updated.size = sizeInPoints;
     }
     normalStyle.setRunFormatting(updated);
+    // Re-register so the style lands in _modifiedStyleIds — otherwise
+    // mergeStylesWithOriginal() returns the original styles.xml verbatim
+    // for loaded documents and the change is silently dropped
+    this.stylesManager.addStyle(normalStyle);
     return this;
   }
 
@@ -11904,6 +12223,10 @@ export class Document {
 
     const existing = normalStyle.getRunFormatting() ?? {};
     normalStyle.setRunFormatting({ ...existing, size: sizeInPoints });
+    // Re-register so the style lands in _modifiedStyleIds — otherwise
+    // mergeStylesWithOriginal() returns the original styles.xml verbatim
+    // for loaded documents and the change is silently dropped
+    this.stylesManager.addStyle(normalStyle);
     return this;
   }
 
@@ -12439,6 +12762,70 @@ export class Document {
   }
 
   /**
+   * Removes a footnote definition and every w:footnoteReference run pointing
+   * at it in the body. Per ECMA-376 §17.11.14 each reference must resolve to
+   * a footnote definition, so the references are stripped together with the
+   * definition; the dirty flag ensures footnotes.xml is regenerated instead
+   * of being restored from the original passthrough XML.
+   * @param id - Footnote ID
+   * @returns True if removed, false if not found or a special separator type
+   */
+  removeFootnote(id: number): boolean {
+    const removed = this.footnoteManager.removeFootnote(id);
+    if (removed) {
+      this._footnotesModified = true;
+      this.removeNoteReferenceRuns('footnoteReference', id);
+    }
+    return removed;
+  }
+
+  /**
+   * Removes an endnote definition and every w:endnoteReference run pointing
+   * at it in the body. Same reference-consistency contract as
+   * {@link removeFootnote} (ECMA-376 §17.11.3).
+   * @param id - Endnote ID
+   * @returns True if removed, false if not found or a special separator type
+   */
+  removeEndnote(id: number): boolean {
+    const removed = this.endnoteManager.removeEndnote(id);
+    if (removed) {
+      this._endnotesModified = true;
+      this.removeNoteReferenceRuns('endnoteReference', id);
+    }
+    return removed;
+  }
+
+  /**
+   * Strips body runs containing a footnote/endnote reference to the given
+   * note ID so the saved document.xml never references a deleted definition.
+   */
+  private removeNoteReferenceRuns(
+    refType: 'footnoteReference' | 'endnoteReference',
+    id: number
+  ): void {
+    for (const para of this.getAllParagraphs()) {
+      const content = para.getContent();
+      // Iterate backwards so removals don't shift pending indices
+      for (let i = content.length - 1; i >= 0; i--) {
+        const item = content[i];
+        if (!(item instanceof Run)) {
+          continue;
+        }
+        const matches = item
+          .getContent()
+          .some(
+            (c) =>
+              c.type === refType &&
+              (refType === 'footnoteReference' ? c.footnoteId === id : c.endnoteId === id)
+          );
+        if (matches) {
+          para.removeContentAt(i);
+        }
+      }
+    }
+  }
+
+  /**
    * Adds a comment to a paragraph (wraps the entire paragraph)
    * Creates the comment if text is provided, or uses an existing comment object
    * @param paragraph - The paragraph to comment
@@ -12594,11 +12981,68 @@ export class Document {
    * @returns True if the comment was removed
    */
   removeComment(id: number): boolean {
+    // Capture reply IDs before removal — CommentManager.removeComment deletes
+    // them too, and their body anchors must be scrubbed along with the parent's
+    const replyIds = this.commentManager.getReplies(id).map((reply) => reply.getId());
     const removed = this.commentManager.removeComment(id);
     if (removed) {
+      this.removeCommentAnchors([id, ...replyIds]);
       this._commentsModified = true;
     }
     return removed;
+  }
+
+  /**
+   * Strips comment anchors (range markers and reference runs) for the given
+   * comment IDs from every paragraph in the body, headers, footers, footnotes,
+   * and endnotes. Without this, deleting a comment definition leaves
+   * w:commentRangeStart/End and w:commentReference pointing at a comment that
+   * no longer exists in comments.xml — Word reports such documents as
+   * containing unreadable content.
+   */
+  private removeCommentAnchors(commentIds: number[]): void {
+    const strip = (paragraphs: Paragraph[]): boolean => {
+      let removed = false;
+      for (const paragraph of paragraphs) {
+        for (const commentId of commentIds) {
+          if (paragraph.removeCommentAnchor(commentId)) {
+            removed = true;
+          }
+        }
+      }
+      return removed;
+    };
+
+    strip(this.getAllParagraphs());
+
+    for (const entry of this.headerFooterManager.getAllHeaders()) {
+      strip(this.extractParagraphsFromElements(entry.header.getElements()));
+    }
+    for (const entry of this.headerFooterManager.getAllFooters()) {
+      strip(this.extractParagraphsFromElements(entry.footer.getElements()));
+    }
+
+    // Footnote/endnote parts are raw-XML passthrough unless flagged modified,
+    // so anchor removal must mark them dirty to take effect on save
+    let footnotesChanged = false;
+    for (const footnote of this.footnoteManager.getAllFootnotes()) {
+      if (strip(footnote.getParagraphs())) {
+        footnotesChanged = true;
+      }
+    }
+    if (footnotesChanged) {
+      this._footnotesModified = true;
+    }
+
+    let endnotesChanged = false;
+    for (const endnote of this.endnoteManager.getAllEndnotes()) {
+      if (strip(endnote.getParagraphs())) {
+        endnotesChanged = true;
+      }
+    }
+    if (endnotesChanged) {
+      this._endnotesModified = true;
+    }
   }
 
   /**
@@ -13342,8 +13786,10 @@ export class Document {
     // Clear all managers using their clear() methods
     this.stylesManager.clear();
     this.numberingManager.clear();
-    this.imageManager.clear();
+    // Release buffers before clear() empties the images map; the reverse order
+    // would leave releaseAllImageData() iterating zero entries.
     this.imageManager.releaseAllImageData();
+    this.imageManager.clear();
     this.relationshipManager.clear();
     this.headerFooterManager.clear();
     this.bookmarkManager.clear();
@@ -13364,6 +13810,7 @@ export class Document {
     this._originalNumberingXml = undefined;
     this._originalSettingsXml = undefined;
     this._originalAppPropsXml = undefined;
+    this._originalCorePropsXml = undefined;
     this._originalFootnotesXml = undefined;
     this._originalEndnotesXml = undefined;
     this._originalCommentsXml = undefined;
@@ -13372,6 +13819,7 @@ export class Document {
     this._originalContentTypes = undefined;
     this._settingsModified = false;
     this._appPropsModified = false;
+    this._corePropsModified = false;
     this._footnotesModified = false;
     this._endnotesModified = false;
     this._originalWebSettingsXml = undefined;
@@ -14614,7 +15062,9 @@ export class Document {
           const matches = originalText.match(wordPattern);
           if (matches) {
             replacementCount += matches.length;
-            newText = originalText.replace(wordPattern, replace);
+            // Replacer function inserts `replace` literally; passing the raw
+            // string would expand $-substitution tokens ($&, $', $`, $$).
+            newText = originalText.replace(wordPattern, () => replace);
           }
         } else {
           // Simple substring replacement
@@ -14625,7 +15075,9 @@ export class Document {
           const matches = originalText.match(searchPattern);
           if (matches) {
             replacementCount += matches.length;
-            newText = originalText.replace(searchPattern, replace);
+            // Replacer function inserts `replace` literally; passing the raw
+            // string would expand $-substitution tokens ($&, $', $`, $$).
+            newText = originalText.replace(searchPattern, () => replace);
           }
         }
 
@@ -15871,7 +16323,12 @@ export class Document {
     let index: number;
 
     if (typeof paragraphOrIndex === 'number') {
-      index = paragraphOrIndex;
+      // Numeric index is paragraph-ordinal (matching getParagraphAt /
+      // getParagraphIndex), not a bodyElements index — tables or SDTs before
+      // the target would otherwise shift it onto the wrong paragraph.
+      const para = this.getParagraphAt(paragraphOrIndex);
+      if (!para) return false;
+      index = this.bodyElements.indexOf(para);
     } else {
       // Find the index of the paragraph
       index = this.bodyElements.indexOf(paragraphOrIndex);
@@ -15884,13 +16341,12 @@ export class Document {
         // No paragraphRemoved event in this branch — the paragraph is still
         // structurally present, just marked deleted via revision.
         if (this.trackChangesEnabled && this.trackingContext.isEnabled()) {
-          const runs = element.getRuns();
-          if (runs.length > 0) {
-            const author = this.trackingContext.getAuthor();
-            const deletion = Revision.createDeletion(author, runs);
-            this.trackingContext.getRevisionManager().register(deletion);
-            element.addRevision(deletion);
-          }
+          // clearContent with tracking bound REPLACES each Run/Hyperlink with
+          // its delete revision in place. Appending a revision built from
+          // getRuns() would leave the originals live alongside the w:del copy,
+          // so the text would serialize twice and survive an accept-all.
+          this.bindTrackingToElement(element);
+          element.clearContent();
           return true;
         }
         this.bodyElements.splice(index, 1);
@@ -16511,21 +16967,10 @@ export class Document {
       }
     };
 
+    // getAllParagraphs() already walks table-cell paragraphs, so a separate
+    // table pass would report each table hyperlink twice.
     for (const paragraph of this.getAllParagraphs()) {
       extractHyperlinksFromParagraph(paragraph);
-    }
-
-    // Also check in tables
-    for (const table of this.getTables()) {
-      for (const row of table.getRows()) {
-        for (const cell of row.getCells()) {
-          // TableCell has getParagraphs method
-          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
-          for (const para of cellParagraphs) {
-            extractHyperlinksFromParagraph(para);
-          }
-        }
-      }
     }
 
     return hyperlinks;
@@ -16721,23 +17166,12 @@ export class Document {
   getBookmarks(): { bookmark: Bookmark; paragraph: Paragraph }[] {
     const bookmarks: { bookmark: Bookmark; paragraph: Paragraph }[] = [];
 
+    // getAllParagraphs() already walks table-cell paragraphs, so a separate
+    // table pass would report each table bookmark twice.
     for (const paragraph of this.getAllParagraphs()) {
       // Get bookmarks that start in this paragraph
       for (const bookmark of paragraph.getBookmarksStart()) {
         bookmarks.push({ bookmark, paragraph });
-      }
-    }
-
-    // Also check in tables
-    for (const table of this.getTables()) {
-      for (const row of table.getRows()) {
-        for (const cell of row.getCells()) {
-          for (const para of cell.getParagraphs()) {
-            for (const bookmark of para.getBookmarksStart()) {
-              bookmarks.push({ bookmark, paragraph: para });
-            }
-          }
-        }
       }
     }
 
@@ -16780,24 +17214,11 @@ export class Document {
   getFields(): { field: FieldLike; paragraph: Paragraph; table?: Table }[] {
     const results: { field: FieldLike; paragraph: Paragraph; table?: Table }[] = [];
 
-    // Get fields from all body paragraphs
+    // getAllParagraphs() already walks table-cell paragraphs, so a separate
+    // table pass would report each table field twice.
     for (const paragraph of this.getAllParagraphs()) {
       for (const field of paragraph.getFields()) {
         results.push({ field, paragraph });
-      }
-    }
-
-    // Get fields from paragraphs inside table cells
-    for (const table of this.getTables()) {
-      for (const row of table.getRows()) {
-        for (const cell of row.getCells()) {
-          const cellParagraphs = cell instanceof TableCell ? cell.getParagraphs() : [];
-          for (const para of cellParagraphs) {
-            for (const field of para.getFields()) {
-              results.push({ field, paragraph: para, table });
-            }
-          }
-        }
       }
     }
 
@@ -16892,7 +17313,14 @@ export class Document {
 
       // 5. If format changed (e.g., bmp → png), update filename + relationships
       if (result.newExtension !== extension) {
-        const newFilename = filename.replace(/\.[^.]+$/, `.${result.newExtension}`);
+        // Swapping the extension can collide with a distinct existing media
+        // part (e.g. image1.bmp → image1.png when image1.png already exists;
+        // non-Word producers don't share Word's global numbering). Resolve to
+        // a fresh, unused name before renaming so neither image is clobbered.
+        const newFilename = this.resolveUniqueMediaFilename(
+          filename.replace(/\.[^.]+$/, `.${result.newExtension}`),
+          filename
+        );
         this.imageManager.updateEntryFilename(image, newFilename);
 
         // Update relationship targets across all relationship managers
@@ -16906,6 +17334,33 @@ export class Document {
     }
 
     return { optimizedCount, totalSavedBytes: totalSaved };
+  }
+
+  /**
+   * Resolves a media filename that does not collide with an existing ZIP media
+   * part or another registered image entry. If the candidate is free, it is
+   * returned unchanged; otherwise a numeric suffix is appended to the base name
+   * (image1.png → image1-1.png → image1-2.png …) until a unique name is found.
+   * @param candidate The desired filename (base name + extension, no directory)
+   * @param currentFilename The filename being renamed away from (excluded from collision check)
+   * @private
+   */
+  private resolveUniqueMediaFilename(candidate: string, currentFilename: string): string {
+    const dotIndex = candidate.lastIndexOf('.');
+    const base = dotIndex === -1 ? candidate : candidate.slice(0, dotIndex);
+    const ext = dotIndex === -1 ? '' : candidate.slice(dotIndex);
+
+    const isTaken = (name: string): boolean =>
+      this.zipHandler.hasFile(`word/media/${name}`) ||
+      this.imageManager.isFilenameOwnedByOther(name, currentFilename);
+
+    let name = candidate;
+    let counter = 1;
+    while (isTaken(name)) {
+      name = `${base}-${counter}${ext}`;
+      counter++;
+    }
+    return name;
   }
 
   /**
@@ -17296,7 +17751,7 @@ export class Document {
 
       this.bodyElements.forEach((element, index) => {
         if (element instanceof Paragraph) {
-          const isEmpty = element.getText().trim() === '';
+          const isEmpty = this.isParagraphRemovableBlank(element);
           if (isEmpty && lastWasEmpty) {
             toRemove.push(index);
           }
@@ -17393,6 +17848,44 @@ export class Document {
   }
 
   /**
+   * Determines whether a body paragraph is safely removable as a duplicate
+   * empty paragraph. Text emptiness alone is insufficient: a paragraph with no
+   * visible text can still carry a bookmark/comment anchor, an inline image or
+   * shape, a range marker, or a section break (sectPr) in its formatting.
+   * Removing such a paragraph silently destroys that content. Mirrors the
+   * richer blankness standard used by TableCell.isParaBlank.
+   * @private
+   */
+  private isParagraphRemovableBlank(para: Paragraph): boolean {
+    if (para.getText().trim() !== '') return false;
+
+    // Inline section break — removing it merges sections and drops that
+    // section's page setup / headers / margins.
+    if (para.formatting.sectPr !== undefined) return false;
+
+    // Bookmark anchors — destroying them breaks REF fields / internal hyperlinks
+    // targeting them ("Error! Bookmark not defined.").
+    if (para.getBookmarksStart().length > 0 || para.getBookmarksEnd().length > 0) {
+      return false;
+    }
+
+    // Comment anchors.
+    if (para.getCommentsStart().length > 0 || para.getCommentsEnd().length > 0) {
+      return false;
+    }
+
+    // Inline images, shapes, and range markers (bookmark/comment range markers)
+    // are invisible to getText() but are real content.
+    for (const item of para.getContent()) {
+      if (item instanceof ImageRun || item instanceof Shape || item instanceof RangeMarker) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
    * Sets the document language
    * @param language - Language code (e.g., 'en-US', 'es-ES', 'fr-FR')
    * @returns This document for chaining
@@ -17403,6 +17896,7 @@ export class Document {
       this.properties = {};
     }
     this.properties.language = language;
+    this._corePropsModified = true;
 
     return this;
   }
@@ -17701,7 +18195,9 @@ export class Document {
       ? new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
       : new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
 
-    // Process body paragraphs
+    // getAllParagraphs() walks recursively and already includes every
+    // table-cell paragraph, so a separate table loop would re-apply the
+    // replacement to the same Run instances (e.g. 'cat'->'cats' => 'catss')
     for (const para of this.getAllParagraphs()) {
       for (const run of para.getRuns()) {
         const text = run.getText();
@@ -17722,36 +18218,6 @@ export class Document {
         }
         // Reset regex lastIndex for next iteration
         pattern.lastIndex = 0;
-      }
-    }
-
-    // Process paragraphs inside table cells
-    for (const table of this.getTables()) {
-      for (const row of table.getRows()) {
-        for (const cell of row.getCells()) {
-          for (const para of cell.getParagraphs()) {
-            for (const run of para.getRuns()) {
-              const text = run.getText();
-              if (!text) continue;
-
-              // Check formatting constraints
-              const runFormatting = run.getFormatting();
-              if (matchBold && !runFormatting.bold) continue;
-              if (matchItalic && !runFormatting.italic) continue;
-
-              // Perform replacement
-              if (pattern.test(text)) {
-                const newText = text.replace(pattern, replace);
-                if (newText !== text) {
-                  run.setText(newText);
-                  replacedCount++;
-                }
-              }
-              // Reset regex lastIndex for next iteration
-              pattern.lastIndex = 0;
-            }
-          }
-        }
       }
     }
 

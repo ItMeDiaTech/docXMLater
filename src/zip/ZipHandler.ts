@@ -15,6 +15,7 @@ import {
   DEFAULT_SIZE_LIMITS,
 } from './types.js';
 import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger.js';
+import { normalizePath } from '../utils/validation.js';
 
 // Create scoped logger for ZipHandler operations
 function getLogger(): ILogger {
@@ -98,15 +99,26 @@ export class ZipHandler {
     const limits = this.getSizeLimits(options);
     this.validateDocumentSize(sizeMB, limits);
 
-    await this.reader.loadFromFile(filePath, options);
+    try {
+      await this.reader.loadFromFile(filePath, options);
 
-    // Copy all files from reader to writer for modification
-    const files = this.reader.getAllFiles();
-    this.writer.clear();
-    this.writer.addFiles(files);
+      // Copy all files from reader to writer for modification
+      const files = this.reader.getAllFiles();
+      this.writer.clear();
+      this.writer.addFiles(files);
 
-    this.mode = 'modify';
-    logger.info('DOCX file loaded', { fileCount: files.size, sizeMB: sizeMB.toFixed(2) });
+      this.mode = 'modify';
+      logger.info('DOCX file loaded', { fileCount: files.size, sizeMB: sizeMB.toFixed(2) });
+    } catch (error) {
+      // A failed reload must not leave the handler serving the previously loaded
+      // archive. Reset to a deterministically empty state so getFile/save/etc.
+      // cannot silently return stale content. A fresh reader discards any
+      // partially-extracted files and the stale `loaded` flag.
+      this.writer.clear();
+      this.reader = new ZipReader();
+      this.mode = 'write';
+      throw error;
+    }
   }
 
   /**
@@ -125,15 +137,26 @@ export class ZipHandler {
     const limits = this.getSizeLimits(options);
     this.validateDocumentSize(sizeMB, limits);
 
-    await this.reader.loadFromBuffer(buffer, options);
+    try {
+      await this.reader.loadFromBuffer(buffer, options);
 
-    // Copy all files from reader to writer for modification
-    const files = this.reader.getAllFiles();
-    this.writer.clear();
-    this.writer.addFiles(files);
+      // Copy all files from reader to writer for modification
+      const files = this.reader.getAllFiles();
+      this.writer.clear();
+      this.writer.addFiles(files);
 
-    this.mode = 'modify';
-    logger.info('DOCX buffer loaded', { fileCount: files.size, sizeMB: sizeMB.toFixed(2) });
+      this.mode = 'modify';
+      logger.info('DOCX buffer loaded', { fileCount: files.size, sizeMB: sizeMB.toFixed(2) });
+    } catch (error) {
+      // A failed reload must not leave the handler serving the previously loaded
+      // archive. Reset to a deterministically empty state so getFile/save/etc.
+      // cannot silently return stale content. A fresh reader discards any
+      // partially-extracted files and the stale `loaded` flag.
+      this.writer.clear();
+      this.reader = new ZipReader();
+      this.mode = 'write';
+      throw error;
+    }
   }
 
   // ==================== FILE OPERATIONS ====================
@@ -300,6 +323,13 @@ export class ZipHandler {
     if (!file) {
       return false;
     }
+    // Guard against degenerate rename where source and destination collapse to
+    // the same archive key (identical strings or backslash/forward-slash variants).
+    // Without this, addFile would overwrite the single entry and the subsequent
+    // removeFile would delete it, silently destroying the file.
+    if (normalizePath(oldPath) === normalizePath(newPath)) {
+      return true;
+    }
     this.addFile(newPath, file.content, {
       binary: file.isBinary,
       date: file.date,
@@ -335,6 +365,12 @@ export class ZipHandler {
   moveFile(srcPath: string, destPath: string): boolean {
     if (!this.copyFile(srcPath, destPath)) {
       return false;
+    }
+    // Guard against degenerate move where source and destination collapse to the
+    // same archive key. copyFile already re-added the (identical) entry, so the
+    // removeFile below would delete it, silently destroying the file.
+    if (normalizePath(srcPath) === normalizePath(destPath)) {
+      return true;
     }
     this.removeFile(srcPath);
     return true;

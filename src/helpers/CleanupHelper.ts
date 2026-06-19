@@ -21,6 +21,7 @@ import { Hyperlink } from '../elements/Hyperlink.js';
 import { Paragraph } from '../elements/Paragraph.js';
 import { Table } from '../elements/Table.js';
 import { StructuredDocumentTag } from '../elements/StructuredDocumentTag.js';
+import { StylesManager } from '../formatting/StylesManager.js';
 
 export interface CleanupOptions {
   /** Unlock all SDTs to enable editing */
@@ -264,24 +265,98 @@ export class CleanupHelper {
   }
 
   private cleanupStyles(): number {
-    // Implementation for unused styles removal
-    // Scan all paragraphs and runs for used styles
+    const stylesManager = this.doc.getStylesManager();
     const usedStyles = new Set<string>();
-    for (const para of this.doc.getAllParagraphs()) {
+
+    const collectParagraph = (para: Paragraph): void => {
       const paraStyle = para.getFormatting().style;
       if (paraStyle) usedStyles.add(paraStyle);
       for (const run of para.getRuns()) {
         const runStyle = run.getFormatting().characterStyle;
         if (runStyle) usedStyles.add(runStyle);
       }
+    };
+
+    // Body paragraphs (getAllParagraphs walks table cells and nested SDTs)
+    for (const para of this.doc.getAllParagraphs()) {
+      collectParagraph(para);
     }
 
-    // Remove unused styles
+    // Table styles (w:tblStyle) — tables reference styles without any
+    // paragraph carrying the ID, so a paragraph-only scan misses them
+    for (const table of this.doc.getAllTables()) {
+      const tableStyle = table.getFormatting().style;
+      if (tableStyle) usedStyles.add(tableStyle);
+    }
+
+    // Headers and footers live outside the body walk
+    const headerFooterManager = this.doc.getHeaderFooterManager();
+    const headerFooterElements = [
+      ...headerFooterManager.getAllHeaders().flatMap((entry) => entry.header.getElements()),
+      ...headerFooterManager.getAllFooters().flatMap((entry) => entry.footer.getElements()),
+    ];
+    for (const element of headerFooterElements) {
+      if (element instanceof Paragraph) {
+        collectParagraph(element);
+      } else if (element instanceof Table) {
+        const tableStyle = element.getFormatting().style;
+        if (tableStyle) usedStyles.add(tableStyle);
+        for (const row of element.getRows()) {
+          for (const cell of row.getCells()) {
+            for (const para of cell.getParagraphs()) {
+              collectParagraph(para);
+            }
+          }
+        }
+      }
+    }
+
+    // Footnotes and endnotes also live outside the body walk
+    for (const footnote of this.doc.getFootnoteManager().getAllFootnotes()) {
+      for (const para of footnote.getParagraphs()) {
+        collectParagraph(para);
+      }
+    }
+    for (const endnote of this.doc.getEndnoteManager().getAllEndnotes()) {
+      for (const para of endnote.getParagraphs()) {
+        collectParagraph(para);
+      }
+    }
+
+    // Numbering levels can bind a paragraph style (w:pStyle, ECMA-376 §17.9.23)
+    for (const abstractNum of this.doc.getNumberingManager().getAllAbstractNumberings()) {
+      for (const level of abstractNum.getAllLevels()) {
+        const pStyle = level.getParagraphStyle();
+        if (pStyle) usedStyles.add(pStyle);
+      }
+    }
+
+    // Expand to basedOn/link/next ancestors transitively — removing a chain
+    // member leaves dangling references that break style resolution in Word
+    const allStyles = stylesManager.getAllStyles();
+    const stylesById = new Map(allStyles.map((style) => [style.getStyleId(), style]));
+    const pending = [...usedStyles];
+    while (pending.length > 0) {
+      const style = stylesById.get(pending.pop()!);
+      if (!style) continue;
+      const props = style.getProperties();
+      for (const ref of [props.basedOn, props.link, props.next]) {
+        if (ref && !usedStyles.has(ref)) {
+          usedStyles.add(ref);
+          pending.push(ref);
+        }
+      }
+    }
+
+    // Remove unused styles — but never built-ins or part defaults, which
+    // apply without being referenced (mirrors StylesManager.cleanupUnusedStyles)
     let removed = 0;
-    const allStyles = this.doc.getStylesManager().getAllStyles();
     for (const style of allStyles) {
-      if (!usedStyles.has(style.getStyleId())) {
-        this.doc.getStylesManager().removeStyle(style.getStyleId());
+      const styleId = style.getStyleId();
+      if (usedStyles.has(styleId)) continue;
+      if (StylesManager.isBuiltInStyle(styleId)) continue;
+      if (style.getProperties().isDefault) continue;
+      if (stylesManager.removeStyle(styleId)) {
         removed++;
       }
     }
@@ -330,38 +405,55 @@ export class CleanupHelper {
     return removed;
   }
 
+  // Lock state must be cleared on the in-memory model, not the ZIP copy of
+  // word/document.xml: prepareSave() regenerates document.xml from the model,
+  // so raw-XML edits here would be overwritten and the locks re-emitted.
   private unlockFields(): number {
-    const zipHandler = this.doc.getZipHandler();
-    const docXml = zipHandler.getFileAsString('word/document.xml');
-    if (!docXml) return 0;
+    let count = 0;
 
-    // Count matches first, then replace (avoid regex re-execution)
-    const pattern = /w:fldLock="(1|true)"/g;
-    const matches = docXml.match(pattern) || [];
-    if (matches.length === 0) return 0;
+    for (const para of this.doc.getAllParagraphs()) {
+      // w:fldChar w:fldLock on complex-field runs (ECMA-376 §17.16.18).
+      // getRuns() includes runs inside revisions and hyperlinks; the
+      // returned content elements are live references, so clearing the
+      // flag mutates the run itself.
+      for (const run of para.getRuns()) {
+        for (const item of run.getContent()) {
+          if (item.type === 'fieldChar' && item.fieldCharLocked === true) {
+            item.fieldCharLocked = undefined;
+            count++;
+          }
+        }
+      }
 
-    // Remove w:fldLock="1" or w:fldLock="true"
-    const updatedXml = docXml.replace(pattern, '');
-    zipHandler.updateFile('word/document.xml', updatedXml);
+      // w:fldLock on simple fields (w:fldSimple, ECMA-376 §17.16.16).
+      // Field keeps the flag private with no mutator, so clear it
+      // structurally — the regenerated fldSimple then omits the attribute.
+      for (const item of para.getContent()) {
+        if (item instanceof Field) {
+          const lockable = item as unknown as { fldLock?: boolean };
+          if (lockable.fldLock === true) {
+            lockable.fldLock = undefined;
+            count++;
+          }
+        }
+      }
+    }
 
-    return matches.length;
+    return count;
   }
 
   private unlockFrames(): number {
-    const zipHandler = this.doc.getZipHandler();
-    const docXml = zipHandler.getFileAsString('word/document.xml');
-    if (!docXml) return 0;
+    let count = 0;
 
-    // Count matches first, then replace (avoid regex re-execution)
-    const pattern = /w:anchorLock="(1|true)"/g;
-    const matches = docXml.match(pattern) || [];
-    if (matches.length === 0) return 0;
+    for (const para of this.doc.getAllParagraphs()) {
+      const framePr = para.getFormatting().framePr;
+      if (framePr?.anchorLock === true) {
+        para.setFrameProperties({ ...framePr, anchorLock: undefined });
+        count++;
+      }
+    }
 
-    // Remove w:anchorLock="1" or w:anchorLock="true"
-    const updatedXml = docXml.replace(pattern, '');
-    zipHandler.updateFile('word/document.xml', updatedXml);
-
-    return matches.length;
+    return count;
   }
 
   private sanitizeTables(): number {

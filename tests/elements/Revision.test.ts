@@ -72,6 +72,30 @@ describe('Revision', () => {
 
       expect(revision.getType()).toBe('paragraphPropertiesChange');
       expect(revision.getPreviousProperties()).toEqual(previousProps);
+
+      // OOXML-style keys pass through; object-valued spacing is serialized, not dropped
+      const xml = revision.toXML();
+      expect(xml).not.toBeNull();
+      const serialized = XMLBuilder.elementToString(xml!);
+      expect(serialized).toContain('<w:jc w:val="left"');
+      expect(serialized).toContain('<w:spacing w:before="120"');
+    });
+
+    it('should map API-style paragraph property keys to OOXML element names', () => {
+      const run = new Run('paragraph text');
+      const revision = Revision.createParagraphPropertiesChange('Editor', run, {
+        alignment: 'left',
+      });
+
+      const xml = revision.toXML();
+      expect(xml).not.toBeNull();
+      const pPr = xml!.children?.find((c: any) => c.name === 'w:pPr') as any;
+      expect(pPr).toBeDefined();
+      // CT_PPrBase has w:jc, not w:alignment — verbatim key emission is invalid
+      expect(pPr.children?.some((c: any) => c.name === 'w:jc')).toBe(true);
+      expect(pPr.children?.some((c: any) => c.name === 'w:alignment')).toBe(false);
+      const jc = pPr.children?.find((c: any) => c.name === 'w:jc');
+      expect(jc?.attributes?.['w:val']).toBe('left');
     });
 
     it('should create table properties change revision', () => {
@@ -80,6 +104,12 @@ describe('Revision', () => {
       const revision = Revision.createTablePropertiesChange('Editor', run, previousProps);
 
       expect(revision.getType()).toBe('tablePropertiesChange');
+
+      // Object-valued CT_TblWidth snapshot must serialize with w:w/w:type attributes
+      const xml = revision.toXML();
+      expect(xml).not.toBeNull();
+      const serialized = XMLBuilder.elementToString(xml!);
+      expect(serialized).toContain('<w:tblW w:w="5000" w:type="dxa"');
     });
 
     it('should create table exception properties change revision', () => {
@@ -265,7 +295,7 @@ describe('Revision', () => {
       expect(textChild).toBeDefined();
     });
 
-    it('should include move ID in move revisions', () => {
+    it('should keep move ID internal and omit it from move revision XML', () => {
       const run = new Run('moved');
       const revision = Revision.createMoveFrom('Author', run, 'move-123');
       revision.setId(5);
@@ -273,7 +303,9 @@ describe('Revision', () => {
 
       expect(xml).not.toBeNull();
       expect(xml!.name).toBe('w:moveFrom');
-      expect(xml!.attributes?.['w:moveId']).toBe('move-123');
+      // CT_RunTrackChange has no w:moveId attribute; pairing stays in memory
+      expect(xml!.attributes?.['w:moveId']).toBeUndefined();
+      expect(revision.getMoveId()).toBe('move-123');
     });
 
     it('should generate correct element names for all types', () => {

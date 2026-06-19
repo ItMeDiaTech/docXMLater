@@ -91,9 +91,11 @@ export class ZipReader {
    * Extracts all files from the ZIP archive into memory
    *
    * **Encoding Note:**
-   * - Text files (XML, etc.) are extracted as UTF-8 strings using `async('string')`
+   * - Known-text parts (.xml, .rels, etc.) are extracted as UTF-8 strings using `async('string')`
    * - JSZip automatically decodes UTF-8 when extracting as 'string'
-   * - Binary files are extracted as Buffers to preserve exact content
+   * - Everything else is extracted as a Buffer to preserve exact bytes — a
+   *   string decode is lossy (invalid UTF-8 becomes U+FFFD), which would
+   *   corrupt embedded binary parts (OLE packages, fonts, metafiles)
    * - All text content is guaranteed to be valid UTF-8
    */
   private async extractFiles(): Promise<void> {
@@ -118,13 +120,13 @@ export class ZipReader {
       const isBinary = isBinaryFile(normalizedPath);
 
       // Extract content based on type
-      // For text files: JSZip's async('string') automatically uses UTF-8 decoding
-      // For binary files: async('nodebuffer') preserves exact bytes
+      // For known-text files: JSZip's async('string') automatically uses UTF-8 decoding
+      // For everything else: async('nodebuffer') preserves exact bytes
       let content;
       if (isBinary) {
         content = await zipObject.async('nodebuffer');
       } else {
-        // Text files are extracted as UTF-8 strings
+        // Known-text files are extracted as UTF-8 strings
         // JSZip automatically handles UTF-8 decoding for 'string' type
         content = await zipObject.async('string');
       }

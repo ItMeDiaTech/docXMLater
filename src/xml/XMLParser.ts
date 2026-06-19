@@ -139,8 +139,9 @@ export class XMLParser {
         continue;
       }
 
-      // Find the end of opening tag
-      const openEnd = xml.indexOf('>', startIdx);
+      // Find the end of opening tag (quote-aware: attribute values may
+      // legally contain a raw '>')
+      const openEnd = XMLParser.findTagEnd(xml, startIdx);
       if (openEnd === -1) break;
 
       // Check if self-closing
@@ -333,8 +334,9 @@ export class XMLParser {
     const startIdx = xml.indexOf(startTag);
     if (startIdx === -1) return undefined;
 
-    // Find the end of the opening tag
-    const openEnd = xml.indexOf('>', startIdx);
+    // Find the end of the opening tag (quote-aware: attribute values may
+    // legally contain a raw '>')
+    const openEnd = XMLParser.findTagEnd(xml, startIdx);
     if (openEnd === -1) return undefined;
 
     // Find the closing tag
@@ -342,6 +344,28 @@ export class XMLParser {
     if (endIdx === -1) return undefined;
 
     return xml.substring(openEnd + 1, endIdx);
+  }
+
+  /**
+   * Finds the first '>' at or after startPos that is not inside a quoted
+   * attribute value. XML 1.0 §2.3 permits a raw '>' inside attribute values
+   * (only '<', '&', and the delimiting quote must be escaped), so a bare
+   * indexOf('>') can end a tag header mid-attribute.
+   * @private
+   */
+  private static findTagEnd(xml: string, startPos: number): number {
+    let quote: string | undefined;
+    for (let pos = startPos; pos < xml.length; pos++) {
+      const ch = xml[pos];
+      if (quote) {
+        if (ch === quote) quote = undefined;
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+      } else if (ch === '>') {
+        return pos;
+      }
+    }
+    return -1;
   }
 
   /**
@@ -371,19 +395,17 @@ export class XMLParser {
 
       // Valid separators after tag name: space, '/', or '>'
       if (charAfterTag === ' ' || charAfterTag === '/' || charAfterTag === '>') {
-        // Found the exact tag, now find its end
-        const endIdx = xml.indexOf('/>', startIdx);
-        if (endIdx === -1) {
-          // Try finding a closing tag instead (non-self-closing)
-          const closeTagStart = xml.indexOf('>', startIdx);
-          if (closeTagStart === -1) return undefined;
+        // Found the exact tag. Bound the search to this element's own tag
+        // header: a global indexOf('/>') can land inside a later sibling
+        // when the target is written in expanded form (<tag ...></tag>),
+        // attributing the sibling's attributes to this tag.
+        const tagEnd = XMLParser.findTagEnd(xml, startIdx + startPattern.length);
+        if (tagEnd === -1) return undefined;
 
-          // Return attributes portion
-          return xml.substring(startIdx + startPattern.length, closeTagStart);
-        }
-
-        // Return attributes portion (between tag name and />)
-        return xml.substring(startIdx + startPattern.length, endIdx);
+        // Self-closing: exclude the trailing '/'; expanded form: attributes
+        // run up to the '>' of the open tag.
+        const attrEnd = xml[tagEnd - 1] === '/' ? tagEnd - 1 : tagEnd;
+        return xml.substring(startIdx + startPattern.length, attrEnd);
       }
 
       // Not the exact tag (e.g., found "w:sz" when looking for "w:s")
@@ -477,6 +499,27 @@ export class XMLParser {
       return { value: {}, endPos: xml.length };
     }
 
+    // Skip processing instructions (e.g. <?mso-application ...?>); without
+    // this, '?' fails the element-name match and the PI body is mangled
+    // into text one character at a time
+    if (xml.substring(openTagStart, openTagStart + 2) === '<?') {
+      const piEnd = xml.indexOf('?>', openTagStart + 2);
+      if (piEnd !== -1) {
+        return XMLParser.parseElementToObject(xml, piEnd + 2, options, depth);
+      }
+      return { value: {}, endPos: xml.length };
+    }
+
+    // Skip CDATA found where an element is expected (e.g. at the root);
+    // CDATA inside element content is preserved by the content loop below
+    if (xml.substring(openTagStart, openTagStart + 9) === '<![CDATA[') {
+      const cdataEnd = xml.indexOf(']]>', openTagStart + 9);
+      if (cdataEnd !== -1) {
+        return XMLParser.parseElementToObject(xml, cdataEnd + 3, options, depth);
+      }
+      return { value: {}, endPos: xml.length };
+    }
+
     // Extract element name
     const nameMatch = /^([a-zA-Z0-9:_-]+)/.exec(xml.substring(openTagStart + 1));
     if (!nameMatch) {
@@ -485,7 +528,8 @@ export class XMLParser {
 
     const originalElementName: string = nameMatch[1] || '';
     let elementName: string = originalElementName;
-    const tagHeaderEnd = xml.indexOf('>', openTagStart);
+    // Quote-aware scan: attribute values may legally contain a raw '>'
+    const tagHeaderEnd = XMLParser.findTagEnd(xml, openTagStart);
     if (tagHeaderEnd === -1) {
       return { value: {}, endPos: xml.length };
     }
@@ -558,6 +602,19 @@ export class XMLParser {
         }
       }
 
+      // CDATA: append the payload verbatim — its content is by definition
+      // already unescaped, so entity decoding must not be applied
+      if (content.startsWith('<![CDATA[', nextTag)) {
+        const cdataEnd = content.indexOf(']]>', nextTag + 9);
+        if (cdataEnd === -1) {
+          textContent += content.substring(nextTag + 9);
+          break;
+        }
+        textContent += content.substring(nextTag + 9, cdataEnd);
+        pos = cdataEnd + 3;
+        continue;
+      }
+
       // Parse child element (increment depth for children)
       const childResult = XMLParser.parseElementToObject(content, nextTag, options, depth + 1);
       const childObj = childResult.value as ParsedXMLObject;
@@ -602,6 +659,11 @@ export class XMLParser {
     // Add children
     if (children.length > 0) {
       const coalescedChildren = XMLParser.coalesceChildren(children, options);
+      // Mixed content with no attributes leaves elementValue as a bare
+      // string; fold it into object form so merging children keeps the text
+      if (typeof elementValue === 'string') {
+        elementValue = { [options.textNodeName]: elementValue };
+      }
       if (typeof elementValue === 'object' && !Array.isArray(elementValue)) {
         elementValue = { ...elementValue, ...coalescedChildren };
       } else {
@@ -705,10 +767,15 @@ export class XMLParser {
       // Add prefix to attribute name
       const prefixedName = options.attributeNamePrefix + attrName;
 
+      // Unescape XML entities so stored attribute values are the actual
+      // decoded strings, matching text-node handling and extractAttribute.
+      // This prevents double-escaping when the value is later re-serialized.
+      const decodedValue = XMLBuilder.unescapeXml(attrValue);
+
       // Parse attribute value
       attributes[prefixedName] = options.parseAttributeValue
-        ? XMLParser.parseValue(attrValue)
-        : attrValue;
+        ? XMLParser.parseValue(decodedValue)
+        : decodedValue;
     }
 
     return attributes;

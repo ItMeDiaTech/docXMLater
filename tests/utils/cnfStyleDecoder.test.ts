@@ -10,7 +10,6 @@ import {
   getActiveConditionalsInPriorityOrder,
   CnfStyleFlags,
   CNF_TO_CONDITIONAL_MAP,
-  CONDITIONAL_PRIORITY_ORDER,
 } from '../../src/processors/cnfStyleDecoder';
 
 describe('cnfStyleDecoder', () => {
@@ -182,9 +181,9 @@ describe('cnfStyleDecoder', () => {
 
   describe('getActiveConditionalsInPriorityOrder', () => {
     it('should return conditionals in priority order (corners first)', () => {
-      // nwCell + firstRow - corner should come first
-      const result = getActiveConditionalsInPriorityOrder('100000000100');
-      expect(result[0]).toBe('nwCell'); // Corner first
+      // seCell + firstRow - corner should come first
+      const result = getActiveConditionalsInPriorityOrder('100000000010');
+      expect(result[0]).toBe('seCell'); // Corner first
       expect(result[1]).toBe('firstRow'); // Edge second
     });
 
@@ -195,16 +194,24 @@ describe('cnfStyleDecoder', () => {
       expect(result[1]).toBe('band1Horz'); // Banding second
     });
 
-    it('should match CONDITIONAL_PRIORITY_ORDER', () => {
-      // All flags set - should return in priority order
+    it('should rank the last-applied member of each group first', () => {
+      // All flags set - per ECMA-376 §17.7.6.6 subsequent formats override
+      // earlier ones, so within each group the later-applied member wins
       const result = getActiveConditionalsInPriorityOrder('111111111111');
-      expect(result).toHaveLength(12);
-
-      // Verify order matches CONDITIONAL_PRIORITY_ORDER
-      for (let i = 0; i < CONDITIONAL_PRIORITY_ORDER.length; i++) {
-        const flagName = CONDITIONAL_PRIORITY_ORDER[i]!;
-        expect(result[i]).toBe(CNF_TO_CONDITIONAL_MAP[flagName]);
-      }
+      expect(result).toEqual([
+        'seCell',
+        'swCell',
+        'neCell',
+        'nwCell',
+        'lastRow',
+        'firstRow',
+        'lastCol',
+        'firstCol',
+        'band2Horz',
+        'band1Horz',
+        'band2Vert',
+        'band1Vert',
+      ]);
     });
   });
 

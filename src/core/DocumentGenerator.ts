@@ -3,14 +3,19 @@
  * Converts structured data to OpenXML format
  */
 
+import { AlternateContent } from '../elements/AlternateContent.js';
 import { CommentManager } from '../elements/CommentManager.js';
+import { CustomXmlBlock } from '../elements/CustomXml.js';
 import { EndnoteManager } from '../elements/EndnoteManager.js';
 import { FontManager } from '../elements/FontManager.js';
 import { FootnoteManager } from '../elements/FootnoteManager.js';
 import { HeaderFooterManager } from '../elements/HeaderFooterManager.js';
 import { Hyperlink } from '../elements/Hyperlink.js';
 import { ImageManager } from '../elements/ImageManager.js';
+import { ImageRun } from '../elements/ImageRun.js';
+import { MathParagraph } from '../elements/MathElement.js';
 import { Paragraph } from '../elements/Paragraph.js';
+import { RegisteredBodyElement } from '../elements/RegisteredBodyElement.js';
 import { Revision } from '../elements/Revision.js';
 import { isHyperlinkContent } from '../elements/RevisionContent.js';
 import { Section } from '../elements/Section.js';
@@ -102,6 +107,7 @@ export class DocumentGenerator {
       themeColor?: string;
       themeTint?: string;
       themeShade?: string;
+      rawInnerXml?: string;
     }
   ): string {
     const logger = getLogger();
@@ -127,7 +133,21 @@ export class DocumentGenerator {
       if (documentBackground.themeColor) bgAttrs['w:themeColor'] = documentBackground.themeColor;
       if (documentBackground.themeTint) bgAttrs['w:themeTint'] = documentBackground.themeTint;
       if (documentBackground.themeShade) bgAttrs['w:themeShade'] = documentBackground.themeShade;
-      preBodyContent = [XMLBuilder.wSelf('background', bgAttrs)];
+      // Picture/gradient/texture page backgrounds carry a v:background child
+      // (ECMA-376 §17.2.1) preserved verbatim from parse; emit the expanded
+      // element form so the fill survives the round-trip. Flat-color
+      // backgrounds stay self-closing.
+      if (documentBackground.rawInnerXml) {
+        preBodyContent = [
+          {
+            name: 'w:background',
+            attributes: bgAttrs,
+            rawXml: documentBackground.rawInnerXml,
+          },
+        ];
+      } else {
+        preBodyContent = [XMLBuilder.wSelf('background', bgAttrs)];
+      }
     }
 
     const result = XMLBuilder.createDocument(bodyXmls, namespaces, preBodyContent);
@@ -468,8 +488,9 @@ ${properties}
     }
 
     // CustomXML entries — enumerate dynamically to handle multiple parts (item1, item2, etc.)
+    // Case-insensitive match: Word writes 'customXml/' but other producers vary casing
     for (const file of zipHandler.getFilePaths?.() || []) {
-      if (file.startsWith('customXML/item') && file.endsWith('.xml')) {
+      if (file.toLowerCase().startsWith('customxml/item') && file.endsWith('.xml')) {
         if (file.includes('Props')) {
           generatedOverrides.add(
             `/${file}|application/vnd.openxmlformats-officedocument.customXmlProperties+xml`
@@ -483,7 +504,19 @@ ${properties}
     // Merge with original entries, but ONLY keep overrides for files that actually exist
     // This prevents corruption when headers/footers are removed but their Content_Types entries
     // from the original document would otherwise be preserved
-    const allDefaults = new Set([...generatedDefaults, ...(originalContentTypes?.defaults || [])]);
+
+    // OPC allows at most one Default per extension (compared case-insensitively),
+    // so dedupe by extension rather than the full "ext|mimetype" string — a producer
+    // that declared a different-but-valid MIME (e.g. image/emf vs image/x-emf) must
+    // not yield duplicate <Default> elements. The original document's declared
+    // content type wins to preserve round-trip fidelity.
+    const allDefaults = new Map<string, string>();
+    for (const entry of [...(originalContentTypes?.defaults || []), ...generatedDefaults]) {
+      const ext = (entry.split('|')[0] || '').toLowerCase();
+      if (!allDefaults.has(ext)) {
+        allDefaults.set(ext, entry);
+      }
+    }
 
     // filesInArchive was created earlier (line 318) for header/footer validation
     // Reuse it here to filter original overrides as well
@@ -500,14 +533,23 @@ ${properties}
       }
     }
 
-    const allOverrides = new Set([...generatedOverrides, ...filteredOriginalOverrides]);
+    // Same OPC constraint for Overrides: at most one per part name. The original
+    // document's declared content type wins (e.g. a macro-enabled main part must
+    // not be downgraded to the standard wordprocessingml content type).
+    const allOverrides = new Map<string, string>();
+    for (const entry of [...filteredOriginalOverrides, ...generatedOverrides]) {
+      const partName = (entry.split('|')[0] || '').toLowerCase();
+      if (!allOverrides.has(partName)) {
+        allOverrides.set(partName, entry);
+      }
+    }
 
     // Build XML from merged sets
     let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     xml += '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n';
 
     // Add all default entries (escape attribute values for security)
-    for (const entry of allDefaults) {
+    for (const entry of allDefaults.values()) {
       const parts = entry.split('|');
       const ext = parts[0] || '';
       const contentType = parts[1] || '';
@@ -517,7 +559,7 @@ ${properties}
     }
 
     // Add all override entries (escape attribute values for security)
-    for (const entry of allOverrides) {
+    for (const entry of allOverrides.values()) {
       const parts = entry.split('|');
       const partName = parts[0] || '';
       const contentType = parts[1] || '';
@@ -549,6 +591,33 @@ ${properties}
     // Step 1: Collect all relationship IDs currently used by hyperlinks
     const usedRelIds = new Set<string>();
 
+    // Helper to extract r:id references from raw XML passthrough strings
+    const collectRelIds = (rawXml: string): void => {
+      const rIdPattern = /r:id="(rId\d+)"/g;
+      let rIdMatch: RegExpExecArray | null;
+      while ((rIdMatch = rIdPattern.exec(rawXml)) !== null) {
+        usedRelIds.add(rIdMatch[1]!);
+      }
+    };
+
+    // Helper to scan an image run's raw passthrough for r:id references.
+    // Clickable images carry <a:hlinkClick r:id=".."/> only in these slots
+    // (captured run XML, wp:docPr / pic:cNvPr extras) — never as a Hyperlink
+    // instance — so they must be scanned to keep the relationship alive.
+    const scanImageRun = (imageRun: ImageRun): void => {
+      const rawRunXml = imageRun.getRawRunXml();
+      if (rawRunXml) {
+        collectRelIds(rawRunXml);
+      }
+      const image = imageRun.getImageElement();
+      for (const slot of ['docPr-extra', 'cNvPr-extra']) {
+        const slotXml = image._getRawPassthrough(slot);
+        if (slotXml) {
+          collectRelIds(slotXml);
+        }
+      }
+    };
+
     // Helper to scan paragraphs for hyperlink relationship IDs
     const scanParagraph = (para: Paragraph) => {
       for (const item of para.getContent()) {
@@ -571,16 +640,19 @@ ${properties}
                 }
               }
             }
+            // Image runs inside tracked insertions can be clickable too
+            if (revContent instanceof ImageRun) {
+              scanImageRun(revContent);
+            }
           }
+        }
+        // Image runs may reference hyperlink relationships via hlinkClick
+        if (item instanceof ImageRun) {
+          scanImageRun(item);
         }
         // PreservedElements (raw XML passthrough) may contain r:id references
         if (item instanceof PreservedElement) {
-          const rawXml = item.getRawXml();
-          const rIdPattern = /r:id="(rId\d+)"/g;
-          let rIdMatch: RegExpExecArray | null;
-          while ((rIdMatch = rIdPattern.exec(rawXml)) !== null) {
-            usedRelIds.add(rIdMatch[1]!);
-          }
+          collectRelIds(item.getRawXml());
         }
       }
     };
@@ -606,11 +678,7 @@ ${properties}
               // Scan raw nested content (nested tables, SDTs stored as raw XML)
               // Extract any relationship IDs referenced in the raw XML to prevent orphan removal
               for (const nested of cell.getRawNestedContent()) {
-                const rIdPattern = /r:id="(rId\d+)"/g;
-                let rIdMatch: RegExpExecArray | null;
-                while ((rIdMatch = rIdPattern.exec(nested.xml)) !== null) {
-                  usedRelIds.add(rIdMatch[1]!);
-                }
+                collectRelIds(nested.xml);
               }
             }
           }
@@ -621,6 +689,17 @@ ${properties}
         for (const item of content) {
           scanElement(item); // Recursive call handles nested structures
         }
+      } else if (
+        element instanceof AlternateContent ||
+        element instanceof MathParagraph ||
+        element instanceof CustomXmlBlock ||
+        element instanceof PreservedElement ||
+        element instanceof RegisteredBodyElement
+      ) {
+        // Raw-XML body blocks (mc:AlternateContent drawings, math, custom XML,
+        // altChunk, registry-handled elements) are re-emitted verbatim and may
+        // reference hyperlink relationships via r:id — keep those rIds alive.
+        collectRelIds(element.getRawXml());
       }
       // TableOfContentsElement is for programmatic TOCs - real TOCs come as SDTs
     };
@@ -1043,9 +1122,17 @@ ${properties}
     xml += `
   <w:defaultTabStop w:val="720"/>
   <w:characterSpacingControl w:val="doNotCompress"/>
-  <w:updateFields w:val="true"/>`;
+  <w:updateFields w:val="true"/>
+  <w:compat>
+    <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
+    <w:compatSetting w:name="overrideTableStyleFontSizeAndJustification" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
+    <w:compatSetting w:name="enableOpenTypeFeatures" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
+    <w:compatSetting w:name="doNotFlipMirrorIndents" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
+    <w:compatSetting w:name="differentiateMultirowTableHeaders" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
+  </w:compat>`;
 
-    // RSIDs (Revision Save IDs)
+    // RSIDs (Revision Save IDs) — CT_Settings sequence places w:rsids (#83)
+    // after w:compat (#81), matching the loaded-document merge path
     if (trackChangesSettings?.rsids && trackChangesSettings.rsids.length > 0) {
       xml += '\n  <w:rsids>';
       if (trackChangesSettings.rsidRoot) {
@@ -1058,13 +1145,6 @@ ${properties}
     }
 
     xml += `
-  <w:compat>
-    <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
-    <w:compatSetting w:name="overrideTableStyleFontSizeAndJustification" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
-    <w:compatSetting w:name="enableOpenTypeFeatures" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
-    <w:compatSetting w:name="doNotFlipMirrorIndents" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
-    <w:compatSetting w:name="differentiateMultirowTableHeaders" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
-  </w:compat>
   <w:themeFontLang w:val="en-US"/>
   <w:clrSchemeMapping w:bg1="light1" w:t1="dark1" w:bg2="light2" w:t2="dark2" w:accent1="accent1" w:accent2="accent2" w:accent3="accent3" w:accent4="accent4" w:accent5="accent5" w:accent6="accent6" w:hyperlink="hyperlink" w:followedHyperlink="followedHyperlink"/>
 </w:settings>`;

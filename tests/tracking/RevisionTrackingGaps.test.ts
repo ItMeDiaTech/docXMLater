@@ -15,6 +15,7 @@ import { Run } from '../../src/elements/Run';
 import { Revision } from '../../src/elements/Revision';
 import { acceptRevisionsInMemory } from '../../src/processors/InMemoryRevisionAcceptor';
 import { XMLBuilder } from '../../src/xml/XMLBuilder';
+import { ZipHandler } from '../../src/zip/ZipHandler';
 
 // ============================================================================
 // Helper: create a document with tracking enabled
@@ -622,28 +623,37 @@ describe('Structural table change tracking', () => {
     doc.dispose();
   });
 
-  it('should mark new cells with cellIns on insertRow', () => {
+  it('should mark inserted row with trPr w:ins on insertRow', () => {
     const newRow = table.insertRow(1);
-    const cells = newRow.getCells();
-    for (const cell of cells) {
-      const rev = cell.getCellRevision();
-      expect(rev).toBeDefined();
-      expect(rev!.getType()).toBe('tableCellInsert');
-      expect(rev!.getAuthor()).toBe('TestAuthor');
+    // Whole-row insertions use the row-level marker (ECMA-376 §17.13.5.19),
+    // not per-cell cellIns (which tracks cell-structure changes)
+    const ins = newRow.getRowInsertion();
+    expect(ins).toBeDefined();
+    expect(ins!.author).toBe('TestAuthor');
+    for (const cell of newRow.getCells()) {
+      expect(cell.getCellRevision()).toBeUndefined();
     }
   });
 
-  it('should mark cells with cellDel on removeRow (not actually remove)', () => {
+  it('should mark row with trPr w:del on removeRow (not actually remove)', () => {
     const rowBefore = table.getRows()[1]!;
-    const cellsBefore = rowBefore.getCells();
     table.removeRow(1);
-    // Row should still exist (not removed) with cellDel markers
+    // Row should still exist (not removed) with the row-level deletion
+    // marker (ECMA-376 §17.13.5.14), not per-cell cellDel
     expect(table.getRows().length).toBe(3); // Still 3 rows
-    for (const cell of cellsBefore) {
-      const rev = cell.getCellRevision();
-      expect(rev).toBeDefined();
-      expect(rev!.getType()).toBe('tableCellDelete');
+    const del = rowBefore.getRowDeletion();
+    expect(del).toBeDefined();
+    expect(del!.author).toBe('TestAuthor');
+    for (const cell of rowBefore.getCells()) {
+      expect(cell.getCellRevision()).toBeUndefined();
     }
+  });
+
+  it('should remove the row when the tracked deletion is accepted', async () => {
+    table.removeRow(1);
+    expect(table.getRows().length).toBe(3);
+    await doc.acceptAllRevisions();
+    expect(table.getRows().length).toBe(2);
   });
 
   it('should mark new cells with cellIns on addColumn', () => {
@@ -687,6 +697,7 @@ describe('Structural table change tracking', () => {
   it('should not mark structural changes when tracking is disabled', () => {
     doc.disableTrackChanges();
     const newRow = table.insertRow(1);
+    expect(newRow.getRowInsertion()).toBeUndefined();
     for (const cell of newRow.getCells()) {
       expect(cell.getCellRevision()).toBeUndefined();
     }
@@ -722,7 +733,7 @@ describe('Body-level paragraph add/remove tracking', () => {
     doc.dispose();
   });
 
-  it('should wrap paragraph runs in w:ins on addParagraph', () => {
+  it('should wrap paragraph runs in w:ins on addParagraph', async () => {
     const para = new Paragraph();
     para.addText('Tracked text');
     doc.addParagraph(para);
@@ -732,6 +743,17 @@ describe('Body-level paragraph add/remove tracking', () => {
     expect(revisions.length).toBe(1);
     expect(revisions[0]!.getType()).toBe('insert');
     expect(revisions[0]!.getAuthor()).toBe('TestAuthor');
+
+    // The run must be REPLACED by the revision, not left alongside it —
+    // a live top-level copy would serialize the text twice
+    const plainRuns = content.filter((item) => item instanceof Run);
+    expect(plainRuns.length).toBe(0);
+
+    const buffer = await doc.toBuffer();
+    const zip = new ZipHandler();
+    await zip.loadFromBuffer(buffer);
+    const xml = zip.getFileAsString('word/document.xml')!;
+    expect(xml.match(/Tracked text/g)!.length).toBe(1);
   });
 
   it('should not wrap empty paragraphs in w:ins', () => {
@@ -761,6 +783,11 @@ describe('Body-level paragraph add/remove tracking', () => {
     const revisions = content.filter((item) => item instanceof Revision);
     expect(revisions.length).toBe(1);
     expect(revisions[0]!.getType()).toBe('delete');
+
+    // The original run must be REPLACED by the revision — a live top-level
+    // copy would serialize the text twice and survive an accept-all
+    const plainRuns = content.filter((item) => item instanceof Run);
+    expect(plainRuns.length).toBe(0);
   });
 
   it('should actually remove paragraph when tracking is disabled', () => {
@@ -804,6 +831,10 @@ describe('TableCell paragraph add/remove tracking', () => {
     const revisions = content.filter((item) => item instanceof Revision);
     expect(revisions.length).toBe(1);
     expect(revisions[0]!.getType()).toBe('insert');
+
+    // The run must be REPLACED by the revision, not left alongside it
+    const plainRuns = content.filter((item) => item instanceof Run);
+    expect(plainRuns.length).toBe(0);
   });
 
   it('should wrap content in w:del on removeParagraph', () => {
@@ -1033,7 +1064,7 @@ describe('Fix 1: Element identity prevents consolidation key collisions', () => 
 });
 
 describe('Fix 2: removeRows respects tracking', () => {
-  it('should mark cells with cellDel when tracking enabled', () => {
+  it('should mark rows with trPr w:del when tracking enabled', () => {
     const doc = createTrackedDocument();
     const table = new Table(4, 2);
     doc.addTable(table);
@@ -1043,18 +1074,16 @@ describe('Fix 2: removeRows respects tracking', () => {
     // Rows should still exist (not removed)
     expect(table.getRows().length).toBe(4);
 
-    // Rows 1 and 2 should have cellDel markers
+    // Rows 1 and 2 should carry the row-level deletion marker
     for (let i = 1; i <= 2; i++) {
-      for (const cell of table.getRows()[i]!.getCells()) {
-        const rev = cell.getCellRevision();
-        expect(rev).toBeDefined();
-        expect(rev!.getType()).toBe('tableCellDelete');
-      }
+      const del = table.getRows()[i]!.getRowDeletion();
+      expect(del).toBeDefined();
+      expect(del!.author).toBe('TestAuthor');
     }
 
-    // Rows 0 and 3 should NOT have cellDel markers
-    expect(table.getRows()[0]!.getCells()[0]!.getCellRevision()).toBeUndefined();
-    expect(table.getRows()[3]!.getCells()[0]!.getCellRevision()).toBeUndefined();
+    // Rows 0 and 3 should NOT have deletion markers
+    expect(table.getRows()[0]!.getRowDeletion()).toBeUndefined();
+    expect(table.getRows()[3]!.getRowDeletion()).toBeUndefined();
 
     doc.dispose();
   });
@@ -1072,13 +1101,14 @@ describe('Fix 2: removeRows respects tracking', () => {
 });
 
 describe('Fix 3: removeRow wraps content in w:del', () => {
-  it('should wrap cell text in w:del revisions', () => {
+  it('should wrap cell text in w:del revisions without leaving live copies', async () => {
     const doc = Document.create();
     const table = new Table(2, 1);
     doc.addTable(table);
 
     // Add text to cells without tracking
-    const cell = table.getRows()[1]!.getCells()[0]!;
+    const row = table.getRows()[1]!;
+    const cell = row.getCells()[0]!;
     const para = new Paragraph();
     para.addText('Cell text');
     cell.addParagraph(para);
@@ -1087,15 +1117,26 @@ describe('Fix 3: removeRow wraps content in w:del', () => {
     doc.enableTrackChanges({ author: 'TestAuthor' });
     table.removeRow(1);
 
-    // Cell should have cellDel AND content should have w:del revision
-    const rev = cell.getCellRevision();
-    expect(rev).toBeDefined();
-    expect(rev!.getType()).toBe('tableCellDelete');
+    // Row should carry the row-level deletion marker
+    expect(row.getRowDeletion()).toBeDefined();
 
     const content = para.getContent();
     const revisions = content.filter((item) => item instanceof Revision);
     expect(revisions.length).toBe(1);
     expect(revisions[0]!.getType()).toBe('delete');
+    // The original run must be REPLACED by the revision, not kept alongside
+    // it — otherwise the text serializes twice and survives an accept
+    expect(content.filter((item) => item instanceof Run).length).toBe(0);
+
+    // Serialized XML: the text exists only inside w:del (as w:delText),
+    // never as a live unwrapped run
+    const buffer = await doc.toBuffer();
+    const zip = new ZipHandler();
+    await zip.loadFromBuffer(buffer);
+    const xml = zip.getFileAsString('word/document.xml')!;
+    expect((xml.match(/Cell text/g) || []).length).toBe(1);
+    expect(xml).toMatch(/<w:delText[^>]*>Cell text/);
+    expect(xml).not.toMatch(/<w:t[ >][^<]*Cell text/);
 
     doc.dispose();
   });

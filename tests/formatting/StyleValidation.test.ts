@@ -6,6 +6,7 @@
  */
 
 import { Document, Style, StylesManager } from '../../src';
+import { ZipHandler } from '../../src/zip/ZipHandler';
 
 describe('Style Validation Features', () => {
   let doc: Document;
@@ -62,6 +63,34 @@ describe('Style Validation Features', () => {
     it('should return false for non-existent style', () => {
       const removed = doc.removeStyle('NonExistent');
       expect(removed).toBe(false);
+    });
+
+    it('should persist removal to saved styles.xml for loaded documents', async () => {
+      const source = Document.create();
+      source.addStyle(
+        Style.create({
+          styleId: 'DoomedStyle',
+          name: 'Doomed Style',
+          type: 'paragraph',
+        })
+      );
+      const buffer = await source.toBuffer();
+      source.dispose();
+
+      const loaded = await Document.loadFromBuffer(buffer);
+      try {
+        expect(loaded.hasStyle('DoomedStyle')).toBe(true);
+        expect(loaded.removeStyle('DoomedStyle')).toBe(true);
+
+        const savedBuffer = await loaded.toBuffer();
+        const zip = new ZipHandler();
+        await zip.loadFromBuffer(savedBuffer);
+        const stylesXml = zip.getFileAsString('word/styles.xml');
+        expect(stylesXml).toBeDefined();
+        expect(stylesXml).not.toContain('w:styleId="DoomedStyle"');
+      } finally {
+        loaded.dispose();
+      }
     });
   });
 

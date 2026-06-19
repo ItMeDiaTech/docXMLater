@@ -78,25 +78,31 @@ const BIT_POSITIONS: Record<keyof CnfStyleFlags, number> = {
 
 /**
  * Priority order for conditional formatting resolution
- * More specific conditions (corners) override less specific (edges, banding)
- * Per ECMA-376, this is the order in which conditionals should be applied
+ *
+ * ECMA-376 §17.7.6.6 applies conditional formats in sequence (banding, then
+ * first/last row, first/last column, then corners top-left through
+ * bottom-right) with subsequent formats overriding earlier ones. First-match
+ * consumers need the opposite: the last-applied (winning) member of each
+ * group listed first, so when two conditionals in the same group co-apply
+ * (e.g. firstRow + lastRow in a single-row table) resolution picks the one
+ * Word actually renders.
  */
 export const CONDITIONAL_PRIORITY_ORDER: (keyof CnfStyleFlags)[] = [
-  // Corner cells (most specific)
-  'nwCell',
-  'neCell',
-  'swCell',
+  // Corner cells (most specific; spec applies nw, ne, sw, se — se wins)
   'seCell',
-  // Edge rows/columns
-  'firstRow',
+  'swCell',
+  'neCell',
+  'nwCell',
+  // Edge rows/columns (within each pair, last is applied after first)
   'lastRow',
-  'firstCol',
+  'firstRow',
   'lastCol',
-  // Banding (least specific)
-  'band1Horz',
+  'firstCol',
+  // Banding (least specific; even banding is applied after odd)
   'band2Horz',
-  'band1Vert',
+  'band1Horz',
   'band2Vert',
+  'band1Vert',
 ];
 
 /**

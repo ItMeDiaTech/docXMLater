@@ -171,12 +171,28 @@ export class NumberingLevel {
   private properties: Required<
     Omit<
       NumberingLevelProperties,
-      'lvlRestart' | 'underline' | 'pStyle' | 'tentative' | 'tplc' | 'lvlPicBulletId' | 'legacy'
+      | 'fontSize'
+      | 'color'
+      | 'lvlRestart'
+      | 'underline'
+      | 'pStyle'
+      | 'tentative'
+      | 'tplc'
+      | 'lvlPicBulletId'
+      | 'legacy'
     >
   > &
     Pick<
       NumberingLevelProperties,
-      'lvlRestart' | 'underline' | 'pStyle' | 'tentative' | 'tplc' | 'lvlPicBulletId' | 'legacy'
+      | 'fontSize'
+      | 'color'
+      | 'lvlRestart'
+      | 'underline'
+      | 'pStyle'
+      | 'tentative'
+      | 'tplc'
+      | 'lvlPicBulletId'
+      | 'legacy'
     >;
 
   /**
@@ -195,11 +211,14 @@ export class NumberingLevel {
         properties.leftIndent !== undefined ? properties.leftIndent : 720 + properties.level * 360,
       hangingIndent: properties.hangingIndent !== undefined ? properties.hangingIndent : 360,
       font: properties.font || 'Calibri',
-      fontSize: properties.fontSize || 22, // 11pt default
+      // undefined = inherit per ECMA-376 (absent w:sz/w:color rPr child);
+      // forcing defaults here would inject explicit size/color into
+      // re-serialized levels that the source document never specified
+      fontSize: properties.fontSize,
       isLegalNumberingStyle:
         properties.isLegalNumberingStyle !== undefined ? properties.isLegalNumberingStyle : false,
       suffix: properties.suffix || 'tab',
-      color: properties.color || '000000',
+      color: properties.color,
       bold: properties.bold !== undefined ? properties.bold : false,
       italic: properties.italic !== undefined ? properties.italic : false,
       underline: properties.underline,
@@ -310,12 +329,28 @@ export class NumberingLevel {
   getProperties(): Required<
     Omit<
       NumberingLevelProperties,
-      'lvlRestart' | 'underline' | 'pStyle' | 'tentative' | 'tplc' | 'lvlPicBulletId' | 'legacy'
+      | 'fontSize'
+      | 'color'
+      | 'lvlRestart'
+      | 'underline'
+      | 'pStyle'
+      | 'tentative'
+      | 'tplc'
+      | 'lvlPicBulletId'
+      | 'legacy'
     >
   > &
     Pick<
       NumberingLevelProperties,
-      'lvlRestart' | 'underline' | 'pStyle' | 'tentative' | 'tplc' | 'lvlPicBulletId' | 'legacy'
+      | 'fontSize'
+      | 'color'
+      | 'lvlRestart'
+      | 'underline'
+      | 'pStyle'
+      | 'tentative'
+      | 'tplc'
+      | 'lvlPicBulletId'
+      | 'legacy'
     > {
     return { ...this.properties };
   }
@@ -616,13 +651,15 @@ export class NumberingLevel {
     // ... b, bCs, i, iCs, ... color (#19), ... sz (#24), szCs (#25), ... u (#27)
 
     // Color (#19)
-    if (this.properties.color) {
+    if (this.properties.color !== undefined) {
       rPrChildren.push(XMLBuilder.wSelf('color', { 'w:val': this.properties.color }));
     }
 
-    // Font size (#24, #25)
-    rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': this.properties.fontSize.toString() }));
-    rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': this.properties.fontSize.toString() }));
+    // Font size (#24, #25) — omit when unset so the level inherits size
+    if (this.properties.fontSize !== undefined) {
+      rPrChildren.push(XMLBuilder.wSelf('sz', { 'w:val': this.properties.fontSize.toString() }));
+      rPrChildren.push(XMLBuilder.wSelf('szCs', { 'w:val': this.properties.fontSize.toString() }));
+    }
 
     // Underline (#27)
     if (this.properties.underline) {
@@ -1123,9 +1160,10 @@ export class NumberingLevel {
       if (hangingMatch?.[1]) hangingIndent = parseInt(hangingMatch[1], 10);
     }
 
-    // Extract font and size from <w:rPr>
+    // Extract font and size from <w:rPr>. An absent w:sz means the level
+    // inherits its size — keep it undefined so toXML doesn't fabricate one.
     let font = 'Calibri';
-    let fontSize = 22;
+    let fontSize: number | undefined;
 
     const rFontsMatch = /<w:rFonts[^>]*\/>/.exec(xml);
     if (rFontsMatch) {

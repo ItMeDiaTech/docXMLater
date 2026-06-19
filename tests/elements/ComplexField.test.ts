@@ -64,15 +64,16 @@ describe('ComplexField', () => {
       }
     });
 
-    it('should generate 4 runs when result is not provided', () => {
+    it('should generate 3 runs when result is not provided', () => {
       const field = new ComplexField({
         instruction: ' PAGE ',
       });
 
       const runs = field.toXML();
 
-      // Should have 4 runs: begin, instr, separate, end (no result)
-      expect(runs).toHaveLength(4);
+      // Per ECMA-376, fields without a result section skip w:fldSep:
+      // begin, instr, end (no separator, no result)
+      expect(runs).toHaveLength(3);
 
       // Verify all runs are present
       for (const run of runs) {
@@ -80,6 +81,36 @@ describe('ComplexField', () => {
         expect(run.name).toBe('w:r');
         expect(run.children).toBeDefined();
       }
+
+      const fldCharTypes = runs.flatMap((run) =>
+        (run.children || [])
+          .filter(
+            (child): child is XMLElement => typeof child !== 'string' && child.name === 'w:fldChar'
+          )
+          .map((child) => child.attributes!['w:fldCharType'])
+      );
+      expect(fldCharTypes).toEqual(['begin', 'end']);
+    });
+
+    it('should emit separator when hasResult is true even with empty result', () => {
+      const field = new ComplexField({
+        instruction: ' PAGE ',
+        hasResult: true,
+      });
+
+      const runs = field.toXML();
+
+      // Field had a separator with an empty result: begin, instr, separate, end
+      expect(runs).toHaveLength(4);
+
+      const fldCharTypes = runs.flatMap((run) =>
+        (run.children || [])
+          .filter(
+            (child): child is XMLElement => typeof child !== 'string' && child.name === 'w:fldChar'
+          )
+          .map((child) => child.attributes!['w:fldCharType'])
+      );
+      expect(fldCharTypes).toEqual(['begin', 'separate', 'end']);
     });
 
     it('should preserve xml:space attribute on instrText and result', () => {
@@ -110,8 +141,8 @@ describe('ComplexField', () => {
       const runs = field.toXML();
 
       // Check that instruction run exists and has children (including rPr)
-      // Should have 4 runs (begin, instr, sep, end) since no result provided
-      expect(runs).toHaveLength(4);
+      // Should have 3 runs (begin, instr, end) since no result provided
+      expect(runs).toHaveLength(3);
       if (runs[1]) {
         expect(runs[1].children).toBeDefined();
         if (runs[1].children) {

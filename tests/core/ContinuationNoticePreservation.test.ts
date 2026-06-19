@@ -141,6 +141,55 @@ describe('ContinuationNotice preservation', () => {
     doc2.dispose();
   });
 
+  it('should remove a footnote and its body reference via Document.removeFootnote', async () => {
+    const doc = Document.create();
+    const buf = await doc.toBuffer();
+    doc.dispose();
+
+    const JSZip = require('jszip');
+    const zip = await JSZip.loadAsync(buf);
+
+    zip.file(
+      'word/document.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p><w:r><w:t>Anchor text</w:t></w:r><w:r><w:footnoteReference w:id="2"/></w:r></w:p>
+    <w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>
+  </w:body>
+</w:document>`
+    );
+    zip.file(
+      'word/footnotes.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>
+  <w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>
+  <w:footnote w:id="2"><w:p><w:r><w:t>Removable footnote</w:t></w:r></w:p></w:footnote>
+</w:footnotes>`
+    );
+
+    const modifiedBuf = await zip.generateAsync({ type: 'nodebuffer' });
+    const doc2 = await Document.loadFromBuffer(modifiedBuf);
+
+    expect(doc2.removeFootnote(2)).toBe(true);
+
+    const outBuf = await doc2.toBuffer();
+    doc2.dispose();
+
+    const outZip = await JSZip.loadAsync(outBuf);
+    const outFootnotes = await outZip.file('word/footnotes.xml')?.async('string');
+    const outDocument = await outZip.file('word/document.xml')?.async('string');
+
+    // Definition removed even though it was the last user footnote — the
+    // dirty flag must defeat the original-XML passthrough
+    expect(outFootnotes).toBeDefined();
+    expect(outFootnotes).not.toContain('Removable footnote');
+    // Body reference stripped so every reference resolves per ECMA-376 §17.11.14
+    expect(outDocument).not.toContain('w:footnoteReference');
+    expect(outDocument).toContain('Anchor text');
+  });
+
   it('should set nextId correctly after clear with continuationNotice', async () => {
     const doc = Document.create();
     const buf = await doc.toBuffer();

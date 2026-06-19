@@ -134,6 +134,22 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
 }
 
 /**
+ * Escapes a value for use inside a quoted field-instruction argument.
+ *
+ * Per ECMA-376 field-argument syntax (§17.16.4.1), a literal double quote
+ * inside a quoted argument must be written as \" and a literal backslash
+ * as \\ — otherwise an embedded quote terminates the argument early and
+ * the remainder is misparsed as stray switches. The XML layer only
+ * escapes XML entities, so this must happen at field-code level.
+ *
+ * @param value Raw argument text
+ * @returns Text safe to interpolate between double quotes in a field code
+ */
+export function escapeFieldArgument(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
  * Creates a HYPERLINK field instruction string from components
  *
  * @param url The target URL
@@ -148,14 +164,14 @@ export function parseHyperlinkInstruction(instruction: string): ParsedHyperlinkI
  * ```
  */
 export function buildHyperlinkInstruction(url: string, anchor?: string, tooltip?: string): string {
-  let instruction = `HYPERLINK "${url}"`;
+  let instruction = `HYPERLINK "${escapeFieldArgument(url)}"`;
 
   if (anchor) {
-    instruction += ` \\l "${anchor}"`;
+    instruction += ` \\l "${escapeFieldArgument(anchor)}"`;
   }
 
   if (tooltip) {
-    instruction += ` \\o "${tooltip}"`;
+    instruction += ` \\o "${escapeFieldArgument(tooltip)}"`;
   }
 
   // Always add \h switch for clickable hyperlinks
@@ -291,7 +307,7 @@ export function createIFField(
   trueContent: string,
   falseContent = ''
 ): ComplexField {
-  const instruction = ` IF ${condition} "${trueContent}" "${falseContent}" `;
+  const instruction = ` IF ${condition} "${escapeFieldArgument(trueContent)}" "${escapeFieldArgument(falseContent)}" `;
 
   return new ComplexField({
     instruction,

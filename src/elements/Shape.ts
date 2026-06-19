@@ -503,57 +503,65 @@ export class Shape {
       selfClosing: true,
     });
 
-    // Position H (horizontal)
-    if (this.position) {
-      const posH = this.position.horizontal;
-      const posHChildren: XMLElement[] = [];
+    // Position H (horizontal) — required child of wp:anchor per CT_Anchor
+    // (minOccurs=1), so fall back to a zero page offset when no explicit
+    // position is configured (anchor-only floating shapes)
+    const posH = this.position?.horizontal;
+    const posHChildren: XMLElement[] = [];
 
-      if (posH.offset !== undefined) {
-        posHChildren.push({
-          name: 'wp:posOffset',
-          children: [posH.offset.toString()],
-        });
-      } else if (posH.alignment) {
-        posHChildren.push({
-          name: 'wp:align',
-          children: [posH.alignment],
-        });
-      }
-
-      children.push({
-        name: 'wp:positionH',
-        attributes: {
-          relativeFrom: posH.anchor,
-        },
-        children: posHChildren,
+    if (posH?.offset !== undefined) {
+      posHChildren.push({
+        name: 'wp:posOffset',
+        children: [posH.offset.toString()],
+      });
+    } else if (posH?.alignment) {
+      posHChildren.push({
+        name: 'wp:align',
+        children: [posH.alignment],
+      });
+    } else {
+      posHChildren.push({
+        name: 'wp:posOffset',
+        children: ['0'],
       });
     }
 
-    // Position V (vertical)
-    if (this.position) {
-      const posV = this.position.vertical;
-      const posVChildren: XMLElement[] = [];
+    children.push({
+      name: 'wp:positionH',
+      attributes: {
+        relativeFrom: posH?.anchor ?? 'page',
+      },
+      children: posHChildren,
+    });
 
-      if (posV.offset !== undefined) {
-        posVChildren.push({
-          name: 'wp:posOffset',
-          children: [posV.offset.toString()],
-        });
-      } else if (posV.alignment) {
-        posVChildren.push({
-          name: 'wp:align',
-          children: [posV.alignment],
-        });
-      }
+    // Position V (vertical) — required child of wp:anchor per CT_Anchor
+    const posV = this.position?.vertical;
+    const posVChildren: XMLElement[] = [];
 
-      children.push({
-        name: 'wp:positionV',
-        attributes: {
-          relativeFrom: posV.anchor,
-        },
-        children: posVChildren,
+    if (posV?.offset !== undefined) {
+      posVChildren.push({
+        name: 'wp:posOffset',
+        children: [posV.offset.toString()],
+      });
+    } else if (posV?.alignment) {
+      posVChildren.push({
+        name: 'wp:align',
+        children: [posV.alignment],
+      });
+    } else {
+      posVChildren.push({
+        name: 'wp:posOffset',
+        children: ['0'],
       });
     }
+
+    children.push({
+      name: 'wp:positionV',
+      attributes: {
+        relativeFrom: posV?.anchor ?? 'page',
+      },
+      children: posVChildren,
+    });
 
     // Extent (size)
     children.push({

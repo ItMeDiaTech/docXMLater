@@ -9,11 +9,13 @@
  * - 0x09 (tab), 0x0A (newline), 0x0D (carriage return)
  * - 0x20-0xD7FF, 0xE000-0xFFFD, 0x10000-0x10FFFF
  *
- * Invalid characters (control characters that must be removed):
+ * Invalid characters that must be removed:
  * - 0x00-0x08 (NULL through BACKSPACE)
  * - 0x0B-0x0C (VERTICAL TAB and FORM FEED)
  * - 0x0E-0x1F (SHIFT OUT through UNIT SEPARATOR)
  * - 0x7F (DELETE)
+ * - 0xFFFE-0xFFFF (Unicode noncharacters excluded by the Char production)
+ * - Unpaired surrogates (0xD800-0xDFFF outside a valid high/low pair)
  *
  * @module xmlSanitization
  */
@@ -21,26 +23,40 @@
 import { getGlobalLogger } from './logger.js';
 
 /**
- * Regular expression matching invalid XML 1.0 control characters.
- * Matches: 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F
+ * Regular expression matching invalid XML 1.0 characters.
+ * Matches: 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F, 0xFFFE, 0xFFFF
  * Does NOT match valid chars: 0x09 (tab), 0x0A (newline), 0x0D (CR)
  */
-const INVALID_XML_CHAR_REGEX = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
+const INVALID_XML_CHAR_REGEX = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F￾￿]/g;
 
 /**
- * Removes invalid XML 1.0 control characters from text.
+ * Matches surrogate code units that do not form a valid high/low pair.
+ * XML 1.0 Char excludes 0xD800-0xDFFF entirely; only properly paired
+ * surrogates (which decode to a single 0x10000-0x10FFFF character) are
+ * legal, so lone halves must be stripped or they corrupt the part at
+ * UTF-8 encode time.
+ */
+const UNPAIRED_SURROGATE_REGEX =
+  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/**
+ * Removes invalid XML 1.0 characters from text.
  *
- * Per XML 1.0 spec, characters 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F are invalid
- * and cannot appear in XML documents. This function removes them.
+ * Per XML 1.0 spec, characters 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F,
+ * 0xFFFE, 0xFFFF, and unpaired surrogates are invalid and cannot appear
+ * in XML documents. This function removes them.
  *
  * Valid control characters are preserved:
  * - Tab (0x09)
  * - Line Feed / Newline (0x0A)
  * - Carriage Return (0x0D)
  *
+ * Properly paired surrogates (astral-plane characters such as emoji)
+ * are preserved.
+ *
  * @param text - Input text to sanitize
  * @param logWarning - If true, logs a warning when invalid chars are found (default: true)
- * @returns Sanitized text with invalid control characters removed
+ * @returns Sanitized text with invalid characters removed
  *
  * @example
  * ```typescript
@@ -54,31 +70,33 @@ const INVALID_XML_CHAR_REGEX = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
  * ```
  */
 export function removeInvalidXmlChars(text: string, logWarning = true): string {
-  // Reset regex lastIndex for global regex
+  // Reset regex lastIndex for global regexes
   INVALID_XML_CHAR_REGEX.lastIndex = 0;
+  UNPAIRED_SURROGATE_REGEX.lastIndex = 0;
 
-  if (logWarning && INVALID_XML_CHAR_REGEX.test(text)) {
+  if (logWarning && (INVALID_XML_CHAR_REGEX.test(text) || UNPAIRED_SURROGATE_REGEX.test(text))) {
     // Reset regex lastIndex after test
     INVALID_XML_CHAR_REGEX.lastIndex = 0;
+    UNPAIRED_SURROGATE_REGEX.lastIndex = 0;
 
     const invalidChars = findInvalidXmlChars(text);
     const hexCodes = invalidChars
       .map((c) => `0x${c.toString(16).toUpperCase().padStart(2, '0')}`)
       .join(', ');
-    getGlobalLogger().warn(
-      `[XMLSanitization] Removing invalid XML control characters: ${hexCodes}`
-    );
+    getGlobalLogger().warn(`[XMLSanitization] Removing invalid XML characters: ${hexCodes}`);
   }
 
   // Reset regex lastIndex before replace
   INVALID_XML_CHAR_REGEX.lastIndex = 0;
-  return text.replace(INVALID_XML_CHAR_REGEX, '');
+  UNPAIRED_SURROGATE_REGEX.lastIndex = 0;
+  return text.replace(INVALID_XML_CHAR_REGEX, '').replace(UNPAIRED_SURROGATE_REGEX, '');
 }
 
 /**
- * Finds all invalid XML 1.0 control characters in text.
+ * Finds all invalid XML 1.0 characters in text.
  *
- * Returns an array of unique character codes that are invalid per XML 1.0 spec.
+ * Returns an array of unique character codes that are invalid per XML 1.0 spec,
+ * including 0xFFFE/0xFFFF noncharacters and unpaired surrogate code units.
  * This is useful for diagnostics and error reporting.
  *
  * @param text - Text to scan for invalid characters
@@ -100,12 +118,25 @@ export function findInvalidXmlChars(text: string): number[] {
     const code = text.charCodeAt(i);
 
     // Check if character is in invalid ranges
-    if (
+    let isInvalid =
       (code >= 0x00 && code <= 0x08) || // NULL through BACKSPACE
       (code >= 0x0b && code <= 0x0c) || // VERTICAL TAB and FORM FEED
       (code >= 0x0e && code <= 0x1f) || // SHIFT OUT through UNIT SEPARATOR
-      code === 0x7f // DELETE
-    ) {
+      code === 0x7f || // DELETE
+      code === 0xfffe || // Noncharacter excluded by XML 1.0 Char
+      code === 0xffff; // Noncharacter excluded by XML 1.0 Char
+
+    if (!isInvalid && code >= 0xd800 && code <= 0xdbff) {
+      // High surrogate is only valid when followed by a low surrogate
+      const next = text.charCodeAt(i + 1); // NaN at end of string fails the range check
+      isInvalid = !(next >= 0xdc00 && next <= 0xdfff);
+    } else if (!isInvalid && code >= 0xdc00 && code <= 0xdfff) {
+      // Low surrogate is only valid when preceded by a high surrogate
+      const prev = text.charCodeAt(i - 1); // NaN at start of string fails the range check
+      isInvalid = !(prev >= 0xd800 && prev <= 0xdbff);
+    }
+
+    if (isInvalid) {
       // Only add unique codes
       if (!invalid.includes(code)) {
         invalid.push(code);
@@ -117,7 +148,7 @@ export function findInvalidXmlChars(text: string): number[] {
 }
 
 /**
- * Checks if text contains any invalid XML 1.0 control characters.
+ * Checks if text contains any invalid XML 1.0 characters.
  *
  * This is a fast check that returns true/false without identifying specific characters.
  * Use `findInvalidXmlChars()` if you need to know which characters are invalid.
@@ -133,9 +164,10 @@ export function findInvalidXmlChars(text: string): number[] {
  * ```
  */
 export function hasInvalidXmlChars(text: string): boolean {
-  // Reset regex lastIndex for global regex
+  // Reset regex lastIndex for global regexes
   INVALID_XML_CHAR_REGEX.lastIndex = 0;
-  return INVALID_XML_CHAR_REGEX.test(text);
+  UNPAIRED_SURROGATE_REGEX.lastIndex = 0;
+  return INVALID_XML_CHAR_REGEX.test(text) || UNPAIRED_SURROGATE_REGEX.test(text);
 }
 
 /**

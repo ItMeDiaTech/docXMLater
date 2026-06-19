@@ -24,7 +24,7 @@ import { Document } from '../../src/core/Document';
 import { ZipHandler } from '../../src/zip/ZipHandler';
 import { StructuredDocumentTag } from '../../src/elements/StructuredDocumentTag';
 
-async function loadSdtCheckedValue(valXml: string) {
+async function buildSdtCheckboxDocx(checkboxInnerXml: string): Promise<Buffer> {
   const zipHandler = new ZipHandler();
   zipHandler.addFile(
     '[Content_Types].xml',
@@ -53,9 +53,7 @@ async function loadSdtCheckedValue(valXml: string) {
       <w:sdtPr>
         <w:id w:val="100"/>
         <w14:checkbox>
-          ${valXml}
-          <w14:checkedState w14:val="2612" w14:font="MS Gothic"/>
-          <w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/>
+          ${checkboxInnerXml}
         </w14:checkbox>
       </w:sdtPr>
       <w:sdtContent>
@@ -66,7 +64,15 @@ async function loadSdtCheckedValue(valXml: string) {
   </w:body>
 </w:document>`
   );
-  const buffer = await zipHandler.toBuffer();
+  return zipHandler.toBuffer();
+}
+
+async function loadSdtCheckedValue(valXml: string) {
+  const buffer = await buildSdtCheckboxDocx(
+    `${valXml}
+          <w14:checkedState w14:val="2612" w14:font="MS Gothic"/>
+          <w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/>`
+  );
   const doc = await Document.loadFromBuffer(buffer);
   const sdt = doc
     .getBodyElements()
@@ -97,5 +103,51 @@ describe('SDT <w14:checkbox> <w14:checked> — ST_OnOff literal coverage', () =>
   });
   it('bare <w14:checked/> → checked=true', async () => {
     expect(await loadSdtCheckedValue('<w14:checked/>')).toBe(true);
+  });
+});
+
+describe('SDT <w14:checkbox> state-symbol font preservation', () => {
+  // CT_SdtCheckboxSymbol pairs a character code with a glyph font;
+  // Wingdings PUA codes are meaningless in MS Gothic, so the original
+  // font must survive re-serialization.
+  const WINGDINGS_CHECKBOX = `<w14:checked w14:val="1"/>
+          <w14:checkedState w14:val="F0FE" w14:font="Wingdings"/>
+          <w14:uncheckedState w14:val="F0A8" w14:font="Wingdings 2"/>`;
+
+  it('parses w14:font from checkedState/uncheckedState', async () => {
+    const doc = await Document.loadFromBuffer(await buildSdtCheckboxDocx(WINGDINGS_CHECKBOX));
+    try {
+      const sdt = doc
+        .getBodyElements()
+        .find((el): el is StructuredDocumentTag => el instanceof StructuredDocumentTag);
+      const props = sdt?.getCheckboxProperties();
+      expect(props?.checkedFont).toBe('Wingdings');
+      expect(props?.uncheckedFont).toBe('Wingdings 2');
+    } finally {
+      doc.dispose();
+    }
+  });
+
+  it('keeps the original font when sdtPr is rebuilt after a mutation', async () => {
+    const doc = await Document.loadFromBuffer(await buildSdtCheckboxDocx(WINGDINGS_CHECKBOX));
+    try {
+      const sdt = doc
+        .getBodyElements()
+        .find((el): el is StructuredDocumentTag => el instanceof StructuredDocumentTag);
+      expect(sdt).toBeDefined();
+      // Toggling through the API invalidates the raw sdtPr passthrough,
+      // forcing toXML() to rebuild the checkbox from the model.
+      sdt!.setCheckboxProperties({ ...sdt!.getCheckboxProperties()!, checked: false });
+
+      const out = await doc.toBuffer();
+      const zip = new ZipHandler();
+      await zip.loadFromBuffer(out);
+      const docXml = zip.getFileAsString('word/document.xml')!;
+      expect(docXml).toContain('w14:font="Wingdings"');
+      expect(docXml).toContain('w14:font="Wingdings 2"');
+      expect(docXml).not.toContain('MS Gothic');
+    } finally {
+      doc.dispose();
+    }
   });
 });

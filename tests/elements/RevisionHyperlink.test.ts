@@ -17,6 +17,7 @@ import { Hyperlink } from '../../src/elements/Hyperlink';
 import { Revision } from '../../src/elements/Revision';
 import { Run } from '../../src/elements/Run';
 import { isRunContent, isHyperlinkContent } from '../../src/elements/RevisionContent';
+import { XMLBuilder } from '../../src/xml/XMLBuilder';
 
 const OUTPUT_DIR = join(__dirname, '../output');
 
@@ -362,7 +363,11 @@ describe('RevisionHyperlink Tests', () => {
 
     it('should handle revision with mixed content types', () => {
       const run1 = new Run('Text before ');
-      const hyperlink = new Hyperlink({ url: 'https://example.com', text: 'Link' });
+      const hyperlink = new Hyperlink({
+        url: 'https://example.com',
+        text: 'Link',
+        relationshipId: 'rId7',
+      });
       const run2 = new Run(' text after');
 
       const revision = Revision.createInsertion('Author', [run1, hyperlink, run2]);
@@ -370,6 +375,18 @@ describe('RevisionHyperlink Tests', () => {
       expect(revision.getContent()).toHaveLength(3);
       expect(revision.getRuns()).toHaveLength(2);
       expect(revision.getHyperlinks()).toHaveLength(1);
+
+      // Serialization must keep the hyperlink wrapper (with its r:id link target)
+      // as a sibling element instead of downgrading the link to plain runs
+      const xml = revision.toXML();
+      expect(xml).not.toBeNull();
+      const serialized = XMLBuilder.elementToString(xml!);
+      expect(serialized).toContain('<w:hyperlink');
+      expect(serialized).toContain('r:id="rId7"');
+      // The hyperlink wraps its own w:ins; the surrounding runs get their own w:ins siblings
+      expect(serialized).toMatch(/<w:hyperlink[^>]*><w:ins/);
+      expect(serialized).toContain('Text before ');
+      expect(serialized).toContain(' text after');
     });
 
     it('should preserve hyperlink tooltip through clone', () => {

@@ -506,8 +506,10 @@ export class Run {
       warnToConsole: true, // Enable warnings to help catch data quality issues
     });
 
-    // Use cleaned text if available and cleaning was requested
-    const cleanedText = validation.cleanedText || text;
+    // Use cleaned text if available and cleaning was requested.
+    // `??` (not `||`) so a cleaned result of '' (input that was entirely XML
+    // markup) is kept rather than falling back to the original markup-laden text.
+    const cleanedText = validation.cleanedText ?? text;
 
     // Convert undefined/null to empty string for consistent XML generation
     const normalizedText = cleanedText ?? '';
@@ -774,8 +776,10 @@ export class Run {
       warnToConsole: true, // Enable warnings to help catch data quality issues
     });
 
-    // Use cleaned text if available and cleaning was requested
-    const cleanedText = validation.cleanedText || text;
+    // Use cleaned text if available and cleaning was requested.
+    // `??` (not `||`) so a cleaned result of '' (input that was entirely XML
+    // markup) is kept rather than falling back to the original markup-laden text.
+    const cleanedText = validation.cleanedText ?? text;
 
     // Convert undefined/null to empty string for consistent XML generation
     const normalizedText = cleanedText ?? '';
@@ -1627,14 +1631,26 @@ export class Run {
    */
   setFont(font: string, size?: number): this {
     const previousFont = this.formatting.font;
+    const previousHAnsi = this.formatting.fontHAnsi;
+    const previousCs = this.formatting.fontCs;
     const previousSize = this.formatting.size;
     this.formatting.font = font;
+    // Mirror into hAnsi/cs so an explicit font choice covers all character
+    // ranges; the serializer no longer back-fills these slots from ascii.
+    this.formatting.fontHAnsi = font;
+    this.formatting.fontCs = font;
     if (size !== undefined) {
       this.formatting.size = size;
     }
     if (this.trackingContext?.isEnabled()) {
       if (previousFont !== font) {
         this.trackingContext.trackRunPropertyChange(this, 'font', previousFont, font);
+      }
+      if (previousHAnsi !== font) {
+        this.trackingContext.trackRunPropertyChange(this, 'fontHAnsi', previousHAnsi, font);
+      }
+      if (previousCs !== font) {
+        this.trackingContext.trackRunPropertyChange(this, 'fontCs', previousCs, font);
       }
       if (size !== undefined && previousSize !== size) {
         this.trackingContext.trackRunPropertyChange(this, 'size', previousSize, size);
@@ -2015,6 +2031,24 @@ export class Run {
     this.formatting.webHidden = webHidden;
     if (this.trackingContext?.isEnabled() && previousValue !== webHidden) {
       this.trackingContext.trackRunPropertyChange(this, 'webHidden', previousValue, webHidden);
+    }
+    return this;
+  }
+
+  /**
+   * Sets only the ASCII font slot (w:rFonts w:ascii) without mirroring into
+   * hAnsi/cs. Use this when reconstructing a run from source XML so the parsed
+   * model carries exactly the rFonts slots the document declared — unlike
+   * setFont(), which intentionally fills hAnsi/cs for programmatic convenience
+   * and would otherwise override style/theme-inherited fonts on round-trip.
+   * @param font - Font name for the ASCII slot
+   * @returns This run for method chaining
+   */
+  setFontAscii(font: string): this {
+    const previousValue = this.formatting.font;
+    this.formatting.font = font;
+    if (this.trackingContext?.isEnabled() && previousValue !== font) {
+      this.trackingContext.trackRunPropertyChange(this, 'font', previousValue, font);
     }
     return this;
   }
@@ -2822,9 +2856,13 @@ export class Run {
     ) {
       const rFontsAttrs: Record<string, string> = {};
       if (formatting.font) rFontsAttrs['w:ascii'] = formatting.font;
-      rFontsAttrs['w:hAnsi'] = formatting.fontHAnsi || formatting.font || '';
+      // Only emit w:hAnsi/w:cs when explicitly set — per ECMA-376 §17.3.2.26
+      // each rFonts slot inherits independently from the style/theme chain, so
+      // back-filling them from the ascii font would override style- or
+      // theme-resolved hAnsi/cs fonts and break round-trip fidelity.
+      if (formatting.fontHAnsi !== undefined) rFontsAttrs['w:hAnsi'] = formatting.fontHAnsi;
       if (formatting.fontEastAsia) rFontsAttrs['w:eastAsia'] = formatting.fontEastAsia;
-      rFontsAttrs['w:cs'] = formatting.fontCs || formatting.font || '';
+      if (formatting.fontCs !== undefined) rFontsAttrs['w:cs'] = formatting.fontCs;
       if (formatting.fontHint) rFontsAttrs['w:hint'] = formatting.fontHint;
       // Theme font references per ECMA-376 Part 1 §17.3.2.26
       if (formatting.fontAsciiTheme) rFontsAttrs['w:asciiTheme'] = formatting.fontAsciiTheme;

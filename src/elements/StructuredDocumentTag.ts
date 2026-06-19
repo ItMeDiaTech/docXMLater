@@ -9,6 +9,8 @@
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
 import { Paragraph } from './Paragraph.js';
 import { Table } from './Table.js';
+import { PreservedElement } from './PreservedElement.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
 
 /**
  * Type of content lock for SDT
@@ -95,6 +97,10 @@ export interface CheckboxProperties {
   checkedState?: string;
   /** Character code for unchecked state (default: '2610' - ☐) */
   uncheckedState?: string;
+  /** Font for the checked-state glyph (default: 'MS Gothic') */
+  checkedFont?: string;
+  /** Font for the unchecked-state glyph (default: 'MS Gothic') */
+  uncheckedFont?: string;
 }
 
 /**
@@ -167,8 +173,12 @@ export interface SDTProperties {
 
 /**
  * Content that can be wrapped by an SDT
+ *
+ * PreservedElement covers CT_SdtContentBlock children outside the modeled
+ * set (range markers, w:customXml, math, tracked-change wrappers) so they
+ * survive round-trip instead of being dropped on regeneration.
  */
-export type SDTContent = Table | Paragraph | StructuredDocumentTag;
+export type SDTContent = Table | Paragraph | StructuredDocumentTag | PreservedElement;
 
 /**
  * Structured Document Tag class
@@ -191,6 +201,17 @@ export type SDTContent = Table | Paragraph | StructuredDocumentTag;
 export class StructuredDocumentTag {
   private properties: SDTProperties;
   private content: SDTContent[];
+  // Original w:sdtPr markup captured at parse time. toXML() rebuilds sdtPr
+  // from a modeled subset of CT_SdtPr, which would drop unmodeled children
+  // (w:rPr, w15:appearance, w15:color, w:label, w:tabIndex, w:temporary,
+  // w15:repeatingSection, ...) on every save — so while no modeled property
+  // has been mutated, the captured markup is re-emitted verbatim.
+  private rawSdtPrXml?: string;
+  // Original w:sdtEndPr markup. Never modeled, so always re-emitted.
+  private rawSdtEndPrXml?: string;
+  // Once a modeled sdtPr property changes, the preserved markup is stale;
+  // fall back to rebuilding sdtPr from the modeled subset.
+  private sdtPrMutated = false;
 
   /**
    * Create a new Structured Document Tag
@@ -200,6 +221,16 @@ export class StructuredDocumentTag {
   constructor(properties: SDTProperties = {}, content: SDTContent[] = []) {
     this.properties = properties;
     this.content = content;
+  }
+
+  /** @internal */
+  _setRawSdtPrXml(xml: string): void {
+    this.rawSdtPrXml = xml;
+  }
+
+  /** @internal */
+  _setRawSdtEndPrXml(xml: string): void {
+    this.rawSdtEndPrXml = xml;
   }
 
   /**
@@ -216,6 +247,7 @@ export class StructuredDocumentTag {
    */
   setId(id: number): this {
     this.properties.id = id;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -233,6 +265,7 @@ export class StructuredDocumentTag {
    */
   setTag(tag: string): this {
     this.properties.tag = tag;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -250,6 +283,7 @@ export class StructuredDocumentTag {
    */
   setLock(lock: SDTLockType): this {
     this.properties.lock = lock;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -267,6 +301,7 @@ export class StructuredDocumentTag {
    */
   setAlias(alias: string): this {
     this.properties.alias = alias;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -284,6 +319,7 @@ export class StructuredDocumentTag {
    */
   setControlType(type: ContentControlType): this {
     this.properties.controlType = type;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -302,6 +338,7 @@ export class StructuredDocumentTag {
   setPlainTextProperties(properties: PlainTextProperties): this {
     this.properties.controlType = 'plainText';
     this.properties.plainText = properties;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -320,6 +357,7 @@ export class StructuredDocumentTag {
   setComboBoxProperties(properties: ComboBoxProperties): this {
     this.properties.controlType = 'comboBox';
     this.properties.comboBox = properties;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -338,6 +376,7 @@ export class StructuredDocumentTag {
   setDropDownListProperties(properties: DropDownListProperties): this {
     this.properties.controlType = 'dropDownList';
     this.properties.dropDownList = properties;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -356,6 +395,7 @@ export class StructuredDocumentTag {
   setDatePickerProperties(properties: DatePickerProperties): this {
     this.properties.controlType = 'datePicker';
     this.properties.datePicker = properties;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -374,6 +414,7 @@ export class StructuredDocumentTag {
   setCheckboxProperties(properties: CheckboxProperties): this {
     this.properties.controlType = 'checkbox';
     this.properties.checkbox = properties;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -400,6 +441,7 @@ export class StructuredDocumentTag {
   setBuildingBlockProperties(properties: BuildingBlockProperties): this {
     this.properties.controlType = 'buildingBlock';
     this.properties.buildingBlock = properties;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -449,6 +491,7 @@ export class StructuredDocumentTag {
    */
   setTemporary(temporary: boolean): this {
     this.properties.temporary = temporary;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -565,7 +608,13 @@ export class StructuredDocumentTag {
                 })
               );
             }
-            sdtPrChildren.push(XMLBuilder.w('comboBox', {}, comboBoxChildren));
+            // w:lastValue records the last selected entry (CT_SdtComboBox);
+            // dropping it on rebuild loses the control's stored selection.
+            const comboBoxAttrs: Record<string, string> = {};
+            if (this.properties.comboBox.lastValue !== undefined) {
+              comboBoxAttrs['w:lastValue'] = this.properties.comboBox.lastValue;
+            }
+            sdtPrChildren.push(XMLBuilder.w('comboBox', comboBoxAttrs, comboBoxChildren));
           }
           break;
 
@@ -580,7 +629,12 @@ export class StructuredDocumentTag {
                 })
               );
             }
-            sdtPrChildren.push(XMLBuilder.w('dropDownList', {}, dropDownChildren));
+            // Same CT_SdtDropDownList w:lastValue preservation as comboBox.
+            const dropDownAttrs: Record<string, string> = {};
+            if (this.properties.dropDownList.lastValue !== undefined) {
+              dropDownAttrs['w:lastValue'] = this.properties.dropDownList.lastValue;
+            }
+            sdtPrChildren.push(XMLBuilder.w('dropDownList', dropDownAttrs, dropDownChildren));
           }
           break;
 
@@ -590,7 +644,9 @@ export class StructuredDocumentTag {
             // storeMappedDataAs, and calendar are child elements with w:val
             const dateAttrs: Record<string, string> = {};
             if (this.properties.datePicker.fullDate) {
-              dateAttrs['w:fullDate'] = this.properties.datePicker.fullDate.toISOString();
+              // formatDateForXml strips milliseconds — Word rejects them in
+              // ST_DateTime attributes, and toISOString() always emits them.
+              dateAttrs['w:fullDate'] = formatDateForXml(this.properties.datePicker.fullDate);
             }
             const dateChildren: XMLElement[] = [];
             if (this.properties.datePicker.dateFormat) {
@@ -635,12 +691,17 @@ export class StructuredDocumentTag {
               );
             }
 
-            // Add checked state symbol - use w14 namespace per OOXML spec
+            // Add checked state symbol - use w14 namespace per OOXML spec.
+            // The state pairs a character code with a glyph font
+            // (CT_SdtCheckboxSymbol); keep the parsed font so codes authored
+            // in e.g. Wingdings are not re-pointed at MS Gothic, where they
+            // map to wrong or missing glyphs. MS Gothic is only the default
+            // for programmatically created checkboxes (Word's stock symbols).
             if (this.properties.checkbox.checkedState) {
               checkboxChildren.push(
                 XMLBuilder.w14Self('checkedState', {
                   'w14:val': this.properties.checkbox.checkedState,
-                  'w14:font': 'MS Gothic',
+                  'w14:font': this.properties.checkbox.checkedFont ?? 'MS Gothic',
                 })
               );
             }
@@ -650,7 +711,7 @@ export class StructuredDocumentTag {
               checkboxChildren.push(
                 XMLBuilder.w14Self('uncheckedState', {
                   'w14:val': this.properties.checkbox.uncheckedState,
-                  'w14:font': 'MS Gothic',
+                  'w14:font': this.properties.checkbox.uncheckedFont ?? 'MS Gothic',
                 })
               );
             }
@@ -723,8 +784,18 @@ export class StructuredDocumentTag {
       }
     }
 
-    if (sdtPrChildren.length > 0) {
+    if (this.rawSdtPrXml !== undefined && !this.sdtPrMutated) {
+      // The rebuilt sdtPr above only covers the modeled subset of CT_SdtPr;
+      // emit the parse-time markup verbatim so unmodeled children survive.
+      children.push({ name: '__rawXml', rawXml: this.rawSdtPrXml });
+    } else if (sdtPrChildren.length > 0) {
       children.push(XMLBuilder.w('sdtPr', {}, sdtPrChildren));
+    }
+
+    // w:sdtEndPr has no object model; re-emit the parse-time markup so it
+    // is not dropped on save (CT_SdtBlock order: sdtPr, sdtEndPr, sdtContent).
+    if (this.rawSdtEndPrXml !== undefined) {
+      children.push({ name: '__rawXml', rawXml: this.rawSdtEndPrXml });
     }
 
     // Build sdtContent
@@ -1009,6 +1080,7 @@ export class StructuredDocumentTag {
    */
   unlock(): this {
     delete this.properties.lock;
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -1055,6 +1127,7 @@ export class StructuredDocumentTag {
    */
   setPlaceholder(docPart: string): this {
     this.properties.placeholder = { docPart };
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -1073,6 +1146,7 @@ export class StructuredDocumentTag {
    */
   setDataBinding(xpath: string, prefixMappings?: string, storeItemId?: string): this {
     this.properties.dataBinding = { xpath, prefixMappings, storeItemId };
+    this.sdtPrMutated = true;
     return this;
   }
 
@@ -1089,6 +1163,7 @@ export class StructuredDocumentTag {
    */
   setShowingPlaceholder(val: boolean): this {
     this.properties.showingPlcHdr = val;
+    this.sdtPrMutated = true;
     return this;
   }
 

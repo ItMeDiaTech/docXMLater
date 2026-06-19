@@ -1636,6 +1636,8 @@ export class Style {
       },
       runFormatting: {
         font: 'Verdana',
+        fontHAnsi: 'Verdana',
+        fontCs: 'Verdana',
         size: 12,
         color: '000000',
       },
@@ -1684,6 +1686,8 @@ export class Style {
       },
       runFormatting: {
         font: 'Verdana',
+        fontHAnsi: 'Verdana',
+        fontCs: 'Verdana',
         size: sizes[level - 1],
         bold: true,
         color: '000000',
@@ -1713,6 +1717,8 @@ export class Style {
       uiPriority: 9,
       runFormatting: {
         font: 'Verdana',
+        fontHAnsi: 'Verdana',
+        fontCs: 'Verdana',
         size: sizes[level - 1],
         bold: true,
         color: '000000',
@@ -1738,6 +1744,8 @@ export class Style {
       },
       runFormatting: {
         font: 'Verdana',
+        fontHAnsi: 'Verdana',
+        fontCs: 'Verdana',
         size: 28,
         color: '000000',
       },
@@ -1762,6 +1770,8 @@ export class Style {
       },
       runFormatting: {
         font: 'Verdana',
+        fontHAnsi: 'Verdana',
+        fontCs: 'Verdana',
         size: 14,
         color: '000000',
         italic: true,
@@ -1798,6 +1808,8 @@ export class Style {
       },
       runFormatting: {
         font: 'Verdana',
+        fontHAnsi: 'Verdana',
+        fontCs: 'Verdana',
         size: 12,
         color: '000000',
       },
@@ -1818,6 +1830,8 @@ export class Style {
       runFormatting: {
         bold: true,
         font: 'Verdana',
+        fontHAnsi: 'Verdana',
+        fontCs: 'Verdana',
         size: 14,
         color: '000000', // Black
       },

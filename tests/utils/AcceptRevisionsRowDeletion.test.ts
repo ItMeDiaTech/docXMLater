@@ -15,8 +15,9 @@
 import { Document } from '../../src/core/Document';
 import { Table } from '../../src/elements/Table';
 import { ZipHandler } from '../../src/zip/ZipHandler';
+import { acceptAllRevisions } from '../../src/processors/acceptRevisions';
 
-async function makeDocxWithDeletedRow(): Promise<Buffer> {
+async function makeDocx(documentXml: string): Promise<Buffer> {
   const zipHandler = new ZipHandler();
   zipHandler.addFile(
     '[Content_Types].xml',
@@ -34,8 +35,12 @@ async function makeDocxWithDeletedRow(): Promise<Buffer> {
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`
   );
-  zipHandler.addFile(
-    'word/document.xml',
+  zipHandler.addFile('word/document.xml', documentXml);
+  return await zipHandler.toBuffer();
+}
+
+async function makeDocxWithDeletedRow(): Promise<Buffer> {
+  return await makeDocx(
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
@@ -61,7 +66,13 @@ async function makeDocxWithDeletedRow(): Promise<Buffer> {
   </w:body>
 </w:document>`
   );
-  return await zipHandler.toBuffer();
+}
+
+async function getSavedDocumentXml(doc: Document): Promise<string> {
+  const buffer = await doc.toBuffer();
+  const zip = new ZipHandler();
+  await zip.loadFromBuffer(buffer);
+  return zip.getFileAsString('word/document.xml')!;
 }
 
 describe('acceptAllRevisions (raw-XML path) — row-level <w:del/>', () => {
@@ -134,5 +145,103 @@ describe('acceptAllRevisions (raw-XML path) — row-level <w:del/>', () => {
     // Deleted content stripped; surviving content kept.
     expect(text).toBe(' surviving');
     doc.dispose();
+  });
+
+  it('removes the whole <w:tbl> when every row is tracked-deleted', async () => {
+    // A row-less table violates ECMA-376 §17.4.38 (at least one w:tr per
+    // w:tbl) and Word's Accept All removes the entire table in this case.
+    const buffer = await makeDocx(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tblPr/>
+      <w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid>
+      <w:tr>
+        <w:trPr>
+          <w:del w:id="1" w:author="A" w:date="2026-01-15T10:00:00Z"/>
+        </w:trPr>
+        <w:tc><w:tcPr/><w:p><w:r><w:t>gone</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:trPr>
+          <w:del w:id="2" w:author="A" w:date="2026-01-15T10:00:00Z"/>
+        </w:trPr>
+        <w:tc><w:tcPr/><w:p><w:r><w:t>also gone</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>after</w:t></w:r></w:p>
+  </w:body>
+</w:document>`
+    );
+    const doc = await Document.loadFromBuffer(buffer);
+    try {
+      expect(doc.getBodyElements().some((el) => el instanceof Table)).toBe(false);
+      const savedXml = await getSavedDocumentXml(doc);
+      expect(savedXml).not.toMatch(/<w:tbl[ >/]/);
+      expect(savedXml).toContain('after');
+    } finally {
+      doc.dispose();
+    }
+  });
+
+  it('keeps an inter-row bookmarkEnd anchored when a preceding row is deleted', async () => {
+    // ECMA-376 CT_Tbl allows range markers between rows; removing a row
+    // must not shift the marker relative to the surviving rows.
+    const buffer = await makeDocx(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tblPr/>
+      <w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid>
+      <w:tr>
+        <w:trPr>
+          <w:del w:id="1" w:author="A" w:date="2026-01-15T10:00:00Z"/>
+        </w:trPr>
+        <w:tc><w:tcPr/><w:p><w:r><w:t>gone</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:bookmarkEnd w:id="5"/>
+      <w:tr>
+        <w:trPr/>
+        <w:tc><w:tcPr/><w:p><w:r><w:t>row1</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:trPr/>
+        <w:tc><w:tcPr/><w:p><w:r><w:t>row2</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p/>
+  </w:body>
+</w:document>`
+    );
+    // Marker position is asserted on the acceptor output: the in-memory
+    // table model does not carry inter-row range markers, so the saved
+    // file cannot reflect their ordering.
+    const zip = new ZipHandler();
+    await zip.loadFromBuffer(buffer);
+    await acceptAllRevisions(zip);
+    const accepted = zip.getFileAsString('word/document.xml')!;
+    expect(accepted).not.toContain('gone');
+    // Stale order metadata dropped the trailing row — both must survive.
+    expect(accepted).toContain('row1');
+    expect(accepted).toContain('row2');
+    // The marker preceded the first surviving row; it must stay there.
+    const markerIdx = accepted.indexOf('<w:bookmarkEnd');
+    const firstRowIdx = accepted.indexOf('<w:tr');
+    expect(markerIdx).toBeGreaterThan(-1);
+    expect(firstRowIdx).toBeGreaterThan(-1);
+    expect(markerIdx).toBeLessThan(firstRowIdx);
+
+    // End-to-end through the model: both surviving rows reach the document.
+    const doc = await Document.loadFromBuffer(buffer);
+    try {
+      const table = doc.getBodyElements().find((el) => el instanceof Table) as Table;
+      expect(table).toBeDefined();
+      const texts = table.getRows().map((r) => r.getCells()[0]!.getParagraphs()[0]!.getText());
+      expect(texts).toEqual(['row1', 'row2']);
+    } finally {
+      doc.dispose();
+    }
   });
 });

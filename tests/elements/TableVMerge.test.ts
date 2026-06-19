@@ -156,6 +156,12 @@ describe('Table Vertical Merge (vMerge)', () => {
       // Should have column span but not vMerge
       expect(gridSpan).toBeDefined();
       expect(vMerge).toBeUndefined();
+
+      // The merged cell replaces the cells it spans (ECMA-376 §17.4.17) —
+      // absorbed cells leave the row, other rows are untouched
+      expect(table.getRow(0)!.getCellCount()).toBe(1);
+      expect(table.getRow(1)!.getCellCount()).toBe(3);
+      expect(table.getRow(2)!.getCellCount()).toBe(3);
     });
 
     it('should handle single-column merge (only vertical merge)', () => {

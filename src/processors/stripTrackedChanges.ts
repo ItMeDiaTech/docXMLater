@@ -67,18 +67,29 @@ class TrackedChangesStripper {
     // STEP 2: Process insertions - keep content, remove wrapper
     content = this.processInsertions(content);
 
-    // STEP 3: Process deletions - remove entirely
+    // STEP 3: Remove rows whose w:trPr carries a row-deletion marker
+    // (self-closing <w:del/> per ECMA-376 §17.13.5.14 marks the ENTIRE
+    // row as deleted). Must run before the marker itself is stripped in
+    // STEP 4, otherwise the row would silently survive as un-deleted.
+    content = this.removeDeletedRows(content);
+
+    // STEP 4: Remove self-closing revision markers (paragraph-mark
+    // deletions in w:pPr/w:rPr per ECMA-376 §17.13.5.15, etc.). Must run
+    // BEFORE the block-removal steps: their [^>]* also matches the
+    // trailing '/' of `<w:del .../>`, which would turn the marker into an
+    // opening tag and swallow everything up to the next closing tag,
+    // corrupting the part.
+    content = this.removeSelfClosingRevisionTags(content);
+
+    // STEP 5: Process deletions - remove entirely
     content = this.processDeletions(content);
 
-    // STEP 4: Process move operations
+    // STEP 6: Process move operations
     content = this.processMoveFrom(content);
     content = this.processMoveTo(content);
 
-    // STEP 5: Remove all property change tracking elements
+    // STEP 7: Remove all property change tracking elements
     content = this.removePropertyChanges(content);
-
-    // STEP 6: Remove any remaining self-closing revision tags
-    content = this.removeSelfClosingRevisionTags(content);
 
     // Update the file in the zip
     this.zipHandler.updateFile(partPath, content);
@@ -156,6 +167,30 @@ class TrackedChangesStripper {
 
     // Then, remove all opening tags (keeping any content that follows)
     result = result.replace(/<w:ins[\s>][^>]*>/g, '');
+
+    return result;
+  }
+
+  /**
+   * Remove entire <w:tr> rows marked as tracked deletions.
+   *
+   * Per ECMA-376 Part 1 §17.13.5.14, a self-closing `<w:del/>` inside
+   * `<w:trPr>` marks the whole row as deleted — stripping just the marker
+   * would resurrect the row instead of removing it. Mirrors the row-level
+   * pass in acceptRevisions.ts: the negative lookaheads keep the match
+   * anchored to a single row (it cannot slip past a cell boundary or a
+   * nested-table row and latch onto a later row's trPr-with-del).
+   */
+  private removeDeletedRows(xml: string): string {
+    const rowDelPattern =
+      /<w:tr\b[^>]*>(?:(?!<w:tc\b|<w:tr\b|<\/w:tr>)[\s\S])*?<w:trPr\b(?:\s[^>]*)?>(?:(?!<\/w:trPr>)[\s\S])*?<w:del\b[^>]*\/>(?:(?!<\/w:trPr>)[\s\S])*?<\/w:trPr>(?:(?!<w:tr\b|<\/w:tr>)[\s\S])*?<\/w:tr>/g;
+
+    let result = xml;
+    let previousLength = 0;
+    while (result.length !== previousLength) {
+      previousLength = result.length;
+      result = result.replace(rowDelPattern, '');
+    }
 
     return result;
   }
@@ -241,13 +276,15 @@ class TrackedChangesStripper {
 
   /**
    * Remove self-closing revision tags
+   * `\b` (not `\s+`) so attribute-less markers like `<w:del/>` are also
+   * caught while `<w:delText>` is not.
    */
   private removeSelfClosingRevisionTags(xml: string): string {
     const patterns = [
-      /<w:ins\s+[^>]*\/>/g,
-      /<w:del\s+[^>]*\/>/g,
-      /<w:moveFrom\s+[^>]*\/>/g,
-      /<w:moveTo\s+[^>]*\/>/g,
+      /<w:ins\b[^>]*\/>/g,
+      /<w:del\b[^>]*\/>/g,
+      /<w:moveFrom\b[^>]*\/>/g,
+      /<w:moveTo\b[^>]*\/>/g,
     ];
 
     let result = xml;

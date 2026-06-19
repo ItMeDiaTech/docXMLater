@@ -24,6 +24,8 @@ import {
   isImageRunContent,
 } from '../elements/RevisionContent.js';
 import { ComplexField } from '../elements/Field.js';
+import { RangeMarker, RangeMarkerType } from '../elements/RangeMarker.js';
+import { PreservedElement } from '../elements/PreservedElement.js';
 import { Table } from '../elements/Table.js';
 import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger.js';
 
@@ -83,6 +85,34 @@ const PROPERTY_REVISION_TYPES: RevisionType[] = [
 ];
 
 /**
+ * Range-marker boundary types dropped when the matching accept option is set.
+ * These are paired boundaries for the move / ins / del revisions handled
+ * elsewhere in the loop; once the revision they delimit is accepted, the
+ * markers reference a change that no longer exists (ECMA-376 §17.13.5.21-28)
+ * and Word still reports the document as containing tracked changes. The
+ * raw-XML acceptor (acceptRevisions.ts) and stripRevisionsFromXml remove the
+ * same set; this keeps the in-memory paragraph path in parity.
+ */
+const MOVE_RANGE_MARKER_TYPES = new Set<RangeMarkerType>([
+  'moveFromRangeStart',
+  'moveFromRangeEnd',
+  'moveToRangeStart',
+  'moveToRangeEnd',
+  'customXmlMoveFromRangeStart',
+  'customXmlMoveFromRangeEnd',
+  'customXmlMoveToRangeStart',
+  'customXmlMoveToRangeEnd',
+]);
+const INS_RANGE_MARKER_TYPES = new Set<RangeMarkerType>([
+  'customXmlInsRangeStart',
+  'customXmlInsRangeEnd',
+]);
+const DEL_RANGE_MARKER_TYPES = new Set<RangeMarkerType>([
+  'customXmlDelRangeStart',
+  'customXmlDelRangeEnd',
+]);
+
+/**
  * Strip revision markup from raw XML string.
  * Used for nested tables stored as raw XML that cannot be processed via the in-memory model.
  *
@@ -132,21 +162,27 @@ export function stripRevisionsFromXml(xml: string): string {
   }
 
   // Step 3: Remove deletions entirely (including content)
+  // Self-closing markers (paragraph-mark deletions in w:pPr/w:rPr per
+  // ECMA-376 §17.13.5.15) must be stripped BEFORE the block pattern runs:
+  // its [^>]* also matches the trailing '/' of `<w:del .../>`, which would
+  // turn the marker into an opening tag and swallow everything up to the
+  // next </w:del>, leaving unbalanced XML.
+  result = result.replace(/<w:del\b[^>]*\/>/g, '');
   // Iterate until no more deletions (handles nested cases)
   let prevLen = 0;
   while (result.length !== prevLen) {
     prevLen = result.length;
     result = result.replace(/<w:del\b[^>]*>[\s\S]*?<\/w:del>/g, '');
   }
-  result = result.replace(/<w:del\b[^>]*\/>/g, '');
 
   // Step 4: Remove moveFrom entirely (source of moved content)
+  // Same self-closing-first ordering as Step 3.
+  result = result.replace(/<w:moveFrom\b[^>]*\/>/g, '');
   prevLen = 0;
   while (result.length !== prevLen) {
     prevLen = result.length;
     result = result.replace(/<w:moveFrom\b[^>]*>[\s\S]*?<\/w:moveFrom>/g, '');
   }
-  result = result.replace(/<w:moveFrom\b[^>]*\/>/g, '');
 
   // Step 5: Unwrap moveTo (keep content, remove wrapper)
   result = result.replace(/<\/w:moveTo>/g, '');
@@ -200,6 +236,11 @@ export function acceptRevisionsInMemory(
 
   logger.info('Accepting revisions in-memory', { options: opts });
 
+  // Paragraphs whose tracked paragraph-mark deletion (w:del in w:pPr/w:rPr)
+  // is accepted — they must be merged into their following sibling after the
+  // walk completes (ECMA-376 §17.13.5.15).
+  const acceptedMarkDeletions: Paragraph[] = [];
+
   // Validate move pairs before accepting if moves are being accepted
   // Orphaned moves could result in content loss (moveFrom without moveTo = content deleted)
   if (opts.acceptMoves) {
@@ -228,7 +269,7 @@ export function acceptRevisionsInMemory(
   // Process all paragraphs in the document body
   const paragraphs = doc.getAllParagraphs();
   for (const paragraph of paragraphs) {
-    const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+    const paragraphResult = acceptRevisionsInParagraph(paragraph, opts, acceptedMarkDeletions);
     result.insertionsAccepted += paragraphResult.insertionsAccepted;
     result.deletionsAccepted += paragraphResult.deletionsAccepted;
     result.movesAccepted += paragraphResult.movesAccepted;
@@ -309,7 +350,11 @@ export function acceptRevisionsInMemory(
 
         // Process paragraphs in the cell
         for (const paragraph of cell.getParagraphs()) {
-          const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+          const paragraphResult = acceptRevisionsInParagraph(
+            paragraph,
+            opts,
+            acceptedMarkDeletions
+          );
           result.insertionsAccepted += paragraphResult.insertionsAccepted;
           result.deletionsAccepted += paragraphResult.deletionsAccepted;
           result.movesAccepted += paragraphResult.movesAccepted;
@@ -352,7 +397,7 @@ export function acceptRevisionsInMemory(
       for (const element of elements) {
         // Element can be Paragraph or Table - use instanceof for type safety
         if (element instanceof Paragraph) {
-          const paragraphResult = acceptRevisionsInParagraph(element, opts);
+          const paragraphResult = acceptRevisionsInParagraph(element, opts, acceptedMarkDeletions);
           result.insertionsAccepted += paragraphResult.insertionsAccepted;
           result.deletionsAccepted += paragraphResult.deletionsAccepted;
           result.movesAccepted += paragraphResult.movesAccepted;
@@ -362,7 +407,11 @@ export function acceptRevisionsInMemory(
           for (const row of element.getRows()) {
             for (const cell of row.getCells()) {
               for (const paragraph of cell.getParagraphs()) {
-                const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+                const paragraphResult = acceptRevisionsInParagraph(
+                  paragraph,
+                  opts,
+                  acceptedMarkDeletions
+                );
                 result.insertionsAccepted += paragraphResult.insertionsAccepted;
                 result.deletionsAccepted += paragraphResult.deletionsAccepted;
                 result.movesAccepted += paragraphResult.movesAccepted;
@@ -395,7 +444,7 @@ export function acceptRevisionsInMemory(
       for (const element of elements) {
         // Element can be Paragraph or Table - use instanceof for type safety
         if (element instanceof Paragraph) {
-          const paragraphResult = acceptRevisionsInParagraph(element, opts);
+          const paragraphResult = acceptRevisionsInParagraph(element, opts, acceptedMarkDeletions);
           result.insertionsAccepted += paragraphResult.insertionsAccepted;
           result.deletionsAccepted += paragraphResult.deletionsAccepted;
           result.movesAccepted += paragraphResult.movesAccepted;
@@ -405,7 +454,11 @@ export function acceptRevisionsInMemory(
           for (const row of element.getRows()) {
             for (const cell of row.getCells()) {
               for (const paragraph of cell.getParagraphs()) {
-                const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+                const paragraphResult = acceptRevisionsInParagraph(
+                  paragraph,
+                  opts,
+                  acceptedMarkDeletions
+                );
                 result.insertionsAccepted += paragraphResult.insertionsAccepted;
                 result.deletionsAccepted += paragraphResult.deletionsAccepted;
                 result.movesAccepted += paragraphResult.movesAccepted;
@@ -445,7 +498,7 @@ export function acceptRevisionsInMemory(
   if (footnoteManager) {
     for (const fn of footnoteManager.getAllFootnotes()) {
       for (const paragraph of fn.getParagraphs()) {
-        const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+        const paragraphResult = acceptRevisionsInParagraph(paragraph, opts, acceptedMarkDeletions);
         result.insertionsAccepted += paragraphResult.insertionsAccepted;
         result.deletionsAccepted += paragraphResult.deletionsAccepted;
         result.movesAccepted += paragraphResult.movesAccepted;
@@ -457,7 +510,7 @@ export function acceptRevisionsInMemory(
   if (endnoteManager) {
     for (const en of endnoteManager.getAllEndnotes()) {
       for (const paragraph of en.getParagraphs()) {
-        const paragraphResult = acceptRevisionsInParagraph(paragraph, opts);
+        const paragraphResult = acceptRevisionsInParagraph(paragraph, opts, acceptedMarkDeletions);
         result.insertionsAccepted += paragraphResult.insertionsAccepted;
         result.deletionsAccepted += paragraphResult.deletionsAccepted;
         result.movesAccepted += paragraphResult.movesAccepted;
@@ -483,6 +536,13 @@ export function acceptRevisionsInMemory(
 
   // Disable track changes setting
   doc.disableTrackChanges();
+
+  // Combine paragraphs whose paragraph-mark deletion was accepted with their
+  // following sibling (ECMA-376 §17.13.5.15). Runs after tracking is disabled
+  // so the removals are plain splices rather than new tracked deletions.
+  if (acceptedMarkDeletions.length > 0) {
+    mergeParagraphsWithDeletedMarks(doc, new Set(acceptedMarkDeletions));
+  }
 
   // Cleanup empty tables if enabled
   // This removes tables that have no visible content after revision acceptance
@@ -525,7 +585,8 @@ export function acceptRevisionsInMemory(
  */
 function acceptRevisionsInParagraph(
   paragraph: Paragraph,
-  options: Required<AcceptRevisionsOptions>
+  options: Required<AcceptRevisionsOptions>,
+  acceptedMarkDeletions?: Paragraph[]
 ): AcceptRevisionsResult {
   const result: AcceptRevisionsResult = {
     insertionsAccepted: 0,
@@ -645,6 +706,20 @@ function acceptRevisionsInParagraph(
         }
       }
       newContent.push(item);
+    } else if (item instanceof RangeMarker) {
+      // Boundary markers for a move / ins / del span. Drop them when the
+      // revision they delimit is being accepted so no orphaned range markers
+      // remain (the move/ins/del revisions themselves are counted above; the
+      // markers carry no content, so they are not counted again).
+      const markerType = item.getType();
+      if (
+        (options.acceptMoves && MOVE_RANGE_MARKER_TYPES.has(markerType)) ||
+        (options.acceptInsertions && INS_RANGE_MARKER_TYPES.has(markerType)) ||
+        (options.acceptDeletions && DEL_RANGE_MARKER_TYPES.has(markerType))
+      ) {
+        continue;
+      }
+      newContent.push(item);
     } else {
       // Non-revision content - keep as-is
       newContent.push(item);
@@ -672,12 +747,17 @@ function acceptRevisionsInParagraph(
   }
 
   // Clear paragraph mark deletion tracking if accepting deletions
-  // This removes the w:del element from w:pPr/w:rPr
+  // This removes the w:del element from w:pPr/w:rPr. The paragraph is also
+  // recorded for the post-walk merge pass: per ECMA-376 §17.13.5.15 a deleted
+  // paragraph mark means this paragraph's contents combine with the FOLLOWING
+  // paragraph, so clearing the marker alone would leave a leftover paragraph
+  // Word's own Accept All removes.
   if (options.acceptDeletions) {
     const formatting = paragraph.getFormatting();
     if (formatting.paragraphMarkDeletion) {
       paragraph.clearParagraphMarkDeletion();
       result.deletionsAccepted++;
+      acceptedMarkDeletions?.push(paragraph);
     }
   }
 
@@ -692,6 +772,111 @@ function acceptRevisionsInParagraph(
   }
 
   return result;
+}
+
+/**
+ * Merge paragraphs whose tracked paragraph-mark deletion was accepted into
+ * their immediately following sibling paragraph.
+ *
+ * Per ECMA-376 §17.13.5.15, a w:del inside w:pPr/w:rPr marks the paragraph
+ * mark (¶) itself as deleted: accepting it means the paragraph's contents are
+ * no longer delimited by that mark and combine with the FOLLOWING paragraph.
+ * Clearing the marker alone leaves a leftover paragraph (blank line) that
+ * Word's own Accept All removes.
+ *
+ * Merging only happens between siblings of the same container (document body
+ * or table cell). A paragraph with no following sibling paragraph — last in
+ * its container, or followed by a table/SDT/raw nested content — keeps its
+ * content in place, matching Word, which cannot delete a container's final
+ * paragraph mark.
+ */
+export function mergeParagraphsWithDeletedMarks(doc: Document, marked: Set<Paragraph>): void {
+  if (marked.size === 0) {
+    return;
+  }
+
+  // Body-level siblings
+  mergeMarkedSequence(doc.getBodyElements(), marked, (para) => {
+    doc.removeElement(para);
+  });
+
+  // Table-cell siblings (same tables the acceptance walk visits)
+  for (const table of doc.getTables()) {
+    for (const row of table.getRows()) {
+      for (const cell of row.getCells()) {
+        // Raw nested content (nested tables/SDTs) at position p renders
+        // between paragraph p-1 and paragraph p, so it interrupts sibling
+        // adjacency the same way a body-level table does. Capture the
+        // boundaries before any removal: removeParagraph keeps positions in
+        // sync with live indices, which match this snapshot only up front.
+        const blockedBoundaries = new Set(cell.getRawNestedContent().map((item) => item.position));
+        mergeMarkedSequence(
+          cell.getParagraphs(),
+          marked,
+          (para) => {
+            const index = cell.getParagraphs().indexOf(para);
+            if (index !== -1) {
+              cell.removeParagraph(index);
+            }
+          },
+          (index) => blockedBoundaries.has(index)
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Walk one sibling sequence (body elements or cell paragraphs) and fold each
+ * run of marked paragraphs into the first unmarked paragraph that follows it.
+ * Consecutive marked paragraphs chain: their contents concatenate, in
+ * document order, ahead of the surviving paragraph's own content. The
+ * surviving paragraph keeps its own pPr — the deleted marks took their
+ * properties with them.
+ */
+function mergeMarkedSequence(
+  sequence: readonly unknown[],
+  marked: Set<Paragraph>,
+  removeParagraph: (paragraph: Paragraph) => void,
+  blockedBefore?: (index: number) => boolean
+): void {
+  let chain: Paragraph[] = [];
+
+  for (let i = 0; i < sequence.length; i++) {
+    const element = sequence[i];
+
+    if (!(element instanceof Paragraph)) {
+      // A non-paragraph block (table, SDT, TOC) is not a valid merge target
+      chain = [];
+      continue;
+    }
+
+    if (blockedBefore?.(i)) {
+      chain = [];
+    }
+
+    if (marked.has(element)) {
+      chain.push(element);
+      continue;
+    }
+
+    if (chain.length > 0) {
+      const inherited: ParagraphContent[] = [];
+      for (const para of chain) {
+        inherited.push(...para.getContent());
+      }
+      element.setContent([...inherited, ...element.getContent()]);
+      for (const para of chain) {
+        // Empty before removal so a tracking-bound removal path can never
+        // duplicate content that now lives in the surviving paragraph
+        para.setContent([]);
+        removeParagraph(para);
+      }
+      chain = [];
+    }
+  }
+  // A trailing chain has no following sibling: the final paragraph mark of a
+  // container cannot be deleted, so those paragraphs stay as-is.
 }
 
 /**
@@ -737,11 +922,79 @@ export function countRevisionsByType(doc: Document): Map<RevisionType, number> {
 }
 
 /**
+ * Inline preserved-element types that are pure range/proofing markers.
+ * They carry no displayable content, so a table whose cells hold only these
+ * (e.g. leftover proofErr markers after all text was deleted via tracked
+ * changes) must still be eligible for cleanup.
+ */
+const MARKER_PRESERVED_ELEMENT_TYPES = new Set([
+  'w:proofErr',
+  'w:permStart',
+  'w:permEnd',
+  'w:commentRangeStart',
+  'w:commentRangeEnd',
+]);
+
+/**
+ * Check whether a paragraph carries visible content for empty-table cleanup.
+ *
+ * Paragraph.getText() only surfaces Run/Hyperlink text, so images, shapes,
+ * text boxes, fields, pending revisions, and preserved raw XML (loaded-doc
+ * hyperlinks, inline SDTs, math) would read as "empty" and the table holding
+ * them would be silently deleted. Mirrors TableCell.isParaBlank's duck-typed
+ * element detection.
+ */
+function paragraphHasVisibleContent(para: Paragraph): boolean {
+  if (para.getText().trim().length > 0) {
+    return true;
+  }
+
+  for (const item of para.getContent()) {
+    if (!item) continue;
+
+    // Revisions left behind by selective acceptance still render their
+    // content (e.g. strikethrough deletions) — removing the table would
+    // discard tracked changes the caller chose to keep.
+    if (item instanceof Revision) {
+      return true;
+    }
+
+    // Marker-only preserved elements are not content; everything else
+    // preserved as raw XML (w:r, w:hyperlink, m:oMath, w:ruby, nested
+    // revision wrappers) is.
+    if (item instanceof PreservedElement) {
+      if (!MARKER_PRESERVED_ELEMENT_TYPES.has(item.getElementType())) {
+        return true;
+      }
+      continue;
+    }
+
+    // Duck-typed checks matching TableCell.isParaBlank: ImageRun
+    // (getImageElement), Shape (getShapeType), TextBox (getTextContent),
+    // Hyperlink (getUrl), Field/ComplexField (getInstruction).
+    const candidate = item as unknown as Record<string, unknown>;
+    if (
+      typeof candidate.getImageElement === 'function' ||
+      typeof candidate.getShapeType === 'function' ||
+      typeof candidate.getTextContent === 'function' ||
+      typeof candidate.getUrl === 'function' ||
+      typeof candidate.getInstruction === 'function'
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Remove tables that have no visible content after revision acceptance.
  *
- * A table is considered empty if ALL cells in ALL rows have no text content.
- * This handles cases where all table content was deleted via tracked changes -
- * the deletion markers are stripped but the empty table structure remains.
+ * A table is considered empty only if ALL cells in ALL rows have no visible
+ * content: no text, images, shapes, text boxes, fields, hyperlinks, preserved
+ * raw XML, or raw nested content (nested tables/SDTs). This handles cases
+ * where all table content was deleted via tracked changes - the deletion
+ * markers are stripped but the empty table structure remains.
  *
  * @param doc - Document to clean up
  * @param logger - Logger instance for debug output
@@ -762,10 +1015,16 @@ function cleanupEmptyTables(doc: Document, logger: ILogger): number {
     for (const row of rows) {
       const cells = row.getCells();
       for (const cell of cells) {
+        // Nested tables/SDTs live in raw XML passthrough, never in
+        // paragraphs — a cell whose real content is a nested table would
+        // otherwise read as empty and be deleted.
+        if (cell.hasRawNestedContent()) {
+          hasContent = true;
+          break;
+        }
         const paragraphs = cell.getParagraphs();
         for (const para of paragraphs) {
-          const text = para.getText().trim();
-          if (text.length > 0) {
+          if (paragraphHasVisibleContent(para)) {
             hasContent = true;
             break;
           }

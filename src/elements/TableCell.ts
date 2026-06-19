@@ -5,8 +5,10 @@
 import { deepClone } from '../utils/deepClone.js';
 import { formatDateForXml } from '../utils/dateFormatting.js';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
+import { Hyperlink } from './Hyperlink.js';
 import { Paragraph, TextDirection } from './Paragraph.js';
 import { Revision } from './Revision.js';
+import { Run } from './Run.js';
 import {
   BorderStyle as CommonBorderStyle,
   FullBorderStyle as CommonFullBorderStyle,
@@ -242,17 +244,30 @@ export class TableCell {
       return false;
     }
 
-    // When tracking enabled, wrap content in w:del instead of removing
+    // When tracking enabled, wrap content in w:del instead of removing.
+    // Each run is REPLACED by its delete revision — appending the revision
+    // would leave the original run live alongside its w:del copy, so the
+    // text would serialize twice and survive an accept.
     if (this.trackingContext?.isEnabled()) {
       const paragraph = this.paragraphs[index]!;
-      const runs = paragraph.getRuns();
-      if (runs.length > 0) {
-        const author = this.trackingContext.getAuthor();
-        const deletion = Revision.createDeletion(author, runs);
-        this.trackingContext.getRevisionManager().register(deletion);
-        paragraph.addRevision(deletion);
+      const author = this.trackingContext.getAuthor();
+      const manager = this.trackingContext.getRevisionManager();
+      for (const item of paragraph.getContent()) {
+        if (item instanceof Run || item instanceof Hyperlink) {
+          const deletion = Revision.createDeletion(author, item);
+          manager.register(deletion);
+          paragraph.replaceContent(item, [deletion]);
+        }
       }
       return true;
+    }
+
+    // Word repairs files where a nested table is the final child of w:tc —
+    // every cell must end with w:p. Refuse to remove the last paragraph when
+    // raw block content sits immediately before it and nothing would follow.
+    const isLastParagraph = index === this.paragraphs.length - 1;
+    if (isLastParagraph && this.rawNestedContent.some((item) => item.position === index)) {
+      return false;
     }
 
     const removed = this.paragraphs.splice(index, 1);
@@ -309,14 +324,20 @@ export class TableCell {
       paragraph._setStylesManager(stylesManager);
     }
 
-    // When tracking enabled, wrap paragraph content in w:ins revision
+    // When tracking enabled, wrap paragraph content in w:ins revisions.
+    // Each top-level Run/Hyperlink is REPLACED by its insert revision in
+    // place — wrapping paragraph.getRuns() and appending the revision would
+    // leave the originals live alongside the w:ins copy, so the text would
+    // serialize twice and survive a reject.
     if (this.trackingContext?.isEnabled()) {
-      const runs = paragraph.getRuns();
-      if (runs.length > 0) {
-        const author = this.trackingContext.getAuthor();
-        const insertion = Revision.createInsertion(author, runs);
-        this.trackingContext.getRevisionManager().register(insertion);
-        paragraph.addRevision(insertion);
+      const author = this.trackingContext.getAuthor();
+      const manager = this.trackingContext.getRevisionManager();
+      for (const item of paragraph.getContent()) {
+        if (item instanceof Run || item instanceof Hyperlink) {
+          const insertion = Revision.createInsertion(author, item);
+          manager.register(insertion);
+          paragraph.replaceContent(item, [insertion]);
+        }
       }
     }
 
@@ -1289,6 +1310,22 @@ export class TableCell {
   }
 
   /**
+   * Removes every paragraph from this cell and returns them, bypassing
+   * tracked-change wrapping. Used when content is moved wholesale to another
+   * cell — the paragraphs must leave this cell's array first so the same
+   * Paragraph instances never live in two cells at once.
+   * @internal
+   */
+  _detachAllParagraphs(): Paragraph[] {
+    const detached = this.paragraphs;
+    this.paragraphs = [];
+    for (const para of detached) {
+      para._setParentCell(undefined);
+    }
+    return detached;
+  }
+
+  /**
    * Gets the table style ID by traversing up the parent chain.
    * @returns Table style ID or undefined if not in a table or no style set
    */
@@ -1707,6 +1744,7 @@ export class TableCell {
       }
 
       // Insert any remaining raw content after all paragraphs
+      const rawContentEndsCell = rawIndex < sortedRaw.length;
       while (rawIndex < sortedRaw.length) {
         const rawItem = sortedRaw[rawIndex];
         if (rawItem) {
@@ -1718,9 +1756,11 @@ export class TableCell {
         rawIndex++;
       }
 
-      // If we only have raw content and no paragraphs, we need at least one empty paragraph
-      // per ECMA-376 (table cell must contain at least one block-level element)
-      if (this.paragraphs.length === 0) {
+      // Word requires every cell to end with w:p (it repairs files where a
+      // nested w:tbl is the final child of w:tc), so close with an empty
+      // paragraph whenever raw block content ended up last — this also covers
+      // cells that have raw content but no paragraphs at all
+      if (rawContentEndsCell) {
         cellChildren.push(new Paragraph().toXML());
       }
     } else {

@@ -63,10 +63,29 @@ describe('Validation Utilities', () => {
       expect(isBinaryFile('font.ttf')).toBe(true);
       expect(isBinaryFile('font.otf')).toBe(true);
       expect(isBinaryFile('font.woff')).toBe(true);
+      expect(isBinaryFile('word/fonts/font1.odttf')).toBe(true);
+    });
+
+    test('should identify embedded packages and metafiles as binary', () => {
+      expect(isBinaryFile('word/embeddings/Microsoft_Excel_Worksheet1.xlsx')).toBe(true);
+      expect(isBinaryFile('word/embeddings/document1.docx')).toBe(true);
+      expect(isBinaryFile('word/embeddings/presentation1.pptx')).toBe(true);
+      expect(isBinaryFile('word/embeddings/file1.pdf')).toBe(true);
+      expect(isBinaryFile('word/media/image1.emz')).toBe(true);
+      expect(isBinaryFile('word/media/image2.wmz')).toBe(true);
+      expect(isBinaryFile('word/media/hdphoto1.wdp')).toBe(true);
+      expect(isBinaryFile('word/media/image3.tif')).toBe(true);
+    });
+
+    test('should identify unknown extensions and extensionless paths as binary', () => {
+      expect(isBinaryFile('word/media/mystery.xyz')).toBe(true);
+      expect(isBinaryFile('word/embeddings/payload')).toBe(true);
     });
 
     test('should identify text files as non-binary', () => {
       expect(isBinaryFile('document.xml')).toBe(false);
+      expect(isBinaryFile('_rels/.rels')).toBe(false);
+      expect(isBinaryFile('word/_rels/document.xml.rels')).toBe(false);
       expect(isBinaryFile('readme.txt')).toBe(false);
       expect(isBinaryFile('style.css')).toBe(false);
       expect(isBinaryFile('script.js')).toBe(false);
@@ -92,6 +111,11 @@ describe('Validation Utilities', () => {
     test('should remove leading slashes', () => {
       expect(normalizePath('/path/to/file.txt')).toBe('path/to/file.txt');
       expect(normalizePath('//path/to/file.txt')).toBe('path/to/file.txt');
+    });
+
+    test('should sanitize Unix absolute paths to relative (not reject)', () => {
+      expect(normalizePath('/etc/passwd')).toBe('etc/passwd');
+      expect(() => normalizePath('/etc/passwd')).not.toThrow();
     });
 
     test('should handle mixed slashes', () => {

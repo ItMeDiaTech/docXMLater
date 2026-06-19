@@ -976,6 +976,62 @@ export class Paragraph {
   }
 
   /**
+   * Removes every anchor for a comment ID from this paragraph: programmatic
+   * range markers (commentsStart/commentsEnd, which also emit the reference
+   * run) and raw-XML anchors preserved from loaded documents. Anchors left
+   * behind after the comment definition is deleted would point at a comment
+   * that no longer exists in comments.xml, which Word reports as unreadable
+   * content.
+   * @param commentId - ID of the comment whose anchors should be removed
+   * @returns true if any anchor was removed
+   */
+  removeCommentAnchor(commentId: number): boolean {
+    let removed = false;
+
+    const startCount = this.commentsStart.length;
+    this.commentsStart = this.commentsStart.filter((c) => c.getId() !== commentId);
+    if (this.commentsStart.length !== startCount) {
+      removed = true;
+    }
+
+    const endCount = this.commentsEnd.length;
+    this.commentsEnd = this.commentsEnd.filter((c) => c.getId() !== commentId);
+    if (this.commentsEnd.length !== endCount) {
+      removed = true;
+    }
+
+    const contentCount = this.content.length;
+    this.content = this.content.filter((item) => {
+      if (!(item instanceof PreservedElement)) {
+        return true;
+      }
+      const elementType = item.getElementType();
+      if (elementType === 'w:commentRangeStart' || elementType === 'w:commentRangeEnd') {
+        return !Paragraph.rawXmlMatchesCommentId(item.getRawXml(), elementType, commentId);
+      }
+      if (elementType === 'w:r') {
+        // Loaded comment reference runs are preserved as raw w:r XML
+        return !Paragraph.rawXmlMatchesCommentId(item.getRawXml(), 'w:commentReference', commentId);
+      }
+      return true;
+    });
+    if (this.content.length !== contentCount) {
+      removed = true;
+    }
+
+    return removed;
+  }
+
+  private static rawXmlMatchesCommentId(
+    rawXml: string,
+    elementName: string,
+    commentId: number
+  ): boolean {
+    const match = rawXml.match(new RegExp(`<${elementName}\\b[^>]*\\bw:id="(\\d+)"`));
+    return match !== null && Number(match[1]) === commentId;
+  }
+
+  /**
    * Adds a page number field
    * @param formatting - Optional run formatting for the page number
    * @returns This paragraph for chaining
@@ -1152,7 +1208,46 @@ export class Paragraph {
    * ```
    */
   setText(text: string, formatting?: RunFormatting): this {
-    this.content = [new Run(text, formatting)];
+    const newRun = new Run(text, formatting);
+    // Wire parent/tracking so subsequent run.setText() tracking and table
+    // conditional-formatting resolution work for the new run
+    newRun._setParentParagraph(this);
+    if (this.trackingContext) {
+      newRun._setTrackingContext(this.trackingContext);
+    }
+
+    if (this.trackingContext?.isEnabled()) {
+      // Record the replacement as tracked delete + insert so the edit
+      // appears in the revision record (mirrors clearContent() + addText())
+      const deletedContent: ParagraphContent[] = [];
+      for (const item of this.content) {
+        // Skip items that are already revisions (don't double-wrap)
+        if (item instanceof Revision) {
+          deletedContent.push(item);
+        } else if (item instanceof Run || item instanceof Hyperlink) {
+          const revision = Revision.createDeletion(
+            this.trackingContext.getAuthor(),
+            item,
+            new Date()
+          );
+          this.trackingContext.getRevisionManager().register(revision);
+          deletedContent.push(revision);
+        } else {
+          // For other content types (fields, etc.), just keep them
+          // as they may have complex structures
+          deletedContent.push(item);
+        }
+      }
+      const insertion = Revision.createInsertion(
+        this.trackingContext.getAuthor(),
+        newRun,
+        new Date()
+      );
+      this.trackingContext.getRevisionManager().register(insertion);
+      this.content = [...deletedContent, insertion];
+    } else {
+      this.content = [newRun];
+    }
     return this;
   }
 
@@ -4128,10 +4223,10 @@ export class Paragraph {
     // Clone all content (runs, fields, hyperlinks, revisions)
     for (const item of this.content) {
       if (item instanceof Run) {
-        // Clone the run with its text and formatting
-        const runFormatting = item.getFormatting();
-        const clonedRun = new Run(item.getText(), deepClone(runFormatting));
-        clonedParagraph.addRun(clonedRun);
+        // Run.clone() deep-copies the content array, so non-text run content
+        // (page breaks with breakType, field chars, footnote references,
+        // symbols, etc.) survives instead of being flattened through getText()
+        clonedParagraph.addRun(item.clone());
       } else {
         // For other content types, add them as-is (shallow copy for now)
         // In a more complete implementation, we'd clone these too
@@ -4814,16 +4909,26 @@ export class Paragraph {
           ? lastAffected.run.getText().slice(match.end - lastAffected.start)
           : '';
 
-      // Set the first affected run to: kept-before + replacement + kept-after
-      firstAffected.run.setText(keepBefore + replace + keepAfter);
+      if (affectedRuns.length === 1) {
+        // Match contained in a single run: rebuild it in place
+        firstAffected.run.setText(keepBefore + replace + keepAfter);
+      } else {
+        // Trim the last run in place when partially consumed so its
+        // formatting (rPr) survives on the unmatched tail
+        if (keepAfter !== '') {
+          lastAffected.run.setText(keepAfter);
+        }
+        firstAffected.run.setText(keepBefore + replace);
 
-      // Remove any middle/last runs that were fully or partially consumed
-      // (iterate in reverse to preserve indices)
-      for (let r = affectedRuns.length - 1; r >= 1; r--) {
-        const runEntry = affectedRuns[r]!;
-        const idx = this.content.indexOf(runEntry.run);
-        if (idx !== -1) {
-          this.content.splice(idx, 1);
+        // Remove only fully consumed runs (iterate in reverse to preserve
+        // indices); a partially consumed last run was trimmed above
+        const lastRemovable = keepAfter !== '' ? affectedRuns.length - 2 : affectedRuns.length - 1;
+        for (let r = lastRemovable; r >= 1; r--) {
+          const runEntry = affectedRuns[r]!;
+          const idx = this.content.indexOf(runEntry.run);
+          if (idx !== -1) {
+            this.content.splice(idx, 1);
+          }
         }
       }
     }
@@ -5205,6 +5310,11 @@ export class Paragraph {
 
       if (
         prev instanceof Run &&
+        // w:rPrChange lives outside formatting and Run.createFromContent()
+        // would not carry it over, so treat it as a merge boundary to keep
+        // tracked formatting history intact
+        !prev.hasPropertyChangeRevision() &&
+        !item.hasPropertyChangeRevision() &&
         isEqualFormatting(
           prev.getFormatting() as unknown as Record<string, unknown>,
           item.getFormatting() as unknown as Record<string, unknown>
@@ -5292,37 +5402,19 @@ export class Paragraph {
   clearDirectRunFormatting(properties?: string[]): this {
     const runs = this.getRuns();
 
+    // Mutate formatting in place rather than rebuilding runs from getText():
+    // reconstruction flattens non-text content (footnote/endnote references,
+    // field chars, symbols disappear; page/column breaks demote to line breaks).
     for (const run of runs) {
-      const formatting = run.getFormatting();
-
       if (properties && properties.length > 0) {
-        // Clear only specified properties
-        const newFormatting: RunFormatting = { ...formatting };
+        const formatting = (run as unknown as { formatting: RunFormatting }).formatting;
         for (const prop of properties) {
-          if (prop in newFormatting) {
-            delete (newFormatting as any)[prop];
+          if (prop in formatting) {
+            delete (formatting as any)[prop];
           }
         }
-
-        // Create new run with cleared formatting
-        const text = run.getText();
-        const newRun = new Run(text, newFormatting);
-
-        // Replace in content array
-        const index = this.content.indexOf(run);
-        if (index !== -1) {
-          this.content[index] = newRun;
-        }
       } else {
-        // Clear ALL direct formatting - replace with plain text run
-        const text = run.getText();
-        const newRun = new Run(text, {});
-
-        // Replace in content array
-        const index = this.content.indexOf(run);
-        if (index !== -1) {
-          this.content[index] = newRun;
-        }
+        run.clearFormatting();
       }
     }
 

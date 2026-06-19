@@ -59,6 +59,15 @@ describe('Field Types - Reference Fields', () => {
     expect(field.getType()).toBe('HYPERLINK');
     expect(field.getInstruction()).toContain('HYPERLINK');
     expect(field.getInstruction()).toContain('https://example.com');
+
+    // The fldSimple cached result must show the caller's display text,
+    // not the generic 'Link' placeholder
+    const xml = field.toXML();
+    const run = xml.children!.find((child) => typeof child !== 'string' && child.name === 'w:r');
+    const textElement = (run as any)?.children?.find(
+      (child: any) => typeof child !== 'string' && child.name === 'w:t'
+    );
+    expect(textElement.children).toEqual(['Click here']);
   });
 
   test('should create HYPERLINK field with tooltip', () => {
@@ -149,7 +158,8 @@ describe('Field Types - Document Property Fields', () => {
   test('should create XE entry field with sub-entry', () => {
     const field = Field.createXEEntry('Main Entry', 'Sub Entry');
 
-    expect(field.getInstruction()).toContain('XE "Main Entry":Sub Entry');
+    // Per ECMA-376 §17.16.5.75 the colon separator goes inside the quoted argument
+    expect(field.getInstruction()).toContain('XE "Main Entry:Sub Entry"');
   });
 });
 
@@ -285,6 +295,7 @@ describe('Field Types - Factory Methods', () => {
   test('should create custom field', () => {
     const field = Field.createCustom('CUSTOM \\* MERGEFORMAT');
 
+    expect(field.getType()).toBe('CUSTOM');
     expect(field.getInstruction()).toBe('CUSTOM \\* MERGEFORMAT');
   });
 });

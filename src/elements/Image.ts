@@ -335,8 +335,11 @@ export class Image {
   private flipV = false;
   private border?: ImageBorder;
 
-  // Set true when a serialization-affecting setter (setBorder/setSize) mutates this image
-  // after parse, so an owning ImageRun knows to refresh its captured raw run XML.
+  // Set true when a serialization-affecting setter mutates this image after parse,
+  // so an owning ImageRun knows to refresh its captured raw run XML. Identity setters
+  // the parse/save pipeline invokes on every image (setRelationshipId/setDocPrId) and
+  // the parser-internal _setRawPassthrough must NOT set this, or unmodified documents
+  // would lose raw-XML round-trip fidelity.
   private _mutated = false;
 
   // Group A: Simple attribute preservation (ECMA-376 compliance)
@@ -967,6 +970,7 @@ export class Image {
       this.height = Math.round(width * ratio);
     }
     this.width = width;
+    this._mutated = true;
     return this;
   }
 
@@ -976,6 +980,7 @@ export class Image {
       this.width = Math.round(height * ratio);
     }
     this.height = height;
+    this._mutated = true;
     return this;
   }
 
@@ -1018,6 +1023,7 @@ export class Image {
 
   setAltText(altText: string): this {
     this.description = altText;
+    this._mutated = true;
     return this;
   }
 
@@ -1027,6 +1033,7 @@ export class Image {
 
   setTitle(title: string): this {
     this.title = title;
+    this._mutated = true;
     return this;
   }
 
@@ -1035,10 +1042,11 @@ export class Image {
   }
 
   rotate(degrees: number): this {
+    // wp:extent/a:ext describe the pre-rotation bounding box per ECMA-376
+    // §20.1.7.6 — a:xfrm/@rot rotates about the center, so swapping the
+    // extents for 90/270 would stretch the bitmap before rotating it.
     this.rotation = ((degrees % 360) + 360) % 360;
-    if (this.rotation === 90 || this.rotation === 270) {
-      [this.width, this.height] = [this.height, this.width];
-    }
+    this._mutated = true;
     return this;
   }
 
@@ -1048,6 +1056,7 @@ export class Image {
 
   setFlipH(flip: boolean): this {
     this.flipH = flip;
+    this._mutated = true;
     return this;
   }
 
@@ -1057,6 +1066,7 @@ export class Image {
 
   setFlipV(flip: boolean): this {
     this.flipV = flip;
+    this._mutated = true;
     return this;
   }
 
@@ -1071,6 +1081,7 @@ export class Image {
   }
   setPresetGeometry(geom: PresetGeometry): this {
     this.presetGeometry = geom;
+    this._mutated = true;
     return this;
   }
 
@@ -1079,6 +1090,7 @@ export class Image {
   }
   setCompressionState(state: BlipCompressionState): this {
     this.compressionState = state;
+    this._mutated = true;
     return this;
   }
 
@@ -1087,6 +1099,7 @@ export class Image {
   }
   setBwMode(mode: string): this {
     this.bwMode = mode;
+    this._mutated = true;
     return this;
   }
 
@@ -1107,6 +1120,7 @@ export class Image {
     this.inlineDistB = distB;
     this.inlineDistL = distL;
     this.inlineDistR = distR;
+    this._mutated = true;
     return this;
   }
 
@@ -1115,6 +1129,7 @@ export class Image {
   }
   setNoChangeAspect(val: boolean): this {
     this.noChangeAspect = val;
+    this._mutated = true;
     return this;
   }
 
@@ -1123,6 +1138,7 @@ export class Image {
   }
   setHidden(val: boolean): this {
     this.hidden = val;
+    this._mutated = true;
     return this;
   }
 
@@ -1131,6 +1147,7 @@ export class Image {
   }
   setBlipFillDpi(dpi: number | undefined): this {
     this.blipFillDpi = dpi;
+    this._mutated = true;
     return this;
   }
 
@@ -1139,6 +1156,7 @@ export class Image {
   }
   setBlipFillRotWithShape(val: boolean | undefined): this {
     this.blipFillRotWithShape = val;
+    this._mutated = true;
     return this;
   }
 
@@ -1147,6 +1165,7 @@ export class Image {
   }
   setPicLocks(locks: Partial<Record<PicLockAttribute, boolean>>): this {
     this.picLocks = locks;
+    this._mutated = true;
     return this;
   }
 
@@ -1155,6 +1174,7 @@ export class Image {
   }
   setPicNonVisualProps(props: PicNonVisualProperties): this {
     this.picNonVisualProps = props;
+    this._mutated = true;
     return this;
   }
 
@@ -1163,6 +1183,7 @@ export class Image {
   }
   setIsLinked(val: boolean): this {
     this.isLinked = val;
+    this._mutated = true;
     return this;
   }
 
@@ -1171,6 +1192,7 @@ export class Image {
   }
   setSvgRelationshipId(id: string | undefined): this {
     this.svgRelationshipId = id;
+    this._mutated = true;
     return this;
   }
 
@@ -1199,6 +1221,7 @@ export class Image {
 
   setEffectExtent(left: number, top: number, right: number, bottom: number): this {
     this.effectExtent = { left, top, right, bottom };
+    this._mutated = true;
     return this;
   }
 
@@ -1219,6 +1242,7 @@ export class Image {
       distanceLeft: distances?.left,
       distanceRight: distances?.right,
     };
+    this._mutated = true;
     return this;
   }
 
@@ -1278,6 +1302,7 @@ export class Image {
     this.validatePositionOffset(vertical.offset, 'vertical');
 
     this.position = { horizontal, vertical };
+    this._mutated = true;
     return this;
   }
 
@@ -1341,6 +1366,7 @@ export class Image {
 
   setAnchor(options: ImageAnchor): this {
     this.anchor = options;
+    this._mutated = true;
     return this;
   }
 
@@ -1351,6 +1377,7 @@ export class Image {
   setCrop(left: number, top: number, right: number, bottom: number): this {
     const clamp = (val: number) => Math.max(0, Math.min(100, val));
     this.crop = { left: clamp(left), top: clamp(top), right: clamp(right), bottom: clamp(bottom) };
+    this._mutated = true;
     return this;
   }
 
@@ -1370,6 +1397,7 @@ export class Image {
           ? Math.max(0, Math.min(100, options.transparency))
           : undefined,
     };
+    this._mutated = true;
     return this;
   }
 
@@ -1476,6 +1504,7 @@ export class Image {
   setBehindText(behind = true): this {
     if (this.anchor) {
       this.anchor.behindDoc = behind;
+      this._mutated = true;
     } else {
       this.setAnchor({
         behindDoc: behind,
@@ -1534,6 +1563,7 @@ export class Image {
   removeBorder(): this {
     this.border = undefined;
     this._rawPassthrough.delete('zero-width-ln');
+    this._mutated = true;
     return this;
   }
 
@@ -1898,7 +1928,6 @@ export class Image {
         if (this.wrap.distanceBottom !== undefined) wrapAttrs.distB = this.wrap.distanceBottom;
         if (this.wrap.distanceLeft !== undefined) wrapAttrs.distL = this.wrap.distanceLeft;
         if (this.wrap.distanceRight !== undefined) wrapAttrs.distR = this.wrap.distanceRight;
-        if (this.wrap.side) wrapAttrs.wrapText = this.wrap.side;
 
         let wrapElementName: string;
         switch (this.wrap.type) {
@@ -1919,6 +1948,18 @@ export class Image {
             break;
           default:
             wrapElementName = 'wrapSquare';
+        }
+
+        if (
+          wrapElementName === 'wrapSquare' ||
+          wrapElementName === 'wrapTight' ||
+          wrapElementName === 'wrapThrough'
+        ) {
+          // wrapText is use="required" on CT_WrapSquare/CT_WrapTight/CT_WrapThrough,
+          // so default to bothSides when setWrap() was called without a side.
+          wrapAttrs.wrapText = this.wrap.side ?? 'bothSides';
+        } else if (this.wrap.side) {
+          wrapAttrs.wrapText = this.wrap.side;
         }
 
         // Group B: Include wrap polygon passthrough as children
@@ -1972,7 +2013,9 @@ export class Image {
         locked: this.anchor?.locked ? 1 : 0,
         layoutInCell: this.anchor?.layoutInCell ? 1 : 0,
         allowOverlap: this.anchor?.allowOverlap ? 1 : 0,
-        relativeHeight: this.anchor?.relativeHeight,
+        // Required by CT_Anchor even when only setPosition() was called;
+        // matches the parser fallback so position-only floats stay schema-valid.
+        relativeHeight: this.anchor?.relativeHeight ?? 251658240,
         simplePos: this.anchor?.simplePos ? '1' : '0',
         distT: (this.anchor?.distT ?? 0).toString(),
         distB: (this.anchor?.distB ?? 0).toString(),

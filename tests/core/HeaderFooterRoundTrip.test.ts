@@ -358,4 +358,111 @@ describe('Header/Footer Round-Trip', () => {
     expect(relsXml).not.toContain('/header');
     expect(relsXml).not.toContain('/footer');
   });
+
+  it('should save edits to a loaded header part named header2.xml under its original name', async () => {
+    // Build a doc whose only header part is word/header2.xml
+    const doc1 = Document.create();
+    const header = Header.createDefault();
+    header.createParagraph('Original Header');
+    doc1.setHeader(header);
+    doc1.createParagraph('Body');
+    const buf = await doc1.toBuffer();
+    doc1.dispose();
+
+    const JSZip = require('jszip');
+    const sourceZip = await JSZip.loadAsync(buf);
+    const headerXml = await sourceZip.file('word/header1.xml')!.async('string');
+    sourceZip.remove('word/header1.xml');
+    sourceZip.file('word/header2.xml', headerXml);
+    let rels = await sourceZip.file('word/_rels/document.xml.rels')!.async('string');
+    rels = rels.replace('Target="header1.xml"', 'Target="header2.xml"');
+    sourceZip.file('word/_rels/document.xml.rels', rels);
+    let contentTypes = await sourceZip.file('[Content_Types].xml')!.async('string');
+    contentTypes = contentTypes.replace('/word/header1.xml', '/word/header2.xml');
+    sourceZip.file('[Content_Types].xml', contentTypes);
+    const renamedBuf = await sourceZip.generateAsync({ type: 'nodebuffer' });
+
+    // Load, edit the header, save
+    const doc2 = await Document.loadFromBuffer(renamedBuf);
+    const entry = doc2.getHeaderFooterManager().getAllHeaders()[0]!;
+    entry.header.clear();
+    entry.header.createParagraph('Edited Header');
+    const buffer2 = await doc2.toBuffer();
+    doc2.dispose();
+
+    // The edit lands in header2.xml; no orphan header1.xml; rel still targets header2.xml
+    const zip = await JSZip.loadAsync(buffer2);
+    expect(zip.file('word/header1.xml')).toBeNull();
+    const savedHeaderXml = await zip.file('word/header2.xml')!.async('string');
+    expect(savedHeaderXml).toContain('Edited Header');
+    const savedRels = await zip.file('word/_rels/document.xml.rels')!.async('string');
+    expect(savedRels).toContain('Target="header2.xml"');
+    expect(savedRels).not.toContain('Target="header1.xml"');
+  });
+
+  it('should keep multi-header part contents stable on a pure load/save round trip', async () => {
+    // First-page header registered before default header
+    const doc1 = Document.create();
+    const first = Header.createFirst();
+    first.createParagraph('First Page Header');
+    const def = Header.createDefault();
+    def.createParagraph('Default Header');
+    doc1.setFirstPageHeader(first);
+    doc1.setHeader(def);
+    doc1.createParagraph('Body');
+    const buffer1 = await doc1.toBuffer();
+    doc1.dispose();
+
+    const JSZip = require('jszip');
+    const zip1 = await JSZip.loadAsync(buffer1);
+    const headerFiles = Object.keys(zip1.files)
+      .filter((f: string) => /^word\/header\d+\.xml$/.exec(f))
+      .sort();
+    expect(headerFiles).toHaveLength(2);
+
+    // No-edit round trip
+    const doc2 = await Document.loadFromBuffer(buffer1);
+    const buffer2 = await doc2.toBuffer();
+    doc2.dispose();
+
+    // Each part keeps its own content — no swap
+    const zip2 = await JSZip.loadAsync(buffer2);
+    for (const file of headerFiles) {
+      const original = await zip1.file(file)!.async('string');
+      const roundTripped = await zip2.file(file)!.async('string');
+      const marker = original.includes('First Page Header')
+        ? 'First Page Header'
+        : 'Default Header';
+      expect(roundTripped).toContain(marker);
+    }
+  });
+
+  it('should give first-page and default headers distinct relationship targets', async () => {
+    const doc = Document.create();
+    const first = Header.createFirst();
+    first.createParagraph('First Page Header');
+    const def = Header.createDefault();
+    def.createParagraph('Default Header');
+    doc.setFirstPageHeader(first);
+    doc.setHeader(def);
+    doc.createParagraph('Body');
+    const buffer = await doc.toBuffer();
+    doc.dispose();
+
+    const JSZip = require('jszip');
+    const zip = await JSZip.loadAsync(buffer);
+    const relsXml = await zip.file('word/_rels/document.xml.rels')!.async('string');
+
+    const targets = [...relsXml.matchAll(/<Relationship[^>]*\/header"[^>]*Target="([^"]+)"/g)].map(
+      (m: RegExpMatchArray) => m[1]
+    );
+    expect(targets).toHaveLength(2);
+    expect(new Set(targets).size).toBe(2);
+
+    // Each target part holds the content assigned to it
+    for (const target of targets) {
+      const partXml = await zip.file(`word/${target}`)!.async('string');
+      expect(/(First Page Header|Default Header)/.exec(partXml)).not.toBeNull();
+    }
+  });
 });

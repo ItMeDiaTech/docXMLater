@@ -93,9 +93,9 @@ describe('SelectiveRevisionAcceptor', () => {
   });
 
   describe('preview', () => {
-    it('should preview accept action', () => {
+    it('should preview accept action without mutating the document', () => {
       const doc = new MockDocument();
-      doc.addRevision('insert', 'Alice', 'Text');
+      const revision = doc.addRevision('insert', 'Alice', 'Text');
 
       const result = SelectiveRevisionAcceptor.preview(
         doc as any,
@@ -107,11 +107,16 @@ describe('SelectiveRevisionAcceptor', () => {
 
       expect(result.accepted).toHaveLength(1);
       expect(result.rejected).toHaveLength(0);
+
+      // Preview must leave the revision manager untouched
+      const allRevisions = doc.getRevisionManager().getAllRevisions();
+      expect(allRevisions).toHaveLength(1);
+      expect(allRevisions[0]).toBe(revision);
     });
 
-    it('should preview reject action', () => {
+    it('should preview reject action without mutating the document', () => {
       const doc = new MockDocument();
-      doc.addRevision('insert', 'Alice', 'Text');
+      const revision = doc.addRevision('insert', 'Alice', 'Text');
 
       const result = SelectiveRevisionAcceptor.preview(
         doc as any,
@@ -123,6 +128,11 @@ describe('SelectiveRevisionAcceptor', () => {
 
       expect(result.accepted).toHaveLength(0);
       expect(result.rejected).toHaveLength(1);
+
+      // Preview must leave the revision manager untouched
+      const allRevisions = doc.getRevisionManager().getAllRevisions();
+      expect(allRevisions).toHaveLength(1);
+      expect(allRevisions[0]).toBe(revision);
     });
   });
 

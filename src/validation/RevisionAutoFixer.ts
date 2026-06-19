@@ -17,7 +17,11 @@ import {
   FixAction,
   ValidationIssue,
 } from './ValidationRules.js';
-import { RevisionValidator } from './RevisionValidator.js';
+import {
+  CONTENTLESS_REVISION_TYPES,
+  RevisionValidator,
+  revisionHasContent,
+} from './RevisionValidator.js';
 
 /**
  * Automatically fixes revision validation issues.
@@ -81,9 +85,16 @@ export class RevisionAutoFixer {
         actions.push(...this.fixMissingAuthors(revisions, defaultAuthor, options?.dryRun));
       }
 
-      // Fix orphaned move markers (REV003, REV004)
+      // Fix orphaned move markers (REV003, REV004) — one pairing pass
+      // produces both rules, so gate each side individually to honor
+      // onlyRules/skipRules without mutating revisions the caller excluded.
       if (shouldProcess('REV003') || shouldProcess('REV004')) {
-        actions.push(...this.fixOrphanedMoveMarkers(revisionManager, revisions, options?.dryRun));
+        actions.push(
+          ...this.fixOrphanedMoveMarkers(revisionManager, revisions, options?.dryRun, doc, {
+            moveFrom: shouldProcess('REV003'),
+            moveTo: shouldProcess('REV004'),
+          })
+        );
       }
 
       // Fix missing dates (REV101)
@@ -98,7 +109,7 @@ export class RevisionAutoFixer {
 
       // Fix empty revisions (REV103)
       if (shouldProcess('REV103')) {
-        actions.push(...this.fixEmptyRevisions(revisionManager, revisions, options?.dryRun));
+        actions.push(...this.fixEmptyRevisions(revisionManager, revisions, options?.dryRun, doc));
       }
 
       // Fix non-sequential IDs (REV104)
@@ -298,19 +309,50 @@ export class RevisionAutoFixer {
   }
 
   /**
+   * Removes a revision from the paragraph content that owns it.
+   *
+   * RevisionManager.removeById() only deregisters the revision from the
+   * manager registry, but serialization reads Paragraph.content directly —
+   * without this step the removed markup would still be written on save.
+   *
+   * @param doc - Document whose paragraphs are searched
+   * @param revision - Revision instance to remove
+   * @returns True if the revision was found and removed from a paragraph
+   */
+  private static removeRevisionFromContent(doc: Document, revision: Revision): boolean {
+    for (const paragraph of doc.getAllParagraphs()) {
+      // replaceContent matches by identity and splices without tracking side effects
+      if (paragraph.replaceContent(revision, [])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Fix orphaned move markers by removing them.
    *
    * @param revisionManager - RevisionManager instance
    * @param revisions - Array of revisions
    * @param dryRun - If true, only report changes without applying
+   * @param doc - Document to remove the revision content from; without it
+   *   only the manager registry is pruned and saved XML keeps the markup
+   * @param ruleFilter - Which sides of the pairing to fix; REV003 (moveFrom)
+   *   and REV004 (moveTo) are separate rules, so callers honoring
+   *   onlyRules/skipRules must be able to fix one without the other.
+   *   Defaults to both.
    * @returns Array of fix actions
    */
   static fixOrphanedMoveMarkers(
     revisionManager: { removeById(id: number): boolean },
     revisions: Revision[],
-    dryRun?: boolean
+    dryRun?: boolean,
+    doc?: Document,
+    ruleFilter?: { moveFrom?: boolean; moveTo?: boolean }
   ): FixAction[] {
     const actions: FixAction[] = [];
+    const fixMoveFrom = ruleFilter?.moveFrom ?? true;
+    const fixMoveTo = ruleFilter?.moveTo ?? true;
 
     const moveFromIds = new Map<string, Revision>();
     const moveToIds = new Map<string, Revision>();
@@ -326,52 +368,62 @@ export class RevisionAutoFixer {
       }
     }
 
-    // Remove orphaned moveFrom
-    for (const [moveId, rev] of moveFromIds) {
-      if (!moveToIds.has(moveId)) {
-        const issue: ValidationIssue = {
-          code: REVISION_RULES.ORPHANED_MOVE_FROM.code,
-          severity: 'error',
-          message: `Orphaned moveFrom with moveId="${moveId}"`,
-          location: { revisionId: rev.getId() },
-          autoFixable: true,
-        };
+    // Remove orphaned moveFrom (REV003)
+    if (fixMoveFrom) {
+      for (const [moveId, rev] of moveFromIds) {
+        if (!moveToIds.has(moveId)) {
+          const issue: ValidationIssue = {
+            code: REVISION_RULES.ORPHANED_MOVE_FROM.code,
+            severity: 'error',
+            message: `Orphaned moveFrom with moveId="${moveId}"`,
+            location: { revisionId: rev.getId() },
+            autoFixable: true,
+          };
 
-        actions.push({
-          issue,
-          action: `Removed orphaned moveFrom (ID: ${rev.getId()}, moveId: ${moveId})`,
-          before: { type: 'moveFrom', moveId },
-          after: null,
-          success: true,
-        });
+          actions.push({
+            issue,
+            action: `Removed orphaned moveFrom (ID: ${rev.getId()}, moveId: ${moveId})`,
+            before: { type: 'moveFrom', moveId },
+            after: null,
+            success: true,
+          });
 
-        if (!dryRun) {
-          revisionManager.removeById(rev.getId());
+          if (!dryRun) {
+            revisionManager.removeById(rev.getId());
+            if (doc) {
+              this.removeRevisionFromContent(doc, rev);
+            }
+          }
         }
       }
     }
 
-    // Remove orphaned moveTo
-    for (const [moveId, rev] of moveToIds) {
-      if (!moveFromIds.has(moveId)) {
-        const issue: ValidationIssue = {
-          code: REVISION_RULES.ORPHANED_MOVE_TO.code,
-          severity: 'error',
-          message: `Orphaned moveTo with moveId="${moveId}"`,
-          location: { revisionId: rev.getId() },
-          autoFixable: true,
-        };
+    // Remove orphaned moveTo (REV004)
+    if (fixMoveTo) {
+      for (const [moveId, rev] of moveToIds) {
+        if (!moveFromIds.has(moveId)) {
+          const issue: ValidationIssue = {
+            code: REVISION_RULES.ORPHANED_MOVE_TO.code,
+            severity: 'error',
+            message: `Orphaned moveTo with moveId="${moveId}"`,
+            location: { revisionId: rev.getId() },
+            autoFixable: true,
+          };
 
-        actions.push({
-          issue,
-          action: `Removed orphaned moveTo (ID: ${rev.getId()}, moveId: ${moveId})`,
-          before: { type: 'moveTo', moveId },
-          after: null,
-          success: true,
-        });
+          actions.push({
+            issue,
+            action: `Removed orphaned moveTo (ID: ${rev.getId()}, moveId: ${moveId})`,
+            before: { type: 'moveTo', moveId },
+            after: null,
+            success: true,
+          });
 
-        if (!dryRun) {
-          revisionManager.removeById(rev.getId());
+          if (!dryRun) {
+            revisionManager.removeById(rev.getId());
+            if (doc) {
+              this.removeRevisionFromContent(doc, rev);
+            }
+          }
         }
       }
     }
@@ -385,38 +437,27 @@ export class RevisionAutoFixer {
    * @param revisionManager - RevisionManager instance
    * @param revisions - Array of revisions
    * @param dryRun - If true, only report changes without applying
+   * @param doc - Document to remove the revision content from; without it
+   *   only the manager registry is pruned and saved XML keeps the markup
    * @returns Array of fix actions
    */
   static fixEmptyRevisions(
     revisionManager: RevisionManager,
     revisions: Revision[],
-    dryRun?: boolean
+    dryRun?: boolean,
+    doc?: Document
   ): FixAction[] {
     const actions: FixAction[] = [];
-
-    const propertyChangeTypes = [
-      'runPropertiesChange',
-      'paragraphPropertiesChange',
-      'tablePropertiesChange',
-      'tableExceptionPropertiesChange',
-      'tableRowPropertiesChange',
-      'tableCellPropertiesChange',
-      'sectionPropertiesChange',
-      'numberingChange',
-    ];
 
     for (const rev of revisions) {
       const type = rev.getType();
 
-      // Skip property changes
-      if (propertyChangeTypes.includes(type)) {
+      // Property changes and cell markers are contentless by design
+      if (CONTENTLESS_REVISION_TYPES.has(type)) {
         continue;
       }
 
-      const runs = rev.getRuns();
-      const hasContent = runs.length > 0 && runs.some((r) => r.getText().length > 0);
-
-      if (!hasContent) {
+      if (!revisionHasContent(rev)) {
         const issue: ValidationIssue = {
           code: REVISION_RULES.EMPTY_REVISION.code,
           severity: 'warning',
@@ -435,6 +476,9 @@ export class RevisionAutoFixer {
 
         if (!dryRun) {
           revisionManager.removeById(rev.getId());
+          if (doc) {
+            this.removeRevisionFromContent(doc, rev);
+          }
         }
       }
     }

@@ -1646,8 +1646,13 @@ export class Section {
    * @returns New Section instance with copied properties
    */
   clone(): Section {
-    // Deep clone all nested objects
-    const clonedProperties: SectionProperties = {};
+    // Spread the full properties object first so every SectionProperties field is
+    // preserved (primitives such as type/titlePage/bidi as well as the fields the
+    // old allow-list silently dropped: footnotePr, endnotePr, noEndnote, formProt,
+    // pageBorders, printerSettingsId, chapStyle, chapSep). Then overwrite the
+    // object-typed fields with deep copies so the clone is independent of the
+    // original. This mirrors the constructor's preserve-everything approach.
+    const clonedProperties: SectionProperties = { ...this.properties };
 
     if (this.properties.pageSize) {
       clonedProperties.pageSize = { ...this.properties.pageSize };
@@ -1693,13 +1698,24 @@ export class Section {
       clonedProperties.lineNumbering = { ...this.properties.lineNumbering };
     }
 
-    // Copy primitive properties
-    clonedProperties.type = this.properties.type;
-    clonedProperties.titlePage = this.properties.titlePage;
-    clonedProperties.verticalAlignment = this.properties.verticalAlignment;
-    clonedProperties.textDirection = this.properties.textDirection;
-    clonedProperties.bidi = this.properties.bidi;
-    clonedProperties.rtlGutter = this.properties.rtlGutter;
+    if (this.properties.footnotePr) {
+      clonedProperties.footnotePr = { ...this.properties.footnotePr };
+    }
+
+    if (this.properties.endnotePr) {
+      clonedProperties.endnotePr = { ...this.properties.endnotePr };
+    }
+
+    if (this.properties.pageBorders) {
+      const pb = this.properties.pageBorders;
+      clonedProperties.pageBorders = {
+        ...pb,
+        top: pb.top ? { ...pb.top } : undefined,
+        bottom: pb.bottom ? { ...pb.bottom } : undefined,
+        left: pb.left ? { ...pb.left } : undefined,
+        right: pb.right ? { ...pb.right } : undefined,
+      };
+    }
 
     return new Section(clonedProperties);
   }

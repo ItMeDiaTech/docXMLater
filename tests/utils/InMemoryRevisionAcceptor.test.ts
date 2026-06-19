@@ -813,6 +813,48 @@ describe('InMemoryRevisionAcceptor', () => {
       // emptyTablesRemoved should be 0, not undefined
       expect(result.emptyTablesRemoved).toBe(0);
     });
+
+    it('should preserve tables whose only content is an image', async () => {
+      const doc = Document.create();
+
+      // 1x1 transparent PNG
+      const pngBuffer = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+        0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+      ]);
+      const image = await Image.fromBuffer(pngBuffer, 'png', 914400, 914400);
+
+      // Image-only table (e.g. figure/logo layout) - contributes no text
+      const table = doc.createTable(1, 1);
+      const cell = table.getRows()[0]?.getCells()[0];
+      cell?.createParagraph().addRun(new ImageRun(image));
+
+      const result = acceptRevisionsInMemory(doc, { cleanupEmptyTables: true });
+
+      expect(result.emptyTablesRemoved).toBe(0);
+      expect(doc.getTables().length).toBe(1);
+    });
+
+    it('should preserve tables whose cell content lives in raw nested content', () => {
+      const doc = Document.create();
+
+      // Nested tables are stored as raw XML passthrough, not paragraphs
+      const table = doc.createTable(1, 1);
+      const cell = table.getRows()[0]?.getCells()[0];
+      cell?.addRawNestedContent(
+        0,
+        '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol/></w:tblGrid><w:tr><w:tc><w:tcPr/><w:p><w:r><w:t>Nested content</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+        'table'
+      );
+
+      const result = acceptRevisionsInMemory(doc, { cleanupEmptyTables: true });
+
+      expect(result.emptyTablesRemoved).toBe(0);
+      expect(doc.getTables().length).toBe(1);
+    });
   });
 
   describe('Hyperlink handling in revisions', () => {
@@ -911,19 +953,44 @@ describe('InMemoryRevisionAcceptor', () => {
   });
 
   describe('paragraph mark revision markers', () => {
-    it('should accept paragraph mark deletion by clearing the marker', () => {
+    it('should accept paragraph mark deletion by merging into the following paragraph', () => {
       const doc = Document.create();
       const para = doc.createParagraph();
       para.addRun(new Run('Some text'));
       para.markParagraphMarkAsDeleted(1, 'Author', new Date('2024-01-01'));
+      const next = doc.createParagraph();
+      next.addRun(new Run(' continues here'));
 
       expect(para.isParagraphMarkDeleted()).toBe(true);
       expect(paragraphHasRevisions(para)).toBe(true);
 
       const result = acceptRevisionsInMemory(doc, { acceptDeletions: true });
 
+      expect(result.deletionsAccepted).toBeGreaterThanOrEqual(1);
+
+      // ECMA-376 §17.13.5.15: the deleted paragraph mark joins this
+      // paragraph's content with the following paragraph — no leftover
+      // blank paragraph survives.
+      const paragraphs = doc.getAllParagraphs();
+      expect(paragraphs.length).toBe(1);
+      expect(paragraphs[0]?.getText()).toBe('Some text continues here');
+      expect(paragraphs[0]?.isParagraphMarkDeleted()).toBe(false);
+    });
+
+    it('should clear the marker without merging when no following paragraph exists', () => {
+      const doc = Document.create();
+      const para = doc.createParagraph();
+      para.addRun(new Run('Some text'));
+      para.markParagraphMarkAsDeleted(1, 'Author', new Date('2024-01-01'));
+
+      const result = acceptRevisionsInMemory(doc, { acceptDeletions: true });
+
+      // Final paragraph mark of a container cannot be deleted — the
+      // paragraph stays, only the marker is cleared.
       expect(para.isParagraphMarkDeleted()).toBe(false);
       expect(result.deletionsAccepted).toBeGreaterThanOrEqual(1);
+      expect(doc.getAllParagraphs().length).toBe(1);
+      expect(para.getText()).toBe('Some text');
     });
 
     it('should accept paragraph mark insertion by clearing the marker', () => {

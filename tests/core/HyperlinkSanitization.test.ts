@@ -94,6 +94,27 @@ describe('Hyperlink URL Sanitization', () => {
       const extensionFixes = result.fixed.filter((f) => f.includes('extension'));
       expect(extensionFixes).toHaveLength(0);
     });
+
+    it('should not report HTTP upgrade when only a non-protocol fix fired on an https URL', async () => {
+      // Space-encoding an already-https URL must not be misreported as an
+      // http→https upgrade — that rewrite never ran.
+      const hyperlink = new Hyperlink({ url: 'https://example.com/a b' });
+
+      const result = await hyperlink.validateAndFix({ fixCommonIssues: true });
+
+      expect(result.fixed).toContain('Encoded spaces as %20');
+      expect(result.fixed).not.toContain('Upgraded HTTP to HTTPS');
+      expect(result.fixedUrl).toBe('https://example.com/a%20b');
+    });
+
+    it('should report HTTP upgrade only when an http:// URL is rewritten', async () => {
+      const hyperlink = new Hyperlink({ url: 'http://example.com' });
+
+      const result = await hyperlink.validateAndFix({ fixCommonIssues: true });
+
+      expect(result.fixed).toContain('Upgraded HTTP to HTTPS');
+      expect(result.fixedUrl).toBe('https://example.com');
+    });
   });
 
   describe('Round-trip sanitization', () => {

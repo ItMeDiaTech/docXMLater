@@ -52,6 +52,19 @@ const DIAGRAM_DATA_XML =
 
 const OLE_BIN = Buffer.from('OLE_BINARY_PAYLOAD_PLACEHOLDER', 'utf8');
 
+// The body-side reference to the chart part: a w:drawing whose a:graphicData
+// is c:chart (not pic:pic). Namespaces are declared inline so the snippet is
+// valid regardless of what the generated w:document root declares.
+const CHART_DRAWING_PARAGRAPH =
+  `<w:p><w:r><w:drawing>` +
+  `<wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">` +
+  `<wp:extent cx="5274310" cy="3076575"/>` +
+  `<wp:docPr id="7" name="Chart 7"/>` +
+  `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+  `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">` +
+  `<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId500"/>` +
+  `</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+
 async function buildDocxWithEmbedded(): Promise<Buffer> {
   // Use Document.create() as a valid OOXML base, then add chart/diagram/OLE
   // parts at the ZIP layer. Round-trip must keep them all.
@@ -62,6 +75,13 @@ async function buildDocxWithEmbedded(): Promise<Buffer> {
 
   const zip = new ZipHandler();
   await zip.loadFromBuffer(base);
+
+  // Insert the chart reference into the document body (before sectPr).
+  const docXml = zip.getFileAsString('word/document.xml')!;
+  const updatedDoc = docXml.includes('<w:sectPr')
+    ? docXml.replace('<w:sectPr', `${CHART_DRAWING_PARAGRAPH}<w:sectPr`)
+    : docXml.replace('</w:body>', `${CHART_DRAWING_PARAGRAPH}</w:body>`);
+  zip.updateFile('word/document.xml', updatedDoc);
 
   zip.addFile('word/charts/chart1.xml', CHART_XML);
   zip.addFile('word/diagrams/data1.xml', DIAGRAM_DATA_XML);
@@ -108,6 +128,22 @@ describe('Chart / SmartArt / OLE passthrough', () => {
     expect(out.getFileAsString('word/diagrams/data1.xml')).toContain(
       '{00000000-0000-0000-0000-000000000001}'
     );
+  });
+
+  it('preserves the chart w:drawing reference in the document body', async () => {
+    const buf1 = await buildDocxWithEmbedded();
+    const doc = await Document.loadFromBuffer(buf1);
+    const buf2 = await doc.toBuffer();
+    doc.dispose();
+
+    const out = new ZipHandler();
+    await out.loadFromBuffer(buf2);
+    const docXml = out.getFileAsString('word/document.xml')!;
+    expect(docXml).toContain('<w:drawing>');
+    expect(docXml).toContain(
+      '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">'
+    );
+    expect(docXml).toMatch(/<c:chart[^>]*r:id="rId500"/);
   });
 
   it('preserves the chart/diagram/oleObject relationships on the document part', async () => {

@@ -54,13 +54,16 @@ async function loadAndResaveDocXml(xml: string): Promise<string> {
   return content instanceof Buffer ? content.toString('utf8') : String(content);
 }
 
+// Cached result text deliberately differs from the PAGE placeholder ("1")
+// so these tests also catch the emitter substituting a synthetic
+// placeholder for the document's cached field result.
 function buildFldSimpleDoc(attrFragment: string): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:p>
       <w:fldSimple w:instr="PAGE"${attrFragment}>
-        <w:r><w:t>1</w:t></w:r>
+        <w:r><w:t>42</w:t></w:r>
       </w:fldSimple>
     </w:p>
   </w:body>
@@ -109,5 +112,11 @@ describe('<w:fldSimple> w:fldLock / w:dirty round-trip', () => {
     const tag = extractFldSimpleOpenTag(out);
     expect(tag).not.toMatch(/w:fldLock/);
     expect(tag).not.toMatch(/w:dirty/);
+  });
+
+  it('preserves the cached field result text unchanged', async () => {
+    const out = await loadAndResaveDocXml(buildFldSimpleDoc(''));
+    const fldSimple = out.match(/<w:fldSimple[\s\S]*?<\/w:fldSimple>/)?.[0] ?? '';
+    expect(fldSimple).toMatch(/<w:t[^>]*>42<\/w:t>/);
   });
 });

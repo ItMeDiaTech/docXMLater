@@ -43,7 +43,7 @@ describe('NumberingLevel', () => {
       expect(props.leftIndent).toBe(720); // 720 + (0 * 360)
       expect(props.hangingIndent).toBe(360);
       expect(props.font).toBe('Calibri'); // Changed from Symbol to Calibri
-      expect(props.fontSize).toBe(22);
+      expect(props.fontSize).toBeUndefined(); // unset = inherit (no explicit w:sz)
       expect(props.isLegalNumberingStyle).toBe(false);
       expect(props.suffix).toBe('tab');
     });

@@ -214,6 +214,64 @@ describe('consolidateNumbering()', () => {
     expect(result.groupsConsolidated).toBe(1);
   });
 
+  it('should add startOverrides to remapped numbered instances so each list restarts', () => {
+    const manager = new NumberingManager();
+
+    // Two identical decimal lists, each an independent sequence starting at 1
+    manager.addAbstractNumbering(createNumberedAbstractNum(0));
+    manager.addAbstractNumbering(createNumberedAbstractNum(1));
+    manager.addInstance(NumberingInstance.create({ numId: 1, abstractNumId: 0 }));
+    manager.addInstance(NumberingInstance.create({ numId: 2, abstractNumId: 1 }));
+    manager.resetModified();
+
+    const result = manager.consolidateNumbering();
+    expect(result.instancesRemapped).toBe(1);
+
+    // Counters are shared per abstractNum, so the remapped instance needs a
+    // startOverride to keep beginning at 1 instead of continuing list 1
+    const remapped = manager.getInstance(2)!;
+    expect(remapped.getAbstractNumId()).toBe(0);
+    expect(remapped.getLevelOverride(0)).toBe(1);
+
+    // The canonical instance keeps its original counter (no override added)
+    const canonical = manager.getInstance(1)!;
+    expect(canonical.getLevelOverride(0)).toBeUndefined();
+  });
+
+  it('should not add startOverrides to remapped bullet instances', () => {
+    const manager = new NumberingManager();
+
+    manager.addAbstractNumbering(createBulletAbstractNum(0));
+    manager.addAbstractNumbering(createBulletAbstractNum(1));
+    manager.addInstance(NumberingInstance.create({ numId: 1, abstractNumId: 0 }));
+    manager.addInstance(NumberingInstance.create({ numId: 2, abstractNumId: 1 }));
+    manager.resetModified();
+
+    const result = manager.consolidateNumbering();
+    expect(result.instancesRemapped).toBe(1);
+
+    // Bullets carry no counter — no override noise expected
+    const remapped = manager.getInstance(2)!;
+    expect(remapped.getLevelOverrides().size).toBe(0);
+  });
+
+  it('should preserve an existing startOverride on a remapped instance', () => {
+    const manager = new NumberingManager();
+
+    manager.addAbstractNumbering(createNumberedAbstractNum(0));
+    manager.addAbstractNumbering(createNumberedAbstractNum(1));
+    manager.addInstance(NumberingInstance.create({ numId: 1, abstractNumId: 0 }));
+    const restarted = NumberingInstance.create({ numId: 2, abstractNumId: 1 });
+    restarted.setLevelOverride(0, 5);
+    manager.addInstance(restarted);
+    manager.resetModified();
+
+    manager.consolidateNumbering();
+
+    // The author's explicit restart value wins over the level default
+    expect(manager.getInstance(2)!.getLevelOverride(0)).toBe(5);
+  });
+
   it('should track _removedAbstractNumIds and _modifiedNumIds correctly', () => {
     const manager = new NumberingManager();
 
@@ -431,6 +489,67 @@ describe('Fingerprint correctness', () => {
     const result = manager.consolidateNumbering();
 
     expect(result.abstractNumsRemoved).toBe(0);
+    expect(manager.getAbstractNumberingCount()).toBe(2);
+  });
+
+  it('should NOT merge abstractNums differing only in lvlPicBulletId', () => {
+    const manager = new NumberingManager();
+
+    // Identical picture-bullet levels except for the referenced numPicBullet
+    const makePicBulletAbstractNum = (id: number, picBulletId: number): AbstractNumbering => {
+      const abstractNum = new AbstractNumbering({ abstractNumId: id, multiLevelType: 1 });
+      abstractNum.addLevel(
+        NumberingLevel.create({
+          level: 0,
+          format: 'bullet',
+          text: '',
+          lvlPicBulletId: picBulletId,
+        })
+      );
+      return abstractNum;
+    };
+
+    manager.addAbstractNumbering(makePicBulletAbstractNum(0, 0));
+    manager.addAbstractNumbering(makePicBulletAbstractNum(1, 1));
+    manager.addInstance(NumberingInstance.create({ numId: 1, abstractNumId: 0 }));
+    manager.addInstance(NumberingInstance.create({ numId: 2, abstractNumId: 1 }));
+    manager.resetModified();
+
+    const result = manager.consolidateNumbering();
+
+    // Different bullet pictures render differently → must not consolidate
+    expect(result.abstractNumsRemoved).toBe(0);
+    expect(result.groupsConsolidated).toBe(0);
+    expect(manager.getAbstractNumberingCount()).toBe(2);
+  });
+
+  it('should NOT merge abstractNums differing only in pStyle', () => {
+    const manager = new NumberingManager();
+
+    const makeStyledAbstractNum = (id: number, pStyle?: string): AbstractNumbering => {
+      const abstractNum = new AbstractNumbering({ abstractNumId: id, multiLevelType: 1 });
+      abstractNum.addLevel(
+        NumberingLevel.create({
+          level: 0,
+          format: 'decimal',
+          text: '%1.',
+          pStyle,
+        })
+      );
+      return abstractNum;
+    };
+
+    manager.addAbstractNumbering(makeStyledAbstractNum(0, 'ListParagraph'));
+    manager.addAbstractNumbering(makeStyledAbstractNum(1, 'Heading1'));
+    manager.addInstance(NumberingInstance.create({ numId: 1, abstractNumId: 0 }));
+    manager.addInstance(NumberingInstance.create({ numId: 2, abstractNumId: 1 }));
+    manager.resetModified();
+
+    const result = manager.consolidateNumbering();
+
+    // Different style-to-level linkage → must not consolidate
+    expect(result.abstractNumsRemoved).toBe(0);
+    expect(result.groupsConsolidated).toBe(0);
     expect(manager.getAbstractNumberingCount()).toBe(2);
   });
 });

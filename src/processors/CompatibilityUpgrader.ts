@@ -67,9 +67,22 @@ export class CompatibilityUpgrader {
     const selfClosingCompat = /<w:compat\s*\/>/.exec(settingsXml);
 
     if (!compatBlockMatch && !selfClosingCompat) {
-      // No w:compat block — insert a full modern block before </w:settings>
+      // No w:compat block — insert a full modern block. CT_Settings is an
+      // xsd:sequence where w:compat must precede rsids, mathPr, themeFontLang,
+      // clrSchemeMapping, shapeDefaults, decimalSymbol, and listSeparator, so
+      // anchor before the earliest of those; append before </w:settings> only
+      // when none are present.
       const modernBlock = CompatibilityUpgrader.buildModernCompatBlock(MODERN_COMPAT_SETTINGS);
-      const xml = settingsXml.replace(/<\/w:settings>/, modernBlock + '\n</w:settings>');
+      const followingSibling =
+        /<(?:w:rsids|m:mathPr|w:themeFontLang|w:clrSchemeMapping|w:shapeDefaults|w:decimalSymbol|w:listSeparator)[\s/>]/.exec(
+          settingsXml
+        );
+      const xml = followingSibling
+        ? settingsXml.slice(0, followingSibling.index) +
+          modernBlock +
+          '\n  ' +
+          settingsXml.slice(followingSibling.index)
+        : settingsXml.replace(/<\/w:settings>/, modernBlock + '\n</w:settings>');
 
       for (const s of MODERN_COMPAT_SETTINGS) {
         addedSettings.push(s.name);

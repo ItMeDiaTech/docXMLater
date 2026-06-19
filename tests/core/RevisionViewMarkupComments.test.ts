@@ -127,4 +127,21 @@ describe('revisionView w:markup / w:comments (§17.15.1.77)', () => {
     expect(settingsXml).toMatch(/<w:revisionView\b[^>]*w:markup="0"/);
     expect(settingsXml).toMatch(/<w:revisionView\b[^>]*w:comments="0"/);
   });
+
+  it('preserves w:markup and w:comments when settings are mutated (merge path)', async () => {
+    // A settings-mutating API marks _settingsModified, forcing
+    // mergeSettingsWithOriginal down the merge branch (not the verbatim
+    // passthrough). The merge must re-emit w:markup / w:comments.
+    const buffer = await makeDocxWithRevisionView('w:markup="0" w:comments="0"');
+    const doc = await Document.loadFromBuffer(buffer, { revisionHandling: 'preserve' });
+    doc.setDefaultTabStop(708);
+    const rebuffered = await doc.toBuffer();
+    doc.dispose();
+
+    const zh = new ZipHandler();
+    await zh.loadFromBuffer(rebuffered);
+    const settingsXml = zh.getFileAsString('word/settings.xml') ?? '';
+    expect(settingsXml).toMatch(/<w:revisionView\b[^>]*w:markup="0"/);
+    expect(settingsXml).toMatch(/<w:revisionView\b[^>]*w:comments="0"/);
+  });
 });

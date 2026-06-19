@@ -172,6 +172,30 @@ describe('stripTrackedChanges — non-body parts coverage', () => {
     expect(after).toContain('w:val="center"');
   });
 
+  it('keeps a tracked paragraph deletion well-formed: self-closing <w:del/> in w:pPr/w:rPr must not swallow content up to the paired <w:del> block', async () => {
+    // Per ECMA-376 §17.13.5.15 the paragraph-mark deletion marker is a
+    // self-closing <w:del/> inside w:pPr/w:rPr, preceding the paired
+    // <w:del> run wrappers of the same paragraph.
+    const zip = makeBaseZip();
+    zip.addFile(
+      'word/header1.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:pPr><w:rPr><w:del w:id="30" w:author="A" w:date="2026-04-24T10:00:00Z"/></w:rPr></w:pPr><w:r><w:t>untracked kept</w:t></w:r><w:del w:id="31" w:author="A" w:date="2026-04-24T10:00:00Z"><w:r><w:delText>gone</w:delText></w:r></w:del></w:p>
+</w:hdr>`
+    );
+    await stripTrackedChanges(zip);
+    const after = zip.getFileAsString('word/header1.xml') ?? '';
+    expect(after).not.toMatch(/<w:del\b/);
+    expect(after).toContain('untracked kept');
+    expect(after).not.toContain('gone');
+    // The marker must not consume </w:rPr></w:pPr> — output stays balanced.
+    expect(after).toContain('</w:rPr></w:pPr>');
+    const opens = (after.match(/<w:pPr>/g) ?? []).length;
+    const closes = (after.match(/<\/w:pPr>/g) ?? []).length;
+    expect(closes).toBe(opens);
+  });
+
   it('leaves a header without revisions unchanged (regression guard)', async () => {
     const zip = makeBaseZip();
     zip.addFile(

@@ -149,6 +149,13 @@ export class RevisionWalker {
     // detect it at the table level. The default `w:del` removal in
     // processRevisions only strips the marker itself, leaving a zombie
     // empty row; per spec, accepting the deletion removes the entire row.
+    // Tables are checked from the parent first: a table whose rows are ALL
+    // tracked-deleted must be removed entirely (a row-less w:tbl violates
+    // §17.4.38's at-least-one-row requirement and Word's Accept All drops
+    // the whole table), and only the parent can remove the w:tbl itself.
+    if (options.acceptDeletions && obj['w:tbl']) {
+      RevisionWalker.removeFullyDeletedTables(obj);
+    }
     if (options.acceptDeletions && obj['w:tr']) {
       RevisionWalker.filterDeletedRows(obj);
     }
@@ -193,17 +200,86 @@ export class RevisionWalker {
     };
 
     if (Array.isArray(rows)) {
-      const kept = rows.filter((r) => !isRowDeleted(r));
-      if (kept.length !== rows.length) {
-        if (kept.length === 0) {
-          delete tbl['w:tr'];
-        } else {
-          tbl['w:tr'] = kept;
-        }
+      const removedIndices = new Set<number>();
+      for (let i = 0; i < rows.length; i++) {
+        if (isRowDeleted(rows[i])) removedIndices.add(i);
       }
+      if (removedIndices.size === 0) return;
+      const kept = rows.filter((_, i) => !removedIndices.has(i));
+      if (kept.length === 0) {
+        delete tbl['w:tr'];
+      } else {
+        tbl['w:tr'] = kept;
+      }
+      RevisionWalker.dropOrderedChildEntries(tbl, 'w:tr', removedIndices);
     } else if (isRowDeleted(rows)) {
       delete tbl['w:tr'];
+      RevisionWalker.dropOrderedChildEntries(tbl, 'w:tr', new Set([0]));
     }
+  }
+
+  /**
+   * Remove `<w:tbl>` children whose rows are ALL tracked-deleted.
+   *
+   * Runs at the table's parent because filterDeletedRows (invoked on the
+   * table itself) has no reference back to the container holding the
+   * `w:tbl` key. Skips tables that still carry potential row containers
+   * (w:ins / w:moveTo wrappers, w:sdt, w:customXml) — their surviving rows
+   * are only materialized as direct `w:tr` children later, when the
+   * wrappers are unwrapped during recursion.
+   */
+  private static removeFullyDeletedTables(parent: any): void {
+    const tables = parent['w:tbl'];
+    const becomesRowless = (tbl: any): boolean => {
+      // Tables with no rows at all are pre-existing structures, not the
+      // result of accepting a deletion — leave them untouched.
+      if (!tbl || typeof tbl !== 'object' || tbl['w:tr'] === undefined) return false;
+      RevisionWalker.filterDeletedRows(tbl);
+      return (
+        tbl['w:tr'] === undefined &&
+        !tbl['w:ins'] &&
+        !tbl['w:moveTo'] &&
+        !tbl['w:sdt'] &&
+        !tbl['w:customXml']
+      );
+    };
+
+    if (Array.isArray(tables)) {
+      const removedIndices = new Set<number>();
+      for (let i = 0; i < tables.length; i++) {
+        if (becomesRowless(tables[i])) removedIndices.add(i);
+      }
+      if (removedIndices.size === 0) return;
+      const kept = tables.filter((_: any, i: number) => !removedIndices.has(i));
+      if (kept.length === 0) {
+        delete parent['w:tbl'];
+      } else {
+        parent['w:tbl'] = kept;
+      }
+      RevisionWalker.dropOrderedChildEntries(parent, 'w:tbl', removedIndices);
+    } else if (becomesRowless(tables)) {
+      delete parent['w:tbl'];
+      RevisionWalker.dropOrderedChildEntries(parent, 'w:tbl', new Set([0]));
+    }
+  }
+
+  /**
+   * Drop specific {type, index} entries from `_orderedChildren` and
+   * re-index the survivors. The serializer maps each entry onto the
+   * element array by index, so stale entries left after filtering would
+   * shift surviving elements relative to inter-element siblings (e.g. a
+   * w:bookmarkEnd between table rows) or silently drop the tail.
+   */
+  private static dropOrderedChildEntries(
+    parent: any,
+    type: string,
+    removedIndices: Set<number>
+  ): void {
+    if (!parent._orderedChildren) return;
+    parent._orderedChildren = parent._orderedChildren.filter(
+      (c: OrderedChildInfo) => c.type !== type || !removedIndices.has(c.index)
+    );
+    RevisionWalker.reindexOrderedChildren(parent._orderedChildren);
   }
 
   /**

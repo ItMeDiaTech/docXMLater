@@ -130,7 +130,10 @@ export class FootnoteManager {
   }
 
   /**
-   * Removes a footnote
+   * Removes a footnote from the model only. Does not touch body
+   * w:footnoteReference runs or the document's dirty flags — callers going
+   * through a Document should use Document.removeFootnote(), which also
+   * strips the matching references and forces footnotes.xml regeneration.
    * @param id Footnote ID
    * @returns True if removed, false if not found or if it's a special type
    */

@@ -5,7 +5,8 @@
  * Different footers can be defined for first page, odd pages, and even pages.
  */
 
-import { XMLElement } from '../xml/XMLBuilder.js';
+import { XMLBuilder } from '../xml/XMLBuilder.js';
+import { XMLParser } from '../xml/XMLParser.js';
 import { Paragraph } from './Paragraph.js';
 import { RunFormatting } from './Run.js';
 import { Table } from './Table.js';
@@ -36,6 +37,12 @@ export class Footer {
   private type: FooterType;
   private footerId?: string;
   private rawXML?: string; // Store original XML for preservation
+  // Top-level w:p/w:tbl count of the preserved raw XML. DocumentParser calls
+  // setRawXML() before repopulating elements from that same XML, so mutators
+  // can't simply clear rawXML — they would fire during parsing and lose the
+  // preserved bytes. Instead, growth beyond this count is the signal that
+  // content was added after load and the preserved XML is stale.
+  private rawXmlBlockCount = Number.MAX_SAFE_INTEGER;
 
   /**
    * Creates a new footer
@@ -51,7 +58,41 @@ export class Footer {
    */
   setRawXML(xml: string): this {
     this.rawXML = xml;
+    this.rawXmlBlockCount = Footer.countTopLevelBlocks(xml);
     return this;
+  }
+
+  /**
+   * Counts the top-level w:p/w:tbl children of a raw footer part.
+   * Parsing populates this.elements from exactly those blocks, so the count
+   * is the baseline against which mutators detect post-load additions.
+   */
+  private static countTopLevelBlocks(xml: string): number {
+    try {
+      const parsed = XMLParser.parseToObject(xml) as Record<string, unknown>;
+      const root = parsed?.['w:ftr'];
+      if (!root || typeof root !== 'object') {
+        return 0;
+      }
+      const count = (node: unknown): number =>
+        node === undefined ? 0 : Array.isArray(node) ? node.length : 1;
+      const rootObj = root as Record<string, unknown>;
+      return count(rootObj['w:p']) + count(rootObj['w:tbl']);
+    } catch {
+      // Unparseable part: never invalidate, keep the preserved bytes
+      return Number.MAX_SAFE_INTEGER;
+    }
+  }
+
+  /**
+   * Drops the preserved raw XML once content grows beyond what that XML
+   * already contains, so toXML() regenerates from elements and post-load
+   * edits are not silently discarded on save.
+   */
+  private invalidateRawXmlOnGrowth(): void {
+    if (this.rawXML !== undefined && this.elements.length > this.rawXmlBlockCount) {
+      this.rawXML = undefined;
+    }
   }
 
   /**
@@ -90,6 +131,7 @@ export class Footer {
    */
   addParagraph(paragraph: Paragraph): this {
     this.elements.push(paragraph);
+    this.invalidateRawXmlOnGrowth();
     return this;
   }
 
@@ -103,6 +145,7 @@ export class Footer {
       para.addText(text);
     }
     this.elements.push(para);
+    this.invalidateRawXmlOnGrowth();
     return para;
   }
 
@@ -125,6 +168,7 @@ export class Footer {
     const para = new Paragraph();
     para.addText(text, formatting);
     this.elements.push(para);
+    this.invalidateRawXmlOnGrowth();
     return para;
   }
 
@@ -134,6 +178,7 @@ export class Footer {
    */
   addTable(table: Table): this {
     this.elements.push(table);
+    this.invalidateRawXmlOnGrowth();
     return this;
   }
 
@@ -145,6 +190,7 @@ export class Footer {
   createTable(rows: number, columns: number): Table {
     const table = new Table(rows, columns);
     this.elements.push(table);
+    this.invalidateRawXmlOnGrowth();
     return table;
   }
 
@@ -181,76 +227,25 @@ export class Footer {
       return this.rawXML;
     }
 
-    // Otherwise generate from elements
-    const elementXmls = this.elements.map((el) => el.toXML());
+    // Serialize through XMLBuilder so text and attribute values are
+    // XML-escaped and rawXml passthrough children are honored
+    const children = this.elements.map((el) => el.toXML());
 
-    let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-    xml += '<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ';
-    xml += 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">\n';
-
-    // Add elements
-    for (const element of elementXmls) {
-      xml += this.renderElement(element, 1);
+    // ECMA-376 requires block-level content in w:ftr
+    if (children.length === 0) {
+      children.push(XMLBuilder.w('p'));
     }
 
-    // If no elements, add an empty paragraph
-    if (this.elements.length === 0) {
-      xml += '  <w:p/>\n';
-    }
+    const namespaces: Record<string, string> = {
+      ...XMLBuilder.createNamespaces(),
+      // Extension namespaces (w14:paraId etc. on regenerated paragraphs)
+      // must be declared ignorable or Word rejects the part
+      'mc:Ignorable': 'w14 w15 wp14 asvg',
+    };
 
-    xml += '</w:ftr>';
-
-    return xml;
-  }
-
-  /**
-   * Renders an XML element to string with indentation
-   */
-  private renderElement(element: XMLElement, indent: number): string {
-    const spaces = '  '.repeat(indent);
-    let xml = '';
-
-    if (element.selfClosing) {
-      xml += `${spaces}<${element.name}`;
-      if (element.attributes) {
-        for (const [key, value] of Object.entries(element.attributes)) {
-          xml += ` ${key}="${value}"`;
-        }
-      }
-      xml += '/>\n';
-    } else {
-      xml += `${spaces}<${element.name}`;
-      if (element.attributes) {
-        for (const [key, value] of Object.entries(element.attributes)) {
-          xml += ` ${key}="${value}"`;
-        }
-      }
-      xml += '>';
-
-      if (element.children && element.children.length > 0) {
-        const hasOnlyText = element.children.every((c) => typeof c === 'string');
-
-        if (hasOnlyText) {
-          // Inline text content
-          xml += element.children.join('');
-        } else {
-          // Block-level children
-          xml += '\n';
-          for (const child of element.children) {
-            if (typeof child === 'string') {
-              xml += spaces + '  ' + child + '\n';
-            } else {
-              xml += this.renderElement(child, indent + 1);
-            }
-          }
-          xml += spaces;
-        }
-      }
-
-      xml += `</${element.name}>\n`;
-    }
-
-    return xml;
+    const builder = new XMLBuilder();
+    builder.element('w:ftr', namespaces, children);
+    return builder.build(true);
   }
 
   /**

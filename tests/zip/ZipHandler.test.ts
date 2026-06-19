@@ -320,6 +320,28 @@ describe('ZipHandler', () => {
         expect(renamed).toBe(false);
       });
 
+      test('should keep file when rename source and destination normalize to same path', () => {
+        const buffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // PNG signature
+        handler.addFile('word/media/image1.png', buffer, { binary: true });
+
+        const renamed = handler.renameFile('word/media/image1.png', 'word\\media\\image1.png');
+
+        expect(renamed).toBe(true);
+        expect(handler.hasFile('word/media/image1.png')).toBe(true);
+        expect(handler.getFileAsBuffer('word/media/image1.png')).toEqual(buffer);
+      });
+
+      test('should keep file when move source and destination normalize to same path', () => {
+        const buffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // PNG signature
+        handler.addFile('word/media/image1.png', buffer, { binary: true });
+
+        const moved = handler.moveFile('word/media/image1.png', 'word\\media\\image1.png');
+
+        expect(moved).toBe(true);
+        expect(handler.hasFile('word/media/image1.png')).toBe(true);
+        expect(handler.getFileAsBuffer('word/media/image1.png')).toEqual(buffer);
+      });
+
       test('should copy file', () => {
         handler.addFile('original.txt', 'Content');
         const copied = handler.copyFile('original.txt', 'copy.txt');

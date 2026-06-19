@@ -145,7 +145,9 @@ export function emusToPixels(emus: number, dpi: number = STANDARD_DPI): number {
  * @returns Value in twips
  */
 export function pointsToTwips(points: number): number {
-  return points * UNITS.TWIPS_PER_POINT;
+  // Round to nearest integer — twips attributes (w:spacing, w:ind) require
+  // ST_DecimalNumber-based integer values
+  return Math.round(points * UNITS.TWIPS_PER_POINT);
 }
 
 /**

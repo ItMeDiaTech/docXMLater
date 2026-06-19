@@ -23,29 +23,28 @@ export function validateDocxStructure(filePaths: string[]): void {
 
 /**
  * Checks if a file path represents a binary file based on extension
+ *
+ * Uses a text-extension whitelist rather than a binary-extension whitelist:
+ * misclassifying text as binary only changes its in-memory representation
+ * (Buffer instead of string), but misclassifying binary as text corrupts the
+ * bytes through a lossy UTF-8 decode. OOXML packages can embed arbitrary
+ * binary parts (.xlsx/.pdf OLE packages, .odttf obfuscated fonts, .emz/.wmz
+ * compressed metafiles, extensionless parts), so anything not known to be
+ * text must be preserved byte-for-byte.
+ *
  * @param filePath - The file path to check
  * @returns True if the file is likely binary
  */
 export function isBinaryFile(filePath: string): boolean {
-  const binaryExtensions = [
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.gif',
-    '.bmp',
-    '.tiff',
-    '.ico',
-    '.emf',
-    '.wmf',
-    '.bin',
-    '.dat',
-    '.ttf',
-    '.otf',
-    '.woff',
-  ];
+  const textExtensions = ['.xml', '.rels', '.svg', '.txt', '.html', '.css', '.js'];
 
-  const extension = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
-  return binaryExtensions.includes(extension);
+  const dotIndex = filePath.lastIndexOf('.');
+  if (dotIndex === -1) {
+    return true;
+  }
+
+  const extension = filePath.substring(dotIndex).toLowerCase();
+  return !textExtensions.includes(extension);
 }
 
 /**
@@ -55,12 +54,15 @@ export function isBinaryFile(filePath: string): boolean {
  *
  * **Security:** This function validates paths to prevent:
  * - Path traversal attacks (../, ..\, URL-encoded variants)
- * - Absolute paths (C:\, /etc/, etc.)
+ * - Absolute Windows paths (C:\, D:, etc.) — rejected
  * - Malicious DOCX files attempting directory escape
+ *
+ * Unix absolute paths (/etc/...) are sanitized to archive-relative paths
+ * by stripping leading slashes, not rejected.
  *
  * @param path - The path to normalize
  * @returns Normalized path
- * @throws {Error} If path contains path traversal sequences, absolute paths, or URL-encoded attacks
+ * @throws {Error} If path contains path traversal sequences, absolute Windows paths, or URL-encoded attacks
  */
 export function normalizePath(path: string): string {
   // First convert all backslashes to forward slashes for consistent checking
@@ -94,15 +96,6 @@ export function normalizePath(path: string): string {
       `Invalid file path: "${path}" appears to be an absolute Windows path. ` +
         `Absolute paths are not allowed in DOCX archives. ` +
         `Only relative paths within the archive are permitted.`
-    );
-  }
-
-  // Security: Prevent Unix absolute paths
-  // After removing leading slashes, if it starts with / it's suspicious
-  if (path.startsWith('/') && normalized.startsWith('/')) {
-    throw new Error(
-      `Invalid file path: "${path}" appears to be an absolute Unix path. ` +
-        `Only relative paths are allowed in DOCX archives.`
     );
   }
 
@@ -159,6 +152,11 @@ export function isTextContent(content: Buffer | string): boolean {
 export function validateTwips(value: number, fieldName = 'value'): void {
   if (!Number.isFinite(value)) {
     throw new Error(`${fieldName} must be a finite number, got ${value}`);
+  }
+
+  // ST_TwipsMeasure/ST_SignedTwipsMeasure are ST_DecimalNumber-based — integers only
+  if (!Number.isInteger(value)) {
+    throw new Error(`${fieldName} must be an integer (in twips), got ${value}`);
   }
 
   // Reasonable range: ±22 inches (31680 twips)
@@ -304,7 +302,7 @@ export function validateAlignment(
 
 /**
  * Validates a font size (in half-points for Word)
- * Reasonable range: 2-1638 (1-819 points)
+ * Reasonable range: 2-3276 (1-1638 points)
  * @param size - The font size in half-points to validate
  * @param fieldName - Name of the field (for error messages)
  * @throws {Error} If the size is invalid
@@ -318,9 +316,9 @@ export function validateFontSize(size: number, fieldName = 'font size'): void {
     throw new Error(`${fieldName} must be an integer (in half-points), got ${size}`);
   }
 
-  // Reasonable range: 2-1638 half-points (1-819 points)
+  // Word's limit is 1-1638 points, i.e. 2-3276 half-points for w:sz (ST_HpsMeasure)
   const MIN_SIZE = 2;
-  const MAX_SIZE = 1638;
+  const MAX_SIZE = 3276;
 
   if (size < MIN_SIZE || size > MAX_SIZE) {
     throw new Error(

@@ -357,8 +357,10 @@ export class AbstractNumbering {
       children.push(level.toXML());
     });
 
-    // If no levels defined, add a default level 0
-    if (sortedLevels.length === 0) {
+    // If no levels defined, add a default level 0 — except for numStyleLink
+    // definitions, which are pure style references per ECMA-376 §17.9.21 and
+    // must carry no w:lvl children (the linked style supplies the levels)
+    if (sortedLevels.length === 0 && !this.numStyleLink) {
       children.push(NumberingLevel.createDecimalLevel(0).toXML());
     }
 

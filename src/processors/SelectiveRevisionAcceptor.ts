@@ -15,10 +15,11 @@
 import type { Document } from '../core/Document.js';
 import type { Paragraph, ParagraphContent } from '../elements/Paragraph.js';
 import { Revision, RevisionType } from '../elements/Revision.js';
-import type { Run } from '../elements/Run.js';
+import type { Run, RunFormatting } from '../elements/Run.js';
 import { isRunContent, isHyperlinkContent } from '../elements/RevisionContent.js';
 import { ChangeCategory } from './ChangelogGenerator.js';
 import { SelectionCriteria } from './RevisionAwareProcessor.js';
+import { mergeParagraphsWithDeletedMarks } from './InMemoryRevisionAcceptor.js';
 
 /**
  * Result of selective revision acceptance.
@@ -62,9 +63,23 @@ export class SelectiveRevisionAcceptor {
     const hasFullApi = typeof (doc as any).getAllParagraphs === 'function';
 
     if (hasFullApi) {
+      const acceptedMarkDeletions: Paragraph[] = [];
       this.walkAllParagraphs(doc, (paragraph) => {
-        this.processSelectiveParagraph(paragraph, criteria, 'accept', accepted, remaining);
+        this.processSelectiveParagraph(
+          paragraph,
+          criteria,
+          'accept',
+          accepted,
+          remaining,
+          acceptedMarkDeletions
+        );
       });
+      // Accepted paragraph-mark deletions combine the paragraph with its
+      // following sibling (ECMA-376 §17.13.5.15) — same merge the all-or-
+      // nothing acceptor performs.
+      if (acceptedMarkDeletions.length > 0) {
+        mergeParagraphsWithDeletedMarks(doc, new Set(acceptedMarkDeletions));
+      }
     } else {
       // Fallback: Filter revisions from RevisionManager only (for backward compatibility)
       const revisionManager = doc.getRevisionManager();
@@ -257,7 +272,8 @@ export class SelectiveRevisionAcceptor {
     criteria: SelectionCriteria,
     action: 'accept' | 'reject',
     processedIds: string[],
-    remainingIds: string[]
+    remainingIds: string[],
+    acceptedMarkDeletions?: Paragraph[]
   ): void {
     const content = paragraph.getContent();
     const newContent: ParagraphContent[] = [];
@@ -267,15 +283,18 @@ export class SelectiveRevisionAcceptor {
         const revisionId = item.getId().toString();
 
         if (this.matchesCriteria(item, criteria)) {
-          // This revision matches the criteria - process it
-          processedIds.push(revisionId);
-
           if (action === 'accept') {
             // Accept: Transform based on revision type
+            processedIds.push(revisionId);
             this.acceptRevisionItem(item, newContent);
-          } else {
+          } else if (this.rejectRevisionItem(item, newContent, paragraph)) {
             // Reject: Transform opposite of accept
-            this.rejectRevisionItem(item, newContent);
+            processedIds.push(revisionId);
+          } else {
+            // The revision was kept in place (its previous-property
+            // snapshot could not be restored), so report it as remaining
+            // rather than rejected — it must stay in the RevisionManager.
+            remainingIds.push(revisionId);
           }
         } else {
           // This revision doesn't match - keep it
@@ -291,13 +310,18 @@ export class SelectiveRevisionAcceptor {
     // Replace paragraph content with the transformed content
     paragraph.setContent(newContent);
 
-    // Handle paragraph mark revision markers (w:del/w:ins in w:pPr/w:rPr)
-    // Both accept and reject clear the marker — these are metadata-only markers (no content),
-    // so there is no content to add or remove, only the marker itself to clear.
+    // Handle paragraph mark revision markers (w:del/w:ins in w:pPr/w:rPr).
+    // Rejecting a mark deletion just restores the mark (clear the marker);
+    // ACCEPTING one means the paragraph's contents combine with the following
+    // paragraph (ECMA-376 §17.13.5.15), so the paragraph is recorded for the
+    // post-walk merge pass in addition to clearing the marker.
     const formatting = paragraph.getFormatting();
     if (formatting.paragraphMarkDeletion) {
       const del = formatting.paragraphMarkDeletion;
       if (this.matchesMarkerCriteria(del, criteria)) {
+        if (action === 'accept') {
+          acceptedMarkDeletions?.push(paragraph);
+        }
         paragraph.clearParagraphMarkDeletion();
         processedIds.push(del.id.toString());
       } else {
@@ -415,8 +439,17 @@ export class SelectiveRevisionAcceptor {
    * Reject a single revision item (opposite of accept).
    * - Rejecting an insertion removes the content
    * - Rejecting a deletion keeps the content (unwraps it)
+   * - Rejecting a run/paragraph property change restores the previous
+   *   properties snapshot (ECMA-376 §17.13.5.30/§17.13.5.31)
+   *
+   * @returns true if the revision was rejected, false if it was kept in
+   *   place because its previous-property snapshot could not be restored
    */
-  private static rejectRevisionItem(revision: Revision, newContent: ParagraphContent[]): void {
+  private static rejectRevisionItem(
+    revision: Revision,
+    newContent: ParagraphContent[],
+    paragraph: Paragraph
+  ): boolean {
     const revisionType = revision.getType();
     const childContent = revision.getContent();
 
@@ -424,7 +457,7 @@ export class SelectiveRevisionAcceptor {
       case 'insert':
       case 'moveTo':
         // Reject insertion: Remove the inserted content entirely
-        break;
+        return true;
 
       case 'delete':
       case 'moveFrom':
@@ -436,19 +469,46 @@ export class SelectiveRevisionAcceptor {
             newContent.push(child);
           }
         }
-        break;
+        return true;
 
-      case 'runPropertiesChange':
-      case 'paragraphPropertiesChange':
-      case 'tablePropertiesChange':
-      case 'tableExceptionPropertiesChange':
-      case 'tableRowPropertiesChange':
-      case 'tableCellPropertiesChange':
-      case 'sectionPropertiesChange':
-      case 'numberingChange':
-        // Rejecting property changes: Would need to restore old properties
-        // For now, just keep content without the change metadata
-        // (Full implementation would restore previousProperties)
+      case 'runPropertiesChange': {
+        const previous = revision.getPreviousProperties();
+        if (!previous) {
+          // No snapshot to restore from — keep the tracked change so the
+          // prior formatting is not silently lost.
+          newContent.push(revision);
+          return false;
+        }
+        for (const child of childContent) {
+          if (isRunContent(child)) {
+            const run = child as Run;
+            // w:rPrChange carries the complete pre-change run properties,
+            // so rejecting replaces (not merges) the run's formatting.
+            // Run.formatting is private; written directly the same way
+            // DocumentParser populates parsed properties.
+            (run as unknown as { formatting: RunFormatting }).formatting = {
+              ...(previous as RunFormatting),
+            };
+            newContent.push(run);
+          } else if (isHyperlinkContent(child)) {
+            newContent.push(child);
+          }
+        }
+        return true;
+      }
+
+      case 'paragraphPropertiesChange': {
+        const previous = revision.getPreviousProperties();
+        if (!previous) {
+          newContent.push(revision);
+          return false;
+        }
+        // The snapshot uses the same key names as ParagraphFormatting
+        // (see Revision.PROPERTY_KEY_TO_ELEMENT), so the recorded values
+        // are written back onto the containing paragraph. Only recorded
+        // keys are touched: internal bookkeeping fields (revision markers,
+        // paraId) are not part of a w:pPrChange snapshot.
+        Object.assign(paragraph.formatting, previous);
         for (const child of childContent) {
           if (isRunContent(child)) {
             newContent.push(child as Run);
@@ -456,11 +516,26 @@ export class SelectiveRevisionAcceptor {
             newContent.push(child);
           }
         }
-        break;
+        return true;
+      }
+
+      case 'tablePropertiesChange':
+      case 'tableExceptionPropertiesChange':
+      case 'tableRowPropertiesChange':
+      case 'tableCellPropertiesChange':
+      case 'sectionPropertiesChange':
+      case 'numberingChange':
+        // The element these snapshots belong to (table/row/cell/section/
+        // numbering definition) is not reachable from paragraph content,
+        // so the previous properties cannot be restored here. Keep the
+        // revision in place rather than discarding the snapshot.
+        newContent.push(revision);
+        return false;
 
       default:
         // Unknown type - keep the revision as-is for safety
         newContent.push(revision);
+        return true;
     }
   }
 
@@ -477,8 +552,69 @@ export class SelectiveRevisionAcceptor {
     criteria: SelectionCriteria,
     action: 'accept' | 'reject'
   ): SelectiveAcceptResult {
-    // Preview is the same as the actual operation but without side effects
-    return action === 'accept' ? this.accept(doc, criteria) : this.reject(doc, criteria);
+    const processed: string[] = [];
+    const remaining: string[] = [];
+
+    // Delegating to accept()/reject() would mutate paragraph content and
+    // splice revisions out of the RevisionManager, so preview classifies
+    // with the same traversal and criteria but never transforms anything.
+    const hasFullApi = typeof (doc as any).getAllParagraphs === 'function';
+
+    if (hasFullApi) {
+      this.walkAllParagraphs(doc, (paragraph) => {
+        for (const item of paragraph.getContent()) {
+          if (item instanceof Revision) {
+            if (this.matchesCriteria(item, criteria)) {
+              processed.push(item.getId().toString());
+            } else {
+              remaining.push(item.getId().toString());
+            }
+          }
+        }
+
+        const formatting = paragraph.getFormatting();
+        if (formatting.paragraphMarkDeletion) {
+          const del = formatting.paragraphMarkDeletion;
+          if (this.matchesMarkerCriteria(del, criteria)) {
+            processed.push(del.id.toString());
+          } else {
+            remaining.push(del.id.toString());
+          }
+        }
+        if (formatting.paragraphMarkInsertion) {
+          const ins = formatting.paragraphMarkInsertion;
+          if (this.matchesMarkerCriteria(ins, criteria)) {
+            processed.push(ins.id.toString());
+          } else {
+            remaining.push(ins.id.toString());
+          }
+        }
+      });
+    } else {
+      // Fallback: Filter revisions from RevisionManager only (for backward compatibility)
+      const revisionManager = doc.getRevisionManager();
+      if (revisionManager) {
+        for (const rev of revisionManager.getAllRevisions()) {
+          if (this.matchesCriteria(rev, criteria)) {
+            processed.push(rev.getId().toString());
+          } else {
+            remaining.push(rev.getId().toString());
+          }
+        }
+      }
+    }
+
+    return {
+      accepted: action === 'accept' ? processed : [],
+      rejected: action === 'reject' ? processed : [],
+      remaining,
+      summary: {
+        totalProcessed: processed.length + remaining.length,
+        acceptedCount: action === 'accept' ? processed.length : 0,
+        rejectedCount: action === 'reject' ? processed.length : 0,
+        remainingCount: remaining.length,
+      },
+    };
   }
 
   /**

@@ -3,11 +3,13 @@
  */
 
 import { Paragraph } from './Paragraph.js';
+import { Run } from './Run.js';
 import { TableRow, RowFormatting } from './TableRow.js';
 import { TableCell, CellFormatting } from './TableCell.js';
 import { Revision } from './Revision.js';
 import { XMLBuilder, XMLElement } from '../xml/XMLBuilder.js';
 import { deepClone } from '../utils/deepClone.js';
+import { formatDateForXml } from '../utils/dateFormatting.js';
 import { TableGridChange } from './TableGridChange.js';
 import {
   TableAlignment as CommonTableAlignment,
@@ -2069,22 +2071,10 @@ export class Table {
       if (this.rows.length <= 1 && !this.trackingContext?.isEnabled()) {
         return false;
       }
-      // When tracking enabled, mark cells with cellDel and wrap content in w:del
+      // When tracking enabled, record the whole-row tracked deletion instead
+      // of removing the row
       if (this.trackingContext?.isEnabled()) {
-        const author = this.trackingContext.getAuthor();
-        const row = this.rows[index]!;
-        for (const cell of row.getCells()) {
-          const cellDelRevision = Revision.createTableCellDelete(author, []);
-          cell.setCellRevision(cellDelRevision);
-          // Wrap paragraph runs in w:del so content appears as deleted
-          for (const para of cell.getParagraphs()) {
-            const runs = para.getRuns();
-            if (runs.length > 0) {
-              const deletion = Revision.createDeletion(author, runs);
-              para.addRevision(deletion);
-            }
-          }
-        }
+        this.markRowAsTrackedDeletion(this.rows[index]!);
         return true;
       }
       this.rows.splice(index, 1);
@@ -2107,6 +2097,47 @@ export class Table {
     if (index < 0 || index >= this.rows.length) return false;
     this.rows.splice(index, 1);
     return true;
+  }
+
+  /**
+   * Marks a row as a tracked deletion. Per ECMA-376 §17.13.5.14 a tracked
+   * whole-row deletion is recorded as `w:del` inside `w:trPr` — not as
+   * per-cell `w:cellDel`, which tracks cell-structure changes and is never
+   * resolved into a row removal by the revision acceptor. The cell text is
+   * additionally wrapped in `w:del` so Word renders it struck through until
+   * the revision is resolved.
+   */
+  private markRowAsTrackedDeletion(row: TableRow): void {
+    const author = this.trackingContext!.getAuthor();
+    const manager = this.trackingContext!.getRevisionManager();
+    row.setRowDeletion({
+      id: String(manager.consumeNextId()),
+      author,
+      date: formatDateForXml(new Date()),
+    });
+    for (const cell of row.getCells()) {
+      for (const para of cell.getParagraphs()) {
+        this.wrapParagraphRunsInTrackedDeletion(para, author);
+      }
+    }
+  }
+
+  /**
+   * Replaces each live run in the paragraph with a delete revision wrapping
+   * it. Replacement (not append) matters: appending the revision would leave
+   * the original run live alongside its `w:del` copy, so the text would
+   * serialize twice and survive an accept. Items already inside revisions
+   * are left alone to avoid double-wrapping.
+   */
+  private wrapParagraphRunsInTrackedDeletion(para: Paragraph, author: string): void {
+    const manager = this.trackingContext!.getRevisionManager();
+    for (const item of para.getContent()) {
+      if (item instanceof Run) {
+        const deletion = Revision.createDeletion(author, item);
+        manager.register(deletion);
+        para.replaceContent(item, [deletion]);
+      }
+    }
   }
 
   /**
@@ -2146,13 +2177,16 @@ export class Table {
     // Insert the row
     this.rows.splice(index, 0, row);
 
-    // When tracking enabled, mark every cell in the new row with cellIns
+    // When tracking enabled, mark the row as a tracked insertion. Per
+    // ECMA-376 §17.13.5.19 a whole-row insertion is recorded as w:ins inside
+    // w:trPr — per-cell w:cellIns tracks cell-structure changes and would not
+    // let Word or the revision acceptor resolve the row as inserted.
     if (this.trackingContext?.isEnabled()) {
-      const author = this.trackingContext.getAuthor();
-      for (const cell of row.getCells()) {
-        const revision = Revision.createTableCellInsert(author, []);
-        cell.setCellRevision(revision);
-      }
+      row.setRowInsertion({
+        id: String(this.trackingContext.getRevisionManager().consumeNextId()),
+        author: this.trackingContext.getAuthor(),
+        date: formatDateForXml(new Date()),
+      });
     }
 
     return row;
@@ -2198,6 +2232,26 @@ export class Table {
         row.insertCellAt(idx, cell);
       }
     }
+
+    // Keep w:tblGrid in sync — toXML() trusts formatting.tableGrid for the
+    // gridCol count whenever it is set (every loaded table has one), so a
+    // stale grid makes rows consume more columns than the grid defines and
+    // Word misassigns fixed-layout widths (ECMA-376 §17.4.49)
+    const grid = this.formatting.tableGrid;
+    if (grid) {
+      const at = index === undefined || index >= grid.length ? grid.length : Math.max(0, index);
+      const left = at > 0 ? grid[at - 1] : undefined;
+      const right = at < grid.length ? grid[at] : undefined;
+      // Mirror a neighbor's width; fall back to 1 inch when the grid has no
+      // usable neighbor (e.g. an empty w:tblGrid) so a numeric width is always
+      // inserted rather than `undefined`.
+      const width =
+        left !== undefined && right !== undefined
+          ? Math.round((left + right) / 2)
+          : (left ?? right ?? 1440);
+      grid.splice(at, 0, width);
+    }
+
     return this;
   }
 
@@ -2220,15 +2274,25 @@ export class Table {
       return false;
     }
 
-    // When tracking enabled, mark cells with cellDel instead of removing
+    // When tracking enabled, mark cells with cellDel instead of removing.
+    // Column deletions keep the cell-level marker (w:cellDel §17.13.5.1) —
+    // a row-level w:del would claim entire rows were deleted.
     if (this.trackingContext?.isEnabled()) {
       const author = this.trackingContext.getAuthor();
+      const manager = this.trackingContext.getRevisionManager();
       let marked = false;
       for (const row of this.rows) {
         const cells = row.getCells();
         if (index < cells.length) {
+          const cell = cells[index]!;
           const revision = Revision.createTableCellDelete(author, []);
-          cells[index]!.setCellRevision(revision);
+          // Register so each marker gets a unique w:id — unregistered
+          // revisions all serialize as w:id="0", which fails validation
+          manager.register(revision);
+          cell.setCellRevision(revision);
+          for (const para of cell.getParagraphs()) {
+            this.wrapParagraphRunsInTrackedDeletion(para, author);
+          }
           marked = true;
         }
       }
@@ -2242,6 +2306,14 @@ export class Table {
         row.removeCellAt(index);
         removed = true;
       }
+    }
+
+    // Keep w:tblGrid in sync — leaving the deleted column's width in
+    // formatting.tableGrid shifts every surviving column onto the wrong
+    // gridCol width in fixed-layout tables (ECMA-376 §17.4.49). The tracked
+    // branch above keeps cells in place, so the grid must not shrink there.
+    if (removed && this.formatting.tableGrid && index < this.formatting.tableGrid.length) {
+      this.formatting.tableGrid.splice(index, 1);
     }
 
     return removed;
@@ -2738,6 +2810,28 @@ export class Table {
           }
         }
       }
+    } else if (endCol > startCol) {
+      // Per ECMA-376 §17.4.17 a gridSpan cell consumes the columns it spans,
+      // so the absorbed w:tc elements must leave the row — keeping them
+      // widens the table grid and misaligns every other row. Their content
+      // moves into the surviving cell first, matching Word's merge behavior.
+      // vMerge 'continue' cells at startCol stay (required by §17.4.84), and
+      // the tracked branch above keeps cells so w:cellMerge markers survive.
+      const absorbedCount = endCol - startCol;
+      for (let row = startRow; row <= endRow; row++) {
+        const tableRow = this.rows[row];
+        if (!tableRow) continue;
+        for (let i = 0; i < absorbedCount; i++) {
+          const absorbed = tableRow.removeCellAt(startCol + 1);
+          if (!absorbed) break;
+          for (const para of absorbed.getParagraphs()) {
+            // Placeholder-empty paragraphs would only pad the merged cell
+            // with blank lines Word's merge does not create
+            if (para.getContent().length === 0) continue;
+            cell.addParagraph(para);
+          }
+        }
+      }
     }
 
     return this;
@@ -2848,12 +2942,13 @@ export class Table {
     const fromCell = this.getCell(fromRow, fromCol);
     const toCell = this.getCell(toRow, toCol);
 
-    if (!fromCell || !toCell) {
+    if (!fromCell || !toCell || fromCell === toCell) {
       return this;
     }
 
-    // Copy all paragraphs from source to target
-    const paragraphs = fromCell.getParagraphs();
+    // Detach paragraphs from the source before re-homing them so the same
+    // Paragraph instances never live in two cells at once
+    const paragraphs = fromCell._detachAllParagraphs();
     for (const para of paragraphs) {
       toCell.addParagraph(para);
     }
@@ -2865,11 +2960,11 @@ export class Table {
     if (formatting.width) toCell.setWidth(formatting.width);
     if (formatting.verticalAlignment) toCell.setVerticalAlignment(formatting.verticalAlignment);
 
-    // Clear source cell (replace with empty paragraph)
+    // Clear source cell by writing an empty cell into the row's live array —
+    // getCells() returns a defensive copy, so assigning into it never persists
     const row = this.getRow(fromRow);
     if (row) {
-      const cells = row.getCells();
-      cells[fromCol] = new TableCell();
+      row.setCellAt(fromCol, new TableCell());
     }
 
     return this;
@@ -2895,17 +2990,18 @@ export class Table {
       return this;
     }
 
-    const cells1 = row1Obj.getCells();
-    const cells2 = row2Obj.getCells();
+    const cell1 = row1Obj.getCell(col1);
+    const cell2 = row2Obj.getCell(col2);
 
-    if (col1 >= cells1.length || col2 >= cells2.length) {
+    if (!cell1 || !cell2 || cell1 === cell2) {
       return this;
     }
 
-    // Swap cells
-    const temp = cells1[col1];
-    cells1[col1] = cells2[col2]!;
-    cells2[col2] = temp!;
+    // Swap through the rows' live cell arrays — getCells() returns a
+    // defensive copy, so swapping inside it never persists. setCellAt also
+    // re-points each cell's parent-row reference.
+    row1Obj.setCellAt(col1, cell2);
+    row2Obj.setCellAt(col2, cell1);
 
     return this;
   }
@@ -2976,22 +3072,10 @@ export class Table {
 
     const actualCount = Math.min(count, this.rows.length - startIndex);
 
-    // When tracking enabled, mark each row's cells with cellDel + w:del
+    // When tracking enabled, record each row as a whole-row tracked deletion
     if (this.trackingContext?.isEnabled()) {
-      const author = this.trackingContext.getAuthor();
       for (let i = startIndex; i < startIndex + actualCount; i++) {
-        const row = this.rows[i]!;
-        for (const cell of row.getCells()) {
-          const cellDelRevision = Revision.createTableCellDelete(author, []);
-          cell.setCellRevision(cellDelRevision);
-          for (const para of cell.getParagraphs()) {
-            const runs = para.getRuns();
-            if (runs.length > 0) {
-              const deletion = Revision.createDeletion(author, runs);
-              para.addRevision(deletion);
-            }
-          }
-        }
+        this.markRowAsTrackedDeletion(this.rows[i]!);
       }
       return true;
     }
@@ -3320,6 +3404,23 @@ export class Table {
 
     for (const row of this.rows) {
       clonedTable.addRow(row.clone());
+    }
+
+    // Tracked revision history (w:tblPrChange / w:tblGridChange) lives outside
+    // formatting, so deepClone above cannot carry it — copy explicitly for
+    // parity with TableRow.clone()/TableCell.clone().
+    if (this.tblPrChange) {
+      clonedTable.setTblPrChange(deepClone(this.tblPrChange));
+    }
+    if (this.tblGridChange) {
+      clonedTable.setTblGridChange(
+        new TableGridChange({
+          id: this.tblGridChange.getId(),
+          author: this.tblGridChange.getAuthor(),
+          date: deepClone(this.tblGridChange.getDate()),
+          previousGrid: deepClone(this.tblGridChange.getPreviousGrid()),
+        })
+      );
     }
 
     return clonedTable;

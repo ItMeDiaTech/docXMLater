@@ -9,6 +9,7 @@
 
 import type { Document } from '../core/Document.js';
 import type { Revision } from '../elements/Revision.js';
+import { isHyperlinkContent, isImageRunContent } from '../elements/RevisionContent.js';
 import {
   REVISION_RULES,
   ValidationIssue,
@@ -17,6 +18,44 @@ import {
   createIssueFromRule,
 } from './ValidationRules.js';
 import { ValidationRuleRegistry } from './ValidationRuleRegistry.js';
+
+/**
+ * Revision types that are structurally contentless per ECMA-376: property
+ * change markers carry before/after property snapshots rather than runs, and
+ * table cell markers (w:cellIns/w:cellDel/w:cellMerge) annotate the cell
+ * itself. The REV103 empty-content rule must never flag these.
+ *
+ * Shared with RevisionAutoFixer so the validator and fixer cannot drift
+ * apart on which revision types are allowed to be empty.
+ */
+export const CONTENTLESS_REVISION_TYPES: ReadonlySet<string> = new Set([
+  'runPropertiesChange',
+  'paragraphPropertiesChange',
+  'tablePropertiesChange',
+  'tableExceptionPropertiesChange',
+  'tableRowPropertiesChange',
+  'tableCellPropertiesChange',
+  'sectionPropertiesChange',
+  'numberingChange',
+  'tableCellInsert',
+  'tableCellDelete',
+  'tableCellMerge',
+]);
+
+/**
+ * True when a revision carries real content. Per ECMA-376, w:ins/w:del may
+ * contain w:hyperlink and image runs (w:r with w:drawing) in addition to
+ * text runs, so a runs-only text check would falsely flag hyperlink-only
+ * and image-only tracked changes as empty. Shared with RevisionAutoFixer.
+ */
+export function revisionHasContent(rev: Revision): boolean {
+  // Covers text runs and hyperlink display text
+  if (rev.getText().length > 0) {
+    return true;
+  }
+  // Hyperlinks count even without display text; ImageRuns have no text at all
+  return rev.getContent().some((item) => isHyperlinkContent(item) || isImageRunContent(item));
+}
 
 /**
  * Validates document revisions for ECMA-376 compliance.
@@ -67,15 +106,15 @@ export class RevisionValidator {
     if (!skipRules.has('REV001')) {
       allIssues.push(...this.validateRevisionIds(revisions));
     }
-    if (!skipRules.has('REV003') && !skipRules.has('REV004')) {
-      allIssues.push(...this.validateMovePairs(revisions));
-    }
+    // validateMovePairs emits both REV003 and REV004 from one pairing pass;
+    // filter per issue code so skipping one rule does not silently disable
+    // the other (REV004 is error-severity and corruption-relevant).
+    allIssues.push(...this.validateMovePairs(revisions).filter((i) => !skipRules.has(i.code)));
     if (!skipRules.has('REV002')) {
       allIssues.push(...this.validateAuthors(revisions));
     }
-    if (!skipRules.has('REV101') && !skipRules.has('REV102')) {
-      allIssues.push(...this.validateDates(revisions));
-    }
+    // validateDates emits both REV101 and REV102 — same per-code filtering.
+    allIssues.push(...this.validateDates(revisions).filter((i) => !skipRules.has(i.code)));
     if (!skipRules.has('REV103')) {
       allIssues.push(...this.validateContent(revisions));
     }
@@ -302,29 +341,15 @@ export class RevisionValidator {
   static validateContent(revisions: Revision[]): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
 
-    const propertyChangeTypes = [
-      'runPropertiesChange',
-      'paragraphPropertiesChange',
-      'tablePropertiesChange',
-      'tableExceptionPropertiesChange',
-      'tableRowPropertiesChange',
-      'tableCellPropertiesChange',
-      'sectionPropertiesChange',
-      'numberingChange',
-    ];
-
     for (const rev of revisions) {
       const type = rev.getType();
 
-      // Property changes don't need text content
-      if (propertyChangeTypes.includes(type)) {
+      // Property changes and cell markers are contentless by design
+      if (CONTENTLESS_REVISION_TYPES.has(type)) {
         continue;
       }
 
-      const runs = rev.getRuns();
-      const hasContent = runs.length > 0 && runs.some((r) => r.getText().length > 0);
-
-      if (!hasContent) {
+      if (!revisionHasContent(rev)) {
         issues.push(
           createIssueFromRule(
             REVISION_RULES.EMPTY_REVISION,

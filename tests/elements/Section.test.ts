@@ -391,6 +391,21 @@ describe('Section', () => {
         verticalAlignment: 'center',
         paperSource: { first: 1, other: 2 },
         textDirection: 'rtl',
+        pageBorders: {
+          top: { style: 'single', size: 24, color: 'FF0000', space: 24 },
+          bottom: { style: 'single', size: 24, color: 'FF0000', space: 24 },
+          left: { style: 'single', size: 24, color: 'FF0000', space: 24 },
+          right: { style: 'single', size: 24, color: 'FF0000', space: 24 },
+          offsetFrom: 'page',
+          display: 'allPages',
+        },
+        footnotePr: { position: 'pageBottom', numberFormat: 'lowerRoman', startNumber: 3 },
+        endnotePr: { position: 'sectEnd', numberFormat: 'decimal', startNumber: 1 },
+        noEndnote: true,
+        formProt: true,
+        printerSettingsId: 'rId7',
+        chapStyle: 2,
+        chapSep: 'hyphen',
       });
 
       const cloned = section.clone();
@@ -410,6 +425,16 @@ describe('Section', () => {
       expect(clonedProps.verticalAlignment).toBe(originalProps.verticalAlignment);
       expect(clonedProps.paperSource).toEqual(originalProps.paperSource);
       expect(clonedProps.textDirection).toBe(originalProps.textDirection);
+
+      // Previously-dropped fields must survive the clone
+      expect(clonedProps.pageBorders).toEqual(originalProps.pageBorders);
+      expect(clonedProps.footnotePr).toEqual(originalProps.footnotePr);
+      expect(clonedProps.endnotePr).toEqual(originalProps.endnotePr);
+      expect(clonedProps.noEndnote).toBe(originalProps.noEndnote);
+      expect(clonedProps.formProt).toBe(originalProps.formProt);
+      expect(clonedProps.printerSettingsId).toBe(originalProps.printerSettingsId);
+      expect(clonedProps.chapStyle).toBe(originalProps.chapStyle);
+      expect(clonedProps.chapSep).toBe(originalProps.chapSep);
     });
 
     it('should create independent objects (not references)', () => {

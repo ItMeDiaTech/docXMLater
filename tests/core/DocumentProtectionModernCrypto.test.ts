@@ -114,4 +114,25 @@ describe('documentProtection modern crypto attributes', () => {
     expect(settingsXml).toContain(`w:hashValue="${hashValue}"`);
     expect(settingsXml).toContain(`w:saltValue="${saltValue}"`);
   });
+
+  it('preserves all three attributes when settings are modified before save (merge path)', async () => {
+    const hashValue = 'aGFzaA==';
+    const saltValue = 'c2FsdA==';
+    const buffer = await makeDocxWithProtection(
+      `w:edit="trackedChanges" w:enforcement="1" w:algorithmName="SHA-512" w:hashValue="${hashValue}" w:saltValue="${saltValue}"`
+    );
+    const doc = await Document.loadFromBuffer(buffer);
+    // Mutating settings forces the merge path (settings.xml is rebuilt from
+    // the parsed model instead of passed through verbatim).
+    doc.enableTrackChanges();
+    const rebuffered = await doc.toBuffer();
+    doc.dispose();
+
+    const zh = new ZipHandler();
+    await zh.loadFromBuffer(rebuffered);
+    const settingsXml = zh.getFileAsString('word/settings.xml') ?? '';
+    expect(settingsXml).toContain('w:algorithmName="SHA-512"');
+    expect(settingsXml).toContain(`w:hashValue="${hashValue}"`);
+    expect(settingsXml).toContain(`w:saltValue="${saltValue}"`);
+  });
 });
