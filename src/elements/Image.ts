@@ -1958,9 +1958,10 @@ export class Image {
           // wrapText is use="required" on CT_WrapSquare/CT_WrapTight/CT_WrapThrough,
           // so default to bothSides when setWrap() was called without a side.
           wrapAttrs.wrapText = this.wrap.side ?? 'bothSides';
-        } else if (this.wrap.side) {
-          wrapAttrs.wrapText = this.wrap.side;
         }
+        // wrapText is NOT declared on CT_WrapNone or CT_WrapTopBottom — emitting
+        // it there (e.g. from a side defaulted during parse) makes Word report
+        // the document as corrupt, so it is intentionally never set for those.
 
         // Group B: Include wrap polygon passthrough as children
         const wrapChildren: XMLElement[] = [];

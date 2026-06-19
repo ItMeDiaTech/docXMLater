@@ -55,6 +55,7 @@ import {
   parseOnOffAttribute,
 } from '../utils/parsingHelpers.js';
 import { halfPointsToPoints } from '../utils/units.js';
+import { normalizeAnchorSizeRel } from '../utils/xmlSanitization.js';
 import type { ShadingConfig } from '../elements/CommonTypes.js';
 
 // Create scoped logger for DocumentParser operations
@@ -6835,7 +6836,11 @@ export class DocumentParser {
           'wp:cNvGraphicFramePr',
           'a:graphic',
         ]);
-        if (anchorExtras) image._setRawPassthrough('anchor-extra', anchorExtras);
+        if (anchorExtras) {
+          // Repair malformed wp14:sizeRelH/sizeRelV (bare-text percentage) so the
+          // preserved passthrough stays schema-valid on save.
+          image._setRawPassthrough('anchor-extra', normalizeAnchorSizeRel(anchorExtras));
+        }
       }
 
       // DocPr extras (a:hlinkClick, a:hlinkHover, a:extLst)
@@ -6900,7 +6905,13 @@ export class DocumentParser {
 
     return {
       type,
-      side: wrapObj['@_wrapText'] || 'bothSides',
+      // wrapText only exists on CT_WrapSquare/Tight/Through. For wrapNone and
+      // wrapTopAndBottom it must stay undefined so serialization never emits an
+      // (invalid) wrapText attribute on those elements.
+      side:
+        type === 'none' || type === 'topAndBottom'
+          ? wrapObj['@_wrapText']
+          : wrapObj['@_wrapText'] || 'bothSides',
       // Distance attributes are on the wrap element, not the anchor
       distanceTop: wrapObj['@_distT'] ? parseInt(wrapObj['@_distT'], 10) : undefined,
       distanceBottom: wrapObj['@_distB'] ? parseInt(wrapObj['@_distB'], 10) : undefined,

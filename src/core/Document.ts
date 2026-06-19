@@ -86,6 +86,7 @@ import { acceptAllRevisions, cleanupRevisionMetadata } from '../processors/accep
 import { acceptRevisionsInMemory } from '../processors/InMemoryRevisionAcceptor.js';
 import { stripTrackedChanges } from '../processors/stripTrackedChanges.js';
 import { diffText, diffHasUnchangedParts } from '../utils/textDiff.js';
+import { reorderRunPropertyChildren } from '../utils/xmlSanitization.js';
 import { XMLBuilder } from '../xml/XMLBuilder.js';
 import { XMLParser } from '../xml/XMLParser.js';
 import { DocumentTrackingContext } from '../tracking/DocumentTrackingContext.js';
@@ -900,7 +901,10 @@ export class Document {
 
     const numberingXml = zipHandler.getFileAsString(DOCX_PATHS.NUMBERING);
     if (numberingXml) {
-      doc._originalNumberingXml = numberingXml;
+      // Numbering definitions are written back verbatim for fidelity, so repair
+      // any out-of-order w:rPr children here (e.g. w:b/w:bCs appended after
+      // w:color/w:sz by some producers) — Word flags such ordering as corrupt.
+      doc._originalNumberingXml = reorderRunPropertyChildren(numberingXml);
     }
 
     // Preserve original settings.xml and parse managed settings into in-memory state

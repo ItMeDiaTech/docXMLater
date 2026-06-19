@@ -5,6 +5,12 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.11] - 2026-06-18
+
+### Fixed
+
+- **Documents could be saved with three ECMA-376 schema violations that make Word report the file as corrupt.** A real document exhibited all three: (1) a floating image emitted `<wp:wrapNone wrapText="bothSides">` — `wrapText` is declared only on `CT_WrapSquare`/`CT_WrapTight`/`CT_WrapThrough`, never on `wrapNone` or `wrapTopAndBottom`. The parser defaulted the wrap `side` to `"bothSides"` for every wrap type, and serialization then leaked the attribute onto the wrap elements that forbid it. The parser no longer fabricates a `side` for `none`/`topAndBottom`, and `Image.toXML()` only emits `wrapText` for the three wrap types that allow it. (2) `<wp14:sizeRelH>`/`<wp14:sizeRelV>` were preserved holding a bare-text percentage (`>0<`) instead of the required `<wp14:pctWidth>`/`<wp14:pctHeight>` child; the captured anchor passthrough is now normalized to the valid nested form. (3) Raw-preserved `numbering.xml` carried `<w:rPr>` children out of `CT_RPr` order (`w:b`/`w:bCs` after `w:color`/`w:sz`/`w:szCs`), which Word rejects as an unexpected element; preserved numbering run-property children are now reordered to schema sequence before save. All three repairs are idempotent and leave already-valid markup untouched.
+
 ## [11.0.10] - 2026-05-30
 
 ### Fixed

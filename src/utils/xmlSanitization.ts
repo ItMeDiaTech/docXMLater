@@ -171,6 +171,170 @@ export function hasInvalidXmlChars(text: string): boolean {
 }
 
 /**
+ * CT_RPr child element order per ECMA-376 Part 1 §17.3.2.28 (local names,
+ * `w:` namespace). Used to repair raw-preserved run-property blocks whose
+ * children are out of schema order — Word rejects, for example, a `w:b`
+ * that appears after `w:color`/`w:sz` and reports the document as corrupt.
+ */
+const CT_RPR_CHILD_ORDER: readonly string[] = [
+  'rStyle',
+  'rFonts',
+  'b',
+  'bCs',
+  'i',
+  'iCs',
+  'caps',
+  'smallCaps',
+  'strike',
+  'dstrike',
+  'outline',
+  'shadow',
+  'emboss',
+  'imprint',
+  'noProof',
+  'snapToGrid',
+  'vanish',
+  'webHidden',
+  'color',
+  'spacing',
+  'w',
+  'kern',
+  'position',
+  'sz',
+  'szCs',
+  'highlight',
+  'u',
+  'effect',
+  'bdr',
+  'shd',
+  'fitText',
+  'vertAlign',
+  'rtl',
+  'cs',
+  'em',
+  'lang',
+  'eastAsianLayout',
+  'specVanish',
+  'oMath',
+];
+
+/**
+ * Splits the inner content of an element into its top-level child elements,
+ * respecting nesting so that a child's descendants are kept with it. Returns
+ * the raw XML fragment for each direct child in document order. Non-element
+ * text between children (whitespace) is dropped, which is safe for the
+ * element-only content models this helper targets (e.g. `w:rPr`).
+ */
+function splitTopLevelElements(inner: string): string[] {
+  const children: string[] = [];
+  const tagRegex = /<([A-Za-z][\w:.-]*)([^>]*?)(\/?)>|<\/([A-Za-z][\w:.-]*)\s*>/g;
+  let depth = 0;
+  let start = -1;
+  let match: RegExpExecArray | null;
+  while ((match = tagRegex.exec(inner)) !== null) {
+    const isClosing = match[4] !== undefined;
+    const isSelfClosing = match[3] === '/';
+    if (isClosing) {
+      if (depth > 0) {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          children.push(inner.slice(start, tagRegex.lastIndex));
+          start = -1;
+        }
+      }
+      continue;
+    }
+    if (isSelfClosing) {
+      if (depth === 0) {
+        children.push(inner.slice(match.index, tagRegex.lastIndex));
+      }
+      continue;
+    }
+    // Opening tag of a paired element
+    if (depth === 0) start = match.index;
+    depth++;
+  }
+  return children;
+}
+
+/**
+ * Reorders the direct children of every `<w:rPr>` block in a raw XML part to
+ * the ECMA-376 CT_RPr sequence. Unknown/unmodeled children retain their
+ * relative position at the end of the block. The transform is idempotent:
+ * already-ordered run properties are returned unchanged.
+ *
+ * Some producers (and older versions of this framework) appended boolean
+ * toggles such as `w:b`/`w:bCs` to the end of an existing `w:rPr`, leaving
+ * them after `w:color`/`w:sz`. Word treats the out-of-order child as an
+ * unexpected element and flags the whole document as corrupt. Numbering
+ * definitions are written back verbatim for fidelity, so this repair runs on
+ * the preserved part before it is saved.
+ *
+ * @param xml - Raw XML for a part containing `w:rPr` blocks (e.g. numbering.xml)
+ * @returns XML with every `w:rPr` child sequence normalized to schema order
+ */
+export function reorderRunPropertyChildren(xml: string): string {
+  if (!xml || !xml.includes('<w:rPr')) return xml;
+
+  const orderIndex = (fragment: string): number => {
+    const nameMatch = /^<w:(\w+)/.exec(fragment);
+    const name = nameMatch?.[1];
+    if (!name) return CT_RPR_CHILD_ORDER.length;
+    const idx = CT_RPR_CHILD_ORDER.indexOf(name);
+    return idx === -1 ? CT_RPR_CHILD_ORDER.length : idx;
+  };
+
+  // Only match non-empty <w:rPr>...</w:rPr> blocks; self-closing <w:rPr/> has
+  // no children to reorder.
+  return xml.replace(/<w:rPr(\s[^>]*)?>([\s\S]*?)<\/w:rPr>/g, (full, attrs, inner) => {
+    if (!inner || !(inner as string).includes('<')) return full;
+    const children = splitTopLevelElements(inner);
+    if (children.length < 2) return full;
+
+    const ordered = children
+      .map((frag, i) => ({ frag, i, order: orderIndex(frag) }))
+      // Stable sort: ties (including unknown children) keep original order.
+      .sort((a, b) => a.order - b.order || a.i - b.i);
+
+    if (ordered.every((c, i) => c.i === i)) return full; // already in order
+
+    return `<w:rPr${attrs ?? ''}>${ordered.map((c) => c.frag).join('')}</w:rPr>`;
+  });
+}
+
+/**
+ * Normalizes malformed floating-drawing relative-size elements in a raw anchor
+ * fragment. Per ECMA-376 (DrawingML wordprocessing 2010 extensions),
+ * `wp14:sizeRelH` must contain a `wp14:pctWidth` child and `wp14:sizeRelV` a
+ * `wp14:pctHeight` child. Some producers emit the percentage as bare text
+ * content (`<wp14:sizeRelH relativeFrom="margin">0</wp14:sizeRelH>`), which
+ * Word rejects as incomplete content. This wraps such text in the required
+ * child element. Already-valid nested forms are left untouched because the
+ * text-content pattern (`[^<]`) cannot match an element child.
+ *
+ * @param xml - Raw anchor-extras fragment captured during parsing
+ * @returns Fragment with sizeRelH/sizeRelV normalized to schema-valid form
+ */
+export function normalizeAnchorSizeRel(xml: string): string {
+  if (!xml) return xml;
+  return xml
+    .replace(
+      /(<wp14:sizeRelH\b[^>]*>)([^<]+)(<\/wp14:sizeRelH>)/g,
+      (_m, open: string, text: string, close: string) =>
+        text.trim() === ''
+          ? `${open}${text}${close}`
+          : `${open}<wp14:pctWidth>${text.trim()}</wp14:pctWidth>${close}`
+    )
+    .replace(
+      /(<wp14:sizeRelV\b[^>]*>)([^<]+)(<\/wp14:sizeRelV>)/g,
+      (_m, open: string, text: string, close: string) =>
+        text.trim() === ''
+          ? `${open}${text}${close}`
+          : `${open}<wp14:pctHeight>${text.trim()}</wp14:pctHeight>${close}`
+    );
+}
+
+/**
  * Character code constants for documentation and testing.
  */
 export const XML_CONTROL_CHARS = {
