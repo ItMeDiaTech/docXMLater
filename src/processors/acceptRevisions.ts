@@ -5,16 +5,19 @@ import { RevisionWalker } from './RevisionWalker.js';
 /**
  * Markers covered: w:ins, w:del, w:moveFrom, w:moveTo,
  * w:rPrChange, w:pPrChange, w:tblPrChange, w:tblPrExChange,
- * w:trPrChange, w:tcPrChange, w:sectPrChange, w:numberingChange,
- * w:cellIns, w:cellDel, w:cellMerge, and any *RangeStart/End markers.
+ * w:trPrChange, w:tcPrChange, w:sectPrChange, w:tblGridChange,
+ * w:numberingChange, w:cellIns, w:cellDel, w:cellMerge, and any
+ * *RangeStart/End markers.
  */
 const REVISION_MARKER_PATTERN =
-  /<w:(?:ins|del|moveFrom|moveTo|rPrChange|pPrChange|tblPrChange|tblPrExChange|trPrChange|tcPrChange|sectPrChange|numberingChange|cellIns|cellDel|cellMerge|moveFromRangeStart|moveFromRangeEnd|moveToRangeStart|moveToRangeEnd|customXmlInsRangeStart|customXmlInsRangeEnd|customXmlDelRangeStart|customXmlDelRangeEnd|customXmlMoveFromRangeStart|customXmlMoveFromRangeEnd|customXmlMoveToRangeStart|customXmlMoveToRangeEnd)\b/;
+  /<w:(?:ins|del|moveFrom|moveTo|rPrChange|pPrChange|tblPrChange|tblPrExChange|trPrChange|tcPrChange|sectPrChange|tblGridChange|numberingChange|cellIns|cellDel|cellMerge|moveFromRangeStart|moveFromRangeEnd|moveToRangeStart|moveToRangeEnd|customXmlInsRangeStart|customXmlInsRangeEnd|customXmlDelRangeStart|customXmlDelRangeEnd|customXmlMoveFromRangeStart|customXmlMoveFromRangeEnd|customXmlMoveToRangeStart|customXmlMoveToRangeEnd)\b/;
 
 /**
- * Accepts all tracked changes in a Word document per Microsoft's OpenXML SDK pattern
+ * Applies tracked changes in a Word document per Microsoft's OpenXML SDK
+ * pattern, in either direction (see `mode`).
  *
- * This implementation uses DOM-based tree walking for reliability:
+ * This implementation uses DOM-based tree walking for reliability. In 'accept'
+ * mode (the post-edit document):
  * 1. Insertions (<w:ins>): Keep content, remove wrapper tags
  * 2. Deletions (<w:del>): Remove entirely (content and tags)
  * 3. Move From (<w:moveFrom>): Remove entirely (source of move)
@@ -22,17 +25,27 @@ const REVISION_MARKER_PATTERN =
  * 5. Property changes: Remove all *Change elements
  * 6. Range markers: Remove all boundary markers
  *
+ * In 'reject' mode every content decision is inverted and property changes
+ * restore the previous formatting (see RevisionWalker).
+ *
  * Also cleans up metadata in people.xml, settings.xml, and core.xml
  *
  * @see https://learn.microsoft.com/en-us/office/open-xml/how-to-accept-all-revisions
  */
-class RevisionAcceptor {
+class RevisionProcessor {
   private zipHandler: ZipHandler;
   /** Feature flag for DOM-based processing (default: true) */
   private useDomBasedProcessing = true;
+  /**
+   * Processing direction. 'accept' yields the post-edit document; 'reject'
+   * reverts to the original pre-edit document (the exact inverse). Reject is
+   * DOM-only — the regex fallback cannot restore previous formatting.
+   */
+  private mode: 'accept' | 'reject';
 
-  constructor(zipHandler: ZipHandler) {
+  constructor(zipHandler: ZipHandler, mode: 'accept' | 'reject' = 'accept') {
     this.zipHandler = zipHandler;
+    this.mode = mode;
   }
 
   /**
@@ -43,9 +56,10 @@ class RevisionAcceptor {
   }
 
   /**
-   * Main method to accept all revisions in the document
+   * Main entry point: apply every tracked change in the document in the
+   * configured direction (accept or reject).
    */
-  public async acceptAllRevisions(): Promise<void> {
+  public async process(): Promise<void> {
     // Process document.xml
     await this.processDocumentPart('word/document.xml');
 
@@ -91,11 +105,13 @@ class RevisionAcceptor {
     // byte-for-byte passthrough preservation in downstream consumers
     // (e.g., comments.xml round-trip with no tracked changes inside).
     const xml = this.zipHandler.getFileAsString(partPath);
-    if (!xml || !RevisionAcceptor.containsRevisionMarkup(xml)) {
+    if (!xml || !RevisionProcessor.containsRevisionMarkup(xml)) {
       return;
     }
 
-    if (this.useDomBasedProcessing) {
+    // Reject must restore previous formatting from *Change snapshots, which the
+    // regex fallback cannot do — always take the DOM path when rejecting.
+    if (this.useDomBasedProcessing || this.mode === 'reject') {
       return this.processDocumentPartDOM(partPath);
     }
     return this.processDocumentPartRegex(partPath);
@@ -126,14 +142,22 @@ class RevisionAcceptor {
 
     // Step 2: Process revisions using DOM walker
     const processed = RevisionWalker.processTree(parsed, {
+      mode: this.mode,
       acceptInsertions: true,
       acceptDeletions: true,
       acceptMoves: true,
       acceptPropertyChanges: true,
     });
 
-    // Step 3: Handle image relationship ID remapping
-    this.remapImageRelationshipsInTree(processed);
+    // Step 3: Handle image relationship ID remapping.
+    // Only relevant when accepting: unwrapping an inserted image can surface a
+    // relationship ID that Word reused across tracked-change contexts, so a
+    // fresh unique ID is assigned. Rejecting discards insertions and restores
+    // the original content, whose relationship IDs are already unique, so
+    // remapping would needlessly rewrite valid references.
+    if (this.mode === 'accept') {
+      this.remapImageRelationshipsInTree(processed);
+    }
 
     // Step 4: Convert back to XML
     const outputXml =
@@ -768,8 +792,34 @@ class RevisionAcceptor {
  * Convenience function to accept all revisions in a document
  */
 export async function acceptAllRevisions(zipHandler: ZipHandler): Promise<void> {
-  const acceptor = new RevisionAcceptor(zipHandler);
-  await acceptor.acceptAllRevisions();
+  const acceptor = new RevisionProcessor(zipHandler);
+  await acceptor.process();
+}
+
+/**
+ * Convenience function to reject all revisions in a document, reverting it to
+ * its original pre-edit state (the exact inverse of {@link acceptAllRevisions}):
+ *
+ * 1. Insertions (`w:ins`): removed — inserted content is discarded
+ * 2. Deletions (`w:del`): unwrapped and `w:delText` restored to `w:t` — deleted
+ *    content reappears
+ * 3. MoveFrom (`w:moveFrom`): unwrapped — the original source content is restored
+ * 4. MoveTo (`w:moveTo`): removed — the moved-to destination is discarded
+ * 5. Property changes (`w:rPrChange`, `w:pPrChange`, ...): previous formatting
+ *    stored inside the change is restored, then the marker is removed
+ * 6. Inserted rows/tables are removed; deleted rows/tables are kept
+ * 7. Range markers are removed and revision metadata is cleaned up
+ *
+ * Limitations (shared with {@link acceptAllRevisions}): cell-level markers
+ * (`w:cellIns`/`w:cellDel`/`w:cellMerge`) are left in place, and the legacy
+ * `w:numberingChange` is dropped rather than reverted (it embeds no recoverable
+ * previous value).
+ *
+ * @param zipHandler - The ZipHandler containing the DOCX package
+ */
+export async function rejectAllRevisions(zipHandler: ZipHandler): Promise<void> {
+  const rejector = new RevisionProcessor(zipHandler, 'reject');
+  await rejector.process();
 }
 
 /**
@@ -786,6 +836,6 @@ export async function acceptAllRevisions(zipHandler: ZipHandler): Promise<void> 
  * @param zipHandler - The ZipHandler containing the DOCX package
  */
 export function cleanupRevisionMetadata(zipHandler: ZipHandler): void {
-  const acceptor = new RevisionAcceptor(zipHandler);
-  acceptor.cleanupMetadata();
+  const processor = new RevisionProcessor(zipHandler);
+  processor.cleanupMetadata();
 }

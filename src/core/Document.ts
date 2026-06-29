@@ -81,7 +81,11 @@ function getLogger(): ILogger {
 }
 // Raw XML revision acceptance - used at load time BEFORE parsing
 // cleanupRevisionMetadata - cleanup metadata files after in-memory acceptance
-import { acceptAllRevisions, cleanupRevisionMetadata } from '../processors/acceptRevisions.js';
+import {
+  acceptAllRevisions,
+  rejectAllRevisions,
+  cleanupRevisionMetadata,
+} from '../processors/acceptRevisions.js';
 // In-memory revision acceptance - used AFTER parsing, allows subsequent modifications
 import { acceptRevisionsInMemory } from '../processors/InMemoryRevisionAcceptor.js';
 import { stripTrackedChanges } from '../processors/stripTrackedChanges.js';
@@ -157,6 +161,7 @@ export interface DocumentLoadOptions extends DocumentOptions {
    *
    * - 'preserve': Keep tracked changes as-is (may cause corruption if IDs conflict)
    * - 'accept': Accept all changes - removes revision markup, keeps inserted content, removes deleted content (default)
+   * - 'reject': Reject all changes - reverts to the original pre-edit document: removes inserted content, restores deleted content, undoes moves, and restores previous formatting from property-change markers (the exact inverse of 'accept')
    * - 'strip': Remove all revision markup, keeping inserted content and removing deleted content (same resulting text as 'accept')
    *
    * Default: 'accept' (prevents corruption from revision ID conflicts)
@@ -171,6 +176,9 @@ export interface DocumentLoadOptions extends DocumentOptions {
    * // Explicit accept
    * const doc = await Document.load('file.docx', { revisionHandling: 'accept' });
    *
+   * // Reject all changes - revert to the original pre-edit document
+   * const doc = await Document.load('file.docx', { revisionHandling: 'reject' });
+   *
    * // Strip all tracked changes
    * const doc = await Document.load('file.docx', { revisionHandling: 'strip' });
    *
@@ -178,7 +186,7 @@ export interface DocumentLoadOptions extends DocumentOptions {
    * const doc = await Document.load('file.docx', { revisionHandling: 'preserve' });
    * ```
    */
-  revisionHandling?: 'preserve' | 'accept' | 'strip';
+  revisionHandling?: 'preserve' | 'accept' | 'reject' | 'strip';
 
   /**
    * Accept all tracked changes after parsing using in-memory transformation.
@@ -919,6 +927,17 @@ export class Document {
     // If acceptRevisions is true, we need to preserve revisions during parsing
     // so they can be accepted using in-memory transformation after parsing
     const useInMemoryAccept = options?.acceptRevisions === true;
+    // `acceptRevisions: true` performs an in-memory ACCEPT, which is the exact
+    // opposite of `revisionHandling: 'reject'`. Honoring the in-memory accept
+    // gate would silently produce the accepted document when the caller asked
+    // to revert — surface the conflict instead of doing the opposite.
+    if (useInMemoryAccept && options?.revisionHandling === 'reject') {
+      throw new Error(
+        "Conflicting load options: 'acceptRevisions: true' (in-memory accept) cannot be combined " +
+          'with \'revisionHandling: "reject"\'. Use \'revisionHandling: "reject"\' on its own to ' +
+          'revert the document to its original pre-edit state.'
+      );
+    }
     const revisionHandling = useInMemoryAccept
       ? 'preserve' // Force preserve so revisions are parsed into model
       : (options?.revisionHandling ?? 'accept'); // Default to accept
@@ -927,6 +946,10 @@ export class Document {
     if (revisionHandling === 'accept') {
       // Accept all tracked changes to prevent corruption (raw XML approach)
       await acceptAllRevisions(zipHandler);
+    } else if (revisionHandling === 'reject') {
+      // Reject all tracked changes - revert to the original pre-edit document
+      // (inverse of accept: drop insertions, restore deletions/moves/formatting)
+      await rejectAllRevisions(zipHandler);
     } else if (revisionHandling === 'strip') {
       // Strip all tracked changes completely
       await stripTrackedChanges(zipHandler);

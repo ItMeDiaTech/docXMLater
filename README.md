@@ -429,18 +429,20 @@ By default, `Document.load()` accepts all tracked changes during loading. This p
 ```typescript
 const doc = await Document.load('document.docx', {
   revisionHandling: 'accept', // default - keep insertions, drop deletions
+  // revisionHandling: 'reject',   - revert to the original pre-edit document
   // revisionHandling: 'strip',    - remove markup, keep inserted, drop deleted (same text as accept)
   // revisionHandling: 'preserve', - keep tracked changes verbatim (advanced)
 });
 ```
 
-| Mode               | Behavior                                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `accept` (default) | Removes revision markup, keeps inserted content, removes deleted content                                     |
-| `strip`            | Removes all revision markup, keeping inserted and removing deleted content (same resulting text as `accept`) |
-| `preserve`         | Keeps tracked changes intact for advanced workflows                                                          |
+| Mode               | Behavior                                                                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `accept` (default) | Removes revision markup, keeps inserted content, removes deleted content                                                                                                      |
+| `reject`           | Reverts to the original pre-edit document: removes inserted content, restores deleted content, undoes moves, and restores previous formatting (the exact inverse of `accept`) |
+| `strip`            | Removes all revision markup, keeping inserted and removing deleted content (same resulting text as `accept`)                                                                  |
+| `preserve`         | Keeps tracked changes intact for advanced workflows                                                                                                                           |
 
-There is no `reject` (revert-to-original) mode: `accept` and `strip` both yield the post-edit text, and neither restores deleted-then-replaced content. To recover the pre-edit text, load with `revisionHandling: 'preserve'` and filter out the `Revision` deletions yourself.
+Use `reject` to recover the pre-edit text: it discards every insertion, restores deleted-then-replaced content (`w:delText` becomes live text again), undoes moves, and rolls back tracked formatting changes recorded in `w:rPrChange` / `w:pPrChange` markers. Inserted rows and tables are removed; deleted ones are kept.
 
 When `enableTrackChanges()` is active, edits made to text inside hyperlinks are tracked the same way as paragraph runs. `toPlainText()` on a `preserve`-mode document includes tracked-inserted and tracked-deleted text via the underlying `Paragraph.getTextIncludingRevisions()` call.
 
