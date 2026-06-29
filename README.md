@@ -332,6 +332,8 @@ The following features round-trip safely as raw XML but have no editing API:
 
 **Text manipulation**: `applyFormattingToRange`, `deleteRange`, `truncate`, `wrap`, `splitAt`, `consolidateRuns`, `replaceAll`, `findTextCrossRun`, `getRunAtOffset`, `getFormattingAtOffset`, `contains`, `toJSON` / `fromJSON`
 
+`consolidateRuns()` merges adjacent identically-formatted text runs, whereas `consolidateRevisions()` merges adjacent tracked-change revisions — they are distinct methods.
+
 **Numbering**: `setNumbering(numId, level)`
 
 ### Run
@@ -430,11 +432,11 @@ const doc = await Document.load('document.docx', {
 });
 ```
 
-| Mode               | Behavior                                                                 |
-| ------------------ | ------------------------------------------------------------------------ |
-| `accept` (default) | Removes revision markup, keeps inserted content, removes deleted content |
-| `strip`            | Removes all revision markup completely                                   |
-| `preserve`         | Keeps tracked changes intact for advanced workflows                      |
+| Mode               | Behavior                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `accept` (default) | Removes revision markup, keeps inserted content, removes deleted content                                     |
+| `strip`            | Removes all revision markup, keeping inserted and removing deleted content (same resulting text as `accept`) |
+| `preserve`         | Keeps tracked changes intact for advanced workflows                                                          |
 
 ### Custom Styles
 

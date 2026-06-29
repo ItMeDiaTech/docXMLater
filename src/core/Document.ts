@@ -92,7 +92,7 @@ import { XMLParser } from '../xml/XMLParser.js';
 import { DocumentTrackingContext } from '../tracking/DocumentTrackingContext.js';
 import type { TrackingContext } from '../tracking/TrackingContext.js';
 import { ZipHandler } from '../zip/ZipHandler.js';
-import { DOCX_PATHS } from '../zip/types.js';
+import { DOCX_PATHS, SizeLimitOptions } from '../zip/types.js';
 import { DocumentGenerator } from './DocumentGenerator.js';
 import { DocumentIdManager } from './DocumentIdManager.js';
 import { DocumentParser } from './DocumentParser.js';
@@ -157,7 +157,7 @@ export interface DocumentLoadOptions extends DocumentOptions {
    *
    * - 'preserve': Keep tracked changes as-is (may cause corruption if IDs conflict)
    * - 'accept': Accept all changes - removes revision markup, keeps inserted content, removes deleted content (default)
-   * - 'strip': Remove all revision markup completely
+   * - 'strip': Remove all revision markup, keeping inserted content and removing deleted content (same resulting text as 'accept')
    *
    * Default: 'accept' (prevents corruption from revision ID conflicts)
    *
@@ -210,6 +210,68 @@ export interface DocumentLoadOptions extends DocumentOptions {
    * ```
    */
   acceptRevisions?: boolean;
+
+  /**
+   * Resource limits applied while reading the DOCX archive.
+   *
+   * Forwarded to the underlying ZIP reader to guard against availability
+   * attacks (zip bombs, entry-count amplification) when loading untrusted
+   * input. Defaults are intentionally generous so legitimate documents load
+   * unchanged; tighten the fields on {@link SizeLimitOptions} for untrusted
+   * sources.
+   *
+   * @example
+   * ```typescript
+   * const doc = await Document.load('untrusted.docx', {
+   *   sizeLimits: { maxTotalUncompressedMB: 100, maxEntryCount: 500 },
+   * });
+   * ```
+   */
+  sizeLimits?: SizeLimitOptions;
+}
+
+/**
+ * Options controlling {@link Document.toMarkdown} conversion fidelity.
+ *
+ * Markdown cannot natively express every Word construct, so the converter
+ * falls back to inline HTML (when {@link htmlFallback} is enabled) for things
+ * like underline, super/subscript, highlight and color, and collects
+ * footnotes/endnotes as GFM-style references. These options let callers tune
+ * how aggressively that extra information is preserved.
+ */
+export interface MarkdownConversionOptions {
+  /**
+   * Emit inline HTML for character formatting Markdown cannot represent:
+   * underline (`<u>`), superscript (`<sup>`), subscript (`<sub>`), highlight
+   * (`<mark>`) and text color (`<span style="color:#…">`). Tracked deletions
+   * (in `'preserve'` mode) are wrapped in `<del>`. When `false`, that
+   * formatting is dropped but the text itself is still emitted. Default: `true`.
+   */
+  htmlFallback?: boolean;
+  /**
+   * Collect footnote/endnote references as GFM footnote markers (`[^fn1]`,
+   * `[^en1]`) and append their definitions at the end of the output.
+   * Default: `true`.
+   */
+  footnotes?: boolean;
+  /**
+   * Emit inline images as `![alt](src)` where `src` is the image's
+   * relationship id (or a placeholder for unsaved documents). When `false`,
+   * images are skipped. Default: `true`.
+   */
+  images?: boolean;
+}
+
+/**
+ * Internal state threaded through a single Markdown conversion pass.
+ * @internal
+ */
+interface MarkdownContext {
+  opts: Required<MarkdownConversionOptions>;
+  /** Ordered, de-duplicated footnote/endnote definitions to append at the end. */
+  notes: { marker: string; text: string }[];
+  /** Markers already emitted, to avoid duplicate definitions. */
+  noteMarkers: Set<string>;
 }
 
 /**
@@ -796,7 +858,7 @@ export class Document {
     logger.info('Loading document from file', { path: filePath });
 
     const zipHandler = new ZipHandler();
-    await zipHandler.load(filePath);
+    await zipHandler.load(filePath, { sizeLimits: options?.sizeLimits });
 
     const doc = await Document.initializeFromZip(zipHandler, options);
     doc._events.emit('afterLoad', { source: 'file', path: filePath });
@@ -836,7 +898,7 @@ export class Document {
     logger.info('Loading document from buffer', { bufferSize: buffer.length });
 
     const zipHandler = new ZipHandler();
-    await zipHandler.loadFromBuffer(buffer);
+    await zipHandler.loadFromBuffer(buffer, { sizeLimits: options?.sizeLimits });
 
     const doc = await Document.initializeFromZip(zipHandler, options);
     doc._events.emit('afterLoad', { source: 'buffer' });
@@ -11847,14 +11909,13 @@ export class Document {
       }
     }
 
-    // Bind to ComplexField instances in paragraph content
+    // Bind to content items that accept a tracking context (Hyperlink,
+    // ComplexField, etc.). Hyperlink.setText() consults its own
+    // trackingContext, so it must be bound here too; re-binding the inner
+    // Runs handled above is idempotent.
     if (element && typeof element.getContent === 'function') {
       for (const item of element.getContent()) {
-        if (
-          item &&
-          typeof item._setTrackingContext === 'function' &&
-          typeof item.getInstruction === 'function'
-        ) {
+        if (item && typeof item._setTrackingContext === 'function') {
           item._setTrackingContext(this.trackingContext);
         }
       }
@@ -15720,23 +15781,37 @@ export class Document {
    */
   toPlainText(separator = '\n'): string {
     const paragraphs = this.getAllParagraphs();
-    return paragraphs.map((p) => p.getText()).join(separator);
+    // Use the revision-aware path so preserve-mode documents retain the text
+    // carried by tracked changes (inserted w:t and deleted w:delText) instead
+    // of silently dropping it.
+    return paragraphs.map((p) => p.getTextIncludingRevisions()).join(separator);
   }
 
   /**
    * Converts the document to Markdown format
    *
-   * Iterates body elements in order and converts them to Markdown syntax:
-   * - Headings → `#` / `##` / `###` etc.
-   * - Bold/italic runs → `**bold**` / `*italic*`
-   * - Hyperlinks → `[text](url)`
-   * - Tables → pipe-delimited Markdown tables with alignment row
-   * - Numbered/bulleted lists → `1.` / `-` prefixes
-   * - Regular paragraphs → plain text with blank lines between
+   * Walks the body in order and renders every information-bearing construct,
+   * falling back to inline HTML where Markdown has no native equivalent so
+   * that no content is silently dropped:
+   * - Headings → `#` … `######`
+   * - Bold/italic/strikethrough → `**` / `*` / `~~`; monospace fonts → `` `code` ``
+   * - Underline/super/subscript/highlight/color → inline HTML (`<u>`, `<sup>`,
+   *   `<sub>`, `<mark>`, `<span style="color:#…">`) when {@link MarkdownConversionOptions.htmlFallback}
+   * - Hyperlinks → `[text](url)` (internal links resolve to `#anchor`)
+   * - Inline images → `![alt](src)`
+   * - Footnote/endnote references → `[^fn1]` / `[^en1]` with definitions appended
+   * - Line breaks → `<br>` (or newline), tabs preserved
+   * - Numbered/bulleted lists → `1.` / `-` with two-space indentation per nesting level
+   * - Block quotes (Quote styles) → `>` prefixes
+   * - Tables → GFM pipe tables; tables with merged or nested cells → inline HTML
+   * - Field results, shapes, text boxes, structured document tags and preserved
+   *   elements → their textual content
+   * - Tracked insertions (preserve mode) render inline; deletions wrap in `~~`/`<del>`
    *
    * Useful for AI/LLM pipelines, content migration, documentation
    * generation, and plain-text extraction with structure preserved.
    *
+   * @param options - Conversion fidelity options (see {@link MarkdownConversionOptions})
    * @returns Markdown string representation of the document
    *
    * @example
@@ -15754,137 +15829,493 @@ export class Document {
    * // | Alice | 30 |
    * ```
    */
-  toMarkdown(): string {
-    const lines: string[] = [];
+  toMarkdown(options?: MarkdownConversionOptions): string {
+    const ctx: MarkdownContext = {
+      opts: {
+        htmlFallback: options?.htmlFallback ?? true,
+        footnotes: options?.footnotes ?? true,
+        images: options?.images ?? true,
+      },
+      notes: [],
+      noteMarkers: new Set<string>(),
+    };
 
+    const lines: string[] = [];
     for (const element of this.bodyElements) {
-      if (element instanceof Paragraph) {
-        const mdLine = this.paragraphToMarkdown(element);
-        if (mdLine !== null) {
-          lines.push(mdLine);
-          lines.push('');
-        }
-      } else if (element instanceof Table) {
-        lines.push(...this.tableToMarkdown(element));
-        lines.push('');
-      }
-      // Other element types (SDT, AlternateContent, etc.) are skipped
+      this.bodyElementToMarkdown(element, ctx, lines);
     }
 
-    // Remove trailing blank line
+    // Remove trailing blank line(s)
     while (lines.length > 0 && lines[lines.length - 1] === '') {
       lines.pop();
     }
 
-    return lines.join('\n');
+    let out = lines.join('\n');
+
+    // Append footnote/endnote definitions in first-reference order.
+    if (ctx.opts.footnotes && ctx.notes.length > 0) {
+      const defs = ctx.notes.map((n) => `[^${n.marker}]: ${n.text}`).join('\n');
+      out = out ? `${out}\n\n${defs}` : defs;
+    }
+
+    return out;
   }
 
   /**
-   * Converts a paragraph to a Markdown line.
+   * Renders a single body element into the running Markdown line buffer.
+   * Recurses into block-level structured document tags.
    * @internal
    */
-  private paragraphToMarkdown(para: Paragraph): string | null {
-    const text = this.paragraphContentToMarkdown(para);
-    if (!text && !para.hasNumbering()) return null;
+  private bodyElementToMarkdown(element: BodyElement, ctx: MarkdownContext, lines: string[]): void {
+    if (element instanceof Paragraph) {
+      const md = this.paragraphToMarkdown(element, ctx);
+      if (md !== null) {
+        lines.push(md);
+        lines.push('');
+      }
+    } else if (element instanceof Table) {
+      const tableLines = this.tableToMarkdown(element, ctx);
+      if (tableLines.length > 0) {
+        lines.push(...tableLines);
+        lines.push('');
+      }
+    } else if (element instanceof StructuredDocumentTag) {
+      // Block SDT: render its inner content (paragraphs/tables/nested SDTs).
+      for (const child of element.getContent()) {
+        this.bodyElementToMarkdown(child, ctx, lines);
+      }
+    } else if (element instanceof PreservedElement) {
+      // Best-effort: surface any text so round-trip-preserved blocks are not lost.
+      const text = this.extractTextFromRawXml(element.getRawXml());
+      if (text) {
+        lines.push(this.escapeMarkdown(text));
+        lines.push('');
+      }
+    }
+    // TableOfContentsElement is intentionally skipped: its content is generated
+    // from the headings, which are already represented in the Markdown output.
+  }
 
-    // Headings
+  /**
+   * Converts a paragraph to a Markdown block (heading, list item, block quote,
+   * or plain paragraph). Returns null for empty, non-list paragraphs.
+   * @internal
+   */
+  private paragraphToMarkdown(para: Paragraph, ctx: MarkdownContext): string | null {
+    const inline = this.paragraphContentToMarkdown(para, ctx);
+    const hasNumbering = para.hasNumbering();
+    if (!inline && !hasNumbering) return null;
+
+    // Headings take precedence over every other block style.
     const headingLevel = para.detectHeadingLevel();
     if (headingLevel !== null && headingLevel >= 1 && headingLevel <= 6) {
-      return '#'.repeat(headingLevel) + ' ' + text;
+      return '#'.repeat(headingLevel) + ' ' + this.toSingleLine(inline);
     }
 
-    // Numbered/bulleted lists
-    if (para.hasNumbering()) {
-      const style = para.getStyle();
-      const isBullet =
-        style?.toLowerCase().includes('bullet') || style?.toLowerCase().includes('list bullet');
-      return isBullet ? `- ${text}` : `1. ${text}`;
+    const style = (para.getStyle() ?? '').toLowerCase();
+    const isListStyle =
+      style.includes('listbullet') ||
+      style.includes('list bullet') ||
+      style.includes('listnumber') ||
+      style.includes('list number');
+
+    if (hasNumbering || isListStyle) {
+      const level = para.getNumbering()?.level ?? 0;
+      const indent = '  '.repeat(Math.max(0, level));
+      const marker = this.isOrderedList(para) ? '1.' : '-';
+      return `${indent}${marker} ${this.toSingleLine(inline)}`;
     }
 
-    return text;
+    // Block quote (Quote / IntenseQuote styles).
+    if (style.includes('quote')) {
+      return this.toSingleLine(inline)
+        .split('\n')
+        .map((l) => `> ${l}`)
+        .join('\n');
+    }
+
+    return inline;
+  }
+
+  /**
+   * Determines whether a numbered paragraph uses an ordered (decimal/letter/
+   * roman) format rather than a bullet. Resolves the numbering definition when
+   * available, falling back to the paragraph's style name.
+   * @internal
+   */
+  private isOrderedList(para: Paragraph): boolean {
+    const numbering = para.getNumbering();
+    if (numbering) {
+      const instance = this.numberingManager.getInstance(numbering.numId);
+      if (instance) {
+        const abstract = this.numberingManager.getAbstractNumbering(instance.getAbstractNumId());
+        const levelDef = abstract?.getLevel(numbering.level);
+        const format = levelDef?.getFormat();
+        if (format) return format !== 'bullet';
+      }
+    }
+    const style = (para.getStyle() ?? '').toLowerCase();
+    if (style.includes('bullet')) return false;
+    if (style.includes('number')) return true;
+    return true;
   }
 
   /**
    * Converts paragraph inline content to Markdown with formatting.
    * @internal
    */
-  private paragraphContentToMarkdown(para: Paragraph): string {
+  private paragraphContentToMarkdown(para: Paragraph, ctx: MarkdownContext): string {
+    return this.inlineContentToMarkdown(para.getContent(), ctx);
+  }
+
+  /**
+   * Converts a sequence of inline content items (runs, hyperlinks, fields,
+   * revisions, shapes, text boxes, preserved elements) to Markdown.
+   * @internal
+   */
+  private inlineContentToMarkdown(items: ParagraphContent[], ctx: MarkdownContext): string {
     const parts: string[] = [];
 
-    for (const item of para.getContent()) {
-      if (item instanceof Run) {
-        const runText = item.getText();
-        if (!runText) continue;
-
-        const fmt = item.getFormatting();
-        let md = runText;
-
-        // Apply inline formatting (bold + italic combined)
-        if (fmt.bold && fmt.italic) {
-          md = `***${md}***`;
-        } else if (fmt.bold) {
-          md = `**${md}**`;
-        } else if (fmt.italic) {
-          md = `*${md}*`;
+    for (const item of items) {
+      // ImageRun extends Run, so it must be checked first.
+      if (item instanceof ImageRun) {
+        if (ctx.opts.images) {
+          const image = item.getImageElement();
+          const alt = this.escapeMarkdown(image.getAltText() || 'image');
+          const src = image.getRelationshipId() ?? 'image';
+          parts.push(`![${alt}](${src})`);
         }
-
-        if (fmt.strike) {
-          md = `~~${md}~~`;
-        }
-
-        // Inline code (monospace font detection)
-        if (
-          fmt.font &&
-          /^(courier|consolas|monaco|menlo|source code|fira code|jetbrains mono)/i.test(fmt.font)
-        ) {
-          md = `\`${runText}\``;
-        }
-
-        parts.push(md);
+      } else if (item instanceof Run) {
+        parts.push(this.runToMarkdown(item, ctx));
       } else if (item instanceof Hyperlink) {
-        const url = item.getUrl() || '';
-        const linkText = item.getText() || url;
-        parts.push(`[${linkText}](${url})`);
+        const runs = item.getRuns();
+        let label =
+          runs.length > 0
+            ? runs.map((r) => this.runToMarkdown(r, ctx, true)).join('')
+            : this.escapeMarkdown(item.getText());
+        if (!label) label = this.escapeMarkdown(item.getText());
+        let url = item.getUrl() ?? '';
+        const anchor = item.getAnchor();
+        if (anchor) url = url ? `${url}#${anchor}` : `#${anchor}`;
+        parts.push(`[${label}](${url})`);
+      } else if (item instanceof Revision) {
+        const inner = this.inlineContentToMarkdown(item.getContent(), ctx);
+        if (!inner) continue;
+        const type = item.getType();
+        if (type === 'delete' || type === 'moveFrom') {
+          // Deleted/moved-away content (only present in 'preserve' mode): mark it
+          // so the information survives without claiming it as final body text.
+          parts.push(ctx.opts.htmlFallback ? `<del>${inner}</del>` : `~~${inner}~~`);
+        } else {
+          parts.push(inner);
+        }
+      } else if (item instanceof ComplexField) {
+        const result = item.getResult();
+        if (result) parts.push(this.escapeMarkdown(result));
+      } else if (item instanceof Field) {
+        const result = item.getCachedResult();
+        if (result) parts.push(this.escapeMarkdown(result));
+      } else if (item instanceof TextBox) {
+        const text = item
+          .getParagraphs()
+          .map((p) => this.paragraphContentToMarkdown(p, ctx))
+          .filter((s) => s !== '')
+          .join(' ');
+        if (text) parts.push(text);
+      } else if (item instanceof Shape) {
+        const text = item.getText();
+        if (text) parts.push(this.escapeMarkdown(text));
+      } else if (item instanceof PreservedElement) {
+        const type = item.getElementType();
+        // Comment range/reference markers carry no inline body text.
+        if (!type.startsWith('w:comment')) {
+          const text = this.extractTextFromRawXml(item.getRawXml());
+          if (text) parts.push(this.escapeMarkdown(text));
+        }
       }
-      // Revisions, fields, shapes, etc. — extract text if possible
+      // RangeMarker (bookmarks) carry no display text and are skipped.
     }
 
     return parts.join('');
   }
 
   /**
-   * Converts a table to Markdown table lines.
+   * Converts a single run to Markdown, applying inline formatting and emitting
+   * footnote/endnote markers. Tabs, breaks and symbols are preserved.
    * @internal
    */
-  private tableToMarkdown(table: Table): string[] {
-    const data = table.toArray();
-    if (data.length === 0) return [];
+  private runToMarkdown(run: Run, ctx: MarkdownContext, inLink = false): string {
+    const fmt = run.getFormatting();
+    const isMono = !!(
+      fmt.font &&
+      /^(courier|consolas|monaco|menlo|source code|fira code|jetbrains mono)/i.test(fmt.font)
+    );
+    const escape = (s: string): string => (isMono ? s : this.escapeMarkdown(s));
 
-    const colCount = Math.max(...data.map((row) => row.length));
+    const segments: string[] = [];
+    const markers: string[] = [];
+
+    for (const content of run.getContent()) {
+      switch (content.type) {
+        case 'text':
+        case 'instructionText':
+          segments.push(escape(content.value ?? ''));
+          break;
+        case 'tab':
+          segments.push('\t');
+          break;
+        case 'carriageReturn':
+          segments.push('\n');
+          break;
+        case 'break':
+          // Page/column breaks are layout-only; line breaks become hard breaks.
+          if (content.breakType !== 'page' && content.breakType !== 'column') {
+            segments.push(ctx.opts.htmlFallback ? '<br>' : '\n');
+          }
+          break;
+        case 'noBreakHyphen':
+          segments.push('‑');
+          break;
+        case 'symbol':
+          if (content.symbolChar) {
+            const code = parseInt(content.symbolChar, 16);
+            if (!Number.isNaN(code)) segments.push(escape(String.fromCharCode(code)));
+          }
+          break;
+        case 'footnoteReference':
+          if (ctx.opts.footnotes && content.footnoteId !== undefined) {
+            markers.push(this.noteMarker(content.footnoteId, 'fn', ctx));
+          }
+          break;
+        case 'endnoteReference':
+          if (ctx.opts.footnotes && content.endnoteId !== undefined) {
+            markers.push(this.noteMarker(content.endnoteId, 'en', ctx));
+          }
+          break;
+        // Field chars, VML, soft hyphens and other layout markers contribute no text.
+        default:
+          break;
+      }
+    }
+
+    let text = segments.join('');
+    if (text) {
+      if (isMono) {
+        text = `\`${text}\``;
+      }
+      // Emphasis (bold/italic innermost, strikethrough outermost).
+      if (fmt.bold && fmt.italic) text = `***${text}***`;
+      else if (fmt.bold) text = `**${text}**`;
+      else if (fmt.italic) text = `*${text}*`;
+      if (fmt.strike || fmt.dstrike) text = `~~${text}~~`;
+
+      if (ctx.opts.htmlFallback) {
+        if (fmt.superscript) text = `<sup>${text}</sup>`;
+        else if (fmt.subscript) text = `<sub>${text}</sub>`;
+        if (fmt.highlight && fmt.highlight !== 'none') text = `<mark>${text}</mark>`;
+        // Underline and color are the conventional appearance of a hyperlink, so
+        // suppress them inside link labels to avoid redundant markup; elsewhere
+        // they carry real information and are preserved as inline HTML.
+        if (!inLink) {
+          if (fmt.underline && fmt.underline !== 'none') text = `<u>${text}</u>`;
+          if (fmt.color && fmt.color !== 'auto' && /^[0-9a-fA-F]{6}$/.test(fmt.color)) {
+            text = `<span style="color:#${fmt.color}">${text}</span>`;
+          }
+        }
+      }
+    }
+
+    // Footnote/endnote markers follow the text, unaffected by run formatting.
+    return text + markers.join('');
+  }
+
+  /**
+   * Resolves a footnote/endnote reference to a GFM marker and records its
+   * definition (once) for later emission.
+   * @internal
+   */
+  private noteMarker(id: number, kind: 'fn' | 'en', ctx: MarkdownContext): string {
+    const marker = `${kind}${id}`;
+    if (!ctx.noteMarkers.has(marker)) {
+      ctx.noteMarkers.add(marker);
+      const note =
+        kind === 'fn' ? this.footnoteManager.getFootnote(id) : this.endnoteManager.getEndnote(id);
+      let text = '';
+      if (note) {
+        text = note
+          .getParagraphs()
+          .map((p) => this.paragraphContentToMarkdown(p, ctx))
+          .filter((s) => s !== '')
+          .join(' ')
+          .replace(/\s*\n\s*/g, ' ')
+          .trim();
+      }
+      ctx.notes.push({ marker, text });
+    }
+    return `[^${marker}]`;
+  }
+
+  /**
+   * Converts a table to Markdown. Simple grid tables become GFM pipe tables;
+   * tables with merged or nested cells fall back to inline HTML (when enabled)
+   * so structural information is preserved.
+   * @internal
+   */
+  private tableToMarkdown(table: Table, ctx: MarkdownContext): string[] {
+    const rows = table.getRows();
+    if (rows.length === 0) return [];
+
+    const isComplex = rows.some((row) =>
+      row
+        .getCells()
+        .some(
+          (cell) =>
+            (cell.getColumnSpan() ?? 1) > 1 ||
+            cell.getVerticalMerge() !== undefined ||
+            cell.hasNestedTables()
+        )
+    );
+
+    if (isComplex && ctx.opts.htmlFallback) {
+      return this.tableToHtmlBlock(table);
+    }
+
+    const matrix = rows.map((row) => row.getCells().map((cell) => this.cellToMarkdown(cell, ctx)));
+    const colCount = Math.max(...matrix.map((row) => row.length));
     if (colCount === 0) return [];
 
-    // Normalize all rows to same column count
-    const normalized = data.map((row) => {
+    const normalized = matrix.map((row) => {
       const padded = [...row];
       while (padded.length < colCount) padded.push('');
-      // Escape pipes and normalize whitespace in cell text
-      return padded.map((cell) => cell.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim());
+      return padded;
     });
 
     const lines: string[] = [];
-
-    // Header row
     lines.push('| ' + normalized[0]!.join(' | ') + ' |');
-
-    // Separator row
     lines.push('| ' + normalized[0]!.map(() => '---').join(' | ') + ' |');
-
-    // Data rows
     for (let i = 1; i < normalized.length; i++) {
       lines.push('| ' + normalized[i]!.join(' | ') + ' |');
     }
-
     return lines;
+  }
+
+  /**
+   * Renders a single table cell as inline Markdown text (formatting preserved),
+   * with pipes escaped and line breaks collapsed for pipe-table compatibility.
+   * @internal
+   */
+  private cellToMarkdown(cell: TableCell, ctx: MarkdownContext): string {
+    const text = cell
+      .getParagraphs()
+      .map((p) => this.paragraphContentToMarkdown(p, ctx))
+      .filter((s) => s !== '')
+      .join(' ');
+    return text.replace(/\|/g, '\\|').replace(/<br>/g, ' ').replace(/\n/g, ' ').trim();
+  }
+
+  /**
+   * Renders a table with merged or nested cells as an inline HTML table,
+   * honoring `colspan`/`rowspan` from grid and vertical-merge information.
+   * @internal
+   */
+  private tableToHtmlBlock(table: Table): string[] {
+    const rows = table.getRows();
+
+    // Precompute each cell's starting grid column (accounting for column spans).
+    const rowCells = rows.map((row) => {
+      let gridStart = 0;
+      return row.getCells().map((cell) => {
+        const span = cell.getColumnSpan() ?? 1;
+        const entry = { cell, gridStart, span };
+        gridStart += span;
+        return entry;
+      });
+    });
+
+    const html: string[] = ['<table>'];
+    for (let ri = 0; ri < rowCells.length; ri++) {
+      html.push('<tr>');
+      for (const { cell, gridStart, span } of rowCells[ri]!) {
+        // Cells continuing a vertical merge are covered by the rowspan above.
+        if (cell.getVerticalMerge() === 'continue') continue;
+
+        let rowspan = 1;
+        if (cell.getVerticalMerge() === 'restart') {
+          for (let rj = ri + 1; rj < rowCells.length; rj++) {
+            const below = rowCells[rj]!.find((e) => e.gridStart === gridStart);
+            if (below?.cell.getVerticalMerge() === 'continue') rowspan++;
+            else break;
+          }
+        }
+
+        const tag = ri === 0 ? 'th' : 'td';
+        const attrs =
+          (span > 1 ? ` colspan="${span}"` : '') + (rowspan > 1 ? ` rowspan="${rowspan}"` : '');
+
+        let content =
+          cell
+            .getParagraphs()
+            .map((p) => this.paragraphContentToHTML(p))
+            .filter((s) => s !== '')
+            .join('<br>') || this.escapeHTML(cell.getText());
+
+        if (cell.hasNestedTables()) {
+          const nestedText = cell
+            .getRawNestedContent()
+            .map((n) => this.extractTextFromRawXml(n.xml))
+            .filter((s) => s)
+            .join(' ');
+          if (nestedText) content += `<br>${this.escapeHTML(nestedText)}`;
+        }
+
+        html.push(`<${tag}${attrs}>${content}</${tag}>`);
+      }
+      html.push('</tr>');
+    }
+    html.push('</table>');
+    return html;
+  }
+
+  /**
+   * Escapes Markdown-significant characters in literal text so they render
+   * verbatim rather than as formatting.
+   * @internal
+   */
+  private escapeMarkdown(text: string): string {
+    return text.replace(/([\\`*_[\]<>])/g, '\\$1');
+  }
+
+  /**
+   * Collapses hard/soft line breaks to single spaces for contexts that must
+   * stay on one line (headings, list items, table cells).
+   * @internal
+   */
+  private toSingleLine(text: string): string {
+    return text.replace(/<br>/g, ' ').replace(/\s*\n\s*/g, ' ');
+  }
+
+  /**
+   * Extracts visible text from a raw OOXML fragment by concatenating the
+   * contents of its `w:t` elements and decoding XML entities. Used as a
+   * last-resort so preserved/round-trip elements never silently lose text.
+   * @internal
+   */
+  private extractTextFromRawXml(xml: string): string {
+    if (!xml.includes('<w:t')) return '';
+    const parts: string[] = [];
+    const regex = /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(xml)) !== null) {
+      parts.push(match[1] ?? '');
+    }
+    return parts
+      .join('')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim();
   }
 
   /**
@@ -16023,8 +16454,13 @@ export class Document {
 
         parts.push(html);
       } else if (item instanceof Hyperlink) {
-        const url = this.escapeHTML(item.getUrl() || '');
-        const linkText = this.escapeHTML(item.getText() || url);
+        // Word stores the fragment/anchor (e.g. "!/view?docid=…") separately
+        // from the base URL; recombine them so deep links are not truncated.
+        let rawUrl = item.getUrl() ?? '';
+        const anchor = item.getAnchor();
+        if (anchor) rawUrl = rawUrl ? `${rawUrl}#${anchor}` : `#${anchor}`;
+        const url = this.escapeHTML(rawUrl);
+        const linkText = this.escapeHTML(item.getText() || rawUrl);
         parts.push(`<a href="${url}">${linkText}</a>`);
       }
     }

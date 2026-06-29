@@ -1520,6 +1520,35 @@ export class Paragraph {
   }
 
   /**
+   * Gets the combined text content including tracked-change text.
+   *
+   * Like {@link getText}, but also emits text carried by `Revision` objects in
+   * document order — both inserted text (`w:t`) and deleted text (`w:delText`).
+   * Move and property-change revisions contribute no text. This exists as a
+   * separate method because offset-based operations (`splitAt`, `findAndReplace`,
+   * etc.) and round-trip serialization depend on the narrower {@link getText}
+   * filter, which must keep ignoring revisions.
+   *
+   * @returns Combined text from Runs, Hyperlinks, and Revisions in document order
+   *
+   * @example
+   * ```typescript
+   * // Paragraph with a tracked edit "Hello" -> "Hi"
+   * para.getText();                  // "" (revisions filtered out)
+   * para.getTextIncludingRevisions(); // "Helloi" (deleted + inserted)
+   * ```
+   */
+  getTextIncludingRevisions(): string {
+    return this.content
+      .filter(
+        (item): item is Run | Hyperlink | Revision =>
+          item instanceof Run || item instanceof Hyperlink || item instanceof Revision
+      )
+      .map((item) => item.getText())
+      .join('');
+  }
+
+  /**
    * Gets all fields in the paragraph (both Field and ComplexField)
    *
    * Returns all field instances including simple fields (`<w:fldSimple>`)
