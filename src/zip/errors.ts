@@ -47,6 +47,21 @@ export class CorruptedArchiveError extends DocxError {
 }
 
 /**
+ * Error thrown when an archive breaches a configured resource limit.
+ *
+ * Distinct from {@link CorruptedArchiveError} so callers can tell a hostile/oversized
+ * input (a "zip bomb" style payload) apart from a genuinely malformed archive. The
+ * message names the specific limit that was exceeded so it is actionable.
+ */
+export class ResourceLimitError extends DocxError {
+  constructor(message: string) {
+    super(`Resource limit exceeded: ${message}`);
+    this.name = 'ResourceLimitError';
+    Object.setPrototypeOf(this, ResourceLimitError.prototype);
+  }
+}
+
+/**
  * Error thrown when a required DOCX file is missing
  */
 export class MissingRequiredFileError extends DocxError {

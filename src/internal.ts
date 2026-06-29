@@ -46,6 +46,7 @@ export {
   CorruptedArchiveError,
   MissingRequiredFileError,
   FileOperationError,
+  ResourceLimitError,
 } from './zip/errors.js';
 
 // XML layer

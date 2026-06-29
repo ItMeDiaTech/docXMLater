@@ -28,18 +28,47 @@ export interface SizeLimitOptions {
    */
   warningSizeMB?: number;
   /**
-   * Maximum size in MB to load (default: 150 MB)
+   * Maximum *compressed* archive size in MB to load (default: 150 MB)
    * Set to 0 to disable the limit (not recommended)
    */
   maxSizeMB?: number;
+  /**
+   * Maximum total *uncompressed* size in MB across all archive entries
+   * (default: 300 MB). This is the primary defense against high-ratio
+   * "zip bomb" payloads whose compressed size is small. Set to 0 to disable.
+   */
+  maxTotalUncompressedMB?: number;
+  /**
+   * Maximum *uncompressed* size in MB for any single archive entry
+   * (default: 150 MB). Set to 0 to disable.
+   */
+  maxEntryUncompressedMB?: number;
+  /**
+   * Maximum number of entries (files) allowed in the archive
+   * (default: 2000). Guards against entry-count amplification. Set to 0 to disable.
+   */
+  maxEntryCount?: number;
+  /**
+   * Maximum allowed per-entry compression ratio (uncompressed / compressed)
+   * (default: 200). Only enforced for sizable entries where the ratio is
+   * meaningful and the compressed size is reported by the archive. Set to 0 to disable.
+   */
+  maxCompressionRatio?: number;
 }
 
 /**
- * Default size limits for document loading
+ * Default size limits for document loading.
+ *
+ * Defaults are intentionally generous so legitimate large documents load
+ * unchanged; tighten them via {@link LoadOptions.sizeLimits} for untrusted input.
  */
 export const DEFAULT_SIZE_LIMITS: Required<SizeLimitOptions> = {
   warningSizeMB: 50,
   maxSizeMB: 150,
+  maxTotalUncompressedMB: 300,
+  maxEntryUncompressedMB: 150,
+  maxEntryCount: 2000,
+  maxCompressionRatio: 200,
 };
 
 /**

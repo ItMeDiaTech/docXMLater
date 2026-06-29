@@ -4,12 +4,13 @@
 
 import JSZip from 'jszip';
 import { promises as fs } from 'fs';
-import { ZipFile, FileMap, LoadOptions } from './types.js';
+import { ZipFile, FileMap, LoadOptions, SizeLimitOptions, DEFAULT_SIZE_LIMITS } from './types.js';
 import {
   DocxNotFoundError,
   InvalidDocxError,
   CorruptedArchiveError,
   FileOperationError,
+  ResourceLimitError,
 } from './errors.js';
 import {
   validateDocxStructure,
@@ -44,7 +45,14 @@ export class ZipReader {
       const buffer = await fs.readFile(filePath);
       await this.loadFromBuffer(buffer, options);
     } catch (error: unknown) {
-      if (error instanceof DocxNotFoundError) {
+      // Surface load-classification errors verbatim so callers can distinguish a
+      // missing/oversized/hostile archive from a generic read failure.
+      if (
+        error instanceof DocxNotFoundError ||
+        error instanceof ResourceLimitError ||
+        error instanceof InvalidDocxError ||
+        error instanceof CorruptedArchiveError
+      ) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
@@ -59,6 +67,7 @@ export class ZipReader {
    */
   async loadFromBuffer(buffer: Buffer, options: LoadOptions = {}): Promise<void> {
     const { validate = true } = options;
+    const limits: Required<SizeLimitOptions> = { ...DEFAULT_SIZE_LIMITS, ...options.sizeLimits };
 
     try {
       // Validate ZIP signature
@@ -69,8 +78,18 @@ export class ZipReader {
       // Load ZIP archive
       this.zip = await JSZip.loadAsync(buffer);
 
-      // Extract all files
-      await this.extractFiles();
+      // Reject entry-count amplification before decompressing anything.
+      const entryCount = Object.keys(this.zip.files).filter(
+        (path) => !this.zip!.files[path]!.dir
+      ).length;
+      if (limits.maxEntryCount > 0 && entryCount > limits.maxEntryCount) {
+        throw new ResourceLimitError(
+          `archive entry count (${entryCount}) exceeds maxEntryCount (${limits.maxEntryCount})`
+        );
+      }
+
+      // Extract all files (enforces uncompressed/ratio budgets while decompressing)
+      await this.extractFiles(limits);
 
       // Validate DOCX structure if requested
       if (validate) {
@@ -79,7 +98,9 @@ export class ZipReader {
 
       this.loaded = true;
     } catch (error: unknown) {
-      if (error instanceof InvalidDocxError) {
+      // A resource-limit breach must not be masked as a generic corruption error;
+      // the cause (which budget was exceeded) is actionable for the caller.
+      if (error instanceof InvalidDocxError || error instanceof ResourceLimitError) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
@@ -97,8 +118,15 @@ export class ZipReader {
    *   string decode is lossy (invalid UTF-8 becomes U+FFFD), which would
    *   corrupt embedded binary parts (OLE packages, fonts, metafiles)
    * - All text content is guaranteed to be valid UTF-8
+   *
+   * **Resource limits:** the running total of *actual* decompressed bytes is the
+   * primary defense against high-ratio archives. JSZip's internal `_data` metadata
+   * is consulted only as an early-reject hint (it is undocumented and may be absent),
+   * never as the sole guard — every breach is re-checked against measured bytes.
+   *
+   * @param limits - Fully-resolved size limits to enforce while extracting
    */
-  private async extractFiles(): Promise<void> {
+  private async extractFiles(limits: Required<SizeLimitOptions>): Promise<void> {
     if (!this.zip) {
       throw new Error('ZIP archive not loaded');
     }
@@ -108,6 +136,17 @@ export class ZipReader {
     // Get all file paths
     const filePaths = Object.keys(this.zip.files).filter((path) => !this.zip!.files[path]!.dir);
 
+    const maxEntryBytes =
+      limits.maxEntryUncompressedMB > 0 ? limits.maxEntryUncompressedMB * 1024 * 1024 : 0;
+    const maxTotalBytes =
+      limits.maxTotalUncompressedMB > 0 ? limits.maxTotalUncompressedMB * 1024 * 1024 : 0;
+    // Only enforce the compression ratio on entries large enough for the ratio to be
+    // meaningful, so a small but highly-compressible part (e.g. tiny repetitive XML)
+    // cannot trip a false positive.
+    const ratioFloorBytes = 1024 * 1024;
+
+    let totalBytes = 0;
+
     // Extract each file
     for (const filePath of filePaths) {
       const normalizedPath = normalizePath(filePath);
@@ -115,6 +154,26 @@ export class ZipReader {
 
       if (!zipObject) {
         continue;
+      }
+
+      // Early-reject hint: JSZip exposes the declared uncompressed size on a private
+      // `_data` field. Use it only to avoid decompressing an obviously oversized entry;
+      // the authoritative check below uses the measured byte count.
+      const internal = (zipObject as unknown as { _data?: { uncompressedSize?: number } })._data;
+      const declaredSize = internal?.uncompressedSize;
+      if (typeof declaredSize === 'number' && declaredSize >= 0) {
+        if (maxEntryBytes > 0 && declaredSize > maxEntryBytes) {
+          throw new ResourceLimitError(
+            `entry "${normalizedPath}" uncompressed size (${declaredSize} bytes) exceeds ` +
+              `maxEntryUncompressedMB (${limits.maxEntryUncompressedMB}MB)`
+          );
+        }
+        if (maxTotalBytes > 0 && totalBytes + declaredSize > maxTotalBytes) {
+          throw new ResourceLimitError(
+            `total uncompressed size would exceed maxTotalUncompressedMB ` +
+              `(${limits.maxTotalUncompressedMB}MB)`
+          );
+        }
       }
 
       const isBinary = isBinaryFile(normalizedPath);
@@ -129,6 +188,46 @@ export class ZipReader {
         // Known-text files are extracted as UTF-8 strings
         // JSZip automatically handles UTF-8 decoding for 'string' type
         content = await zipObject.async('string');
+      }
+
+      // Measure the *actual* decompressed byte count (UTF-8 for strings) — this is the
+      // primary, authoritative resource accounting that does not trust archive metadata.
+      const entryBytes = Buffer.isBuffer(content)
+        ? content.length
+        : Buffer.byteLength(content, 'utf8');
+
+      if (maxEntryBytes > 0 && entryBytes > maxEntryBytes) {
+        throw new ResourceLimitError(
+          `entry "${normalizedPath}" uncompressed size (${entryBytes} bytes) exceeds ` +
+            `maxEntryUncompressedMB (${limits.maxEntryUncompressedMB}MB)`
+        );
+      }
+
+      totalBytes += entryBytes;
+      if (maxTotalBytes > 0 && totalBytes > maxTotalBytes) {
+        throw new ResourceLimitError(
+          `total uncompressed size (${totalBytes} bytes) exceeds maxTotalUncompressedMB ` +
+            `(${limits.maxTotalUncompressedMB}MB)`
+        );
+      }
+
+      // Compression-ratio guard for sizable entries, when the archive reports a
+      // compressed size we can divide by.
+      const compressedSize = (zipObject as unknown as { _data?: { compressedSize?: number } })._data
+        ?.compressedSize;
+      if (
+        limits.maxCompressionRatio > 0 &&
+        entryBytes > ratioFloorBytes &&
+        typeof compressedSize === 'number' &&
+        compressedSize > 0
+      ) {
+        const ratio = entryBytes / compressedSize;
+        if (ratio > limits.maxCompressionRatio) {
+          throw new ResourceLimitError(
+            `entry "${normalizedPath}" compression ratio (${ratio.toFixed(1)}:1) exceeds ` +
+              `maxCompressionRatio (${limits.maxCompressionRatio}:1)`
+          );
+        }
       }
 
       // Get file metadata
