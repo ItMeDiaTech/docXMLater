@@ -538,6 +538,16 @@ const base64 = doc.toBase64();
 doc.dispose();
 ```
 
+`toMarkdown()` converts the full document with information parity: headings, bold/italic/strikethrough, hyperlinks, inline images (`![alt](src)`), footnote/endnote references (`[^fn1]`) with definitions, line breaks and tabs, nested lists with numbering-aware markers, block quotes, field results, shape and text-box text, structured-document-tag content, and tracked insertions/deletions in `preserve` mode. Formatting Markdown cannot express natively (underline, superscript, subscript, highlight, color) is preserved as inline HTML, and tables with merged or nested cells fall back to an inline HTML `<table>`. Tune fidelity with `MarkdownConversionOptions`:
+
+```typescript
+const md = doc.toMarkdown({
+  htmlFallback: true, // inline HTML for underline/sup/sub/highlight/color (default true)
+  footnotes: true, // GFM footnote markers + definitions (default true)
+  images: true, // emit ![alt](src) for inline images (default true)
+});
+```
+
 ---
 
 ## Performance & Memory Management
