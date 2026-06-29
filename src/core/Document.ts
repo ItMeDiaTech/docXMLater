@@ -2958,7 +2958,7 @@ export class Document {
    * console.log(doc.toPlainText());
    * ```
    */
-  static async loadFromBase64(base64: string, options?: DocumentOptions): Promise<Document> {
+  static async loadFromBase64(base64: string, options?: DocumentLoadOptions): Promise<Document> {
     const buffer = Buffer.from(base64, 'base64');
     return Document.loadFromBuffer(buffer, options);
   }
@@ -11890,6 +11890,12 @@ export class Document {
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private bindTrackingToElement(element: any): void {
+    // Two-arm coverage: the getContent() arm below binds any paragraph-content
+    // item exposing _setTrackingContext (Hyperlink, ComplexField, etc.) so their
+    // own setText() emits tracked markup; the getRuns() arm binds the inner Runs
+    // that actually carry the text. Both arms are required — neither subsumes the
+    // other — to fully wire a paragraph's tracking context.
+
     // Set tracking context on element if it supports it
     if (element && typeof element._setTrackingContext === 'function') {
       element._setTrackingContext(this.trackingContext);
@@ -15770,6 +15776,13 @@ export class Document {
    * @param separator - String to insert between paragraphs (default: '\n')
    * @returns Plain text content of the entire document
    *
+   * @remarks
+   * The output depends on the `revisionHandling` mode the document was loaded with, and reflects any tracked changes applied to the document after loading.
+   * In `'preserve'` mode the result now includes BOTH tracked-inserted (`w:ins`) and
+   * tracked-deleted (`w:delText`) text, interleaved in document order. In
+   * `'accept'`/`'strip'` modes (the default) the output is the post-acceptance plain
+   * text — inserted content kept, deleted content dropped.
+   *
    * @example
    * ```typescript
    * const text = doc.toPlainText();
@@ -15808,7 +15821,7 @@ export class Document {
    *   elements → their textual content
    * - Tracked insertions (preserve mode) render inline; deletions wrap in `~~`/`<del>`
    *
-   * Useful for AI/LLM pipelines, content migration, documentation
+   * Useful for document processing pipelines, content migration, documentation
    * generation, and plain-text extraction with structure preserved.
    *
    * @param options - Conversion fidelity options (see {@link MarkdownConversionOptions})

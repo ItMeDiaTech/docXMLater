@@ -20,6 +20,25 @@ import {
 } from '../utils/validation.js';
 
 /**
+ * Shape of JSZip's undocumented per-entry `_data` field, consulted only as an
+ * early-reject hint — never as the authoritative size guard (measured decompressed
+ * bytes are). Mirrors the commented-out `CompressedObject` interface in jszip's own
+ * `node_modules/jszip/index.d.ts`.
+ *
+ * [TS-5] Verified against jszip 3.10.x (package.json range `^3.10.1`). A minor jszip
+ * bump could rename or remove this field; if so the early-reject/ratio hints silently
+ * degrade to no-ops while the measured-byte accounting in {@link extractFiles} keeps
+ * enforcing the budgets. `tests/zip/JSZipInternalContract.test.ts` canaries the field
+ * so such a regression surfaces on upgrade.
+ */
+interface JSZipObjectPrivate {
+  _data?: {
+    compressedSize?: number;
+    uncompressedSize?: number;
+  };
+}
+
+/**
  * Handles reading operations on ZIP archives
  */
 export class ZipReader {
@@ -78,18 +97,19 @@ export class ZipReader {
       // Load ZIP archive
       this.zip = await JSZip.loadAsync(buffer);
 
+      // Enumerate non-directory entries once; reused for the count guard below and
+      // for extraction, so the file list is not filtered twice.
+      const filePaths = Object.keys(this.zip.files).filter((path) => !this.zip!.files[path]!.dir);
+
       // Reject entry-count amplification before decompressing anything.
-      const entryCount = Object.keys(this.zip.files).filter(
-        (path) => !this.zip!.files[path]!.dir
-      ).length;
-      if (limits.maxEntryCount > 0 && entryCount > limits.maxEntryCount) {
+      if (limits.maxEntryCount > 0 && filePaths.length > limits.maxEntryCount) {
         throw new ResourceLimitError(
-          `archive entry count (${entryCount}) exceeds maxEntryCount (${limits.maxEntryCount})`
+          `archive entry count (${filePaths.length}) exceeds maxEntryCount (${limits.maxEntryCount})`
         );
       }
 
       // Extract all files (enforces uncompressed/ratio budgets while decompressing)
-      await this.extractFiles(limits);
+      await this.extractFiles(limits, filePaths);
 
       // Validate DOCX structure if requested
       if (validate) {
@@ -125,16 +145,17 @@ export class ZipReader {
    * never as the sole guard — every breach is re-checked against measured bytes.
    *
    * @param limits - Fully-resolved size limits to enforce while extracting
+   * @param filePaths - Pre-filtered non-directory entry paths (computed by the caller)
    */
-  private async extractFiles(limits: Required<SizeLimitOptions>): Promise<void> {
+  private async extractFiles(
+    limits: Required<SizeLimitOptions>,
+    filePaths: string[]
+  ): Promise<void> {
     if (!this.zip) {
       throw new Error('ZIP archive not loaded');
     }
 
     this.files.clear();
-
-    // Get all file paths
-    const filePaths = Object.keys(this.zip.files).filter((path) => !this.zip!.files[path]!.dir);
 
     const maxEntryBytes =
       limits.maxEntryUncompressedMB > 0 ? limits.maxEntryUncompressedMB * 1024 * 1024 : 0;
@@ -156,11 +177,12 @@ export class ZipReader {
         continue;
       }
 
-      // Early-reject hint: JSZip exposes the declared uncompressed size on a private
-      // `_data` field. Use it only to avoid decompressing an obviously oversized entry;
-      // the authoritative check below uses the measured byte count.
-      const internal = (zipObject as unknown as { _data?: { uncompressedSize?: number } })._data;
-      const declaredSize = internal?.uncompressedSize;
+      // Early-reject hint: JSZip exposes declared uncompressed/compressed sizes on a
+      // private `_data` field. Cast once per entry (see {@link JSZipObjectPrivate}) and
+      // use it only to avoid decompressing an obviously oversized entry; the
+      // authoritative check below uses the measured byte count.
+      const internalData = (zipObject as unknown as JSZipObjectPrivate)._data;
+      const declaredSize = internalData?.uncompressedSize;
       if (typeof declaredSize === 'number' && declaredSize >= 0) {
         if (maxEntryBytes > 0 && declaredSize > maxEntryBytes) {
           throw new ResourceLimitError(
@@ -212,9 +234,8 @@ export class ZipReader {
       }
 
       // Compression-ratio guard for sizable entries, when the archive reports a
-      // compressed size we can divide by.
-      const compressedSize = (zipObject as unknown as { _data?: { compressedSize?: number } })._data
-        ?.compressedSize;
+      // compressed size we can divide by (reusing the single `_data` read above).
+      const compressedSize = internalData?.compressedSize;
       if (
         limits.maxCompressionRatio > 0 &&
         entryBytes > ratioFloorBytes &&

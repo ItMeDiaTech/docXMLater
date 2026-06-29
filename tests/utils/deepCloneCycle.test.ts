@@ -117,4 +117,70 @@ describe('deepClone cycle and shared-reference handling', () => {
     expect(original.nested.inner.flag).toBe(true);
     expect(original.map.get('k')!.n).toBe(1);
   });
+
+  it('clones a Date shared by two fields to the SAME cloned instance', () => {
+    const shared = new Date('2026-03-15T08:00:00Z');
+    const original = { created: shared, modified: shared };
+
+    const cloned = deepClone(original);
+
+    expect(cloned.created instanceof Date).toBe(true);
+    expect(cloned.created).not.toBe(shared);
+    expect(cloned.created.getTime()).toBe(shared.getTime());
+    // The single shared Date instance must yield a single shared clone.
+    expect(cloned.created).toBe(cloned.modified);
+  });
+
+  it('clones a RegExp shared by two fields to the SAME cloned instance', () => {
+    const shared = /abc\d+/gi;
+    const original = { include: shared, exclude: shared };
+
+    const cloned = deepClone(original);
+
+    expect(cloned.include instanceof RegExp).toBe(true);
+    expect(cloned.include).not.toBe(shared);
+    expect(cloned.include.source).toBe(shared.source);
+    expect(cloned.include.flags).toBe(shared.flags);
+    // The single shared RegExp instance must yield a single shared clone.
+    expect(cloned.include).toBe(cloned.exclude);
+  });
+
+  it('deep-clones a RunFormatting-like object with a nested object field independently', () => {
+    // Mirrors the run-formatting shape passed through deepClone in the codebase.
+    const original = {
+      bold: true,
+      italic: false,
+      fontSize: 24,
+      color: 'FF0000',
+      underline: 'single' as const,
+      font: { ascii: 'Arial', hAnsi: 'Arial', eastAsia: 'SimSun' },
+    };
+
+    const cloned = deepClone(original);
+
+    expect(cloned).toEqual(original);
+    expect(cloned).not.toBe(original);
+    // The nested font object must be an independent copy.
+    expect(cloned.font).not.toBe(original.font);
+
+    cloned.font.ascii = 'Calibri';
+    expect(original.font.ascii).toBe('Arial');
+  });
+
+  it('clones a null-prototype object without throwing', () => {
+    const original = Object.create(null) as Record<string, unknown>;
+    original.a = 1;
+    original.nested = { b: 2 };
+
+    let cloned!: Record<string, unknown>;
+    expect(() => {
+      cloned = deepClone(original);
+    }).not.toThrow();
+
+    expect(cloned).not.toBe(original);
+    expect(Object.getPrototypeOf(cloned)).toBeNull();
+    expect(cloned.a).toBe(1);
+    expect(cloned.nested).not.toBe(original.nested);
+    expect(cloned.nested).toEqual({ b: 2 });
+  });
 });

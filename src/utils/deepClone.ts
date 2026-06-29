@@ -13,7 +13,8 @@
  * Cyclic and shared references are handled via an internal seen-cache: an
  * object encountered more than once during a single clone is cloned exactly
  * once, so circular graphs cannot overflow the stack and shared sub-objects
- * retain a single shared identity in the result.
+ * (including shared Date and RegExp instances) retain a single shared identity
+ * in the result.
  *
  * @param obj - Object to clone
  * @returns Deep cloned copy of the object
@@ -40,20 +41,29 @@ function cloneInternal<T>(obj: T, seen: WeakMap<object, unknown>): T {
     return obj;
   }
 
-  // Handle Date (immutable value copy; cannot form a cycle)
-  if (obj instanceof Date) {
-    return new Date(obj.getTime()) as T;
-  }
-
-  // Handle RegExp (immutable value copy; cannot form a cycle)
-  if (obj instanceof RegExp) {
-    return new RegExp(obj.source, obj.flags) as T;
-  }
-
-  // Return the existing clone for any container already seen in this call.
+  // Return the existing clone for any object already seen in this call. Placed
+  // before the Date/RegExp branches so a single Date/RegExp instance shared by
+  // multiple nodes resolves to one shared clone (the JSDoc shared-identity
+  // guarantee), not a fresh copy per reference.
   const existing = seen.get(obj as object);
   if (existing !== undefined) {
     return existing as T;
+  }
+
+  // Handle Date (immutable value copy; cannot form a cycle). Registered in
+  // `seen` so repeat references to the same instance share this clone.
+  if (obj instanceof Date) {
+    const dateCopy = new Date(obj.getTime());
+    seen.set(obj as object, dateCopy);
+    return dateCopy as T;
+  }
+
+  // Handle RegExp (immutable value copy; cannot form a cycle). Registered in
+  // `seen` so repeat references to the same instance share this clone.
+  if (obj instanceof RegExp) {
+    const regexpCopy = new RegExp(obj.source, obj.flags);
+    seen.set(obj as object, regexpCopy);
+    return regexpCopy as T;
   }
 
   // Handle Array
@@ -90,10 +100,11 @@ function cloneInternal<T>(obj: T, seen: WeakMap<object, unknown>): T {
   // Handle plain objects
   const objCopy = Object.create(Object.getPrototypeOf(obj)) as Record<string, unknown>;
   seen.set(obj as object, objCopy);
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      objCopy[key] = cloneInternal((obj as Record<string, unknown>)[key], seen);
-    }
+  // Object.keys avoids the prototype-builtins shadowing risk of
+  // obj.hasOwnProperty(key) (matches sibling deepEqual.ts) and yields the same
+  // own-enumerable string keys the previous for..in + hasOwnProperty loop did.
+  for (const key of Object.keys(obj as object)) {
+    objCopy[key] = cloneInternal((obj as Record<string, unknown>)[key], seen);
   }
 
   return objCopy as T;

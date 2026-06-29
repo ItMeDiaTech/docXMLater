@@ -1533,9 +1533,9 @@ export class Paragraph {
    *
    * @example
    * ```typescript
-   * // Paragraph with a tracked edit "Hello" -> "Hi"
-   * para.getText();                  // "" (revisions filtered out)
-   * para.getTextIncludingRevisions(); // "Helloi" (deleted + inserted)
+   * // Paragraph: run "H" + tracked-delete "ello" + tracked-insert "i" + run " World"
+   * para.getText();                   // "H World" (revisions filtered out)
+   * para.getTextIncludingRevisions(); // "Helloi World" (deleted + inserted, in order)
    * ```
    */
   getTextIncludingRevisions(): string {

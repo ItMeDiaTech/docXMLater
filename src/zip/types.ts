@@ -34,8 +34,15 @@ export interface SizeLimitOptions {
   maxSizeMB?: number;
   /**
    * Maximum total *uncompressed* size in MB across all archive entries
-   * (default: 300 MB). This is the primary defense against high-ratio
-   * "zip bomb" payloads whose compressed size is small. Set to 0 to disable.
+   * (default: 300 MB). This is the primary, authoritative defense against
+   * high-ratio "zip bomb" payloads whose compressed size is small: it is
+   * enforced against measured decompressed bytes, never archive-reported
+   * metadata. Set to 0 to disable.
+   *
+   * Note: decompression is non-streaming (JSZip buffers each entry fully), so
+   * peak transient heap can approach `maxTotalUncompressedMB + maxEntryUncompressedMB`
+   * (the already-accumulated total plus the entry being decoded) before a limit
+   * fires. Size the limits with that headroom in mind for memory-constrained hosts.
    */
   maxTotalUncompressedMB?: number;
   /**
@@ -51,7 +58,13 @@ export interface SizeLimitOptions {
   /**
    * Maximum allowed per-entry compression ratio (uncompressed / compressed)
    * (default: 200). Only enforced for sizable entries where the ratio is
-   * meaningful and the compressed size is reported by the archive. Set to 0 to disable.
+   * meaningful and the compressed size is reported by the archive.
+   *
+   * Best-effort: it relies on a compressed size that JSZip exposes only on an
+   * undocumented internal field, so it is silently skipped for any entry where
+   * that size is absent. `maxTotalUncompressedMB` is the authoritative guard
+   * against high-ratio payloads; treat this ratio limit as a defense-in-depth
+   * early reject, not a sole defense. Set to 0 to disable.
    */
   maxCompressionRatio?: number;
 }

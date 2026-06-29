@@ -14,6 +14,7 @@ import {
   SizeLimitOptions,
   DEFAULT_SIZE_LIMITS,
 } from './types.js';
+import { ResourceLimitError } from './errors.js';
 import { getGlobalLogger, createScopedLogger, ILogger } from '../utils/logger.js';
 import { normalizePath } from '../utils/validation.js';
 
@@ -42,16 +43,19 @@ export class ZipHandler {
    * Validates document size against configured limits
    * @param sizeMB - Size in megabytes
    * @param limits - Size limit options (merged with defaults)
-   * @throws Error if size exceeds maximum
+   * @throws {ResourceLimitError} If the compressed size exceeds maxSizeMB
    */
   private validateDocumentSize(sizeMB: number, limits: Required<SizeLimitOptions>): void {
     const logger = getLogger();
     const { warningSizeMB, maxSizeMB } = limits;
 
-    // Check maximum size (if enabled)
+    // Check maximum size (if enabled). Throw the typed ResourceLimitError so this
+    // compressed-size guard is catchable by the same type as the uncompressed/ratio/
+    // entry-count guards enforced downstream in ZipReader — callers can distinguish a
+    // hostile/oversized payload from a genuinely corrupt archive.
     if (maxSizeMB > 0 && sizeMB > maxSizeMB) {
       logger.error('Document exceeds maximum size', { sizeMB: sizeMB.toFixed(1), maxSizeMB });
-      throw new Error(
+      throw new ResourceLimitError(
         `Document size (${sizeMB.toFixed(1)}MB) exceeds maximum supported size (${maxSizeMB}MB). ` +
           `This would likely cause out-of-memory errors. Consider:\n` +
           `- Compressing/optimizing images\n` +

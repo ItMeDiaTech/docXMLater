@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`Document.toMarkdown()` now converts the full document with information parity instead of a text-only subset.** The previous implementation emitted only headings, plain bold/italic/strikethrough, monospace code spans, hyperlinks, flat lists, and simple tables — every other construct was silently dropped. The converter now also renders: inline images (`![alt](src)`), footnote/endnote references as GFM markers (`[^fn1]`/`[^en1]`) with definitions appended, line breaks (`<br>`) and tabs, nested lists with two-space-per-level indentation and numbering-format-aware ordered/bullet markers, block quotes (`>`), field results, shape and text-box text, structured-document-tag content, and tracked insertions/deletions in `preserve` mode. Character formatting Markdown cannot express natively — underline, superscript, subscript, highlight, and text color — is preserved as inline HTML, and tables with merged or nested cells fall back to an inline HTML `<table>` honoring `colspan`/`rowspan`. Markdown-significant characters in literal text are escaped so they round-trip verbatim. A new `MarkdownConversionOptions` parameter (`htmlFallback`, `footnotes`, `images`) tunes fidelity; all default to maximal preservation. The output for the previously supported constructs is unchanged.
 
+## [12.0.1] - 2026-06-29
+
+### Changed
+
+- **BREAKING: document loading now enforces uncompressed resource limits by default.** In addition to the pre-existing compressed-size cap (150 MB), `Document.load()` / `loadFromBuffer()` / `loadFromBase64()` now reject any archive that expands beyond 300 MB total uncompressed, 150 MB for a single entry, 2,000 entries, or a 200:1 per-entry compression ratio, throwing `ResourceLimitError`. These defaults defend against zip-bomb and resource-amplification payloads, but a document that was previously loadable (small compressed size, very large expanded size) may now be rejected — hence the major version bump. To restore the prior behavior, opt out of the new guards with `sizeLimits: { maxTotalUncompressedMB: 0, maxEntryUncompressedMB: 0, maxEntryCount: 0 }`; set any individual limit to `0` to disable just that check.
+
+### Added
+
+- **Per-load size-limit configuration via `DocumentLoadOptions.sizeLimits`.** Every threshold is tunable: `warningSizeMB`, `maxSizeMB`, `maxTotalUncompressedMB`, `maxEntryUncompressedMB`, `maxEntryCount`, and `maxCompressionRatio`. `loadFromBase64()` accepts the same options.
+- **`ResourceLimitError` is now exported from the stable package entry** (`import { ResourceLimitError } from 'docxmlater'`), so untrusted-input callers can catch size-limit violations by type instead of reaching into `docxmlater/internal`. The `SizeLimitOptions` type is also exported from the package root.
+
+### Fixed
+
+- **`Document.toPlainText()` in `preserve` revision-handling mode dropped tracked text.** The plain-text output now includes the text of both tracked insertions and deletions when revisions are preserved, instead of silently omitting them.
+- **Hyperlink content was not bound to the tracking context.** `bindTrackingToAllElements()` now binds hyperlink runs, so tracked-change operations apply to text inside hyperlinks in loaded documents rather than skipping it.
+- **`deepClone()` could recurse infinitely on cyclic references.** Cloning now uses a per-call visited-set guard so self-referential structures clone without stack overflow.
+- **Clarified `strip` revision-handling documentation.** `strip` keeps inserted content and removes deleted content, yielding the same resulting text as `accept` (it does not erase all text). There is no `reject`/revert-to-original mode; to recover pre-edit text, load with `revisionHandling: 'preserve'` and filter out the `Revision` deletions.
+
 ## [11.0.11] - 2026-06-18
 
 ### Fixed
@@ -112,12 +130,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Repository hygiene
 
-- Untracked release-please tooling, internal agent docs, and
+- Untracked release-please tooling, internal developer notes, and
   development-only workflow files so they no longer surface in
   contributor diffs. The npm tarball is unaffected (already
   scoped to `dist/`, `src/**/*.ts` source, `README.md`, and
   `LICENSE` since 11.0.2). Verified via `npm pack --dry-run`:
-  zero `CLAUDE.md`, test, agent-doc, or env files in the
+  zero internal config, test, or env files in the
   tarball.
 
 ### No source changes
@@ -148,8 +166,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **npm package contents.** The `files` field in `package.json` now uses
   an explicit glob (`src/**/*.ts` plus negations for `*.test.ts`,
   `*.spec.ts`, and `src/__tests__/**`) instead of the bare `"src"`
-  whitelist. Previous releases inadvertently shipped 12 module-level
-  `CLAUDE.md` development notes plus the `helper-methods.test.ts`
+  whitelist. Previous releases inadvertently shipped 12
+  module-level development notes plus the `helper-methods.test.ts`
   test file inside the npm tarball; `.npmignore` patterns do not apply
   inside directories listed verbatim in `files`. The 11.0.2 tarball
   contains only `dist/`, `src/**/*.ts` source, `README.md`, and
@@ -492,7 +510,7 @@ doc.save(b)])` cannot corrupt internal state. Errors do not poison
 
 ### Added
 
-- **`Document.collectAllReferencedHyperlinkIds()`**: Comprehensive scan of all hyperlink relationship IDs across the entire document (body, nested tables, headers/footers, footnotes/endnotes, SDTs, revisions). Used internally by cleanup paths to prevent incorrect orphan removal.
+- **`Document.collectAllReferencedHyperlinkIds()`**: Full scan of all hyperlink relationship IDs across body, headers/footers, footnotes, endnotes, SDTs, and revisions. Used internally by cleanup paths to prevent incorrect orphan removal.
 
 ### Statistics
 

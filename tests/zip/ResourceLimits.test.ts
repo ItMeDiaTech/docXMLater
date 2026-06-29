@@ -80,6 +80,64 @@ describe('ZIP resource limits', () => {
         reader.clear();
       }
     });
+
+    test('boundary: entry count exactly at maxEntryCount loads; limit+1 throws [T9]', async () => {
+      // Build an archive with a known number of non-directory entries.
+      const entryCount = 4;
+      const zip = new JSZip();
+      for (let i = 0; i < entryCount; i++) {
+        zip.file(`part-${i}.bin`, `entry ${i}`);
+      }
+      const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+      // At the limit (count === maxEntryCount): inclusive, must load.
+      const atLimit = new ZipReader();
+      try {
+        await atLimit.loadFromBuffer(buffer, {
+          validate: false,
+          sizeLimits: { maxEntryCount: entryCount },
+        });
+        expect(atLimit.isLoaded()).toBe(true);
+        expect(atLimit.getFilePaths()).toHaveLength(entryCount);
+      } finally {
+        atLimit.clear();
+      }
+
+      // One over the limit (count === maxEntryCount + 1, i.e. maxEntryCount = count - 1): rejected.
+      const overLimit = new ZipReader();
+      try {
+        await expect(
+          overLimit.loadFromBuffer(buffer, {
+            validate: false,
+            sizeLimits: { maxEntryCount: entryCount - 1 },
+          })
+        ).rejects.toThrow(ResourceLimitError);
+      } finally {
+        overLimit.clear();
+      }
+    });
+  });
+
+  describe('compressed-size budget (maxSizeMB)', () => {
+    test('ZipHandler.loadFromBuffer throws ResourceLimitError when maxSizeMB is exceeded [T3]', async () => {
+      // A normal small archive is a few hundred bytes; a deliberately tiny maxSizeMB
+      // (~104 bytes) guarantees the compressed-size guard fires for it.
+      const buffer = await buildMinimalDocx();
+      expect(buffer.length).toBeGreaterThan(0.0001 * 1024 * 1024);
+
+      const handler = new ZipHandler();
+      try {
+        await expect(
+          handler.loadFromBuffer(buffer, { validate: false, sizeLimits: { maxSizeMB: 0.0001 } })
+        ).rejects.toThrow(ResourceLimitError);
+        // The message still names the breached limit so it stays actionable.
+        await expect(
+          handler.loadFromBuffer(buffer, { validate: false, sizeLimits: { maxSizeMB: 0.0001 } })
+        ).rejects.toThrow(/maximum supported size/);
+      } finally {
+        handler.clear();
+      }
+    });
   });
 
   describe('total-uncompressed budget (primary guard)', () => {

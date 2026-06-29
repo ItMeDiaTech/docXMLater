@@ -412,6 +412,12 @@ export {
   CorruptionType,
 } from './utils/corruptionDetection.js';
 export { isError, toError, wrapError, getErrorMessage } from './utils/errorHandling.js';
+// Deliberately on the stable path: ResourceLimitError is the security-relevant,
+// catchable error thrown by Document.load/loadFromBuffer for oversized/zip-bomb
+// untrusted input, and SizeLimitOptions is its tuning type. The rest of the
+// DocxError hierarchy stays on the `docxmlater/internal` subpath.
+export { ResourceLimitError } from './zip/errors.js';
+export type { SizeLimitOptions } from './zip/types.js';
 export {
   REVISION_RULES,
   ValidationSeverity,

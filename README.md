@@ -427,7 +427,7 @@ By default, `Document.load()` accepts all tracked changes during loading. This p
 ```typescript
 const doc = await Document.load('document.docx', {
   revisionHandling: 'accept', // default - keep insertions, drop deletions
-  // revisionHandling: 'strip',    - remove all revision markup entirely
+  // revisionHandling: 'strip',    - remove markup, keep inserted, drop deleted (same text as accept)
   // revisionHandling: 'preserve', - keep tracked changes verbatim (advanced)
 });
 ```
@@ -437,6 +437,8 @@ const doc = await Document.load('document.docx', {
 | `accept` (default) | Removes revision markup, keeps inserted content, removes deleted content                                     |
 | `strip`            | Removes all revision markup, keeping inserted and removing deleted content (same resulting text as `accept`) |
 | `preserve`         | Keeps tracked changes intact for advanced workflows                                                          |
+
+There is no `reject` (revert-to-original) mode: `accept` and `strip` both yield the post-edit text, and neither restores deleted-then-replaced content. To recover the pre-edit text, load with `revisionHandling: 'preserve'` and filter out the `Revision` deletions yourself.
 
 ### Custom Styles
 
@@ -536,7 +538,7 @@ doc.dispose();
 
 - **Always call `dispose()`** to release ZIP handles and image buffers
 - Buffer-based I/O (`loadFromBuffer` / `toBuffer`) is 20-30% faster than file-path I/O
-- Default size limits: warn at 50 MB, error at 150 MB (configurable via `LoadOptions.sizeLimits`)
+- Default size limits (configurable via `DocumentLoadOptions.sizeLimits`): warn at 50 MB; hard caps of 150 MB compressed, 300 MB total uncompressed, 150 MB per entry, 2,000 entries, and a 200:1 per-entry compression ratio
 - Memory footprint: ~2 MB per `Document`, ~2 bytes/character, full buffer per embedded image, ~200 bytes/cell
 - For repeated paragraph access, cache `getAllParagraphs()` rather than calling it inside a loop
 - Large documents (1,000+ pages) are supported
@@ -572,7 +574,13 @@ async function processDocument(input: Buffer): Promise<Buffer> {
 }
 ```
 
-Custom error types are available from `docxmlater/internal`. These include `DocxError`, `InvalidDocxError`, `CorruptedArchiveError`, and `FileOperationError`.
+`ResourceLimitError` (thrown when a load exceeds the configured size limits) is exported from the package root, so untrusted-input callers can catch it by type:
+
+```typescript
+import { ResourceLimitError } from 'docxmlater';
+```
+
+Additional custom error types are available from `docxmlater/internal`. These include `DocxError`, `InvalidDocxError`, `CorruptedArchiveError`, and `FileOperationError`.
 
 Logging is configurable via `DOCXMLATER_LOG_LEVEL=debug|info|warn|error`.
 
@@ -611,15 +619,39 @@ src/
 - **ReDoS protection** - position-based XML parsing eliminates catastrophic backtracking
 - **Path traversal prevention** - DOCX archive entries are validated against `../`, absolute paths, and URL-encoded traversal
 - **XML injection prevention** - all text and attribute content is escaped via `XMLBuilder.escapeXmlText()` and `XMLBuilder.escapeXmlAttribute()`
-- **Size limits** - configurable warning (50 MB) and hard cap (150 MB) on document size
+- **Size limits** - guards against zip-bomb and resource-amplification payloads, enforced on every load. Configurable defaults: warning at 50 MB (`warningSizeMB`), hard cap 150 MB compressed (`maxSizeMB`), 300 MB total uncompressed (`maxTotalUncompressedMB`), 150 MB per single entry (`maxEntryUncompressedMB`), 2,000 entries (`maxEntryCount`), and a 200:1 per-entry compression ratio (`maxCompressionRatio`). Exceeding a hard limit throws `ResourceLimitError`
 - **Nesting limits** - XML parser caps nesting depth at 256 levels (configurable) to prevent stack overflow
 - **UTF-8 enforcement** - all text content is explicitly UTF-8 encoded per ECMA-376
 
+For untrusted input, tighten every limit and reject oversized or high-ratio payloads by catching `ResourceLimitError`:
+
 ```typescript
-const doc = await Document.load('large.docx', {
-  sizeLimits: { warningSizeMB: 100, maxSizeMB: 500 },
-});
+import { Document, ResourceLimitError } from 'docxmlater';
+
+try {
+  const doc = await Document.loadFromBuffer(untrustedBuffer, {
+    sizeLimits: {
+      maxSizeMB: 25,
+      maxTotalUncompressedMB: 75,
+      maxEntryUncompressedMB: 25,
+      maxEntryCount: 500,
+      maxCompressionRatio: 100,
+    },
+  });
+  try {
+    // ... process doc ...
+  } finally {
+    doc.dispose();
+  }
+} catch (err) {
+  if (err instanceof ResourceLimitError) {
+    // reject the upload; the archive was never fully expanded in memory
+  }
+  throw err;
+}
 ```
+
+Set any individual limit to `0` to disable that check. To restore the pre-12.0.0 behavior for trusted large documents, opt out of the uncompressed/entry guards with `sizeLimits: { maxTotalUncompressedMB: 0, maxEntryUncompressedMB: 0, maxEntryCount: 0 }`.
 
 ```typescript
 import { XMLParser } from 'docxmlater/internal';
