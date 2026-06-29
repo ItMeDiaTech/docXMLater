@@ -5,6 +5,12 @@ All notable changes to docxmlater will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`Document.toMarkdown()` now converts the full document with information parity instead of a text-only subset.** The previous implementation emitted only headings, plain bold/italic/strikethrough, monospace code spans, hyperlinks, flat lists, and simple tables — every other construct was silently dropped. The converter now also renders: inline images (`![alt](src)`), footnote/endnote references as GFM markers (`[^fn1]`/`[^en1]`) with definitions appended, line breaks (`<br>`) and tabs, nested lists with two-space-per-level indentation and numbering-format-aware ordered/bullet markers, block quotes (`>`), field results, shape and text-box text, structured-document-tag content, and tracked insertions/deletions in `preserve` mode. Character formatting Markdown cannot express natively — underline, superscript, subscript, highlight, and text color — is preserved as inline HTML, and tables with merged or nested cells fall back to an inline HTML `<table>` honoring `colspan`/`rowspan`. Markdown-significant characters in literal text are escaped so they round-trip verbatim. A new `MarkdownConversionOptions` parameter (`htmlFallback`, `footnotes`, `images`) tunes fidelity; all default to maximal preservation. The output for the previously supported constructs is unchanged.
+
 ## [11.0.11] - 2026-06-18
 
 ### Fixed

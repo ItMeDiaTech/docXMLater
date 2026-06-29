@@ -13,6 +13,7 @@ export {
   DocumentOptions,
   DocumentLoadOptions,
   DocumentPart,
+  MarkdownConversionOptions,
 } from './core/Document.js';
 
 // =============================================================================
