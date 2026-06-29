@@ -658,6 +658,26 @@ doc.trackDeletion(para, 'Editor', 'old heading');
 doc.trackInsertion(para, 'Editor', 'new heading');
 ```
 
+### Track Changes Inside Hyperlinks
+
+When `enableTrackChanges()` is active, calls to `setText()` on runs inside a hyperlink produce tracked-change markup the same way as plain paragraph runs.
+
+```typescript
+doc.enableTrackChanges({ author: 'Editor' });
+const link = para.getHyperlinks()[0];
+link.setText('updated link text'); // emits w:ins / w:del markup
+```
+
+### Text Extraction in Preserve Mode
+
+When a document is loaded with `revisionHandling: 'preserve'`, `doc.toPlainText()` returns text from all tracked-change runs — both `w:ins` (inserted) and `w:del` (deleted) content — rather than silently dropping them. Use `Paragraph.getTextIncludingRevisions()` for the same behavior at the paragraph level.
+
+```typescript
+const doc = await Document.load('reviewed.docx', { revisionHandling: 'preserve' });
+const allText = doc.toPlainText(); // includes inserted + deleted text
+const paraText = para.getTextIncludingRevisions(); // same, per paragraph
+```
+
 ## Accepting/Rejecting Changes
 
 While DocXML creates tracked changes, accepting or rejecting them is typically done in Microsoft Word. However, you can programmatically remove revisions:

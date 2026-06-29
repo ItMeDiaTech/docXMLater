@@ -316,7 +316,7 @@ The following features round-trip safely as raw XML but have no editing API:
 
 **Conversion**
 
-- `toMarkdown()`, `toHTML(options?)`, `toPlainText()`
+- `toMarkdown()`, `toHTML(options?)`, `toPlainText()` (in `preserve` mode, includes tracked-inserted and tracked-deleted text)
 - `toBase64()`, `toDataUri()`, `getHeadingHierarchy()`
 - `findImagesWithoutAltText()` (accessibility audit)
 
@@ -329,6 +329,8 @@ The following features round-trip safely as raw XML but have no editing API:
 **Content**: `addText(text, formatting?)`, `addRun(run)`, `addHyperlink(link)`, `addImage(buffer, options)`
 
 **Formatting**: `setAlignment`, `setIndentation`, `setSpacing`, `setBorders`, `setShading`, `applyStyle`, `setKeepNext`, `setKeepLines`, `setPageBreakBefore`, `clearSpacing`
+
+**Text retrieval**: `getText()`, `getTextIncludingRevisions()` (returns text including tracked-inserted and deleted runs, useful with `preserve` mode)
 
 **Text manipulation**: `applyFormattingToRange`, `deleteRange`, `truncate`, `wrap`, `splitAt`, `consolidateRuns`, `replaceAll`, `findTextCrossRun`, `getRunAtOffset`, `getFormattingAtOffset`, `contains`, `toJSON` / `fromJSON`
 
@@ -439,6 +441,8 @@ const doc = await Document.load('document.docx', {
 | `preserve`         | Keeps tracked changes intact for advanced workflows                                                          |
 
 There is no `reject` (revert-to-original) mode: `accept` and `strip` both yield the post-edit text, and neither restores deleted-then-replaced content. To recover the pre-edit text, load with `revisionHandling: 'preserve'` and filter out the `Revision` deletions yourself.
+
+When `enableTrackChanges()` is active, edits made to text inside hyperlinks are tracked the same way as paragraph runs. `toPlainText()` on a `preserve`-mode document includes tracked-inserted and tracked-deleted text via the underlying `Paragraph.getTextIncludingRevisions()` call.
 
 ### Custom Styles
 
