@@ -30,7 +30,7 @@ async function main() {
 
   doc.createParagraph('Authoring inline').setStyle('Heading1');
   doc.createParagraph(
-    'For programmatic equation authoring, build the OMML XML directly and inject it as a preserved XML element. See the agent_docs notes in the main repo for examples.'
+    'For programmatic equation authoring, build the OMML XML directly and inject it as a preserved XML element. See the architecture notes in the main repo for examples.'
   );
 
   writeFileSync('18-math-equations.docx', await doc.toBuffer());

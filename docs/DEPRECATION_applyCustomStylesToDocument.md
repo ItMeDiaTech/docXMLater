@@ -63,12 +63,12 @@ Use [`applyCustomFormattingToExistingStyles()`](../src/core/Document.ts:3311) in
 
 ### Key Advantages
 
-✅ **Updates actual style definitions** in [`styles.xml`](../src/core/Document.ts:1392)
-✅ **Clears direct formatting conflicts** per ECMA-376 §17.7.2
-✅ **Fully customizable** - configure all properties
-✅ **Preserves user emphasis** - selectively keep bold/italic/underline
-✅ **Supports 5 styles** - Heading1-3, Normal, List Paragraph
-✅ **ECMA-376 compliant** - proper structure and precedence
+- **Updates actual style definitions** in [`styles.xml`](../src/core/Document.ts:1392)
+- **Clears direct formatting conflicts** per ECMA-376 §17.7.2
+- **Fully customizable** - configure all properties
+- **Preserves user emphasis** - selectively keep bold/italic/underline
+- **Supports 5 styles** - Heading1-3, Normal, List Paragraph
+- **ECMA-376 compliant** - proper structure and precedence
 
 ---
 
@@ -135,9 +135,9 @@ doc.applyCustomFormattingToExistingStyles({
 **Result:**
 
 - Font → Arial 11pt (from style)
-- User's **bold** words stay bold ✅
-- User's _italic_ words stay italic ✅
-- User's <u>underlined</u> words stay underlined ✅
+- User's **bold** words stay bold
+- User's _italic_ words stay italic
+- User's <u>underlined</u> words stay underlined
 
 ---
 
@@ -225,7 +225,7 @@ This ensures:
  * @see [Migration Guide](../docs/guides/style-application-migration.md)
  *
  * Creates and applies custom styles to the document
- * ⚠️ WARNING: This method creates undefined styles and doesn't work correctly
+ * Warning: This method creates undefined styles and doesn't work correctly
  */
 ````
 
@@ -267,8 +267,8 @@ public applyCustomStylesToDocument(): {
 
 ### Before Deprecation
 
-- [x] Verify no examples use `applyCustomStylesToDocument()` ✅
-- [x] Verify no tests use `applyCustomStylesToDocument()` ✅
+- [x] Verify no examples use `applyCustomStylesToDocument()`
+- [x] Verify no tests use `applyCustomStylesToDocument()`
 - [ ] Add integration test comparing old vs new methods
 - [ ] Document behavior differences
 

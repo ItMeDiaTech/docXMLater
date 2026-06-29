@@ -696,7 +696,7 @@ The Comments feature in DocXML provides:
 - Support for threaded discussions with replies
 - Multiple authors with automatic initial generation
 - Formatted comment content with Run formatting
-- Comprehensive search and filtering capabilities
+- Search and filtering across comments
 - Full WordprocessingML XML generation
 - Integration with other document features
 

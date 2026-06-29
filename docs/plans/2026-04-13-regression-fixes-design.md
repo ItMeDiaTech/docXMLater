@@ -1,7 +1,5 @@
 # Regression Fixes: Theme Fonts, Hyperlink Parsing, Image Cropping
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Fix three regressions: style theme font contamination in docxmlater, hyperlink-with-revisions not editable in docxmlater, and image border crop not removing whitespace+border in dochub-app.
 
 **Architecture:** Fix A modifies the `applyStyles()` merge in `Document.ts` to strip theme font attributes when an explicit font is provided. Fix B modifies `DocumentParser.ts` to flatten revision children inside hyperlinks before parsing (instead of wrapping as PreservedElement). Fix C modifies `ImageBorderCropper.ts` scanLine to resume scanning past the border into the whitespace gap before returning the crop position, and removes the safety margin pullback.

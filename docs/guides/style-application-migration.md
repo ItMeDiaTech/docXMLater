@@ -1,6 +1,6 @@
 # Style Application API Migration Guide
 
-## ⚠️ Deprecation Notice
+## Deprecation Notice
 
 **`applyCustomStylesToDocument()`** is **DEPRECATED** as of v3.6.0 and will be removed in v4.0.0.
 
@@ -12,40 +12,40 @@
 
 ### Problems with `applyCustomStylesToDocument()`
 
-1. **Creates Non-Standard Styles** ❌
+1. Problem: **Creates Non-Standard Styles**
    - Sets style IDs like `CustomHeader1`, `CustomHeader2`
    - **Never defines these styles** in StylesManager
    - Text falls back to "Normal" style (formatting is lost!)
    - Breaks compatibility with other Word documents
 
-2. **No Actual Style Definitions** ❌
+2. Problem: **No Actual Style Definitions**
    - Changes paragraph style _references_ only
    - Doesn't modify [`styles.xml`](../../src/core/Document.ts:1392)
    - Formatting won't apply in Word
 
-3. **Limited & Inflexible** ❌
+3. Problem: **Limited & Inflexible**
    - Only 3 hardcoded styles (Heading1, Heading2, Normal)
    - Fixed formatting (cannot customize)
    - Cannot preserve user emphasis (bold/italic/underline)
 
 ### Benefits of `applyCustomFormattingToExistingStyles()`
 
-1. **Modifies Actual Style Definitions** ✅
+1. Advantage: **Modifies Actual Style Definitions**
    - Updates styles in [`styles.xml`](../../src/core/Document.ts:1392)
    - Works with standard Word styles (Heading1, Heading2, etc.)
    - Changes apply immediately to ALL paragraphs using that style
 
-2. **Clears Direct Formatting Conflicts** ✅
+2. Advantage: **Clears Direct Formatting Conflicts**
    - Per ECMA-376 §17.7.2: Direct formatting overrides styles
    - Automatically removes conflicting direct formatting
    - Style changes now take effect properly
 
-3. **Fully Customizable** ✅
+3. Advantage: **Fully Customizable**
    - Configure 5 styles: Heading1, Heading2, Heading3, Normal, List Paragraph
    - Full control over fonts, sizes, colors, spacing, etc.
    - **Selective preservation** of bold/italic/underline
 
-4. **Preserve User Emphasis** ✅
+4. Advantage: **Preserve User Emphasis**
    - Keep existing bold/italic/underline formatting
    - Perfect for body text with intentional emphasis
    - Configurable per-style (headings vs. body text)
@@ -114,13 +114,13 @@ doc.applyCustomFormattingToExistingStyles({
 
 ### Default Behavior
 
-| Style              | Bold Preserved                  | Italic Preserved | Underline Preserved |
-| ------------------ | ------------------------------- | ---------------- | ------------------- |
-| Heading1           | ❌ No (enforce consistency)     | ❌ No            | ❌ No               |
-| Heading2           | ❌ No (enforce consistency)     | ❌ No            | ❌ No               |
-| Heading3           | ❌ No (enforce consistency)     | ❌ No            | ❌ No               |
-| **Normal**         | ✅ **Yes** (keep user emphasis) | ❌ No            | ❌ No               |
-| **List Paragraph** | ✅ **Yes** (keep user emphasis) | ❌ No            | ❌ No               |
+| Style              | Bold Preserved               | Italic Preserved | Underline Preserved |
+| ------------------ | ---------------------------- | ---------------- | ------------------- |
+| Heading1           | No (enforce consistency)     | No               | No                  |
+| Heading2           | No (enforce consistency)     | No               | No                  |
+| Heading3           | No (enforce consistency)     | No               | No                  |
+| **Normal**         | **Yes** (keep user emphasis) | No               | No                  |
+| **List Paragraph** | **Yes** (keep user emphasis) | No               | No                  |
 
 ### Example: Keep All Emphasis in Body Text
 

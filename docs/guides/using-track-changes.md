@@ -747,7 +747,7 @@ The Track Changes feature in DocXML provides:
 - Simple API for tracking insertions and deletions
 - Support for multiple authors
 - Formatted revision content with Run formatting
-- Comprehensive search and filtering capabilities
+- Search and filtering across revisions
 - Full WordprocessingML XML generation
 - Integration with comments and other document features
 - Production-ready implementation

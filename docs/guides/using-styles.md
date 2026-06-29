@@ -1,6 +1,6 @@
 # Using Styles in DocXML
 
-A comprehensive guide to using the Styles system in DocXML for creating professionally formatted Word documents.
+How to use the Styles system in docxmlater.
 
 ## Table of Contents
 

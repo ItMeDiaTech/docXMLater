@@ -257,7 +257,7 @@ src/
 
 tests/             # 148 test suites organized by feature
 examples/          # 17 example categories (01-basic through advanced)
-agent_docs/        # Architecture, testing guide, anti-patterns
+dev_docs/          # Architecture, testing guide, anti-patterns
 docs/              # Contributing guide, API reference
 ```
 

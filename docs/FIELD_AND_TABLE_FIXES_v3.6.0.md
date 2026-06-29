@@ -258,10 +258,10 @@ npm run npx ts-node examples/troubleshooting/test-fixes.ts
 
 ### Verification Steps
 
-1. ✅ Open `Errors_FIXED.docx` in Microsoft Word
-2. ✅ Click on any table cell
-3. ✅ Type text - **IT WORKS!**
-4. ✅ Delete text - **IT WORKS!**
+1. Open `Errors_FIXED.docx` in Microsoft Word
+2. Click on any table cell
+3. Type text - **IT WORKS!**
+4. Delete text - **IT WORKS!**
 
 ---
 
@@ -369,11 +369,11 @@ const lockedSdt = StructuredDocumentTag.wrapTable(table, 'my-table', 'contentLoc
 
 ## What You Get
 
-✅ **No more "Insufficient runs" errors** - handled gracefully
-✅ **Tables are automatically editable** - no manual unlock needed
-✅ **Better diagnostics** - know what went wrong and why
-✅ **Field management APIs** - query and modify fields easily
-✅ **Backward compatible** - existing code works unchanged
+- **No more "Insufficient runs" errors** - handled gracefully
+- **Tables are automatically editable** - no manual unlock needed
+- **Better diagnostics** - know what went wrong and why
+- **Field management APIs** - query and modify fields easily
+- **Backward compatible** - existing code works unchanged
 
 ---
 

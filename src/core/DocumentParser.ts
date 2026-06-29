@@ -1468,7 +1468,7 @@ export class DocumentParser {
           // w:moveTo inside w:hyperlink) are always flattened to an editable
           // Hyperlink object, regardless of the revisionHandling mode (including
           // 'preserve'). This is a deliberate exception to 'preserve' — see the
-          // flattening note below and src/core/CLAUDE.md.
+          // flattening note below and the core module documentation.
           const hasRevisionChildren =
             hyperlinkObj['w:del'] ||
             hyperlinkObj['w:ins'] ||

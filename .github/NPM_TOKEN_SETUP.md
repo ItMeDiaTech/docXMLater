@@ -96,7 +96,7 @@ You can't view the secret value (it's encrypted), but you can see if it exists:
 
 1. Go to: Settings → Secrets and variables → Actions
 2. Look for `NPM_TOKEN` in the "Repository secrets" list
-3. If it's there, it's set ✅
+3. If it's there, it's set (done)
 
 ### Alternative: Manual Publishing
 
